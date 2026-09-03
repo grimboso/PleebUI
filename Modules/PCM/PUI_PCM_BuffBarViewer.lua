@@ -131,34 +131,6 @@ local function _GetBuffBarGrowthPoints(bb, vertical)
   return growthDirection, growUp and "BOTTOM" or "TOP", growUp and "TOP" or "BOTTOM"
 end
 
-local function _AnchorBuffBarHolderToGrowthOrigin(holder, rowPoint)
-  local point, relativeTo, relativePoint = holder:GetPoint(1)
-  if holder:GetNumPoints() == 1
-    and point == rowPoint
-    and relativeTo == UIParent
-    and relativePoint == "CENTER"
-  then
-    return
-  end
-
-  local centerX, centerY = holder:GetCenter()
-  local parentX, parentY = UIParent:GetCenter()
-  local x = centerX - parentX
-  local y = centerY - parentY
-
-  if rowPoint == "TOP" then
-    y = y + (holder:GetHeight() / 2)
-  elseif rowPoint == "BOTTOM" then
-    y = y - (holder:GetHeight() / 2)
-  elseif rowPoint == "LEFT" then
-    x = x - (holder:GetWidth() / 2)
-  else
-    x = x + (holder:GetWidth() / 2)
-  end
-
-  holder:ClearAllPoints()
-  holder:SetPoint(rowPoint, UIParent, "CENTER", x, y)
-end
 
 local function _BuffBarUsesReverseFill(bb)
   if bb and bb.orientation == "VERTICAL" then
@@ -701,22 +673,14 @@ local function _Refresh()
   if rowSpacing > 40  then rowSpacing = 40  end
   rowSpacing = Round(rowSpacing)
 
-  local growthDirection = bb and bb.growthDirection or (vertical and "RIGHT" or "DOWN")
-  local rowPoint
-  local previousPoint
+  local growthDirection, rowPoint, previousPoint = _GetBuffBarGrowthPoints(bb, vertical)
   local stepX = 0
   local stepY = 0
 
   if vertical then
-    local growLeft = growthDirection == "LEFT"
-    rowPoint = growLeft and "RIGHT" or "LEFT"
-    previousPoint = growLeft and "LEFT" or "RIGHT"
-    stepX = growLeft and -rowSpacing or rowSpacing
+    stepX = growthDirection == "LEFT" and -rowSpacing or rowSpacing
   else
-    local growUp = growthDirection == "UP"
-    rowPoint = growUp and "BOTTOM" or "TOP"
-    previousPoint = growUp and "TOP" or "BOTTOM"
-    stepY = growUp and rowSpacing or -rowSpacing
+    stepY = growthDirection == "UP" and rowSpacing or -rowSpacing
   end
 
   local rows = _GetBuffBarRows(viewer)
@@ -793,7 +757,7 @@ local function _Refresh()
   end
 
   if holder and holder.SetSize then
-    local totalSlots = viewer.itemFramePool:GetNumActive()
+    local totalSlots = _GetConfiguredBuffBarSlots(viewer)
     local holderWidth = totalSlots > 0 and rowWidth or 1
     local holderHeight = totalSlots > 0 and rowHeight or 1
 
@@ -1333,7 +1297,6 @@ PCMRuntime:RegisterSubscriber("BuffBars", {
   _GetBuffBarGeometry = P:Def('_GetBuffBarGeometry', _GetBuffBarGeometry)
   _GetConfiguredBuffBarSlots = P:Def('_GetConfiguredBuffBarSlots', _GetConfiguredBuffBarSlots)
   _GetBuffBarGrowthPoints = P:Def('_GetBuffBarGrowthPoints', _GetBuffBarGrowthPoints)
-  _AnchorBuffBarHolderToGrowthOrigin = P:Def('_AnchorBuffBarHolderToGrowthOrigin', _AnchorBuffBarHolderToGrowthOrigin)
   _BuffBarUsesReverseFill = P:Def('_BuffBarUsesReverseFill', _BuffBarUsesReverseFill)
   _GetBuffBarHolder = P:Def('_GetBuffBarHolder', _GetBuffBarHolder)
   _GetBuffBarColor = P:Def('_GetBuffBarColor', _GetBuffBarColor)
