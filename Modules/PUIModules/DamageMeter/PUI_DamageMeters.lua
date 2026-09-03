@@ -2,7 +2,7 @@ local _, ns = ...
 
 local Addon = ns.Addon
 
-local DamageMeters = Addon:NewModule("DamageMeters", "NumyAceEvent-3.0", "AceConsole-3.0")
+local DamageMeters = Addon:NewModule("DamageMeters", "NumyAceEvent-3.0")
 ns.Modules.DamageMeters = DamageMeters
 ns.Registry.DamageMeters = DamageMeters
 
@@ -1127,6 +1127,12 @@ function DamageMeters:HandleSlashCommand(message)
   end
 end
 
+SLASH_PUI_DAMAGEMETERS1 = "/dmg"
+SLASH_PUI_DAMAGEMETERS2 = "/dps"
+function SlashCmdList.PUI_DAMAGEMETERS(message)
+  DamageMeters:HandleSlashCommand(message)
+end
+
 function DamageMeters:OnProfileChanged()
   Breakdown.Close()
   Breakdown.InvalidateTargetAnalysisCache()
@@ -1151,8 +1157,6 @@ function DamageMeters:OnInitialize()
 
   EnsureCombatRefreshDriver()
   self:InitializeLauncher()
-  self:RegisterChatCommand("dmg", "HandleSlashCommand")
-  self:RegisterChatCommand("dps", "HandleSlashCommand")
 
   Addon.db.RegisterCallback(self, "OnProfileChanged", "OnProfileChanged")
   Addon.db.RegisterCallback(self, "OnProfileCopied", "OnProfileChanged")

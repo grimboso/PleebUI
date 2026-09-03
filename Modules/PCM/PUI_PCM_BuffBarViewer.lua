@@ -30,8 +30,6 @@ local math_abs          = math.abs
 local math_max          = math.max
 local UnitClass         = UnitClass
 local RAID_CLASS_COLORS = RAID_CLASS_COLORS
-local C_CooldownViewer  = C_CooldownViewer
-local CooldownViewerCategory = Enum.CooldownViewerCategory
 
 local _buffBarHolder = nil
 
@@ -41,9 +39,6 @@ local _buffBarLayoutRev = 1
 local _buffBarStyleCached = false
 local _buffBarStyleCache
 local _buffBarDBCache
-local _buffBarConfiguredSlotsViewer
-local _buffBarConfiguredSlotsGeneration = -1
-local _buffBarConfiguredSlots = 0
 
 local function _InvalidateBuffBarStyleCache()
   _buffBarStyleCached = false
@@ -106,17 +101,6 @@ local function _GetBuffBarGeometry(bb)
   end
 
   return vertical, length, thickness, gap, iconPlacement, showIcon, iconSize, barWidth, barHeight, rowWidth, rowHeight
-end
-
-local function _GetConfiguredBuffBarSlots(viewer)
-  local itemGeneration = PCMRuntime:GetViewerGenerations(viewer)
-  if _buffBarConfiguredSlotsViewer ~= viewer or _buffBarConfiguredSlotsGeneration ~= itemGeneration then
-    _buffBarConfiguredSlotsViewer = viewer
-    _buffBarConfiguredSlotsGeneration = itemGeneration
-    _buffBarConfiguredSlots = #C_CooldownViewer.GetCooldownViewerCategorySet(CooldownViewerCategory.TrackedBar, false)
-  end
-
-  return _buffBarConfiguredSlots
 end
 
 local function _GetBuffBarGrowthPoints(bb, vertical)
@@ -757,7 +741,7 @@ local function _Refresh()
   end
 
   if holder and holder.SetSize then
-    local totalSlots = _GetConfiguredBuffBarSlots(viewer)
+    local totalSlots = viewer.itemFramePool:GetNumActive()
     local holderWidth = totalSlots > 0 and rowWidth or 1
     local holderHeight = totalSlots > 0 and rowHeight or 1
 
@@ -1295,7 +1279,6 @@ PCMRuntime:RegisterSubscriber("BuffBars", {
   _InvalidateBuffBarStyleCache = P:Def('_InvalidateBuffBarStyleCache', _InvalidateBuffBarStyleCache)
   _GetBuffBarStyle = P:Def('_GetBuffBarStyle', _GetBuffBarStyle)
   _GetBuffBarGeometry = P:Def('_GetBuffBarGeometry', _GetBuffBarGeometry)
-  _GetConfiguredBuffBarSlots = P:Def('_GetConfiguredBuffBarSlots', _GetConfiguredBuffBarSlots)
   _GetBuffBarGrowthPoints = P:Def('_GetBuffBarGrowthPoints', _GetBuffBarGrowthPoints)
   _BuffBarUsesReverseFill = P:Def('_BuffBarUsesReverseFill', _BuffBarUsesReverseFill)
   _GetBuffBarHolder = P:Def('_GetBuffBarHolder', _GetBuffBarHolder)

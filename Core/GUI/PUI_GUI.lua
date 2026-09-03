@@ -3667,13 +3667,13 @@ local function _PUI_RenderCustomOptionsPath(frame, AceConfigDialog, APP, path)
 end
 
 local function _PUI_EnsureOptionsDialog()
-  local AceConfig = LibStub("AceConfig-3.0")
+  local AceConfigRegistry = LibStub("AceConfigRegistry-3.0")
   local AceConfigDialog = LibStub("AceConfigDialog-3.0")
   local APP = PUI_OPTIONS_APP
 
   if not State.dialogRegistered then
     State.dialogRegistered = true
-    AceConfig:RegisterOptionsTable(APP, function()
+    AceConfigRegistry:RegisterOptionsTable(APP, function()
       return _PUI_GetOptionsRoot()
     end)
   end

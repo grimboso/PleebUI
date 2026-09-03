@@ -35,8 +35,12 @@ ns.Pixel = {
   end,
 }
 
-local Addon = AceAddon:NewAddon(ADDON_NAME, "NumyAceEvent-3.0", "AceConsole-3.0")
+local Addon = AceAddon:NewAddon(ADDON_NAME, "NumyAceEvent-3.0")
 ns.Addon = Addon
+
+function Addon:Print(message)
+  DEFAULT_CHAT_FRAME:AddMessage("|cff33ff99" .. ADDON_NAME .. "|r: " .. tostring(message))
+end
 
 function Addon:PUI_ResetAndReload(resetFn)
   if InCombatLockdown() then

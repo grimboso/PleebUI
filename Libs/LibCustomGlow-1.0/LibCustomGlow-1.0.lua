@@ -6,7 +6,7 @@ https://www.wowace.com/projects/libbuttonglow-1-0
 -- luacheck: globals CreateFromMixins ObjectPoolMixin CreateTexturePool CreateFramePool
 
 local MAJOR_VERSION = "LibCustomGlow-1.0"
-local MINOR_VERSION = 21
+local MINOR_VERSION = 19
 if not LibStub then error(MAJOR_VERSION .. " requires LibStub.") end
 local lib, oldversion = LibStub:NewLibrary(MAJOR_VERSION, MINOR_VERSION)
 if not lib then return end
@@ -130,8 +130,7 @@ local function addFrameAndTex(r,color,name,key,N,xOffset,yOffset,texture,texCoor
         r[name..key].name = name..key
     end
     local f = r[name..key]
-f:SetFrameStrata((r.GetFrameStrata and r:GetFrameStrata()) or "MEDIUM")
-f:SetFrameLevel(frameLevel or 8)
+	f:SetFrameLevel(r:GetFrameLevel()+frameLevel)
     f:SetPoint("TOPLEFT",r,"TOPLEFT",-xOffset+0.05,yOffset+0.05)
     f:SetPoint("BOTTOMRIGHT",r,"BOTTOMRIGHT",xOffset,-yOffset+0.05)
     f:Show()
@@ -433,7 +432,6 @@ function lib.AutoCastGlow_Start(r,color,N,frequency,scale,xOffset,yOffset,key,fr
     f.info.N = N
     f.info.period = period
     f:SetScript("OnUpdate",acUpdate)
-    acUpdate(f, 0)
 end
 
 function lib.AutoCastGlow_Stop(r,key)
@@ -663,8 +661,7 @@ function lib.ButtonGlow_Start(r,color,frequency,frameLevel)
     if r._ButtonGlow then
         local f = r._ButtonGlow
         local width,height = r:GetSize()
-f:SetFrameStrata((r.GetFrameStrata and r:GetFrameStrata()) or "MEDIUM")
-f:SetFrameLevel(frameLevel or 8)
+        f:SetFrameLevel(r:GetFrameLevel()+frameLevel)
         f:SetSize(width*1.4 , height*1.4)
         f:SetPoint("TOPLEFT", r, "TOPLEFT", -width * 0.2, height * 0.2)
         f:SetPoint("BOTTOMRIGHT", r, "BOTTOMRIGHT", width * 0.2, -height * 0.2)
@@ -705,8 +702,7 @@ f:SetFrameLevel(frameLevel or 8)
         r._ButtonGlow = f
         local width,height = r:GetSize()
         f:SetParent(r)
-f:SetFrameStrata((r.GetFrameStrata and r:GetFrameStrata()) or "MEDIUM")
-f:SetFrameLevel(frameLevel or 8)
+        f:SetFrameLevel(r:GetFrameLevel()+frameLevel)
         f:SetSize(width * 1.4, height * 1.4)
         f:SetPoint("TOPLEFT", r, "TOPLEFT", -width * 0.2, height * 0.2)
         f:SetPoint("BOTTOMRIGHT", r, "BOTTOMRIGHT", width * 0.2, -height * 0.2)
@@ -728,17 +724,18 @@ f:SetFrameLevel(frameLevel or 8)
 
         f.animIn:Play()
 
-        if Masque and Masque.UpdateSpellAlert then
-            Masque:UpdateSpellAlert(r, f)
+        if Masque and Masque.UpdateSpellAlert and (not r.overlay or not issecurevariable(r, "overlay")) then
+            local old_overlay = r.overlay
+            r.overlay = f
+            Masque:UpdateSpellAlert(r)
+            r.overlay = old_overlay
         end
     end
 end
 
 function lib.ButtonGlow_Stop(r)
     if r._ButtonGlow then
-        if r._ButtonGlow.animOut:IsPlaying() then
-            -- Do nothing the animOut finishing will release
-        elseif r._ButtonGlow.animIn:IsPlaying() then
+        if r._ButtonGlow.animIn:IsPlaying() then
             r._ButtonGlow.animIn:Stop()
             ButtonGlowPool:Release(r._ButtonGlow)
         elseif r:IsVisible() then
