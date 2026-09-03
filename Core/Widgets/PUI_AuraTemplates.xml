@@ -1,0 +1,71 @@
+<Ui xmlns="http://www.blizzard.com/wow/ui/">
+  <Button name="PUI_AuraApplicationDurationTemplate" virtual="true">
+    <Layers>
+      <Layer level="ARTWORK">
+        <Texture parentKey="PUIIcon" hidden="true"/>
+      </Layer>
+    </Layers>
+    <Frames>
+      <StatusBar parentKey="PUIApplicationBase" inherits="DisableUntrustedLayoutScriptsTemplate" hidden="true"/>
+      <StatusBar parentKey="PUIApplicationBar" inherits="DisableUntrustedLayoutScriptsTemplate" hidden="true"/>
+      <Frame parentKey="PUIApplicationHolder" inherits="DisableUntrustedLayoutScriptsTemplate" setAllPoints="true" hidden="true">
+        <Layers>
+          <Layer level="OVERLAY">
+            <FontString parentKey="PUIApplicationCount" inherits="NumberFontNormal" justifyH="CENTER" justifyV="MIDDLE"/>
+          </Layer>
+        </Layers>
+      </Frame>
+
+      <StatusBar parentKey="PUIDurationBar" inherits="DisableUntrustedLayoutScriptsTemplate" hidden="true"/>
+      <Frame parentKey="PUIDurationTextHolder" inherits="DisableUntrustedLayoutScriptsTemplate" hidden="true">
+        <Layers>
+          <Layer level="OVERLAY">
+            <FontString parentKey="PUIDurationText" inherits="NumberFontNormal" justifyH="CENTER" justifyV="MIDDLE">
+              <Anchors>
+                <Anchor point="CENTER"/>
+              </Anchors>
+            </FontString>
+          </Layer>
+        </Layers>
+      </Frame>
+
+      <Cooldown parentKey="PUIDurationCooldown" inherits="CooldownFrameTemplate, DisableUntrustedLayoutScriptsTemplate" hidden="true"/>
+    </Frames>
+  </Button>
+
+  <Button name="PUI_PlayerAuraButtonTemplate" virtual="true">
+    <Size x="30" y="44"/>
+    <Layers>
+      <Layer level="ARTWORK">
+        <Texture parentKey="PUIIcon" hidden="true"/>
+      </Layer>
+      <Layer level="OVERLAY">
+        <Texture parentKey="PUIBorderTop" file="Interface\Buttons\WHITE8x8" hidden="true"/>
+        <Texture parentKey="PUIBorderBottom" file="Interface\Buttons\WHITE8x8" hidden="true"/>
+        <Texture parentKey="PUIBorderLeft" file="Interface\Buttons\WHITE8x8" hidden="true"/>
+        <Texture parentKey="PUIBorderRight" file="Interface\Buttons\WHITE8x8" hidden="true"/>
+      </Layer>
+    </Layers>
+    <Frames>
+      <Frame parentKey="PUIApplicationHolder" inherits="DisableUntrustedLayoutScriptsTemplate" hidden="true">
+        <Layers>
+          <Layer level="OVERLAY">
+            <FontString parentKey="PUIApplicationCount" inherits="NumberFontNormal" justifyH="CENTER" justifyV="MIDDLE"/>
+          </Layer>
+        </Layers>
+      </Frame>
+      <Frame parentKey="PUIDurationTextHolder" inherits="DisableUntrustedLayoutScriptsTemplate" hidden="true">
+        <Layers>
+          <Layer level="OVERLAY">
+            <FontString parentKey="PUIDurationText" inherits="NumberFontNormal" justifyH="CENTER" justifyV="MIDDLE">
+              <Anchors>
+                <Anchor point="CENTER"/>
+              </Anchors>
+            </FontString>
+          </Layer>
+        </Layers>
+      </Frame>
+      <Cooldown parentKey="PUIDurationCooldown" inherits="CooldownFrameTemplate, DisableUntrustedLayoutScriptsTemplate" hidden="true"/>
+    </Frames>
+  </Button>
+</Ui>

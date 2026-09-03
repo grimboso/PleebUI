@@ -1,0 +1,87 @@
+<Ui xmlns="http://www.blizzard.com/wow/ui/">
+  <Frame name="PUI_DurationBarTemplate" virtual="true">
+    <Frames>
+      <Frame parentKey="PUIBarFrame" setAllPoints="true">
+        <Layers>
+          <Layer level="BACKGROUND">
+            <Texture parentKey="PUIBackground" setAllPoints="true"/>
+          </Layer>
+        </Layers>
+        <Frames>
+          <StatusBar parentKey="PUIStatusBar"/>
+          <Frame parentKey="PUITextHolder" setAllPoints="true">
+            <Layers>
+              <Layer level="OVERLAY">
+                <FontString parentKey="PUIDurationText" inherits="GameFontNormal" justifyH="CENTER" justifyV="MIDDLE">
+                  <Anchors>
+                    <Anchor point="CENTER"/>
+                  </Anchors>
+                </FontString>
+              </Layer>
+            </Layers>
+          </Frame>
+        </Frames>
+      </Frame>
+      <Frame parentKey="PUIIconFrame" hidden="true">
+        <Layers>
+          <Layer level="ARTWORK">
+            <Texture parentKey="PUIIcon" setAllPoints="true" hidden="true"/>
+          </Layer>
+        </Layers>
+      </Frame>
+    </Frames>
+  </Frame>
+
+  <Frame name="PUI_ChargeBarTemplate" virtual="true">
+    <Frames>
+      <Frame parentKey="PUIIconFrame" hidden="true">
+        <Layers>
+          <Layer level="ARTWORK">
+            <Texture parentKey="PUIIcon" setAllPoints="true"/>
+          </Layer>
+        </Layers>
+      </Frame>
+      <Frame parentKey="PUISlotsContainer">
+        <Frames>
+          <StatusBar parentKey="PUIChargeTracker">
+            <BarTexture file="Interface\Buttons\WHITE8x8">
+              <Color r="1" g="1" b="1" a="0"/>
+            </BarTexture>
+          </StatusBar>
+          <Frame parentKey="PUIDurationTextHolder">
+            <Size x="60" y="20"/>
+            <Layers>
+              <Layer level="OVERLAY">
+                <FontString parentKey="PUIDurationText" inherits="GameFontNormalSmall" setAllPoints="true" justifyH="CENTER">
+                  <Color r="1" g="1" b="0.5" a="1"/>
+                </FontString>
+              </Layer>
+            </Layers>
+          </Frame>
+        </Frames>
+      </Frame>
+    </Frames>
+  </Frame>
+
+  <Frame name="PUI_ChargeSlotTemplate" virtual="true">
+    <Layers>
+      <Layer level="BACKGROUND">
+        <Texture parentKey="PUIBackground"/>
+      </Layer>
+    </Layers>
+    <Frames>
+      <StatusBar parentKey="PUIRechargeBar" hidden="true"/>
+      <StatusBar parentKey="PUIFullBar"/>
+      <Frame parentKey="PUIBorder" setAllPoints="true" hidden="true">
+        <Layers>
+          <Layer level="OVERLAY">
+            <Texture parentKey="Top"/>
+            <Texture parentKey="Bottom"/>
+            <Texture parentKey="Left"/>
+            <Texture parentKey="Right"/>
+          </Layer>
+        </Layers>
+      </Frame>
+    </Frames>
+  </Frame>
+</Ui>

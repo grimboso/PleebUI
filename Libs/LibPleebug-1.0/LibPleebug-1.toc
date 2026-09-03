@@ -1,0 +1,9 @@
+## Interface: 120000
+## Title: LibPleebug-1
+## Notes: Runtime debugging library
+## Author: Pleeb
+## Version: 1.0.0
+## SavedVariables: LibPleebugDB
+## LoadSavedVariablesFirst: 1
+
+LibPleebug-1.xml

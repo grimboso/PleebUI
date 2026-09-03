@@ -1,0 +1,64 @@
+<Bindings>
+  <Binding name="CLICK PUI_CWM:LeftButton" header="World markers" category="PleebUI World markers" />
+  <Binding name="CLICK PUI_WM1:LeftButton" category="PleebUI World markers" />
+  <Binding name="CLICK PUI_WM2:LeftButton" category="PleebUI World markers" />
+  <Binding name="CLICK PUI_WM3:LeftButton" category="PleebUI World markers" />
+  <Binding name="CLICK PUI_WM4:LeftButton" category="PleebUI World markers" />
+  <Binding name="CLICK PUI_WM5:LeftButton" category="PleebUI World markers" />
+  <Binding name="CLICK PUI_WM6:LeftButton" category="PleebUI World markers" />
+  <Binding name="CLICK PUI_WM7:LeftButton" category="PleebUI World markers" />
+  <Binding name="CLICK PUI_WM8:LeftButton" category="PleebUI World markers" />
+
+  <!-- Optional extra action bars -->
+  <Binding name="PUIACTIONBAR9BUTTON1" category="PleebUI Action bars" header="PUI_EXTRA_ACTION_BARS" />
+  <Binding name="PUIACTIONBAR9BUTTON2" category="PleebUI Action bars" />
+  <Binding name="PUIACTIONBAR9BUTTON3" category="PleebUI Action bars" />
+  <Binding name="PUIACTIONBAR9BUTTON4" category="PleebUI Action bars" />
+  <Binding name="PUIACTIONBAR9BUTTON5" category="PleebUI Action bars" />
+  <Binding name="PUIACTIONBAR9BUTTON6" category="PleebUI Action bars" />
+  <Binding name="PUIACTIONBAR9BUTTON7" category="PleebUI Action bars" />
+  <Binding name="PUIACTIONBAR9BUTTON8" category="PleebUI Action bars" />
+  <Binding name="PUIACTIONBAR9BUTTON9" category="PleebUI Action bars" />
+  <Binding name="PUIACTIONBAR9BUTTON10" category="PleebUI Action bars" />
+  <Binding name="PUIACTIONBAR9BUTTON11" category="PleebUI Action bars" />
+  <Binding name="PUIACTIONBAR9BUTTON12" category="PleebUI Action bars" />
+
+  <Binding name="PUIACTIONBAR10BUTTON1" category="PleebUI Action bars" />
+  <Binding name="PUIACTIONBAR10BUTTON2" category="PleebUI Action bars" />
+  <Binding name="PUIACTIONBAR10BUTTON3" category="PleebUI Action bars" />
+  <Binding name="PUIACTIONBAR10BUTTON4" category="PleebUI Action bars" />
+  <Binding name="PUIACTIONBAR10BUTTON5" category="PleebUI Action bars" />
+  <Binding name="PUIACTIONBAR10BUTTON6" category="PleebUI Action bars" />
+  <Binding name="PUIACTIONBAR10BUTTON7" category="PleebUI Action bars" />
+  <Binding name="PUIACTIONBAR10BUTTON8" category="PleebUI Action bars" />
+  <Binding name="PUIACTIONBAR10BUTTON9" category="PleebUI Action bars" />
+  <Binding name="PUIACTIONBAR10BUTTON10" category="PleebUI Action bars" />
+  <Binding name="PUIACTIONBAR10BUTTON11" category="PleebUI Action bars" />
+  <Binding name="PUIACTIONBAR10BUTTON12" category="PleebUI Action bars" />
+
+  <Binding name="PUIACTIONBAR11BUTTON1" category="PleebUI Action bars" />
+  <Binding name="PUIACTIONBAR11BUTTON2" category="PleebUI Action bars" />
+  <Binding name="PUIACTIONBAR11BUTTON3" category="PleebUI Action bars" />
+  <Binding name="PUIACTIONBAR11BUTTON4" category="PleebUI Action bars" />
+  <Binding name="PUIACTIONBAR11BUTTON5" category="PleebUI Action bars" />
+  <Binding name="PUIACTIONBAR11BUTTON6" category="PleebUI Action bars" />
+  <Binding name="PUIACTIONBAR11BUTTON7" category="PleebUI Action bars" />
+  <Binding name="PUIACTIONBAR11BUTTON8" category="PleebUI Action bars" />
+  <Binding name="PUIACTIONBAR11BUTTON9" category="PleebUI Action bars" />
+  <Binding name="PUIACTIONBAR11BUTTON10" category="PleebUI Action bars" />
+  <Binding name="PUIACTIONBAR11BUTTON11" category="PleebUI Action bars" />
+  <Binding name="PUIACTIONBAR11BUTTON12" category="PleebUI Action bars" />
+
+  <Binding name="PUIACTIONBAR12BUTTON1" category="PleebUI Action bars" />
+  <Binding name="PUIACTIONBAR12BUTTON2" category="PleebUI Action bars" />
+  <Binding name="PUIACTIONBAR12BUTTON3" category="PleebUI Action bars" />
+  <Binding name="PUIACTIONBAR12BUTTON4" category="PleebUI Action bars" />
+  <Binding name="PUIACTIONBAR12BUTTON5" category="PleebUI Action bars" />
+  <Binding name="PUIACTIONBAR12BUTTON6" category="PleebUI Action bars" />
+  <Binding name="PUIACTIONBAR12BUTTON7" category="PleebUI Action bars" />
+  <Binding name="PUIACTIONBAR12BUTTON8" category="PleebUI Action bars" />
+  <Binding name="PUIACTIONBAR12BUTTON9" category="PleebUI Action bars" />
+  <Binding name="PUIACTIONBAR12BUTTON10" category="PleebUI Action bars" />
+  <Binding name="PUIACTIONBAR12BUTTON11" category="PleebUI Action bars" />
+  <Binding name="PUIACTIONBAR12BUTTON12" category="PleebUI Action bars" />
+</Bindings>

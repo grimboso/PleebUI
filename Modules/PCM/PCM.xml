@@ -1,0 +1,19 @@
+<Ui xmlns="http://www.blizzard.com/wow/ui/">
+  <Script file="PUI_PCM_Hooks.lua"/>
+  <Script file="PUI_PCM_DB.lua"/>
+  <Script file="PUI_PCM_IconSettings.lua"/>
+  <Script file="PUI_PCM_Runtime.lua"/>
+  <Script file="PUI_PCM_Presentation.lua"/>
+  <Script file="PUI_PCM_CustomIcons.lua"/>
+  <Script file="PUI_PCM.lua"/>
+  <Script file="PUI_PCM_BuffsIconViewer.lua"/>
+  <Script file="PUI_PCM_BuffBarViewer.lua"/>
+  <Script file="PUI_PCM_CustomCooldownBars.lua"/>
+  <Script file="PUI_PCM_CustomBuffBars.lua"/>
+  <Script file="PUI_PCM_CustomChargeCooldownBars.lua"/>
+  <Script file="PUI_PCM_Keybinds.lua"/>
+  <Script file="PUI_PCM_ConsumableTracker.lua"/>
+  <Script file="PUI_PCM_CustomTrackerInstaller.lua"/>
+  <Script file="PUI_PCM_Preview.lua"/>
+  <Script file="PUI_PCM_Config.lua"/>
+</Ui>

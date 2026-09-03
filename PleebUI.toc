@@ -1,0 +1,27 @@
+## Interface: 120100
+## Title: PleebUI
+## Notes:
+## Author: Pleeb
+## Version: 1.2
+## Category-enUS: PleebUI
+## IconTexture: Interface\Addons\PleebUI\Media\Logo.tga
+## OptionalDeps: Ace3, LibSharedMedia-3.0, NorthernSkyRaidTools
+## SavedVariables: PleebUIDB, LibPleebugDB
+## LoadSavedVariablesFirst: 1
+
+# Bootstrap
+Bootstrap.xml
+
+# Core
+Core\Core.xml
+
+# PUI modules
+Modules\PUIModules\PUIModules.xml
+
+# Feature modules
+Modules\PCM\PCM.xml
+Modules\PRD\PRD.xml
+Modules\UnitFrames\UnitFrames.xml
+Modules\ActionBars\ActionBars.xml
+
+

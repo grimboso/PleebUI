@@ -1,0 +1,18 @@
+<Ui xmlns="http://www.blizzard.com/wow/ui/">
+  <Script file="PUI_MinimapData.lua"/>
+  <Script file="PUI_Minimap.lua"/>
+  <Script file="PUI_Dragonriding.lua"/>
+  <Script file="PUI_Chat.lua"/>
+  <Script file="PUI_CharacterSheet.lua"/>
+  <Script file="PUI_Bags.lua"/>
+  <Script file="PUI_PlayerBuffs.lua"/>
+  <Script file="PUI_RaidUtility.lua"/>
+  <Script file="PUI_HunterTools.lua"/>
+  <Script file="DamageMeter/PUI_DamageMeters.lua"/>
+  <Script file="DamageMeter/PUI_DamageMeterConfig.lua"/>
+  <Script file="DamageMeter/PUI_DamageMeterSessions.lua"/>
+  <Script file="DamageMeter/PUI_DamageMeterHistory.lua"/>
+  <Script file="DamageMeter/PUI_DamageMeterWindows.lua"/>
+  <Script file="DamageMeter/PUI_DamageMeterBreakdown.lua"/>
+  <Script file="DamageMeter/PUI_DamageMeterSegmentPicker.lua"/>
+</Ui>

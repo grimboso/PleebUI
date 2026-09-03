@@ -1,0 +1,12 @@
+tag a1877a2514f03cd73a76fd145ca513a85019d9ba v1.29.0
+Author:	Kyle Buller <bullerk@gmail.com>
+Date:	Sat Feb 14 10:42:15 2026 -0600
+
+Tagging as v1.29.0
+
+commit 18d5cc4d53f7819c344262fc7a8a0ea4b72f7ef6
+Author: Kyle Buller <bullerk@gmail.com>
+Date:   Sat Feb 14 10:34:33 2026 -0600
+
+    Fix options error
+
