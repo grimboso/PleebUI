@@ -344,10 +344,6 @@ local function RefreshEmergencySalve()
   AuraSlotDriver:RefreshUnit("player")
 end
 
-local function RegisterEvent(event)
-  HunterTools:RegisterEvent(event, "OnHunterEvent")
-end
-
 local function RefreshEventRegistration()
   HunterTools:UnregisterAllEvents()
 
@@ -360,16 +356,16 @@ local function RefreshEventRegistration()
     and db.emergencySalveEnabled == true
 
   if salveActive then
-    RegisterEvent("PLAYER_ENTERING_WORLD")
-    RegisterEvent("PLAYER_TALENT_UPDATE")
-    RegisterEvent("PLAYER_SPECIALIZATION_CHANGED")
-    RegisterEvent("SPELLS_CHANGED")
-    RegisterEvent("TRAIT_CONFIG_UPDATED")
-    RegisterEvent("TRAIT_CONFIG_LIST_UPDATED")
+    HunterTools:RegisterEvent("PLAYER_ENTERING_WORLD", "OnHunterEvent")
+    HunterTools:RegisterEvent("PLAYER_TALENT_UPDATE", "OnHunterEvent")
+    HunterTools:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED", "OnHunterEvent")
+    HunterTools:RegisterEvent("SPELLS_CHANGED", "OnHunterEvent")
+    HunterTools:RegisterEvent("TRAIT_CONFIG_UPDATED", "OnHunterEvent")
+    HunterTools:RegisterEvent("TRAIT_CONFIG_LIST_UPDATED", "OnHunterEvent")
   end
 
   if SalveDirty then
-    RegisterEvent("ADDON_RESTRICTION_STATE_CHANGED")
+    HunterTools:RegisterEvent("ADDON_RESTRICTION_STATE_CHANGED", "OnHunterEvent")
   end
 
   if SalveDirty
@@ -379,7 +375,7 @@ local function RefreshEventRegistration()
       and EmergencySalveSpellDirty
     )
   then
-    RegisterEvent("PLAYER_REGEN_ENABLED")
+    HunterTools:RegisterEvent("PLAYER_REGEN_ENABLED", "OnHunterEvent")
   end
 end
 
@@ -464,12 +460,8 @@ function HunterTools:OnHunterEvent(event)
 end
 
 function HunterTools:GetOptions()
-  local function GetDB()
-    return NormalizeDB()
-  end
-
   local function MasterDisabled()
-    return GetDB().enabled ~= true
+    return NormalizeDB().enabled ~= true
   end
 
   local function ToggleOption(name, key, order)
@@ -479,11 +471,11 @@ function HunterTools:GetOptions()
       order = order,
 
       get = function()
-        return GetDB()[key] == true
+        return NormalizeDB()[key] == true
       end,
 
       set = function(_, value)
-        GetDB()[key] = value == true
+        NormalizeDB()[key] = value == true
         HunterTools:ApplySettings()
       end,
     }
@@ -505,11 +497,11 @@ function HunterTools:GetOptions()
       step = 1,
 
       get = function()
-        return GetDB()[key]
+        return NormalizeDB()[key]
       end,
 
       set = function(_, value)
-        GetDB()[key] = Clamp(
+        NormalizeDB()[key] = Clamp(
           value,
           minimum,
           maximum
@@ -528,12 +520,12 @@ function HunterTools:GetOptions()
       hasAlpha = true,
 
       get = function()
-        local color = GetDB()[key]
+        local color = NormalizeDB()[key]
         return color.r, color.g, color.b, color.a
       end,
 
       set = function(_, r, g, b, a)
-        GetDB()[key] = NormalizeColor(
+        NormalizeDB()[key] = NormalizeColor(
           {
             r = r,
             g = g,

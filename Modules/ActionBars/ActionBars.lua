@@ -204,10 +204,6 @@ local function GetMainSpecialBindingDriver()
 end
 
 local MAIN_PAGE_SNIPPET = [[
-  local special = newstate == "vehicle"
-    or newstate == "override"
-    or newstate == "shapeshift"
-    or newstate == "dragon"
   if newstate == "vehicle" then
     newstate = self:GetAttribute("pui-vehicle-page")
   elseif newstate == "override" then
@@ -224,15 +220,6 @@ local MAIN_PAGE_SNIPPET = [[
     end
   end
 
-  self:SetAttribute("pui-special-state", special)
-  local width = self:GetAttribute(special and "pui-special-width" or "pui-normal-width")
-  local height = self:GetAttribute(special and "pui-special-height" or "pui-normal-height")
-  if width and height then
-    self:SetWidth(width)
-    self:SetHeight(height)
-  end
-
-  self:ChildUpdate("specialstate", special and "1" or "0")
   self:SetAttribute("state", newstate)
   self:SetAttribute("actionpage", newstate)
   self:ChildUpdate("state", newstate)
@@ -340,7 +327,6 @@ local function CreateButtons(bar, def, barIndex)
     if def.uiKey == "1" then
       button:SetAttribute("pui-paged", true)
       button:SetAttribute("pui-button-index", buttonIndex)
-      button:SetAttribute("pui-special-page-button", true)
       button:SetAttribute("pui-normal-visible", false)
     end
 
@@ -607,8 +593,7 @@ function StandardBars:RefreshLayout(barKey)
         bar,
         skin,
         skin.iconsPerBar,
-        skin.iconsPerRow,
-        def.uiKey == "1" and #bar.buttons or nil
+        skin.iconsPerRow
       )
       UpdateBarActionStates(bar, def, bar.visibleButtonCount)
       if bar.visibleButtonCount ~= previousButtonCount then
@@ -694,8 +679,7 @@ function StandardBars:RefreshFull(barKey)
           bar,
           skin,
           skin.iconsPerBar,
-          skin.iconsPerRow,
-          def.uiKey == "1" and #bar.buttons or nil
+          skin.iconsPerRow
         )
         UpdateBarActionStates(bar, def, bar.visibleButtonCount)
         Core:ApplyBackdrop(bar, skin)

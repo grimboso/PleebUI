@@ -30,10 +30,6 @@ local function Round(v)
   return ns.Pixel.Round(tonumber(v) or 0)
 end
 
-local function GetUF()
-  return ns.UnitFrames
-end
-
 local function ApplyFontStringFrameWidth(fontString, anchorFrame, offsetX)
   local width = anchorFrame:GetWidth()
   if width <= 0 then
@@ -89,12 +85,8 @@ end
 local TextConfigKeyCache = setmetatable({}, { __mode = "k" })
 local EMPTY_TEXT_CONFIG = {}
 
-function Text.GetBaseTextSizesForUnit(unit)
-  return GetUF():GetBaseTextSizesForUnit(unit)
-end
-
 function Text.GetUnitTextConfig(unit)
-  local uf = GetUF()
+  local uf = ns.UnitFrames
   local db = uf.db.profile
   local unitConfig = uf:GetConfigUnit(unit)
   return db.text or EMPTY_TEXT_CONFIG, unitConfig and unitConfig.text or EMPTY_TEXT_CONFIG
@@ -254,7 +246,7 @@ function Text.GetConfigTextKey(cfg)
   local offsetHealthY = text.offsetHealthY or ""
   local offsetPowerX = text.offsetPowerX or ""
   local offsetPowerY = text.offsetPowerY or ""
-  local uf = GetUF()
+  local uf = ns.UnitFrames
   local ufDB = uf and uf.db and uf.db.profile or nil
   local shortenValues = ShouldShortenValues(text, ufDB)
 
@@ -462,7 +454,7 @@ function Text.RefreshTextForFrame(frame, fontRev)
     return
   end
 
-  local uf = GetUF()
+  local uf = ns.UnitFrames
   local ufDB = uf and uf.db and uf.db.profile or nil
   local cfg = frame.config
 
@@ -544,7 +536,7 @@ function Text.Construct(frame, unit, cfg, deferLayout)
 
   if created or frame.__puiTextConstructedUnit ~= unit then
     local useConfigText = frame.__puiUseConfigText == true
-    local baseNameSize, baseHPSize, basePowerSize = Text.GetBaseTextSizesForUnit(unit)
+    local baseNameSize, baseHPSize, basePowerSize = ns.UnitFrames:GetBaseTextSizesForUnit(unit)
 
     Text.ApplyUnitTextFont(frame.NameText, unit, "name", baseNameSize, cfg, useConfigText)
     Text.ApplyUnitTextFont(frame.HealthText, unit, "health", baseHPSize, cfg, useConfigText)
@@ -621,7 +613,7 @@ function Text.ApplyFrame(frame, unit, cfg, fontRev, opts)
   local showHealth = not hideHealthText
   local hpMode = showHealth and (textCfg.healthMode or "CUR_MAX") or "HIDE"
   local ppMode = textCfg.powerMode or "CUR"
-  local uf = GetUF()
+  local uf = ns.UnitFrames
   local ufDB = uf and uf.db and uf.db.profile or nil
   local shortenValues = ShouldShortenValues(textCfg, ufDB)
   local healthTags = shortenValues and SHORT_HEALTH_TAGS or HEALTH_TAGS
@@ -697,7 +689,7 @@ function Text.ApplyFrame(frame, unit, cfg, fontRev, opts)
     end
 
     if frame.__puiFontRev ~= curRev or frame.__puiTextConfigKey ~= textKey then
-      local baseNameSize, baseHPSize, basePowerSize = Text.GetBaseTextSizesForUnit(unit)
+      local baseNameSize, baseHPSize, basePowerSize = ns.UnitFrames:GetBaseTextSizesForUnit(unit)
 
       if frame.NameText then
         Text.ApplyUnitTextFont(frame.NameText, unit, "name", baseNameSize, cfg, useConfigText)
@@ -809,10 +801,8 @@ function Text.ApplyFrame(frame, unit, cfg, fontRev, opts)
 end
 
   Round = P:Def("Text.Round", Round)
-  GetUF = P:Def("Text.GetUF", GetUF)
   ApplyFontStringFrameWidth = P:Def("Text.ApplyFontStringFrameWidth", ApplyFontStringFrameWidth)
   ShouldShortenValues = P:Def("Text.ShouldShortenValues", ShouldShortenValues)
-  Text.GetBaseTextSizesForUnit = P:Def("Text.GetBaseTextSizesForUnit", Text.GetBaseTextSizesForUnit)
   Text.GetUnitTextConfig = P:Def("Text.GetUnitTextConfig", Text.GetUnitTextConfig)
   PickTextValue = P:Def("PickTextValue", PickTextValue)
   Text.ResolveFontForText = P:Def("Text.ResolveFontForText", Text.ResolveFontForText)

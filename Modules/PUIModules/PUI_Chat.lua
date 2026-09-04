@@ -6,8 +6,10 @@ local ADDON_NAME, ns = ...
 
 local Addon    = ns.Addon
 
+local FrameScale = ns.FrameScale
 local FrameUtil = ns.FrameUtil
 local OptionsUtil = ns.OptionsUtil
+local Round = ns.Pixel.Round
 
 
 local ChatLinks = Addon:NewModule("ChatLinks", "NumyAceEvent-3.0")
@@ -2559,8 +2561,8 @@ local function EnsurePrimaryChatHolder()
   end
 
   holder = CreateFrame("Frame", "PleebUI_PrimaryChatHolder", UIParent)
-  holder:SetSize(430, 180)
-  holder:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", 32, 32)
+  holder:SetSize(Round(430), Round(180))
+  holder:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", Round(32), Round(32))
   holder:SetClampRectInsets(0, 0, 0, 0)
   holder:SetClampedToScreen(false)
   holder:SetMovable(true)
@@ -2585,8 +2587,8 @@ local function ApplyPrimaryChatHolderLayout(db)
   local relName    = cfg.relativeTo or "UIParent"
   local relFrame   = _G[relName] or UIParent
   local relPoint   = cfg.relativePoint or point
-  local x          = cfg.x or 32
-  local y          = cfg.y or 32
+  local x          = Round(tonumber(cfg.x) or 32)
+  local y          = Round(tonumber(cfg.y) or 32)
 
   -- Normalize the removed DataBar anchor without reading its runtime geometry.
   if relName == "PleebUI_DataBar" then
@@ -2599,7 +2601,7 @@ local function ApplyPrimaryChatHolderLayout(db)
 
   holder:ClearAllPoints()
   holder:SetPoint(point, relFrame, relPoint, x, y)
-  holder:SetSize(tonumber(cfg.width) or 430, tonumber(cfg.height) or 180)
+  holder:SetSize(Round(tonumber(cfg.width) or 430), Round(tonumber(cfg.height) or 180))
   return holder
 end
 
@@ -2661,8 +2663,8 @@ local function SavePrimaryChatLayout(holder)
   cfg.point = point or "BOTTOMLEFT"
   cfg.relativeTo = relativeName
   cfg.relativePoint = relativePoint or cfg.point
-  cfg.x = x or 0
-  cfg.y = y or 0
+  cfg.x = Round(x or 0)
+  cfg.y = Round(y or 0)
   cfg.width = ClampInt(holder:GetWidth(), 220, 1000)
   cfg.height = ClampInt(holder:GetHeight(), 100, 700)
 end
@@ -2678,6 +2680,7 @@ local function StopPrimaryChatMove()
   if holder then
     holder:StopMovingOrSizing()
     SavePrimaryChatLayout(holder)
+    ApplyPrimaryChatHolderLayout(ChatLinks.db.profile)
   end
 end
 
@@ -2723,6 +2726,7 @@ local function StopPrimaryChatResize()
   local holder = ChatLinks._primaryChatHolder
   if holder then
     SavePrimaryChatLayout(holder)
+    ApplyPrimaryChatHolderLayout(ChatLinks.db.profile)
     ChatLinks:ApplyChatWindowStyle()
   end
 end
@@ -2741,11 +2745,11 @@ local function UpdatePrimaryChatResize(handle)
   cursorX = cursorX / scale
   cursorY = cursorY / scale
 
-  local width = ClampInt(state.width + cursorX - state.cursorX, 220, 1000)
-  local height = ClampInt(state.height - cursorY + state.cursorY, 100, 700)
+  local width = Round(ClampInt(state.width + cursorX - state.cursorX, 220, 1000))
+  local height = Round(ClampInt(state.height - cursorY + state.cursorY, 100, 700))
 
   state.holder:ClearAllPoints()
-  state.holder:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", state.left, state.top)
+  state.holder:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", Round(state.left), Round(state.top))
   state.holder:SetSize(width, height)
 end
 
@@ -2771,8 +2775,8 @@ local function StartPrimaryChatResize(handle)
     holder = holder,
     cursorX = cursorX / scale,
     cursorY = cursorY / scale,
-    left = left,
-    top = top,
+    left = Round(left),
+    top = Round(top),
     width = holder:GetWidth(),
     height = holder:GetHeight(),
   }
@@ -2863,7 +2867,7 @@ local function RegisterPrimaryChatMover()
 
     onDragStop = SavePrimaryChatLayout,
 
-    resetPosition = function(f)
+    resetPosition = function()
       local db = ChatLinks.db and ChatLinks.db.profile
       if not db then
         return
@@ -2879,9 +2883,7 @@ local function RegisterPrimaryChatMover()
         height        = 180,
       }
 
-      f:ClearAllPoints()
-      f:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", 32, 32)
-      f:SetSize(430, 180)
+      ApplyPrimaryChatHolderLayout(db)
     end,
 
     optionsString = "Chat",
@@ -2901,7 +2903,7 @@ local function RegisterPrimaryChatMover()
             get = function() return tonumber(cfg.width) or holder:GetWidth() end,
             set = function(value)
               cfg.width = ClampInt(value, 220, 1000)
-              holder:SetWidth(cfg.width)
+              ApplyPrimaryChatHolderLayout(ChatLinks.db.profile)
             end,
           },
           {
@@ -2913,7 +2915,7 @@ local function RegisterPrimaryChatMover()
             get = function() return tonumber(cfg.height) or holder:GetHeight() end,
             set = function(value)
               cfg.height = ClampInt(value, 100, 700)
-              holder:SetHeight(cfg.height)
+              ApplyPrimaryChatHolderLayout(ChatLinks.db.profile)
             end,
           },
           {
@@ -3465,14 +3467,19 @@ local function SkinChatFrame(chatFrame)
   local function RefreshShellAnchors()
     local scrollbarWidth = 0
     if chatFrame.ScrollBar then
-      scrollbarWidth = 8
+      scrollbarWidth = Round(8)
     end
 
+    local left = Round(-2)
+    local top = Round(3)
+    local right = Round(15) + scrollbarWidth
+    local bottom = Round(-6)
+
     shell:ClearAllPoints()
-    shell:SetPoint("TOPLEFT", chatFrame, "TOPLEFT", -2, 3)
-    shell:SetPoint("TOPRIGHT", chatFrame, "TOPRIGHT", 15 + scrollbarWidth, 3)
-    shell:SetPoint("BOTTOMLEFT", chatFrame, "BOTTOMLEFT", -2, -6)
-    shell:SetPoint("BOTTOMRIGHT", chatFrame, "BOTTOMRIGHT", 15 + scrollbarWidth, -6)
+    shell:SetPoint("TOPLEFT", chatFrame, "TOPLEFT", left, top)
+    shell:SetPoint("TOPRIGHT", chatFrame, "TOPRIGHT", right, top)
+    shell:SetPoint("BOTTOMLEFT", chatFrame, "BOTTOMLEFT", left, bottom)
+    shell:SetPoint("BOTTOMRIGHT", chatFrame, "BOTTOMRIGHT", right, bottom)
   end
 
   if chatFrame.GetFrameStrata then
@@ -3944,7 +3951,7 @@ function ChatLinks:OnEnable()
   tempFrame:RegisterEvent("CHAT_MSG_BN_WHISPER")
   tempFrame:RegisterEvent("CHAT_MSG_BN_WHISPER_INFORM")
 
-  ApplyPrimaryChatHolderLayout(self.db.profile)
+  FrameScale:RegisterScaleListener(InitializePrimaryChatLayout)
 
   -- Primary chat holder mover
   RegisterPrimaryChatMover()
@@ -3955,6 +3962,7 @@ end
 
 
 function ChatLinks:OnDisable()
+  FrameScale:UnregisterScaleListener(InitializePrimaryChatLayout)
   self._puiRuntimeEnabled = false
   self:SetUrlFiltersEnabled(false)
   self:UnregisterEvent("UPDATE_CHAT_WINDOWS")

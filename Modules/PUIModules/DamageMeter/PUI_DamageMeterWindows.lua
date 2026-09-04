@@ -1675,10 +1675,6 @@ function DamageMeters:EnsureWindows()
   end
 end
 
-function DamageMeters:RegisterWindowMover(window)
-  FrameUtil:RegisterMover(MOVER_PREFIX .. window.index, window.frame, window.moverOptions)
-end
-
 function DamageMeters:UnregisterWindowMovers()
   for index = 1, MAX_WINDOWS do
     FrameUtil:UnregisterMover(MOVER_PREFIX .. index)
@@ -1739,7 +1735,7 @@ function DamageMeters:ApplyWindowConfiguration()
       ApplyWindowStyle(window)
       ApplyWindowLayout(window)
       window.frame:Show()
-      self:RegisterWindowMover(window)
+      FrameUtil:RegisterMover(MOVER_PREFIX .. window.index, window.frame, window.moverOptions)
     elseif window then
       window.dragState = nil
       window.resizeState = nil

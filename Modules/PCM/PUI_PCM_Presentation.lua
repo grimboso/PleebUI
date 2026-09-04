@@ -46,10 +46,6 @@ local function CopyColor(color, fallback)
   }
 end
 
-local function ResolveTexture(key)
-  return BarWidget.ResolveStatusBarTexture(key, FALLBACK_BAR_TEXTURE)
-end
-
 local function ResolveFont(config, role, fallbackSize)
   config = config or {}
   local isDuration = config.kind == "duration"
@@ -319,7 +315,7 @@ local function LayoutChargeSlots(parts, state)
   local available = math_max(1, totalSize - spacing * (count - 1))
   local span = available / count
   local slots = EnsureChargeSlots(parts, count)
-  local texture = ResolveTexture(cfg.texture or "Pleebar")
+  local texture = BarWidget.ResolveStatusBarTexture(cfg.texture or "Pleebar", FALLBACK_BAR_TEXTURE)
   local background = CopyColor(cfg.slotBackgroundColor, { 0.12, 0.12, 0.12, 0.95 })
   local opacity = tonumber(cfg.opacity) or 1
   local barColor = CopyColor(state.color or cfg.barColor, { 1, 1, 1, 1 })
@@ -547,7 +543,7 @@ function PCMBarAdapter.ApplyStyle(parts, state)
     parts.background:Show()
   end
   if parts.status then
-    parts.status:SetStatusBarTexture(ResolveTexture(textureKey))
+    parts.status:SetStatusBarTexture(BarWidget.ResolveStatusBarTexture(textureKey, FALLBACK_BAR_TEXTURE))
     parts.status:SetStatusBarColor(color[1], color[2], color[3], color[4])
   end
   if state.applyBorder ~= false then
@@ -1456,7 +1452,7 @@ function PCMPresentation.LayoutStackSegments(parts, state)
   local totalSize = vertical and height or width
   local usableSize = math_max(count, totalSize - gap * (count - 1))
   local span = usableSize / count
-  local texture = ResolveTexture(cfg.stackTexture or "Pleebar")
+  local texture = BarWidget.ResolveStatusBarTexture(cfg.stackTexture or "Pleebar", FALLBACK_BAR_TEXTURE)
   local color = CopyColor(state.color or cfg.barColor, { 0.74, 0.48, 0.92, 1 })
 
   for index = 1, count do

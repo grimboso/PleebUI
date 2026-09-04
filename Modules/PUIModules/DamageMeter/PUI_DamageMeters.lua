@@ -1133,7 +1133,7 @@ function SlashCmdList.PUI_DAMAGEMETERS(message)
   DamageMeters:HandleSlashCommand(message)
 end
 
-function DamageMeters:OnProfileChanged()
+function DamageMeters:ApplyProfile()
   Breakdown.Close()
   Breakdown.InvalidateTargetAnalysisCache()
   Breakdown.InvalidateDeathRecapCache()
@@ -1157,11 +1157,6 @@ function DamageMeters:OnInitialize()
 
   EnsureCombatRefreshDriver()
   self:InitializeLauncher()
-
-  Addon.db.RegisterCallback(self, "OnProfileChanged", "OnProfileChanged")
-  Addon.db.RegisterCallback(self, "OnProfileCopied", "OnProfileChanged")
-  Addon.db.RegisterCallback(self, "OnProfileReset", "OnProfileChanged")
-  Addon.db.RegisterCallback(self, "OnNewProfile", "OnProfileChanged")
 
   Addon:RegisterOptionsSection("DamageMeters", function()
     return DamageMeters
@@ -1208,7 +1203,7 @@ DamageMeters.ApplySettings = P:Def("DamageMeters.ApplySettings", DamageMeters.Ap
 DamageMeters.ClearUnsavedCombatHistory = P:Def("DamageMeters.ClearUnsavedCombatHistory", DamageMeters.ClearUnsavedCombatHistory)
 DamageMeters.InitializeLauncher = P:Def("DamageMeters.InitializeLauncher", DamageMeters.InitializeLauncher)
 DamageMeters.HandleSlashCommand = P:Def("DamageMeters.HandleSlashCommand", DamageMeters.HandleSlashCommand)
-DamageMeters.OnProfileChanged = P:Def("DamageMeters.OnProfileChanged", DamageMeters.OnProfileChanged)
+DamageMeters.ApplyProfile = P:Def("DamageMeters.ApplyProfile", DamageMeters.ApplyProfile)
 DamageMeters.CHALLENGE_MODE_START = P:Def("DamageMeters.CHALLENGE_MODE_START", DamageMeters.CHALLENGE_MODE_START)
 DamageMeters.CHALLENGE_MODE_COMPLETED = P:Def("DamageMeters.CHALLENGE_MODE_COMPLETED", DamageMeters.CHALLENGE_MODE_COMPLETED)
 DamageMeters.CHALLENGE_MODE_RESET = P:Def("DamageMeters.CHALLENGE_MODE_RESET", DamageMeters.CHALLENGE_MODE_RESET)

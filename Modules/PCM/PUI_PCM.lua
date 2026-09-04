@@ -72,7 +72,6 @@ local function _PUI_SetAllPointsStamped(obj, parent)
   obj:SetAllPoints(parent)
 end
 
-local __PUI_PCM_ChildrenBuf = {}
 local t_wipe = table.wipe
 
 local _PCM_IsSecret = issecretvalue
@@ -176,19 +175,8 @@ ns.PCM_IsTransitionPending = _PCM_IsTransitionPending
 
 local __PUI_PCM_ItemRulePassStamp = setmetatable({}, { __mode = "k" })
 
-local function _PackChildren(buf, ...)
-  t_wipe(buf)
-  local n = select("#", ...)
-  for i = 1, n do
-    buf[i] = select(i, ...)
-  end
-  return buf
-end
-
-
 local PCMFrameState = {
   ViewerFrameKey = setmetatable({}, { __mode = "k" }),
-  ItemAppsFSCache = setmetatable({}, { __mode = "k" }),
 }
 local PCMAnchorState = {
   anchorsOwned = setmetatable({}, { __mode = "k" }),
@@ -1121,85 +1109,19 @@ function Cooldowns:_ApplyCooldownCountRule(itemFrame, viewerKey)
   cd:SetHideCountdownNumbers(enabled ~= true)
 end
 
-local function _GetApplicationsFontStrings(itemFrame)
-  if not itemFrame then
-    return {}
-  end
-
-  -- Cache result per itemFrame to avoid repeated allocations/scans.
-  local cached = PCMFrameState.ItemAppsFSCache[itemFrame]
-  if cached then
-    return cached
-  end
-
-  local out = {}
-
-  local function Add(fs)
-    if fs then
-      out[#out + 1] = fs
-    end
-  end
-
-  -- Prefer the viewer's method if it exists.
-  if itemFrame.GetApplicationsFontString then
-    local fs = itemFrame:GetApplicationsFontString()
-    if fs then
-      Add(fs)
-      PCMFrameState.ItemAppsFSCache[itemFrame] = out
-      return out
-    end
-  end
-
-  -- Common buff-viewer fields.
-  Add(itemFrame.Applications)
-  Add(itemFrame.applications)
-
-  -- Fallback: scan children for Applications-named fontstrings (do once).
-  if itemFrame.GetChildren then
-    local children = _PackChildren(__PUI_PCM_ChildrenBuf, itemFrame:GetChildren())
-    for _, child in ipairs(children) do
-      if child and child.GetName and child.GetObjectType then
-        local name = child:GetName()
-        local typ  = child:GetObjectType()
-        if name and typ == "FontString" then
-          if name:find("Applications") then
-            Add(child)
-          end
-        end
-
-      end
-    end
-  end
-  PCMFrameState.ItemAppsFSCache[itemFrame] = out
-  return out
-end
-
 function Cooldowns:_ApplyBuffCountRule(itemFrame, viewerKey)
-  if not itemFrame or not viewerKey then
-    return
-  end
-
   viewerKey = PCMHooks.GetItemViewerKey(itemFrame, viewerKey)
 
-  local list = _GetApplicationsFontStrings(itemFrame)
-  if not list or #list == 0 then
+  local fs
+  if viewerKey == "BuffIconCooldownViewer" then
+    fs = itemFrame.Applications.Applications
+  elseif viewerKey == "BuffBarCooldownViewer" then
+    fs = itemFrame.Icon.Applications
+  else
     return
   end
 
-  local enabled = self:GetBuffCountEnabled(viewerKey)
-  for _, fs in ipairs(list) do
-    if enabled then
-      if fs.Show then
-        fs:Show()
-      end
-    else
-      if fs.Hide then
-        fs:Hide()
-      end
-    end
-  end
-
-
+  fs:SetShown(self:GetBuffCountEnabled(viewerKey))
 end
 
 local function _GetChargeFontString(itemFrame)
@@ -4081,12 +4003,8 @@ local __PUI_PCM_BlockedRefresh = {
   dirty = {},
 }
 
-local function _PCM_RefreshMaskHas(mask, flag)
-  return PCMRuntime:MaskHas(mask, flag)
-end
-
 local function _PCM_RefreshMaskAdd(mask, flag)
-  if _PCM_RefreshMaskHas(mask, flag) then
+  if PCMRuntime:MaskHas(mask, flag) then
     return mask or 0
   end
   return (mask or 0) + flag
@@ -4096,13 +4014,13 @@ local function _PCM_MergeRefreshMask(left, right)
   local merged = left or 0
   right = right or 0
 
-  if _PCM_RefreshMaskHas(right, PCM_REFRESH_LAYOUT) then
+  if PCMRuntime:MaskHas(right, PCM_REFRESH_LAYOUT) then
     merged = _PCM_RefreshMaskAdd(merged, PCM_REFRESH_LAYOUT)
   end
-  if _PCM_RefreshMaskHas(right, PCM_REFRESH_FONT) then
+  if PCMRuntime:MaskHas(right, PCM_REFRESH_FONT) then
     merged = _PCM_RefreshMaskAdd(merged, PCM_REFRESH_FONT)
   end
-  if _PCM_RefreshMaskHas(right, PCM_REFRESH_SKIN) then
+  if PCMRuntime:MaskHas(right, PCM_REFRESH_SKIN) then
     merged = _PCM_RefreshMaskAdd(merged, PCM_REFRESH_SKIN)
   end
 
@@ -4150,13 +4068,13 @@ local function _PCM_ExecuteViewerRefresh(self, mask, viewerKey)
     return
   end
 
-  if _PCM_RefreshMaskHas(mask, PCM_REFRESH_SKIN) then
+  if PCMRuntime:MaskHas(mask, PCM_REFRESH_SKIN) then
     _RefreshIconViewers(viewerKey)
-  elseif _PCM_RefreshMaskHas(mask, PCM_REFRESH_FONT) then
+  elseif PCMRuntime:MaskHas(mask, PCM_REFRESH_FONT) then
     _RefreshViewerFontsOnly(viewerKey)
   end
 
-  if _PCM_RefreshMaskHas(mask, PCM_REFRESH_LAYOUT) then
+  if PCMRuntime:MaskHas(mask, PCM_REFRESH_LAYOUT) then
     _ForEachRefreshViewer(viewerKey, _PCM_ApplyRequestedViewerLayout)
   end
 end
@@ -4200,7 +4118,7 @@ function Cooldowns:_RequestViewerRefresh(mode, viewerKey)
 
   local mask = _PCM_GetViewerRefreshMask(mode)
 
-  if _PCM_RefreshMaskHas(mask, PCM_REFRESH_SKIN) then
+  if PCMRuntime:MaskHas(mask, PCM_REFRESH_SKIN) then
     _PCM_MarkCountRulesDirty()
     _PCM_InvalidateStaticPresentation()
   end
@@ -5562,15 +5480,12 @@ function Cooldowns:OnProfileChanged()
   _PCM_RunHardViewerTransition(self)
 end
 
-Cooldowns.RefreshProfile = Cooldowns.OnProfileChanged
-
   Cooldowns.ApplyCustomBarsCDMProfile = P:Def('Cooldowns:ApplyCustomBarsCDMProfile', Cooldowns.ApplyCustomBarsCDMProfile)
   Cooldowns.ExportCustomBars = P:Def('Cooldowns:ExportCustomBars', Cooldowns.ExportCustomBars)
   Cooldowns.ImportCustomBarsString = P:Def('Cooldowns:ImportCustomBarsString', Cooldowns.ImportCustomBarsString)
   RoundPixel = P:Def('RoundPixel', RoundPixel)
   _PUI_SetPointStamped = P:Def('_PUI_SetPointStamped', _PUI_SetPointStamped)
   _PUI_SetAllPointsStamped = P:Def('_PUI_SetAllPointsStamped', _PUI_SetAllPointsStamped)
-  _PackChildren = P:Def('_PackChildren', _PackChildren)
   _PCM_GetViewerCategoryEnum = P:Def('_PCM_GetViewerCategoryEnum', _PCM_GetViewerCategoryEnum)
   _PCM_GetViewerKeyFromFrame = P:Def('_PCM_GetViewerKeyFromFrame', _PCM_GetViewerKeyFromFrame)
   _PCM_GetConfiguredViewerEntryCount = P:Def('_PCM_GetConfiguredViewerEntryCount', _PCM_GetConfiguredViewerEntryCount)
@@ -5615,7 +5530,6 @@ Cooldowns.RefreshProfile = Cooldowns.OnProfileChanged
   Cooldowns.SetBuffCountEnabled = P:Def('Cooldowns:SetBuffCountEnabled', Cooldowns.SetBuffCountEnabled)
   Cooldowns.GetChargeCountEnabled = P:Def('Cooldowns:GetChargeCountEnabled', Cooldowns.GetChargeCountEnabled)
   Cooldowns.SetChargeCountEnabled = P:Def('Cooldowns:SetChargeCountEnabled', Cooldowns.SetChargeCountEnabled)
-  _GetApplicationsFontStrings = P:Def('_GetApplicationsFontStrings', _GetApplicationsFontStrings)
   _GetChargeFontString = P:Def('_GetChargeFontString', _GetChargeFontString)
   _PCM_FetchFontPath = P:Def('_PCM_FetchFontPath', _PCM_FetchFontPath)
   _PCM_ApplyFontOptsToFontString = P:Def('_PCM_ApplyFontOptsToFontString', _PCM_ApplyFontOptsToFontString)
@@ -5735,7 +5649,6 @@ Cooldowns.RefreshProfile = Cooldowns.OnProfileChanged
   Cooldowns.ApplySettings = P:Def('Cooldowns:ApplySettings', Cooldowns.ApplySettings)
   Cooldowns.SoftRebuild = P:Def('Cooldowns:SoftRebuild', Cooldowns.SoftRebuild)
   Cooldowns.OnProfileChanged = P:Def('Cooldowns:OnProfileChanged', Cooldowns.OnProfileChanged)
-  Cooldowns.RefreshProfile = P:Def('Cooldowns:RefreshProfile', Cooldowns.RefreshProfile)
   _PCM_GetEquipSlot = P:Def('_PCM_GetEquipSlot', _PCM_GetEquipSlot)
   _PCM_IsEquipSlotCooldownItem = P:Def('_PCM_IsEquipSlotCooldownItem', _PCM_IsEquipSlotCooldownItem)
   _PCM_GetEquipSlotCooldown = P:Def('_PCM_GetEquipSlotCooldown', _PCM_GetEquipSlotCooldown)
@@ -5744,7 +5657,6 @@ Cooldowns.RefreshProfile = Cooldowns.OnProfileChanged
   _PCM_GetViewerCategoryList = P:Def('_PCM_GetViewerCategoryList', _PCM_GetViewerCategoryList)
   _PCM_FlushTransition = P:Def('_PCM_FlushTransition', _PCM_FlushTransition)
   _PCM_QueueTransitionFlush = P:Def('_PCM_QueueTransitionFlush', _PCM_QueueTransitionFlush)
-  _PCM_RefreshMaskHas = P:Def('_PCM_RefreshMaskHas', _PCM_RefreshMaskHas)
   _PCM_RefreshMaskAdd = P:Def('_PCM_RefreshMaskAdd', _PCM_RefreshMaskAdd)
   _PCM_MergeRefreshMask = P:Def('_PCM_MergeRefreshMask', _PCM_MergeRefreshMask)
   _PCM_SetDirtyViewerMask = P:Def('_PCM_SetDirtyViewerMask', _PCM_SetDirtyViewerMask)

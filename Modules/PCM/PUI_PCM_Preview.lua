@@ -125,10 +125,6 @@ local function PCMPreview_GetSafeSpellTexture(spellID)
   return nil
 end
 
-local function PCMPreview_GetStatusBarTexture(key)
-  return BarWidget.ResolveStatusBarTexture(key, FALLBACK_BAR_TEXTURE)
-end
-
 local function PCMPreview_GetFontConfig(root, viewerKey, role)
   local fonts = type(root) == "table" and root.fonts or nil
   local global = fonts and fonts.global or nil
@@ -1042,7 +1038,7 @@ local function PCMPreview_ConfigureBuffBarPanel(panel, style)
 
   local labelWidth = vertical and 0 or math_max(88, Round(132 * previewZoom))
   local labelGap = vertical and 0 or Round(6 * previewZoom)
-  local texture = PCMPreview_GetStatusBarTexture(config.texture or "Pleebar")
+  local texture = BarWidget.ResolveStatusBarTexture(config.texture or "Pleebar", FALLBACK_BAR_TEXTURE)
   local backgroundColor = style.buffBarBgColor or { 0.12, 0.12, 0.12, 0.95 }
   local fillColor = style.buffBarColor or colors.accent
   local borderColor = config.borderColor or { 0.20, 0.20, 0.24, 1 }
@@ -1805,7 +1801,7 @@ local function PCMPreview_ConfigureChargeSlots(bar, config, zoom, texture)
 end
 
 local function PCMPreview_ConfigureDurationVisuals(bar, config, entry, zoom)
-  local texture = PCMPreview_GetStatusBarTexture(config.durationTexture or "Pleebar")
+  local texture = BarWidget.ResolveStatusBarTexture(config.durationTexture or "Pleebar", FALLBACK_BAR_TEXTURE)
   local orientation = config.orientation == "vertical" and "VERTICAL" or "HORIZONTAL"
   local direction = tostring(config.fillDirection or ""):upper()
   local reverseFill = orientation == "VERTICAL" and direction == "DOWN"
@@ -2974,7 +2970,6 @@ PCMPreview_Clamp = P:Def("Clamp", PCMPreview_Clamp)
 PCMPreview_GetDisplayScale = P:Def("GetDisplayScale", PCMPreview_GetDisplayScale)
 PCMPreview_ColorComponents = P:Def("ColorComponents", PCMPreview_ColorComponents)
 PCMPreview_GetSafeSpellTexture = P:Def("GetSafeSpellTexture", PCMPreview_GetSafeSpellTexture)
-PCMPreview_GetStatusBarTexture = P:Def("GetStatusBarTexture", PCMPreview_GetStatusBarTexture)
 PCMPreview_GetFontConfig = P:Def("GetFontConfig", PCMPreview_GetFontConfig)
 PCMPreview_ApplyFont = P:Def("ApplyFont", PCMPreview_ApplyFont)
 PCMPreview_ApplyBackdrop = P:Def("ApplyBackdrop", PCMPreview_ApplyBackdrop)

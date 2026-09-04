@@ -315,21 +315,25 @@ function Addon:OnProfileChanged(event, db, newProfile)
     end
   end
 
+  ns.FrameUtil.BeginProfileTransition()
   self:EnsureSchema()
   self:StaggeredUpdateAll({ profile = true, profileChanged = true, movers = true, layout = true, options = true, theme = true, fonts = true })
 end
 
 function Addon:OnProfileCopied(event, db, sourceProfile)
+  ns.FrameUtil.BeginProfileTransition()
   self:EnsureSchema()
   self:StaggeredUpdateAll({ profile = true, profileCopied = true, movers = true, layout = true, options = true, theme = true, fonts = true })
 end
 
 function Addon:OnProfileReset(event, db)
+  ns.FrameUtil.BeginProfileTransition()
   self:EnsureSchema()
   self:StaggeredUpdateAll({ profile = true, profileReset = true, movers = true, layout = true, options = true, theme = true, fonts = true })
 end
 
 function Addon:OnNewProfile(event, db)
+  ns.FrameUtil.BeginProfileTransition()
   self:EnsureSchema()
   self:StaggeredUpdateAll({ profile = true, profileNew = true, movers = true, layout = true, options = true, theme = true, fonts = true })
 end
@@ -1020,7 +1024,10 @@ local PUI_PROFILE_UPDATE_TARGETS = {
   "PlayerBuffs",
   "HunterTools",
   "PRD",
+  "DamageMeters",
   "CharacterSheet",
+  "Bags",
+  "TestMode",
   "Options",
 }
 
@@ -1125,6 +1132,8 @@ function Addon:_RunNextStaggeredUpdate()
 
     if nextFlags and next(nextFlags) then
       self:StaggeredUpdateAll(nextFlags)
+    else
+      ns.FrameUtil.CompleteProfileTransition()
     end
 
     return
@@ -1282,7 +1291,11 @@ function Addon:_FlushUpdateBus()
   local damageMeters = ns.Modules.DamageMeters
   flags = targets.DamageMeters
   if flags then
-    damageMeters:RefreshTheme()
+    if flags.profile == true then
+      damageMeters:ApplyProfile()
+    elseif flags.theme == true then
+      damageMeters:RefreshTheme()
+    end
   end
 
   local characterSheet = ns.Registry.CharacterSheet

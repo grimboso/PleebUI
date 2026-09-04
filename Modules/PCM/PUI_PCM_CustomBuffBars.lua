@@ -306,17 +306,6 @@ local function _CustomBars_GetAccentRGBA()
   return color[1], color[2], color[3], color[4]
 end
 
-local function _CustomBars_FetchBarTexture(key)
-  if key and key ~= "" then
-    local texture = LSM:Fetch("statusbar", key, true)
-    if texture then
-      return texture
-    end
-  end
-
-  return Theme.GetBarTexture()
-end
-
 local function _CustomBars_GetLayoutGeometry(cfg)
   local totalLength = Round(tonumber(cfg and cfg.width) or 250)
   local thickness = Round(tonumber(cfg and cfg.height) or 25)
@@ -1501,7 +1490,7 @@ end
 
 function _customBarsAuraDriver:GetBarAppearance(cfg, duration)
   local textureKey = duration and cfg.durationTexture or cfg.stackTexture
-  local texturePath = _CustomBars_FetchBarTexture(textureKey)
+  local texturePath = BarWidget.ResolveStatusBarTexture(textureKey)
   local orientation = cfg.orientation == "vertical" and "VERTICAL" or "HORIZONTAL"
   local direction = tostring(cfg.fillDirection or ""):upper()
   local reverseFill = orientation == "VERTICAL" and direction == "DOWN"
@@ -3130,7 +3119,6 @@ _GetStackBarsDB = P:Def("_GetStackBarsDB", _GetStackBarsDB)
 PUI_GetCooldownNumbersFontString = P:Def("PUI_GetCooldownNumbersFontString", PUI_GetCooldownNumbersFontString)
 _CustomBars_EnsureDefaults = P:Def("_CustomBars_EnsureDefaults", _CustomBars_EnsureDefaults)
 _CustomBars_GetAccentRGBA = P:Def("_CustomBars_GetAccentRGBA", _CustomBars_GetAccentRGBA)
-_CustomBars_FetchBarTexture = P:Def("_CustomBars_FetchBarTexture", _CustomBars_FetchBarTexture)
 _CustomBars_GetLayoutGeometry = P:Def("_CustomBars_GetLayoutGeometry", _CustomBars_GetLayoutGeometry)
 _CustomBars_GetAnchorVisualOffset = P:Def("_CustomBars_GetAnchorVisualOffset", _CustomBars_GetAnchorVisualOffset)
 _CustomBars_ApplyAnchor = P:Def("_CustomBars_ApplyAnchor", _CustomBars_ApplyAnchor)

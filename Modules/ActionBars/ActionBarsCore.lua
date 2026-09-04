@@ -935,7 +935,7 @@ function Core:IsBarEnabled(bar)
   return bar.enabled ~= false
 end
 
-function Core:LayoutButtons(bar, skin, buttonCount, perRow, layoutButtonCount)
+function Core:LayoutButtons(bar, skin, buttonCount, perRow)
   local frame = bar.frame
   local buttons = bar.buttons
   local size = math_max(1, Round(skin.iconSize))
@@ -943,30 +943,17 @@ function Core:LayoutButtons(bar, skin, buttonCount, perRow, layoutButtonCount)
   local paddingX = math_max(0, Round(PADDING_X))
   local paddingY = math_max(0, Round(PADDING_Y))
   local count = Clamp(buttonCount or skin.iconsPerBar or #buttons, 1, #buttons > 0 and #buttons or 1)
-  local layoutCount = Clamp(layoutButtonCount or count, count, #buttons > 0 and #buttons or 1)
   local columns = Clamp(perRow or skin.iconsPerRow or count, 1, count)
-  local layoutColumns = Clamp(perRow or skin.iconsPerRow or layoutCount, 1, layoutCount)
   local rows = math_floor((count - 1) / columns) + 1
-  local layoutRows = math_floor((layoutCount - 1) / layoutColumns) + 1
-  local normalWidth = (columns * size) + ((columns - 1) * spacing) + (paddingX * 2)
-  local normalHeight = (rows * size) + ((rows - 1) * spacing) + (paddingY * 2)
-  local specialWidth = (layoutColumns * size) + ((layoutColumns - 1) * spacing) + (paddingX * 2)
-  local specialHeight = (layoutRows * size) + ((layoutRows - 1) * spacing) + (paddingY * 2)
-  local specialState = frame:GetAttribute("pui-special-state") == true and layoutCount > count
+  local width = (columns * size) + ((columns - 1) * spacing) + (paddingX * 2)
+  local height = (rows * size) + ((rows - 1) * spacing) + (paddingY * 2)
 
-  frame:SetAttribute("pui-normal-width", normalWidth)
-  frame:SetAttribute("pui-normal-height", normalHeight)
-  frame:SetAttribute("pui-special-width", specialWidth)
-  frame:SetAttribute("pui-special-height", specialHeight)
-  frame:SetSize(
-    specialState and specialWidth or normalWidth,
-    specialState and specialHeight or normalHeight
-  )
+  frame:SetSize(width, height)
 
   for index, button in ipairs(buttons) do
-    if index <= layoutCount then
-      local column = (index - 1) % layoutColumns
-      local row = math_floor((index - 1) / layoutColumns)
+    if index <= count then
+      local column = (index - 1) % columns
+      local row = math_floor((index - 1) / columns)
       button:ClearAllPoints()
       button:SetSize(size, size)
       button:SetPoint(
@@ -976,9 +963,6 @@ function Core:LayoutButtons(bar, skin, buttonCount, perRow, layoutButtonCount)
         paddingX + (column * (size + spacing)),
         -paddingY - (row * (size + spacing))
       )
-    end
-
-    if index <= (specialState and layoutCount or count) then
       button:SetAttribute("statehidden", nil)
       button:Show()
     else
@@ -1394,24 +1378,14 @@ function Core:RegisterMover(bar)
 
       return liveFrame:GetSize()
     end,
-    getPoint = function(_, liveFrame)
-      local x, y = liveFrame:GetCenter()
-      local parentX, parentY = UIParent:GetCenter()
-      if x and y and parentX and parentY then
-        local xOfs, yOfs = SnapActionBarPoint(
-          liveFrame,
-          "CENTER",
-          UIParent,
-          "CENTER",
-          x - parentX,
-          y - parentY
-        )
-        return "CENTER", UIParent, "CENTER", xOfs, yOfs
-      end
+    getPoint = function()
       return self:GetSavedPoint(bar)
     end,
     shouldShow = function()
       return ActionBar:IsEnabled() and ns.Flags.IsEditing and self:IsBarEnabled(bar)
+    end,
+    onRuntimePosition = function(moverFrame)
+      self:SaveMoverPosition(bar, moverFrame)
     end,
     onDragStop = function(moverFrame)
       self:SaveMoverPosition(bar, moverFrame)

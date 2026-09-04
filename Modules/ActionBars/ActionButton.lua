@@ -69,10 +69,7 @@ local PUI_UPDATE_STATE_SNIPPET = [[
     if self:GetAttribute("pui-hide-zero") and page <= 0 then
       active = false
     end
-    if self:GetAttribute("pui-special-page-button")
-      and not self:GetAttribute("pui-special-state")
-      and self:GetAttribute("pui-normal-visible") ~= true
-    then
+    if self:GetAttribute("pui-normal-visible") ~= true then
       active = false
     end
   end
@@ -124,10 +121,6 @@ local PUI_UPDATE_STATE_SNIPPET = [[
 local PUI_CHILD_UPDATE_STATE_SNIPPET = [[
   self:RunAttribute("PUI_UpdateState", message)
   self:CallMethod("UpdateAction")
-]]
-
-local PUI_CHILD_UPDATE_SPECIAL_STATE_SNIPPET = [[
-  self:SetAttribute("pui-special-state", message == "1")
 ]]
 
 local function GetShortBindingKey(binding)
@@ -422,7 +415,7 @@ local function UpdateButtonProfessionQuality(button)
     return
   end
 
-  if isItem and C_ActionBar.GetProfessionQualityInfo then
+  if isItem then
     local qualityInfo = C_ActionBar.GetProfessionQualityInfo(button.action)
     if not issecretvalue(qualityInfo) and qualityInfo ~= nil then
       local atlas = qualityInfo.iconInventory
@@ -668,7 +661,6 @@ function Engine:CreateButton(name, header)
 
   button:SetAttribute("PUI_UpdateState", PUI_UPDATE_STATE_SNIPPET)
   button:SetAttributeNoHandler("_childupdate-state", PUI_CHILD_UPDATE_STATE_SNIPPET)
-  button:SetAttributeNoHandler("_childupdate-specialstate", PUI_CHILD_UPDATE_SPECIAL_STATE_SNIPPET)
   button:SetAttribute("checkselfcast", true)
   button:SetAttribute("checkfocuscast", true)
   button:SetAttribute("checkmouseovercast", true)
@@ -678,7 +670,6 @@ function Engine:CreateButton(name, header)
   button:SetAttribute("useOnKeyDown", Core.castOnKeyDown ~= false)
   button:SetAttribute("state", "0")
   button:SetAttribute("pui-active", false)
-  button:SetAttribute("pui-special-state", false)
 
   button:RegisterForDrag("LeftButton", "RightButton")
   button:RegisterForClicks("AnyDown", "AnyUp")

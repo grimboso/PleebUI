@@ -92,54 +92,27 @@ local function GetEditModeDB()
   return Addon.db.profile.EditMode
 end
 
-local _configInitialized = false
+local _editModeConfigDB
 local function InitEditModeConfig()
-  if _configInitialized then
+  local db = GetEditModeDB()
+  if _editModeConfigDB == db then
     return
   end
-  _configInitialized = true
+  _editModeConfigDB = db
 
-  local db = GetEditModeDB()
-
-  if db.keyboardMoveEnabled ~= nil then
-    FrameUtil._keyboardMoveEnabled = not not db.keyboardMoveEnabled
-  end
-  if db.snapToGrid ~= nil then
-    FrameUtil._snapToGrid = not not db.snapToGrid
-  end
-  if db.snapToFrame ~= nil then
-    FrameUtil._snapToFrame = not not db.snapToFrame
-  end
-  if db.smartSnapEnabled ~= nil then
-    FrameUtil._smartSnapEnabled = not not db.smartSnapEnabled
-  end
-  if db.snapTolerance then
-    FrameUtil._snapTolerance = db.snapTolerance
-  end
-  if db.nudgeStep then
-    FrameUtil._nudgeStep = db.nudgeStep
-  end
-  if db.gridSize then
-    FrameUtil._gridSize = db.gridSize
-  end
-  if db.showGrid ~= nil then
-    FrameUtil._showGrid = not not db.showGrid
-  end
-  if db.dimAlpha then
-    FrameUtil._dimAlpha = db.dimAlpha
-  end
-  if db.disableDimming ~= nil then
-    FrameUtil._disableDimming = not not db.disableDimming
-  end
-  if db.settingsCollapsed ~= nil then
-    FrameUtil._settingsCollapsed = not not db.settingsCollapsed
-  end
-  if db.instructionsCollapsed ~= nil then
-    FrameUtil._instructionsCollapsed = not not db.instructionsCollapsed
-  end
-  if db.keybindsCollapsed ~= nil then
-    FrameUtil._keybindsCollapsed = not not db.keybindsCollapsed
-  end
+  FrameUtil._keyboardMoveEnabled = db.keyboardMoveEnabled == true
+  FrameUtil._snapToGrid = db.snapToGrid == true
+  FrameUtil._snapToFrame = db.snapToFrame == true
+  FrameUtil._smartSnapEnabled = db.smartSnapEnabled ~= false
+  FrameUtil._snapTolerance = db.snapTolerance or 8
+  FrameUtil._nudgeStep = db.nudgeStep or NUDGE_DEFAULT
+  FrameUtil._gridSize = db.gridSize or 16
+  FrameUtil._showGrid = db.showGrid == true
+  FrameUtil._dimAlpha = db.dimAlpha or 0.7
+  FrameUtil._disableDimming = db.disableDimming == true
+  FrameUtil._settingsCollapsed = db.settingsCollapsed == true
+  FrameUtil._instructionsCollapsed = db.instructionsCollapsed == true
+  FrameUtil._keybindsCollapsed = db.keybindsCollapsed == true
 end
 
 FrameUtil._GetEditModeDB      = GetEditModeDB
@@ -1127,6 +1100,15 @@ local PendingSmartSnapRelayouts = FrameUtil._pendingSmartSnapRelayouts
 local PendingSmartSnapRuntimeRelayouts = FrameUtil._pendingSmartSnapRuntimeRelayouts
 local SmartSnapRuntimeRelayoutScheduled = false
 local SmartSnapWorldReady = false
+
+function FrameUtil.BeginProfileTransition()
+  FrameUtil._profileTransitionActive = true
+  _editModeConfigDB = nil
+  FrameUtil._smartSnapDBRef = nil
+  wipe(PendingSmartSnapRelayouts)
+  wipe(PendingSmartSnapRuntimeRelayouts)
+end
+
 local SMART_SNAP_RELATIONS = {
   ABOVE = true,
   BELOW = true,
@@ -2429,7 +2411,7 @@ local function ApplySmartSnapRuntimePosition(entry)
 end
 
 local function RelayoutSmartSnapCluster(startEntry, finalize, syncSize)
-  if not startEntry or not startEntry.key then
+  if FrameUtil._profileTransitionActive == true or not startEntry or not startEntry.key then
     return
   end
 
@@ -2595,7 +2577,7 @@ local function SchedulePendingSmartSnapRelayouts()
 end
 
 local function QueueSmartSnapRuntimeRelayout(key)
-  if not key then
+  if FrameUtil._profileTransitionActive == true or not key then
     return
   end
 
@@ -2681,7 +2663,11 @@ function FrameUtil.RefreshSmartSnapState(key)
   local previousState = entry._smartSnapState
   entry._smartSnapState = nextState
 
-  if FrameUtil._smartSnapApplying or not previousState or not SmartSnapLinks[key] then
+  if FrameUtil._profileTransitionActive == true
+    or FrameUtil._smartSnapApplying
+    or not previousState
+    or not SmartSnapLinks[key]
+  then
     return
   end
 
@@ -5863,6 +5849,39 @@ end
 function FrameUtil:RefreshAllGhostMovers()
   for key in pairs(GhostMoverHelpers) do
     self:RefreshGhostMover(key)
+  end
+end
+
+function FrameUtil.CompleteProfileTransition()
+  if FrameUtil._profileTransitionActive ~= true then
+    return
+  end
+
+  _editModeConfigDB = nil
+  FrameUtil._smartSnapDBRef = nil
+  InitEditModeConfig()
+  EnsureSmartSnapLoaded()
+  FrameUtil:RefreshAllGhostMovers()
+
+  local roots = {}
+  for key in pairs(SmartSnapLinks) do
+    local root = GetStableSmartSnapRoot(key)
+    if root then
+      roots[root.key] = true
+    end
+  end
+
+  FrameUtil._profileTransitionActive = nil
+
+  for rootKey in pairs(roots) do
+    local root = MoversByKey[rootKey]
+    if root then
+      if InCombatLockdown() then
+        QueueSmartSnapRuntimeRelayout(rootKey)
+      else
+        RelayoutSmartSnapCluster(root, false, false)
+      end
+    end
   end
 end
 

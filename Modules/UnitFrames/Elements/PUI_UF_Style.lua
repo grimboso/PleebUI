@@ -62,11 +62,6 @@ local P = select(1, ns.Pleebug:DropIn(UFStyle, { name = "UnitFrames.Style" }))
 
 local Round = ns.Pixel.Round
 
-local function GetUF()
-  return ns.UnitFrames
-end
-
-
 local function GetConfigMediaOverride(config, kind)
   if type(config) ~= "table" then
     return nil
@@ -88,7 +83,7 @@ local function GetConfigMediaOverride(config, kind)
 end
 
 local function GetUnitMediaOverride(unit, kind)
-  local UF = GetUF()
+  local UF = ns.UnitFrames
   local units = UF.db.profile.units
   local cfg = units and units[unit] or nil
   local media = cfg and cfg.media or nil
@@ -108,7 +103,7 @@ local function GetUnitMediaOverride(unit, kind)
 end
 
 function UFStyle.ResolveStatusbarTexture(kind, unit, config)
-  local UF = GetUF()
+  local UF = ns.UnitFrames
   local configName = GetConfigMediaOverride(config, kind)
 
   if configName then
@@ -140,7 +135,7 @@ function UFStyle.ResolveStatusbarTexture(kind, unit, config)
 end
 
 function UFStyle.ResolveMedia(owner)
-  local UF = GetUF()
+  local UF = ns.UnitFrames
   owner = owner or UF
 
   owner.Media = owner.Media or UF.Media or {}
@@ -162,7 +157,7 @@ end
 
 
 function UFStyle.GetUFThemeColors()
-  local UF = GetUF()
+  local UF = ns.UnitFrames
   if UF._colorsCache then
     return UF._colorsCache
   end
@@ -179,16 +174,6 @@ function UFStyle.GetUFThemeColors()
         colors[k] = v
       end
     end
-  end
-
-  if colors.borderColor and not colors.border then
-    local src = colors.borderColor
-    colors.border = { src[1], src[2], src[3], src[4] }
-  end
-
-  if colors.emptyHealth and not colors.healthMissing then
-    local src = colors.emptyHealth
-    colors.healthMissing = { src[1], src[2], src[3], src[4] }
   end
 
   if overrides and overrides.healthAbsorb then
@@ -218,7 +203,7 @@ end
 
 
 function UFStyle.ApplyStyleIfNeeded(frame, unit)
-  local UF = GetUF()
+  local UF = ns.UnitFrames
   if not frame then
     return
   end
@@ -260,7 +245,7 @@ function UFStyle.RefreshFrameTextures(frame)
 end
 
 function UFStyle.RefreshAllFrameTextures(owner)
-  owner = owner or GetUF()
+  owner = owner or ns.UnitFrames
   if not owner or type(owner.IterateSingleFrames) ~= "function" then
     return
   end

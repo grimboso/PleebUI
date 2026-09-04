@@ -764,10 +764,6 @@ function Breakdown.InvalidateDeathRecapCache()
   DamageMeters.deathRecapCache = nil
 end
 
-function Breakdown.GetAnalysisSessionKey(windowDB)
-  return GetSessionStateKey(windowDB)
-end
-
 function Breakdown.GetTargetPlayerKey(playerName, classFilename)
   local shortPlayerName = Breakdown.GetPlainShortName(playerName)
   if not shortPlayerName then
@@ -782,7 +778,7 @@ function Breakdown.BuildTargetAnalysisCache(windowDB)
     return nil
   end
 
-  local cacheKey = Breakdown.GetAnalysisSessionKey(windowDB)
+  local cacheKey = GetSessionStateKey(windowDB)
   local caches = DamageMeters.targetAnalysisCache
   if not caches then
     caches = {}
@@ -1999,7 +1995,6 @@ Breakdown.GetPlainShortName = P:Def("GetPlainShortName", Breakdown.GetPlainShort
 Breakdown.InvalidateTargetAnalysisCache = P:Def("InvalidateTargetAnalysisCache", Breakdown.InvalidateTargetAnalysisCache)
 Breakdown.MarkTargetAnalysisDirty = P:Def("MarkTargetAnalysisDirty", Breakdown.MarkTargetAnalysisDirty)
 Breakdown.InvalidateDeathRecapCache = P:Def("InvalidateDeathRecapCache", Breakdown.InvalidateDeathRecapCache)
-Breakdown.GetAnalysisSessionKey = P:Def("GetAnalysisSessionKey", Breakdown.GetAnalysisSessionKey)
 Breakdown.GetTargetPlayerKey = P:Def("GetTargetPlayerKey", Breakdown.GetTargetPlayerKey)
 Breakdown.BuildTargetAnalysisCache = P:Def("BuildTargetAnalysisCache", Breakdown.BuildTargetAnalysisCache)
 Breakdown.GetTargetAnalysisPlayer = P:Def("GetTargetAnalysisPlayer", Breakdown.GetTargetAnalysisPlayer)
