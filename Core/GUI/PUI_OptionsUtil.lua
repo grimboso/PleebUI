@@ -69,17 +69,13 @@ function OptionsUtil.BuildFontValues(includeDefault, defaultLabel, defaultKey)
   return list
 end
 
-function OptionsUtil.GetGlobalFontKey()
-  local fontKey = ns.Theme.GetIconTextGlobal()
-  return HasLSMFontKey(fontKey) and fontKey or "FiraSans Heavy"
-end
-
 function OptionsUtil.ResolveFontKey(value, useGlobalFont)
   if useGlobalFont ~= true and HasLSMFontKey(value) then
     return value
   end
 
-  return OptionsUtil.GetGlobalFontKey()
+  local fontKey = ns.Theme.GetIconTextGlobal()
+  return HasLSMFontKey(fontKey) and fontKey or "FiraSans Heavy"
 end
 
 
