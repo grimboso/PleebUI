@@ -46,26 +46,15 @@ function Module.NormalizeDB(q)
   q.bresLustWidgetIconSize = Clamp(q.bresLustWidgetIconSize or 32, 16, 64)
   q.bresLustWidgetAnchor = SeedAnchorDefaults(q.bresLustWidgetAnchor, POSITION_DEFAULTS.bresLustWidget)
 
-  local legacyRaidUtilityEnable = q.raidUtilityEnable
   if q.raidUtilityButtonsEnable == nil then
-    q.raidUtilityButtonsEnable = legacyRaidUtilityEnable
-    if q.raidUtilityButtonsEnable == nil then
-      q.raidUtilityButtonsEnable = POSITION_DEFAULTS.raidUtilityButtons.enabled
-    end
+    q.raidUtilityButtonsEnable = POSITION_DEFAULTS.raidUtilityButtons.enabled
   end
   if q.raidUtilityRaidMarkersEnable == nil then
-    q.raidUtilityRaidMarkersEnable = legacyRaidUtilityEnable
-    if q.raidUtilityRaidMarkersEnable == nil then
-      q.raidUtilityRaidMarkersEnable = POSITION_DEFAULTS.raidUtilityRaidMarkers.enabled
-    end
+    q.raidUtilityRaidMarkersEnable = POSITION_DEFAULTS.raidUtilityRaidMarkers.enabled
   end
   if q.raidUtilityWorldMarkersEnable == nil then
-    q.raidUtilityWorldMarkersEnable = legacyRaidUtilityEnable
-    if q.raidUtilityWorldMarkersEnable == nil then
-      q.raidUtilityWorldMarkersEnable = POSITION_DEFAULTS.raidUtilityWorldMarkers.enabled
-    end
+    q.raidUtilityWorldMarkersEnable = POSITION_DEFAULTS.raidUtilityWorldMarkers.enabled
   end
-  q.raidUtilityEnable = nil
 
   if q.raidUtilityShowOnlyInGroup == nil then q.raidUtilityShowOnlyInGroup = true end
   q.raidUtilityPullTimerSeconds = Clamp(q.raidUtilityPullTimerSeconds or 10, 1, 60)
@@ -85,12 +74,6 @@ function Module.NormalizeDB(q)
     q.raidUtilityExtraPullTimers = cleaned
   end
 
-  local legacyButtonSize = Clamp(q.raidUtilityButtonSize or 22, 18, 40)
-  local legacyAnchor = SeedAnchorDefaults(q.raidUtilityAnchor, {
-    x = 300,
-    y = -300,
-  })
-
   if q.raidUtilityButtonsHideInCombat == nil then q.raidUtilityButtonsHideInCombat = true end
   if q.raidUtilityButtonsMouseover == nil then q.raidUtilityButtonsMouseover = false end
   if q.raidUtilityButtonsFreeMove == nil then q.raidUtilityButtonsFreeMove = false end
@@ -104,7 +87,7 @@ function Module.NormalizeDB(q)
   q.raidUtilityRaidMarkersAlpha = Clamp(q.raidUtilityRaidMarkersAlpha or 1, 0, 1)
   q.raidUtilityRaidMarkersFadeOutAlpha = Clamp(q.raidUtilityRaidMarkersFadeOutAlpha or 0, 0, 1)
   q.raidUtilityRaidMarkersFadeOutDuration = Clamp(q.raidUtilityRaidMarkersFadeOutDuration or 0, 0, 10)
-  q.raidUtilityRaidMarkerButtonSize = Clamp(q.raidUtilityRaidMarkerButtonSize or legacyButtonSize, 18, 40)
+  q.raidUtilityRaidMarkerButtonSize = Clamp(q.raidUtilityRaidMarkerButtonSize or 22, 18, 40)
 
   if q.raidUtilityWorldMarkersHideInCombat == nil then q.raidUtilityWorldMarkersHideInCombat = false end
   if q.raidUtilityWorldMarkersMouseover == nil then q.raidUtilityWorldMarkersMouseover = false end
@@ -112,24 +95,11 @@ function Module.NormalizeDB(q)
   q.raidUtilityWorldMarkersAlpha = Clamp(q.raidUtilityWorldMarkersAlpha or 1, 0, 1)
   q.raidUtilityWorldMarkersFadeOutAlpha = Clamp(q.raidUtilityWorldMarkersFadeOutAlpha or 0, 0, 1)
   q.raidUtilityWorldMarkersFadeOutDuration = Clamp(q.raidUtilityWorldMarkersFadeOutDuration or 0, 0, 10)
-  q.raidUtilityWorldMarkerButtonSize = Clamp(q.raidUtilityWorldMarkerButtonSize or legacyButtonSize, 18, 40)
+  q.raidUtilityWorldMarkerButtonSize = Clamp(q.raidUtilityWorldMarkerButtonSize or 22, 18, 40)
 
-  q.raidUtilityButtonsAnchor = SeedAnchorDefaults(q.raidUtilityButtonsAnchor, {
-    x = legacyAnchor.x,
-    y = legacyAnchor.y + 56,
-  })
-  q.raidUtilityRaidMarkersAnchor = SeedAnchorDefaults(q.raidUtilityRaidMarkersAnchor, {
-    x = legacyAnchor.x,
-    y = legacyAnchor.y,
-  })
-  q.raidUtilityWorldMarkersAnchor = SeedAnchorDefaults(q.raidUtilityWorldMarkersAnchor, {
-    x = legacyAnchor.x,
-    y = legacyAnchor.y - 56,
-  })
-
-  q.raidUtilityCollapsed = nil
-  q.raidUtilityButtonSize = nil
-  q.raidUtilityAnchor = nil
+  q.raidUtilityButtonsAnchor = SeedAnchorDefaults(q.raidUtilityButtonsAnchor, POSITION_DEFAULTS.raidUtilityButtons)
+  q.raidUtilityRaidMarkersAnchor = SeedAnchorDefaults(q.raidUtilityRaidMarkersAnchor, POSITION_DEFAULTS.raidUtilityRaidMarkers)
+  q.raidUtilityWorldMarkersAnchor = SeedAnchorDefaults(q.raidUtilityWorldMarkersAnchor, POSITION_DEFAULTS.raidUtilityWorldMarkers)
 end
 
 local BRLWidgetFrame
