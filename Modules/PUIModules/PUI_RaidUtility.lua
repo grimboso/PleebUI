@@ -5,7 +5,7 @@ ns.RaidUtilityModule = Module
 
 local LibStub = _G.LibStub
 local LCG = LibStub("LibCustomGlow-1.0")
-local LibKeyBound = LibStub("LibKeyBound-1.0", true)
+local LibKeyBound = LibStub("LibKeyBound-1.0")
 local P, TrackThis = ns.Pleebug:DropIn(Module, { name = "Modules.RaidUtility" })
 
 
@@ -1214,7 +1214,7 @@ end
 
 local function RaidUtility_GetShortBinding(bindingAction)
   local key = bindingAction and GetBindingKey(bindingAction)
-  if key and LibKeyBound then
+  if key then
     return LibKeyBound:ToShortKey(key)
   end
   return key
@@ -1505,11 +1505,9 @@ local function RaidUtility_CreateMarkerButton(parent, kind, index, size)
       or ((RAID_MARKER_NAMES[self.index] or tostring(self.index)) .. " world marker")
   end
 
-  if LibKeyBound then
-    b:HookScript("OnEnter", function(self)
-      LibKeyBound:Set(self)
-    end)
-  end
+  b:HookScript("OnEnter", function(self)
+    LibKeyBound:Set(self)
+  end)
 
   RaidUtility_UpdateMarkerHotkey(b)
 
