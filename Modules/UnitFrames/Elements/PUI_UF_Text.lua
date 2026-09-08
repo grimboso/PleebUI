@@ -107,7 +107,7 @@ local function ShouldUseGlobalFont(fontKey, useGlobalFont)
     return useGlobalFont == true
   end
 
-  local standardKey = ns.FontDropdown and ns.FontDropdown.STANDARD_FONT_KEY
+  local standardKey = ns.FontDropdown.STANDARD_FONT_KEY
   return not (type(fontKey) == "string" and fontKey ~= "" and fontKey ~= standardKey)
 end
 
@@ -367,11 +367,11 @@ function Text.ApplyUnitTextFont(fontString, unit, kind, baseSize, cfg, useConfig
     outline = (gFlags ~= "" and gFlags) or "OUTLINE"
   end
 
-  if fontKey and LSM and LSM.Fetch then
+  if fontKey then
     local fontPath = LSM:Fetch("font", fontKey, true)
     if fontPath then
       fontString:SetFont(fontPath, Theme.ResolveFontSize(size, "unitFrames"), outline)
-      if fontString.GetFont and fontString:GetFont() then
+      if fontString:GetFont() then
         return
       end
     end

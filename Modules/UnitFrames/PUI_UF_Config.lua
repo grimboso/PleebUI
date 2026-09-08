@@ -348,7 +348,7 @@ local function UFCB_IsUsingGlobalFont(fontKey, useGlobalFont)
     return useGlobalFont == true
   end
 
-  local standardKey = ns.FontDropdown and ns.FontDropdown.STANDARD_FONT_KEY
+  local standardKey = ns.FontDropdown.STANDARD_FONT_KEY
   return not (type(fontKey) == "string" and fontKey ~= "" and fontKey ~= standardKey)
 end
 
