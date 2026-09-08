@@ -121,9 +121,6 @@ local function SanitizeProfile()
   db.barAlpha = Clamp(db.barAlpha or 0.82, 0.2, 1)
   db.showSpecIcons = db.showSpecIcons ~= false
   db.history = db.history or {}
-  db.history.segmentsToKeep = nil
-  db.history.saveBossPulls = nil
-  db.history.bossPullsToKeep = nil
   db.history.bossKillsToKeep = Clamp(math_floor(db.history.bossKillsToKeep or 15), 0, 50)
   db.history.dungeonSummariesToKeep = Clamp(
     math_floor(db.history.dungeonSummariesToKeep or 10),
