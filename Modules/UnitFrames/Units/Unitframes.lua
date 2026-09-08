@@ -655,39 +655,14 @@ end
 function UF:EnsureConfigDefaults(db)
   db = db or self.db.profile
 
-  local legacyCombatOverlays = rawget(db, "showCombatOverlays")
-  if legacyCombatOverlays ~= nil and rawget(db, "healthPrediction") == nil then
-    local enabled = legacyCombatOverlays ~= false
-    db.healthPrediction = {
-      incomingHeals = enabled,
-      damageAbsorbs = enabled,
-      healAbsorbs = enabled,
-    }
-  end
-  db.showCombatOverlays = nil
-
   MergeMissing(db, UFDefaults.Profile)
   db.units = db.units or {}
   db.units.player = db.units.player or {}
-
-  if db.colors and db.colors.useClassForPlayer ~= nil then
-    if db.units.player.useClassColor == nil then
-      db.units.player.useClassColor = db.colors.useClassForPlayer ~= false
-    end
-
-    db.colors.useClassForPlayer = nil
-  end
 
   for unit, defaults in pairs(UFDefaults.Player or {}) do
     db.units[unit] = db.units[unit] or {}
     MergeMissing(db.units[unit], defaults)
   end
-
-  local savedPlayerPowerHeight = tonumber(db.units.player.__puiQuickSetupPowerHeight)
-  if savedPlayerPowerHeight and savedPlayerPowerHeight > 0 and (tonumber(db.units.player.powerHeight) or 0) <= 0 then
-    db.units.player.powerHeight = savedPlayerPowerHeight
-  end
-  db.units.player.__puiQuickSetupPowerHeight = nil
 
   for unit, defaults in pairs(UFDefaults.Target or {}) do
     db.units[unit] = db.units[unit] or {}
