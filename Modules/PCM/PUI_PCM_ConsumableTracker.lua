@@ -31,6 +31,7 @@ local IsSecret = issecretvalue
 local UnitClassBase = UnitClassBase
 local GetInventoryItemID = GetInventoryItemID
 local PCMRuntime = ns.PCMRuntime
+local DB = ns.PCM_DBExports
 
 local ACTIVE_TRINKET_CATEGORY = Enum.CooldownViewerCategory.EquipSlotEssential
 local TRACKED_TRINKET_CATEGORY = Enum.CooldownViewerCategory.EquipSlotTracked
@@ -190,9 +191,7 @@ local Tracker = {
 
 local QUALITY_ATLAS_CACHE = {}
 
-local function GetDB()
-  return ns.PCM_DBExports.GetConsumableTrackerDB()
-end
+local GetDB = DB.GetConsumableTrackerDB
 
 local function GetSlotDB(cfg, key)
   return cfg.slots[key]
@@ -1257,10 +1256,6 @@ local function RefreshEvents()
   Tracker.eventsRegistered = shouldRegister
 end
 
-function Cooldowns:GetConsumableTrackerDB()
-  return GetDB()
-end
-
 function Cooldowns:GetConsumableTrackerDefinitions()
   return DEFINITIONS
 end
@@ -1755,7 +1750,6 @@ end
 
 ns.TestMode:RegisterParticipant(PARTICIPANT_KEY, TestParticipant)
 
-Cooldowns.GetConsumableTrackerDB = P:Def("Cooldowns:GetConsumableTrackerDB", Cooldowns.GetConsumableTrackerDB)
 Cooldowns.GetConsumableTrackerDefinitions = P:Def("Cooldowns:GetConsumableTrackerDefinitions", Cooldowns.GetConsumableTrackerDefinitions)
 Cooldowns.GetConsumableItemQualityAtlas = P:Def("Cooldowns:GetConsumableItemQualityAtlas", Cooldowns.GetConsumableItemQualityAtlas)
 Cooldowns.GetConsumableCategoryItemIDs = P:Def("Cooldowns:GetConsumableCategoryItemIDs", Cooldowns.GetConsumableCategoryItemIDs)

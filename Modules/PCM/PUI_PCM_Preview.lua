@@ -2360,7 +2360,7 @@ local function PCMPreview_ConfigureCustomPanel(box, panel)
 end
 
 local function PCMPreview_ConfigureConsumablesPanel(box, panel)
-  local cfg = Cooldowns:GetConsumableTrackerDB()
+  local cfg = DB.GetConsumableTrackerDB()
   local definitions = Cooldowns:GetConsumableTrackerDefinitions()
   local entries = {}
 

@@ -9,6 +9,7 @@ local OptionsUtil = ns.OptionsUtil
 local PCMPresentation = ns.PCMPresentation
 local AuraWidget = ns.AuraWidget
 local IconSettings = ns.PCMIconSettings
+local DB = ns.PCM_DBExports
 local P, TrackThis = ns.Pleebug:DropIn(Addon, { name = "PCM", bucket = "Config" })
 local function _PCM_RefreshPreview()
   ns.PCMPreview.Refresh()
@@ -7948,7 +7949,7 @@ end
 
 local function _PCM_BuildConsumablesTabArgs()
   local function GetCfg()
-    return Cooldowns:GetConsumableTrackerDB()
+    return DB.GetConsumableTrackerDB()
   end
 
   local function Rebuild()

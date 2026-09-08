@@ -7,6 +7,7 @@ local Hooks = ns.PCMHooks
 local IconSettings = ns.PCMIconSettings
 local PCMRuntime = ns.PCMRuntime
 local LSM = ns.LSM
+local DB = ns.PCM_DBExports
 local P = select(1, ns.Pleebug:DropIn(Cooldowns, { name = "PCM", bucket = "Keybinds" }))
 
 local _G = _G
@@ -994,7 +995,7 @@ local function _KB_HasActiveConsumer()
   return Cooldowns:GetKeybindTextEnabled("EssentialCooldownViewer")
     or Cooldowns:GetKeybindTextEnabled("UtilityCooldownViewer")
     or IconSettings:HasShownTextOverride("keybind")
-    or (Cooldowns:GetConsumableTrackerEnabled() and Cooldowns:GetConsumableTrackerDB().showKeybinds == true)
+    or (Cooldowns:GetConsumableTrackerEnabled() and DB.GetConsumableTrackerDB().showKeybinds == true)
 end
 
 local _kbActive = false
