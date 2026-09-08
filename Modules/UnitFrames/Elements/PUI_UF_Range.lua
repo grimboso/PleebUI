@@ -327,7 +327,7 @@ individualRangeDriver:SetScript("OnEvent", function(_, event, unit)
   end
 end)
 
-function Range.GetNormalizedRangeConfig(db)
+local function GetNormalizedRangeConfig(db)
   if type(db) ~= "table" then
     return {
       enabled = true,
@@ -348,22 +348,9 @@ local function NormalizeConfigObject(config)
     return config
   end
 
-  config = Range.GetNormalizedRangeConfig(config)
+  config = GetNormalizedRangeConfig(config)
   config.__puiRangeConfigNormalized = true
   return config
-end
-
-local function ResolveConfig(frame, config)
-  return NormalizeConfigObject(config or (frame and frame.__puiRangeConfig))
-end
-
-local function EnsureOwnerRegistry(owner)
-  if not owner then
-    return nil
-  end
-
-  owner._rangeFrames = owner._rangeFrames or setmetatable({}, { __mode = "k" })
-  return owner._rangeFrames
 end
 
 local function DisableRangeElement(frame)
@@ -429,15 +416,7 @@ local function ApplyRangeElementConfig(frame, cfg)
   end
 end
 
-function Range.Configure(frame, config)
-  ApplyRangeElementConfig(frame, ResolveConfig(frame, config))
-end
-
 function Range.Detach(frame)
-  if not frame then
-    return
-  end
-
   local owner = frame.__puiRangeOwner
   if owner and owner._rangeFrames then
     owner._rangeFrames[frame] = nil
@@ -453,19 +432,13 @@ function Range.Detach(frame)
 end
 
 function Range.RegisterFrame(owner, frame, configOrProvider)
-  if not frame then
-    return
-  end
-
   local oldOwner = frame.__puiRangeOwner
   if oldOwner and oldOwner ~= owner and oldOwner._rangeFrames then
     oldOwner._rangeFrames[frame] = nil
   end
 
-  local registry = EnsureOwnerRegistry(owner)
-  if registry then
-    registry[frame] = true
-  end
+  owner._rangeFrames = owner._rangeFrames or setmetatable({}, { __mode = "k" })
+  owner._rangeFrames[frame] = true
 
   frame.__puiRangeOwner = owner
   frame.__puiRangeRegistered = true
@@ -476,18 +449,18 @@ function Range.RegisterFrame(owner, frame, configOrProvider)
     frame:HookScript("OnHide", RangeFrame_OnHide)
   end
 
-  Range.Configure(frame, configOrProvider)
+  ApplyRangeElementConfig(frame, NormalizeConfigObject(configOrProvider or frame.__puiRangeConfig))
 end
 
 function Range.RefreshRangeOwnerConfig(owner, configOrProvider)
-  if not owner or not owner._rangeFrames then
+  if not owner._rangeFrames then
     return
   end
 
-  local cfg = ResolveConfig(nil, configOrProvider)
+  local cfg = NormalizeConfigObject(configOrProvider)
 
   for frame in pairs(owner._rangeFrames) do
-    Range.Configure(frame, cfg)
+    ApplyRangeElementConfig(frame, cfg)
   end
 end
 
@@ -501,14 +474,11 @@ UpdateIndividualRangeDriverRegistration = P:Def("UpdateIndividualRangeDriverRegi
 RegisterIndividualRangeFrame = P:Def("RegisterIndividualRangeFrame", RegisterIndividualRangeFrame)
 UnregisterIndividualRangeFrame = P:Def("UnregisterIndividualRangeFrame", UnregisterIndividualRangeFrame)
 IsIndividualFrameAffected = P:Def("IsIndividualFrameAffected", IsIndividualFrameAffected)
-Range.GetNormalizedRangeConfig = P:Def("Range.GetNormalizedRangeConfig", Range.GetNormalizedRangeConfig)
+GetNormalizedRangeConfig = P:Def("GetNormalizedRangeConfig", GetNormalizedRangeConfig)
 NormalizeConfigObject = P:Def("NormalizeConfigObject", NormalizeConfigObject)
-ResolveConfig = P:Def("ResolveConfig", ResolveConfig)
-EnsureOwnerRegistry = P:Def("EnsureOwnerRegistry", EnsureOwnerRegistry)
 DisableRangeElement = P:Def("DisableRangeElement", DisableRangeElement)
 EnableOUFRangeElement = P:Def("EnableOUFRangeElement", EnableOUFRangeElement)
 ApplyRangeElementConfig = P:Def("ApplyRangeElementConfig", ApplyRangeElementConfig)
-Range.Configure = P:Def("Range.Configure", Range.Configure)
 Range.Detach = P:Def("Range.Detach", Range.Detach)
 Range.RegisterFrame = P:Def("Range.RegisterFrame", Range.RegisterFrame)
 Range.RefreshRangeOwnerConfig = P:Def("Range.RefreshRangeOwnerConfig", Range.RefreshRangeOwnerConfig)
