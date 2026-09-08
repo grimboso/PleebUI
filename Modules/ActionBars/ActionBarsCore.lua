@@ -176,46 +176,6 @@ local ACTIONBARS_DEFAULTS = {
   },
 }
 
-local RENAMED_BAR_FRAMES = {
-  MainActionBar = "PUI_MainBar",
-  MultiBarBottomLeft = "PUI_BottomLeftBar",
-  MultiBarBottomRight = "PUI_BottomRightBar",
-  MultiBarRight = "PUI_RightBar",
-  MultiBarLeft = "PUI_Bar5",
-  MultiBar5 = "PUI_Bar6",
-  MultiBar6 = "PUI_Bar7",
-  MultiBar7 = "PUI_Bar8",
-  PetActionBar = "PUI_PetBar",
-  StanceBar = "PUI_StanceBar",
-  PossessActionBar = "PUI_MainBar",
-}
-
-local function MigrateMoverRelativeNames(db)
-  for _, saved in pairs(db.movers) do
-    if type(saved) == "table" then
-      saved.relName = RENAMED_BAR_FRAMES[saved.relName] or saved.relName
-    end
-  end
-end
-
-local function MigrateSpecialStateOwnership(db)
-  if db.specialStateOwnershipVersion == 1 then
-    return
-  end
-
-  db.bars.possess = nil
-  db.overrides.possess = nil
-  db.movers.ACTIONBAR_POSSESS = nil
-
-  for _, saved in pairs(db.movers) do
-    if type(saved) == "table" and saved.relName == "PUI_PossessBar" then
-      saved.relName = "PUI_MainBar"
-    end
-  end
-
-  db.specialStateOwnershipVersion = 1
-end
-
 local BLIZZARD_MULTI_BAR_FRAMES = {
   "MultiBarBottomLeft",
   "MultiBarBottomRight",
@@ -302,78 +262,6 @@ local function PickFontFace(useCustom, customSkin, baseSkin, prefix)
   return face
 end
 
-local function MigrateAlphaSettings(db)
-  if rawget(db, "alphaSettingsVersion") == 1 then
-    return
-  end
-
-  db.skin = db.skin or {}
-  db.overrides = db.overrides or {}
-
-  local base = db.skin
-  local oldBase = {
-    barAlpha = rawget(base, "barAlpha"),
-    mouseoverAlpha = rawget(base, "mouseoverAlpha"),
-    mouseoverEnabled = rawget(base, "mouseoverEnabled"),
-    mouseoverFade = rawget(base, "mouseoverFade"),
-  }
-
-  oldBase.barAlpha = oldBase.barAlpha == nil and 1 or oldBase.barAlpha
-  oldBase.mouseoverAlpha = oldBase.mouseoverAlpha == nil and 1 or oldBase.mouseoverAlpha
-  oldBase.mouseoverEnabled = oldBase.mouseoverEnabled == true
-  oldBase.mouseoverFade = oldBase.mouseoverFade == nil and 0 or oldBase.mouseoverFade
-
-  if rawget(base, "barAlpha") ~= nil
-    or rawget(base, "mouseoverAlpha") ~= nil
-    or rawget(base, "mouseoverEnabled") ~= nil
-    or rawget(base, "mouseoverFade") ~= nil
-  then
-    base.alpha = oldBase.mouseoverEnabled and oldBase.mouseoverAlpha or oldBase.barAlpha
-    base.fadeOutAlpha = oldBase.barAlpha
-    base.fadeOutEnabled = oldBase.mouseoverEnabled
-    base.fadeOutDuration = oldBase.mouseoverFade
-  end
-
-  base.barAlpha = nil
-  base.mouseoverAlpha = nil
-  base.mouseoverEnabled = nil
-  base.mouseoverFade = nil
-
-  for _, override in pairs(db.overrides) do
-    local custom = override and override.skin
-    if custom
-      and (
-        rawget(custom, "barAlpha") ~= nil
-        or rawget(custom, "mouseoverAlpha") ~= nil
-        or rawget(custom, "mouseoverEnabled") ~= nil
-        or rawget(custom, "mouseoverFade") ~= nil
-      )
-    then
-      local oldBarAlpha = rawget(custom, "barAlpha")
-      local oldMouseoverAlpha = rawget(custom, "mouseoverAlpha")
-      local oldMouseoverEnabled = rawget(custom, "mouseoverEnabled")
-      local oldMouseoverFade = rawget(custom, "mouseoverFade")
-
-      if oldBarAlpha == nil then oldBarAlpha = oldBase.barAlpha end
-      if oldMouseoverAlpha == nil then oldMouseoverAlpha = oldBase.mouseoverAlpha end
-      if oldMouseoverEnabled == nil then oldMouseoverEnabled = oldBase.mouseoverEnabled end
-      if oldMouseoverFade == nil then oldMouseoverFade = oldBase.mouseoverFade end
-
-      custom.alpha = oldMouseoverEnabled and oldMouseoverAlpha or oldBarAlpha
-      custom.fadeOutAlpha = oldBarAlpha
-      custom.fadeOutEnabled = oldMouseoverEnabled == true
-      custom.fadeOutDuration = oldMouseoverFade
-
-      custom.barAlpha = nil
-      custom.mouseoverAlpha = nil
-      custom.mouseoverEnabled = nil
-      custom.mouseoverFade = nil
-    end
-  end
-
-  db.alphaSettingsVersion = 1
-end
-
 function Core:GetDB()
   if not ActionBar.db then
     ActionBar.db = Addon.db:RegisterNamespace("ActionBars", ACTIONBARS_DEFAULTS)
@@ -384,13 +272,10 @@ end
 
 function Core:PrepareProfile()
   local db = self:GetDB()
-  MigrateAlphaSettings(db)
 
   db.movers = db.movers or {}
-  MigrateMoverRelativeNames(db)
   db.bars = db.bars or {}
   db.overrides = db.overrides or {}
-  MigrateSpecialStateOwnership(db)
   for barNumber = 1, 12 do
     local barKey = tostring(barNumber)
     local barDB = db.bars[barKey] or {}
@@ -2198,9 +2083,6 @@ NormalizeTooltipMode = P:Def("NormalizeTooltipMode", NormalizeTooltipMode)
 CopyColor = P:Def("CopyColor", CopyColor)
 PickField = P:Def("PickField", PickField)
 PickFontFace = P:Def("PickFontFace", PickFontFace)
-MigrateMoverRelativeNames = P:Def("MigrateMoverRelativeNames", MigrateMoverRelativeNames)
-MigrateSpecialStateOwnership = P:Def("MigrateSpecialStateOwnership", MigrateSpecialStateOwnership)
-MigrateAlphaSettings = P:Def("MigrateAlphaSettings", MigrateAlphaSettings)
 SetCVarIfChanged = P:Def("SetCVarIfChanged", SetCVarIfChanged)
 HideBlizzardActionFrame = P:Def("HideBlizzardActionFrame", HideBlizzardActionFrame)
 HideBlizzardActionButton = P:Def("HideBlizzardActionButton", HideBlizzardActionButton)
