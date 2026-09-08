@@ -47,28 +47,6 @@ local RefreshPRDControls
 local LayoutQualityControls
 local RefreshQualityControls
 
-local function IsCooldownManagerAvailable()
-  return ns.Modules.CooldownManager ~= nil
-    and ns.Modules.PCM_BB ~= nil
-    and ns.PCMPresentation ~= nil
-end
-
-local function IsPersonalResourceDisplayAvailable()
-  return ns.Modules.PRD ~= nil
-end
-
-local function IsUnitFramesAvailable()
-  return ns.Modules.UnitFrames ~= nil
-    and ns.UnitFrames ~= nil
-    and ns.UFStyle ~= nil
-end
-
-local function CreateUnavailableHost(parent)
-  local host = CreateFrame("Frame", nil, parent, "BackdropTemplate")
-  host:Hide()
-  return host
-end
-
 local function GetInstallOnboardingDB()
   return Addon.db.char.onboarding
 end
@@ -186,40 +164,38 @@ function Addon:ApplyCombatReadabilityPreset()
     return false
   end
 
-  if IsUnitFramesAvailable() then
-    local UF = ns.Modules.UnitFrames
-    local ufDB = UF.db.profile
+  local UF = ns.Modules.UnitFrames
+  local ufDB = UF.db.profile
 
-    ufDB.text.shortenValues = true
-    ApplyCombatReadabilityTextConfig(ufDB.text, 16, 16, 14)
+  ufDB.text.shortenValues = true
+  ApplyCombatReadabilityTextConfig(ufDB.text, 16, 16, 14)
 
-    for _, cfg in pairs(ufDB.units or {}) do
-      if type(cfg) == "table" then
-        ApplyCombatReadabilityTextConfig(cfg.text, 16, 16, 14)
-      end
+  for _, cfg in pairs(ufDB.units or {}) do
+    if type(cfg) == "table" then
+      ApplyCombatReadabilityTextConfig(cfg.text, 16, 16, 14)
     end
+  end
 
-    UF:SafeRefresh("text")
+  UF:SafeRefresh("text")
 
-    local groupedModules = {
-      ns.Modules.PartyFrames,
-      ns.Modules.RaidFrames,
-    }
+  local groupedModules = {
+    ns.Modules.PartyFrames,
+    ns.Modules.RaidFrames,
+  }
 
-    for i = 1, #groupedModules do
-      local module = groupedModules[i]
-      if module and module.db and module.db.profile then
-        local profile = module.db.profile
-        ApplyCombatReadabilityTextConfig(profile.text, 14, 14, 12)
+  for i = 1, #groupedModules do
+    local module = groupedModules[i]
+    if module and module.db and module.db.profile then
+      local profile = module.db.profile
+      ApplyCombatReadabilityTextConfig(profile.text, 14, 14, 12)
 
-        if type(profile.auras) == "table" then
-          profile.auras.buffIconSize = math_max(tonumber(profile.auras.buffIconSize) or 0, 20)
-          profile.auras.debuffIconSize = math_max(tonumber(profile.auras.debuffIconSize) or 0, 20)
-        end
-
-        module:SafeRefresh("text")
-        module:RefreshAuraDisplay()
+      if type(profile.auras) == "table" then
+        profile.auras.buffIconSize = math_max(tonumber(profile.auras.buffIconSize) or 0, 20)
+        profile.auras.debuffIconSize = math_max(tonumber(profile.auras.debuffIconSize) or 0, 20)
       end
+
+      module:SafeRefresh("text")
+      module:RefreshAuraDisplay()
     end
   end
 
@@ -259,51 +235,49 @@ function Addon:ApplyCombatReadabilityPreset()
     })
   end
 
-  if IsCooldownManagerAvailable() then
-    local Cooldowns = ns.Modules.CooldownManager
-    local BuffBars = ns.Modules.PCM_BB
+  local Cooldowns = ns.Modules.CooldownManager
+  local BuffBars = ns.Modules.PCM_BB
 
-    local spellBars = Cooldowns:GetSpellBarsDB() or {}
-    for _, cfg in pairs(spellBars) do
-      if type(cfg) == "table" then
-        cfg.fontSize = math_max(tonumber(cfg.fontSize) or 0, 16)
-        cfg.fontOutline = "THICKOUTLINE"
-        Cooldowns:NormalizeCustomTrackerPresentation(cfg, "cooldown")
-        cfg.icon.fontSize = math_max(tonumber(cfg.icon.fontSize) or 0, 16)
-        cfg.icon.countFontSize = math_max(tonumber(cfg.icon.countFontSize) or 0, 16)
-        cfg.icon.outline = "THICKOUTLINE"
-      end
+  local spellBars = Cooldowns:GetSpellBarsDB() or {}
+  for _, cfg in pairs(spellBars) do
+    if type(cfg) == "table" then
+      cfg.fontSize = math_max(tonumber(cfg.fontSize) or 0, 16)
+      cfg.fontOutline = "THICKOUTLINE"
+      Cooldowns:NormalizeCustomTrackerPresentation(cfg, "cooldown")
+      cfg.icon.fontSize = math_max(tonumber(cfg.icon.fontSize) or 0, 16)
+      cfg.icon.countFontSize = math_max(tonumber(cfg.icon.countFontSize) or 0, 16)
+      cfg.icon.outline = "THICKOUTLINE"
     end
-    Cooldowns:SpellBars_Rebuild()
-
-    local chargeBars = Cooldowns:GetCooldownStackBarsDB() or {}
-    for _, cfg in pairs(chargeBars) do
-      if type(cfg) == "table" then
-        cfg.fontSize = math_max(tonumber(cfg.fontSize) or 0, 16)
-        cfg.fontOutline = "THICKOUTLINE"
-        Cooldowns:NormalizeCustomTrackerPresentation(cfg, "charge")
-        cfg.icon.fontSize = math_max(tonumber(cfg.icon.fontSize) or 0, 16)
-        cfg.icon.countFontSize = math_max(tonumber(cfg.icon.countFontSize) or 0, 16)
-        cfg.icon.outline = "THICKOUTLINE"
-      end
-    end
-    Cooldowns:CooldownStackBars_Rebuild()
-
-    local buffBars = BuffBars.GetStackBarsDB() or {}
-    for _, cfg in pairs(buffBars) do
-      if type(cfg) == "table" then
-        cfg.fontSize = math_max(tonumber(cfg.fontSize) or 0, 16)
-        cfg.outline = "THICKOUTLINE"
-        cfg.durationCountFontSize = math_max(tonumber(cfg.durationCountFontSize) or 0, 16)
-        cfg.durationOutline = "THICKOUTLINE"
-        Cooldowns:NormalizeCustomTrackerPresentation(cfg, cfg.kind)
-        cfg.icon.fontSize = math_max(tonumber(cfg.icon.fontSize) or 0, 16)
-        cfg.icon.countFontSize = math_max(tonumber(cfg.icon.countFontSize) or 0, 16)
-        cfg.icon.outline = "THICKOUTLINE"
-      end
-    end
-    BuffBars.RebuildCustomBars()
   end
+  Cooldowns:SpellBars_Rebuild()
+
+  local chargeBars = Cooldowns:GetCooldownStackBarsDB() or {}
+  for _, cfg in pairs(chargeBars) do
+    if type(cfg) == "table" then
+      cfg.fontSize = math_max(tonumber(cfg.fontSize) or 0, 16)
+      cfg.fontOutline = "THICKOUTLINE"
+      Cooldowns:NormalizeCustomTrackerPresentation(cfg, "charge")
+      cfg.icon.fontSize = math_max(tonumber(cfg.icon.fontSize) or 0, 16)
+      cfg.icon.countFontSize = math_max(tonumber(cfg.icon.countFontSize) or 0, 16)
+      cfg.icon.outline = "THICKOUTLINE"
+    end
+  end
+  Cooldowns:CooldownStackBars_Rebuild()
+
+  local buffBars = BuffBars.GetStackBarsDB() or {}
+  for _, cfg in pairs(buffBars) do
+    if type(cfg) == "table" then
+      cfg.fontSize = math_max(tonumber(cfg.fontSize) or 0, 16)
+      cfg.outline = "THICKOUTLINE"
+      cfg.durationCountFontSize = math_max(tonumber(cfg.durationCountFontSize) or 0, 16)
+      cfg.durationOutline = "THICKOUTLINE"
+      Cooldowns:NormalizeCustomTrackerPresentation(cfg, cfg.kind)
+      cfg.icon.fontSize = math_max(tonumber(cfg.icon.fontSize) or 0, 16)
+      cfg.icon.countFontSize = math_max(tonumber(cfg.icon.countFontSize) or 0, 16)
+      cfg.icon.outline = "THICKOUTLINE"
+    end
+  end
+  BuffBars.RebuildCustomBars()
 
   SetStatus("Combat readability applied. You can adjust every changed setting normally.")
   return true
@@ -555,32 +529,6 @@ local INSTALL_FLOW = {
     },
   },
 }
-
-local function BuildAvailableFlow(flow)
-  local pages = {}
-  for i = 1, #flow.pages do
-    local page = flow.pages[i]
-    local available = true
-
-    if page.unitFrames == true then
-      available = IsUnitFramesAvailable()
-    elseif page.prd == true then
-      available = IsPersonalResourceDisplayAvailable()
-    elseif page.preview == "customBars" then
-      available = IsCooldownManagerAvailable()
-    end
-
-    if available then
-      pages[#pages + 1] = page
-    end
-  end
-
-  return {
-    title = flow.title,
-    skipText = flow.skipText,
-    pages = pages,
-  }
-end
 
 local ACCESSIBILITY_PRESET_COLUMNS = 3
 local ACCESSIBILITY_PRESET_CARD_HEIGHT = 100
@@ -2762,16 +2710,10 @@ local function BuildWizardFrame()
 
   frame.ProfileChoiceHost = BuildProfileChoiceControls(frame, colors)
   frame.AccessibilityHost = BuildAccessibilityControls(frame, colors)
-  frame.UnitFrameHost = IsUnitFramesAvailable()
-    and BuildUnitFrameControls(frame, colors)
-    or CreateUnavailableHost(frame)
-  frame.PRDHost = IsPersonalResourceDisplayAvailable()
-    and BuildPRDControls(frame, colors)
-    or CreateUnavailableHost(frame)
+  frame.UnitFrameHost = BuildUnitFrameControls(frame, colors)
+  frame.PRDHost = BuildPRDControls(frame, colors)
   frame.QualityHost = BuildQualityControls(frame, colors)
-  frame.PreviewHost = IsCooldownManagerAvailable()
-    and BuildCustomBarsPreview(frame, colors)
-    or CreateUnavailableHost(frame)
+  frame.PreviewHost = BuildCustomBarsPreview(frame, colors)
 
   local note = frame:CreateFontString(nil, "OVERLAY")
   note:SetPoint("TOPLEFT", frame, "TOPLEFT", 24, -250)
@@ -2915,10 +2857,7 @@ local function BuildWizardFrame()
 end
 
 local function ShowInstallFlow()
-  local flow = BuildAvailableFlow(INSTALL_FLOW)
-  if not flow then
-    return
-  end
+  local flow = INSTALL_FLOW
 
   activeFlow = flow
   currentPage = 1
