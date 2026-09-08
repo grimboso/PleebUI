@@ -884,7 +884,8 @@ local CustomBarBuffGlowEventFrame = CreateFrame("Frame")
 local CustomTrackerStateGlows = {}
 local CUSTOM_TRACKER_STATE_GLOW_KEY = "PUI_CustomTrackerState"
 
-local function StopCustomTrackerStateGlow(trackKey)
+local function ReleaseCustomTrackerStateGlow(trackKey)
+  trackKey = tostring(trackKey)
   local state = CustomTrackerStateGlows[trackKey]
   if not state then return end
   if state.style == "PIXEL" then
@@ -916,7 +917,7 @@ function PCMPresentation.ApplyCustomTrackerStateGlow(trackKey, targetFrame, styl
     return
   end
 
-  StopCustomTrackerStateGlow(trackKey)
+  ReleaseCustomTrackerStateGlow(trackKey)
   if not targetFrame or style == nil or style == "NONE" then return end
   local glowColor = { r, g, b, a }
   if style == "PIXEL" then
@@ -945,12 +946,6 @@ function PCMPresentation.ApplyCustomTrackerStateGlow(trackKey, targetFrame, styl
     a = a,
   }
 end
-
-function PCMPresentation.ReleaseCustomTrackerStateGlow(trackKey)
-  StopCustomTrackerStateGlow(tostring(trackKey))
-end
-
-
 
 local function CustomBarBuffGlowRestyleLocked()
   return C_Secrets.ShouldAurasBeSecret() == true
@@ -1437,5 +1432,5 @@ PCMPresentation.RefreshCustomBarBuffGlowStyle = P:Def("PCMPresentation.RefreshCu
 PCMPresentation.DisableCustomBarBuffGlow = P:Def("PCMPresentation.DisableCustomBarBuffGlow", PCMPresentation.DisableCustomBarBuffGlow)
 PCMPresentation.ReleaseCustomBarBuffGlow = P:Def("PCMPresentation.ReleaseCustomBarBuffGlow", PCMPresentation.ReleaseCustomBarBuffGlow)
 PCMPresentation.ApplyCustomTrackerStateGlow = P:Def("PCMPresentation.ApplyCustomTrackerStateGlow", PCMPresentation.ApplyCustomTrackerStateGlow)
-PCMPresentation.ReleaseCustomTrackerStateGlow = P:Def("PCMPresentation.ReleaseCustomTrackerStateGlow", PCMPresentation.ReleaseCustomTrackerStateGlow)
+PCMPresentation.ReleaseCustomTrackerStateGlow = P:Def("PCMPresentation.ReleaseCustomTrackerStateGlow", ReleaseCustomTrackerStateGlow)
 PCMPresentation.SetCustomBarBuffGlowContextAlpha = P:Def("PCMPresentation.SetCustomBarBuffGlowContextAlpha", PCMPresentation.SetCustomBarBuffGlowContextAlpha)
