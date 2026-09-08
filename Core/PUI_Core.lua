@@ -390,33 +390,23 @@ function Addon:EnsureSchema()
   local g = self.db.global or {}
   self.db.global = g
 
-  local current = tonumber(g.schemaVersion) or 0
-  if current > PUI_SCHEMA_VERSION then
-    -- Future DB from newer build: do not downgrade.
-    return
-  end
-
   local p = self.db.profile
   if not p then return end
 
-  -- Ensure required root tables exist.
   _PUI_EnsureTable(p, "blizzardFonts")
 
   local pui = _PUI_EnsureTable(p, "pui")
-  local profileSchemaVersion = tonumber(rawget(pui, "schemaVersion")) or 0
-
   local puiMedia = _PUI_EnsureTable(pui, "media")
   local puiOptions = _PUI_EnsureTable(pui, "options")
-  local puiSkin = _PUI_EnsureTable(puiOptions, "skin")
-  pui.layouts = nil
+  _PUI_EnsureTable(puiOptions, "skin")
   local globalPUI = _PUI_EnsureTable(g, "pui")
   local globalOptions = _PUI_EnsureTable(globalPUI, "options")
 
   if puiMedia.iconTextGlobalFont == nil or puiMedia.iconTextGlobalFont == "" then
-    puiMedia.iconTextGlobalFont = p.iconTextGlobalFont or "FiraSans Heavy"
+    puiMedia.iconTextGlobalFont = "FiraSans Heavy"
   end
   if puiMedia.iconTextGlobalFlags == nil or puiMedia.iconTextGlobalFlags == "" then
-    puiMedia.iconTextGlobalFlags = p.iconTextGlobalFlags or "OUTLINE"
+    puiMedia.iconTextGlobalFlags = "OUTLINE"
   end
 
   puiMedia.fontSizeOffset = tonumber(puiMedia.fontSizeOffset) or 0
@@ -430,86 +420,35 @@ function Addon:EnsureSchema()
   if fontSizeScopes.actionBars == nil then fontSizeScopes.actionBars = true end
   if fontSizeScopes.cooldownManager == nil then fontSizeScopes.cooldownManager = true end
   if fontSizeScopes.resourceDisplay == nil then fontSizeScopes.resourceDisplay = true end
-  fontSizeScopes.chat = nil
   if fontSizeScopes.playerBuffs == nil then fontSizeScopes.playerBuffs = true end
   if fontSizeScopes.minimap == nil then fontSizeScopes.minimap = true end
   if fontSizeScopes.qualityOfLife == nil then fontSizeScopes.qualityOfLife = true end
 
-  puiMedia.globalFontSizeOffset = nil
-
   puiOptions.uiTheme = "modern"
 
-  if profileSchemaVersion < 3 then
-    if puiSkin.backgroundColor == nil then
-      puiSkin.backgroundColor = puiSkin.uiShellColor
-    end
-    if puiSkin.accentColor == nil then
-      puiSkin.accentColor = puiSkin.uiAccentColor
-    end
-    if puiSkin.borderColor == nil then
-      puiSkin.borderColor = puiSkin.controlBorderColor
-    end
-
-    puiSkin.uiShellColor = nil
-    puiSkin.uiGroupColor = nil
-    puiSkin.uiChild1Color = nil
-    puiSkin.uiChild2Color = nil
-    puiSkin.uiAccentColor = nil
-    puiSkin.controlBorderColor = nil
-    puiSkin.controlHoverColor = nil
-  end
-
   if puiOptions.puiOptionsFontSize == nil then
-    puiOptions.puiOptionsFontSize = tonumber(p.puiOptionsFontSize) or 14
+    puiOptions.puiOptionsFontSize = 14
   end
   if puiOptions.optionsScale == nil or tonumber(puiOptions.optionsScale) == nil or tonumber(puiOptions.optionsScale) <= 0 then
-    puiOptions.optionsScale = tonumber(p.optionsScale) or 1.0
+    puiOptions.optionsScale = 1.0
   end
-  local storedProfileUseCustomUIScale = rawget(puiOptions, "useCustomUIScale")
-  local storedProfileUIScale = rawget(puiOptions, "UIScale")
   local storedGlobalUseCustomUIScale = rawget(globalOptions, "useCustomUIScale")
   local storedGlobalUIScale = rawget(globalOptions, "UIScale")
 
   if type(storedGlobalUseCustomUIScale) ~= "boolean" then
-    globalOptions.useCustomUIScale = type(storedProfileUseCustomUIScale) == "boolean" and storedProfileUseCustomUIScale or true
+    globalOptions.useCustomUIScale = true
   end
   if type(storedGlobalUIScale) ~= "number" or storedGlobalUIScale <= 0 then
-    if type(storedProfileUIScale) == "number" and storedProfileUIScale > 0 and storedProfileUIScale ~= 0.533333333333333 then
-      globalOptions.UIScale = storedProfileUIScale
-    else
-      globalOptions.UIScale = 0.533333333333333
-    end
+    globalOptions.UIScale = 0.533333333333333
   end
-
-  puiOptions.useCustomUIScale = nil
-  puiOptions.UIScale = nil
 
   -- PCM roots (Core owns schema + defaults)
   local cm = _PUI_EnsureTable(p, "cooldownManager")
   if cm.enabled == nil then cm.enabled = true end
 
-  if profileSchemaVersion < 6 then
-    cm.customIconGroups = nil
-
-    local function ClearCustomTrackerButtonGroups(root)
-      if type(root) ~= "table" then
-        return
-      end
-      for _, tracker in pairs(root) do
-        if type(tracker) == "table" and type(tracker.icon) == "table" then
-          tracker.icon.group = nil
-        end
-      end
-    end
-
-    ClearCustomTrackerButtonGroups(cm.spellBars)
-    ClearCustomTrackerButtonGroups(cm.cooldownStackBars)
-    ClearCustomTrackerButtonGroups(cm.stackBars)
-  end
-
   -- Required subtables used by runtime + options
   local cmStyle = _PUI_EnsureTable(cm, "style")
-  local cmBuffBarStyle = _PUI_EnsureTable(cmStyle, "buffBar")
+  _PUI_EnsureTable(cmStyle, "buffBar")
   local cmBorders = _PUI_EnsureTable(cm, "borders")
   local cmEffects = _PUI_EnsureTable(cm, "effects")
   _PUI_EnsureTable(cm, "flags")
@@ -556,25 +495,6 @@ function Addon:EnsureSchema()
   if pbStyle.iconSpacing == nil then pbStyle.iconSpacing = 1 end
   if pbViewerGrowth.BuffIconCooldownViewer == nil then pbViewerGrowth.BuffIconCooldownViewer = "CENTER" end
 
-  if profileSchemaVersion < 4 then
-    cm.editMode = nil
-    cmBuffBarStyle.hideWhenInactive = nil
-    pbStyle.hideWhenInactive = nil
-
-    local editMode = p.EditMode
-    local oldPositions = editMode and editMode.viewerPositions
-    if type(oldPositions) == "table" then
-      local oldPosition = oldPositions.BuffIconCooldownViewer
-      if type(oldPosition) == "table" then
-        local pbAnchor = _PUI_EnsureTable(pb, "anchor")
-        if pbAnchor.BuffIconCooldownViewer == nil then
-          pbAnchor.BuffIconCooldownViewer = oldPosition
-        end
-      end
-
-      editMode.viewerPositions = nil
-    end
-  end
   pui.schemaVersion = PUI_SCHEMA_VERSION
 
   local pbIcon = _PUI_EnsureTable(pbBorders, "icon")
@@ -690,10 +610,6 @@ local function _PUI_GetRootProfileExportData(db)
     data = {}
   end
 
-  if type(data.pui) == "table" then
-    data.pui.layouts = nil
-  end
-
   return data
 end
 
@@ -790,23 +706,20 @@ function Addon:ImportProfileString(text, targetProfileName, applyNow)
   if not ok or type(payload) ~= "table" then
     return false, "Failed to deserialize profile."
   end
-  if payload.format ~= PUI_PROFILE_FORMAT or type(payload.data) ~= "table" then
-    return false, "Imported payload is not a PleebUI profile."
+  if payload.format ~= PUI_PROFILE_FORMAT or payload.formatVersion ~= PUI_PROFILE_FORMAT_VERSION or type(payload.data) ~= "table" then
+    return false, "Imported profile is not supported."
   end
 
   local db = self.db
   local profiles = db.profiles
 
-  local importedRoot = payload.data.profile or payload.data.root or payload.data
+  local importedRoot = payload.data.profile
   if type(importedRoot) ~= "table" then
     return false, "Imported profile data is invalid."
   end
 
   local profileName = _PUI_GetSafeProfileName(db, targetProfileName, payload.profileName)
   local importedProfile = _PUI_CloneProfileData(importedRoot)
-  if type(importedProfile.pui) == "table" then
-    importedProfile.pui.layouts = nil
-  end
 
   profiles[profileName] = importedProfile
   _PUI_SetNamespaceProfileImportData(db, profileName, payload.data.namespaces)
