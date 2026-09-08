@@ -2452,12 +2452,6 @@ local function _PUI_SaveOptionsWindowState(frame)
   local db = _PUI_GetOptionsWindowDB()
   local width, height = _PUI_ClampOptionsWindowBounds(frame:GetWidth(), frame:GetHeight(), frame)
 
-  db.optionsWindowPoint = nil
-  db.optionsWindowRelativePoint = nil
-  db.optionsWindowX = nil
-  db.optionsWindowY = nil
-  db.optionsWindowLeft = nil
-  db.optionsWindowTop = nil
   db.optionsWindowWidth = width
   db.optionsWindowHeight = height
 end
