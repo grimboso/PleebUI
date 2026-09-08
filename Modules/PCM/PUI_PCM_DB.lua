@@ -376,13 +376,6 @@ local function _PCM_DB_Attach(Cooldowns)
     return cm
   end
 
-  local BORDER_VIEWER_KEYS = {
-    "EssentialCooldownViewer",
-    "UtilityCooldownViewer",
-    "BuffIconCooldownViewer",
-    "BuffBarCooldownViewer",
-  }
-
   local function _ClampBorderThickness(v)
     v = tonumber(v) or 0
     if v < 0 then v = 0 end
@@ -405,45 +398,6 @@ local function _PCM_DB_Attach(Cooldowns)
     b.viewer.viewers = b.viewer.viewers or {}
 
     local m = b.module
-
-    if m.thickness == nil and b.thickness ~= nil then
-      m.thickness = b.thickness
-    end
-
-    if m.color == nil and b.color ~= nil then
-      local c = b.color
-      local cr = c.r or c[1]
-      local cg = c.g or c[2]
-      local cb = c.b or c[3]
-      local ca = c.a or c[4]
-
-      if cr == 1 and cg == 1 and cb == 1 and (ca == nil or ca == 1) then
-        m.color = { 0.20, 0.20, 0.24, 1.00 }
-      else
-        m.color = c
-      end
-    end
-
-    b.thickness = nil
-    b.color = nil
-
-    for i = 1, #BORDER_VIEWER_KEYS do
-      local viewerKey = BORDER_VIEWER_KEYS[i]
-      local old = b.viewer[viewerKey]
-      if type(old) == "table" then
-        local current = b.viewer.viewers[viewerKey]
-        if type(current) ~= "table" then
-          b.viewer.viewers[viewerKey] = old
-        else
-          for key, value in pairs(old) do
-            if current[key] == nil then
-              current[key] = value
-            end
-          end
-        end
-        b.viewer[viewerKey] = nil
-      end
-    end
 
     if m.thickness == nil then
       m.thickness = 2
@@ -847,8 +801,6 @@ local function _PCM_DB_Attach(Cooldowns)
   -- Spell Cooldown Bars DB (supports Shared + per-character Enable)
   
 
-  local MigrateLegacyCustomTrackerStore
-
   local function _SpellBars_GetProfileRoot()
     local root = Addon.db and Addon.db.profile
     if not root then
@@ -864,7 +816,6 @@ local function _PCM_DB_Attach(Cooldowns)
       return nil
     end
     cm.spellBars = cm.spellBars or {}
-    MigrateLegacyCustomTrackerStore(cm.spellBars, "cooldown")
     return cm.spellBars
   end
 
@@ -1070,7 +1021,6 @@ local function _PCM_DB_Attach(Cooldowns)
       return nil
     end
     cm.cooldownStackBars = cm.cooldownStackBars or {}
-    MigrateLegacyCustomTrackerStore(cm.cooldownStackBars, "charge")
     return cm.cooldownStackBars
   end
 
@@ -1136,62 +1086,6 @@ local function _PCM_DB_Attach(Cooldowns)
     end
 
     return entry
-  end
-
-    local function CopyCustomTrackerTable(source)
-    local copy = {}
-    for key, value in pairs(source) do
-      if type(value) == "table" then
-        copy[key] = CopyCustomTrackerTable(value)
-      else
-        copy[key] = value
-      end
-    end
-    return copy
-  end
-
-  local function GetNextCustomTrackerID(root)
-    local nextID = 1
-    for id in pairs(root) do
-      if type(id) == "number" and id >= nextID then
-        nextID = id + 1
-      end
-    end
-    return nextID
-  end
-
-  MigrateLegacyCustomTrackerStore = function(root, kind)
-    local duplicates = {}
-    for id, entry in pairs(root) do
-      if type(entry) == "table" and type(entry.views) == "table" then
-        local showBar = entry.views.bar ~= false
-        local showButton = entry.views.icon == true
-        if showBar and showButton then
-          duplicates[#duplicates + 1] = CopyCustomTrackerTable(entry)
-        end
-
-        entry.presentation = showButton and not showBar and "BUTTON" or "BAR"
-        entry.views = nil
-        if entry.presentation == "BAR" then
-          entry.icon = nil
-        end
-      end
-    end
-
-    for index = 1, #duplicates do
-      local duplicate = duplicates[index]
-      local id = GetNextCustomTrackerID(root)
-      duplicate.id = id
-      duplicate.presentation = "BUTTON"
-      duplicate.views = nil
-      local duplicateKind = kind == "aura" and duplicate.kind or kind
-      duplicate.label = (duplicateKind == "charge" and "Charge Button "
-        or duplicateKind == "duration" and "Duration Button "
-        or duplicateKind == "stack" and "Stack Button " or "Cooldown Button ") .. tostring(id)
-      root[id] = duplicate
-    end
-
-    return root
   end
 
   local function NormalizeCustomTrackerPresentation(selfOrEntry, maybeEntry, maybeKind)
@@ -1262,15 +1156,13 @@ local function _PCM_DB_Attach(Cooldowns)
     icon.outOfCombatAlpha = tonumber(icon.outOfCombatAlpha) or 0
     if icon.outOfCombatAlpha < 0 then icon.outOfCombatAlpha = 0 end
     if icon.outOfCombatAlpha > 100 then icon.outOfCombatAlpha = 100 end
-    icon.readyAlpha = tonumber(icon.readyAlpha) or tonumber(icon.inactiveAlpha) or 35
+    icon.readyAlpha = tonumber(icon.readyAlpha) or 35
     if icon.readyAlpha < 0 then icon.readyAlpha = 0 end
     if icon.readyAlpha > 100 then icon.readyAlpha = 100 end
     icon.onCooldownAlpha = tonumber(icon.onCooldownAlpha) or 100
     if icon.onCooldownAlpha < 0 then icon.onCooldownAlpha = 0 end
     if icon.onCooldownAlpha > 100 then icon.onCooldownAlpha = 100 end
-    icon.inactiveAlpha = nil
-
-    if icon.desaturateReady == nil then icon.desaturateReady = icon.desaturateInactive ~= false end
+    if icon.desaturateReady == nil then icon.desaturateReady = true end
     if icon.desaturateCooldown == nil then icon.desaturateCooldown = false end
     if icon.showSwipe == nil then icon.showSwipe = true end
     if icon.showDuration == nil then icon.showDuration = true end
@@ -1281,7 +1173,6 @@ local function _PCM_DB_Attach(Cooldowns)
 
     icon.desaturateReady = icon.desaturateReady == true
     icon.desaturateCooldown = icon.desaturateCooldown == true
-    icon.desaturateInactive = nil
     icon.showSwipe = icon.showSwipe == true
     icon.showDuration = icon.showDuration == true
     icon.showCount = icon.showCount == true
@@ -1346,18 +1237,12 @@ local function _PCM_DB_Attach(Cooldowns)
       AUTOCAST = true,
       PROC = true,
     }
-    icon.cooldownGlowStyle = icon.cooldownGlowStyle or icon.activeGlowStyle
-    icon.readyGlowStyle = icon.readyGlowStyle or icon.inactiveGlowStyle
+    icon.cooldownGlowStyle = icon.cooldownGlowStyle or "NONE"
+    icon.readyGlowStyle = icon.readyGlowStyle or "NONE"
     if not validGlowStyles[icon.cooldownGlowStyle] then icon.cooldownGlowStyle = "NONE" end
     if not validGlowStyles[icon.readyGlowStyle] then icon.readyGlowStyle = "NONE" end
-    icon.cooldownGlowColor = type(icon.cooldownGlowColor) == "table" and icon.cooldownGlowColor
-      or type(icon.activeGlowColor) == "table" and icon.activeGlowColor or { 1, 0.55, 0.1, 1 }
-    icon.readyGlowColor = type(icon.readyGlowColor) == "table" and icon.readyGlowColor
-      or type(icon.inactiveGlowColor) == "table" and icon.inactiveGlowColor or { 0.25, 0.75, 1, 1 }
-    icon.activeGlowStyle = nil
-    icon.inactiveGlowStyle = nil
-    icon.activeGlowColor = nil
-    icon.inactiveGlowColor = nil
+    icon.cooldownGlowColor = type(icon.cooldownGlowColor) == "table" and icon.cooldownGlowColor or { 1, 0.55, 0.1, 1 }
+    icon.readyGlowColor = type(icon.readyGlowColor) == "table" and icon.readyGlowColor or { 0.25, 0.75, 1, 1 }
     if icon.activeAuraEnabled == nil then icon.activeAuraEnabled = false end
     icon.activeAuraEnabled = icon.activeAuraEnabled == true
     icon.activeAuraAlpha = tonumber(icon.activeAuraAlpha) or 100
@@ -1626,7 +1511,6 @@ local function _PCM_DB_Attach(Cooldowns)
   -- Spell Bars DB
   Cooldowns.GetSpellBarsDB = _SpellBars_GetProfileBars
   Cooldowns.NormalizeCustomBarBuffGlow = NormalizeCustomBarBuffGlow
-  Cooldowns.MigrateLegacyCustomTrackerStore = MigrateLegacyCustomTrackerStore
   Cooldowns.NormalizeCustomTrackerPresentation = NormalizeCustomTrackerPresentation
   Cooldowns.NormalizeSpellBarEntry = NormalizeSpellBarEntry
   Cooldowns.SpellBars_GetEffectiveEnabled = SpellBars_GetEffectiveEnabled

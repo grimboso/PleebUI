@@ -95,7 +95,6 @@ local AceGUI = LibStub("AceGUI-3.0")
 local function _GetStackBarsDB()
   local cm = _GetBuffsDB()
   cm.stackBars = cm.stackBars or {}
-  ns.Modules.CooldownManager:MigrateLegacyCustomTrackerStore(cm.stackBars, "aura")
   return cm.stackBars
 end
 
