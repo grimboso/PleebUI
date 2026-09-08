@@ -1199,22 +1199,9 @@ local function EnsureSmartSnapLoaded()
     end
   end
 
-  local migratedMasters = false
-  for persistedKey, persistedMaster in pairs(db.masters) do
-    if persistedMaster == true then
-      SmartSnapMasters[persistedKey] = true
-    elseif type(persistedMaster) == "string" then
-      SmartSnapMasters[persistedMaster] = true
-      migratedMasters = true
-    end
-  end
-
-  if migratedMasters then
-    wipe(db.masters)
-    for masterKey in pairs(SmartSnapMasters) do
-      if SmartSnapLinks[masterKey] then
-        db.masters[masterKey] = true
-      end
+  for key, isMaster in pairs(db.masters) do
+    if isMaster == true then
+      SmartSnapMasters[key] = true
     end
   end
 end
