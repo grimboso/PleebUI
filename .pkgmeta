@@ -1,0 +1,49 @@
+package-as: PleebUI
+enable-nolib-creation: no
+
+externals:
+  PackagerLibs/LibStub: https://repos.wowace.com/wow/libstub/trunk
+  PackagerLibs/LibEditModeOverride: https://github.com/plusmouse/LibEditModeOverride.git
+  PackagerLibs/oUF: https://github.com/oUF-wow/oUF.git
+  PackagerLibs/AceGUI-3.0: https://repos.wowace.com/wow/ace3/trunk/AceGUI-3.0
+  PackagerLibs/CallbackHandler-1.0: https://repos.wowace.com/wow/callbackhandler/trunk/CallbackHandler-1.0
+  PackagerLibs/LibSharedMedia-3.0: https://repos.wowace.com/wow/libsharedmedia-3-0/trunk/LibSharedMedia-3.0
+  PackagerLibs/LibCustomGlow-1.0: https://github.com/Stanzilla/LibCustomGlow.git
+  PackagerLibs/AceSerializer-3.0: https://repos.wowace.com/wow/ace3/trunk/AceSerializer-3.0
+  PackagerLibs/AceAddon-3.0: https://repos.wowace.com/wow/ace3/trunk/AceAddon-3.0
+  PackagerLibs/LibDeflate: https://github.com/SafeteeWoW/LibDeflate.git
+  PackagerLibs/LibDualSpec-1.0: https://repos.wowace.com/wow/libdualspec-1-0
+  PackagerLibs/AceDB-3.0: https://repos.wowace.com/wow/ace3/trunk/AceDB-3.0
+  PackagerLibs/AceDBOptions-3.0: https://repos.wowace.com/wow/ace3/trunk/AceDBOptions-3.0
+  PackagerLibs/NumyAceEvent-3.0-master: https://github.com/NumyAddon/NumyAceEvent-3.0.git
+  PackagerLibs/AceConfig-3.0/AceConfigRegistry-3.0: https://repos.wowace.com/wow/ace3/trunk/AceConfig-3.0/AceConfigRegistry-3.0
+  PackagerLibs/AceConfig-3.0/AceConfigDialog-3.0: https://repos.wowace.com/wow/ace3/trunk/AceConfig-3.0/AceConfigDialog-3.0
+  PackagerLibs/AceGUI-3.0-SharedMediaWidgets: https://repos.wowace.com/wow/ace-gui-3-0-shared-media-widgets/trunk/AceGUI-3.0-SharedMediaWidgets
+  PackagerLibs/LibDataBroker-1.1: https://github.com/tekkub/libdatabroker-1-1.git
+  PackagerLibs/LibDBIcon-1.0: https://repos.wowace.com/wow/libdbicon-1-0/trunk/LibDBIcon-1.0
+  PackagerLibs/LibKeyBound-1.0: https://repos.wowace.com/wow/libkeybound-1-0/trunk/LibKeyBound-1.0
+
+move-folders:
+  PleebUI/PackagerLibs/LibStub: PleebUI/Libs/LibStub
+  PleebUI/PackagerLibs/LibEditModeOverride: PleebUI/Libs/LibEditModeOverride
+  PleebUI/PackagerLibs/oUF: PleebUI/Libs/oUF
+  PleebUI/PackagerLibs/AceGUI-3.0: PleebUI/Libs/AceGUI-3.0
+  PleebUI/PackagerLibs/CallbackHandler-1.0: PleebUI/Libs/CallbackHandler-1.0
+  PleebUI/PackagerLibs/LibSharedMedia-3.0: PleebUI/Libs/LibSharedMedia-3.0
+  PleebUI/PackagerLibs/LibCustomGlow-1.0: PleebUI/Libs/LibCustomGlow-1.0
+  PleebUI/PackagerLibs/AceSerializer-3.0: PleebUI/Libs/AceSerializer-3.0
+  PleebUI/PackagerLibs/AceAddon-3.0: PleebUI/Libs/AceAddon-3.0
+  PleebUI/PackagerLibs/LibDeflate: PleebUI/Libs/LibDeflate
+  PleebUI/PackagerLibs/LibDualSpec-1.0: PleebUI/Libs/LibDualSpec-1.0
+  PleebUI/PackagerLibs/AceDB-3.0: PleebUI/Libs/AceDB-3.0
+  PleebUI/PackagerLibs/AceDBOptions-3.0: PleebUI/Libs/AceDBOptions-3.0
+  PleebUI/PackagerLibs/NumyAceEvent-3.0-master: PleebUI/Libs/NumyAceEvent-3.0-master
+  PleebUI/PackagerLibs/AceConfig-3.0: PleebUI/Libs/AceConfig-3.0
+  PleebUI/PackagerLibs/AceGUI-3.0-SharedMediaWidgets: PleebUI/Libs/AceGUI-3.0-SharedMediaWidgets
+  PleebUI/PackagerLibs/LibDataBroker-1.1: PleebUI/Libs/LibDataBroker-1.1
+  PleebUI/PackagerLibs/LibDBIcon-1.0: PleebUI/Libs/LibDBIcon-1.0
+  PleebUI/PackagerLibs/LibKeyBound-1.0: PleebUI/Libs/LibKeyBound-1.0
+
+ignore:
+  - Libs/AceConsole-3.0
+  - Libs/AceEvent-3.0
