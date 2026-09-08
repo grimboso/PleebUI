@@ -7,6 +7,7 @@ local Presentation = ns.Presentation
 local Theme = ns.Theme
 local FrameUtil = ns.FrameUtil
 local AuraWidget = ns.AuraWidget
+local LSM = ns.LSM
 
 local P = ns.Pleebug:DropIn({}, { name = "PRD_Config" })
 local _, PLAYER_CLASS = UnitClass("player")
@@ -22,7 +23,6 @@ function PRDPreview.MarkDirty()
 end
 
 local CreateFrame = CreateFrame
-local UnitClass = UnitClass
 local UnitPowerType = UnitPowerType
 local RAID_CLASS_COLORS = RAID_CLASS_COLORS
 local PowerBarColor = PowerBarColor
@@ -64,16 +64,7 @@ local function PRDPreview_CopyColor(color, r, g, b, a)
 end
 
 local function PRDPreview_FetchStatusbar(key)
-  local LSM = ns.LSM
-
-  if LSM and LSM.Fetch then
-    local texture = LSM:Fetch("statusbar", key or "Pleebar", true)
-    if texture then
-      return texture
-    end
-  end
-
-  return PRD_PREVIEW_STATUSBAR_FALLBACK
+  return LSM:Fetch("statusbar", key or "Pleebar", true) or PRD_PREVIEW_STATUSBAR_FALLBACK
 end
 
 local function PRDPreview_SetTexture(statusBar, textureKey)
@@ -88,14 +79,8 @@ local function PRDPreview_SetTexture(statusBar, textureKey)
 end
 
 local function PRDPreview_ResolveClassColor()
-  local _, classToken = UnitClass("player")
-  local color = classToken and RAID_CLASS_COLORS and RAID_CLASS_COLORS[classToken]
-
-  if color then
-    return color.r or 1, color.g or 1, color.b or 1, color.a or 1
-  end
-
-  return 1, 1, 1, 1
+  local color = RAID_CLASS_COLORS[PLAYER_CLASS]
+  return color.r, color.g, color.b, color.a or 1
 end
 
 local function PRDPreview_ResolveNativeColor(role, config)
@@ -115,7 +100,7 @@ local function PRDPreview_ResolveNativeColor(role, config)
   local PRD = ns.Modules.PRD
   local liveBar = role == "health" and PRD.healthBar or PRD.primaryBar
 
-  if liveBar and liveBar.GetStatusBarColor then
+  if liveBar then
     local r, g, b, a = liveBar:GetStatusBarColor()
     if r ~= nil then
       return r, g or 1, b or 1, a or 1
@@ -127,7 +112,7 @@ local function PRDPreview_ResolveNativeColor(role, config)
   end
 
   local _, token = UnitPowerType("player")
-  local color = token and PowerBarColor and PowerBarColor[token]
+  local color = token and PowerBarColor[token]
 
   if color then
     return color.r or 0.15, color.g or 0.45, color.b or 1, color.a or 1
@@ -146,7 +131,7 @@ local function PRDPreview_ResolveResourceColor(config, definition)
     return PRDPreview_ResolveClassColor()
   elseif config.useBlizzardPowerColor == true then
     local token = definition.colorToken or definition.token
-    local color = token and PowerBarColor and PowerBarColor[token]
+    local color = token and PowerBarColor[token]
 
     if color then
       return color.r or 1, color.g or 1, color.b or 1, color.a or 1
@@ -191,8 +176,7 @@ local function PRD_UsesSecondaryResourceTabs(resourceOptions)
 end
 
 local function PRDPreview_GetResourceOptionCategory(resourceKey)
-  local Secondary = ns.PRDSecondary
-  local resources = Secondary and Secondary:GetResourceOptionsForClass(PLAYER_CLASS) or {}
+  local resources = ns.PRDSecondary:GetResourceOptionsForClass(PLAYER_CLASS)
 
   for index = 1, #resources do
     local resource = resources[index]
