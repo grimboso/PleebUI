@@ -35,10 +35,6 @@ Profiles can be switched, copied, reset, imported, and exported. Per-specializat
 | `/cd` | Open Blizzard Cooldown Manager settings |
 | `/dmg` or `/dps` | Control PleebUI Damage Meters |
 
-## Compatibility
 
-- World of Warcraft Retail
-- Midnight 12.1
-- Required libraries are included
 
 Source and issue tracker: [github.com/grimboso/PleebUI](https://github.com/grimboso/PleebUI)

@@ -51,11 +51,6 @@ For a manual installation:
 
 Use the packaged `PleebUI-v*.zip` asset, not GitHub's automatically generated source-code archives.
 
-## Compatibility
-
-- World of Warcraft Retail
-- Midnight 12.1
-- Required libraries are included in packaged releases
 
 ## Feedback and issues
 

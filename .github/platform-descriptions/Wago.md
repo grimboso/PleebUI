@@ -22,10 +22,6 @@ The setup wizard opens for new characters. Use `/pui` to open settings and `/pe`
 
 Other commands include `/pek` for keyboard Edit Mode, `/test` as an alternate Edit Mode command, `/kb` for Action Bar binding mode, `/cd` for Blizzard Cooldown Manager settings, and `/dmg` for Damage Meters.
 
-## Compatibility
 
-- World of Warcraft Retail
-- Midnight 12.1
-- Required libraries are included
 
 Source and issue tracker: [github.com/grimboso/PleebUI](https://github.com/grimboso/PleebUI)
