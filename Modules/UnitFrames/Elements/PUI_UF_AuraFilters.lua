@@ -552,7 +552,6 @@ local function CreateImportantBuffsDisplay(auraDB)
   display.maxIcons = 1
   display.sortMethod = "TIME_REMAINING"
   display.sortDirection = "ASCENDING"
-  display.importantBuffsDefaultsVersion = 2
   display.appearanceOverrides = {
     tooltips = true,
   }
@@ -847,19 +846,6 @@ function AuraFilters.NormalizeDisplays(auraDB)
 
     local importantBuffs = output[importantBuffsID] or CreateImportantBuffsDisplay(auraDB)
 
-    if auraDB.kind == "party"
-      and importantBuffs.importantBuffsDefaultsVersion == nil
-      and tonumber(importantBuffs.iconSize) == 18
-    then
-      importantBuffs.iconSize = 24
-    elseif auraDB.kind == "raid"
-      and (tonumber(importantBuffs.importantBuffsDefaultsVersion) or 0) < 2
-      and tonumber(importantBuffs.iconSize) == 16
-    then
-      importantBuffs.iconSize = 20
-    end
-
-    importantBuffs.importantBuffsDefaultsVersion = 2
     importantBuffs.builtInKey = "IMPORTANT_BUFFS"
     importantBuffs.specialType = "IMPORTANT_BUFFS"
     importantBuffs.protected = true
