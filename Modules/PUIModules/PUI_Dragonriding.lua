@@ -183,26 +183,6 @@ end
 
 local _WS_INTERP = Enum.StatusBarInterpolation.ExponentialEaseOut
 local _TIMER_DIRECTION_ELAPSED = Enum.StatusBarTimerDirection.ElapsedTime
-
-local function _SetStatusBarTimerDuration(bar, durationObject, interpolation, direction)
-  if not bar or not durationObject or not bar.SetTimerDuration then
-    return false
-  end
-
-  if interpolation ~= nil and direction ~= nil then
-    bar:SetTimerDuration(durationObject, interpolation, direction)
-  elseif interpolation ~= nil then
-    bar:SetTimerDuration(durationObject, interpolation)
-  elseif direction ~= nil then
-    bar:SetTimerDuration(durationObject, nil, direction)
-  else
-    bar:SetTimerDuration(durationObject)
-  end
-
-  return true
-end
-
-
 local _CHARGE_INTERP = Enum.StatusBarInterpolation.Immediate
 
 local function _ClearRechargeBar(rechargeBar)
@@ -922,10 +902,7 @@ local function _UpdateWSWithTimer(cdStart, cdDur, cdEnabled, isGCD)
   end
 
   wsBar:SetMinMaxValues(0, 1)
-
-  if not _SetStatusBarTimerDuration(wsBar, durationObject, interp, _TIMER_DIRECTION_ELAPSED) then
-    _WS_SetReady(interp)
-  end
+  wsBar:SetTimerDuration(durationObject, interp, _TIMER_DIRECTION_ELAPSED)
 end
 
 local function _ApplyChargeBars(runtime)
@@ -1056,14 +1033,6 @@ function Dragonriding:Refresh()
   _RefreshRuntimeState(self)
 end
 
-function Dragonriding:OnInitialize()
-  _CompileRuntimeConfig(GetDB())
-end
-
-function Dragonriding:_OnGlidingChanged()
-  _RefreshRuntimeState(self)
-end
-
 function Dragonriding:_OnSpellUpdateCharges()
   if not _cache.gliding then
     return
@@ -1118,8 +1087,8 @@ end
 function Dragonriding:OnEnable()
   _SetTicking(false)
   self:_SetSpellStateEventsRegistered(false)
-  self:RegisterEvent("PLAYER_IS_GLIDING_CHANGED", "_OnGlidingChanged")
-  self:RegisterEvent("PLAYER_ENTERING_WORLD", "_OnGlidingChanged")
+  self:RegisterEvent("PLAYER_IS_GLIDING_CHANGED", _RefreshRuntimeState, self)
+  self:RegisterEvent("PLAYER_ENTERING_WORLD", _RefreshRuntimeState, self)
   self:Refresh()
 end
 
@@ -1169,18 +1138,28 @@ function Dragonriding:EnsureMovers()
     return
   end
 
+  local function SavePosition(movedFrame)
+    local db = GetDB()
+    local x, y = FrameUtil.GetMoverOffsets(movedFrame)
+    db.point = "CENTER"
+    db.relativeTo = "UIParent"
+    db.relativePoint = "CENTER"
+    db.x = x
+    db.y = y
+  end
+
   FrameUtil:RegisterMover("Dragonriding", moverGhost, {
     label = "Skyriding",
     useOverlayDrag = true,
     optionsString = "Dragonriding",
-    onDragStop = function(movedFrame)
-      local db = GetDB()
-      local x, y = FrameUtil.GetMoverOffsets(movedFrame)
-      db.point = "CENTER"
-      db.relativeTo = "UIParent"
-      db.relativePoint = "CENTER"
-      db.x = x
-      db.y = y
+    smartSnap = {
+      family = "positionOnly",
+      isRuntimeActive = function()
+        return GetDB().enabled ~= false
+      end,
+    },
+    savePosition = SavePosition,
+    onDragStop = function()
       _ApplyStyle()
     end,
     resetPosition = function()
@@ -1563,7 +1542,6 @@ end
   _GetVigorInfo = P:Def("_GetVigorInfo", _GetVigorInfo)
   _GetSecondWindInfo = P:Def("_GetSecondWindInfo", _GetSecondWindInfo)
   _GetGlidingInfo = P:Def("_GetGlidingInfo", _GetGlidingInfo)
-  _SetStatusBarTimerDuration = P:Def("_SetStatusBarTimerDuration", _SetStatusBarTimerDuration)
   _ClearRechargeBar = P:Def("_ClearRechargeBar", _ClearRechargeBar)
   _LayoutRechargeBar = P:Def("_LayoutRechargeBar", _LayoutRechargeBar)
   _ApplyChargeBarState = P:Def("_ApplyChargeBarState", _ApplyChargeBarState)
@@ -1588,8 +1566,6 @@ end
   _Tick = P:Def("_Tick", _Tick)
   _RefreshRuntimeState = P:Def("_RefreshRuntimeState", _RefreshRuntimeState)
   Dragonriding.Refresh = P:Def("Dragonriding.Refresh", Dragonriding.Refresh)
-  Dragonriding.OnInitialize = P:Def("Dragonriding.OnInitialize", Dragonriding.OnInitialize)
-  Dragonriding._OnGlidingChanged = P:Def("Dragonriding._OnGlidingChanged", Dragonriding._OnGlidingChanged)
   Dragonriding._OnSpellUpdateCharges = P:Def("Dragonriding._OnSpellUpdateCharges", Dragonriding._OnSpellUpdateCharges)
   Dragonriding._OnSpellUpdateCooldown = P:Def("Dragonriding._OnSpellUpdateCooldown", Dragonriding._OnSpellUpdateCooldown)
   Dragonriding._SetSpellStateEventsRegistered = P:Def("Dragonriding._SetSpellStateEventsRegistered", Dragonriding._SetSpellStateEventsRegistered)

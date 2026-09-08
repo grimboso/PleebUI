@@ -426,7 +426,7 @@ local function _CustomBars_SaveAnchor(f, cfg)
     return
   end
 
-  local x, y = FrameUtil._GetOffsetsForFrame(f)
+  local x, y = FrameUtil.GetMoverOffsets(f)
 
   cfg.pos = cfg.pos or {}
   cfg.pos.point = "CENTER"
@@ -810,6 +810,12 @@ local function _CustomBars_RegisterMover(id, f, cfg)
   end
 
   local key = "PCM_CustomStackBar_" .. tostring(id)
+
+  local function SavePosition(frame)
+    _CustomBars_SaveAnchor(frame or f, cfg)
+    _CustomBars_ApplyAnchor(f, cfg)
+  end
+
   local moverOpts = {
     label = ns.Modules.CooldownManager:GetCustomBarDisplayName(cfg),
     optionsString = "CooldownManager,custom_bars,bb:" .. tostring(id),
@@ -819,9 +825,8 @@ local function _CustomBars_RegisterMover(id, f, cfg)
     shouldShow = function()
       return cfg and cfg.enabled ~= false and _CustomBars_IsTrackedSpellAvailable(cfg)
     end,
-    onDragStop = function(frame)
-      _CustomBars_SaveAnchor(frame or f, cfg)
-      _CustomBars_ApplyAnchor(f, cfg)
+    savePosition = SavePosition,
+    onDragStop = function()
       FrameUtil:RefreshGhostMover(key)
     end,
     quickSettings = function()
@@ -1160,23 +1165,42 @@ local _CustomBars_GetIconCooldownID
 local _CustomBars_GetIconSpellID
 local _GetViewerIcons
 
+local _manualHiddenByCooldownID = {}
+local _manualHiddenBySpellID = {}
+local _glowAuraHiddenBySpellID = {}
+
 local _BB_EnsureViewerAuraIconHook
 
-local function ApplyConfiguredViewerHiddenState(icon, bucket)
-  local hide = false
+local function _BB_ShouldHideViewerIcon(icon, bucket)
+  local state = _BB_State(icon)
+  local cooldownID = state and state.cooldownID
+  local spellID = state and state.spellID
+
+  if type(cooldownID) == "number" and _manualHiddenByCooldownID[cooldownID] then
+    return true
+  end
+
+  if type(spellID) == "number"
+    and (_manualHiddenBySpellID[spellID] or _glowAuraHiddenBySpellID[spellID])
+  then
+    return true
+  end
 
   if bucket then
     local db = _GetStackBarsDB()
     for id in pairs(bucket) do
       local cfg = db[id]
       if cfg and cfg.enabled ~= false and cfg.hideViewerIcon == true then
-        hide = true
-        break
+        return true
       end
     end
   end
 
-  _CustomBars_SetViewerIconHidden(icon, hide)
+  return false
+end
+
+local function ApplyConfiguredViewerHiddenState(icon, bucket)
+  _CustomBars_SetViewerIconHidden(icon, _BB_ShouldHideViewerIcon(icon, bucket))
 end
 
 _BB_EnsureViewerAuraIconHook = function(icon)
@@ -1201,10 +1225,7 @@ local function _BB_ResetViewerIconIdentity(icon)
   state.refreshPending = nil
   _CustomBars.barsByIcon[icon] = nil
 
-  local bucket = _BB_EnsureViewerAuraIconHook(icon)
-  if not bucket then
-    _CustomBars_SetViewerIconHidden(icon, false)
-  end
+  _BB_EnsureViewerAuraIconHook(icon)
 end
 
 
@@ -2442,39 +2463,103 @@ _CustomBars_SetViewerIconHidden = function(icon, hidden)
   end
 end
 
-local _manualHiddenByCooldownID = {}
-local _manualHiddenBySpellID    = {}
-
 local function _BB_ApplyViewerIconHiddenState(viewer)
-  local v = viewer or _GetViewer()
-  if not v then
-    return
+  _BB_EnsureViewerAuraHooks(viewer or _GetViewer())
+end
+
+local function _BB_CustomTrackerUsesAuraGlow(cfg)
+  if type(cfg) ~= "table"
+    or cfg.enabled == false
+    or cfg.buffGlowHideViewerIcon ~= true
+    or ns.Modules.CooldownManager:AllowsCurrentSpecialization(cfg) ~= true
+  then
+    return false
   end
 
-  local icons = _GetViewerIcons(v)
-  if type(icons) ~= "table" then
-    return
+  if cfg.presentation == "BAR" then
+    local auraTracker = cfg.kind == "duration" or cfg.kind == "stack"
+    if auraTracker then
+      return cfg.buffGlowEnabled == true
+    end
+    return cfg.activeAuraEnabled == true and cfg.activeGlowStyle ~= "NONE"
   end
 
-  for i = 1, #icons do
-    local icon = icons[i]
-    if icon and icon.GetObjectType then
-      local cdID = _CustomBars_GetIconCooldownID(icon)
-      if type(cdID) == "string" then cdID = tonumber(cdID) end
+  if cfg.presentation == "BUTTON" and type(cfg.icon) == "table" then
+    local auraKind = cfg.kind == "duration" or cfg.kind == "stack"
+    return cfg.icon.activeAuraGlowStyle ~= nil
+      and cfg.icon.activeAuraGlowStyle ~= "NONE"
+      and (auraKind or cfg.icon.activeAuraEnabled == true)
+  end
 
-      local sid = _CustomBars_GetIconSpellID(icon)
+  return false
+end
 
-      local hide = false
-      if type(cdID) == "number" and _manualHiddenByCooldownID and _manualHiddenByCooldownID[cdID] then
-        hide = true
+local function _BB_GetCustomTrackerGlowAuraSpellID(cfg)
+  if cfg.presentation == "BUTTON" and (cfg.kind == "duration" or cfg.kind == "stack") then
+    return tonumber(cfg.trackedSpellID)
+  end
+
+  return tonumber(cfg.buffGlowSpellID or cfg.trackedSpellID)
+end
+
+local function _BB_RebuildGlowAuraHiddenState()
+  wipe(_glowAuraHiddenBySpellID)
+
+  local resolved = {}
+
+  local function AddSpell(spellID)
+    if not spellID or spellID <= 0 then
+      return
+    end
+
+    local spellIDs = resolved[spellID]
+    if spellIDs == nil then
+      local _, resolvedSpellIDs = ns.Modules.CooldownManager:ResolveCustomBarAuraEntry(spellID)
+      spellIDs = type(resolvedSpellIDs) == "table" and resolvedSpellIDs or false
+      resolved[spellID] = spellIDs
+    end
+
+    if spellIDs then
+      for resolvedSpellID in pairs(spellIDs) do
+        _glowAuraHiddenBySpellID[resolvedSpellID] = true
       end
-      if (not hide) and type(sid) == "number" and _manualHiddenBySpellID and _manualHiddenBySpellID[sid] then
-        hide = true
-      end
-
-      _CustomBars_SetViewerIconHidden(icon, hide)
+    else
+      _glowAuraHiddenBySpellID[spellID] = true
     end
   end
+
+  local function AddStore(store)
+    for _, cfg in pairs(store or {}) do
+      if _BB_CustomTrackerUsesAuraGlow(cfg) then
+        AddSpell(_BB_GetCustomTrackerGlowAuraSpellID(cfg))
+      end
+    end
+  end
+
+  AddStore(ns.Modules.CooldownManager.GetSpellBarsDB())
+  AddStore(ns.Modules.CooldownManager.GetCooldownStackBarsDB())
+  AddStore(_GetStackBarsDB())
+end
+
+local function _BB_RefreshViewerHiddenState()
+  _BB_RebuildGlowAuraHiddenState()
+
+  local needsViewerIdentity = next(_manualHiddenByCooldownID) ~= nil
+    or next(_manualHiddenBySpellID) ~= nil
+    or next(_glowAuraHiddenBySpellID) ~= nil
+
+  if not needsViewerIdentity then
+    local db = _GetStackBarsDB()
+    for _, cfg in pairs(db) do
+      if type(cfg) == "table" and cfg.enabled ~= false and cfg.hideViewerIcon == true then
+        needsViewerIdentity = true
+        break
+      end
+    end
+  end
+
+  BB.__puiNeedsViewerIdentity = needsViewerIdentity
+  _BB_ApplyViewerIconHiddenState(_GetViewer())
 end
 
 function API.SetViewerIconHiddenByCooldownID(cooldownID, hidden)
@@ -2488,7 +2573,7 @@ function API.SetViewerIconHiddenByCooldownID(cooldownID, hidden)
     _manualHiddenByCooldownID[cdID] = nil
   end
 
-  _BB_ApplyViewerIconHiddenState(_GetViewer())
+  _BB_RefreshViewerHiddenState()
 end
 
 function API.SetViewerIconHiddenBySpellID(spellID, hidden)
@@ -2502,7 +2587,11 @@ function API.SetViewerIconHiddenBySpellID(spellID, hidden)
     _manualHiddenBySpellID[sid] = nil
   end
 
-  _BB_ApplyViewerIconHiddenState(_GetViewer())
+  _BB_RefreshViewerHiddenState()
+end
+
+function API.RefreshViewerHiddenState()
+  _BB_RefreshViewerHiddenState()
 end
 
 
@@ -2543,7 +2632,6 @@ local function _BB_RebuildCustomBars()
 
   _CustomBars_RebuildAll()
 
-  local needsViewerIdentity = false
   local db = _GetStackBarsDB()
   for id, cfg in pairs(db) do
     if type(cfg) == "table" and cfg.enabled ~= false then
@@ -2551,20 +2639,7 @@ local function _BB_RebuildCustomBars()
     end
   end
 
-  for _, cfg in pairs(db) do
-    if type(cfg) == "table" and cfg.enabled ~= false and cfg.hideViewerIcon == true then
-      needsViewerIdentity = true
-      break
-    end
-  end
-  BB.__puiNeedsViewerIdentity = needsViewerIdentity
-
-  local viewer = _GetViewer()
-  if needsViewerIdentity then
-    _BB_EnsureViewerAuraHooks(viewer)
-  else
-    _BB_ApplyViewerIconHiddenState(viewer)
-  end
+  _BB_RefreshViewerHiddenState()
 end
 
 API.RebuildCustomBars = _BB_RebuildCustomBars
@@ -2885,6 +2960,16 @@ function BB:OnDisable()
   _bbAvailabilityRefreshQueued = false
   _bbDeferredFlushQueued = false
   _bbStartupDid = false
+
+  local viewer = _cache.viewer or PCMRuntime:GetViewer(VIEWER_KEY)
+  local icons = viewer and _GetViewerIcons(viewer) or nil
+  if type(icons) == "table" then
+    for i = 1, #icons do
+      _CustomBars_SetViewerIconHidden(icons[i], false)
+    end
+  end
+  wipe(_glowAuraHiddenBySpellID)
+  self.__puiNeedsViewerIdentity = nil
   _cache.viewer = nil
 
   if self.__puiCustomBarsScaleListener then
@@ -3203,4 +3288,5 @@ API.RefreshCustomBarStyle = P:Def("API.RefreshCustomBarStyle", API.RefreshCustom
 API.DeleteCustomBar = P:Def("API.DeleteCustomBar", API.DeleteCustomBar)
 API.SetViewerIconHiddenByCooldownID = P:Def("API.SetViewerIconHiddenByCooldownID", API.SetViewerIconHiddenByCooldownID)
 API.SetViewerIconHiddenBySpellID = P:Def("API.SetViewerIconHiddenBySpellID", API.SetViewerIconHiddenBySpellID)
+API.RefreshViewerHiddenState = P:Def("API.RefreshViewerHiddenState", API.RefreshViewerHiddenState)
 API.RefreshAfterTalentSwap = P:Def("API.RefreshAfterTalentSwap", API.RefreshAfterTalentSwap)

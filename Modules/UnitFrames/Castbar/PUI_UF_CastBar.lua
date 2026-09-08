@@ -29,7 +29,6 @@ ns.Registry.Modules.CastBar = CastBar
 
 local P = select(1, ns.Pleebug:DropIn(CastBar, { name = "UnitFrames.CastBar" }))
 
-local THROTTLE = 0.02
 local CB_TIME_TEXT_UPDATE_INTERVAL = 0.10
 local CB_SetIdleVisuals
 
@@ -54,8 +53,6 @@ local CB_REMAINING_TOTAL_TIME_COMPONENTS = {
 function CastBar:GetBar(unit)
   return self.bars and self.bars[unit] or nil
 end
-
-CastBar.THROTTLE = THROTTLE
 
 CastBar.Units = {
   "player",
@@ -558,10 +555,6 @@ local function CB_OUF_PostCastFail(element, unit, spellID)
   bar.__puiCastDelayTenths = nil
 end
 
-local function CB_OUF_PostCastInterrupted(element, unit, spellID, interruptedBy)
-  CB_OUF_PostCastFail(element, unit, spellID)
-end
-
 local function CB_BindCallbacks(self, frame, element, unit)
   if not element.__puiHolderHideHooked then
     element.__puiHolderHideHooked = true
@@ -592,7 +585,7 @@ local function CB_BindCallbacks(self, frame, element, unit)
   element.CustomTimeText = nil
   element.CustomDelayText = CB_OUF_CustomDelayText
   element.PostCastFail = CB_OUF_PostCastFail
-  element.PostCastInterrupted = CB_OUF_PostCastInterrupted
+  element.PostCastInterrupted = CB_OUF_PostCastFail
   element.smoothing = Enum.StatusBarInterpolation.Immediate
 end
 
@@ -652,11 +645,9 @@ end
   CB_OUF_PostCastStop = P:Def("CB_OUF_PostCastStop", CB_OUF_PostCastStop)
   CB_OUF_PostInterruptible = P:Def("CB_OUF_PostInterruptible", CB_OUF_PostInterruptible)
   CB_OUF_PostCastFail = P:Def("CB_OUF_PostCastFail", CB_OUF_PostCastFail)
-  CB_OUF_PostCastInterrupted = P:Def("CB_OUF_PostCastInterrupted", CB_OUF_PostCastInterrupted)
   CB_OUF_CustomDelayText = P:Def("CB_OUF_CustomDelayText", CB_OUF_CustomDelayText)
   CB_BindCallbacks = P:Def("CB_BindCallbacks", CB_BindCallbacks)
 
-  CastBar.IsEnemyCastUnit = CB_IsEnemyCastUnit
   CastBar.Clamp = CB_Clamp
   CastBar.HideIndexedWidgets = CB_HideIndexedWidgets
   CastBar.UnpackColor = CB_UnpackColor
@@ -665,14 +656,12 @@ end
   CastBar.ShouldShowCastTime = CB_ShouldShowCastTime
   CastBar.SetTestCastVisuals = CB_SetTestCastVisuals
   CastBar.SetTestTimeText = CB_SetTestTimeText
-  CastBar.UpdateInterruptShield = CB_UpdateInterruptShield
   CastBar.ApplyUninterruptTextureMode = CB_ApplyUninterruptTextureMode
   CastBar.SetIdleVisuals = CB_SetIdleVisuals
   CastBar.CreateTimeTextBinding = CB_CreateTimeTextBinding
   CastBar.StopTimeText = CB_StopTimeText
   CastBar.StartTimeText = CB_StartTimeText
   CastBar.PostCastStart = CB_OUF_PostCastStart
-  CastBar.PostCastUpdate = CB_OUF_PostCastUpdate
   CastBar.PostCastStop = CB_OUF_PostCastStop
   CastBar.BindCallbacks = CB_BindCallbacks
 

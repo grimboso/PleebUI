@@ -203,6 +203,14 @@ local function ApplyAnchor(self)
   anchor:ClearAllPoints()
   anchor:SetPoint(point, _G[db.relativeTo or "UIParent"] or UIParent, db.relativePoint or point, Round(db.x or 0), Round(db.y or 0))
 
+  FrameUtil.UpdateLinearHeaderAnchorSize(self, {
+    count = self.partyFrames and (self.partyPlayerFrame and 5 or 4) or ((db.showPlayer == true) and 5 or 4),
+    width = width,
+    height = height,
+    spacing = Round(db.spacing or 8),
+    orientation = db.orientation,
+  })
+
   FrameUtil.EnsureHeaderMover(self, "PartyFrames", "PleebUI_PartyFramesMover", anchor, db, {
     defaultPoint = point,
     defaultRelativePoint = db.relativePoint or point,
@@ -211,22 +219,33 @@ local function ApplyAnchor(self)
     label = "Party Frames",
     optionsString = "unitframes,party",
     overlayBelowFrame = false,
+    getDB = function()
+      return PartyFrames.db.profile
+    end,
+    smartSnap = {
+      family = "positionOnly",
+      isRuntimeActive = function()
+        return PartyFrames:IsEnabled() and PartyFrames.db.profile.enabled ~= false
+      end,
+    },
     quickSettings = function()
       return ns.UnitFrameTest:OpenQuickSettings("PartyFrames")
+    end,
+    resetPosition = function()
+      local defaults = UFDefaults.GetPartyDefaults().profile
+      local current = PartyFrames.db.profile
+      current.point = defaults.point
+      current.relativeTo = defaults.relativeTo
+      current.relativePoint = defaults.relativePoint
+      current.x = defaults.x
+      current.y = defaults.y
+      ApplyAnchor(self)
     end,
     onDragStop = function()
       if ns.TestMode:IsActive() then
         ns.TestMode:Refresh("unitframes", "mover", "uf.partySettings")
       end
     end,
-  })
-
-  FrameUtil.UpdateLinearHeaderAnchorSize(self, {
-    count = self.partyFrames and (self.partyPlayerFrame and 5 or 4) or ((db.showPlayer == true) and 5 or 4),
-    width = width,
-    height = height,
-    spacing = Round(db.spacing or 8),
-    orientation = db.orientation,
   })
 end
 
@@ -359,14 +378,10 @@ local function BuildPartyAuraDB(unit)
   return aDB
 end
 
-local function RefreshPartyAuraAvailabilityForFrame(frame)
-  UFAuraContainers.RefreshAvailability(frame)
-end
-
 local function RegisterPartyAuraAvailabilityEvents(frame)
-  frame:RegisterEvent("UNIT_AREA_CHANGED", RefreshPartyAuraAvailabilityForFrame)
-  frame:RegisterEvent("UNIT_CONNECTION", RefreshPartyAuraAvailabilityForFrame)
-  frame:RegisterEvent("UNIT_PHASE", RefreshPartyAuraAvailabilityForFrame)
+  frame:RegisterEvent("UNIT_AREA_CHANGED", UFAuraContainers.RefreshAvailability)
+  frame:RegisterEvent("UNIT_CONNECTION", UFAuraContainers.RefreshAvailability)
+  frame:RegisterEvent("UNIT_PHASE", UFAuraContainers.RefreshAvailability)
 end
 
 local function UpdatePartyRosterIdentity(frame, refreshElements)
@@ -721,21 +736,17 @@ function PartyFrames:RefreshVisibility()
       self.anchor:Hide()
     end
 
-    local function DisableFrame(frame)
-      UF:DisableFrameRuntime(frame)
-    end
-
     if self.partyFrames then
       for index = 1, 4 do
-        DisableFrame(self.partyFrames[index])
+        UF:DisableFrameRuntime(self.partyFrames[index])
       end
     end
 
-    DisableFrame(self.partyPlayerFrame)
+    UF:DisableFrameRuntime(self.partyPlayerFrame)
 
     if self.petFrames then
       for _, frame in pairs(self.petFrames) do
-        DisableFrame(frame)
+        UF:DisableFrameRuntime(frame)
       end
     end
 
@@ -1086,10 +1097,6 @@ function PartyFrames:GROUP_ROSTER_UPDATE()
   RefreshPartyRosterFrames(self)
 end
 
-function PartyFrames:PLAYER_ROLES_ASSIGNED()
-  self:RefreshGroupLayout()
-end
-
 function PartyFrames:PLAYER_ENTERING_WORLD()
   if self._initialRefreshComplete ~= true then
     self.__puiDeferredRefresh = nil
@@ -1126,7 +1133,7 @@ end
 
 function PartyFrames:OnEnable()
   self:RegisterEvent("GROUP_ROSTER_UPDATE")
-  self:RegisterEvent("PLAYER_ROLES_ASSIGNED")
+  self:RegisterEvent("PLAYER_ROLES_ASSIGNED", "RefreshGroupLayout")
   self:RegisterEvent("PLAYER_ENTERING_WORLD")
   self:RegisterEvent("PARTY_MEMBER_ENABLE", "RefreshAuraAvailability")
   self:RegisterEvent("PARTY_MEMBER_DISABLE", "RefreshAuraAvailability")
@@ -1142,7 +1149,10 @@ function PartyFrames:SetMoversVisible(show)
   end
 
   if self.mover then
-    FrameUtil.SetMoverFrameVisible(self.mover, show == true)
+    FrameUtil.SetMoverFrameVisible(
+      self.mover,
+      show == true and self:IsEnabled() and self.db.profile.enabled ~= false
+    )
   end
 end
 
@@ -1204,7 +1214,6 @@ local P = select(1, ns.Pleebug:DropIn(PartyFrames, { name = "UnitFrames.Party" }
   PartyFrames.RefreshAuraAvailability = P:Def("PartyFrames.RefreshAuraAvailability", PartyFrames.RefreshAuraAvailability)
   RefreshPartyRosterFrames = P:Def("RefreshPartyRosterFrames", RefreshPartyRosterFrames)
   PartyFrames.GROUP_ROSTER_UPDATE = P:Def("PartyFrames.GROUP_ROSTER_UPDATE", PartyFrames.GROUP_ROSTER_UPDATE)
-  PartyFrames.PLAYER_ROLES_ASSIGNED = P:Def("PartyFrames.PLAYER_ROLES_ASSIGNED", PartyFrames.PLAYER_ROLES_ASSIGNED)
   PartyFrames.PLAYER_ENTERING_WORLD = P:Def("PartyFrames.PLAYER_ENTERING_WORLD", PartyFrames.PLAYER_ENTERING_WORLD)
   PartyFrames.PLAYER_REGEN_ENABLED = P:Def("PartyFrames.PLAYER_REGEN_ENABLED", PartyFrames.PLAYER_REGEN_ENABLED)
   PartyFrames.OnInitialize = P:Def("PartyFrames.OnInitialize", PartyFrames.OnInitialize)
@@ -1228,7 +1237,6 @@ local P = select(1, ns.Pleebug:DropIn(PartyFrames, { name = "UnitFrames.Party" }
   GetPartyProfile = P:Def("GetPartyProfile", GetPartyProfile)
   InvalidatePartyAuraDB = P:Def("InvalidatePartyAuraDB", InvalidatePartyAuraDB)
   BuildPartyAuraDB = P:Def("BuildPartyAuraDB", BuildPartyAuraDB)
-  RefreshPartyAuraAvailabilityForFrame = P:Def("RefreshPartyAuraAvailabilityForFrame", RefreshPartyAuraAvailabilityForFrame)
   RegisterPartyAuraAvailabilityEvents = P:Def("RegisterPartyAuraAvailabilityEvents", RegisterPartyAuraAvailabilityEvents)
   UpdatePartyRosterIdentity = P:Def("UpdatePartyRosterIdentity", UpdatePartyRosterIdentity)
   RefreshPartyFrameConfiguration = P:Def("RefreshPartyFrameConfiguration", RefreshPartyFrameConfiguration)

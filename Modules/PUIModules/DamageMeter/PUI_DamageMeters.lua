@@ -181,7 +181,7 @@ function Util.GetViewportRowCount(viewport, rowHeight, rowSpacing, maximum)
 end
 
 function Util.IsSecret(value)
-  return issecretvalue and issecretvalue(value) == true
+  return issecretvalue(value) == true
 end
 
 function Util.IsCountMeter(meterKey)
@@ -841,7 +841,7 @@ function DamageMeters:PLAYER_ENTERING_WORLD()
   self.playerInCombat = IsPlainUnitInCombat("player")
   self.waitingForGroupCombatEnd = not self.playerInCombat and IsGroupInCombat()
 
-  History:OnPlayerEnteringWorld()
+  History:ReconcileDungeonState()
 
   if self.breakdownSelection then
     if self.breakdownSelection.mode == "LIVE_ENEMY_PLAYERS" then
@@ -1140,7 +1140,7 @@ function DamageMeters:ApplyProfile()
   self.db = Addon.db:GetNamespace("DamageMeters")
   Config.SanitizeProfile()
   self:ClearAllWindowSelections()
-  History:OnProfileChanged()
+  History:ApplyTrackingOptions()
   LDBIcon:Refresh(LAUNCHER_NAME, self.db.profile.minimap)
   self:ApplySettings()
 end

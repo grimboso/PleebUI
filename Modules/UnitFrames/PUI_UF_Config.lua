@@ -342,44 +342,6 @@ local function UFCB_BuildCategorizedInlineArgs(args)
   return output
 end
 
-local function UFCB_TakeInlineSection(source, keys)
-  local output = {}
-
-  for index, key in ipairs(keys or {}) do
-    local option = source[key]
-    if option then
-      option.order = index
-      output[key] = option
-      source[key] = nil
-    end
-  end
-
-  return output
-end
-
-local function UFCB_BuildInlineSections(args, sections)
-  local source = {}
-  local output = {}
-
-  for key, option in pairs(args or {}) do
-    source[key] = option
-  end
-
-  for index, section in ipairs(sections or {}) do
-    local sectionArgs = UFCB_TakeInlineSection(source, section.keys)
-    if next(sectionArgs) then
-      output[section.key] = UFCB_BuildInlineArgsGroup(section.name, section.order or index, sectionArgs)
-    end
-  end
-
-  local remaining = UFCB_BuildCategorizedInlineArgs(source)
-  for key, option in pairs(remaining) do
-    output[key] = option
-  end
-
-  return output
-end
-
 
 local function UFCB_IsUsingGlobalFont(fontKey, useGlobalFont)
   if useGlobalFont ~= nil then
@@ -1603,6 +1565,10 @@ local function UFCB_BuildUnitGeneralArgs(unitKey, extraNote)
             cfg.height = unitDefaults.height
             cfg.powerHeight = unitDefaults.powerHeight
 
+            if unitKey == "player" then
+              cfg.showRestingIndicator = unitDefaults.showRestingIndicator ~= false
+            end
+
             for key in pairs(media) do
               media[key] = nil
             end
@@ -1732,7 +1698,21 @@ local function UFCB_BuildUnitGeneralArgs(unitKey, extraNote)
         UFCB_RefreshUFTextures()
       end,
     },
-    suffixArgs = unitKey == "boss" and {
+    suffixArgs = unitKey == "player" and {
+      showRestingIndicator = {
+        type = "toggle",
+        name = "Show rested indicator",
+        order = 8,
+        get = function()
+          return cfg.showRestingIndicator ~= false
+        end,
+        set = function(_, v)
+          if UFCB_BlockCombat() then return end
+          cfg.showRestingIndicator = v and true or false
+          Addon:ApplyOptionsChange("UnitFrames", { mode = "indicators", unit = "player" })
+        end,
+      },
+    } or unitKey == "boss" and {
       growthDirection = {
         type = "select",
         name = "Growth direction",
@@ -7611,8 +7591,6 @@ ns.UFPreview.RegisterAuraManagerPositionCommitter(UFCB_CommitAuraManagerPreviewP
   UFCB_BuildInlineArgsGroup = P:Def("UFCB_BuildInlineArgsGroup", UFCB_BuildInlineArgsGroup)
   UFCB_GetInlineSectionKey = P:Def("UFCB_GetInlineSectionKey", UFCB_GetInlineSectionKey)
   UFCB_BuildCategorizedInlineArgs = P:Def("UFCB_BuildCategorizedInlineArgs", UFCB_BuildCategorizedInlineArgs)
-  UFCB_TakeInlineSection = P:Def("UFCB_TakeInlineSection", UFCB_TakeInlineSection)
-  UFCB_BuildInlineSections = P:Def("UFCB_BuildInlineSections", UFCB_BuildInlineSections)
   UFCB_GetValidChoice = P:Def("UFCB_GetValidChoice", UFCB_GetValidChoice)
   UFCB_GetTextModeChoice = P:Def("UFCB_GetTextModeChoice", UFCB_GetTextModeChoice)
   UFCB_GetNumberOrDefault = P:Def("UFCB_GetNumberOrDefault", UFCB_GetNumberOrDefault)

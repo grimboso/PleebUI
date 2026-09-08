@@ -5,8 +5,8 @@ local ADDON_NAME, ns = ...
 local _G = _G
 local UIParent = _G.UIParent
 local InCombatLockdown = _G.InCombatLockdown
-local UnitClass = _G.UnitClass
-local PLAYER_CLASS = select(2, UnitClass("player"))
+local PLAYER_CLASS = select(2, _G.UnitClass("player"))
+local C_ClassColor = _G.C_ClassColor
 local C_Spell = _G.C_Spell
 local C_SpellBook = _G.C_SpellBook
 local Cooldowns = ns.Modules.CooldownManager
@@ -63,19 +63,8 @@ local function _CSB_GetClassColor()
     return _CSB_ClassColorR, _CSB_ClassColorG, _CSB_ClassColorB
   end
 
-  local r, g, b = 1, 1, 1
-  local c = PLAYER_CLASS and RAID_CLASS_COLORS and RAID_CLASS_COLORS[PLAYER_CLASS]
-  if PLAYER_CLASS then
-    local cc = C_ClassColor.GetClassColor(PLAYER_CLASS)
-    if cc then
-      c = cc
-    end
-  end
-  if c then
-    r = tonumber(c.r) or r
-    g = tonumber(c.g) or g
-    b = tonumber(c.b) or b
-  end
+  local c = C_ClassColor.GetClassColor(PLAYER_CLASS)
+  local r, g, b = c.r, c.g, c.b
 
   _CSB_ClassColorR, _CSB_ClassColorG, _CSB_ClassColorB = r, g, b
   return r, g, b
@@ -186,6 +175,28 @@ local function _CSB_RegisterMover(barData, cfg)
   local key = "PCMChargeCooldownBar:" .. tostring(barData.id)
   local label = Cooldowns:GetCustomBarDisplayName(cfg)
 
+  local function SavePosition(frame)
+    local root = Cooldowns.GetCooldownStackBarsDB()
+    local entry = root and root[barData.id]
+    local anchorFrame = frame or barData.frame
+    if not entry or not anchorFrame then
+      return
+    end
+
+    local x, y = FrameUtil.GetMoverOffsets(anchorFrame)
+    entry.posX = Round(x or 0)
+    entry.posY = Round(y or 0)
+
+    barData.frame:ClearAllPoints()
+    barData.frame:SetPoint(
+      "CENTER",
+      UIParent,
+      "CENTER",
+      _CSB_Snap(entry.posX),
+      _CSB_Snap(entry.posY)
+    )
+  end
+
   local moverOpts = {
     label = label,
     optionsString = "CooldownManager,custom_bars,chargeSpell:" .. tostring(barData.id),
@@ -198,27 +209,8 @@ local function _CSB_RegisterMover(barData, cfg)
         and cfg.presentation == "BAR"
         and barData.hiddenBySpec ~= true
     end,
-    onDragStop = function(frame)
-      local root = Cooldowns.GetCooldownStackBarsDB()
-      local entry = root and root[barData.id]
-      local anchorFrame = frame or barData.frame
-      if not entry or not anchorFrame then
-        return
-      end
-
-      local x, y = FrameUtil._GetOffsetsForFrame(anchorFrame)
-      entry.posX = Round(x or 0)
-      entry.posY = Round(y or 0)
-
-      barData.frame:ClearAllPoints()
-      barData.frame:SetPoint(
-        "CENTER",
-        UIParent,
-        "CENTER",
-        _CSB_Snap(entry.posX),
-        _CSB_Snap(entry.posY)
-      )
-
+    savePosition = SavePosition,
+    onDragStop = function()
       FrameUtil:RefreshGhostMover(key)
     end,
     resetPosition = function()
@@ -895,6 +887,7 @@ function Cooldowns:CooldownStackBars_Rebuild()
   end
 
   _CSB_RebuildAll()
+  ns.Modules.PCM_BB:RefreshViewerHiddenState()
 end
 
 function Cooldowns:CooldownStackBars_RefreshBar(id, flags)
@@ -1025,7 +1018,7 @@ function Cooldowns:CooldownStackBars_RefreshAfterTalentSwap()
 
   __PUI_PCM_CooldownStackBars.pendingSpecTalentRefresh = false
   _CSB_ClearKnownSpellCache()
-  _CSB_RebuildAll()
+  self:CooldownStackBars_Rebuild()
 end
 
 PCMRuntime:RegisterSubscriber("CooldownStackBars", {

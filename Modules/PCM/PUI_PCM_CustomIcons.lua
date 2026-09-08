@@ -21,7 +21,6 @@ local LCG = LibStub("LibCustomGlow-1.0")
 local records = {}
 local retiredCandidates = { includeSpellIDs = { [0] = true } }
 local STATE_GLOW_KEY = "PUI_CustomIconState"
-local AURA_GLOW_KEY = "PUI_CustomIconAura"
 local BLIZZARD_BORDER_TEXTURE = "Interface\\Buttons\\UI-Quickslot2"
 local EDIT_MODE_PREVIEW_ALPHA = 0.5
 
@@ -78,7 +77,7 @@ local function ApplyAnchor(frame, icon, defaultY)
 end
 
 local function SaveAnchor(frame, icon)
-  local x, y = FrameUtil._GetOffsetsForFrame(frame)
+  local x, y = FrameUtil.GetMoverOffsets(frame)
   icon.pos.point = "CENTER"
   icon.pos.rel = "UIParent"
   icon.pos.relPoint = "CENTER"
@@ -150,48 +149,7 @@ local function StopStateGlow(record)
   record.stateGlowActive = nil
 end
 
-local function StopAuraGlow(record)
-  local target = record.auraGlowTarget
-  if not target then
-    record.auraGlowStyle = nil
-    return
-  end
-  if record.auraGlowStyle == "PIXEL" then
-    LCG.PixelGlow_Stop(target, AURA_GLOW_KEY)
-  elseif record.auraGlowStyle == "AUTOCAST" then
-    LCG.AutoCastGlow_Stop(target, AURA_GLOW_KEY)
-  elseif record.auraGlowStyle == "PROC" then
-    LCG.ProcGlow_Stop(target, AURA_GLOW_KEY)
-  end
-  record.auraGlowStyle = nil
-end
 
-local function ApplyAuraGlow(record)
-  local style = record.icon.activeAuraGlowStyle
-  StopAuraGlow(record)
-  if style == "NONE" then
-    return
-  end
-
-  local color = CopyColor(record.icon.activeAuraGlowColor, { 1, 0.55, 0.1, 1 })
-  local target = record.auraGlowTarget
-  if style == "PIXEL" then
-    LCG.PixelGlow_Start(target, color, 8, 0.25, nil, 2, 0, 0, true, AURA_GLOW_KEY, 8)
-  elseif style == "AUTOCAST" then
-    LCG.AutoCastGlow_Start(target, color, 8, 0.25, 1, 0, 0, AURA_GLOW_KEY, 8)
-  elseif style == "PROC" then
-    LCG.ProcGlow_Start(target, {
-      key = AURA_GLOW_KEY,
-      color = color,
-      startAnim = true,
-      xOffset = 0,
-      yOffset = 0,
-      duration = 1,
-      frameLevel = 8,
-    })
-  end
-  record.auraGlowStyle = style
-end
 
 local function ApplyStateGlow(record, active)
   if record.kind == "aura" or record.runtimeEnabled ~= true or not record.parts.frame:IsShown() then
@@ -461,6 +419,12 @@ end
 local function RegisterMover(record)
   local key = record.moverKey
   local frame = record.parts.frame
+
+  local function SavePosition(movedFrame)
+    SaveAnchor(movedFrame or frame, record.icon)
+    ApplyAnchor(frame, record.icon, record.defaultY)
+  end
+
   FrameUtil:EnsureGhostMover(key, {
     label = record.label,
     optionsString = record.optionsString,
@@ -471,9 +435,8 @@ local function RegisterMover(record)
         and record.cfg.presentation == "BUTTON"
         and record.runtimeEnabled == true
     end,
-    onDragStop = function(movedFrame)
-      SaveAnchor(movedFrame or frame, record.icon)
-      ApplyAnchor(frame, record.icon, record.defaultY)
+    savePosition = SavePosition,
+    onDragStop = function()
       FrameUtil:RefreshGhostMover(key)
     end,
     quickSettings = record.kind ~= "aura" and function(moverFrame)
@@ -679,55 +642,21 @@ local function SpellSetsMatch(left, right)
   return true
 end
 
-local function EnsureAuraCueBorder(parts, button)
-  local border = parts.cueBorder
-  if border then
-    return border
+local function ResolveCueGlowStyle(record)
+  local style = record.cfg.activeGlowStyle
+  if style == nil or style == "NONE" then
+    style = record.icon.activeAuraGlowStyle
   end
-
-  local function CreateEdge()
-    local edge = button:CreateTexture(nil, "OVERLAY", nil, 7)
-    edge:SetBlendMode("ADD")
-    return edge
+  if style == nil or style == "NONE" then
+    style = "PIXEL"
   end
-
-  border = {
-    top = CreateEdge(),
-    bottom = CreateEdge(),
-    left = CreateEdge(),
-    right = CreateEdge(),
-  }
-  parts.cueBorder = border
-  return border
+  return style
 end
 
-local function ConfigureAuraCueBorder(record, parts, button, shown)
-  local border = EnsureAuraCueBorder(parts, button)
-  local cfg = record.cfg
-  local thickness = math.max(1, math.min(8, math.floor((tonumber(cfg.buffGlowThickness) or 2) + 0.5)))
-  local color = CopyColor(cfg.buffGlowColor, { 0.25, 0.75, 1, 1 })
-
-  border.top:ClearAllPoints()
-  border.top:SetHeight(thickness)
-  border.top:SetPoint("TOPLEFT", button, "TOPLEFT", -thickness, thickness)
-  border.top:SetPoint("TOPRIGHT", button, "TOPRIGHT", thickness, thickness)
-  border.bottom:ClearAllPoints()
-  border.bottom:SetHeight(thickness)
-  border.bottom:SetPoint("BOTTOMLEFT", button, "BOTTOMLEFT", -thickness, -thickness)
-  border.bottom:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT", thickness, -thickness)
-  border.left:ClearAllPoints()
-  border.left:SetWidth(thickness)
-  border.left:SetPoint("TOPLEFT", border.top, "BOTTOMLEFT", 0, 0)
-  border.left:SetPoint("BOTTOMLEFT", border.bottom, "TOPLEFT", 0, 0)
-  border.right:ClearAllPoints()
-  border.right:SetWidth(thickness)
-  border.right:SetPoint("TOPRIGHT", border.top, "BOTTOMRIGHT", 0, 0)
-  border.right:SetPoint("BOTTOMRIGHT", border.bottom, "TOPRIGHT", 0, 0)
-
-  for _, edge in pairs(border) do
-    edge:SetColorTexture(color[1], color[2], color[3], color[4])
-    edge:SetShown(shown == true)
-  end
+local function GetSlotGlowOptions(record)
+  return {
+    pixelThickness = tonumber(record.cfg.buffGlowThickness) or 2,
+  }
 end
 
 local function ResolveButtonAuraSpellIDs(record, cueOnly)
@@ -736,7 +665,7 @@ local function ResolveButtonAuraSpellIDs(record, cueOnly)
   if not cfg or not icon then return nil end
 
   local enabled = cueOnly and cfg.buffGlowEnabled == true
-    or not cueOnly and (icon.activeAuraEnabled == true or cfg.buffGlowEnabled == true)
+    or not cueOnly and icon.activeAuraEnabled == true
   if not enabled then return nil end
 
   local spellID = tonumber(cfg.buffGlowSpellID or cfg.trackedSpellID)
@@ -750,7 +679,7 @@ local function ResolveButtonAuraSpellIDs(record, cueOnly)
   return spellIDs
 end
 
-local function ConfigureActiveAuraParts(record, button, parts)
+local function ConfigureActiveAuraParts(record, button, parts, initializing)
   local icon = record.icon
   AuraWidget.BindApplicationDurationButton(button, parts)
   button:ClearAllPoints()
@@ -759,13 +688,28 @@ local function ConfigureActiveAuraParts(record, button, parts)
   button:SetFrameLevel(record.parts.frame:GetFrameLevel() + 6)
   button:EnableMouse(false)
 
-  if not record.auraGlowTarget or record.auraGlowTarget:GetParent() ~= button then
-    StopAuraGlow(record)
-    record.auraGlowTarget = CreateFrame("Frame", nil, button, "DisableUntrustedLayoutScriptsTemplate")
-    record.auraGlowTarget:SetAllPoints(button)
-    record.auraGlowTarget:EnableMouse(false)
+  local glowStyle = icon.activeAuraEnabled == true and icon.activeAuraGlowStyle or "NONE"
+  local glowColor = CopyColor(icon.activeAuraGlowColor, { 1, 0.55, 0.1, 1 })
+  local glowOptions = GetSlotGlowOptions(record)
+  if initializing == true then
+    parts.activeAuraGlow = AuraWidget.CreateSlotGlow(
+      button,
+      icon.size,
+      icon.size,
+      glowStyle,
+      glowColor,
+      glowOptions
+    )
+  elseif parts.activeAuraGlow then
+    AuraWidget.ConfigureSlotGlow(
+      parts.activeAuraGlow,
+      icon.size,
+      icon.size,
+      glowStyle,
+      glowColor,
+      glowOptions
+    )
   end
-  record.auraGlowTarget:SetFrameLevel(button:GetFrameLevel() + 8)
 
   if icon.activeAuraEnabled == true then
     AuraWidget.ConfigureIcon(parts)
@@ -793,16 +737,11 @@ local function ConfigureActiveAuraParts(record, button, parts)
     else
       AuraWidget.DisableDurationCooldown(parts)
     end
-    ApplyAuraGlow(record)
   else
     AuraWidget.DisableIcon(parts)
     AuraWidget.DisableDurationCooldown(parts)
-    StopAuraGlow(record)
   end
 
-  local showCueBorder = record.cfg.buffGlowEnabled == true
-    and (icon.activeAuraEnabled ~= true or icon.activeAuraGlowStyle == "NONE")
-  ConfigureAuraCueBorder(record, parts, button, showCueBorder)
   button:SetAlpha(icon.activeAuraEnabled == true and icon.activeAuraAlpha / 100 or 1)
 end
 
@@ -810,7 +749,7 @@ local function ConfigureActiveAuraTrack(record)
   if record.kind == "aura" then
     return
   end
-  if record.runtimeEnabled ~= true then
+  if record.runtimeEnabled ~= true or record.icon.activeAuraEnabled ~= true then
     if record.activeAuraSlot then
       AuraSlotDriver:SetSlotActive(record.activeAuraSlot, false)
     end
@@ -831,7 +770,7 @@ local function ConfigureActiveAuraTrack(record)
       templateNames = { "PUI_AuraApplicationDurationTemplate" },
       initializeFrame = function(button)
         record.activeAuraParts = {}
-        ConfigureActiveAuraParts(record, button, record.activeAuraParts)
+        ConfigureActiveAuraParts(record, button, record.activeAuraParts, true)
       end,
     })
     record.activeAuraSpellIDs = spellIDs
@@ -847,7 +786,7 @@ local function ConfigureActiveAuraTrack(record)
   AuraSlotDriver:SetSlotActive(record.activeAuraSlot, true)
 end
 
-local function ConfigureCueAuraParts(record, button, parts)
+local function ConfigureCueAuraParts(record, button, parts, initializing)
   AuraWidget.BindApplicationDurationButton(button, parts)
   button:ClearAllPoints()
   button:SetAllPoints(record.parts.frame)
@@ -860,7 +799,17 @@ local function ConfigureCueAuraParts(record, button, parts)
   AuraWidget.DisableDurationBar(parts)
   AuraWidget.DisableApplicationCount(parts)
   AuraWidget.DisableApplicationBar(parts)
-  ConfigureAuraCueBorder(record, parts, button, true)
+
+  local size = record.icon.size
+  local style = ResolveCueGlowStyle(record)
+  local color = CopyColor(record.cfg.buffGlowColor, { 0.25, 0.75, 1, 1 })
+  local options = GetSlotGlowOptions(record)
+  if initializing == true then
+    parts.cueGlow = AuraWidget.CreateSlotGlow(button, size, size, style, color, options)
+  elseif parts.cueGlow then
+    AuraWidget.ConfigureSlotGlow(parts.cueGlow, size, size, style, color, options)
+  end
+
   button:SetAlpha(1)
 end
 
@@ -894,7 +843,7 @@ local function ConfigureCueAuraTrack(record)
       templateNames = { "PUI_AuraApplicationDurationTemplate" },
       initializeFrame = function(button)
         record.cueAuraParts = {}
-        ConfigureCueAuraParts(record, button, record.cueAuraParts)
+        ConfigureCueAuraParts(record, button, record.cueAuraParts, true)
       end,
     })
     record.cueAuraSpellIDs = spellIDs
@@ -904,7 +853,7 @@ local function ConfigureCueAuraTrack(record)
       record.cueAuraSpellIDs = spellIDs
     end
     if record.cueAuraParts and C_Secrets.ShouldAurasBeSecret() ~= true then
-      ConfigureCueAuraParts(record, record.cueAuraParts.button, record.cueAuraParts)
+      ConfigureCueAuraParts(record, record.cueAuraParts.button, record.cueAuraParts, false)
     end
   end
   AuraSlotDriver:SetSlotActive(record.cueAuraSlot, true)
@@ -1040,7 +989,7 @@ function CustomIcons:UpdateCharge(key, duration, currentCharges, maximum, active
   ApplyStateVisibility(record, active)
 end
 
-local function ConfigureAuraParts(record, button, parts)
+local function ConfigureAuraParts(record, button, parts, initializing)
   local icon = record.icon
   AuraWidget.BindApplicationDurationButton(button, parts)
   AuraWidget.ConfigureApplicationThresholdSource(
@@ -1057,14 +1006,37 @@ local function ConfigureAuraParts(record, button, parts)
   button:SetAllPoints(record.parts.frame)
   button:SetFrameStrata(record.parts.frame:GetFrameStrata())
   button:SetFrameLevel(record.parts.frame:GetFrameLevel() + 2)
-  if not record.auraGlowTarget or record.auraGlowTarget:GetParent() ~= button then
-    StopAuraGlow(record)
-    record.auraGlowTarget = CreateFrame("Frame", nil, button, "DisableUntrustedLayoutScriptsTemplate")
-    record.auraGlowTarget:SetAllPoints(button)
-    record.auraGlowTarget:EnableMouse(false)
-  end
-  record.auraGlowTarget:SetFrameLevel(button:GetFrameLevel() + 8)
   ApplyChrome(button, icon)
+
+  local glowStyle = icon.activeAuraGlowStyle or "NONE"
+  local glowColor = CopyColor(icon.activeAuraGlowColor, { 1, 0.55, 0.1, 1 })
+  if glowStyle == "NONE"
+    and record.cfg.buffGlowEnabled == true
+    and tonumber(record.cfg.buffGlowSpellID) == nil
+  then
+    glowStyle = ResolveCueGlowStyle(record)
+    glowColor = CopyColor(record.cfg.buffGlowColor, { 0.25, 0.75, 1, 1 })
+  end
+  local glowOptions = GetSlotGlowOptions(record)
+  if initializing == true then
+    parts.activeAuraGlow = AuraWidget.CreateSlotGlow(
+      button,
+      icon.size,
+      icon.size,
+      glowStyle,
+      glowColor,
+      glowOptions
+    )
+  elseif parts.activeAuraGlow then
+    AuraWidget.ConfigureSlotGlow(
+      parts.activeAuraGlow,
+      icon.size,
+      icon.size,
+      glowStyle,
+      glowColor,
+      glowOptions
+    )
+  end
 
   AuraWidget.ConfigureIcon(parts)
   ApplyIconCrop(parts.icon, icon)
@@ -1139,14 +1111,6 @@ local function ConfigureAuraParts(record, button, parts)
   parts.applicationHolder:SetAllPoints(button)
   SetTooltip(button, record)
   button:SetAlpha(icon.activeAuraAlpha / 100)
-  ApplyAuraGlow(record)
-  ConfigureAuraCueBorder(
-    record,
-    parts,
-    button,
-    record.cfg.buffGlowEnabled == true and tonumber(record.cfg.buffGlowSpellID) == nil
-      and icon.activeAuraGlowStyle == "NONE"
-  )
 end
 
 function CustomIcons:ConfigureAura(key, cfg, options)
@@ -1196,7 +1160,7 @@ function CustomIcons:ConfigureAura(key, cfg, options)
       templateNames = { "PUI_AuraApplicationDurationTemplate" },
       initializeFrame = function(button)
         record.auraParts = {}
-        ConfigureAuraParts(record, button, record.auraParts)
+        ConfigureAuraParts(record, button, record.auraParts, true)
       end,
     })
   else
@@ -1267,7 +1231,7 @@ function CustomIcons:FlushAuraStyles()
         ConfigureActiveAuraParts(record, record.activeAuraParts.button, record.activeAuraParts)
       end
       if record.cueAuraParts then
-        ConfigureCueAuraParts(record, record.cueAuraParts.button, record.cueAuraParts)
+        ConfigureCueAuraParts(record, record.cueAuraParts.button, record.cueAuraParts, false)
       end
     end
   end
@@ -1278,7 +1242,6 @@ function CustomIcons:Release(key)
   if not record then return end
   record.runtimeEnabled = false
   StopStateGlow(record)
-  StopAuraGlow(record)
   if record.auraSlot then
     AuraSlotDriver:SetSlotCandidates(record.auraSlot, retiredCandidates)
     AuraSlotDriver:SetSlotActive(record.auraSlot, false)

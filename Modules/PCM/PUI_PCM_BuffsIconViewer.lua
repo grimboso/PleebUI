@@ -222,13 +222,6 @@ local function _IsIconFrame(f)
 end
 
 
-local function _QuantizeRowKey(v, step)
-  if not step or step <= 0 then
-    return Round(v or 0)
-  end
-  return Round((v or 0) / step)
-end
-
 local _rows = {}
 local _rowKeys = {}
 local _prepNeeded = true
@@ -1168,6 +1161,16 @@ local function _RegisterBuffIconMover()
 
   _ApplyViewerAnchorFromDB(viewer)
 
+  local function SavePosition()
+    local anchorDB = ns.PCM_DBExports.GetProfileBuffsAnchorDB()
+    if not anchorDB then
+      return
+    end
+
+    _Buffs_SavePosition(holder, VIEWER_KEY, anchorDB)
+    _ApplyViewerAnchorFromDB(viewer)
+  end
+
   FrameUtil:RegisterMover(VIEWER_KEY, holder, {
     label = "Tracked Icons",
     optionsString = "CooldownManager,buff_icons",
@@ -1176,16 +1179,7 @@ local function _RegisterBuffIconMover()
       family = "combatBars",
       syncAxis = "NONE",
     },
-    onDragStop = function()
-      local anchorDB = ns.PCM_DBExports.GetProfileBuffsAnchorDB()
-      if not anchorDB then
-        return
-      end
-
-      _Buffs_SavePosition(holder, VIEWER_KEY, anchorDB)
-
-      _ApplyViewerAnchorFromDB(viewer)
-    end,
+    savePosition = SavePosition,
     resetPosition = function()
       local anchorDB = ns.PCM_DBExports.GetProfileBuffsAnchorDB()
       if anchorDB then
@@ -1267,15 +1261,6 @@ end
 
 _Buffs_ApplyCentered = function(viewer)
   _RequestUnifiedBuffRefresh("force", viewer)
-end
-
-local function _Buffs_LayoutBuffIconRow(frame, icons, count, iconSize, spacing, RoundPixel)
-  if not frame then
-    frame = _GetViewer()
-  end
-
-  _RequestUnifiedBuffRefresh("layout", frame)
-  return true
 end
 
 local function _Buffs_InitOnce()
@@ -1665,7 +1650,6 @@ PCMRuntime:RegisterSubscriber("BuffIcons", {
   _EnsureBuffHolder = P:Def('_EnsureBuffHolder', _EnsureBuffHolder)
   _SortByLayoutIndex = P:Def('_SortByLayoutIndex', _SortByLayoutIndex)
   _IsIconFrame = P:Def('_IsIconFrame', _IsIconFrame)
-  _QuantizeRowKey = P:Def('_QuantizeRowKey', _QuantizeRowKey)
   _GetViewerItemList = P:Def('_GetViewerItemList', _GetViewerItemList)
   _PrepareBuffIcon = P:Def('_PrepareBuffIcon', _PrepareBuffIcon)
   _PrepareBuffIcons = P:Def('_PrepareBuffIcons', _PrepareBuffIcons)
@@ -1689,7 +1673,6 @@ PCMRuntime:RegisterSubscriber("BuffIcons", {
   _Buffs_EnsureDefaultAnchor = P:Def('_Buffs_EnsureDefaultAnchor', _Buffs_EnsureDefaultAnchor)
   _ApplyViewerAnchorFromDB = P:Def('_ApplyViewerAnchorFromDB', _ApplyViewerAnchorFromDB)
   _RegisterBuffIconMover = P:Def('_RegisterBuffIconMover', _RegisterBuffIconMover)
-  _Buffs_LayoutBuffIconRow = P:Def('_Buffs_LayoutBuffIconRow', _Buffs_LayoutBuffIconRow)
   _Buffs_InitOnce = P:Def('_Buffs_InitOnce', _Buffs_InitOnce)
   Buffs.RetakeBlizzardEditModeOwnership = P:Def('Buffs:RetakeBlizzardEditModeOwnership', Buffs.RetakeBlizzardEditModeOwnership)
   Buffs.OnInitialize = P:Def('Buffs:OnInitialize', Buffs.OnInitialize)

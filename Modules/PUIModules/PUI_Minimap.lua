@@ -1190,7 +1190,17 @@ local function RegisterMinimapMover()
     return
   end
 
-  local db = MinimapModule.db.profile
+  local function GetDB()
+    return MinimapModule.db.profile
+  end
+
+  local function SavePosition(mover)
+    local db = GetDB()
+    local scale = mm:GetScale() or 1
+    db.x = Pixel.Round(((mover:GetRight() or UIParent:GetRight()) - UIParent:GetRight()) / scale)
+    db.y = Pixel.Round(((mover:GetTop() or UIParent:GetTop()) - UIParent:GetTop()) / scale)
+    ApplyMinimapAnchor(db)
+  end
 
   FrameUtil:EnsureGhostMover("Minimap", {
     frameName = "PleebUI_MinimapGhostMover",
@@ -1199,6 +1209,10 @@ local function RegisterMinimapMover()
     useOverlayDrag = true,
     smartSnap = {
       family = "positionOnly",
+      isRuntimeActive = function()
+        local db = GetDB()
+        return MinimapModule:IsEnabled() and db.enabled ~= false
+      end,
     },
     getSize = function()
       return GetMinimapMoverGeometry(mm)
@@ -1209,21 +1223,21 @@ local function RegisterMinimapMover()
         return "BOTTOMLEFT", UIParent, "BOTTOMLEFT", left, bottom
       end
 
+      local db = GetDB()
       return "TOPRIGHT", UIParent, "TOPRIGHT", db.x or -20, db.y or -20
     end,
     shouldShow = function()
+      local db = GetDB()
       return MinimapModule:IsEnabled()
         and db.enabled ~= false
         and ns.Flags.IsEditing == true
     end,
-    onDragStop = function(mover)
-      local scale = mm:GetScale() or 1
-      db.x = Pixel.Round(((mover:GetRight() or UIParent:GetRight()) - UIParent:GetRight()) / scale)
-      db.y = Pixel.Round(((mover:GetTop() or UIParent:GetTop()) - UIParent:GetTop()) / scale)
-      ApplyMinimapAnchor(db)
+    savePosition = SavePosition,
+    onDragStop = function()
       FrameUtil:RefreshGhostMover("Minimap")
     end,
     resetPosition = function()
+      local db = GetDB()
       db.x = -20
       db.y = -20
       ApplyMinimapAnchor(db)
@@ -1287,8 +1301,7 @@ local function HookMinimapEditModeReapply()
   MinimapModule.__pui_editModeHooked = true
 
   local function ReapplyNextFrame()
-    local db = MinimapModule.db.profile
-    if not db.enabled then return end
+    if not MinimapModule.db.profile.enabled then return end
 
     if Addon:IsBlizzardEditModeActive() then
       return
@@ -1298,8 +1311,16 @@ local function HookMinimapEditModeReapply()
       if Addon:IsBlizzardEditModeActive() then
         return
       end
+
+      local db = MinimapModule.db.profile
+      if not db.enabled then
+        return
+      end
+
       ApplySquareMask(db)
       ApplyMinimapAnchor(db)
+      FrameUtil:RefreshGhostMover("Minimap")
+      FrameUtil.RefreshSmartSnapRuntimeLayout("Minimap")
     end)
   end
 

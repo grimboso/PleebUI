@@ -12,6 +12,7 @@ local PLAYER_CLASS = select(2, UnitClass("player"))
 local M     = ns.Modules.PRD
 local Secondary = ns.PRDSecondary
 local AuraSlotDriver = ns.AuraSlotDriver
+local AuraWidget = ns.AuraWidget
 
 
 local _GetSecondaryInactiveAlpha
@@ -197,25 +198,6 @@ local function _ClearSecondaryStructure(self)
 
 end
 
-local function _ApplyTextureToStatusBar(bar, texPath)
-  if not bar then
-    return
-  end
-
-  if bar.SetStatusBarTexture then
-    if texPath then
-      bar:SetStatusBarTexture(texPath)
-    else
-      bar:SetStatusBarTexture("Interface\\Buttons\\WHITE8X8")
-    end
-  end
-
-  local sbtex = bar.GetStatusBarTexture and bar:GetStatusBarTexture() or nil
-  if sbtex then
-    sbtex:SetHorizTile(false)
-    sbtex:SetVertTile(false)
-  end
-end
 
 local function _GetSecondaryBorderThickness(self)
   local config = self.secondaryResourceConfig
@@ -388,7 +370,7 @@ _GetSecondaryInactiveAlpha = function(self)
   return alpha
 end
 
-local function _GetSecondaryDividerSize(self, secCfg)
+function Secondary.GetSecondaryDividerSize(secCfg)
   local size = Pixel.Round(tonumber(secCfg.dividerSize) or 1)
   if size < 1 then
     size = ns.FrameScale:BestOnePixel() or Pixel.Round(1)
@@ -462,7 +444,7 @@ local function _ApplySecondaryDividers(self, bar, secCfg, segmentCount, width, u
   end
 
   local dividerFrame = _EnsureSecondaryDividerFrame(self, bar, levelOffset)
-  local dividerW = _GetSecondaryDividerSize(self, secCfg)
+  local dividerW = Secondary.GetSecondaryDividerSize(secCfg)
   local divCol = _ResolveSecondaryDividerColor(secCfg)
 
   self.secondaryDividers = self.secondaryDividers or {}
@@ -1141,7 +1123,7 @@ local function _ReflowSecondaryGeometry(self)
       local dividerCount = self._puiSecondaryActiveDividerCount or 0
       local segments = dividerCount + 1
       if segments > 1 then
-        local dividerW = _GetSecondaryDividerSize(self, secCfg)
+        local dividerW = Secondary.GetSecondaryDividerSize(secCfg)
         local dividerColor = _ResolveSecondaryDividerColor(secCfg)
         local ww = Pixel.Round(parent:GetWidth() or 0)
         if ww < 1 then
@@ -1181,7 +1163,7 @@ local function _ApplySecondaryAppearance(self)
 end
 
 
-local function _ApplyResourceFont(self, fs, config)
+function Secondary.ApplyResourceFont(self, fs, config)
   local cfg = config.font
   local fontPath, fontFlags = self:ResolveIconTextFont()
   local fontSize = tonumber(cfg.size) or 14
@@ -1206,10 +1188,6 @@ local function _ApplyResourceFont(self, fs, config)
     fs._puiFontAppliedKey = appliedKey
     fs:SetFont(fontPath, fontSize, fontFlags)
   end
-end
-
-local function _EnsureFontSet(self, fs)
-  _ApplyResourceFont(self, fs, self.secondaryResourceConfig)
 end
 
 local function _ShouldShowApplicationCountdown(config)
@@ -1304,7 +1282,7 @@ local function _FormatSecondaryText(self, current, maximum, percentage, displayC
 end
 
 
-local function _ResolveResourceColor(self, config, definition)
+function Secondary.ResolveResourceColor(config, definition)
   local useCustom = config.useCustomColor == true
   local useBlizz = config.useBlizzardPowerColor == true
   local useClass = config.useClassColor == true
@@ -1358,7 +1336,7 @@ local function _ResolveSecondaryColorConfig(self)
   local config = self.secondaryResourceConfig
   local definition = self.secondaryDef
   local r, g, b, a, useCustom, useBlizz, useClass =
-    _ResolveResourceColor(self, config, definition)
+    Secondary.ResolveResourceColor(config, definition)
 
   self._puiSecColorDirty = false
   self._puiSecColorR = r
@@ -1509,59 +1487,6 @@ local function _UpdateResourceThresholdCue(frame, config, current)
 end
 
 
-local function _CreateResourceBuffCueBorder(button)
-  local function CreateEdge()
-    local edge = button:CreateTexture(nil, "OVERLAY", nil, 7)
-    edge:SetBlendMode("ADD")
-    return edge
-  end
-
-  local border = {
-    top = CreateEdge(),
-    bottom = CreateEdge(),
-    left = CreateEdge(),
-    right = CreateEdge(),
-  }
-  local thickness = 2
-  local offset = 2
-
-  border.top:SetHeight(thickness)
-  border.top:SetPoint("TOPLEFT", button, "TOPLEFT", -offset, offset)
-  border.top:SetPoint("TOPRIGHT", button, "TOPRIGHT", offset, offset)
-
-  border.bottom:SetHeight(thickness)
-  border.bottom:SetPoint("BOTTOMLEFT", button, "BOTTOMLEFT", -offset, -offset)
-  border.bottom:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT", offset, -offset)
-
-  border.left:SetWidth(thickness)
-  border.left:SetPoint("TOPLEFT", border.top, "BOTTOMLEFT", 0, 0)
-  border.left:SetPoint("BOTTOMLEFT", border.bottom, "TOPLEFT", 0, 0)
-
-  border.right:SetWidth(thickness)
-  border.right:SetPoint("TOPRIGHT", border.top, "BOTTOMRIGHT", 0, 0)
-  border.right:SetPoint("BOTTOMRIGHT", border.bottom, "TOPRIGHT", 0, 0)
-
-  return border
-end
-
-local function _ConfigureResourceBuffCueBorder(track)
-  local border = track.cueBorder
-  if not border then
-    return
-  end
-
-  local color = track.config.cues.buffGlowColor or { 0.25, 0.75, 1, 1 }
-  local r = color[1] or 0.25
-  local g = color[2] or 0.75
-  local b = color[3] or 1
-  local a = color[4] or 1
-
-  border.top:SetColorTexture(r, g, b, a)
-  border.bottom:SetColorTexture(r, g, b, a)
-  border.left:SetColorTexture(r, g, b, a)
-  border.right:SetColorTexture(r, g, b, a)
-end
-
 local function _ConfigureResourceBuffCountdown(track)
   local owner = track.owner
   local button = track.button
@@ -1600,7 +1525,7 @@ local function _ConfigureResourceBuffCountdown(track)
   text:SetTextColor(sourceText:GetTextColor())
   text:SetShadowColor(sourceText:GetShadowColor())
   text:SetShadowOffset(sourceText:GetShadowOffset())
-  _ApplyResourceFont(owner, text, config)
+  Secondary.ApplyResourceFont(owner, text, config)
   text:SetText(_FormatApplicationCountdown(config, 0))
   text:SetShown(shown)
 end
@@ -1611,11 +1536,33 @@ local function _ConfigureResourceBuffCueButton(track, initializing)
   end
 
   _ConfigureResourceBuffCountdown(track)
-  _ConfigureResourceBuffCueBorder(track)
+
+  local color = track.config.cues.buffGlowColor or { 0.25, 0.75, 1, 1 }
+  local width = math.max(1, track.anchorFrame:GetWidth())
+  local height = math.max(1, track.anchorFrame:GetHeight())
+  if initializing == true then
+    track.cueGlow = AuraWidget.CreateSlotGlow(
+      track.button,
+      width,
+      height,
+      "PIXEL",
+      color,
+      { pixelThickness = 2 }
+    )
+  elseif track.cueGlow then
+    AuraWidget.ConfigureSlotGlow(
+      track.cueGlow,
+      width,
+      height,
+      "PIXEL",
+      color,
+      { pixelThickness = 2 }
+    )
+  end
   return true
 end
 
-local function _DisableResourceBuffCueTrack(self, track)
+local function _DisableResourceBuffCueTrack(track)
   if track and track.auraSlot then
     AuraSlotDriver:SetSlotActive(track.auraSlot, false)
   end
@@ -1629,7 +1576,7 @@ local function _ConfigureResourceBuffCue(self, frame, config)
   local track = tracks[config.resourceKey]
 
   if spellID <= 0 then
-    _DisableResourceBuffCueTrack(self, track)
+    _DisableResourceBuffCueTrack(track)
     return
   end
 
@@ -1663,7 +1610,6 @@ local function _ConfigureResourceBuffCue(self, frame, config)
         button:SetAlpha(1)
         button:SetMouseMotionEnabled(false)
 
-        track.cueBorder = _CreateResourceBuffCueBorder(button)
         _ConfigureResourceBuffCueButton(track, true)
       end,
     })
@@ -1694,7 +1640,7 @@ local function _StopResourceCues(self, frame, config)
 
   local tracks = self._puiSecondaryBuffCueTracks
   if tracks then
-    _DisableResourceBuffCueTrack(self, tracks[config.resourceKey])
+    _DisableResourceBuffCueTrack(tracks[config.resourceKey])
   end
 end
 
@@ -1750,7 +1696,7 @@ local function _PrepareSecondaryText(self, bar)
 
   if self._puiSecFontsDirty then
     self._puiSecFontsDirty = false
-    _EnsureFontSet(self, text)
+    Secondary.ApplyResourceFont(self, text, self.secondaryResourceConfig)
   end
 
   return text
@@ -1869,7 +1815,6 @@ end
   _GetSecondaryStructureSignature = P:Def("_GetSecondaryStructureSignature", _GetSecondaryStructureSignature)
   _CanReuseSecondaryStructure = P:Def("_CanReuseSecondaryStructure", _CanReuseSecondaryStructure)
   _ClearSecondaryStructure = P:Def("_ClearSecondaryStructure", _ClearSecondaryStructure)
-  _ApplyTextureToStatusBar = P:Def("_ApplyTextureToStatusBar", _ApplyTextureToStatusBar)
   _TrackedSpellIconIsShown = P:Def("_TrackedSpellIconIsShown", _TrackedSpellIconIsShown)
   _GetTrackedResourceBarFrame = P:Def("_GetTrackedResourceBarFrame", _GetTrackedResourceBarFrame)
   _UpdateTrackedSpellIcon = P:Def("_UpdateTrackedSpellIcon", _UpdateTrackedSpellIcon)
@@ -1880,7 +1825,7 @@ end
   _EnsureSecondaryTextOverlay = P:Def("_EnsureSecondaryTextOverlay", _EnsureSecondaryTextOverlay)
   _EnsureSecondaryTexts = P:Def("_EnsureSecondaryTexts", _EnsureSecondaryTexts)
   _GetSecondaryInactiveAlpha = P:Def("_GetSecondaryInactiveAlpha", _GetSecondaryInactiveAlpha)
-  _GetSecondaryDividerSize = P:Def("_GetSecondaryDividerSize", _GetSecondaryDividerSize)
+  Secondary.GetSecondaryDividerSize = P:Def("_GetSecondaryDividerSize", Secondary.GetSecondaryDividerSize)
   _ResolveSecondaryDividerColor = P:Def("_ResolveSecondaryDividerColor", _ResolveSecondaryDividerColor)
   _HideSecondaryDividerSet = P:Def("_HideSecondaryDividerSet", _HideSecondaryDividerSet)
   _EnsureSecondaryDividerFrame = P:Def("_EnsureSecondaryDividerFrame", _EnsureSecondaryDividerFrame)
@@ -1895,12 +1840,11 @@ end
   _EnsureSecondaryContainerBox = P:Def("_EnsureSecondaryContainerBox", _EnsureSecondaryContainerBox)
   _ReflowSecondaryGeometry = P:Def("_ReflowSecondaryGeometry", _ReflowSecondaryGeometry)
   _ApplySecondaryAppearance = P:Def("_ApplySecondaryAppearance", _ApplySecondaryAppearance)
-  _ApplyResourceFont = P:Def("_ApplyResourceFont", _ApplyResourceFont)
-  _EnsureFontSet = P:Def("_EnsureFontSet", _EnsureFontSet)
+  Secondary.ApplyResourceFont = P:Def("_ApplyResourceFont", Secondary.ApplyResourceFont)
   _ShouldShowApplicationCountdown = P:Def("_ShouldShowApplicationCountdown", _ShouldShowApplicationCountdown)
   _FormatApplicationCountdown = P:Def("_FormatApplicationCountdown", _FormatApplicationCountdown)
   _FormatSecondaryText = P:Def("_FormatSecondaryText", _FormatSecondaryText)
-  _ResolveResourceColor = P:Def("_ResolveResourceColor", _ResolveResourceColor)
+  Secondary.ResolveResourceColor = P:Def("_ResolveResourceColor", Secondary.ResolveResourceColor)
   _PackResourceColor = P:Def("_PackResourceColor", _PackResourceColor)
   _ResolveSecondaryColorConfig = P:Def("_ResolveSecondaryColorConfig", _ResolveSecondaryColorConfig)
   _ThresholdMatches = P:Def("_ThresholdMatches", _ThresholdMatches)
@@ -1908,8 +1852,6 @@ end
   _StopResourceGlow = P:Def("_StopResourceGlow", _StopResourceGlow)
   _SetResourceGlow = P:Def("_SetResourceGlow", _SetResourceGlow)
   _UpdateResourceThresholdCue = P:Def("_UpdateResourceThresholdCue", _UpdateResourceThresholdCue)
-  _CreateResourceBuffCueBorder = P:Def("_CreateResourceBuffCueBorder", _CreateResourceBuffCueBorder)
-  _ConfigureResourceBuffCueBorder = P:Def("_ConfigureResourceBuffCueBorder", _ConfigureResourceBuffCueBorder)
   _ConfigureResourceBuffCountdown = P:Def("_ConfigureResourceBuffCountdown", _ConfigureResourceBuffCountdown)
   _ConfigureResourceBuffCueButton = P:Def("_ConfigureResourceBuffCueButton", _ConfigureResourceBuffCueButton)
   _DisableResourceBuffCueTrack = P:Def("_DisableResourceBuffCueTrack", _DisableResourceBuffCueTrack)
@@ -1923,19 +1865,15 @@ end
 
 
 Secondary.FetchStatusbarTexture = _FetchStatusbarTexture
-Secondary.GetTrackedResourceBarFrame = _GetTrackedResourceBarFrame
 Secondary.UpdateTrackedSpellIcons = _UpdateTrackedSpellIcons
 Secondary.ApplySecondaryAppearance = _ApplySecondaryAppearance
 Secondary.GetSecondaryBorderThickness = _GetSecondaryBorderThickness
 Secondary.GetSecondaryContentFrame = _GetSecondaryContentFrame
-Secondary.GetSecondaryDividerSize = _GetSecondaryDividerSize
 Secondary.ResolveSecondaryDividerColor = _ResolveSecondaryDividerColor
 Secondary.EnsureSecondaryContainerBox = _EnsureSecondaryContainerBox
 Secondary.ReflowSecondaryGeometry = _ReflowSecondaryGeometry
-Secondary.ApplyResourceFont = _ApplyResourceFont
 Secondary.ShouldShowApplicationCountdown = _ShouldShowApplicationCountdown
 Secondary.FormatApplicationCountdown = _FormatApplicationCountdown
-Secondary.ResolveResourceColor = _ResolveResourceColor
 Secondary.PackResourceColor = _PackResourceColor
 Secondary.ResolveSecondaryColorConfig = _ResolveSecondaryColorConfig
 Secondary.ResolveResourceCueColor = _ResolveResourceCueColor

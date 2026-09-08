@@ -53,7 +53,6 @@ local function ConfigurePredictionBar(bar, texture, frameLevel, orientation, rev
   bar:SetOrientation(orientation)
   bar:SetReverseFill(reverseFill)
   UFHealPrediction.ConfigurePredictionTexture(bar, texture)
-  bar:Show()
 end
 
 local function AnchorPredictionBar(bar, healthBar, relativeTexture, orientation, point, relativePoint)
@@ -84,8 +83,6 @@ local function AnchorOverflowIndicator(indicator, healthBar, orientation, point,
     indicator:SetPoint(point, healthBar, relativePoint, 0, 0)
     indicator:SetWidth(Round(8))
   end
-
-  indicator:Show()
 end
 
 local function HidePredictionWidgets(widgets)

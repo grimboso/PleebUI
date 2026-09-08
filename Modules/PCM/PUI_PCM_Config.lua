@@ -4503,6 +4503,29 @@ local function _PCM_BuildCustomIconGroup(GetCfg, RebuildRuntime, kind, order)
       end,
       set = function(_, value) SetIconValue("activeAuraGlowStyle", value) end,
     },
+    activeAuraHideViewerIcon = {
+      type = "toggle",
+      name = "Hide from buff icon viewer",
+      desc = "Hide the aura used for this glow from the Buff Icon Viewer.",
+      order = 25.45,
+      hidden = function()
+        local _, icon = GetIcon()
+        return HiddenWhenIconOff()
+          or not icon
+          or icon.activeAuraGlowStyle == "NONE"
+          or (not auraKind and icon.activeAuraEnabled ~= true)
+      end,
+      get = function()
+        local cfg = select(1, GetIcon())
+        return cfg and cfg.buffGlowHideViewerIcon == true or false
+      end,
+      set = function(_, value)
+        local cfg = select(1, GetIcon())
+        if not cfg then return end
+        cfg.buffGlowHideViewerIcon = value == true
+        RebuildRuntime()
+      end,
+    },
     activeAuraGlowColor = {
       type = "color",
       name = "Active aura glow color",
@@ -4843,6 +4866,7 @@ local function _PCM_BuildCustomIconGroup(GetCfg, RebuildRuntime, kind, order)
     activeAuraAlpha = args.activeAuraAlpha,
     activeAuraDesaturate = args.activeAuraDesaturate,
     activeAuraGlowStyle = args.activeAuraGlowStyle,
+    activeAuraHideViewerIcon = args.activeAuraHideViewerIcon,
     activeAuraGlowColor = args.activeAuraGlowColor,
   }
 
@@ -6147,14 +6171,24 @@ _PCM_BuildCustomBarBuffGlowGroup = function(GetCfg, RebuildRuntime, trackKey, or
     return cfg
   end
 
+  local function IsAuraTracker(cfg)
+    return cfg and (cfg.kind == "duration" or cfg.kind == "stack") or false
+  end
+
   local function IsGlowEnabled()
     local cfg = GetGlowConfig()
-    return cfg and cfg.buffGlowEnabled == true or false
+    if not cfg then
+      return false
+    end
+    if IsAuraTracker(cfg) then
+      return cfg.buffGlowEnabled == true
+    end
+    return cfg.activeAuraEnabled == true and cfg.activeGlowStyle ~= "NONE"
   end
 
   local function IsActiveAuraEnabled()
     local cfg = GetGlowConfig()
-    return cfg and cfg.activeAuraEnabled == true or false
+    return cfg and (IsAuraTracker(cfg) or cfg.activeAuraEnabled == true) or false
   end
 
   local glowStyles = {
@@ -6200,6 +6234,7 @@ _PCM_BuildCustomBarBuffGlowGroup = function(GetCfg, RebuildRuntime, trackKey, or
           local cfg = GetGlowConfig()
           if not cfg then return end
           cfg.activeAuraEnabled = value == true
+          cfg.buffGlowEnabled = cfg.activeAuraEnabled and cfg.activeGlowStyle ~= "NONE"
           RebuildRuntime()
         end,
       },
@@ -6253,6 +6288,7 @@ _PCM_BuildCustomBarBuffGlowGroup = function(GetCfg, RebuildRuntime, trackKey, or
           if not cfg then return end
           cfg.activeGlowStyle = value
           cfg.buffGlowEnabled = value ~= "NONE"
+            and (IsAuraTracker(cfg) or cfg.activeAuraEnabled == true)
           RebuildRuntime()
         end,
       },
@@ -6338,10 +6374,29 @@ _PCM_BuildCustomBarBuffGlowGroup = function(GetCfg, RebuildRuntime, trackKey, or
           RebuildRuntime()
         end,
       },
+      hideViewerIcon = {
+        type = "toggle",
+        name = "Hide from buff icon viewer",
+        desc = "Hide the aura used for this glow from the Buff Icon Viewer.",
+        order = 12,
+        hidden = function()
+          return not IsGlowEnabled()
+        end,
+        get = function()
+          local cfg = GetGlowConfig()
+          return cfg and cfg.buffGlowHideViewerIcon == true or false
+        end,
+        set = function(_, value)
+          local cfg = GetGlowConfig()
+          if not cfg then return end
+          cfg.buffGlowHideViewerIcon = value == true
+          RebuildRuntime()
+        end,
+      },
       thickness = {
         type = "range",
         name = "Glow thickness",
-        order = 12,
+        order = 13,
         min = 1,
         max = 8,
         step = 1,
@@ -6362,7 +6417,7 @@ _PCM_BuildCustomBarBuffGlowGroup = function(GetCfg, RebuildRuntime, trackKey, or
       color = {
         type = "color",
         name = "Glow color",
-        order = 13,
+        order = 14,
         hasAlpha = true,
         hidden = function()
           return not IsGlowEnabled()

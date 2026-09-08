@@ -56,7 +56,7 @@ local function _GetBuffBarStyle()
   return _buffBarStyleCache, _buffBarDBCache
 end
 
-local function _GetBuffBarGeometry(bb)
+function BuffBars.GetLayoutGeometry(bb)
   local vertical = bb and bb.orientation == "VERTICAL"
 
   local length = (bb and bb.width ~= nil) and (tonumber(bb.width) or 250) or 250
@@ -67,40 +67,19 @@ local function _GetBuffBarGeometry(bb)
   if thickness < 8 then thickness = 8 end
   if thickness > 40 then thickness = 40 end
 
-  local gap = tonumber(bb and bb.iconGap) or tonumber(bb and bb.padding) or 1
-  if gap < 0 then gap = 0 end
-  if gap > 20 then gap = 20 end
+  length = Round(length)
+  thickness = Round(thickness)
 
   local iconPlacement = bb and bb.iconPlacement or (vertical and "TOP" or "LEFT")
   local showIcon = iconPlacement ~= "HIDE"
-  local iconSize = thickness
-  if bb and bb.iconSize ~= nil then
-    iconSize = tonumber(bb.iconSize) or iconSize
-  end
-  if iconSize < 8 then iconSize = 8 end
-  if iconSize > 80 then iconSize = 80 end
+  local iconSize = showIcon and thickness or 0
+  local barLength = showIcon and math_max(1, length - iconSize) or length
+  local barWidth = vertical and thickness or barLength
+  local barHeight = vertical and barLength or thickness
+  local rowWidth = vertical and thickness or length
+  local rowHeight = vertical and length or thickness
 
-  length = Round(length)
-  thickness = Round(thickness)
-  gap = Round(gap)
-  iconSize = Round(iconSize)
-
-  local barWidth = vertical and thickness or length
-  local barHeight = vertical and length or thickness
-  local rowWidth = barWidth
-  local rowHeight = barHeight
-
-  if showIcon then
-    if vertical then
-      rowWidth = math_max(rowWidth, iconSize)
-      rowHeight = rowHeight + iconSize + gap
-    else
-      rowWidth = rowWidth + iconSize + gap
-      rowHeight = math_max(rowHeight, iconSize)
-    end
-  end
-
-  return vertical, length, thickness, gap, iconPlacement, showIcon, iconSize, barWidth, barHeight, rowWidth, rowHeight
+  return vertical, length, thickness, iconPlacement, showIcon, iconSize, barWidth, barHeight, rowWidth, rowHeight
 end
 
 local function _GetBuffBarGrowthPoints(bb, vertical)
@@ -131,7 +110,7 @@ local function _GetBuffBarHolder()
   end
 
   local _, bb = _GetBuffBarStyle()
-  local _, _, _, _, _, _, _, _, _, rowWidth, rowHeight = _GetBuffBarGeometry(bb)
+  local _, _, _, _, _, _, _, _, rowWidth, rowHeight = BuffBars.GetLayoutGeometry(bb)
 
   _buffBarHolder = _G.CreateFrame("Frame", nil, UIParent)
   _buffBarHolder:SetSize(rowWidth, rowHeight)
@@ -141,106 +120,27 @@ local function _GetBuffBarHolder()
 end
 
 
--- Color resolution
 local function _GetBuffBarColor()
-  local r, g, b, a = 0.2, 0.6, 1.0, 1.0 -- fallback
-
-  local style, bb = _GetBuffBarStyle()
-  local useClass = true
-  local override
-
-  if style then
-    local bbUse =
-         (bb and bb.useClassColor)
-      or (bb and bb.useClassColors)
-      or (bb and bb.useClass)
-      or (bb and bb.classColor)
-
-    if bbUse ~= nil then
-      useClass = not not bbUse
-    else
-      useClass = style.buffBarUseClassColor ~= false
-    end
-
-    local manual =
-         (bb and bb.color)
-      or (bb and bb.barColor)
-      or (bb and bb.foregroundColor)
-      or style.buffBarColor
-
-    if not useClass then
-      override = manual
-    else
-      override = nil
-    end
-  end
-
-  if type(override) == "table" then
-    r = override.r or override[1] or r
-    g = override.g or override[2] or g
-    b = override.b or override[3] or b
-    a = override.a or override[4] or a
-    return r, g, b, a
-  end
-
-  if useClass then
+  local style = _GetBuffBarStyle()
+  if style.buffBarUseClassColor ~= false then
     local _, class = UnitClass("player")
-    local cc = class and RAID_CLASS_COLORS[class]
-    if cc then
-      r, g, b, a = cc.r or r, cc.g or g, cc.b or b, 1
-      return r, g, b, a
-    end
+    local color = RAID_CLASS_COLORS[class]
+    return color.r, color.g, color.b, 1
   end
 
-  local colors = Theme.colors or Theme.Colors or Theme.bars
-  if colors then
-    local c = colors.cooldownBar or colors.cooldowns
-    if not c and colors.bars then
-      c = colors.bars.primary or colors.bars.cooldowns
-    end
-    if type(c) == "table" then
-      r = c.r or c[1] or r
-      g = c.g or c[2] or g
-      b = c.b or c[3] or b
-      a = c.a or c[4] or a
-    end
-  end
-
-  return r, g, b, a
+  local color = style.buffBarColor or { 1, 0.6, 0, 1 }
+  return color.r or color[1] or 1,
+    color.g or color[2] or 0.6,
+    color.b or color[3] or 0,
+    color.a or color[4] or 1
 end
 
 local function _GetBuffBarBackgroundColor()
-  local r, g, b, a = 0.12, 0.12, 0.12, 0.95
-  local style, bb = _GetBuffBarStyle()
-  if style then
-    local c =
-         (bb and bb.bgColor)
-      or (bb and bb.backgroundColor)
-      or style.buffBarBgColor
-
-    if type(c) == "table" then
-      r = c.r or c[1] or r
-      g = c.g or c[2] or g
-      b = c.b or c[3] or b
-      a = c.a or c[4] or a
-    end
-  end
-  return r, g, b, a
-end
-
--- Row discovery (no PCM helpers)
-local function _IsUsableRow(f)
-  if not f then return false end
-  if f.IsForbidden and f:IsForbidden() then return false end
-  if f.GetObjectType and not f:GetObjectType() then return false end
-
-  -- A BuffBar row usually has one of these
-  local bar = f.Bar or f.StatusBar or f.ProgressBar
-  if not (bar and bar.SetStatusBarTexture) then
-    return false
-  end
-
-  return true
+  local color = _GetBuffBarStyle().buffBarBgColor
+  return color.r or color[1],
+    color.g or color[2],
+    color.b or color[3],
+    color.a or color[4]
 end
 
 local __PUI_PCM_BuffBarRows = {}
@@ -257,16 +157,10 @@ local function _MarkBuffBarRowsDirty(viewer)
 end
 
 local function _SortBuffBarRows(a, b)
-  local ai = a and (a.layoutIndex or (a.GetID and a:GetID()) or 0) or 0
-  local bi = b and (b.layoutIndex or (b.GetID and b:GetID()) or 0) or 0
-  return ai < bi
+  return a.layoutIndex < b.layoutIndex
 end
 
 local function _GetBuffBarRows(viewer)
-  if not viewer or (viewer.IsForbidden and viewer:IsForbidden()) then
-    return __PUI_PCM_BuffBarRows
-  end
-
   if (not _buffBarRowsDirty) and _buffBarRowsViewer == viewer then
     return __PUI_PCM_BuffBarRows
   end
@@ -276,10 +170,7 @@ local function _GetBuffBarRows(viewer)
 
   local items = PCMRuntime:GetViewerItems(viewer)
   for index = 1, #items do
-    local row = items[index]
-    if _IsUsableRow(row) then
-      __PUI_PCM_BuffBarRows[#__PUI_PCM_BuffBarRows + 1] = row
-    end
+    __PUI_PCM_BuffBarRows[#__PUI_PCM_BuffBarRows + 1] = items[index]
   end
 
   if #__PUI_PCM_BuffBarRows > 1 then
@@ -290,19 +181,14 @@ local function _GetBuffBarRows(viewer)
   return __PUI_PCM_BuffBarRows
 end
 
-
 local function _GetRowState(rowFrame)
-  if not rowFrame then
-    return nil
-  end
-
   local state = __PUI_PCM_BuffBarRowState[rowFrame]
   if not state then
     state = {}
     __PUI_PCM_BuffBarRowState[rowFrame] = state
   end
 
-  if not state.layoutHooks and rowFrame.HookScript then
+  if not state.layoutHooks then
     state.layoutHooks = true
 
     rowFrame:HookScript("OnShow", function()
@@ -318,12 +204,8 @@ local function _GetRowState(rowFrame)
 end
 
 local function _DimensionsDiffer(frame, width, height)
-  if not frame or not frame.GetWidth or not frame.GetHeight then
-    return false
-  end
-
-  return math_abs((frame:GetWidth() or 0) - width) > 0.01
-    or math_abs((frame:GetHeight() or 0) - height) > 0.01
+  return math_abs(frame:GetWidth() - width) > 0.01
+    or math_abs(frame:GetHeight() - height) > 0.01
 end
 
 
@@ -339,18 +221,11 @@ local function _ApplyBorder(target, thickness, color)
 end
 
 local function _StyleRow_StripChrome(rowFrame)
-  local pip = rowFrame.Bar and rowFrame.Bar.Pip or nil
-  if pip then
-    pip:SetTexture(nil)
-    pip:Hide()
-  end
+  rowFrame.Bar.Pip:SetTexture(nil)
+  rowFrame.Bar.Pip:Hide()
 end
 
 local function _StyleRow_ApplyBar(rowFrame, bar, bb)
-  if not (bar and bar.SetStatusBarTexture) then
-    return
-  end
-
   local tex
   local texName = bb and bb.texture or "Pleebar"
   if texName then
@@ -365,109 +240,66 @@ local function _StyleRow_ApplyBar(rowFrame, bar, bb)
   bar:SetOrientation(bb and bb.orientation == "VERTICAL" and "VERTICAL" or "HORIZONTAL")
   bar:SetReverseFill(_BuffBarUsesReverseFill(bb))
 
-  -- Remove extra Blizzard art regions (keep statusbar texture)
-  local barTex = bar.GetStatusBarTexture and bar:GetStatusBarTexture() or nil
-  if bar.GetRegions then
-    local num = bar:GetNumRegions() or 0
-    for i = 1, num do
-      local region = select(i, bar:GetRegions())
-      if region
-         and region.GetObjectType
-         and region:GetObjectType() == "Texture"
-         and region ~= barTex then
-        region:SetTexture(nil)
-        region:Hide()
-      end
+  local barTex = bar:GetStatusBarTexture()
+  local num = bar:GetNumRegions()
+  for i = 1, num do
+    local region = select(i, bar:GetRegions())
+    if region:GetObjectType() == "Texture" and region ~= barTex then
+      region:SetTexture(nil)
+      region:Hide()
     end
   end
 
   local bgR, bgG, bgB, bgA = _GetBuffBarBackgroundColor()
   local bg = bar.__PUIBuffBarBG
-  if not bg and bar.CreateTexture then
+  if not bg then
     bg = bar:CreateTexture(nil, "BACKGROUND")
     bar.__PUIBuffBarBG = bg
   end
-  if bg then
-    bg:ClearAllPoints()
-    bg:SetPoint("TOPLEFT", bar, "TOPLEFT", 0, 0)
-    bg:SetPoint("BOTTOMRIGHT", bar, "BOTTOMRIGHT", 0, 0)
-    bg:SetColorTexture(bgR, bgG, bgB, bgA)
-    bg:Show()
-  end
+  bg:ClearAllPoints()
+  bg:SetPoint("TOPLEFT", bar, "TOPLEFT", 0, 0)
+  bg:SetPoint("BOTTOMRIGHT", bar, "BOTTOMRIGHT", 0, 0)
+  bg:SetColorTexture(bgR, bgG, bgB, bgA)
+  bg:Show()
 end
 
 local function _StyleRow_ApplyIcon(rowFrame)
-  local iconContainer = rowFrame.Icon or rowFrame.icon or rowFrame.IconContainer
-  local icon = iconContainer and (iconContainer.Icon or iconContainer.icon) or nil
-  local cd = iconContainer and (iconContainer.Cooldown or iconContainer.cooldown) or nil
+  local container = rowFrame.Icon
+  local icon = container.Icon
 
-  if icon then
-    IconSkin.StripIconMasks(icon)
-    if icon.SetTexCoord then
-      icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
-    end
-  end
+  IconSkin.StripIconMasks(icon)
+  icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+  IconSkin.StripAllVisualLayers(container, { keepBackdrop = false })
+  IconSkin.MakeIconSquare(container, { crop = 0.08 })
+  IconSkin.MakeIconSquare(icon, { crop = 0.08 })
 
-  if iconContainer then
-    IconSkin.StripAllVisualLayers(iconContainer, { keepBackdrop = false })
-    IconSkin.MakeIconSquare(iconContainer, { crop = 0.08 })
-    if icon then
-      IconSkin.MakeIconSquare(icon, { crop = 0.08 })
-    end
-    if cd then
-      IconSkin.SquareCooldown(cd)
-    end
-  end
-
-  return iconContainer
+  return container
 end
 
-local function _StyleRow_ApplyFonts(rowFrame, iconContainer)
-
-  local nameFS = rowFrame.Bar and rowFrame.Bar.Name or nil
-  local durFS  = rowFrame.Bar and rowFrame.Bar.Duration or nil
-
-  local appsFS
-  if iconContainer then
-    local apps = iconContainer.Applications
-    if apps and apps.Applications then
-      appsFS = apps.Applications
-    elseif apps and apps.SetText then
-      appsFS = apps
-    end
-  end
-
-  if nameFS then Theme.ApplyFont(nameFS, "body") end
-  if durFS  then Theme.ApplyFont(durFS,  "body") end
-  if appsFS then Theme.ApplyFont(appsFS, "nav")  end
+local function _StyleRow_ApplyFonts(rowFrame)
+  Theme.ApplyFont(rowFrame.Bar.Name, "body")
+  Theme.ApplyFont(rowFrame.Bar.Duration, "body")
+  Theme.ApplyFont(rowFrame.Icon.Applications, "nav")
 end
 
 local function _ApplyRowTextLayout(bar, vertical)
-  if not bar then
-    return
-  end
-
   local nameFS = bar.Name
-  if nameFS then
-    nameFS:SetAlpha(vertical and 0 or 1)
-    if not vertical then
-      nameFS:ClearAllPoints()
-      nameFS:SetPoint("TOPLEFT", bar, "TOPLEFT", 5, 0)
-      nameFS:SetPoint("BOTTOMRIGHT", bar, "BOTTOMRIGHT", -25, 0)
-      nameFS:SetJustifyH("LEFT")
-    end
+  nameFS:SetAlpha(vertical and 0 or 1)
+  if not vertical then
+    nameFS:ClearAllPoints()
+    nameFS:SetPoint("TOPLEFT", bar, "TOPLEFT", 5, 0)
+    nameFS:SetPoint("BOTTOMRIGHT", bar, "BOTTOMRIGHT", -25, 0)
+    nameFS:SetJustifyH("LEFT")
   end
 
   local durFS = bar.Duration
-  if durFS then
-    durFS:ClearAllPoints()
-    if vertical then
-      durFS:SetPoint("CENTER", bar, "CENTER", 0, 0)
-      durFS:SetJustifyH("CENTER")
-    else
-      durFS:SetPoint("RIGHT", bar, "RIGHT", -8, 0)
-      durFS:SetJustifyH("LEFT")
-    end
+  durFS:ClearAllPoints()
+  if vertical then
+    durFS:SetPoint("CENTER", bar, "CENTER", 0, 0)
+    durFS:SetJustifyH("CENTER")
+  else
+    durFS:SetPoint("RIGHT", bar, "RIGHT", -8, 0)
+    durFS:SetJustifyH("LEFT")
   end
 end
 
@@ -475,20 +307,12 @@ local function _StyleRow_ApplyBorders(bar, iconContainer, bb)
   local thickness = bb and tonumber(bb.borderThickness) or 2
   local color = bb and bb.borderColor or { 1, 1, 1, 1 }
 
-  if bar then
-    _ApplyBorder(bar, thickness, color)
-  end
-  if iconContainer then
-    _ApplyBorder(iconContainer, thickness, color)
-  end
+  _ApplyBorder(bar, thickness, color)
+  _ApplyBorder(iconContainer, thickness, color)
 end
 
 local function _ApplyRowSizing(rowFrame, bar, iconContainer, bb, state)
-  if not state then
-    return
-  end
-
-  local vertical, length, thickness, gap, iconPlacement, showIcon, iconSize, barWidth, barHeight, rowWidth, rowHeight = _GetBuffBarGeometry(bb)
+  local vertical, length, thickness, iconPlacement, showIcon, iconSize, barWidth, barHeight, rowWidth, rowHeight = BuffBars.GetLayoutGeometry(bb)
   local orientation = vertical and "VERTICAL" or "HORIZONTAL"
 
   local needsSizing =
@@ -501,21 +325,15 @@ local function _ApplyRowSizing(rowFrame, bar, iconContainer, bb, state)
     or state.lastRowHeight ~= rowHeight
     or state.lastIconPlacement ~= iconPlacement
     or state.lastIconShown ~= showIcon
-    or state.lastIconGap ~= gap
     or _DimensionsDiffer(rowFrame, rowWidth, rowHeight)
     or _DimensionsDiffer(bar, barWidth, barHeight)
-    or (showIcon and iconContainer and _DimensionsDiffer(iconContainer, iconSize, iconSize))
+    or (showIcon and _DimensionsDiffer(iconContainer, iconSize, iconSize))
 
   if not needsSizing then
     return
   end
 
-  if rowFrame and rowFrame.SetSize then
-    rowFrame:SetSize(rowWidth, rowHeight)
-  elseif rowFrame then
-    if rowFrame.SetWidth then rowFrame:SetWidth(rowWidth) end
-    if rowFrame.SetHeight then rowFrame:SetHeight(rowHeight) end
-  end
+  rowFrame:SetSize(rowWidth, rowHeight)
 
   state.sizingRev = _buffBarLayoutRev
   state.lastOrientation = orientation
@@ -526,89 +344,65 @@ local function _ApplyRowSizing(rowFrame, bar, iconContainer, bb, state)
   state.lastRowHeight = rowHeight
   state.lastIconPlacement = iconPlacement
   state.lastIconShown = showIcon
-  state.lastIconGap = gap
 
-  if showIcon and iconContainer then
-    if iconContainer.SetShown then
-      iconContainer:SetShown(true)
-    elseif iconContainer.Show then
-      iconContainer:Show()
-    end
-
-    if iconContainer.ClearAllPoints and iconContainer.SetPoint then
-      iconContainer:ClearAllPoints()
-      if vertical then
-        if iconPlacement == "BOTTOM" then
-          iconContainer:SetPoint("BOTTOM", rowFrame, "BOTTOM", 0, 0)
-        else
-          iconContainer:SetPoint("TOP", rowFrame, "TOP", 0, 0)
-        end
-      elseif iconPlacement == "RIGHT" then
-        iconContainer:SetPoint("RIGHT", rowFrame, "RIGHT", 0, 0)
+  if showIcon then
+    iconContainer:SetShown(true)
+    iconContainer:ClearAllPoints()
+    if vertical then
+      if iconPlacement == "BOTTOM" then
+        iconContainer:SetPoint("BOTTOM", rowFrame, "BOTTOM", 0, 0)
       else
-        iconContainer:SetPoint("LEFT", rowFrame, "LEFT", 0, 0)
+        iconContainer:SetPoint("TOP", rowFrame, "TOP", 0, 0)
       end
+    elseif iconPlacement == "RIGHT" then
+      iconContainer:SetPoint("RIGHT", rowFrame, "RIGHT", 0, 0)
+    else
+      iconContainer:SetPoint("LEFT", rowFrame, "LEFT", 0, 0)
     end
-    if iconContainer.SetSize then
-      iconContainer:SetSize(iconSize, iconSize)
-    end
+    iconContainer:SetSize(iconSize, iconSize)
 
-    local icon = iconContainer.Icon or iconContainer.icon
-    if icon and icon.SetAllPoints then
-      icon:ClearAllPoints()
-      icon:SetAllPoints(iconContainer)
-    end
-  elseif iconContainer and iconContainer.Hide then
+    local icon = iconContainer.Icon
+    icon:ClearAllPoints()
+    icon:SetAllPoints(iconContainer)
+  else
     iconContainer:Hide()
   end
 
-  if bar then
-    if bar.ClearAllPoints and bar.SetPoint then
-      bar:ClearAllPoints()
-      if showIcon and iconContainer then
-        if vertical then
-          if iconPlacement == "BOTTOM" then
-            bar:SetPoint("BOTTOM", iconContainer, "TOP", 0, gap)
-          else
-            bar:SetPoint("TOP", iconContainer, "BOTTOM", 0, -gap)
-          end
-        elseif iconPlacement == "RIGHT" then
-          bar:SetPoint("RIGHT", iconContainer, "LEFT", -gap, 0)
-        else
-          bar:SetPoint("LEFT", iconContainer, "RIGHT", gap, 0)
-        end
+  bar:ClearAllPoints()
+  if showIcon then
+    if vertical then
+      if iconPlacement == "BOTTOM" then
+        bar:SetPoint("BOTTOM", iconContainer, "TOP", 0, 0)
       else
-        bar:SetPoint("CENTER", rowFrame, "CENTER", 0, 0)
+        bar:SetPoint("TOP", iconContainer, "BOTTOM", 0, 0)
       end
+    elseif iconPlacement == "RIGHT" then
+      bar:SetPoint("RIGHT", iconContainer, "LEFT", 0, 0)
+    else
+      bar:SetPoint("LEFT", iconContainer, "RIGHT", 0, 0)
     end
-    if bar.SetSize then
-      bar:SetSize(barWidth, barHeight)
-    elseif bar.SetHeight then
-      bar:SetHeight(barHeight)
-    end
-
-    _ApplyRowTextLayout(bar, vertical)
+  else
+    bar:SetPoint("CENTER", rowFrame, "CENTER", 0, 0)
   end
+  bar:SetSize(barWidth, barHeight)
+
+  _ApplyRowTextLayout(bar, vertical)
 end
 
 local function _StyleRow(rowFrame)
-  if not rowFrame or (rowFrame.IsForbidden and rowFrame:IsForbidden()) then
-    return nil
-  end
-
   local state = _GetRowState(rowFrame)
-  if state and state.styledRev == _buffBarStyleRev then
+  if state.styledRev == _buffBarStyleRev then
     return state
   end
 
   local _, bb = _GetBuffBarStyle()
 
-  local bar = rowFrame.Bar or rowFrame.StatusBar or rowFrame.ProgressBar
+  local bar = rowFrame.Bar
 
   _StyleRow_StripChrome(rowFrame)
   _StyleRow_ApplyBar(rowFrame, bar, bb)
   local iconContainer = _StyleRow_ApplyIcon(rowFrame)
-  _StyleRow_ApplyFonts(rowFrame, iconContainer)
+  _StyleRow_ApplyFonts(rowFrame)
   _StyleRow_ApplyBorders(bar, iconContainer, bb)
 
   state.styledRev = _buffBarStyleRev
@@ -624,30 +418,21 @@ local function _Refresh()
   end
 
   local viewer = PCMRuntime:GetViewer("BuffBarCooldownViewer")
-  if not viewer or (viewer.IsForbidden and viewer:IsForbidden()) then
-    -- If Blizzard hasn't created the viewer yet, make sure we keep trying to init.
+  if not viewer or viewer:IsForbidden() then
     _Init()
     return
   end
 
   local holder = _GetBuffBarHolder()
-  if not holder then
-    return
-  end
-
-  if holder.SetFrameStrata and viewer.GetFrameStrata then
-    holder:SetFrameStrata(viewer:GetFrameStrata())
-  end
-  if holder.SetFrameLevel and viewer.GetFrameLevel then
-    holder:SetFrameLevel((viewer:GetFrameLevel() or 0) + 1)
-  end
+  holder:SetFrameStrata(viewer:GetFrameStrata())
+  holder:SetFrameLevel(viewer:GetFrameLevel() + 1)
 
   if PCMHooks.InBlizzardEditMode() then
     return
   end
 
   local _, bb = _GetBuffBarStyle()
-  local vertical, _, _, _, _, _, _, _, _, rowWidth, rowHeight = _GetBuffBarGeometry(bb)
+  local vertical, _, _, _, _, _, _, _, rowWidth, rowHeight = BuffBars.GetLayoutGeometry(bb)
 
   local rowSpacing = 4
   if bb and bb.rowSpacing ~= nil then
@@ -673,19 +458,18 @@ local function _Refresh()
 
   for i = 1, #rows do
     local row = rows[i]
-    if row then
-      local state = _StyleRow(row) or _GetRowState(row)
-      local bar = row.Bar or row.StatusBar or row.ProgressBar
-      local iconContainer = row.Icon or row.icon or row.IconContainer
+    if not row:IsForbidden() then
+      local state = _StyleRow(row)
+      local bar = row.Bar
+      local iconContainer = row.Icon
 
-      if row.SetParent and row.GetParent and row:GetParent() ~= holder then
+      if row:GetParent() ~= holder then
         row:SetParent(holder)
       end
 
       _ApplyRowSizing(row, bar, iconContainer, bb, state)
 
-      local isShown = row.IsShown and row:IsShown()
-      if isShown then
+      if row:IsShown() then
         anchorIndex = anchorIndex + 1
 
         local expectedRelative = prev or holder
@@ -700,18 +484,15 @@ local function _Refresh()
           or math_abs((x or 0) - expectedX) > 0.01
           or math_abs((y or 0) - expectedY) > 0.01
 
-        local needsAnchor = true
-        if state then
-          needsAnchor = anchorChanged
-            or (state.layoutRev ~= _buffBarLayoutRev)
-            or (state.lastShown ~= true)
-            or (state.lastAnchorIndex ~= anchorIndex)
-            or (state.lastPrevRow ~= prev)
-            or (state.lastRowSpacing ~= rowSpacing)
-            or (state.lastGrowthDirection ~= growthDirection)
-        end
+        local needsAnchor = anchorChanged
+          or (state.layoutRev ~= _buffBarLayoutRev)
+          or (state.lastShown ~= true)
+          or (state.lastAnchorIndex ~= anchorIndex)
+          or (state.lastPrevRow ~= prev)
+          or (state.lastRowSpacing ~= rowSpacing)
+          or (state.lastGrowthDirection ~= growthDirection)
 
-        if needsAnchor and row.ClearAllPoints and row.SetPoint then
+        if needsAnchor then
           row:ClearAllPoints()
           if not prev then
             row:SetPoint(rowPoint, holder, rowPoint, 0, 0)
@@ -720,17 +501,15 @@ local function _Refresh()
           end
         end
 
-        if state then
-          state.layoutRev = _buffBarLayoutRev
-          state.lastShown = true
-          state.lastAnchorIndex = anchorIndex
-          state.lastPrevRow = prev
-          state.lastRowSpacing = rowSpacing
-          state.lastGrowthDirection = growthDirection
-        end
+        state.layoutRev = _buffBarLayoutRev
+        state.lastShown = true
+        state.lastAnchorIndex = anchorIndex
+        state.lastPrevRow = prev
+        state.lastRowSpacing = rowSpacing
+        state.lastGrowthDirection = growthDirection
 
         prev = row
-      elseif state then
+      else
         state.lastShown = false
         state.lastAnchorIndex = nil
         state.lastPrevRow = nil
@@ -740,28 +519,25 @@ local function _Refresh()
     end
   end
 
-  if holder and holder.SetSize then
-    local totalSlots = viewer.itemFramePool:GetNumActive()
-    local holderWidth = totalSlots > 0 and rowWidth or 1
-    local holderHeight = totalSlots > 0 and rowHeight or 1
+  local totalSlots = viewer.itemFramePool:GetNumActive()
+  local holderWidth = totalSlots > 0 and rowWidth or 1
+  local holderHeight = totalSlots > 0 and rowHeight or 1
 
-    if totalSlots > 0 then
-      if vertical then
-        holderWidth = (totalSlots * rowWidth) + ((totalSlots - 1) * rowSpacing)
-      else
-        holderHeight = (totalSlots * rowHeight) + ((totalSlots - 1) * rowSpacing)
-      end
-    end
-
-    if holder.__puiBuffBarWidth ~= holderWidth or holder.__puiBuffBarHeight ~= holderHeight then
-      holder:SetSize(holderWidth, holderHeight)
-      holder.__puiBuffBarWidth = holderWidth
-      holder.__puiBuffBarHeight = holderHeight
-      FrameUtil.RefreshSmartSnapRuntimeLayout("BuffBarCooldownViewer")
+  if totalSlots > 0 then
+    if vertical then
+      holderWidth = (totalSlots * rowWidth) + ((totalSlots - 1) * rowSpacing)
+    else
+      holderHeight = (totalSlots * rowHeight) + ((totalSlots - 1) * rowSpacing)
     end
   end
 
-  -- Re-apply saved position in case Blizzard layout moved the holder.
+  if holder.__puiBuffBarWidth ~= holderWidth or holder.__puiBuffBarHeight ~= holderHeight then
+    holder:SetSize(holderWidth, holderHeight)
+    holder.__puiBuffBarWidth = holderWidth
+    holder.__puiBuffBarHeight = holderHeight
+    FrameUtil.RefreshSmartSnapRuntimeLayout("BuffBarCooldownViewer")
+  end
+
   _ApplySavedViewerPos()
 end
 
@@ -774,10 +550,6 @@ end
 
 function _ApplySavedViewerPos()
   local holder = _GetBuffBarHolder()
-  if not holder then
-    return false
-  end
-
   local _, bb = _GetBuffBarStyle()
   local pos = bb and bb.pos
   if type(pos) ~= "table" then
@@ -791,9 +563,6 @@ function _ApplySavedViewerPos()
   local y = Round(tonumber(pos.y or 0) or 0)
 
   local rel = _G[relName] or UIParent
-  if not rel then
-    rel = UIParent
-  end
 
   if holder.__puiBuffBarPoint == point
     and holder.__puiBuffBarRelFrame == rel
@@ -804,19 +573,15 @@ function _ApplySavedViewerPos()
     return true
   end
 
-  if holder.ClearAllPoints and holder.SetPoint then
-    holder:ClearAllPoints()
-    holder:SetPoint(point, rel, relPoint, x, y)
-    holder.__puiBuffBarPoint = point
-    holder.__puiBuffBarRelName = relName
-    holder.__puiBuffBarRelFrame = rel
-    holder.__puiBuffBarRelPoint = relPoint
-    holder.__puiBuffBarPosX = x
-    holder.__puiBuffBarPosY = y
-    return true
-  end
-
-  return false
+  holder:ClearAllPoints()
+  holder:SetPoint(point, rel, relPoint, x, y)
+  holder.__puiBuffBarPoint = point
+  holder.__puiBuffBarRelName = relName
+  holder.__puiBuffBarRelFrame = rel
+  holder.__puiBuffBarRelPoint = relPoint
+  holder.__puiBuffBarPosX = x
+  holder.__puiBuffBarPosY = y
+  return true
 end
 
 local function _EnsureDefaultViewerPos()
@@ -841,21 +606,12 @@ local function _EnsureDefaultViewerPos()
   bb.pos.relPoint = relPoint
   bb.pos.x = x
   bb.pos.y = y
-  bb.__puiNeedDefaultPos = nil
-  bb.__puiDidDefaultPos = true
 
   return _ApplySavedViewerPos()
 end
 
 local function _SaveViewerPos()
   local holder = _GetBuffBarHolder()
-  if not holder then
-    return
-  end
-  if not holder.GetPoint then
-    return
-  end
-
   local point, relTo, relPoint, x, y = holder:GetPoint(1)
   if not point then
     return
@@ -888,11 +644,6 @@ local function _RegisterMover()
   end
 
   local holder = _GetBuffBarHolder()
-  if not holder then
-    return
-  end
-
-  -- Minimal mover registration: position persistence + edit overlay.
   FrameUtil:RegisterMover("BuffBarCooldownViewer", holder, {
     label = "Tracked Buff Bars",
     optionsString = "CooldownManager,buff_bars",
@@ -900,8 +651,8 @@ local function _RegisterMover()
       family = "combatBars",
       syncAxis = "NONE",
     },
+    savePosition = _SaveViewerPos,
     onDragStop = function()
-      _SaveViewerPos()
       _ApplySavedViewerPos()
       _Refresh()
     end,
@@ -1114,15 +865,11 @@ _Init = function()
   end
 
   local viewer = PCMRuntime:GetViewer("BuffBarCooldownViewer")
-  if not viewer or (viewer.IsForbidden and viewer:IsForbidden()) then
+  if not viewer or viewer:IsForbidden() then
     return
   end
 
-  local holder = _GetBuffBarHolder()
-  if not holder then
-    return
-  end
-
+  _GetBuffBarHolder()
   _EnsureDefaultViewerPos()
   _MarkBuffBarRowsDirty(viewer)
   _RegisterMover()
@@ -1135,7 +882,7 @@ function BuffBars:RetakeBlizzardEditModeOwnership()
   end
 
   local viewer = PCMRuntime:GetViewer("BuffBarCooldownViewer")
-  if not viewer or (viewer.IsForbidden and viewer:IsForbidden()) then
+  if not viewer or viewer:IsForbidden() then
     return
   end
 
@@ -1185,7 +932,7 @@ function BuffBars:RefreshAfterTalentSwap()
   end
 
   local viewer = PCMRuntime:GetViewer("BuffBarCooldownViewer")
-  if not viewer or (viewer.IsForbidden and viewer:IsForbidden()) then
+  if not viewer or viewer:IsForbidden() then
     return
   end
 
@@ -1225,7 +972,7 @@ end
 
 PCMRuntime:RegisterSubscriber("BuffBars", {
   OnItemAcquired = function(key, viewer, rowFrame)
-    if key ~= "BuffBarCooldownViewer" or not _IsUsableRow(rowFrame) then
+    if key ~= "BuffBarCooldownViewer" then
       return
     end
 
@@ -1278,13 +1025,12 @@ PCMRuntime:RegisterSubscriber("BuffBars", {
   _PCM_BuffBarsEnabled = P:Def('_PCM_BuffBarsEnabled', _PCM_BuffBarsEnabled)
   _InvalidateBuffBarStyleCache = P:Def('_InvalidateBuffBarStyleCache', _InvalidateBuffBarStyleCache)
   _GetBuffBarStyle = P:Def('_GetBuffBarStyle', _GetBuffBarStyle)
-  _GetBuffBarGeometry = P:Def('_GetBuffBarGeometry', _GetBuffBarGeometry)
+  BuffBars.GetLayoutGeometry = P:Def('BuffBars.GetLayoutGeometry', BuffBars.GetLayoutGeometry)
   _GetBuffBarGrowthPoints = P:Def('_GetBuffBarGrowthPoints', _GetBuffBarGrowthPoints)
   _BuffBarUsesReverseFill = P:Def('_BuffBarUsesReverseFill', _BuffBarUsesReverseFill)
   _GetBuffBarHolder = P:Def('_GetBuffBarHolder', _GetBuffBarHolder)
   _GetBuffBarColor = P:Def('_GetBuffBarColor', _GetBuffBarColor)
   _GetBuffBarBackgroundColor = P:Def('_GetBuffBarBackgroundColor', _GetBuffBarBackgroundColor)
-  _IsUsableRow = P:Def('_IsUsableRow', _IsUsableRow)
   _MarkBuffBarRowsDirty = P:Def('_MarkBuffBarRowsDirty', _MarkBuffBarRowsDirty)
   _SortBuffBarRows = P:Def('_SortBuffBarRows', _SortBuffBarRows)
   _GetBuffBarRows = P:Def('_GetBuffBarRows', _GetBuffBarRows)

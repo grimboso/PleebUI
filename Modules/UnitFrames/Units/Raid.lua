@@ -708,10 +708,6 @@ local function BuildRaidAuraDB(unit)
 end
 
 
-local function RefreshRaidAuraAvailabilityForFrame(frame)
-  UFAuraContainers.RefreshAvailability(frame)
-end
-
 local function ConstructRaidStyledFrame(frame, unit, cfg)
   local db = RaidFrames.db.profile
 
@@ -729,9 +725,9 @@ local function ConstructRaidStyledFrame(frame, unit, cfg)
     auraDBBuilder = BuildRaidAuraDB,
   })
 
-  frame:RegisterEvent("UNIT_AREA_CHANGED", RefreshRaidAuraAvailabilityForFrame)
-  frame:RegisterEvent("UNIT_CONNECTION", RefreshRaidAuraAvailabilityForFrame)
-  frame:RegisterEvent("UNIT_PHASE", RefreshRaidAuraAvailabilityForFrame)
+  frame:RegisterEvent("UNIT_AREA_CHANGED", UFAuraContainers.RefreshAvailability)
+  frame:RegisterEvent("UNIT_CONNECTION", UFAuraContainers.RefreshAvailability)
+  frame:RegisterEvent("UNIT_PHASE", UFAuraContainers.RefreshAvailability)
 end
 
 function RaidFrames:Construct_RaidFrames(frame)
@@ -821,8 +817,27 @@ function RaidFrames:ApplyAnchor()
     label = "Raid Frames",
     optionsString = "unitframes,raid",
     overlayBelowFrame = true,
+    getDB = function()
+      return RaidFrames.db.profile
+    end,
+    smartSnap = {
+      family = "positionOnly",
+      isRuntimeActive = function()
+        return RaidFrames:IsEnabled() and RaidFrames.db.profile.enabled ~= false
+      end,
+    },
     quickSettings = function()
       return ns.UnitFrameTest:OpenQuickSettings("RaidFrames")
+    end,
+    resetPosition = function()
+      local defaults = UFDefaults.GetRaidDefaults().profile
+      local current = RaidFrames.db.profile
+      current.point = defaults.point
+      current.relativeTo = defaults.relativeTo
+      current.relativePoint = defaults.relativePoint
+      current.x = defaults.x
+      current.y = defaults.y
+      RaidFrames:ApplyAnchor()
     end,
     onDragStop = function()
       if ns.TestMode:IsActive() then
@@ -1411,7 +1426,10 @@ function RaidFrames:SetMoversVisible(show)
   end
 
   if self.mover then
-    FrameUtil.SetMoverFrameVisible(self.mover, show == true)
+    FrameUtil.SetMoverFrameVisible(
+      self.mover,
+      show == true and self:IsEnabled() and self.db.profile.enabled ~= false
+    )
   end
 
   ns.UFTankFrames.SetMoverVisible(self, show == true)
@@ -1508,7 +1526,6 @@ local P = select(1, ns.Pleebug:DropIn(RaidFrames, { name = "UnitFrames.Raid" }))
   GetRaidProfile = P:Def("GetRaidProfile", GetRaidProfile)
   InvalidateRaidAuraDB = P:Def("InvalidateRaidAuraDB", InvalidateRaidAuraDB)
   BuildRaidAuraDB = P:Def("BuildRaidAuraDB", BuildRaidAuraDB)
-  RefreshRaidAuraAvailabilityForFrame = P:Def("RefreshRaidAuraAvailabilityForFrame", RefreshRaidAuraAvailabilityForFrame)
   ConstructRaidStyledFrame = P:Def("ConstructRaidStyledFrame", ConstructRaidStyledFrame)
   UpdateRaidStyledFrame = P:Def("UpdateRaidStyledFrame", UpdateRaidStyledFrame)
   RF_GetGroupLabelProfile = P:Def("RF_GetGroupLabelProfile", RF_GetGroupLabelProfile)

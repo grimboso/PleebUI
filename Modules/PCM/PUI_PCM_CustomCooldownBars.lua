@@ -172,7 +172,7 @@ local function _SB_SaveAnchor(f, cfg)
     return
   end
 
-  local x, y = FrameUtil._GetOffsetsForFrame(f)
+  local x, y = FrameUtil.GetMoverOffsets(f)
 
   cfg.pos = cfg.pos or {}
   cfg.pos.point = "CENTER"
@@ -184,6 +184,12 @@ end
 
 local function _SB_RegisterMover(id, f, cfg)
   local key = "PCM_SpellBar_" .. tostring(id)
+
+  local function SavePosition(frame)
+    _SB_SaveAnchor(frame or f, cfg)
+    _SB_ApplyAnchor(f, cfg, 0)
+  end
+
   local moverOpts = {
     label = Cooldowns:GetCustomBarDisplayName(cfg),
     optionsString = "CooldownManager,custom_bars,spell:" .. tostring(id),
@@ -199,9 +205,8 @@ local function _SB_RegisterMover(id, f, cfg)
         and bd
         and bd.__puiSBRuntimeEnabled == true
     end,
-    onDragStop = function(frame)
-      _SB_SaveAnchor(frame or f, cfg)
-      _SB_ApplyAnchor(f, cfg, 0)
+    savePosition = SavePosition,
+    onDragStop = function()
       FrameUtil:RefreshGhostMover(key)
     end,
     quickSettings = function()
@@ -1116,6 +1121,7 @@ function Cooldowns:SpellBars_Rebuild()
 
   _SB_RebuildAll()
   _SB_SetCooldownEventRegistered(self, _SB_RuntimeEnabled and _SB_HasActiveCooldownPresentations())
+  ns.Modules.PCM_BB:RefreshViewerHiddenState()
 end
 
 function Cooldowns:SpellBars_RefreshBar(id, flags)

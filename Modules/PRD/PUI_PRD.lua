@@ -276,6 +276,12 @@ end
 local function PRD_BuildCombatBarSmartSnap(owner, getState)
   return {
     family = "combatBars",
+    isRuntimeActive = function()
+      return owner.db
+        and owner.db.profile
+        and owner.db.profile.enabled == true
+        and getState() ~= nil
+    end,
     syncAxis = "WIDTH",
     syncWidthMin = 120,
     syncWidthMax = 600,
@@ -564,17 +570,12 @@ function M:SetBlizzardShowBarText(enabled)
   return true
 end
 
--- Simple accessor for options UI.
 function M:IsModuleEnabled()
   return self.db
      and self.db.profile
      and self.db.profile.enabled == true
 end
 
--- Main toggle API.
--- enabled : boolean
--- opts    : optional table
---          { syncCVar = true } -> also SetCVar when called (used by options)
 function M:SetModuleEnabled(enabled, opts)
   if not self.db or not self.db.profile then
     return false
@@ -587,7 +588,7 @@ function M:SetModuleEnabled(enabled, opts)
 
   if want then
     if self:IsEnabled() then
-      self:StartRuntime()
+      self:OnEnable()
     else
       self:Enable()
     end
@@ -857,14 +858,6 @@ function M:ReassertBlizzardPRDRoot()
   self:SetBlizzardRootGhosted(true)
 end
 
-function M:PLAYER_ALIVE()
-  self:ReassertBlizzardPRDRoot()
-end
-
-function M:PLAYER_UNGHOST()
-  self:ReassertBlizzardPRDRoot()
-end
-
 function M:SyncEnabledState()
   if not self.db or not self.db.profile then
     return false
@@ -1015,7 +1008,7 @@ function M:RequestRefresh(flags, delay)
 
   local wait = tonumber(delay) or 0
   if wait <= 0 then
-    if self._puiPRDRefreshTimer and self._puiPRDRefreshTimer.Cancel then
+    if self._puiPRDRefreshTimer then
       self._puiPRDRefreshTimer:Cancel()
     end
 
@@ -1035,7 +1028,7 @@ function M:RequestRefresh(flags, delay)
   end)
 end
 
-function M:StartRuntime()
+function M:OnEnable()
   if not self.db or not self.db.profile or self.db.profile.enabled ~= true then
     return
   end
@@ -1053,8 +1046,8 @@ function M:StartRuntime()
   self._puiShutdownCleanupPending = nil
   self._puiNativeRestorePending = nil
   self:SyncCVarFromSettings()
-  self:RegisterEvent("PLAYER_ALIVE")
-  self:RegisterEvent("PLAYER_UNGHOST")
+  self:RegisterEvent("PLAYER_ALIVE", "ReassertBlizzardPRDRoot")
+  self:RegisterEvent("PLAYER_UNGHOST", "ReassertBlizzardPRDRoot")
 
   if not self._puiDidPEWRefresh then
     local f = self:EnsurePEWFrame()
@@ -1091,13 +1084,13 @@ function M:StopRuntime()
     self._puiPEWFrame:UnregisterEvent("PLAYER_ENTERING_WORLD")
   end
 
-  if self._puiPRDRefreshTimer and self._puiPRDRefreshTimer.Cancel then
+  if self._puiPRDRefreshTimer then
     self._puiPRDRefreshTimer:Cancel()
   end
   self._puiPRDRefreshTimer = nil
   self._puiPendingRefreshFlags = nil
 
-  if self._puiPRDSettleTimer and self._puiPRDSettleTimer.Cancel then
+  if self._puiPRDSettleTimer then
     self._puiPRDSettleTimer:Cancel()
   end
   self._puiPRDSettleTimer = nil
@@ -1137,7 +1130,7 @@ function M:GetBarBorderThickness(style, owner)
     return 0
   end
 
-  if owner and owner.GetWidth and owner.GetHeight then
+  if owner then
     local width = tonumber(owner:GetWidth()) or 0
     local height = tonumber(owner:GetHeight()) or 0
     local minimum = math.min(width, height)
@@ -1166,10 +1159,6 @@ function M:GetBarBorderColor(style)
   end
 
   return Theme.GetColors().border
-end
-
-function M:GetAppearance()
-  return self.db.profile.appearance
 end
 
 function M:GetBarAppearance(role)
@@ -1212,7 +1201,7 @@ function M:ApplyOuterBorder()
 end
 
 function M:ApplyBarBorder(frame, thickness, color)
-  if not frame or not frame.CreateTexture then
+  if not frame then
     return
   end
 
@@ -1799,6 +1788,51 @@ function M:AttachMover()
     return self.db and self.db.profile or nil
   end
 
+  local function SaveAnchor(frame, anchor, centered)
+    if not anchor then
+      return
+    end
+
+    local x, y = FrameUtil.GetMoverOffsets(frame)
+    if centered then
+      anchor.point = "CENTER"
+      anchor.rel = "UIParent"
+      anchor.relPoint = "CENTER"
+    else
+      anchor.point = anchor.point or "CENTER"
+    end
+    anchor.x = x
+    anchor.y = y
+  end
+
+  local function SaveRootPosition(frame)
+    local profile = GetProfile()
+    if not profile then
+      return
+    end
+
+    profile.anchor = profile.anchor or {}
+    SaveAnchor(frame, profile.anchor, true)
+  end
+
+  local function SaveHealthPosition(frame)
+    local profile = GetProfile()
+    if not profile then
+      return
+    end
+
+    SaveAnchor(frame, profile.health.anchor, false)
+  end
+
+  local function SavePrimaryPosition(frame)
+    local profile = GetProfile()
+    if not profile then
+      return
+    end
+
+    SaveAnchor(frame, profile.primary.anchor, false)
+  end
+
   local function BuildQuickSettings(anchor)
     local controls = {}
 
@@ -1986,20 +2020,7 @@ function M:AttachMover()
   FrameUtil:RegisterMover("PRD", self.frame, {
       label = "Personal Resource Display",
 
-      onDragStop = function(frame)
-        local profile = GetProfile()
-        if not profile then
-          return
-        end
-
-        local x, y = FrameUtil._GetOffsetsForFrame(frame)
-        profile.anchor = profile.anchor or {}
-        local a = profile.anchor
-        a.point    = "CENTER"
-        a.rel      = "UIParent"
-        a.relPoint = "CENTER"
-        a.x, a.y   = x, y
-      end,
+      savePosition = SaveRootPosition,
 
       resetPosition = function(frame)
         local profile = GetProfile()
@@ -2059,19 +2080,7 @@ function M:AttachMover()
     FrameUtil:RegisterMover("PRD_HEALTH", self.health, {
       label = "PRD: Health bar",
 
-      onDragStop = function(frame)
-        local p = GetProfile()
-        if not p then
-          return
-        end
-
-        local cfg = p.health
-        local a = cfg.anchor
-
-        local x, y = FrameUtil._GetOffsetsForFrame(frame)
-        a.point = a.point or "CENTER"
-        a.x, a.y = x, y
-      end,
+      savePosition = SaveHealthPosition,
 
       resetPosition = function(frame)
         local p = GetProfile()
@@ -2115,19 +2124,7 @@ function M:AttachMover()
     FrameUtil:RegisterMover("PRD_PRIMARY", self.primary, {
       label = "PRD: Primary bar",
 
-      onDragStop = function(frame)
-        local p = GetProfile()
-        if not p then
-          return
-        end
-
-        local cfg = p.primary
-        local a = cfg.anchor
-
-        local x, y = FrameUtil._GetOffsetsForFrame(frame)
-        a.point = a.point or "CENTER"
-        a.x, a.y = x, y
-      end,
+      savePosition = SavePrimaryPosition,
 
       resetPosition = function(frame)
         local p = GetProfile()
@@ -2184,24 +2181,21 @@ function M:AttachMover()
     end
     activeMoverKeys[moverKey] = true
 
+    local function SavePosition(movedFrame)
+      local p = GetProfile()
+      if not p then
+        return
+      end
+
+      local settings = p.secondary.resourceSettings[resourceKey]
+      SaveAnchor(movedFrame, settings.anchor, false)
+      self:InvalidateRuntimeConfig()
+    end
+
     FrameUtil:RegisterMover(moverKey, frame, {
       label = "PRD: " .. config.resourceName,
 
-      onDragStop = function(movedFrame)
-        local p = GetProfile()
-        if not p then
-          return
-        end
-
-        local settings = p.secondary.resourceSettings[resourceKey]
-        local anchor = settings.anchor
-        local x, y = FrameUtil._GetOffsetsForFrame(movedFrame)
-
-        anchor.point = anchor.point or "CENTER"
-        anchor.x = x
-        anchor.y = y
-        self:InvalidateRuntimeConfig()
-      end,
+      savePosition = SavePosition,
 
       resetPosition = function(movedFrame)
         local p = GetProfile()
@@ -2466,8 +2460,6 @@ function M:OnNewProfile()
   self:SeedHidePrimaryBySpec()
 end
 
-M.OnEnable = M.StartRuntime
-
 function M:OnDisable()
   self:StopRuntime()
   self:SyncCVarFromSettings()
@@ -2500,18 +2492,14 @@ end
   M.SetUsePlayerHealth = P:Def("SetUsePlayerHealth", M.SetUsePlayerHealth)
   M.RefreshPlayerHealthReplacement = P:Def("RefreshPlayerHealthReplacement", M.RefreshPlayerHealthReplacement)
   M.ReassertBlizzardPRDRoot = P:Def("ReassertBlizzardPRDRoot", M.ReassertBlizzardPRDRoot)
-  M.PLAYER_ALIVE = P:Def("PLAYER_ALIVE", M.PLAYER_ALIVE)
-  M.PLAYER_UNGHOST = P:Def("PLAYER_UNGHOST", M.PLAYER_UNGHOST)
   M.SyncEnabledState = P:Def("SyncEnabledState", M.SyncEnabledState)
   M.EnsureInitialized = P:Def("EnsureInitialized", M.EnsureInitialized)
   M.ApplyRequestedFlags = P:Def("ApplyRequestedFlags", M.ApplyRequestedFlags)
   M.RunPendingRefresh = P:Def("RunPendingRefresh", M.RunPendingRefresh)
   M.RequestRefresh = P:Def("RequestRefresh", M.RequestRefresh)
-  M.StartRuntime = P:Def("StartRuntime", M.StartRuntime)
   M.StopRuntime = P:Def("StopRuntime", M.StopRuntime)
   M.GetBarBorderThickness = P:Def("GetBarBorderThickness", M.GetBarBorderThickness)
   M.GetBarBorderColor = P:Def("GetBarBorderColor", M.GetBarBorderColor)
-  M.GetAppearance = P:Def("GetAppearance", M.GetAppearance)
   M.ApplyBarBorder = P:Def("ApplyBarBorder", M.ApplyBarBorder)
   M.ApplyOuterBorder = P:Def("ApplyOuterBorder", M.ApplyOuterBorder)
   M.CreateFrames = P:Def("CreateFrames", M.CreateFrames)

@@ -282,9 +282,6 @@ local function FlushDeferredRefreshes(owner, refreshGlobal, refreshUnit)
   return true
 end
 
-UF.QueueDeferredRefresh = QueueDeferredRefresh
-UF.FlushDeferredRefreshes = FlushDeferredRefreshes
-
 local function CopyTable(src)
   local out = {}
 
@@ -391,19 +388,24 @@ local function GetBossGrowthDirection(cfg)
   return "DOWN"
 end
 
-local function ConfigureBossHeader()
+local function GetBossHeaderSize()
   local shared = UF.db.profile.units.boss
-  local anchor = UF.db.profile.units.boss1
-
   local width, height = UFStyle.ResolveFrameSize(shared)
   local spacing = Round(shared and shared.spacing or 30)
   local growthDirection = GetBossGrowthDirection(shared)
 
   if growthDirection == "UP" or growthDirection == "DOWN" then
-    BossHeader:SetSize(width, height + ((height + spacing) * (MAX_BOSS_FRAMES - 1)))
-  else
-    BossHeader:SetSize(width + ((width + spacing) * (MAX_BOSS_FRAMES - 1)), height)
+    return width, height + ((height + spacing) * (MAX_BOSS_FRAMES - 1)), growthDirection, spacing
   end
+
+  return width + ((width + spacing) * (MAX_BOSS_FRAMES - 1)), height, growthDirection, spacing
+end
+
+local function ConfigureBossHeader()
+  local anchor = UF.db.profile.units.boss1
+  local width, height, growthDirection, spacing = GetBossHeaderSize()
+
+  BossHeader:SetSize(width, height)
 
   if anchor then
     local parent = ResolveRelativeToObject(anchor, BossHeader, "boss1")
@@ -951,7 +953,7 @@ function UF:ConstructUnitFrame(frame, unit, cfg, opts)
     UFThreat.Construct(frame)
   end
 
-  UFAuraContainers.Construct(frame, unit)
+  frame.__puiAuraContainerDB = ns.UFAuraFilters.BuildFrameAuraDB(frame, unit)
 
   if ns.Modules.CastBar.UnitLookup[unit] then
     ns.Modules.CastBar:AttachToUnitFrame(frame, unit)
@@ -1044,7 +1046,7 @@ end
 function UF:ApplyFrameIndicators(frame, state)
   local absorbTexture = UFStyle.ResolveStatusbarTexture("absorb", state.unit, state.config)
   UFHealPrediction.Configure(frame, absorbTexture)
-  UFIndicators.ConstructNativeStatusElements(frame, state.unit)
+  UFIndicators.ConstructNativeStatusElements(frame, state.unit, state.config)
 
   if state.options.groupKind == "party" or state.options.groupKind == "raid" then
     UFIndicators.ConfigureSharedUnitIndicators(frame, state.layout)
@@ -1165,15 +1167,19 @@ function UF:RefreshUnitFrame(frame, unit, cfg, opts, mode)
     local predictionTexture = UFStyle.ResolveStatusbarTexture("absorb", state.unit, state.config)
     UFHealPrediction.Configure(frame, predictionTexture)
     return
+  elseif mode == "indicators" then
+    UFIndicators.ConstructNativeStatusElements(frame, state.unit, state.config)
+    return
   elseif mode == "resize" then
     self:ApplyFrameAppearance(frame, state, false)
     self:ApplyFrameLayout(frame, state)
 
     local absorbTexture = UFStyle.ResolveStatusbarTexture("absorb", state.unit, state.config)
     UFHealPrediction.Configure(frame, absorbTexture)
+    UFIndicators.ConstructNativeStatusElements(frame, state.unit, state.config)
 
     self:ApplyFramePosition(frame, state)
-    UFAuraContainers.RefreshLayout(frame)
+    UFAuraContainers.Configure(frame)
     return
   elseif mode == "layout" then
     self:ApplyFramePosition(frame, state)
@@ -1404,6 +1410,43 @@ local function GetUnitFrameOptionsTab(unitKey)
 end
 
 function UF:EnsureMovers()
+  local function SavePosition(unitKey, owner, mover)
+    if not owner.db or not owner.db.profile or not owner.db.profile.units then
+      return
+    end
+
+    local cfg = owner.db.profile.units[unitKey]
+    if not cfg then
+      return
+    end
+
+    local xOfs, yOfs = FrameUtil.GetMoverOffsets(mover)
+
+    cfg.point = "CENTER"
+    cfg.relativeTo = "UIParent"
+    cfg.relativePoint = "CENTER"
+    cfg.x = Round(xOfs or 0)
+    cfg.y = Round(yOfs or 0)
+
+    if InCombatLockdown() then
+      return
+    end
+
+    if unitKey == "boss1" then
+      ConfigureBossHeader()
+      owner:RefreshSingleUnit("boss", "layout")
+      return
+    end
+
+    local real = owner.frames and owner.frames[unitKey]
+    if real then
+      local holder = EnsureSingleUnitPositionHolder(real, unitKey, cfg)
+
+      real:ClearAllPoints()
+      real:SetAllPoints(holder)
+    end
+  end
+
   FrameUtil.EnsureGhostMovers(self, {
     labels = GHOST_LABELS,
     keyPrefix = "UF_",
@@ -1416,10 +1459,20 @@ function UF:EnsureMovers()
       return ns.UnitFrameTest:OpenQuickSettings("UF_" .. unitKey)
     end,
     smartSnap = function(unitKey, owner)
+      local function IsActive()
+        local db = owner.db and owner.db.profile
+        local cfg = owner:ResolveUnitConfig(unitKey)
+        return db
+          and db.enabled ~= false
+          and cfg
+          and cfg.enabled ~= false
+      end
+
       if unitKey == "player" then
         return {
           family = "unitFramesPlayer",
           families = { combatBars = true },
+          isRuntimeActive = IsActive,
           syncAxis = "WIDTH",
           syncWidthMin = 120,
           syncWidthMax = 600,
@@ -1444,6 +1497,7 @@ function UF:EnsureMovers()
       elseif unitKey == "target" or unitKey == "targettarget" then
         return {
           family = "unitFramesTarget",
+          isRuntimeActive = IsActive,
           getSnapInsets = function()
             return GetUnitFrameAuraSnapInsets(unitKey, owner)
           end,
@@ -1451,12 +1505,16 @@ function UF:EnsureMovers()
       elseif unitKey == "focus" or unitKey == "focustarget" then
         return {
           family = "unitFramesFocus",
+          isRuntimeActive = IsActive,
           getSnapInsets = function()
             return GetUnitFrameAuraSnapInsets(unitKey, owner)
           end,
         }
       elseif unitKey == "pet" then
-        return { family = "unitFramesPet" }
+        return {
+          family = "unitFramesPet",
+          isRuntimeActive = IsActive,
+        }
       elseif unitKey == "boss1" then
         return {
           family = "unitFramesBoss",
@@ -1464,6 +1522,7 @@ function UF:EnsureMovers()
             unitFramesFocus = true,
             unitFramesTarget = true,
           },
+          isRuntimeActive = IsActive,
           syncAxis = "NONE",
           getSnapInsets = function()
             return GetUnitFrameAuraSnapInsets(unitKey, owner)
@@ -1489,16 +1548,9 @@ function UF:EnsureMovers()
         return nil, nil
       end
 
-      if unitKey == "pet" and ns.Flags.IsEditing ~= true then
-        local frame = owner.frames and owner.frames[unitKey]
-        if not frame or not frame:IsVisible() then
-          return nil, nil
-        end
-      end
-
       if unitKey == "boss1" then
-        local header = ConfigureBossHeader()
-        return Round(header:GetWidth() or 200), Round(header:GetHeight() or 22)
+        local width, height = GetBossHeaderSize()
+        return Round(width), Round(height)
       end
 
       return UFStyle.ResolveFrameSize(cfg)
@@ -1523,47 +1575,33 @@ function UF:EnsureMovers()
         and ns.Flags
         and ns.Flags.IsEditing == true
     end,
-    onGhostDragStop = function(unitKey, owner, mover)
-      if not owner.db or not owner.db.profile or not owner.db.profile.units then
+    onGhostSavePosition = SavePosition,
+    onGhostResetPosition = function(unitKey, owner)
+      local cfg = owner.db
+        and owner.db.profile
+        and owner.db.profile.units
+        and owner.db.profile.units[unitKey]
+      local defaults = owner:GetDefaultUnitConfig(unitKey)
+      if not cfg or not defaults then
         return
       end
 
-      local cfg = owner.db.profile.units[unitKey]
-      if not cfg then
-        return
-      end
-
-      local xOfs, yOfs = FrameUtil.GetMoverOffsets(mover)
-
-      cfg.point = "CENTER"
-      cfg.relativeTo = "UIParent"
-      cfg.relativePoint = "CENTER"
-      cfg.x = Round(xOfs or 0)
-      cfg.y = Round(yOfs or 0)
-
-      if InCombatLockdown() then
-        return
-      end
+      cfg.point = defaults.point
+      cfg.relativeTo = defaults.relativeTo
+      cfg.relativePoint = defaults.relativePoint
+      cfg.x = defaults.x
+      cfg.y = defaults.y
 
       if unitKey == "boss1" then
         ConfigureBossHeader()
         owner:RefreshSingleUnit("boss", "layout")
-
-        if ns.TestMode:IsActive() then
-          ns.TestMode:Refresh("unitframes", "mover", "uf.singleSettings")
-        end
-
-        return
+      else
+        owner:RefreshSingleUnit(unitKey, "layout")
       end
 
-      local real = owner.frames and owner.frames[unitKey]
-      if real then
-        local holder = EnsureSingleUnitPositionHolder(real, unitKey, cfg)
-
-        real:ClearAllPoints()
-        real:SetAllPoints(holder)
-      end
-
+      FrameUtil:RefreshGhostMover("UF_" .. unitKey)
+    end,
+    onGhostDragStop = function()
       if ns.TestMode:IsActive() then
         ns.TestMode:Refresh("unitframes", "mover", "uf.singleSettings")
       end
@@ -1900,11 +1938,6 @@ function UF:SoftRebuild(flags)
   end
 end
 
-function UF:RefreshIconFonts()
-  self:SafeRefresh("text")
-end
-
-
 local P = select(1, ns.Pleebug:DropIn(UF, { name = "UnitFrames.Core" }))
 
 
@@ -1952,7 +1985,6 @@ local P = select(1, ns.Pleebug:DropIn(UF, { name = "UnitFrames.Core" }))
   UF.OnProfileChanged = P:Def("UF.OnProfileChanged", UF.OnProfileChanged)
   UF.ApplySettings = P:Def("UF.ApplySettings", UF.ApplySettings)
   UF.SoftRebuild = P:Def("UF.SoftRebuild", UF.SoftRebuild)
-  UF.RefreshIconFonts = P:Def("UF.RefreshIconFonts", UF.RefreshIconFonts)
   ResolveDeferredRefreshRequest = P:Def("ResolveDeferredRefreshRequest", ResolveDeferredRefreshRequest)
   AddDeferredMode = P:Def("AddDeferredMode", AddDeferredMode)
   QueueDeferredRefresh = P:Def("QueueDeferredRefresh", QueueDeferredRefresh)
@@ -1968,6 +2000,7 @@ local P = select(1, ns.Pleebug:DropIn(UF, { name = "UnitFrames.Core" }))
   IsBossUnit = P:Def("IsBossUnit", IsBossUnit)
   GetBossIndex = P:Def("GetBossIndex", GetBossIndex)
   GetBossGrowthDirection = P:Def("GetBossGrowthDirection", GetBossGrowthDirection)
+  GetBossHeaderSize = P:Def("GetBossHeaderSize", GetBossHeaderSize)
   ConfigureBossHeader = P:Def("ConfigureBossHeader", ConfigureBossHeader)
   GetAnchorCoordinate = P:Def("GetAnchorCoordinate", GetAnchorCoordinate)
   GetAnchoredIconBounds = P:Def("GetAnchoredIconBounds", GetAnchoredIconBounds)

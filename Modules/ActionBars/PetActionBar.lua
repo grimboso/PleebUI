@@ -43,7 +43,7 @@ end
 
 local function GetShortKey(binding)
   local key = GetBindingKey(binding)
-  if key and KeyBound then
+  if key then
     return KeyBound:ToShortKey(key)
   end
   return key
@@ -168,9 +168,7 @@ local function OnEnter(button, ...)
   then
     GameTooltip:Hide()
   end
-  if KeyBound then
-    KeyBound:Set(button)
-  end
+  KeyBound:Set(button)
 end
 
 local function OnDragStart(button)

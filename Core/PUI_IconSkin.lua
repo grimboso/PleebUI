@@ -61,7 +61,13 @@ local function HideFrameRegion(frame)
 end
 
 
-local function StripIconMasks_Internal(tex, parent)
+function IconSkin.StripIconMasks(target, parent)
+  local tex = target
+  if parent == nil then
+    tex, parent = ResolveIconTarget(target)
+    parent = parent or target
+  end
+
   if not tex then
     return
   end
@@ -106,7 +112,6 @@ local function StripIconMasks_Internal(tex, parent)
           r:Hide()
         end
       elseif r and r.SetMask then
-        -- Some textures can have their own SetMask, clear it (no nil allowed).
         r:SetMask("")
       end
     end
@@ -117,14 +122,7 @@ local function StripIconMasks_Internal(tex, parent)
   end
 end
 
-function IconSkin.StripIconMasks(target)
-
-  local tex, parent = ResolveIconTarget(target)
-  parent = parent or target
-  StripIconMasks_Internal(tex, parent)
-end
-
-local function StripNineSliceAndBackdrop_Internal(frame, opts)
+function IconSkin.StripNineSliceAndBackdrop(frame, opts)
   opts = opts or {}
 
   if not frame then
@@ -154,8 +152,6 @@ local function StripNineSliceAndBackdrop_Internal(frame, opts)
     end
   end
 end
-
-IconSkin.StripNineSliceAndBackdrop = StripNineSliceAndBackdrop_Internal
 
 local HideRegionToHider = ns.HideToHider
 
@@ -333,10 +329,10 @@ function IconSkin.StripAllVisualLayers(target, opts)
   local frame = parent or target
 
   -- 1) Masks (rounded corners, IconMask etc.)
-  StripIconMasks_Internal(tex, frame)
+  IconSkin.StripIconMasks(tex, frame)
 
   -- 2) 9-slice + backdrop
-  StripNineSliceAndBackdrop_Internal(frame, opts)
+  IconSkin.StripNineSliceAndBackdrop(frame, opts)
 
   -- 3) Button textures and common overlays
   StripButtonTextures_Internal(frame, opts)
@@ -348,7 +344,7 @@ function IconSkin.MakeIconSquare(target, opts)
   opts = opts or {}
 
   -- 1) Strip Blizzard-style rounded masks
-  StripIconMasks_Internal(tex, parent)
+  IconSkin.StripIconMasks(tex, parent)
 
   -- 2) Apply crop (rounded-border removal) via texcoords
   local crop = opts.crop

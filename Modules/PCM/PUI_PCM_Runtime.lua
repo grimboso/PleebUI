@@ -239,7 +239,7 @@ local function HookItem(entry, itemFrame)
 
   itemState.entry = entry
 
-  if itemState.rebindHooked or type(itemFrame.SetCooldownID) ~= "function" then
+  if itemState.rebindHooked then
     return
   end
   itemState.rebindHooked = true
@@ -264,7 +264,7 @@ local function HookItem(entry, itemFrame)
 end
 
 local function AcquireItem(entry, itemFrame, reason, suppressGeneration, expectInitialRebind)
-  if not itemFrame or (itemFrame.IsForbidden and itemFrame:IsForbidden()) then
+  if not itemFrame or itemFrame:IsForbidden() then
     return false
   end
 
@@ -322,22 +322,18 @@ end
 
 local function ScanViewer(entry, reason)
   local viewer = entry and entry.frame or nil
-  if not viewer or (viewer.IsForbidden and viewer:IsForbidden()) then
+  if not viewer or viewer:IsForbidden() then
     return false
   end
 
   local pool = viewer.itemFramePool
-  if not (pool and pool.EnumerateActive) then
-    return false
-  end
-
   local active = entry.activeSet
   local activeItems = entry.activeItems
   wipe(active)
   wipe(activeItems)
 
   for itemFrame in pool:EnumerateActive() do
-    if itemFrame and not (itemFrame.IsForbidden and itemFrame:IsForbidden()) then
+    if itemFrame and not itemFrame:IsForbidden() then
       active[itemFrame] = true
       activeItems[#activeItems + 1] = itemFrame
     end
@@ -609,7 +605,7 @@ function Runtime:BindViewer(key, reason)
   end
 
   local viewer = entry.resolver()
-  if viewer and viewer.IsForbidden and viewer:IsForbidden() then
+  if viewer and viewer:IsForbidden() then
     viewer = nil
   end
 

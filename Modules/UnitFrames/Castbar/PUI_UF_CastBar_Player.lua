@@ -8,14 +8,12 @@ local ADDON_NAME, ns = ...
 
 local CastBar = ns.Modules.CastBar
 
-local LibStub = _G.LibStub
 local P = select(1, ns.Pleebug:DropIn(CastBar, { name = "UnitFrames.CastBar.Player" }))
 
 local CreateFrame = CreateFrame
 local GetNetStats = GetNetStats
 local _, PLAYER_CLASS = UnitClass("player")
 
-local tonumber = tonumber
 local string_format = string.format
 
 
@@ -63,14 +61,12 @@ function CastBar:BindPlayerCastbarElement(frame, element, unit)
 end
 
 function CastBar:LayoutPlayerCastbar(bar, unit, cfg, statusHost)
-  if bar.safeZoneBorder and bar.__puiSafeZoneBorderBackdrop then
-    local edgeSize = ns.FrameScale:BestOnePixel()
-    local backdrop = bar.__puiSafeZoneBorderBackdrop
+  local edgeSize = ns.FrameScale:BestOnePixel()
+  local backdrop = bar.__puiSafeZoneBorderBackdrop
 
-    if backdrop.edgeSize ~= edgeSize then
-      backdrop.edgeSize = edgeSize
-      bar.safeZoneBorder:SetBackdrop(backdrop)
-    end
+  if backdrop.edgeSize ~= edgeSize then
+    backdrop.edgeSize = edgeSize
+    bar.safeZoneBorder:SetBackdrop(backdrop)
   end
 
   ns.PUICastBarPlayerChannelTicks:OnLayout(bar, statusHost, cfg)
@@ -81,51 +77,34 @@ function CastBar:LayoutPlayerCastbar(bar, unit, cfg, statusHost)
 end
 
 function CastBar:PlayerPostCastStart(element, unit, bar, cfg, spellID, isChanneling)
-  if not (element and (element.__puiTestCasting or element.__puiTestChanneling)) then
+  if not (element.__puiTestCasting or element.__puiTestChanneling) then
     ns.PUICastBarPlayerInstant:MarkRealCast(bar)
   end
 
-  if element then
-    element.curStage = 0
-  end
+  element.curStage = 0
 
-  if bar.safeZone then
-    if cfg and cfg.showPingOverlay ~= false then
-      bar.safeZone:Show()
+  if cfg.showPingOverlay ~= false then
+    bar.safeZone:Show()
+    bar.safeZoneBorder:ClearAllPoints()
+    bar.safeZoneBorder:SetAllPoints(bar.safeZone)
+    bar.safeZoneBorder:Show()
 
-      if bar.safeZoneBorder then
-        bar.safeZoneBorder:ClearAllPoints()
-        bar.safeZoneBorder:SetAllPoints(bar.safeZone)
-        bar.safeZoneBorder:Show()
-      end
+    local _, _, home, world = GetNetStats()
+    local ms = (home + world) * 0.5
 
-      if bar.safeZoneText then
-        local _, _, msHome, msWorld = GetNetStats()
-        msHome = tonumber(msHome) or 0
-        msWorld = tonumber(msWorld) or 0
-        local ms = (msHome + msWorld) * 0.5
+    bar.safeZoneText:Show()
+    bar.safeZoneText:ClearAllPoints()
+    bar.safeZoneText:SetText(string_format("%.0fms", ms))
 
-        bar.safeZoneText:Show()
-        bar.safeZoneText:ClearAllPoints()
-        bar.safeZoneText:SetText(string_format("%.0fms", ms))
-
-        if isChanneling then
-          bar.safeZoneText:SetPoint("LEFT", bar.status, "BOTTOMLEFT", 0, 0)
-        else
-          bar.safeZoneText:SetPoint("RIGHT", bar.status, "BOTTOMRIGHT", 0, 0)
-        end
-      elseif bar.safeZoneText then
-        bar.safeZoneText:Hide()
-      end
+    if isChanneling then
+      bar.safeZoneText:SetPoint("LEFT", bar.status, "BOTTOMLEFT", 0, 0)
     else
-      bar.safeZone:Hide()
-      if bar.safeZoneBorder then
-        bar.safeZoneBorder:Hide()
-      end
-      if bar.safeZoneText then
-        bar.safeZoneText:Hide()
-      end
+      bar.safeZoneText:SetPoint("RIGHT", bar.status, "BOTTOMRIGHT", 0, 0)
     end
+  else
+    bar.safeZone:Hide()
+    bar.safeZoneBorder:Hide()
+    bar.safeZoneText:Hide()
   end
 
   if isChanneling then
@@ -144,13 +123,11 @@ function CastBar:PlayerPostCastStop(element, unit, bar, cfg, spellID, empowerCom
     ns.PUICastBarPlayerDisintegrate:HandleEmpowerStop(self, spellID, empowerComplete)
   end
 
-  if element then
-    element.chainTick = nil
-    element.chainTime = nil
-    element.curStage = nil
-    element.__puiDisintegrateChanneling = false
-    element.__puiDisintegrateChaining = false
-  end
+  element.chainTick = nil
+  element.chainTime = nil
+  element.curStage = nil
+  element.__puiDisintegrateChanneling = false
+  element.__puiDisintegrateChaining = false
 
   bar.safeZone:Hide()
   bar.safeZoneBorder:Hide()
@@ -164,22 +141,12 @@ function CastBar:PlayerPostCastStop(element, unit, bar, cfg, spellID, empowerCom
 end
 
 function CastBar:PlayerPostCastFail(element, unit, bar, cfg)
-  if element and element.SafeZone then
-    element.SafeZone:Hide()
-  end
+  bar.safeZone:Hide()
+  bar.safeZoneBorder:Hide()
+  bar.safeZoneText:Hide()
 
-  if bar.safeZoneBorder then
-    bar.safeZoneBorder:Hide()
-  end
-
-  if bar.safeZoneText then
-    bar.safeZoneText:Hide()
-  end
-
-  if element then
-    element.__puiDisintegrateChanneling = false
-    element.__puiDisintegrateChaining = false
-  end
+  element.__puiDisintegrateChanneling = false
+  element.__puiDisintegrateChaining = false
 
   if self.__puiUseDisintegrateLogic == true then
     ns.PUICastBarPlayerDisintegrate:ResetClipWarning(bar)
@@ -280,10 +247,6 @@ function CastBar:RefreshDisintegrateLogic()
   return enabled
 end
 
-function CastBar:SPELLS_CHANGED()
-  self:RefreshDisintegrateLogic()
-end
-
 function CastBar:PLAYER_SPECIALIZATION_CHANGED(_, unit)
   if unit and unit ~= "player" then
     return
@@ -294,7 +257,7 @@ end
 
 function CastBar:EnablePlayerCastbarEvents()
   if PLAYER_CLASS == "EVOKER" then
-    self:RegisterEvent("SPELLS_CHANGED")
+    self:RegisterEvent("SPELLS_CHANGED", "RefreshDisintegrateLogic")
     self:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED")
     self:RefreshDisintegrateLogic()
   else
@@ -332,7 +295,6 @@ end
   CastBar.SPELL_ACTIVATION_OVERLAY_GLOW_HIDE = P:Def("CastBar.SPELL_ACTIVATION_OVERLAY_GLOW_HIDE", CastBar.SPELL_ACTIVATION_OVERLAY_GLOW_HIDE)
   CastBar.PLAYER_DEAD = P:Def("CastBar.PLAYER_DEAD", CastBar.PLAYER_DEAD)
   CastBar.RefreshDisintegrateLogic = P:Def("CastBar.RefreshDisintegrateLogic", CastBar.RefreshDisintegrateLogic)
-  CastBar.SPELLS_CHANGED = P:Def("CastBar.SPELLS_CHANGED", CastBar.SPELLS_CHANGED)
   CastBar.PLAYER_SPECIALIZATION_CHANGED = P:Def("CastBar.PLAYER_SPECIALIZATION_CHANGED", CastBar.PLAYER_SPECIALIZATION_CHANGED)
   CastBar.EnablePlayerCastbarEvents = P:Def("CastBar.EnablePlayerCastbarEvents", CastBar.EnablePlayerCastbarEvents)
   CastBar.DisablePlayerCastbarEvents = P:Def("CastBar.DisablePlayerCastbarEvents", CastBar.DisablePlayerCastbarEvents)

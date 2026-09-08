@@ -7,7 +7,6 @@ local P = ns.Pleebug:DropIn({}, { name = "PRD_Secondary_AuraStacks" })
 local _, PLAYER_CLASS = UnitClass("player")
 local PLAYER_CLASS_COLOR = RAID_CLASS_COLORS[PLAYER_CLASS]
 
-local ResolveTrackColor
 local nativeSpellSets = setmetatable({}, { __mode = "k" })
 
 local function NativeButtonRestricted()
@@ -88,10 +87,6 @@ local function CopyNativeTextStyle(source, target)
   target:SetShadowOffset(source:GetShadowOffset())
 end
 
-ResolveTrackColor = function(owner, definition, config)
-  return Secondary.ResolveResourceColor(owner, config, definition)
-end
-
 local function HideNativeDividers(track)
   local dividers = track and track.dividers
   if dividers then
@@ -151,7 +146,7 @@ local function ShouldUseCDMStackColorSource(track)
     and HasEnabledStackColorThreshold(track.config)
 end
 
-local function LayoutNativeDividers(owner, track)
+local function LayoutNativeDividers(track)
   local config = track.config
   local maximum = tonumber(track.maximum) or 0
   local tickValues = GetNativeTickValues(config, maximum)
@@ -185,7 +180,7 @@ local function LayoutNativeDividers(owner, track)
     return
   end
 
-  local dividerSize = Secondary.GetSecondaryDividerSize(owner, config)
+  local dividerSize = Secondary.GetSecondaryDividerSize(config)
   local dividerColor = Secondary.ResolveSecondaryDividerColor(config)
   local dividers = track.dividers
   if not dividers then
@@ -238,12 +233,12 @@ local function AttachNativeDividers(owner, track)
       local dividerOwner = frame._puiAuraStackDividerOwner
       local dividerTrack = frame._puiAuraStackDividerTrack
       if dividerOwner and dividerTrack then
-        LayoutNativeDividers(dividerOwner, dividerTrack)
+        LayoutNativeDividers(dividerTrack)
       end
     end)
   end
 
-  LayoutNativeDividers(owner, track)
+  LayoutNativeDividers(track)
 end
 
 local function ConfigureNativeCountdownFallback(owner, track, button)
@@ -294,10 +289,9 @@ local function ConfigureNativeApplicationVisuals(owner, track, parts, styleAppli
   local applicationTexture = texturePath or "Interface\\Buttons\\WHITE8X8"
 
   if styleApplicationBar then
-    local r, g, b, a = ResolveTrackColor(
-      owner,
-      track.definition,
-      track.config
+    local r, g, b, a = Secondary.ResolveResourceColor(
+      track.config,
+      track.definition
     )
 
     applicationBar:SetStatusBarTexture(applicationTexture)
@@ -405,7 +399,7 @@ local function ConfigureNativeButton(owner, track, button, initializing)
     if not useCDMStackColorSource then
       local textureKey = track.config.texture or track.definition.texture
       local texturePath = Secondary.FetchStatusbarTexture(textureKey)
-      local r, g, b, a = ResolveTrackColor(owner, track.definition, track.config)
+      local r, g, b, a = Secondary.ResolveResourceColor(track.config, track.definition)
 
       AuraWidget.DisableApplicationThresholdSource(parts)
       AuraWidget.ClearApplicationThresholdBar(parts)
@@ -715,7 +709,6 @@ ShouldUseCDMStackColorSource = P:Def(
   "AuraStacks.ShouldUseCDMStackColorSource",
   ShouldUseCDMStackColorSource
 )
-ResolveTrackColor = P:Def("AuraStacks.ResolveTrackColor", ResolveTrackColor)
 HideNativeDividers = P:Def("AuraStacks.HideNativeDividers", HideNativeDividers)
 LayoutNativeDividers = P:Def("AuraStacks.LayoutNativeDividers", LayoutNativeDividers)
 AttachNativeDividers = P:Def("AuraStacks.AttachNativeDividers", AttachNativeDividers)

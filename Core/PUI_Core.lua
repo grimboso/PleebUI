@@ -937,12 +937,12 @@ function Addon:RefreshIconFonts()
 
   ns.Theme.RefreshAppliedFonts()
 
-  ns.Modules.UnitFrames:RefreshIconFonts()
+  ns.Modules.UnitFrames:SafeRefresh("text")
   ns.Modules.PartyFrames:RefreshText()
   ns.Modules.RaidFrames:RefreshText()
   ns.Modules.CastBar:RefreshFromProfile()
   ns.Modules.PRD:RefreshIconFonts()
-  ns.Modules.ActionBar:RefreshIconFonts()
+  ns.ActionBarsCore:RefreshAll({ fonts = true })
   ns.Modules.CooldownManager:RefreshIconFonts()
   ns.Registry.ChatLinks:RefreshFonts()
   ns.Modules.PlayerBuffs:RefreshFonts()
@@ -1199,10 +1199,9 @@ function Addon:_FlushUpdateBus()
   ub.targets = {}
   ub.scheduled = false
 
-  local actionBar = ns.Modules.ActionBar
   local flags = targets.ActionBar
   if flags then
-    actionBar:HandleProfileChanged(flags)
+    ns.ActionBarsCore:RefreshAll({ full = true, profile = true })
   end
 
   local partyFrames = ns.Modules.PartyFrames

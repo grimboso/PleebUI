@@ -144,14 +144,7 @@ local function GetSpecializationStore(settingsFamily, create)
 end
 
 local function GetCooldownID(itemFrame)
-  local cooldownID
-  if type(itemFrame.GetCooldownID) == "function" then
-    cooldownID = itemFrame:GetCooldownID()
-  end
-  if cooldownID == nil then
-    cooldownID = itemFrame.cooldownID
-  end
-  return ReadPositiveNumber(cooldownID)
+  return ReadPositiveNumber(itemFrame:GetCooldownID())
 end
 
 local function CopyLinkedSpellIDs(source)
@@ -509,13 +502,7 @@ function IconSettings:ResolveItem(itemFrame, viewerKey)
     return frameData.iconIdentity
   end
 
-  local cooldownInfo
-  if type(itemFrame.GetCooldownInfo) == "function" then
-    cooldownInfo = itemFrame:GetCooldownInfo()
-  end
-  if cooldownInfo == nil then
-    cooldownInfo = itemFrame.cooldownInfo
-  end
+  local cooldownInfo = itemFrame:GetCooldownInfo()
 
   local entry
   if not IsSecret(cooldownInfo) and type(cooldownInfo) == "table" then

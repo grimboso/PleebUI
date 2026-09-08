@@ -13,22 +13,6 @@ local type = type
 
 local Round = ns.Pixel.Round
 
-local function CB_GetBossMove(cfg, unit)
-  if not cfg then
-    return nil
-  end
-
-  cfg.positions = cfg.positions or {}
-  if not cfg.positions[unit] then
-    cfg.positions[unit] = {
-      offsetX = cfg.offsetX or -8,
-      offsetY = cfg.offsetY or 0,
-      userMoved = false,
-    }
-  end
-
-  return cfg.positions[unit]
-end
 
 local function CB_RefreshTestMode()
   local testMode = ns.TestMode
@@ -222,6 +206,26 @@ local function CB_CreateCastBarFrame(frame, unit, options)
   if not (options and options.skipMover == true)
     and not (type(unit) == "string" and unit:match("^boss%d"))
   then
+    local function SavePosition(mover)
+      local cfg = CastBar:GetUnitConfig(unit)
+      if not cfg then
+        return
+      end
+
+      local x, y = FrameUtil.GetMoverOffsets(mover)
+
+      cfg.offsetX = Round(x)
+      cfg.offsetY = Round(y)
+      cfg.userMoved = true
+    end
+
+    local function IsMoverActive()
+      local cfg = CastBar:GetUnitConfig(unit)
+      return CastBar.db.profile.enabled ~= false
+        and cfg
+        and cfg.enabled ~= false
+    end
+
     FrameUtil:RegisterMover("CastBar_" .. tostring(unit), holder, {
       label = "CastBar: " .. unit,
       useOverlayDrag = true,
@@ -236,6 +240,7 @@ local function CB_CreateCastBarFrame(frame, unit, options)
         (unit == "player" and {
           family = "unitFramesPlayer",
           families = { combatBars = true },
+          isRuntimeActive = IsMoverActive,
           syncAxis = "WIDTH",
           syncWidthMin = 80,
           syncWidthMax = 800,
@@ -253,17 +258,17 @@ local function CB_CreateCastBarFrame(frame, unit, options)
             CB_RefreshTestMode()
           end,
         })
-        or (unit == "target" and { family = "unitFramesTarget" })
-        or (unit == "focus" and { family = "unitFramesFocus" })
+        or (unit == "target" and {
+          family = "unitFramesTarget",
+          isRuntimeActive = IsMoverActive,
+        })
+        or (unit == "focus" and {
+          family = "unitFramesFocus",
+          isRuntimeActive = IsMoverActive,
+        })
         or (unit == "pet" and {
           family = "unitFramesPet",
-          isRuntimeActive = function()
-            local cfg = CastBar:GetUnitConfig("pet")
-            local unitFrame = holder.__puiUnitFrame
-            return CastBar.db.profile.enabled ~= false
-              and cfg.enabled ~= false
-              and (ns.Flags.IsEditing == true or unitFrame:IsVisible())
-          end,
+          isRuntimeActive = IsMoverActive,
         })
         or nil
       ),
@@ -345,18 +350,8 @@ local function CB_CreateCastBarFrame(frame, unit, options)
           controls = controls,
         }
       end,
-      onDragStop = function(mover)
-        local cfg = CastBar:GetUnitConfig(unit)
-        if not cfg then
-          return
-        end
-
-        local x, y = FrameUtil.GetMoverOffsets(mover)
-
-        cfg.offsetX = Round(x)
-        cfg.offsetY = Round(y)
-        cfg.userMoved = true
-
+      savePosition = SavePosition,
+      onDragStop = function()
         CastBar:UpdateUnitLayout(unit)
         CB_RefreshTestMode()
       end,
@@ -410,16 +405,9 @@ function CastBar:AttachToUnitFrame(frame, unit)
   return holder
 end
 
-CastBar.SetFont = CB_SetFont
-CastBar.GetBorder = CB_GetBorder
-CastBar.GetBossMove = CB_GetBossMove
-CastBar.CreateCastBarFrame = CB_CreateCastBarFrame
-
-
 local P = select(1, ns.Pleebug:DropIn(CastBar, { name = "UnitFrames.CastBar.Construct" }))
 
 
-  CB_GetBossMove = P:Def("CB_GetBossMove", CB_GetBossMove)
   CB_RefreshTestMode = P:Def("CB_RefreshTestMode", CB_RefreshTestMode)
   CB_ResolveFontPath = P:Def("CB_ResolveFontPath", CB_ResolveFontPath)
   CB_SetFont = P:Def("CB_SetFont", CB_SetFont)
@@ -429,5 +417,4 @@ local P = select(1, ns.Pleebug:DropIn(CastBar, { name = "UnitFrames.CastBar.Cons
 
   CastBar.SetFont = CB_SetFont
   CastBar.GetBorder = CB_GetBorder
-  CastBar.GetBossMove = CB_GetBossMove
   CastBar.CreateCastBarFrame = CB_CreateCastBarFrame

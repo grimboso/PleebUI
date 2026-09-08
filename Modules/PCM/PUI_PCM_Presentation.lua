@@ -883,7 +883,6 @@ local CustomBarBuffGlowPending = {}
 local CustomBarBuffGlowEventFrame = CreateFrame("Frame")
 local CustomTrackerStateGlows = {}
 local CUSTOM_TRACKER_STATE_GLOW_KEY = "PUI_CustomTrackerState"
-local CUSTOM_TRACKER_ACTIVE_AURA_GLOW_KEY = "PUI_CustomTrackerActiveAura"
 
 local function StopCustomTrackerStateGlow(trackKey)
   local state = CustomTrackerStateGlows[trackKey]
@@ -951,148 +950,51 @@ function PCMPresentation.ReleaseCustomTrackerStateGlow(trackKey)
   StopCustomTrackerStateGlow(tostring(trackKey))
 end
 
-local function StopCustomTrackerActiveAuraGlow(track)
-  local target = track and track.activeAuraGlowTarget
-  if not target then
-    if track then track.activeAuraGlowStyle = nil end
-    return
-  end
-  if track.activeAuraGlowStyle == "PIXEL" then
-    LCG.PixelGlow_Stop(target, CUSTOM_TRACKER_ACTIVE_AURA_GLOW_KEY)
-  elseif track.activeAuraGlowStyle == "AUTOCAST" then
-    LCG.AutoCastGlow_Stop(target, CUSTOM_TRACKER_ACTIVE_AURA_GLOW_KEY)
-  elseif track.activeAuraGlowStyle == "PROC" then
-    LCG.ProcGlow_Stop(target, CUSTOM_TRACKER_ACTIVE_AURA_GLOW_KEY)
-  end
-  track.activeAuraGlowStyle = nil
-end
 
-local function ApplyCustomTrackerActiveAuraGlow(track, style, color)
-  StopCustomTrackerActiveAuraGlow(track)
-  local target = track.activeAuraGlowTarget
-  if not target or style == nil or style == "NONE" then return end
-  color = CopyColor(color, { 1, 0.55, 0.1, 1 })
-  if style == "PIXEL" then
-    LCG.PixelGlow_Start(
-      target,
-      color,
-      8,
-      0.25,
-      nil,
-      2,
-      0,
-      0,
-      true,
-      CUSTOM_TRACKER_ACTIVE_AURA_GLOW_KEY,
-      8
-    )
-  elseif style == "AUTOCAST" then
-    LCG.AutoCastGlow_Start(
-      target,
-      color,
-      8,
-      0.25,
-      1,
-      0,
-      0,
-      CUSTOM_TRACKER_ACTIVE_AURA_GLOW_KEY,
-      8
-    )
-  elseif style == "PROC" then
-    LCG.ProcGlow_Start(target, {
-      key = CUSTOM_TRACKER_ACTIVE_AURA_GLOW_KEY,
-      color = color,
-      startAnim = true,
-      xOffset = 0,
-      yOffset = 0,
-      duration = 1,
-      frameLevel = 8,
-    })
-  else
-    return
-  end
-  track.activeAuraGlowStyle = style
-end
 
 local function CustomBarBuffGlowRestyleLocked()
   return C_Secrets.ShouldAurasBeSecret() == true
 end
 
-local function CreateCustomBarBuffGlowBorder(button)
-  local function CreateEdge()
-    local edge = button:CreateTexture(nil, "OVERLAY", nil, 7)
-    edge:SetBlendMode("ADD")
-    return edge
+local function IsCustomBarAuraGlowEnabled(cfg)
+  if not cfg or cfg.presentation ~= "BAR" then
+    return false
   end
 
+  if cfg.kind == "duration" or cfg.kind == "stack" then
+    return cfg.buffGlowEnabled == true
+  end
+
+  return cfg.activeAuraEnabled == true and cfg.activeGlowStyle ~= "NONE"
+end
+
+local function ResolveCustomBarAuraGlow(track)
+  local cfg = track.config
+  if not IsCustomBarAuraGlowEnabled(cfg) then
+    return "NONE", { 1, 0.55, 0.1, 1 }
+  end
+
+  local auraTracker = cfg.kind == "duration" or cfg.kind == "stack"
+  local style = cfg.activeGlowStyle
+  if auraTracker and (style == nil or style == "NONE") then
+    style = "PIXEL"
+  end
+
+  if style == nil or style == "NONE" then
+    return "NONE", { 1, 0.55, 0.1, 1 }
+  end
+
+  if auraTracker then
+    return style, CopyColor(cfg.buffGlowColor, { 0.25, 0.75, 1, 1 })
+  end
+
+  return style, CopyColor(cfg.activeGlowColor, { 1, 0.55, 0.1, 1 })
+end
+
+local function GetCustomBarAuraGlowOptions(track)
   return {
-    top = CreateEdge(),
-    bottom = CreateEdge(),
-    left = CreateEdge(),
-    right = CreateEdge(),
+    pixelThickness = tonumber(track.config and track.config.buffGlowThickness) or 2,
   }
-end
-
-local function ConfigureCustomBarBuffGlowBorder(border, button, cfg, scale)
-  if not border or not button or not cfg then
-    return
-  end
-
-  local thickness = tonumber(cfg.buffGlowThickness) or 2
-  thickness = math_floor(thickness + 0.5)
-  if thickness < 1 then
-    thickness = 1
-  elseif thickness > 8 then
-    thickness = 8
-  end
-
-  thickness = thickness * math_max(0.01, tonumber(scale) or 1)
-  local offset = thickness
-
-  border.top:ClearAllPoints()
-  border.top:SetHeight(thickness)
-  border.top:SetPoint("TOPLEFT", button, "TOPLEFT", -offset, offset)
-  border.top:SetPoint("TOPRIGHT", button, "TOPRIGHT", offset, offset)
-
-  border.bottom:ClearAllPoints()
-  border.bottom:SetHeight(thickness)
-  border.bottom:SetPoint("BOTTOMLEFT", button, "BOTTOMLEFT", -offset, -offset)
-  border.bottom:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT", offset, -offset)
-
-  border.left:ClearAllPoints()
-  border.left:SetWidth(thickness)
-  border.left:SetPoint("TOPLEFT", border.top, "BOTTOMLEFT", 0, 0)
-  border.left:SetPoint("BOTTOMLEFT", border.bottom, "TOPLEFT", 0, 0)
-
-  border.right:ClearAllPoints()
-  border.right:SetWidth(thickness)
-  border.right:SetPoint("TOPRIGHT", border.top, "BOTTOMRIGHT", 0, 0)
-  border.right:SetPoint("BOTTOMRIGHT", border.bottom, "TOPRIGHT", 0, 0)
-
-  local color = cfg.buffGlowEnabled == true and cfg.buffGlowColor
-    or cfg.activeGlowColor
-    or { 0.25, 0.75, 1, 1 }
-  local r = tonumber(color[1] or color.r) or 0.25
-  local g = tonumber(color[2] or color.g) or 0.75
-  local b = tonumber(color[3] or color.b) or 1
-  local a = tonumber(color[4] or color.a) or 1
-
-  border.top:SetColorTexture(r, g, b, a)
-  border.bottom:SetColorTexture(r, g, b, a)
-  border.left:SetColorTexture(r, g, b, a)
-  border.right:SetColorTexture(r, g, b, a)
-end
-
-function PCMPresentation.CreateCustomBarBuffGlowBorder(frame)
-  if not frame then
-    return nil
-  end
-
-  return CreateCustomBarBuffGlowBorder(frame)
-end
-
-function PCMPresentation.ConfigureCustomBarBuffGlowBorder(border, frame, cfg, scale)
-  ConfigureCustomBarBuffGlowBorder(border, frame, cfg, scale)
 end
 
 local function ConfigureCustomBarBuffGlowButton(track, initializing)
@@ -1114,62 +1016,35 @@ local function ConfigureCustomBarBuffGlowButton(track, initializing)
   button:SetFrameStrata(anchorFrame:GetFrameStrata())
   button:SetFrameLevel(anchorFrame:GetFrameLevel() + 6)
   button:EnableMouse(false)
-  if not track.activeAuraGlowTarget then
-    track.activeAuraGlowTarget = CreateFrame("Frame", nil, button, "DisableUntrustedLayoutScriptsTemplate")
-    track.activeAuraGlowTarget:SetAllPoints(button)
-    track.activeAuraGlowTarget:EnableMouse(false)
-  end
-  track.activeAuraGlowTarget:SetFrameLevel(button:GetFrameLevel() + 8)
 
-  local cfg = track.config
-  local auraTracker = cfg and (cfg.kind == "duration" or cfg.kind == "stack")
-  local showActiveBar = cfg and cfg.presentation == "BAR" and not auraTracker
-    and cfg.activeAuraEnabled == true
-  local showActiveBarGlow = cfg and cfg.presentation == "BAR"
-    and cfg.activeAuraEnabled == true
-  local buttonAlpha = 1
-  if showActiveBar then
-    track.auraParts = track.auraParts or {}
-    AuraWidget.BindApplicationDurationButton(button, track.auraParts)
-    AuraWidget.DisableIcon(track.auraParts)
-    AuraWidget.DisableDurationCooldown(track.auraParts)
-    AuraWidget.ConfigureDurationBar(
-      track.auraParts,
-      Enum.StatusBarInterpolation.None,
-      Enum.StatusBarTimerDirection.RemainingTime
+  track.buttonBaseAlpha = 1
+  button:SetAlpha(track.contextAlpha or 1)
+
+  local glowStyle, glowColor = ResolveCustomBarAuraGlow(track)
+  local glowOptions = GetCustomBarAuraGlowOptions(track)
+  local width = math_max(1, anchorFrame:GetWidth())
+  local height = math_max(1, anchorFrame:GetHeight())
+
+  if initializing == true then
+    track.auraGlow = AuraWidget.CreateSlotGlow(
+      button,
+      width,
+      height,
+      glowStyle,
+      glowColor,
+      glowOptions
     )
-    track.auraParts.durationBar:ClearAllPoints()
-    track.auraParts.durationBar:SetAllPoints(button)
-    track.auraParts.durationBar:SetStatusBarTexture(
-      LSM:Fetch("statusbar", cfg.texture or "Pleebar", true) or FALLBACK_BAR_TEXTURE
+  elseif track.auraGlow then
+    AuraWidget.ConfigureSlotGlow(
+      track.auraGlow,
+      width,
+      height,
+      glowStyle,
+      glowColor,
+      glowOptions
     )
-    local activeColor = CopyColor(cfg.barColor, { 0.25, 0.75, 1, 1 })
-    track.auraParts.durationBar:SetStatusBarColor(
-      activeColor[1], activeColor[2], activeColor[3], activeColor[4]
-    )
-    track.auraParts.durationBar:GetStatusBarTexture():SetDesaturated(cfg.desaturateActive == true)
-    buttonAlpha = (tonumber(cfg.activeAlpha) or 100) / 100
-  else
-    if track.auraParts then
-      AuraWidget.DisableIcon(track.auraParts)
-      AuraWidget.DisableDurationCooldown(track.auraParts)
-      AuraWidget.DisableDurationBar(track.auraParts)
-    end
   end
 
-  track.buttonBaseAlpha = buttonAlpha
-  button:SetAlpha(buttonAlpha * (track.contextAlpha or 1))
-
-  local activeGlowStyle = showActiveBarGlow and cfg.activeGlowStyle or "NONE"
-  local activeGlowColor = showActiveBarGlow and cfg.activeGlowColor or nil
-  ApplyCustomTrackerActiveAuraGlow(track, activeGlowStyle, activeGlowColor)
-
-  ConfigureCustomBarBuffGlowBorder(track.cueBorder, button, track.config)
-  local showBorder = cfg and cfg.buffGlowEnabled == true and activeGlowStyle == "NONE"
-  track.cueBorder.top:SetShown(showBorder)
-  track.cueBorder.bottom:SetShown(showBorder)
-  track.cueBorder.left:SetShown(showBorder)
-  track.cueBorder.right:SetShown(showBorder)
   return true
 end
 
@@ -1214,6 +1089,7 @@ end
 local function ApplyCustomBarBuffGlowTrack(track)
   local spellID = tonumber(track.spellID)
   if track.enabled ~= true or not track.anchorFrame or not spellID or spellID <= 0 then
+    track.stylePending = nil
     if track.auraSlot then
       AuraSlotDriver:SetSlotActive(track.auraSlot, false)
     end
@@ -1236,7 +1112,6 @@ local function ApplyCustomBarBuffGlowTrack(track)
       templateNames = { "PUI_AuraApplicationDurationTemplate" },
       initializeFrame = function(button)
         track.button = button
-        track.cueBorder = CreateCustomBarBuffGlowBorder(button)
         ConfigureCustomBarBuffGlowButton(track, true)
       end,
     })
@@ -1302,14 +1177,8 @@ function PCMPresentation.ConfigureCustomBarBuffGlow(trackKey, targetFrame, cfg)
   track.anchorFrame = targetFrame
   track.config = cfg
   track.contextAlpha = 1
-  local auraTracker = cfg and (cfg.kind == "duration" or cfg.kind == "stack")
-  local activeBarEnabled = cfg and cfg.presentation == "BAR" and not auraTracker
-    and cfg.activeAuraEnabled == true
-  local barCueEnabled = cfg and cfg.presentation == "BAR" and cfg.buffGlowEnabled == true
-  track.enabled = barCueEnabled or activeBarEnabled
-  track.spellID = cfg and tonumber(
-    cfg.buffGlowSpellID or (activeBarEnabled or barCueEnabled) and cfg.trackedSpellID
-  ) or nil
+  track.enabled = IsCustomBarAuraGlowEnabled(cfg)
+  track.spellID = track.enabled and tonumber(cfg.buffGlowSpellID or cfg.trackedSpellID) or nil
 
   ApplyCustomBarBuffGlowTrack(track)
 
@@ -1361,6 +1230,13 @@ function PCMPresentation.RefreshCustomBarBuffGlowStyle(trackKey, cfg)
   end
 
   track.config = cfg or track.config
+  track.enabled = IsCustomBarAuraGlowEnabled(track.config)
+  if not track.enabled then
+    ApplyCustomBarBuffGlowTrack(track)
+    CustomBarBuffGlowPending[trackKey] = nil
+    StopCustomBarBuffGlowPendingEvents()
+    return
+  end
 
   if not ConfigureCustomBarBuffGlowButton(track, false) then
     QueueCustomBarBuffGlow(trackKey)
@@ -1383,7 +1259,6 @@ function PCMPresentation.DisableCustomBarBuffGlow(trackKey)
   end
 
   track.enabled = false
-  StopCustomTrackerActiveAuraGlow(track)
   track.stylePending = nil
   CustomBarBuffGlowPending[trackKey] = nil
   ApplyCustomBarBuffGlowTrack(track)
@@ -1402,7 +1277,6 @@ function PCMPresentation.ReleaseCustomBarBuffGlow(trackKey)
   end
 
   track.enabled = false
-  StopCustomTrackerActiveAuraGlow(track)
   track.stylePending = nil
   CustomBarBuffGlowPending[trackKey] = nil
   ApplyCustomBarBuffGlowTrack(track)
@@ -1558,8 +1432,6 @@ PCMPresentation.AnchorChargeTimerText = P:Def("PCMPresentation.AnchorChargeTimer
 PCMPresentation.BindCustomBar = P:Def("PCMPresentation.BindCustomBar", PCMPresentation.BindCustomBar)
 PCMPresentation.BindDurationFrame = P:Def("PCMPresentation.BindDurationFrame", PCMPresentation.BindDurationFrame)
 PCMPresentation.BindChargeFrame = P:Def("PCMPresentation.BindChargeFrame", PCMPresentation.BindChargeFrame)
-PCMPresentation.CreateCustomBarBuffGlowBorder = P:Def("PCMPresentation.CreateCustomBarBuffGlowBorder", PCMPresentation.CreateCustomBarBuffGlowBorder)
-PCMPresentation.ConfigureCustomBarBuffGlowBorder = P:Def("PCMPresentation.ConfigureCustomBarBuffGlowBorder", PCMPresentation.ConfigureCustomBarBuffGlowBorder)
 PCMPresentation.ConfigureCustomBarBuffGlow = P:Def("PCMPresentation.ConfigureCustomBarBuffGlow", PCMPresentation.ConfigureCustomBarBuffGlow)
 PCMPresentation.RefreshCustomBarBuffGlowStyle = P:Def("PCMPresentation.RefreshCustomBarBuffGlowStyle", PCMPresentation.RefreshCustomBarBuffGlowStyle)
 PCMPresentation.DisableCustomBarBuffGlow = P:Def("PCMPresentation.DisableCustomBarBuffGlow", PCMPresentation.DisableCustomBarBuffGlow)

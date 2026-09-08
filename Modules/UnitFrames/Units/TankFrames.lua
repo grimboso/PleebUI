@@ -99,8 +99,29 @@ function TankFrames.EnsureMover(owner)
       anchorRelativePoint = moverDB.relativePoint or moverDB.point or point,
       label = "Main Tanks",
       optionsString = "unitframes,raid",
+      getDB = function()
+        return owner.db.profile.mainTankMover
+      end,
+      smartSnap = {
+        family = "positionOnly",
+        isRuntimeActive = function()
+          local profile = owner.db.profile
+          return owner:IsEnabled()
+            and profile.enabled ~= false
+            and profile.enableMainTankFrames == true
+        end,
+      },
       quickSettings = function()
         return ns.UnitFrameTest:OpenQuickSettings("RaidFrames")
+      end,
+      resetPosition = function()
+        local existingMover = owner.mainTankMover
+        owner.db.profile.mainTankMover = nil
+        owner.mainTankMover = nil
+        TankFrames.ApplyHeaderAnchor(owner)
+        TankFrames.EnsureMoverDB(owner)
+        owner.mainTankMover = existingMover
+        TankFrames.EnsureMover(owner)
       end,
       onDragStop = function(_, mainTankDB)
         mainTankDB.relativeTo = "UIParent"
@@ -275,7 +296,10 @@ function TankFrames.SetMoverVisible(owner, show)
   if owner.mainTankMover then
     FrameUtil.SetMoverFrameVisible(
       owner.mainTankMover,
-      show == true and owner.db.profile.enableMainTankFrames == true
+      show == true
+        and owner:IsEnabled()
+        and owner.db.profile.enabled ~= false
+        and owner.db.profile.enableMainTankFrames == true
     )
   end
 end

@@ -126,7 +126,7 @@ local function _EnsureCDB()
 end
 
 local OVERVIEW_KEEP_SECONDS = 120
-local OVERVIEW_SPIKE_MS = { 1, 5, 10, 50, 100, 500, 1000 }
+local OVERVIEW_SPIKE_MS = { 1, 2, 5, 10, 50, 100, 500, 1000 }
 
 local function _NewOverviewWindow(nowT, id, name)
   return {

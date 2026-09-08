@@ -27,7 +27,7 @@ local time = _G.time
 local type = _G.type
 
 local function IsSecret(value)
-  return issecretvalue and issecretvalue(value) == true
+  return issecretvalue(value) == true
 end
 
 local function IsPlainNumber(value)
@@ -809,9 +809,6 @@ function History:RestoreDungeonSessionRecords()
   end
 end
 
-function History:OnProfileChanged()
-  self:ApplyTrackingOptions()
-end
 
 function History:Pause()
   self.paused = true
@@ -2040,9 +2037,6 @@ function History:ReconcileDungeonState()
   end
 end
 
-function History:OnPlayerEnteringWorld()
-  self:ReconcileDungeonState()
-end
 
 function History:ClearUnsaved()
   self.sessionRecords = {}

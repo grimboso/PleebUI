@@ -461,6 +461,15 @@ local function GetQ()
   return QualityQ
 end
 
+local function SaveMoverPosition(frame, anchorKey)
+  local q = NormalizeDB()
+  q[anchorKey] = q[anchorKey] or {}
+  local x, y = ns.FrameUtil.GetMoverOffsets(frame)
+
+  q[anchorKey].x = math.floor((x or 0) + 0.5)
+  q[anchorKey].y = math.floor((y or 0) + 0.5)
+end
+
 local CombatMsgFrame
 local CombatMsgText
 local CombatMsgAnimIn
@@ -552,13 +561,8 @@ local function EnsureCombatMsgFrame()
   ns.FrameUtil:RegisterMover("quality_combat_message", f, {
     label = "Combat Message",
     optionsString = "Quality,qualityTab",
-    onDragStop = function()
-      local qq = GetQ()
-      qq.combatMessageAnchor = qq.combatMessageAnchor or {}
-      local gx, gy = ns.FrameUtil._GetOffsetsForFrame(f)
-
-      qq.combatMessageAnchor.x = math.floor((gx or 0) + 0.5)
-      qq.combatMessageAnchor.y = math.floor((gy or 0) + 0.5)
+    savePosition = function()
+      SaveMoverPosition(f, "combatMessageAnchor")
     end,
     resetPosition = function()
       local qq = GetQ()
@@ -670,13 +674,8 @@ local function EnsureCombatTimer()
     smartSnap = {
       family = "positionOnly",
     },
-    onDragStop = function()
-      local qq = GetQ()
-      qq.combatTimerAnchor = qq.combatTimerAnchor or {}
-      local gx, gy = ns.FrameUtil._GetOffsetsForFrame(f)
-
-      qq.combatTimerAnchor.x = math.floor((gx or 0) + 0.5)
-      qq.combatTimerAnchor.y = math.floor((gy or 0) + 0.5)
+    savePosition = function()
+      SaveMoverPosition(f, "combatTimerAnchor")
     end,
     resetPosition = function()
       local qq = GetQ()
@@ -914,13 +913,8 @@ local function EnsureCombatWarningFrame()
     smartSnap = {
       family = "positionOnly",
     },
-    onDragStop = function()
-      local qq = GetQ()
-      qq.combatWarningAnchor = qq.combatWarningAnchor or {}
-      local gx, gy = ns.FrameUtil._GetOffsetsForFrame(f)
-
-      qq.combatWarningAnchor.x = math.floor((gx or 0) + 0.5)
-      qq.combatWarningAnchor.y = math.floor((gy or 0) + 0.5)
+    savePosition = function()
+      SaveMoverPosition(f, "combatWarningAnchor")
     end,
     resetPosition = function()
       local qq = GetQ()
@@ -1897,13 +1891,8 @@ local function EnsurePetWarnFrame()
   ns.FrameUtil:RegisterMover("quality_pet_warning", f, {
     label = "Pet Warning",
     optionsString = "Quality,qualityTab",
-    onDragStop = function()
-      local qq = NormalizeDB()
-      qq.petWarningAnchor = qq.petWarningAnchor or {}
-      local gx, gy = ns.FrameUtil._GetOffsetsForFrame(f)
-
-      qq.petWarningAnchor.x = math.floor((gx or 0) + 0.5)
-      qq.petWarningAnchor.y = math.floor((gy or 0) + 0.5)
+    savePosition = function()
+      SaveMoverPosition(f, "petWarningAnchor")
     end,
     resetPosition = function()
       local qq = NormalizeDB()

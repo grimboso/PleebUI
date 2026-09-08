@@ -116,6 +116,14 @@ local function ApplySalveAnchor()
   SalveAnchor:SetPoint("CENTER", UIParent, "CENTER", anchor.x, anchor.y)
 end
 
+local function SaveSalvePosition(frame)
+  local db = NormalizeDB()
+  local x, y = FrameUtil.GetMoverOffsets(frame)
+
+  db.emergencySalveAnchor.x = math_floor((x or 0) + 0.5)
+  db.emergencySalveAnchor.y = math_floor((y or 0) + 0.5)
+end
+
 local function EnsureSalveAnchor()
   if SalveAnchor then
     return SalveAnchor
@@ -139,13 +147,16 @@ local function EnsureSalveAnchor()
   FrameUtil:RegisterMover("hunter_emergency_salve", frame, {
     label = "Emergency Salve",
     optionsString = "HunterTools",
+    smartSnap = {
+      family = "positionOnly",
+      isRuntimeActive = function()
+        local db = NormalizeDB()
+        return db.enabled == true and db.emergencySalveEnabled == true
+      end,
+    },
 
-    onDragStop = function()
-      local db = NormalizeDB()
-      local x, y = FrameUtil._GetOffsetsForFrame(frame)
-
-      db.emergencySalveAnchor.x = math_floor((x or 0) + 0.5)
-      db.emergencySalveAnchor.y = math_floor((y or 0) + 0.5)
+    savePosition = function()
+      SaveSalvePosition(frame)
     end,
 
     resetPosition = function()

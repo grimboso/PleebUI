@@ -16,6 +16,7 @@ ns.ActionBarsCore = Core
 
 local P = select(1, ns.Pleebug:DropIn(Core))
 Core.module = ActionBar
+Core.LibKeyBound = LibStub("LibKeyBound-1.0")
 Core.subsystems = {}
 Core.subsystemOrder = {}
 Core.bars = {}
@@ -277,14 +278,6 @@ local function CopyColor(color, fallback)
     color[3] or 1,
     color[4] or 1,
   }
-end
-
-local function SetColor(target, color, fallback)
-  color = type(color) == "table" and color or fallback
-  target[1] = color and color[1] or 1
-  target[2] = color and color[2] or 1
-  target[3] = color and color[3] or 1
-  target[4] = color and color[4] or 1
 end
 
 local function PickField(useCustom, customSkin, baseSkin, field)
@@ -551,10 +544,10 @@ function Core:ResolveFont(face)
   end
 
   local path
-  if face and LSM and LSM.Fetch then
+  if face then
     path = LSM:Fetch("font", face, true)
   end
-  if not path and themeFont and LSM and LSM.Fetch then
+  if not path and themeFont then
     path = LSM:Fetch("font", themeFont, true)
   end
   path = path or STANDARD_TEXT_FONT
@@ -1369,13 +1362,6 @@ function Core:RegisterMover(bar)
     useOverlayDrag = true,
     liveFrame = bar.frame,
     getSize = function(_, liveFrame)
-      if barKey == "pet"
-        and ns.Flags.IsEditing ~= true
-        and not liveFrame:IsVisible()
-      then
-        return nil, nil
-      end
-
       return liveFrame:GetSize()
     end,
     getPoint = function()
@@ -1384,11 +1370,10 @@ function Core:RegisterMover(bar)
     shouldShow = function()
       return ActionBar:IsEnabled() and ns.Flags.IsEditing and self:IsBarEnabled(bar)
     end,
-    onRuntimePosition = function(moverFrame)
+    savePosition = function(moverFrame)
       self:SaveMoverPosition(bar, moverFrame)
     end,
-    onDragStop = function(moverFrame)
-      self:SaveMoverPosition(bar, moverFrame)
+    onDragStop = function()
       FrameUtil:RefreshGhostMover(bar.moverKey)
     end,
     resetPosition = function()
@@ -1401,6 +1386,9 @@ function Core:RegisterMover(bar)
     quickSettings = BuildQuickSettings,
     smartSnap = STANDARD_BAR_KEYS[barKey] and {
       family = "actionBars",
+      isRuntimeActive = function()
+        return ActionBar:IsEnabled() and self:IsBarEnabled(bar)
+      end,
       getSizeState = function()
         local effective = self:GetEffectiveSkin(barKey, bar.defaultSize)
         return {
@@ -1476,12 +1464,21 @@ function Core:RegisterMover(bar)
       family = "actionBars",
       families = { unitFramesPet = true },
       syncAxis = "NONE",
+      isRuntimeActive = function()
+        return ActionBar:IsEnabled() and self:IsBarEnabled(bar)
+      end,
     } or ((barKey == "stance" or barKey == "vehicleExit") and {
       family = "actionBars",
       syncAxis = "NONE",
+      isRuntimeActive = function()
+        return ActionBar:IsEnabled() and self:IsBarEnabled(bar)
+      end,
     } or ((barKey == "extraAbility" or barKey == "zoneAbility") and {
       family = "positionOnly",
       syncAxis = "NONE",
+      isRuntimeActive = function()
+        return ActionBar:IsEnabled() and self:IsBarEnabled(bar)
+      end,
     } or nil))),
   })
 end
@@ -1771,23 +1768,13 @@ function Core:UpdateSpellUIVisibility()
   end
 end
 
-function Core:HandleSpellUIOpened()
-  self.spellUIVisible = true
-  self:UpdateSpellUIVisibility()
-end
-
-function Core:HandleSpellUIClosed()
-  self.spellUIVisible = false
-  self:UpdateSpellUIVisibility()
-end
-
 function Core:RegisterSpellUICallbacks()
   if self.spellUICallbacksRegistered then
     return
   end
 
-  EventRegistry:RegisterCallback("PlayerSpellsFrame.OpenFrame", self.HandleSpellUIOpened, self)
-  EventRegistry:RegisterCallback("PlayerSpellsFrame.CloseFrame", self.HandleSpellUIClosed, self)
+  EventRegistry:RegisterCallback("PlayerSpellsFrame.OpenFrame", self.UpdateSpellUIVisibility, self)
+  EventRegistry:RegisterCallback("PlayerSpellsFrame.CloseFrame", self.UpdateSpellUIVisibility, self)
   self.spellUICallbacksRegistered = true
 end
 
@@ -1827,7 +1814,7 @@ function Core:RegisterCombatFlush()
     return
   end
 
-  ActionBar:RegisterEvent("PLAYER_REGEN_ENABLED", "HandleActionBarEvent")
+  ActionBar:RegisterEvent("PLAYER_REGEN_ENABLED", Core.DispatchEvent, Core)
   self.combatFlushRegistered = true
 end
 
@@ -2115,33 +2102,17 @@ function ActionBar:OnInitialize()
 end
 
 function ActionBar:OnEnable()
-  self:RegisterEvent("PLAYER_ENTERING_WORLD", "HandleActionBarEvent")
-  self:RegisterEvent("UPDATE_BINDINGS", "HandleActionBarEvent")
-  self:RegisterEvent("GAME_PAD_ACTIVE_CHANGED", "HandleActionBarEvent")
-  self:RegisterEvent("ACTIONBAR_SHOWGRID", "HandleActionBarEvent")
-  self:RegisterEvent("ACTIONBAR_HIDEGRID", "HandleActionBarEvent")
+  self:RegisterEvent("PLAYER_ENTERING_WORLD", Core.DispatchEvent, Core)
+  self:RegisterEvent("UPDATE_BINDINGS", Core.DispatchEvent, Core)
+  self:RegisterEvent("GAME_PAD_ACTIVE_CHANGED", Core.DispatchEvent, Core)
+  self:RegisterEvent("ACTIONBAR_SHOWGRID", Core.DispatchEvent, Core)
+  self:RegisterEvent("ACTIONBAR_HIDEGRID", Core.DispatchEvent, Core)
 
   Core:RegisterSpellUICallbacks()
   ns.ActionButtonEngine:Enable()
   FrameScale:RegisterScaleListener(ActionBarScaleChanged)
 
   Core:RefreshAll({ full = true })
-end
-
-function ActionBar:HandleActionBarEvent(event, ...)
-  Core:DispatchEvent(event, ...)
-end
-
-function ActionBar:RefreshFromOptions(flags)
-  Core:RefreshAll(flags)
-end
-
-function ActionBar:RefreshIconFonts()
-  Core:RefreshAll({ fonts = true })
-end
-
-function ActionBar:HandleProfileChanged()
-  Core:RefreshAll({ full = true, profile = true })
 end
 
 function ActionBar:OnDisable()
@@ -2203,8 +2174,6 @@ Core.SetActionGridShown = P:Def("Core:SetActionGridShown", Core.SetActionGridSho
 Core.RefreshBarAlpha = P:Def("Core:RefreshBarAlpha", Core.RefreshBarAlpha)
 Core.AttachAlphaHandlers = P:Def("Core:AttachAlphaHandlers", Core.AttachAlphaHandlers)
 Core.UpdateSpellUIVisibility = P:Def("Core:UpdateSpellUIVisibility", Core.UpdateSpellUIVisibility)
-Core.HandleSpellUIOpened = P:Def("Core:HandleSpellUIOpened", Core.HandleSpellUIOpened)
-Core.HandleSpellUIClosed = P:Def("Core:HandleSpellUIClosed", Core.HandleSpellUIClosed)
 Core.RegisterSpellUICallbacks = P:Def("Core:RegisterSpellUICallbacks", Core.RegisterSpellUICallbacks)
 MergeRefreshFlags = P:Def("MergeRefreshFlags", MergeRefreshFlags)
 HasBarRefreshFlag = P:Def("HasBarRefreshFlag", HasBarRefreshFlag)
@@ -2222,16 +2191,11 @@ Core.DispatchEvent = P:Def("Core:DispatchEvent", Core.DispatchEvent)
 Core.DisableAll = P:Def("Core:DisableAll", Core.DisableAll)
 ActionBar.OnInitialize = P:Def("ActionBar:OnInitialize", ActionBar.OnInitialize)
 ActionBar.OnEnable = P:Def("ActionBar:OnEnable", ActionBar.OnEnable)
-ActionBar.HandleActionBarEvent = P:Def("ActionBar:HandleActionBarEvent", ActionBar.HandleActionBarEvent)
-ActionBar.RefreshFromOptions = P:Def("ActionBar:RefreshFromOptions", ActionBar.RefreshFromOptions)
-ActionBar.RefreshIconFonts = P:Def("ActionBar:RefreshIconFonts", ActionBar.RefreshIconFonts)
-ActionBar.HandleProfileChanged = P:Def("ActionBar:HandleProfileChanged", ActionBar.HandleProfileChanged)
 ActionBar.OnDisable = P:Def("ActionBar:OnDisable", ActionBar.OnDisable)
 Clamp = P:Def("Clamp", Clamp)
 NormalizeFlyoutDirection = P:Def("NormalizeFlyoutDirection", NormalizeFlyoutDirection)
 NormalizeTooltipMode = P:Def("NormalizeTooltipMode", NormalizeTooltipMode)
 CopyColor = P:Def("CopyColor", CopyColor)
-SetColor = P:Def("SetColor", SetColor)
 PickField = P:Def("PickField", PickField)
 PickFontFace = P:Def("PickFontFace", PickFontFace)
 MigrateMoverRelativeNames = P:Def("MigrateMoverRelativeNames", MigrateMoverRelativeNames)

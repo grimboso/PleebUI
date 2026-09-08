@@ -8,7 +8,6 @@ local IconSkin = ns.IconSkin
 local AuraSlotDriver = ns.AuraSlotDriver
 local AuraWidget = ns.AuraWidget
 local BarWidget = ns.BarWidget
-local PCMPresentation = ns.PCMPresentation
 local Theme = ns.Theme
 local LSM = ns.LSM
 local Round = ns.Pixel.Round
@@ -16,10 +15,8 @@ local P = select(1, ns.Pleebug:DropIn(Cooldowns, { name = "PCM", bucket = "Consu
 
 local TRACKER_MOVER_KEY = "PCM_ConsumableTracker"
 local PARTICIPANT_KEY = "pcmConsumables"
-local DURATION_GLOW_STYLE = {
-  buffGlowThickness = 2,
-  activeGlowColor = { 1, 0.55, 0.1, 1 },
-}
+local DURATION_GLOW_COLOR = { 1, 0.55, 0.1, 1 }
+local DURATION_GLOW_OPTIONS = { pixelThickness = 2 }
 local COOLDOWN_FONT_STYLE = {
   role = "cooldown",
   scope = "cooldownManager",
@@ -651,7 +648,7 @@ end
 
 local function SaveAnchor(frame, cfg)
   local point = GetGrowthAnchorPoint(cfg)
-  local x, y = FrameUtil._GetOffsetsForFrame(frame)
+  local x, y = FrameUtil.GetMoverOffsets(frame)
   local width = frame:GetWidth() or 0
   local height = frame:GetHeight() or 0
 
@@ -760,6 +757,12 @@ end
 local function RefreshMover()
   local cfg = GetDB()
   local container = EnsureContainer()
+
+  local function SavePosition(frame)
+    SaveAnchor(frame or container, cfg)
+    ApplyAnchor(container, cfg)
+  end
+
   FrameUtil:EnsureGhostMover(TRACKER_MOVER_KEY, {
     label = "Consumable Tracker",
     optionsString = "CooldownManager,consumables",
@@ -774,9 +777,8 @@ local function RefreshMover()
     shouldShow = function()
       return Tracker.active and (cfg.enabled == true or Tracker.testMode)
     end,
-    onDragStop = function(frame)
-      SaveAnchor(frame or container, cfg)
-      ApplyAnchor(container, cfg)
+    savePosition = SavePosition,
+    onDragStop = function()
       FrameUtil:RefreshGhostMover(TRACKER_MOVER_KEY)
     end,
     quickSettings = function()
@@ -962,11 +964,13 @@ local function ConfigureDurationAuraParts(icon, button, frameLevel, showGlow)
   parts.durationCooldown:SetHideCountdownNumbers(true)
 
   if showGlow then
-    local glowBorder = PCMPresentation.CreateCustomBarBuffGlowBorder(button)
-    PCMPresentation.ConfigureCustomBarBuffGlowBorder(
-      glowBorder,
+    AuraWidget.CreateSlotGlow(
       button,
-      DURATION_GLOW_STYLE
+      math.max(1, icon.frame:GetWidth()),
+      math.max(1, icon.frame:GetHeight()),
+      "PIXEL",
+      DURATION_GLOW_COLOR,
+      DURATION_GLOW_OPTIONS
     )
   end
 

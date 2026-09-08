@@ -166,10 +166,6 @@ local function _PUI_MergeApplyFlags(dst, src)
   end
 end
 
-local function _PUI_FlushPRDOptions(flags)
-  ns.Modules.PRD:ApplyRequestedFlags(flags)
-end
-
 local function _PUI_FlushUFOptions(flags)
   local uf = ns.Modules.UnitFrames
 
@@ -226,9 +222,9 @@ end
 
 local function _PUI_FlushOptionsApplyBucket(kind, flags)
   if kind == "ActionBars" then
-    ns.Modules.ActionBar:RefreshFromOptions(flags)
+    ns.ActionBarsCore:RefreshAll(flags)
   elseif kind == "PRD" then
-    _PUI_FlushPRDOptions(flags)
+    ns.Modules.PRD:ApplyRequestedFlags(flags)
   elseif kind == "UnitFrames" then
     _PUI_FlushUFOptions(flags)
   elseif kind == "CastBar" then

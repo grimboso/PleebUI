@@ -187,6 +187,7 @@ UFDefaults.Player = {
     height = 40,
     powerHeight = 8,
     showPower = true,
+    showRestingIndicator = true,
     portrait = {
       enabled = false,
       style = "2D",

@@ -846,7 +846,6 @@ function PlayerBuffs:SaveAnchorPosition(frame, key)
 
   self.db = db
   self:ApplyAnchorPosition(kind)
-  self:RefreshMover(kind)
 end
 
 function PlayerBuffs:ResetAnchorPosition(_, key)
@@ -891,6 +890,9 @@ function PlayerBuffs:EnsureMovers()
       useOverlayDrag = true,
       smartSnap = {
         family = "positionOnly",
+        isRuntimeActive = function()
+          return GetProfileDB().enabled ~= false
+        end,
       },
       liveFrame = function()
         return GetRoot(kind)
@@ -902,10 +904,15 @@ function PlayerBuffs:EnsureMovers()
         return liveFrame:GetPoint(1)
       end,
       shouldShow = function()
-        return ns.Flags.IsEditing and GetRoot(kind):IsShown()
+        return GetProfileDB().enabled ~= false
+          and ns.Flags.IsEditing
+          and GetRoot(kind):IsShown()
       end,
-      onDragStop = function(frame, moverKey)
+      savePosition = function(frame, moverKey)
         PlayerBuffs:SaveAnchorPosition(frame, moverKey)
+      end,
+      onDragStop = function()
+        PlayerBuffs:RefreshMover(kind)
       end,
       resetPosition = function(frame, moverKey)
         PlayerBuffs:ResetAnchorPosition(frame, moverKey)

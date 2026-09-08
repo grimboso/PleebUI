@@ -147,7 +147,7 @@ local function _PUI_ApplyBackdropStyle(self, target, bg, border, key)
   self:ApplyBarBorder(border, thickness, borderColor)
 end
 
-local function _EnsurePUIBackdrop(self, target, key, role)
+local function _EnsurePUIBackdrop(self, target, key)
   if not target or not target.GetFrameLevel then
     return
   end
@@ -436,7 +436,7 @@ local function _PUI_PRD_ApplyNativeBarTexture(self, bar, role)
     key = "Pleebar"
   end
 
-  local tex = LSM and LSM.Fetch and LSM:Fetch("statusbar", key, true) or nil
+  local tex = LSM:Fetch("statusbar", key, true)
   if tex then
     bar:SetStatusBarTexture(tex)
   end
@@ -458,7 +458,7 @@ local function _PUI_PRD_ApplyNativeBarTexture(self, bar, role)
   end
 end
 
-local function _PUI_PRD_ApplyNativeBarColor(self, bar, role, cfg)
+local function _PUI_PRD_ApplyNativeBarColor(bar, cfg)
   if not bar or not bar.SetStatusBarColor then
     return
   end
@@ -542,7 +542,7 @@ local function _PUI_PRD_SetRegionColor(region, r, g, b, a)
   end
 end
 
-local function _PUI_PRD_GetEffectTint(bar, cfg)
+local function _PUI_PRD_GetEffectTint(cfg)
   cfg = cfg or {}
   local mode = cfg.colorMode or "DEFAULT"
 
@@ -567,11 +567,11 @@ local function _PUI_PRD_ApplyNativeBarEffects(self, bar, role, cfg)
 
   local tex = nil
   local key = self:GetBarAppearance(role).texture
-  if key and key ~= "" and LSM and LSM.Fetch then
+  if key and key ~= "" then
     tex = LSM:Fetch("statusbar", key, true)
   end
 
-  local r, g, b, a = _PUI_PRD_GetEffectTint(bar, cfg)
+  local r, g, b, a = _PUI_PRD_GetEffectTint(cfg)
   local regions = nil
 
   if role == "health" then
@@ -713,10 +713,10 @@ function PRDBarPresentation.ApplyStyle(instance, state)
     Theme.ApplyStatusBarBorder(bar, { enabled = false })
 
     local boxKey = role == "health" and "healthBox" or "primaryBox"
-    _EnsurePUIBackdrop(M, owner or bar, boxKey, "prdResourceBox")
+    _EnsurePUIBackdrop(M, owner or bar, boxKey)
     _PUI_PRD_ApplyNativeBarTexture(M, bar, role)
     _PUI_PRD_HideNativeAnonymousBackground(bar)
-    _PUI_PRD_ApplyNativeBarColor(M, bar, role, cfg)
+    _PUI_PRD_ApplyNativeBarColor(bar, cfg)
     _PUI_PRD_ApplyNativeBarEffects(M, bar, role, cfg)
     _PUI_PRD_ApplyNativeTextConfig(M, bar, role)
     _StripPRDOverlayArt(bar)
@@ -730,7 +730,7 @@ function PRDBarPresentation.ApplyStyle(instance, state)
   local borderColor = M:GetBarBorderColor(style)
   local backgroundColor = style.bgColor or { 0, 0, 0, 0.65 }
   local textureKey = appearance.texture or "Pleebar"
-  local texture = LSM and LSM.Fetch and LSM:Fetch("statusbar", textureKey, true) or textureKey
+  local texture = LSM:Fetch("statusbar", textureKey, true) or textureKey
 
   instance.background:SetColorTexture(
     backgroundColor[1] or backgroundColor.r or 0,
@@ -904,10 +904,6 @@ function M:SkinBlizzardBar(bar, role)
 end
 
 
-function M:_RefreshClassBarVisibility()
-  self:SetBlizzardSecondaryShown(not self.secondaryCustomEnabled)
-end
-
 local function _OnSetupHealthBar(frame)
   local now = GetTime()
   local nextAt = M.__puiSetupHealthNextAt or 0
@@ -982,9 +978,9 @@ local function _OnSetupPowerBar(frame)
   end
 end
 
-local function _OnSetupClassBar(frame)
+local function _OnSetupClassBar()
   if not _PUI_ShouldApply() then return end
-  M:_RefreshClassBarVisibility()
+  M:SetBlizzardSecondaryShown(not M.secondaryCustomEnabled)
 end
 
 function M:HookBlizzardSetupOnce()
@@ -1555,7 +1551,6 @@ end
   _PUI_PRD_ApplyNativeBarEffects = P:Def("_PUI_PRD_ApplyNativeBarEffects", _PUI_PRD_ApplyNativeBarEffects)
   M.ApplyNativeBarSkin = P:Def("ApplyNativeBarSkin", M.ApplyNativeBarSkin)
   M.SkinBlizzardBar = P:Def("SkinBlizzardBar", M.SkinBlizzardBar)
-  M._RefreshClassBarVisibility = P:Def("_RefreshClassBarVisibility", M._RefreshClassBarVisibility)
   _OnSetupHealthBar = P:Def("_OnSetupHealthBar", _OnSetupHealthBar)
   _OnSetupPowerBar = P:Def("_OnSetupPowerBar", _OnSetupPowerBar)
   _OnSetupClassBar = P:Def("_OnSetupClassBar", _OnSetupClassBar)

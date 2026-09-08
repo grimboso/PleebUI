@@ -48,15 +48,14 @@ function Module:PlayerHasSpell(spellID)
   return C_SpellBook.IsSpellKnownOrInSpellBook(spellID) == true
 end
 
-function Module:PlayerKnowsMassDisintegrate()
-  return self:PlayerHasSpell(CB_MASS_DISINTEGRATE_SPELL_ID)
-end
-
 function Module:RefreshEnabled(owner)
   local specializationIndex = GetSpecialization()
   local specializationID = specializationIndex and GetSpecializationInfo(specializationIndex) or nil
   local enabled = specializationID == CB_DEVASTATION_SPEC_ID
-    and (self:PlayerHasSpell(CB_DISINTEGRATE_SPELL_ID) or self:PlayerKnowsMassDisintegrate())
+    and (
+      self:PlayerHasSpell(CB_DISINTEGRATE_SPELL_ID)
+      or self:PlayerHasSpell(CB_MASS_DISINTEGRATE_SPELL_ID)
+    )
   owner.__puiUseDisintegrateLogic = enabled or nil
 
   if not enabled then
@@ -255,14 +254,22 @@ function Module:OnLayout(bar, unit, cfg, statusHost)
 end
 
 function Module:HandleSucceeded(owner, spellID)
-  if owner.__puiUseDisintegrateLogic == true and owner.__puiHasTipTheScalesActive and self:IsMassDisintegrateEmpowerSpell(spellID) and self:PlayerKnowsMassDisintegrate() then
+  if owner.__puiUseDisintegrateLogic == true
+    and owner.__puiHasTipTheScalesActive
+    and self:IsMassDisintegrateEmpowerSpell(spellID)
+    and self:PlayerHasSpell(CB_MASS_DISINTEGRATE_SPELL_ID)
+  then
     owner.__puiHasTipTheScalesActive = false
     self:AddMassDisintegrateStack()
   end
 end
 
 function Module:HandleEmpowerStop(owner, spellID, complete)
-  if owner.__puiUseDisintegrateLogic == true and complete and self:IsMassDisintegrateEmpowerSpell(spellID) and self:PlayerKnowsMassDisintegrate() then
+  if owner.__puiUseDisintegrateLogic == true
+    and complete
+    and self:IsMassDisintegrateEmpowerSpell(spellID)
+    and self:PlayerHasSpell(CB_MASS_DISINTEGRATE_SPELL_ID)
+  then
     self:AddMassDisintegrateStack()
   end
 end
@@ -285,7 +292,6 @@ local P = select(1, ns.Pleebug:DropIn(Module, { name = "UnitFrames.CastBar.Disin
 
   Module.IsMassDisintegrateEmpowerSpell = P:Def("Disintegrate.IsMassDisintegrateEmpowerSpell", Module.IsMassDisintegrateEmpowerSpell)
   Module.PlayerHasSpell = P:Def("Disintegrate.PlayerHasSpell", Module.PlayerHasSpell)
-  Module.PlayerKnowsMassDisintegrate = P:Def("Disintegrate.PlayerKnowsMassDisintegrate", Module.PlayerKnowsMassDisintegrate)
   Module.RefreshEnabled = P:Def("Disintegrate.RefreshEnabled", Module.RefreshEnabled)
   Module.AddMassDisintegrateStack = P:Def("Disintegrate.AddMassDisintegrateStack", Module.AddMassDisintegrateStack)
   Module.ResetOwnerState = P:Def("Disintegrate.ResetOwnerState", Module.ResetOwnerState)

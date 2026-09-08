@@ -19,7 +19,7 @@ local Engine = {
 ns.ActionButtonEngine = Engine
 
 local P = select(1, ns.Pleebug:DropIn(Engine))
-local LibKeyBound = LibStub("LibKeyBound-1.0", true)
+local LibKeyBound = Core.LibKeyBound
 
 local CreateFrame = CreateFrame
 local InCombatLockdown = InCombatLockdown
@@ -125,7 +125,7 @@ local PUI_CHILD_UPDATE_STATE_SNIPPET = [[
 
 local function GetShortBindingKey(binding)
   local key = GetBindingKey(binding)
-  if key and LibKeyBound then
+  if key then
     return LibKeyBound:ToShortKey(key)
   end
   return key
@@ -202,9 +202,7 @@ local function OnEnter(button)
   if button.action and Core:ShouldShowActionTooltip() then
     button:SetTooltip()
   end
-  if LibKeyBound then
-    LibKeyBound:Set(button)
-  end
+  LibKeyBound:Set(button)
 end
 
 local function OnLeave(button)
@@ -259,12 +257,14 @@ local function UpdateButtonUsable(button, action, isUsable, notEnoughMana)
     button.icon:SetVertexColor(0.4, 0.4, 0.4)
   end
 
-  local isLevelLinkLocked = C_LevelLink and C_LevelLink.IsActionLocked(button.action)
-  if not issecretvalue(isLevelLinkLocked) and isLevelLinkLocked ~= nil then
-    button.icon:SetDesaturated(isLevelLinkLocked == true)
-    if button.LevelLinkLockIcon then
-      button.LevelLinkLockIcon:SetShown(isLevelLinkLocked == true)
-    end
+  local locked = C_LevelLink.IsActionLocked(button.action)
+  if issecretvalue(locked) then
+    return
+  end
+
+  button.icon:SetDesaturated(locked == true)
+  if button.LevelLinkLockIcon then
+    button.LevelLinkLockIcon:SetShown(locked == true)
   end
 end
 
@@ -724,9 +724,7 @@ function Engine:ConfigureButton(button, bindingAction, barLabel, buttonIndex)
   button.ClearBindings = ClearBindings
   button.GetActionName = GetActionName
   button.OnEnter = function(self)
-    if LibKeyBound then
-      LibKeyBound:Set(self)
-    end
+    LibKeyBound:Set(self)
   end
 
   self:UpdateButtonHotkey(button)

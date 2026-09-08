@@ -671,6 +671,7 @@ local function ReconcileDisplayState(frame)
   local elementActive = frame:IsElementEnabled("Auras") == true
     and not frame:IsElementPaused("Auras")
   local unitAvailable = IsGroupAuraUnitAvailable(frame)
+  frame.__puiAuraUnitAvailable = unitAvailable
 
   for _, record in pairs(frame.__puiCustomAuraDisplays or {}) do
     for _, runtime in pairs(record.runtimes) do
@@ -819,11 +820,7 @@ end
 RefreshDriver:SetScript("OnEvent", FlushPendingFrameRequests)
 
 AuraContainers.BuildDisplayLayout = BuildDisplayLayout
-AuraContainers.BuildDisplayLayoutSignature = BuildDisplayLayoutSignature
-AuraContainers.BuildAuraGroupLayout = BuildAuraGroupLayout
-AuraContainers.BuildAuraGroupLayoutSignature = BuildAuraGroupLayoutSignature
 AuraContainers.CreateAuraElement = CreateAuraElement
-AuraContainers.ApplyDisplayLayout = ApplyDisplayLayout
 AuraContainers.InitializeAuraButton = InitializeAuraButton
 AuraContainers.IsDisplayEnabled = IsDisplayEnabled
 AuraContainers.SetRuntimeEnabled = SetRuntimeEnabled
@@ -837,10 +834,6 @@ end
 
 function AuraContainers.GetSortDirection(display)
   return SORT_DIRECTIONS[display.sortDirection] or AuraContainerSortDirection.Normal
-end
-
-function AuraContainers.Construct(frame, unit)
-  frame.__puiAuraContainerDB = AuraFilters.BuildFrameAuraDB(frame, unit)
 end
 
 function AuraContainers.Configure(frame)
@@ -929,14 +922,21 @@ function AuraContainers.RefreshHighlight(frame)
 end
 
 function AuraContainers.RefreshAvailability(frame)
-  if frame then
-    ReconcileDisplayState(frame)
+  if not frame then
+    return
   end
-end
 
-function AuraContainers.RefreshLayout(frame)
-  if frame then
-    AuraContainers.Configure(frame)
+  local unitAvailable = IsGroupAuraUnitAvailable(frame)
+  if frame.__puiAuraUnitAvailable == unitAvailable then
+    return
+  end
+
+  frame.__puiAuraUnitAvailable = unitAvailable
+
+  for _, record in pairs(frame.__puiCustomAuraDisplays or {}) do
+    for _, runtime in pairs(record.runtimes) do
+      SetRuntimeShown(runtime, runtime.enabled == true and unitAvailable)
+    end
   end
 end
 
@@ -994,10 +994,8 @@ ConfigureDisplays = P:Def("ConfigureDisplays", ConfigureDisplays)
 Round = P:Def("Round", Round)
 AuraContainers.GetSortMethod = P:Def("AuraContainers.GetSortMethod", AuraContainers.GetSortMethod)
 AuraContainers.GetSortDirection = P:Def("AuraContainers.GetSortDirection", AuraContainers.GetSortDirection)
-AuraContainers.Construct = P:Def("AuraContainers.Construct", AuraContainers.Construct)
 AuraContainers.Configure = P:Def("AuraContainers.Configure", AuraContainers.Configure)
 AuraContainers.RefreshFrame = P:Def("AuraContainers.RefreshFrame", AuraContainers.RefreshFrame)
 AuraContainers.RefreshHighlight = P:Def("AuraContainers.RefreshHighlight", AuraContainers.RefreshHighlight)
 AuraContainers.RefreshAvailability = P:Def("AuraContainers.RefreshAvailability", AuraContainers.RefreshAvailability)
-AuraContainers.RefreshLayout = P:Def("AuraContainers.RefreshLayout", AuraContainers.RefreshLayout)
 AuraContainers.RestoreConfiguredState = P:Def("AuraContainers.RestoreConfiguredState", AuraContainers.RestoreConfiguredState)

@@ -40,8 +40,7 @@ local function _PUI_IsChatMessagingRestricted()
     return true
   end
 
-  local inChatMessagingLockdown = C_ChatInfo and C_ChatInfo.InChatMessagingLockdown
-  return inChatMessagingLockdown and inChatMessagingLockdown() == true
+  return C_ChatInfo.InChatMessagingLockdown()
 end
 
 
@@ -2008,7 +2007,7 @@ local function _PUI_CleanCopyText(text)
   return text
 end
 
-local function _PUI_RefreshCopyWindow()
+function ChatLinks:RefreshCopyWindow()
   if not CopyEditBox then
     return
   end
@@ -2024,8 +2023,6 @@ local function _PUI_RefreshCopyWindow()
       if clean then
         filtered[#filtered + 1] = _PUI_CleanCopyText(line)
       else
-        -- Raw UI escape sequences hide payload characters when rendered, which
-        -- makes EditBox selection geometry diverge from its editable text.
         filtered[#filtered + 1] = line:gsub("|", "||")
       end
     end
@@ -2039,10 +2036,6 @@ local function _PUI_RefreshCopyWindow()
     CopyCleanButton:SetText(clean and "Clean: On" or "Clean: Off")
     ns.Theme.WidgetSkins.UIButton(CopyCleanButton)
   end
-end
-
-function ChatLinks:RefreshCopyWindow()
-  _PUI_RefreshCopyWindow()
 end
 
 
@@ -2475,7 +2468,7 @@ end
   CopySearchBox._puiHint = searchHint
   CopySearchBox:SetScript("OnTextChanged", function(self)
     searchHint:SetShown(self:GetText() == "")
-    _PUI_RefreshCopyWindow()
+    ChatLinks:RefreshCopyWindow()
   end)
   CopySearchBox:SetScript("OnEscapePressed", function(self)
     self:ClearFocus()
@@ -2486,7 +2479,7 @@ end
   CopyCleanButton:SetPoint("TOPRIGHT", -140, -34)
   CopyCleanButton:SetScript("OnClick", function()
     ChatLinks.db.profile.copyClean = ChatLinks.db.profile.copyClean ~= true
-    _PUI_RefreshCopyWindow()
+    ChatLinks:RefreshCopyWindow()
   end)
   ns.Theme.WidgetSkins.UIButton(CopyCleanButton)
 
@@ -2865,7 +2858,7 @@ local function RegisterPrimaryChatMover()
     label = "Chat - Primary",
     overlayInsets = GetPrimaryChatMoverInsets,
 
-    onDragStop = SavePrimaryChatLayout,
+    savePosition = SavePrimaryChatLayout,
 
     resetPosition = function()
       local db = ChatLinks.db and ChatLinks.db.profile
@@ -3136,7 +3129,7 @@ function ChatLinks:OpenCopyWindow(chatFrame)
   local frame = chatFrame or _G.DEFAULT_CHAT_FRAME
   CopySourceLines = GetChatFrameLines(frame)
   CopySearchBox:SetText("")
-  _PUI_RefreshCopyWindow()
+  ChatLinks:RefreshCopyWindow()
   CopyEditBox:HighlightText()
   CopyEditBox:SetFocus()
 
@@ -4030,7 +4023,6 @@ end
   ChatLinks.RefreshFonts = P:Def("ChatLinks.RefreshFonts", ChatLinks.RefreshFonts)
   GetChatFrameLines = P:Def("GetChatFrameLines", GetChatFrameLines)
   _PUI_CleanCopyText = P:Def("_PUI_CleanCopyText", _PUI_CleanCopyText)
-  _PUI_RefreshCopyWindow = P:Def("_PUI_RefreshCopyWindow", _PUI_RefreshCopyWindow)
   ChatLinks.RefreshCopyWindow = P:Def("ChatLinks.RefreshCopyWindow", ChatLinks.RefreshCopyWindow)
   _GetCopyStyle = P:Def("_GetCopyStyle", _GetCopyStyle)
   _GetChatWindowStyle = P:Def("_GetChatWindowStyle", _GetChatWindowStyle)

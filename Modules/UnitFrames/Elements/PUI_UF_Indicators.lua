@@ -297,7 +297,7 @@ local function CreatePhaseIndicator(frame, parent)
   return indicator
 end
 
-function UFIndicators.ConstructNativeStatusElements(frame, unit)
+function UFIndicators.ConstructNativeStatusElements(frame, unit, cfg)
   local parent = frame.TextureParent or frame.RaisedElementParent or frame
   local health = frame.Health or frame
   local size = Round(14)
@@ -321,12 +321,12 @@ function UFIndicators.ConstructNativeStatusElements(frame, unit)
     )
   end
 
-  if isPlayer then
-    if not frame.RestingIndicator then
-      frame.RestingIndicator = parent:CreateTexture(nil, "OVERLAY", nil, 6)
-      frame.RestingIndicator:Hide()
-    end
+  if isPlayer and (not cfg or cfg.showRestingIndicator ~= false) and not frame.RestingIndicator then
+    frame.RestingIndicator = parent:CreateTexture(nil, "OVERLAY", nil, 6)
+    frame.RestingIndicator:Hide()
+  end
 
+  if frame.RestingIndicator then
     frame.RestingIndicator:ClearAllPoints()
     frame.RestingIndicator:SetSize(size, size)
     frame.RestingIndicator:SetPoint(
@@ -336,6 +336,20 @@ function UFIndicators.ConstructNativeStatusElements(frame, unit)
       -Round(2),
       0
     )
+
+    if frame.__puiUF_oUFInitialized == true then
+      if cfg and cfg.showRestingIndicator == false then
+        DisableElement(frame, "RestingIndicator")
+        frame.RestingIndicator:Hide()
+      else
+        local wasEnabled = IsElementEnabled(frame, "RestingIndicator")
+        EnableElement(frame, "RestingIndicator", unit)
+
+        if not wasEnabled and frame.RestingIndicator.ForceUpdate then
+          frame.RestingIndicator:ForceUpdate()
+        end
+      end
+    end
   end
 
   if isPlayer then

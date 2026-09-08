@@ -56,7 +56,7 @@ local function BuildApplicationThresholdSpellSet(spellIDs)
   return spellSet, orderedSpellIDs
 end
 
-local function ApplicationThresholdSourceWantsSpellID(source, spellID)
+local function SourceHasSpell(source, spellID)
   return IsUsableSpellID(spellID) and source.spellSet[spellID] == true
 end
 
@@ -65,19 +65,16 @@ local function ApplicationThresholdInfoMatches(info, source)
     return false
   end
 
-  if ApplicationThresholdSourceWantsSpellID(source, info.overrideSpellID)
-    or ApplicationThresholdSourceWantsSpellID(source, info.overrideTooltipSpellID)
-    or ApplicationThresholdSourceWantsSpellID(source, info.spellID)
+  if SourceHasSpell(source, info.overrideSpellID)
+    or SourceHasSpell(source, info.overrideTooltipSpellID)
+    or SourceHasSpell(source, info.spellID)
   then
     return true
   end
 
-  local linkedSpellIDs = info.linkedSpellIDs
-  if linkedSpellIDs then
-    for _, spellID in ipairs(linkedSpellIDs) do
-      if ApplicationThresholdSourceWantsSpellID(source, spellID) then
-        return true
-      end
+  for _, spellID in ipairs(info.linkedSpellIDs) do
+    if SourceHasSpell(source, spellID) then
+      return true
     end
   end
   return false
@@ -92,20 +89,14 @@ local function GetApplicationThresholdFrameSpellID(frame)
     end
   end
 
-  local getAuraSpellID = frame.GetAuraSpellID
-  if type(getAuraSpellID) == "function" then
-    local spellID = getAuraSpellID(frame)
-    if IsUsableSpellID(spellID) then
-      return spellID
-    end
+  local spellID = frame:GetAuraSpellID()
+  if IsUsableSpellID(spellID) then
+    return spellID
   end
 
-  local getSpellID = frame.GetSpellID
-  if type(getSpellID) == "function" then
-    local spellID = getSpellID(frame)
-    if IsUsableSpellID(spellID) then
-      return spellID
-    end
+  spellID = frame:GetSpellID()
+  if IsUsableSpellID(spellID) then
+    return spellID
   end
 
   return nil
@@ -140,18 +131,12 @@ local function ApplicationThresholdFrameMatches(frame, source)
     return false
   end
 
-  local getCooldownInfo = C_CooldownViewer
-    and C_CooldownViewer.GetCooldownViewerCooldownInfo
-  if not getCooldownInfo then
-    return false
-  end
-
-  local info = getCooldownInfo(cooldownID)
+  local info = C_CooldownViewer.GetCooldownViewerCooldownInfo(cooldownID)
   if ApplicationThresholdInfoMatches(info, source) then
     return true
   end
 
-  return ApplicationThresholdSourceWantsSpellID(
+  return SourceHasSpell(
     source,
     GetApplicationThresholdFrameSpellID(frame)
   )
@@ -182,7 +167,7 @@ local function FindApplicationThresholdChild(source)
 
   for frame in viewer.itemFramePool:EnumerateActive() do
     if ApplicationThresholdFrameHasSourceUnit(frame, source)
-      and ApplicationThresholdSourceWantsSpellID(
+      and SourceHasSpell(
         source,
         GetApplicationThresholdFrameSpellID(frame)
       )
@@ -264,11 +249,7 @@ local function UpdateApplicationThresholdTracks()
       local child = FindApplicationThresholdChild(source)
       local active
       if child then
-        if child.IsActive then
-          active = child:IsActive()
-        elseif child.IsShown then
-          active = child:IsShown()
-        end
+        active = child:IsActive()
       end
 
       local applicationsUpdated = child
@@ -774,6 +755,386 @@ function AuraWidget.DisableApplicationThresholdBarSource(parts)
   parts.applicationThresholdBarSourceEnabled = nil
 end
 
+local SLOT_GLOW_PIXEL_TEX = [[Interface\Buttons\WHITE8X8]]
+local SLOT_GLOW_SHINE_TEX = [[Interface\Artifacts\Artifacts]]
+local SLOT_GLOW_SHINE_COORDS = { 0.8115234375, 0.9169921875, 0.8798828125, 0.9853515625 }
+local SLOT_GLOW_PROC_ATLAS = "UI-HUD-ActionBar-Proc-Loop-Flipbook"
+local SLOT_GLOW_PIXEL_COUNT = 8
+local SLOT_GLOW_PIXEL_LENGTH = 12
+local SLOT_GLOW_PIXEL_THICKNESS = 2
+local SLOT_GLOW_PIXEL_PERIOD = 4
+local SLOT_GLOW_AUTOCAST_COUNT = 8
+local SLOT_GLOW_AUTOCAST_SIZES = { 7, 6, 5, 4 }
+local SLOT_GLOW_AUTOCAST_PERIOD = 4
+local SLOT_GLOW_PROC_DURATION = 1
+local SLOT_GLOW_DIRS = { { 0, 1 }, { 1, 0 }, { 0, -1 }, { -1, 0 } }
+
+local function SetSlotGlowColor(texture, color)
+  texture:SetVertexColor(color[1], color[2], color[3], color[4])
+end
+
+local function NormalizeSlotGlowSize(value)
+  return math.max(1, tonumber(value) or 1)
+end
+
+local function NormalizeSlotGlowOptions(options)
+  options = type(options) == "table" and options or {}
+
+  local pixelCount = math.floor((tonumber(options.pixelCount) or SLOT_GLOW_PIXEL_COUNT) + 0.5)
+  pixelCount = math.max(2, math.min(SLOT_GLOW_PIXEL_COUNT, pixelCount))
+
+  local pixelThickness = tonumber(options.pixelThickness) or SLOT_GLOW_PIXEL_THICKNESS
+  pixelThickness = math.max(1, math.min(8, pixelThickness))
+
+  local pixelLength = tonumber(options.pixelLength) or SLOT_GLOW_PIXEL_LENGTH
+  pixelLength = math.max(1, pixelLength)
+
+  local pixelPeriod = tonumber(options.pixelPeriod) or SLOT_GLOW_PIXEL_PERIOD
+  pixelPeriod = math.max(0.1, pixelPeriod)
+
+  local autocastScale = tonumber(options.autocastScale) or 1
+  autocastScale = math.max(0.1, autocastScale)
+
+  local autocastPeriod = tonumber(options.autocastPeriod) or SLOT_GLOW_AUTOCAST_PERIOD
+  autocastPeriod = math.max(0.1, autocastPeriod)
+
+  local procDuration = tonumber(options.procDuration) or SLOT_GLOW_PROC_DURATION
+  procDuration = math.max(0.05, procDuration)
+
+  return {
+    pixelCount = pixelCount,
+    pixelThickness = pixelThickness,
+    pixelLength = pixelLength,
+    pixelPeriod = pixelPeriod,
+    autocastScale = autocastScale,
+    autocastPeriod = autocastPeriod,
+    procDuration = procDuration,
+  }
+end
+
+local function AnchorSlotGlowTexture(texture, host, pos, width, height)
+  local topRight = height + width
+  local bottomRight = topRight + height
+
+  texture:ClearAllPoints()
+  if pos >= bottomRight then
+    texture:SetPoint("CENTER", host, "BOTTOMRIGHT", -(pos - bottomRight), 0)
+  elseif pos >= topRight then
+    texture:SetPoint("CENTER", host, "TOPRIGHT", 0, -(pos - topRight))
+  elseif pos >= height then
+    texture:SetPoint("CENTER", host, "TOPLEFT", pos - height, 0)
+  else
+    texture:SetPoint("CENTER", host, "BOTTOMLEFT", 0, pos)
+  end
+end
+
+local function ConfigureSlotGlowOrbit(entry, pos, width, height, period)
+  local perimeter = 2 * (width + height)
+  local lengths = { height, width, height, width }
+  local leg = 1
+  local into = pos % perimeter
+
+  for index = 1, 4 do
+    if into < lengths[index] then
+      leg = index
+      break
+    end
+    into = into - lengths[index]
+  end
+
+  entry.group:Stop()
+
+  local remaining = perimeter
+  local index = leg
+  local skip = into
+  local animationIndex = 1
+
+  while remaining > 0.0001 and animationIndex <= #entry.moves do
+    local distance = lengths[index] - skip
+    skip = 0
+    if distance > remaining then
+      distance = remaining
+    end
+
+    local direction = SLOT_GLOW_DIRS[index]
+    local move = entry.moves[animationIndex]
+    move:SetOffset(direction[1] * distance, direction[2] * distance)
+    move:SetDuration(period * distance / perimeter)
+
+    remaining = remaining - distance
+    animationIndex = animationIndex + 1
+    index = index % 4 + 1
+  end
+
+  for moveIndex = animationIndex, #entry.moves do
+    local move = entry.moves[moveIndex]
+    move:SetOffset(0, 0)
+    move:SetDuration(0.001)
+  end
+
+  entry.group:Play()
+end
+
+local function CreateSlotPixelGlow(parent, color)
+  local frame = CreateFrame("Frame", nil, parent)
+  frame:SetAllPoints(parent)
+
+  local backdrop = {}
+  for index = 1, 4 do
+    local edge = frame:CreateTexture(nil, "ARTWORK", nil, 6)
+    edge:SetColorTexture(0.1, 0.1, 0.1, 0.8)
+    backdrop[index] = edge
+  end
+
+  backdrop[1]:SetHeight(1)
+  backdrop[1]:SetPoint("TOPLEFT", frame, "TOPLEFT", 0, 0)
+  backdrop[1]:SetPoint("TOPRIGHT", frame, "TOPRIGHT", 0, 0)
+  backdrop[2]:SetHeight(1)
+  backdrop[2]:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 0, 0)
+  backdrop[2]:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", 0, 0)
+  backdrop[3]:SetWidth(1)
+  backdrop[3]:SetPoint("TOPLEFT", frame, "TOPLEFT", 0, 0)
+  backdrop[3]:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 0, 0)
+  backdrop[4]:SetWidth(1)
+  backdrop[4]:SetPoint("TOPRIGHT", frame, "TOPRIGHT", 0, 0)
+  backdrop[4]:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", 0, 0)
+
+  local edges = {}
+  local textures = {}
+  for edgeIndex = 1, 4 do
+    local clip = CreateFrame("Frame", nil, frame)
+    clip:SetClipsChildren(true)
+
+    local mover = CreateFrame("Frame", nil, clip)
+    mover:SetAllPoints(clip)
+
+    local edgeTextures = {}
+    for textureIndex = 1, SLOT_GLOW_PIXEL_COUNT + 2 do
+      local texture = mover:CreateTexture(nil, "ARTWORK", nil, 7)
+      texture:SetTexture(SLOT_GLOW_PIXEL_TEX)
+      SetSlotGlowColor(texture, color)
+      edgeTextures[textureIndex] = texture
+      textures[#textures + 1] = texture
+    end
+
+    local group = mover:CreateAnimationGroup()
+    group:SetLooping("REPEAT")
+    local move = group:CreateAnimation("Translation")
+    move:SetSmoothing("NONE")
+
+    edges[edgeIndex] = {
+      clip = clip,
+      mover = mover,
+      textures = edgeTextures,
+      group = group,
+      move = move,
+    }
+  end
+
+  return {
+    frame = frame,
+    edges = edges,
+    textures = textures,
+  }
+end
+
+local function ConfigureSlotPixelGlow(pixel, width, height, options)
+  local perimeter = 2 * (width + height)
+  local spacing = perimeter / options.pixelCount
+  local duration = options.pixelPeriod / options.pixelCount
+  local thickness = options.pixelThickness
+  local length = math.min(options.pixelLength, math.max(width, height))
+  local edgeData = {
+    { start = 0, len = height, vertical = true, from = "BOTTOM", point = "LEFT", dx = 0, dy = spacing },
+    { start = height, len = width, vertical = false, from = "LEFT", point = "TOP", dx = spacing, dy = 0 },
+    { start = height + width, len = height, vertical = true, from = "TOP", point = "RIGHT", dx = 0, dy = -spacing },
+    { start = height + width + height, len = width, vertical = false, from = "RIGHT", point = "BOTTOM", dx = -spacing, dy = 0 },
+  }
+
+  for edgeIndex = 1, 4 do
+    local edge = pixel.edges[edgeIndex]
+    local data = edgeData[edgeIndex]
+    local clip = edge.clip
+
+    edge.group:Stop()
+    clip:ClearAllPoints()
+    clip:SetSize(data.vertical and thickness or data.len, data.vertical and data.len or thickness)
+    clip:SetPoint("CENTER", pixel.frame, data.point, 0, 0)
+
+    local first = ((-data.start) % spacing) - spacing
+    local count = math.ceil(data.len / spacing) + 2
+
+    for textureIndex = 1, #edge.textures do
+      local texture = edge.textures[textureIndex]
+      if textureIndex <= count then
+        local at = first + (textureIndex - 1) * spacing
+        texture:ClearAllPoints()
+        texture:SetSize(data.vertical and thickness or length, data.vertical and length or thickness)
+        if data.vertical then
+          texture:SetPoint("CENTER", edge.mover, data.from, 0, data.from == "BOTTOM" and at or -at)
+        else
+          texture:SetPoint("CENTER", edge.mover, data.from, data.from == "LEFT" and at or -at, 0)
+        end
+        texture:Show()
+      else
+        texture:Hide()
+      end
+    end
+
+    edge.move:SetOffset(data.dx, data.dy)
+    edge.move:SetDuration(duration)
+    edge.group:Play()
+  end
+end
+
+local function CreateSlotAutocastGlow(parent, color)
+  local frame = CreateFrame("Frame", nil, parent)
+  frame:SetAllPoints(parent)
+
+  local entries = {}
+  local textures = {}
+  for layer = 1, 4 do
+    for index = 1, SLOT_GLOW_AUTOCAST_COUNT do
+      local texture = frame:CreateTexture(nil, "ARTWORK", nil, 7)
+      texture:SetTexture(SLOT_GLOW_SHINE_TEX)
+      texture:SetTexCoord(
+        SLOT_GLOW_SHINE_COORDS[1],
+        SLOT_GLOW_SHINE_COORDS[2],
+        SLOT_GLOW_SHINE_COORDS[3],
+        SLOT_GLOW_SHINE_COORDS[4]
+      )
+      texture:SetDesaturated(true)
+      SetSlotGlowColor(texture, color)
+
+      local group = texture:CreateAnimationGroup()
+      group:SetLooping("REPEAT")
+      local moves = {}
+      for moveIndex = 1, 5 do
+        local move = group:CreateAnimation("Translation")
+        move:SetOrder(moveIndex)
+        move:SetSmoothing("NONE")
+        moves[moveIndex] = move
+      end
+
+      entries[#entries + 1] = {
+        texture = texture,
+        group = group,
+        moves = moves,
+        layer = layer,
+        index = index,
+      }
+      textures[#textures + 1] = texture
+    end
+  end
+
+  return {
+    frame = frame,
+    entries = entries,
+    textures = textures,
+  }
+end
+
+local function ConfigureSlotAutocastGlow(autocast, width, height, options)
+  local perimeter = 2 * (width + height)
+  local spacing = perimeter / SLOT_GLOW_AUTOCAST_COUNT
+
+  for entryIndex = 1, #autocast.entries do
+    local entry = autocast.entries[entryIndex]
+    local size = SLOT_GLOW_AUTOCAST_SIZES[entry.layer] * options.autocastScale
+    local period = options.autocastPeriod * entry.layer
+    local pos = (spacing * entry.index) % perimeter
+
+    entry.texture:SetSize(size, size)
+    AnchorSlotGlowTexture(entry.texture, autocast.frame, pos, width, height)
+    ConfigureSlotGlowOrbit(entry, pos, width, height, period)
+  end
+end
+
+local function CreateSlotProcGlow(parent, color)
+  local frame = CreateFrame("Frame", nil, parent)
+  frame:SetAllPoints(parent)
+
+  local texture = frame:CreateTexture(nil, "ARTWORK", nil, 7)
+  texture:SetAtlas(SLOT_GLOW_PROC_ATLAS)
+  texture:SetBlendMode("ADD")
+  texture:SetDesaturated(true)
+  texture:SetPoint("TOPLEFT", frame, "TOPLEFT", -8, 8)
+  texture:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", 8, -8)
+  SetSlotGlowColor(texture, color)
+
+  local group = texture:CreateAnimationGroup()
+  group:SetLooping("REPEAT")
+  local flipbook = group:CreateAnimation("FlipBook")
+  flipbook:SetFlipBookRows(6)
+  flipbook:SetFlipBookColumns(5)
+  flipbook:SetFlipBookFrames(30)
+  flipbook:SetFlipBookFrameWidth(0)
+  flipbook:SetFlipBookFrameHeight(0)
+
+  return {
+    frame = frame,
+    texture = texture,
+    textures = { texture },
+    group = group,
+    flipbook = flipbook,
+  }
+end
+
+local function ConfigureSlotProcGlow(proc, options)
+  proc.group:Stop()
+  proc.flipbook:SetDuration(options.procDuration)
+  proc.group:Play()
+end
+
+function AuraWidget.CreateSlotGlow(button, width, height, style, color, options)
+  local root = CreateFrame("Frame", nil, button)
+  root:SetAllPoints(button)
+  root:SetFrameLevel(button:GetFrameLevel() + 8)
+  root:EnableMouse(false)
+
+  local pixel = CreateSlotPixelGlow(root, color)
+  local autocast = CreateSlotAutocastGlow(root, color)
+  local proc = CreateSlotProcGlow(root, color)
+  local glow = {
+    root = root,
+    pixel = pixel,
+    autocast = autocast,
+    proc = proc,
+    styles = {
+      PIXEL = pixel.frame,
+      AUTOCAST = autocast.frame,
+      PROC = proc.frame,
+    },
+  }
+
+  AuraWidget.ConfigureSlotGlow(glow, width, height, style, color, options)
+  return glow
+end
+
+function AuraWidget.ConfigureSlotGlow(glow, width, height, style, color, options)
+  width = NormalizeSlotGlowSize(width)
+  height = NormalizeSlotGlowSize(height)
+  options = NormalizeSlotGlowOptions(options)
+
+  ConfigureSlotPixelGlow(glow.pixel, width, height, options)
+  ConfigureSlotAutocastGlow(glow.autocast, width, height, options)
+  ConfigureSlotProcGlow(glow.proc, options)
+
+  for name, frame in pairs(glow.styles) do
+    frame:SetAlpha(name == style and 1 or 0)
+  end
+
+  for _, texture in ipairs(glow.pixel.textures) do
+    SetSlotGlowColor(texture, color)
+  end
+  for _, texture in ipairs(glow.autocast.textures) do
+    SetSlotGlowColor(texture, color)
+  end
+  for _, texture in ipairs(glow.proc.textures) do
+    SetSlotGlowColor(texture, color)
+  end
+end
+
 function AuraWidget.BindApplicationDurationButton(button, parts)
   parts = parts or button.__puiAuraApplicationDurationParts or {}
   if parts.__puiBoundButton == button then
@@ -1090,6 +1451,8 @@ AuraWidget.DisableApplicationThresholdBarSource = P:Def(
   "AuraWidget.DisableApplicationThresholdBarSource",
   AuraWidget.DisableApplicationThresholdBarSource
 )
+AuraWidget.CreateSlotGlow = P:Def("AuraWidget.CreateSlotGlow", AuraWidget.CreateSlotGlow)
+AuraWidget.ConfigureSlotGlow = P:Def("AuraWidget.ConfigureSlotGlow", AuraWidget.ConfigureSlotGlow)
 AuraWidget.SetApplicationThresholdHost = P:Def(
   "AuraWidget.SetApplicationThresholdHost",
   AuraWidget.SetApplicationThresholdHost

@@ -4,8 +4,8 @@ local Addon = ns.Addon
 local Cooldowns = ns.Modules.CooldownManager
 local Theme = ns.Theme
 local AceHooks = ns.AceHooks
+local AuraWidget = ns.AuraWidget
 local AceGUI = LibStub("AceGUI-3.0")
-local LCG = LibStub("LibCustomGlow-1.0")
 
 local Installer = {}
 ns.PCMCustomTrackerInstaller = Installer
@@ -17,7 +17,6 @@ local page = 1
 local previewState = "COOLDOWN"
 local previewStartedAt = 0
 local PREVIEW_SECONDS = 3
-local PREVIEW_GLOW_KEY = "PUI_CustomTrackerInstaller"
 
 local PAGES = {
   "Choose a widget",
@@ -104,31 +103,37 @@ end
 local function StopPreviewGlow()
   if not frame then return end
   for _, target in ipairs({ frame.PreviewButton, frame.PreviewBar }) do
-    LCG.PixelGlow_Stop(target, PREVIEW_GLOW_KEY)
-    LCG.AutoCastGlow_Stop(target, PREVIEW_GLOW_KEY)
-    LCG.ProcGlow_Stop(target, PREVIEW_GLOW_KEY)
+    if target.__puiPreviewGlow then
+      target.__puiPreviewGlow.root:Hide()
+    end
   end
 end
 
 local function StartPreviewGlow(target, style, color)
   StopPreviewGlow()
   if style == "NONE" then return end
+
   color = CopyColor(color, { 1, 0.55, 0.1, 1 })
-  if style == "PIXEL" then
-    LCG.PixelGlow_Start(target, color, 8, 0.25, nil, 2, 0, 0, true, PREVIEW_GLOW_KEY, 8)
-  elseif style == "AUTOCAST" then
-    LCG.AutoCastGlow_Start(target, color, 8, 0.25, 1, 0, 0, PREVIEW_GLOW_KEY, 8)
-  elseif style == "PROC" then
-    LCG.ProcGlow_Start(target, {
-      key = PREVIEW_GLOW_KEY,
-      color = color,
-      startAnim = true,
-      xOffset = 0,
-      yOffset = 0,
-      duration = 1,
-      frameLevel = 8,
-    })
+  local width = math.max(1, target:GetWidth())
+  local height = math.max(1, target:GetHeight())
+  if not target.__puiPreviewGlow then
+    target.__puiPreviewGlow = AuraWidget.CreateSlotGlow(
+      target,
+      width,
+      height,
+      style,
+      color
+    )
+  else
+    AuraWidget.ConfigureSlotGlow(
+      target.__puiPreviewGlow,
+      width,
+      height,
+      style,
+      color
+    )
   end
+  target.__puiPreviewGlow.root:Show()
 end
 
 local function GetSpellTexture()

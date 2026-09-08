@@ -318,6 +318,19 @@ BRLWidget_UpdateGhostMover = function()
   local q = NormalizeDB()
   local d = POSITION_DEFAULTS.bresLustWidget
 
+  local function SavePosition(frame)
+    local qq = NormalizeDB()
+    qq.bresLustWidgetAnchor = qq.bresLustWidgetAnchor or {}
+    local gx, gy = ns.FrameUtil.GetMoverOffsets(frame)
+
+    qq.bresLustWidgetAnchor.x = math.floor((gx or 0) + 0.5)
+    qq.bresLustWidgetAnchor.y = math.floor((gy or 0) + 0.5)
+
+    if BRLWidgetFrame and BRLWidgetFrame.__puiApplyAnchor then
+      BRLWidgetFrame.__puiApplyAnchor()
+    end
+  end
+
   BRLWidgetGhostMover = ns.FrameUtil:EnsureGhostMover("quality_bres_lust_widget", {
     frameName = "PleebUI_BresLustWidgetGhostMover",
     label = "Battle resurrection and Bloodlust",
@@ -325,6 +338,10 @@ BRLWidget_UpdateGhostMover = function()
     useOverlayDrag = false,
     smartSnap = {
       family = "positionOnly",
+      isRuntimeActive = function()
+        local q = NormalizeDB()
+        return q.bresWidgetEnable == true or q.lustWidgetEnable == true
+      end,
     },
     fallbackAnchor = {
       point = "CENTER",
@@ -342,17 +359,8 @@ BRLWidget_UpdateGhostMover = function()
       return ns.Flags.IsEditing and true or false
     end,
     optionsString = "Quality,qualityTab",
-    onDragStop = function(frame)
-      local qq = NormalizeDB()
-      qq.bresLustWidgetAnchor = qq.bresLustWidgetAnchor or {}
-      local gx, gy = ns.FrameUtil._GetOffsetsForFrame(frame)
-
-      qq.bresLustWidgetAnchor.x = math.floor((gx or 0) + 0.5)
-      qq.bresLustWidgetAnchor.y = math.floor((gy or 0) + 0.5)
-
-      if BRLWidgetFrame and BRLWidgetFrame.__puiApplyAnchor then
-        BRLWidgetFrame.__puiApplyAnchor()
-      end
+    savePosition = SavePosition,
+    onDragStop = function()
       BRLWidget_UpdateGhostMover()
     end,
     resetPosition = function()
@@ -1128,7 +1136,7 @@ local function RaidUtility_StoreAnchor(kind, sourceFrame)
   if not spec or not sourceFrame then return end
 
   local q = NormalizeDB()
-  local x, y = ns.FrameUtil._GetOffsetsForFrame(sourceFrame)
+  local x, y = ns.FrameUtil.GetMoverOffsets(sourceFrame)
   q[spec.anchorKey] = {
     x = math.floor((x or 0) + 0.5),
     y = math.floor((y or 0) + 0.5),
@@ -1853,6 +1861,12 @@ RaidUtility_UpdateGhostMovers = function()
     local spec = RAID_UTILITY_WINDOW_SPECS[kind]
     if frame then
       local anchor = q[spec.anchorKey] or spec.defaults
+
+      local function SavePosition(mover)
+        RaidUtility_StoreAnchor(windowKind, mover)
+        RaidUtility_ApplyAnchor(windowKind)
+      end
+
       RaidUtilityGhostMovers[kind] = ns.FrameUtil:EnsureGhostMover(spec.moverKey, {
         frameName = spec.ghostFrameName,
         label = spec.title,
@@ -1860,6 +1874,9 @@ RaidUtility_UpdateGhostMovers = function()
         useOverlayDrag = false,
         smartSnap = {
           family = "raidUtility",
+          isRuntimeActive = function()
+            return NormalizeDB()[spec.enabledKey] == true
+          end,
         },
         fallbackAnchor = {
           point = "CENTER",
@@ -1874,9 +1891,7 @@ RaidUtility_UpdateGhostMovers = function()
           return current[spec.enabledKey] == true and ns.Flags.IsEditing and true or false
         end,
         optionsString = "Quality,qualityTab",
-        onDragStop = function()
-          RaidUtility_SaveAnchors()
-        end,
+        savePosition = SavePosition,
         resetPosition = function()
           local current = NormalizeDB()
           current[spec.anchorKey] = SeedAnchorDefaults(nil, spec.defaults)
@@ -1942,7 +1957,7 @@ local function RaidUtility_SyncLiveWindowsToGhosts()
     local mover = RaidUtilityGhostMovers[kind]
     local frame = RaidUtilityFrames[kind]
     if mover and frame then
-      local x, y = ns.FrameUtil._GetOffsetsForFrame(mover)
+      local x, y = ns.FrameUtil.GetMoverOffsets(mover)
       frame:ClearAllPoints()
       frame:SetPoint("CENTER", UIParent, "CENTER", x, y)
     end
@@ -1961,6 +1976,7 @@ local function RaidUtility_StopWindowDrag(kind)
   state.driver:Hide()
   state.window.snapHint:Hide()
   ns.FrameUtil.FinishExternalSmartSnapDrag(state.smartSnap)
+  RaidUtility_SyncLiveWindowsToGhosts()
   RaidUtility_SaveAnchors()
   RaidUtility_HideDragGhosts()
 end
@@ -1969,13 +1985,18 @@ RaidUtility_CancelWindowDrag = function()
   local state = RaidUtilityDragState
   if not state then return end
 
-  for _, kind in ipairs(RAID_UTILITY_WINDOW_ORDER) do
-    RaidUtility_StoreAnchor(kind, RaidUtilityFrames[kind])
-  end
   RaidUtilityDragState = nil
   state.driver:Hide()
   state.window.snapHint:Hide()
+
+  if InCombatLockdown() then
+    Module.pendingDragRestore = state.smartSnap
+    RaidUtility_HideDragGhosts()
+    return
+  end
+
   ns.FrameUtil.CancelExternalSmartSnapDrag(state.smartSnap)
+  RaidUtility_SyncLiveWindowsToGhosts()
   RaidUtility_HideDragGhosts()
 end
 
@@ -1983,26 +2004,38 @@ local function RaidUtility_UpdateWindowDrag(kind)
   local state = RaidUtilityDragState
   if not state or state.kind ~= kind then return end
 
+  if InCombatLockdown() then
+    RaidUtility_CancelWindowDrag()
+    return
+  end
+
   local scale = UIParent:GetEffectiveScale()
   local cursorX, cursorY = GetCursorPosition()
   cursorX = cursorX / scale
   cursorY = cursorY / scale
 
+  local deltaX = cursorX - state.cursorX
+  local deltaY = cursorY - state.cursorY
+
   if IsShiftKeyDown() and state.breakSnap ~= true then
+    ns.FrameUtil.CancelExternalSmartSnapDrag(state.smartSnap)
+    RaidUtility_SyncLiveWindowsToGhosts()
+
     state.breakSnap = true
-    state.cursorX = cursorX
-    state.cursorY = cursorY
     state.smartSnap = ns.FrameUtil.BeginExternalSmartSnapDrag(
       RAID_UTILITY_WINDOW_SPECS[kind].moverKey,
       true
     )
-    return
+    if not state.smartSnap then
+      RaidUtility_CancelWindowDrag()
+      return
+    end
   end
 
   ns.FrameUtil.UpdateExternalSmartSnapDrag(
     state.smartSnap,
-    cursorX - state.cursorX,
-    cursorY - state.cursorY
+    deltaX,
+    deltaY
   )
   RaidUtility_SyncLiveWindowsToGhosts()
 end

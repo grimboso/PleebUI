@@ -1099,6 +1099,8 @@ local function _PCM_DB_Attach(Cooldowns)
       entry.buffGlowSource = "CDM"
     end
 
+    entry.buffGlowHideViewerIcon = entry.buffGlowHideViewerIcon == true
+
     local spellID = tonumber(entry.buffGlowSpellID)
     if spellID and spellID > 0 then
       entry.buffGlowSpellID = math_floor(spellID)
@@ -1818,8 +1820,6 @@ do
 
           borderThickness = 2,
           borderColor = { 0.20, 0.20, 0.24, 1.00 },
-
-          __puiNeedDefaultPos = true,
         },
 
         buffBarUseClassColor = true,
@@ -1905,12 +1905,6 @@ do
 
     if bb.texture == nil then bb.texture = "Pleebar" end
     bb.iconOnBar = nil
-    bb.moverMinHeight = nil
-
-    -- One-time default positioning seed for NEW profiles only.
-    if bb.__puiDidDefaultPos == nil then
-      bb.__puiNeedDefaultPos = true
-    end
 
     if bb.borderThickness == nil then bb.borderThickness = 2 end
     if not bb.borderColor then bb.borderColor = { 0.20, 0.20, 0.24, 1.00 } end

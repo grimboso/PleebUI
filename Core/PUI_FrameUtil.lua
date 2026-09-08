@@ -1,29 +1,15 @@
 -- File: PUI_FrameUtil.lua
 
-local ADDON_NAME, ns = ...
+local ns = select(2, ...)
 
--- Core addon (created in PUI_Core.lua)
 local Addon = ns.Addon
-ns.Addon = Addon
 
-
-
--- Locals
 local _G = _G
 local UIParent = _G.UIParent
 local CreateFrame = _G.CreateFrame
-local LibStub = _G.LibStub
 local InCombatLockdown = _G.InCombatLockdown
-local IsAltKeyDown = _G.IsAltKeyDown
 local IsControlKeyDown = _G.IsControlKeyDown
 local IsShiftKeyDown = _G.IsShiftKeyDown
-local GetCursorPosition = _G.GetCursorPosition
-local GetTime = _G.GetTime
-local C_Timer = _G.C_Timer
-local UISpecialFrames = _G.UISpecialFrames
-local YES = _G.YES
-local NO = _G.NO
-local select = _G.select
 local type = _G.type
 local tonumber = _G.tonumber
 local tostring = _G.tostring
@@ -31,43 +17,28 @@ local pairs = _G.pairs
 local ipairs = _G.ipairs
 local next = _G.next
 local wipe = _G.wipe
-local setmetatable = _G.setmetatable
-local table_insert = _G.table.insert
-local table_remove = _G.table.remove
-local table_sort = _G.table.sort
-local hooksecurefunc = _G.hooksecurefunc
-local string_format = _G.string.format
 local math_abs = _G.math.abs
 local math_min = _G.math.min
 local math_max = _G.math.max
 local math_floor = _G.math.floor
-local math_ceil = _G.math.ceil
-local math_pi = _G.math.pi
 
-local Pixel  = ns.Pixel
-local Round  = Pixel.Round
-local FrameScale = ns.FrameScale
+local Round = ns.Pixel.Round
 local LSM = ns.LSM
 
 ns.FrameUtil = ns.FrameUtil or {}
 local FrameUtil = ns.FrameUtil
 
--- Internal mover storage
 local MoversByKey = {}
-local MoversList  = {}
-local GhostFrameState = setmetatable({}, { __mode = "k" })
+local MoversList = {}
+local GhostFrameState = _G.setmetatable({}, { __mode = "k" })
 
--- Forward declarations used by ghost helpers / public API before the helper blocks below.
 local ShowOverlay
 local EnableDrag
 local GhostMoverHelpers
 
--- Dimmer config
-local DIM_FADE_DURATION = 1.5
-FrameUtil._dimAlpha       = FrameUtil._dimAlpha or 0.7
+FrameUtil._dimAlpha = FrameUtil._dimAlpha or 0.7
 FrameUtil._disableDimming = FrameUtil._disableDimming or false
 
--- Nudge config and selection state
 local NUDGE_MIN, NUDGE_MAX, NUDGE_DEFAULT = 1, 10, 1
 
 local SelectedEntry
@@ -86,19 +57,17 @@ FrameUtil._settingsCollapsed   = FrameUtil._settingsCollapsed or false
 FrameUtil._instructionsCollapsed = FrameUtil._instructionsCollapsed or false
 FrameUtil._keybindsCollapsed   = FrameUtil._keybindsCollapsed or false
 
--- Persistent config helpers (Edit Mode dialog state)
-local function GetEditModeDB()
+function FrameUtil._GetEditModeDB()
   Addon.db.profile.EditMode = Addon.db.profile.EditMode or {}
   return Addon.db.profile.EditMode
 end
 
-local _editModeConfigDB
-local function InitEditModeConfig()
-  local db = GetEditModeDB()
-  if _editModeConfigDB == db then
+function FrameUtil._InitEditModeConfig()
+  local db = FrameUtil._GetEditModeDB()
+  if FrameUtil._editModeConfigDB == db then
     return
   end
-  _editModeConfigDB = db
+  FrameUtil._editModeConfigDB = db
 
   FrameUtil._keyboardMoveEnabled = db.keyboardMoveEnabled == true
   FrameUtil._snapToGrid = db.snapToGrid == true
@@ -115,10 +84,7 @@ local function InitEditModeConfig()
   FrameUtil._keybindsCollapsed = db.keybindsCollapsed == true
 end
 
-FrameUtil._GetEditModeDB      = GetEditModeDB
-FrameUtil._InitEditModeConfig = InitEditModeConfig
-
-local function ApplyGlobalEditFont(fs, sizeOverride, flagsOverride)
+function FrameUtil.ApplyGlobalEditFont(fs, sizeOverride, flagsOverride)
   if not fs then
     return
   end
@@ -143,8 +109,6 @@ local function ApplyGlobalEditFont(fs, sizeOverride, flagsOverride)
   end
 end
 
-FrameUtil.ApplyGlobalEditFont = ApplyGlobalEditFont
-
 
 local function GetRawOffsetsForFrame(frame)
   local cx, cy = frame:GetCenter()
@@ -161,6 +125,18 @@ local function GetOffsetsForFrame(frame)
   return Round(x), Round(y)
 end
 
+local function FinalizeEntryMove(entry)
+  if type(entry.savePosition) == "function" then
+    entry.savePosition(entry.frame, entry.key)
+  end
+
+  if type(entry.onDragStop) == "function" then
+    entry.onDragStop(entry.frame, entry.key)
+  end
+
+  FrameUtil._OnMoverMoved(entry)
+end
+
 local function MoveEntryTo(entry, x, y, silent)
   local frame = entry.frame
 
@@ -168,16 +144,9 @@ local function MoveEntryTo(entry, x, y, silent)
   frame:SetPoint("CENTER", UIParent, "CENTER", x, y)
 
   if not silent then
-    if type(entry.onDragStop) == "function" then
-      entry.onDragStop(frame, entry.key)
-    end
-
-    FrameUtil._OnMoverMoved(entry)
+    FinalizeEntryMove(entry)
   end
-
 end
-
-FrameUtil._GetOffsetsForFrame = GetOffsetsForFrame
 
 -- Shared mover helpers
 local function MoverRound(v)
@@ -185,10 +154,6 @@ local function MoverRound(v)
 end
 
 local function GetMoverChromeStrata()
-  return "HIGH"
-end
-
-local function GetSelectionSurfaceStrata()
   return "HIGH"
 end
 
@@ -226,38 +191,30 @@ local function ApplyHeaderMoverTheme(mover, overlayBelowFrame)
   })
 end
 
-local function ApplyMoverChromeLayer(entry)
-  if not entry then
-    return
-  end
-
+function FrameUtil.RefreshMoverLayering()
   local strata = GetMoverChromeStrata()
 
-  if entry.overlay then
-    entry.overlay:SetFrameStrata(strata)
-  end
-
-  if entry.chrome then
-    entry.chrome:SetFrameStrata("HIGH")
-    entry.chrome:SetFrameLevel(190)
-  end
-
-  if entry.nudgeGroup then
-    entry.nudgeGroup:SetFrameStrata(strata)
-  end
-
-  if entry.frame and entry.frame.__puiEditMoverHelper then
-    entry.frame:SetFrameStrata(strata)
-  end
-end
-
-function FrameUtil.RefreshMoverLayering()
   for _, entry in ipairs(MoversList) do
-    ApplyMoverChromeLayer(entry)
+    if entry.overlay then
+      entry.overlay:SetFrameStrata(strata)
+    end
+
+    if entry.chrome then
+      entry.chrome:SetFrameStrata("HIGH")
+      entry.chrome:SetFrameLevel(190)
+    end
+
+    if entry.nudgeGroup then
+      entry.nudgeGroup:SetFrameStrata(strata)
+    end
+
+    if entry.frame and entry.frame.__puiEditMoverHelper then
+      entry.frame:SetFrameStrata(strata)
+    end
   end
 
   if FrameUtil._selectionSurface then
-    FrameUtil._selectionSurface:SetFrameStrata(GetSelectionSurfaceStrata())
+    FrameUtil._selectionSurface:SetFrameStrata("HIGH")
   end
 
   if FrameUtil._selectionBox then
@@ -426,6 +383,17 @@ function FrameUtil.EnsureHeaderMover(owner, key, frameName, anchor, db, opts)
 
   opts = opts or {}
 
+  local function GetDB()
+    if type(opts.getDB) == "function" then
+      local current = opts.getDB(owner)
+      if type(current) == "table" then
+        return current
+      end
+    end
+
+    return db
+  end
+
   local mover = owner.mover
   if not mover then
     mover = CreateFrame("Frame", frameName, UIParent, "BackdropTemplate")
@@ -474,32 +442,40 @@ function FrameUtil.EnsureHeaderMover(owner, key, frameName, anchor, db, opts)
   anchor:ClearAllPoints()
   anchor:SetPoint(anchorPoint, mover, anchorRelativePoint, 0, 0)
 
+  local function SavePosition(frame)
+    local current = GetDB()
+    local x, y = FrameUtil.GetMoverOffsets(frame)
+
+    current.point = "CENTER"
+    current.relativeTo = "UIParent"
+    current.relativePoint = "CENTER"
+    current.x = MoverRound(x or 0)
+    current.y = MoverRound(y or 0)
+
+    if InCombatLockdown() then
+      return
+    end
+
+    if owner.anchor and owner.mover then
+      owner.anchor:ClearAllPoints()
+      owner.anchor:SetPoint(anchorPoint, owner.mover, anchorRelativePoint, 0, 0)
+    end
+  end
+
   FrameUtil:RegisterMover(key, mover, {
     label = opts.label,
     optionsString = opts.optionsString,
     quickSettings = opts.quickSettings,
     overlayBelowFrame = opts.overlayBelowFrame,
     useOverlayDrag = true,
+    smartSnap = opts.smartSnap,
+    savePosition = SavePosition,
+    resetPosition = type(opts.resetPosition) == "function" and function(frame)
+      opts.resetPosition(frame, GetDB(), owner)
+    end or nil,
     onDragStop = function(frame)
-      local x, y = FrameUtil.GetMoverOffsets(frame)
-
-      db.point = "CENTER"
-      db.relativeTo = "UIParent"
-      db.relativePoint = "CENTER"
-      db.x = MoverRound(x or 0)
-      db.y = MoverRound(y or 0)
-
-      if InCombatLockdown() then
-        return
-      end
-
-      if owner.anchor and owner.mover then
-        owner.anchor:ClearAllPoints()
-        owner.anchor:SetPoint(anchorPoint, owner.mover, anchorRelativePoint, 0, 0)
-      end
-
       if type(opts.onDragStop) == "function" then
-        opts.onDragStop(frame, db, owner)
+        opts.onDragStop(frame, GetDB(), owner)
       end
     end,
   })
@@ -542,9 +518,15 @@ function FrameUtil.EnsureGhostMovers(owner, opts)
       shouldShow = function()
         return opts.shouldShow(moverKey, owner)
       end,
-      onDragStop = function(mover)
+      savePosition = type(opts.onGhostSavePosition) == "function" and function(mover)
+        opts.onGhostSavePosition(moverKey, owner, mover)
+      end or nil,
+      resetPosition = type(opts.onGhostResetPosition) == "function" and function(mover)
+        opts.onGhostResetPosition(moverKey, owner, mover)
+      end or nil,
+      onDragStop = type(opts.onGhostDragStop) == "function" and function(mover)
         opts.onGhostDragStop(moverKey, owner, mover)
-      end,
+      end or nil,
     })
   end
 end
@@ -669,7 +651,7 @@ local function EnsureDimmer()
   overlayFadeInAlpha = fadeIn
   fadeIn:SetFromAlpha(0)
   fadeIn:SetToAlpha(targetAlpha)
-  fadeIn:SetDuration(DIM_FADE_DURATION)
+  fadeIn:SetDuration(1.5)
   fadeIn:SetSmoothing("IN_OUT")
 
   agIn:SetScript("OnPlay", function()
@@ -690,7 +672,7 @@ local function EnsureDimmer()
   overlayFadeOutAlpha = fadeOut
   fadeOut:SetFromAlpha(targetAlpha)
   fadeOut:SetToAlpha(0)
-  fadeOut:SetDuration(DIM_FADE_DURATION)
+  fadeOut:SetDuration(1.5)
   fadeOut:SetSmoothing("IN_OUT")
 
   agOut:SetScript("OnPlay", function()
@@ -707,7 +689,7 @@ local function EnsureDimmer()
   return f
 end
 
-local function RefreshDimmerAlpha()
+function FrameUtil._RefreshDimmerAlpha()
   local alpha = FrameUtil._dimAlpha or 0.7
 
   if overlayFadeInAlpha then
@@ -722,12 +704,10 @@ local function RefreshDimmerAlpha()
   end
 end
 
-FrameUtil._RefreshDimmerAlpha = RefreshDimmerAlpha
-
 local function PlayDimmerFade(show)
   local f = EnsureDimmer()
 
-  RefreshDimmerAlpha()
+  FrameUtil._RefreshDimmerAlpha()
 
   if show then
     if overlayFadeOut and overlayFadeOut:IsPlaying() then
@@ -753,8 +733,6 @@ FrameUtil._snapToGrid    = FrameUtil._snapToGrid or false
 FrameUtil._snapToFrame   = FrameUtil._snapToFrame or false
 FrameUtil._snapTolerance = FrameUtil._snapTolerance or 8
 FrameUtil._smartSnapEnabled = FrameUtil._smartSnapEnabled ~= false
-
-local GRID_SIZES = { 8, 16, 32, 64 }
 
 local GridOverlay
 local GridLines = {}
@@ -890,7 +868,7 @@ local function RoundToNearestGrid(value, size)
     return MoverRound(math_floor(scaled + 0.5) * size)
   end
 
-  return MoverRound(math_ceil(scaled - 0.5) * size)
+  return MoverRound(_G.math.ceil(scaled - 0.5) * size)
 end
 
 local function GetGridCornerDelta(cornerX, cornerY, parentLeft, parentTop, maxGridX, maxGridY, size)
@@ -907,7 +885,7 @@ local function GetGridCornerDelta(cornerX, cornerY, parentLeft, parentTop, maxGr
   return dx, dy, distance
 end
 
-local function ApplyGridSnap(entry)
+function FrameUtil._ApplyGridSnap(entry)
   if not entry or not entry.frame then return end
   if not FrameUtil._snapToGrid then return end
 
@@ -991,7 +969,7 @@ local function IsHorizontallyNear(fl, fr, ol, orr, tol)
   end
 end
 
-local function ApplyFrameSnap(entry, live, ignoreEntries)
+function FrameUtil._ApplyFrameSnap(entry, live, ignoreEntries)
   if not entry or not entry.frame then return end
   if not FrameUtil._snapToFrame then return end
 
@@ -1081,11 +1059,6 @@ local function ApplyFrameSnap(entry, live, ignoreEntries)
   FrameUtil._InitEditModeConfig()
 end
 
-FrameUtil._ApplyGridSnap  = ApplyGridSnap
-FrameUtil._ApplyFrameSnap = ApplyFrameSnap
-
-local FinalizeMovedGroup
-
 FrameUtil._smartSnapEnabled = FrameUtil._smartSnapEnabled ~= false
 FrameUtil._SmartSnapLinks = FrameUtil._SmartSnapLinks or {}
 FrameUtil._SmartSnapMasters = FrameUtil._SmartSnapMasters or {}
@@ -1098,12 +1071,12 @@ local SmartSnapLinks = FrameUtil._SmartSnapLinks
 local SmartSnapMasters = FrameUtil._SmartSnapMasters
 local PendingSmartSnapRelayouts = FrameUtil._pendingSmartSnapRelayouts
 local PendingSmartSnapRuntimeRelayouts = FrameUtil._pendingSmartSnapRuntimeRelayouts
-local SmartSnapRuntimeRelayoutScheduled = false
-local SmartSnapWorldReady = false
+FrameUtil._smartSnapRuntimeRelayoutScheduled = false
+FrameUtil._smartSnapWorldReady = false
 
 function FrameUtil.BeginProfileTransition()
   FrameUtil._profileTransitionActive = true
-  _editModeConfigDB = nil
+  FrameUtil._editModeConfigDB = nil
   FrameUtil._smartSnapDBRef = nil
   wipe(PendingSmartSnapRelayouts)
   wipe(PendingSmartSnapRuntimeRelayouts)
@@ -1812,9 +1785,11 @@ local function GetSmartSnapCluster(entry)
     visited[key] = true
 
     local current = MoversByKey[key]
-    if current then
-      cluster[current] = true
+    if not IsSmartSnapRuntimeEntryActive(current) then
+      return
     end
+
+    cluster[current] = true
 
     local peers = SmartSnapLinks[key]
     if peers then
@@ -1826,11 +1801,6 @@ local function GetSmartSnapCluster(entry)
 
   AddKey(entry.key)
   return cluster
-end
-
-function FrameUtil.GetSmartSnapCluster(keyOrEntry)
-  local entry = type(keyOrEntry) == "table" and keyOrEntry or MoversByKey[keyOrEntry]
-  return GetSmartSnapCluster(entry)
 end
 
 local function GetSmartSnapSizeSyncCluster(entry)
@@ -1847,15 +1817,19 @@ local function GetSmartSnapSizeSyncCluster(entry)
 
     visited[key] = true
     local current = MoversByKey[key]
-    if IsSmartSnapRuntimeEntryActive(current) and SmartSnapAllowsSizeSync(current) then
-      cluster[current] = true
+    if not IsSmartSnapRuntimeEntryActive(current) or not SmartSnapAllowsSizeSync(current) then
+      return
     end
+
+    cluster[current] = true
 
     local peers = SmartSnapLinks[key]
     if peers then
       for peerKey, link in pairs(peers) do
         local peer = MoversByKey[peerKey]
-        if SmartSnapLinkSyncsSize(current, peer, link) then
+        if IsSmartSnapRuntimeEntryActive(peer)
+          and SmartSnapLinkSyncsSize(current, peer, link)
+        then
           AddKey(peerKey)
         end
       end
@@ -2120,11 +2094,13 @@ local function PositionSmartSnapEntry(entry, target, relation, alignment, gap, s
 end
 
 local function GetStableSmartSnapRoot(startKey)
-  local topology = GetSmartSnapTopologyKeys(startKey)
+  local startEntry = MoversByKey[startKey]
+  local cluster = GetSmartSnapCluster(startEntry)
   local masterKey = GetSmartSnapClusterMasterKey(startKey)
-  if masterKey and topology[masterKey] then
+
+  if masterKey then
     local masterEntry = MoversByKey[masterKey]
-    if IsSmartSnapRuntimeEntryActive(masterEntry) and GetSmartSnapGeometry(masterEntry) then
+    if masterEntry and cluster[masterEntry] and GetSmartSnapGeometry(masterEntry) then
       return masterEntry, true
     end
   end
@@ -2133,24 +2109,21 @@ local function GetStableSmartSnapRoot(startKey)
   local bestTop
   local bestLeft
 
-  for key in pairs(topology) do
-    local entry = MoversByKey[key]
-    if IsSmartSnapRuntimeEntryActive(entry) then
-      local geometry = GetSmartSnapGeometry(entry)
-      if geometry then
-        local left, top = geometry.left, geometry.top
-        if not bestEntry
-          or bestTop == nil
-          or top > bestTop
-          or (top == bestTop and left < bestLeft)
-        then
-          bestEntry = entry
-          bestTop = top
-          bestLeft = left
-        end
-      elseif not bestEntry then
+  for entry in pairs(cluster) do
+    local geometry = GetSmartSnapGeometry(entry)
+    if geometry then
+      local left, top = geometry.left, geometry.top
+      if not bestEntry
+        or bestTop == nil
+        or top > bestTop
+        or (top == bestTop and left < bestLeft)
+      then
         bestEntry = entry
+        bestTop = top
+        bestLeft = left
       end
+    elseif not bestEntry then
+      bestEntry = entry
     end
   end
 
@@ -2182,13 +2155,13 @@ end
 
 local function GetNextActiveSmartSnapPeers(startKey, relation)
   local results = {}
-  local visited = { [startKey] = true }
-  local queue = {}
 
   for peerKey, link in pairs(SmartSnapLinks[startKey] or {}) do
-    if link.relation == relation then
-      queue[#queue + 1] = {
-        key = peerKey,
+    local entry = MoversByKey[peerKey]
+    if link.relation == relation and IsSmartSnapRuntimeEntryActive(entry) then
+      results[#results + 1] = {
+        entry = entry,
+        relation = relation,
         alignment = link.alignment,
         gap = NormalizeSmartSnapGap(link.gap),
         sideOffset = NormalizeSmartSnapSideOffset(link.sideOffset),
@@ -2198,43 +2171,7 @@ local function GetNextActiveSmartSnapPeers(startKey, relation)
     end
   end
 
-  local index = 1
-  while queue[index] do
-    local current = queue[index]
-    index = index + 1
-
-    if not visited[current.key] then
-      visited[current.key] = true
-
-      local entry = MoversByKey[current.key]
-      if IsSmartSnapRuntimeEntryActive(entry) then
-        results[#results + 1] = {
-          entry = entry,
-          relation = relation,
-          alignment = current.alignment,
-          gap = current.gap,
-          sideOffset = current.sideOffset,
-          syncSize = current.syncSize,
-          syncDesign = current.syncDesign,
-        }
-      else
-        for peerKey, link in pairs(SmartSnapLinks[current.key] or {}) do
-          if not visited[peerKey] and link.relation == relation then
-            queue[#queue + 1] = {
-              key = peerKey,
-              alignment = current.alignment or link.alignment,
-              gap = current.gap + NormalizeSmartSnapGap(link.gap),
-              sideOffset = current.sideOffset + NormalizeSmartSnapSideOffset(link.sideOffset),
-              syncSize = current.syncSize and link.syncSize == true,
-              syncDesign = current.syncDesign and link.syncDesign == true,
-            }
-          end
-        end
-      end
-    end
-  end
-
-  table_sort(results, function(first, second)
+  _G.table.sort(results, function(first, second)
     local firstOrder = GetSmartSnapAlignmentOrder(relation, first.alignment)
     local secondOrder = GetSmartSnapAlignmentOrder(relation, second.alignment)
     if firstOrder ~= secondOrder then
@@ -2379,35 +2316,9 @@ local function ApplySmartSnapSizeSync(sourceEntry)
 end
 
 local function ApplySmartSnapRuntimePosition(entry)
-  local helper = GhostMoverHelpers and GhostMoverHelpers[entry.key]
-  if not helper or not helper.frame then
-    return
+  if type(entry.savePosition) == "function" then
+    entry.savePosition(entry.frame, entry.key)
   end
-
-  local opts = helper.opts or {}
-  if type(opts.onRuntimePosition) == "function" then
-    opts.onRuntimePosition(helper.frame, entry.key, helper)
-    return
-  end
-
-  local liveFrame = opts.liveFrame
-  if type(liveFrame) == "function" then
-    liveFrame = liveFrame(helper.frame, entry.key, helper)
-  end
-
-  local positionFrame = liveFrame and (liveFrame.__puiPositionHolder or liveFrame) or nil
-  if not positionFrame
-    or positionFrame == helper.frame
-    or not positionFrame.ClearAllPoints
-    or not positionFrame.SetPoint
-    or (positionFrame.IsForbidden and positionFrame:IsForbidden())
-  then
-    return
-  end
-
-  local x, y = GetRawOffsetsForFrame(helper.frame)
-  positionFrame:ClearAllPoints()
-  positionFrame:SetPoint("CENTER", UIParent, "CENTER", x, y)
 end
 
 local function RelayoutSmartSnapCluster(startEntry, finalize, syncSize)
@@ -2503,7 +2414,7 @@ local function RelayoutSmartSnapCluster(startEntry, finalize, syncSize)
 
   if finalize then
     local finalizePrimary = startEntry ~= layoutRoot and moved[startEntry] and startEntry or nil
-    FinalizeMovedGroup(moved, finalizePrimary)
+    FrameUtil._FinalizeMovedGroup(moved, finalizePrimary)
   end
 end
 
@@ -2521,10 +2432,10 @@ function FrameUtil.RelayoutSmartSnapCluster(key, finalize)
 end
 
 local function FlushPendingSmartSnapRelayouts()
-  SmartSnapRuntimeRelayoutScheduled = false
+  FrameUtil._smartSnapRuntimeRelayoutScheduled = false
 
   if InCombatLockdown()
-    or not SmartSnapWorldReady
+    or not FrameUtil._smartSnapWorldReady
     or (not next(PendingSmartSnapRelayouts) and not next(PendingSmartSnapRuntimeRelayouts))
   then
     return
@@ -2565,15 +2476,15 @@ local function FlushPendingSmartSnapRelayouts()
 end
 
 local function SchedulePendingSmartSnapRelayouts()
-  if SmartSnapRuntimeRelayoutScheduled
-    or not SmartSnapWorldReady
+  if FrameUtil._smartSnapRuntimeRelayoutScheduled
+    or not FrameUtil._smartSnapWorldReady
     or InCombatLockdown()
   then
     return
   end
 
-  SmartSnapRuntimeRelayoutScheduled = true
-  C_Timer.After(0, FlushPendingSmartSnapRelayouts)
+  FrameUtil._smartSnapRuntimeRelayoutScheduled = true
+  _G.C_Timer.After(0, FlushPendingSmartSnapRelayouts)
 end
 
 local function QueueSmartSnapRuntimeRelayout(key)
@@ -3283,7 +3194,7 @@ end
 
 function FrameUtil.BeginExternalSmartSnapDrag(key, breakSnap)
   local entry = key and MoversByKey[key]
-  if not entry then
+  if not entry or InCombatLockdown() or not IsSmartSnapRuntimeEntryActive(entry) then
     return nil
   end
 
@@ -3336,7 +3247,7 @@ function FrameUtil.UpdateExternalSmartSnapDrag(state, deltaX, deltaY)
 end
 
 function FrameUtil.FinishExternalSmartSnapDrag(state)
-  if not state or not state.entry then
+  if not state or not state.entry or InCombatLockdown() then
     return false
   end
 
@@ -3348,7 +3259,7 @@ function FrameUtil.FinishExternalSmartSnapDrag(state)
   end
 
   if not committed then
-    FinalizeMovedGroup(state.group or { [state.entry] = true }, state.entry)
+    FrameUtil._FinalizeMovedGroup(state.group or { [state.entry] = true }, state.entry)
   end
 
   return committed
@@ -3360,6 +3271,17 @@ function FrameUtil.CancelExternalSmartSnapDrag(state)
   end
 
   ClearSmartSnapCandidate(state.entry)
+
+  if InCombatLockdown() then
+    return false
+  end
+
+  for member, point in pairs(state.start or {}) do
+    if member.frame then
+      MoveEntryTo(member, point.x, point.y, true)
+    end
+  end
+
   return true
 end
 
@@ -3412,7 +3334,7 @@ function FrameUtil.AugmentSmartSnapQuickSettings(entry, spec)
         }
       end
     end
-    table_sort(linkedMovers, function(first, second)
+    _G.table.sort(linkedMovers, function(first, second)
       return tostring(first.label) < tostring(second.label)
     end)
 
@@ -3579,7 +3501,7 @@ local function IsSelectableEntry(entry)
   return true
 end
 
-local function GetSelectedMoverCount()
+function FrameUtil._GetSelectedMoverCount()
   local count = 0
 
   for entry in pairs(SelectedEntries) do
@@ -3591,7 +3513,7 @@ local function GetSelectedMoverCount()
   return count
 end
 
-local function RefreshSelectionVisuals()
+function FrameUtil._RefreshSelectionVisuals()
   for _, entry in ipairs(MoversList) do
     if SelectedEntries[entry] and not IsSelectableEntry(entry) then
       SelectedEntries[entry] = nil
@@ -3609,7 +3531,7 @@ local function RefreshSelectionVisuals()
     end
   end
 
-  local selectedCount = GetSelectedMoverCount()
+  local selectedCount = FrameUtil._GetSelectedMoverCount()
 
   for _, entry in ipairs(MoversList) do
     local visual = entry.chrome or entry.overlay
@@ -3643,7 +3565,7 @@ local function AddEntryToMoveGroup(group, entry, includeSmartSnap)
   group[entry] = true
 
   if includeSmartSnap then
-    local cluster = FrameUtil.GetSmartSnapCluster(entry)
+    local cluster = GetSmartSnapCluster(entry)
     for peer in pairs(cluster) do
       if IsSelectableEntry(peer) then
         group[peer] = true
@@ -3652,7 +3574,7 @@ local function AddEntryToMoveGroup(group, entry, includeSmartSnap)
   end
 end
 
-local function GetSelectedMoveGroup(primary, includeSmartSnap)
+function FrameUtil._GetSelectedMoveGroup(primary, includeSmartSnap)
   local group = {}
 
   if SelectedEntries[primary] then
@@ -3666,31 +3588,23 @@ local function GetSelectedMoveGroup(primary, includeSmartSnap)
   return group
 end
 
-FinalizeMovedGroup = function(group, primary)
+function FrameUtil._FinalizeMovedGroup(group, primary)
   if not group then
     return
   end
 
-  local function FinalizeEntry(entry)
-    if type(entry.onDragStop) == "function" then
-      entry.onDragStop(entry.frame, entry.key)
-    end
-
-    FrameUtil._OnMoverMoved(entry)
-  end
-
   if primary and group[primary] then
-    FinalizeEntry(primary)
+    FinalizeEntryMove(primary)
   end
 
   for entry in pairs(group) do
     if entry ~= primary then
-      FinalizeEntry(entry)
+      FinalizeEntryMove(entry)
     end
   end
 end
 
-local function MoveGroupBy(group, dx, dy, primary)
+function FrameUtil._MoveGroupBy(group, dx, dy, primary)
   if not group then
     return
   end
@@ -3703,21 +3617,12 @@ local function MoveGroupBy(group, dx, dy, primary)
     MoveEntryTo(entry, x + dx, y + dy, true)
   end
 
-  FinalizeMovedGroup(group, primary)
+  FrameUtil._FinalizeMovedGroup(group, primary)
 end
 
 FrameUtil._IsMoverSelected = function(entry)
   return SelectedEntries[entry] == true
 end
-
-FrameUtil._GetSelectedMoverCount = GetSelectedMoverCount
-FrameUtil._RefreshSelectionVisuals = RefreshSelectionVisuals
-FrameUtil._GetSelectedMoveGroup = GetSelectedMoveGroup
-FrameUtil._FinalizeMovedGroup = FinalizeMovedGroup
-FrameUtil._MoveGroupBy = MoveGroupBy
-FrameUtil._GetMoverEntry = function(key) return MoversByKey[key] end
-FrameUtil._GetMoversList = function() return MoversList end
-FrameUtil._MoveEntryTo = MoveEntryTo
 
 function FrameUtil.RefreshTheme()
   local textColor = ns.Theme.GetColors().text
@@ -3748,7 +3653,7 @@ function FrameUtil.RefreshTheme()
 end
 
 local function GetCursorUIPosition()
-  local x, y = GetCursorPosition()
+  local x, y = _G.GetCursorPosition()
   local scale = UIParent:GetEffectiveScale()
 
   if not scale or scale <= 0 then
@@ -3781,7 +3686,7 @@ local function ApplyBoxSelection(left, right, bottom, top, additive)
   end
 
   SelectedEntry = primary
-  RefreshSelectionVisuals()
+  FrameUtil._RefreshSelectionVisuals()
 end
 
 local function EnsureSelectionSurface()
@@ -3793,7 +3698,7 @@ local function EnsureSelectionSurface()
   FrameUtil._selectionSurface = surface
 
   surface:SetAllPoints(UIParent)
-  surface:SetFrameStrata(GetSelectionSurfaceStrata())
+  surface:SetFrameStrata("HIGH")
   surface:SetFrameLevel(0)
   surface:EnableMouse(true)
   surface:Hide()
@@ -3904,13 +3809,8 @@ local function EnsureSelectionSurface()
   return surface
 end
 
-function FrameUtil._SetSelectionSurfaceVisible(enable)
-  local surface = EnsureSelectionSurface()
-  surface:SetShown(enable and true or false)
-end
 
-
-local function UpdateEditDialogKeyboardState()
+function FrameUtil._UpdateEditDialogKeyboardState()
   local dlg = FrameUtil._editDialog
   if not dlg or InCombatLockdown() then
     return
@@ -3919,15 +3819,12 @@ local function UpdateEditDialogKeyboardState()
   dlg:EnableKeyboard(FrameUtil._keyboardMoveEnabled and true or false)
 end
 
-
-FrameUtil._UpdateEditDialogKeyboardState = UpdateEditDialogKeyboardState
-
 local function CreatePleebCheckbox(parent, label, initial, onClick)
   local wrap = CreateFrame("Frame", nil, parent)
   wrap:SetSize(Round(220), Round(20))
   wrap:EnableMouse(true)
 
-  local cb = LibStub("AceGUI-3.0"):Create("CheckBox")
+  local cb = _G.LibStub("AceGUI-3.0"):Create("CheckBox")
   cb:SetFullWidth(true)
   cb:SetLabel(label or "")
   cb:SetValue(initial and true or false)
@@ -3968,7 +3865,7 @@ local function EnsureEditDialog()
     return FrameUtil._editDialog
   end
 
-  local AceGUI = LibStub("AceGUI-3.0")
+  local AceGUI = _G.LibStub("AceGUI-3.0")
 
   FrameUtil._InitEditModeConfig()
 
@@ -3984,7 +3881,7 @@ local function EnsureEditDialog()
   f:SetScript("OnDragStart", f.StartMoving)
   f:SetScript("OnDragStop",  f.StopMovingOrSizing)
 
-  table_insert(UISpecialFrames, f:GetName())
+  _G.table.insert(_G.UISpecialFrames, f:GetName())
 
   ns.Theme.WidgetSkins.Frame(f)
 
@@ -4220,7 +4117,7 @@ local function EnsureEditDialog()
   gridDropdown:SetFullWidth(false)
   gridDropdown:SetWidth(90)
   local sizeList = {}
-  for _, s in ipairs(GRID_SIZES) do
+  for _, s in ipairs({ 8, 16, 32, 64 }) do
     sizeList[s] = tostring(s)
   end
   sizeList["off"] = "Off"
@@ -4406,7 +4303,7 @@ local function EnsureEditDialog()
 end
 
 
-local function EnsureKeyboardHelpPanel()
+function FrameUtil.EnsureKeyboardHelpPanel()
   if FrameUtil._kbHelpPanel and FrameUtil._kbHelpPanel:IsObjectType("Frame") then
     return FrameUtil._kbHelpPanel
   end
@@ -4454,10 +4351,8 @@ local function EnsureKeyboardHelpPanel()
   return panel
 end
 
-FrameUtil.EnsureKeyboardHelpPanel = EnsureKeyboardHelpPanel
-
-local function UpdateKeyboardHelpPanelVisibility()
-  local panel = EnsureKeyboardHelpPanel()
+function FrameUtil._UpdateKeyboardHelpPanelVisibility()
+  local panel = FrameUtil.EnsureKeyboardHelpPanel()
   if not panel then
     return
   end
@@ -4467,8 +4362,6 @@ local function UpdateKeyboardHelpPanelVisibility()
       and not FrameUtil._keybindsCollapsed
   )
 end
-
-FrameUtil._UpdateKeyboardHelpPanelVisibility = UpdateKeyboardHelpPanelVisibility
 
 -- Edit dialog
 local function ShowEditDialog(show)
@@ -4702,7 +4595,8 @@ local function OpenOptionsForEntry(entry, frame)
   Addon:OpenOptions()
 end
 
-local function BuildQuickSettingsSpecForEntry(entry, providerFrame)
+function FrameUtil.GetMoverQuickSettingsSpec(keyOrEntry, providerFrame)
+  local entry = type(keyOrEntry) == "table" and keyOrEntry or MoversByKey[keyOrEntry]
   if not entry then
     return nil
   end
@@ -4730,13 +4624,9 @@ local function BuildQuickSettingsSpecForEntry(entry, providerFrame)
   return spec
 end
 
-function FrameUtil.GetMoverQuickSettingsSpec(key, providerFrame)
-  return BuildQuickSettingsSpecForEntry(MoversByKey[key], providerFrame)
-end
-
 local function OpenQuickSettingsForEntry(entry, frame)
   local anchor = entry.overlay or frame
-  local spec = BuildQuickSettingsSpecForEntry(entry, frame)
+  local spec = FrameUtil.GetMoverQuickSettingsSpec(entry, frame)
   if spec == false then
     return true
   end
@@ -4818,7 +4708,7 @@ local function AttachDrag(entry)
         return
       end
 
-      if IsAltKeyDown() then
+      if _G.IsAltKeyDown() then
         if entry.key then
           FrameUtil.ClearSmartSnapForKey(entry.key)
           Addon:Print("|cffd0ff00[PUI]|r Detached Smart Snap links for '" .. tostring(entry.label or entry.key) .. "'.")
@@ -4827,15 +4717,15 @@ local function AttachDrag(entry)
       end
 
       if IsControlKeyDown() then
-        if type(entry.resetPosition) == "function" then
-          entry.resetPosition(frame, entry.key)
-        elseif entry.opts and type(entry.opts.resetPosition) == "function" then
-          entry.opts.resetPosition(frame, entry.key)
+        local resetPosition = entry.resetPosition
+          or (entry.opts and entry.opts.resetPosition)
+        if type(resetPosition) == "function" then
+          FrameUtil.ClearSmartSnapForKey(entry.key)
+          resetPosition(frame, entry.key)
+          FrameUtil._OnMoverMoved(entry)
         else
           Addon:Print("|cffd0ff00[PUI]|r No resetPosition handler for mover '" .. tostring(entry.key) .. "'.")
         end
-
-        FrameUtil._OnMoverMoved(entry)
         return
       end
 
@@ -4927,7 +4817,7 @@ local function AttachDrag(entry)
     end
 
     if entry == SelectedEntry then
-      local now = GetTime()
+      local now = _G.GetTime()
       if not entry._puiLiveCoordNext or now >= entry._puiLiveCoordNext then
         entry._puiLiveCoordNext = now + 0.05
         FrameUtil._UpdateNudgeUI(entry)
@@ -5021,10 +4911,7 @@ local function AttachDrag(entry)
     elseif attachmentCommitted then
       for peer in pairs(moveGroup) do
         if peer ~= entry then
-          if type(peer.onDragStop) == "function" then
-            peer.onDragStop(peer.frame, peer.key)
-          end
-          FrameUtil._OnMoverMoved(peer)
+          FinalizeEntryMove(peer)
         end
       end
       FrameUtil._OnMoverMoved(entry)
@@ -5198,9 +5085,9 @@ local function EnsureNudgeControls(entry)
   local atlasPressed = "CovenantSanctum-Renown-Arrow-Depressed"
 
   g.left  = CreateArrowTextureButton(g, atlasNormal, atlasPressed, 0)
-  g.up    = CreateArrowTextureButton(g, atlasNormal, atlasPressed, math_pi / 2)
-  g.right = CreateArrowTextureButton(g, atlasNormal, atlasPressed, math_pi)
-  g.down  = CreateArrowTextureButton(g, atlasNormal, atlasPressed, (math_pi * 3) / 2)
+  g.up    = CreateArrowTextureButton(g, atlasNormal, atlasPressed, _G.math.pi / 2)
+  g.right = CreateArrowTextureButton(g, atlasNormal, atlasPressed, _G.math.pi)
+  g.down  = CreateArrowTextureButton(g, atlasNormal, atlasPressed, (_G.math.pi * 3) / 2)
 
   local HOLD_DELAY = 0.25
   local HOLD_RATE  = 0.03
@@ -5251,7 +5138,7 @@ local function EnsureNudgeControls(entry)
         return
       end
 
-      local now = GetTime()
+      local now = _G.GetTime()
       if now >= (g._holdNext or 0) then
         g._holdNext = now + HOLD_RATE
         FrameUtil._NudgeSelected(g._holdDx or 0, g._holdDy or 0)
@@ -5270,7 +5157,7 @@ local function EnsureNudgeControls(entry)
     g._holdDx = dx or 0
     g._holdDy = dy or 0
 
-    g._holdDelayTimer = C_Timer.NewTimer(HOLD_DELAY, function()
+    g._holdDelayTimer = _G.C_Timer.NewTimer(HOLD_DELAY, function()
       g._holdDelayTimer = nil
       if g._holdPending and SelectedEntry == entry then
         g._holdPending = nil
@@ -5342,7 +5229,7 @@ function FrameUtil._NudgeSelected(dx, dy)
     return
   end
 
-  local onePixel = FrameScale:BestOnePixel()
+  local onePixel = ns.FrameScale:BestOnePixel()
   local moveGroup = FrameUtil._GetSelectedMoveGroup(SelectedEntry, true)
   FrameUtil._MoveGroupBy(
     moveGroup,
@@ -5457,8 +5344,8 @@ function FrameUtil._UpdateNudgeUI(entry)
   end
 
   local x, y = GetOffsetsForFrame(entry.frame)
-  local xText = string_format("%.0f", x)
-  local yText = string_format("%.0f", y)
+  local xText = _G.string.format("%.0f", x)
+  local yText = _G.string.format("%.0f", y)
   if xBox.__puiLastText ~= xText then
     xBox:SetText(xText)
     xBox.__puiLastText = xText
@@ -5828,6 +5715,7 @@ function FrameUtil:EnsureGhostMover(key, opts)
     label = opts.label,
     ghost = opts.ghost and true or false,
     useOverlayDrag = opts.useOverlayDrag ~= false,
+    savePosition = opts.savePosition,
     onDragStop = opts.onDragStop,
     resetPosition = opts.resetPosition,
     openOptions = opts.openOptions,
@@ -5857,9 +5745,9 @@ function FrameUtil.CompleteProfileTransition()
     return
   end
 
-  _editModeConfigDB = nil
+  FrameUtil._editModeConfigDB = nil
   FrameUtil._smartSnapDBRef = nil
-  InitEditModeConfig()
+  FrameUtil._InitEditModeConfig()
   EnsureSmartSnapLoaded()
   FrameUtil:RefreshAllGhostMovers()
 
@@ -5920,6 +5808,7 @@ function FrameUtil:RegisterMover(key, frame, opts)
       frame         = frame,
       opts          = opts,
       ghost         = opts.ghost and true or false,
+      savePosition  = opts.savePosition or nil,
       onDragStop    = opts.onDragStop or nil,
       resetPosition = opts.resetPosition or nil,
       openOptions   = opts.openOptions or nil,
@@ -5975,6 +5864,7 @@ function FrameUtil:RegisterMover(key, frame, opts)
     entry.opts  = opts
     entry.ghost = opts.ghost and true or false
 
+    entry.savePosition  = opts.savePosition
     entry.onDragStop    = opts.onDragStop
     entry.resetPosition = opts.resetPosition
     entry.openOptions   = opts.openOptions
@@ -6116,8 +6006,6 @@ function FrameUtil.SetKeyboardMovementEnabled(enable, noPersist)
   FrameUtil._UpdateEditDialogKeyboardState()
 end
 
-local OBJECTIVE_TRACKER_MOVER_KEY = "ObjectiveTracker"
-
 local function ApplyObjectiveTrackerMoverPosition(mover, tracker)
   if not mover or not tracker then
     return
@@ -6139,17 +6027,16 @@ local function SaveObjectiveTrackerMoverPosition(mover, tracker)
   tracker:OnSystemPositionChange()
   tracker:UpdateHeight()
   manager:SaveLayoutChanges()
-  FrameUtil:RefreshGhostMover(OBJECTIVE_TRACKER_MOVER_KEY)
 end
 
-local function EnsureObjectiveTrackerMover()
+function FrameUtil._EnsureObjectiveTrackerMover()
   local tracker = _G.ObjectiveTrackerFrame
   local manager = _G.EditModeManagerFrame
   if not tracker or not manager or not manager:IsInitialized() then
     return
   end
 
-  FrameUtil:EnsureGhostMover(OBJECTIVE_TRACKER_MOVER_KEY, {
+  FrameUtil:EnsureGhostMover("ObjectiveTracker", {
     label = "Objective Tracker",
     useOverlayDrag = true,
     smartSnap = {
@@ -6167,8 +6054,11 @@ local function EnsureObjectiveTrackerMover()
     shouldShow = function()
       return ns.Flags.IsEditing == true
     end,
-    onDragStop = function(mover)
+    savePosition = function(mover)
       SaveObjectiveTrackerMoverPosition(mover, tracker)
+    end,
+    onDragStop = function()
+      FrameUtil:RefreshGhostMover("ObjectiveTracker")
     end,
     onDragUpdate = function(mover)
       ApplyObjectiveTrackerMoverPosition(mover, tracker)
@@ -6191,7 +6081,7 @@ function FrameUtil.OnEditModeChanged(enable)
 
   FrameUtil._InitEditModeConfig()
   if enable then
-    EnsureObjectiveTrackerMover()
+    FrameUtil._EnsureObjectiveTrackerMover()
   end
   FrameUtil:RefreshAllGhostMovers()
   FrameUtil.RefreshMoverLayering()
@@ -6218,7 +6108,7 @@ function FrameUtil.OnEditModeChanged(enable)
 
   if not enable then
     ns.EditModeQuickSettings:Hide()
-    FrameUtil._SetSelectionSurfaceVisible(false)
+    EnsureSelectionSurface():SetShown(false)
     FrameUtil._ClearSelection()
     ClearSmartSnapCandidate(nil)
     FrameUtil.ShowGrid(false)
@@ -6232,7 +6122,7 @@ function FrameUtil.OnEditModeChanged(enable)
     end
 
     ShowEditDialog(true)
-    FrameUtil._SetSelectionSurfaceVisible(true)
+    EnsureSelectionSurface():SetShown(true)
     FrameUtil._UpdateSettingsPanelVisibility()
     FrameUtil._UpdateKeyboardHelpPanelVisibility()
     FrameUtil._UpdateEditDialogKeyboardState()
@@ -6323,7 +6213,7 @@ do
   f:RegisterEvent("PLAYER_REGEN_ENABLED")
   f:SetScript("OnEvent", function(_, event)
     if event == "PLAYER_ENTERING_WORLD" then
-      SmartSnapWorldReady = true
+      FrameUtil._smartSnapWorldReady = true
       SchedulePendingSmartSnapRelayouts()
       return
     end

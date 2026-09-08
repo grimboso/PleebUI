@@ -313,7 +313,7 @@ function UFStyle.BuildUnitFrameVisuals(frame, unit, cfg)
     UFPortrait.PrepareFrame(frame, cfg)
   end
 
-  ns.UFIndicators.ConstructNativeStatusElements(frame, unit)
+  ns.UFIndicators.ConstructNativeStatusElements(frame, unit, cfg)
   ns.UFText.Construct(frame, unit, cfg)
 
   frame.__puiUF_VisualsBuilt = true

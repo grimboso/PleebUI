@@ -665,7 +665,7 @@ function Cooldowns:GetSpellKeybind(spellID)
   return key, false
 end
 
-local function _KB_LookupItem(itemID)
+function Cooldowns:GetItemKeybind(itemID)
   if _KB_IsSecret(itemID) then return nil, true end
 
   itemID = _KB_PositiveNumber(itemID)
@@ -680,7 +680,7 @@ local function _KB_LookupItem(itemID)
   if _KB_IsSecret(itemSpellID) then return nil, true end
   itemSpellID = _KB_PositiveNumber(itemSpellID)
   if itemSpellID then
-    local key, blocked = Cooldowns:GetSpellKeybind(itemSpellID)
+    local key, blocked = self:GetSpellKeybind(itemSpellID)
     if blocked then return nil, true end
     if key then
       _kbItemKeyCache[itemID] = key
@@ -713,7 +713,7 @@ local function _KB_LookupItem(itemID)
   return nil, false
 end
 
-local function _KB_LookupEquipmentSlot(equipSlot)
+function Cooldowns:GetEquipmentSlotKeybind(equipSlot)
   if _KB_IsSecret(equipSlot) then return nil, true end
 
   equipSlot = _KB_PositiveNumber(equipSlot)
@@ -728,7 +728,7 @@ local function _KB_LookupEquipmentSlot(equipSlot)
   if _KB_IsSecret(itemID) then return nil, true end
   itemID = _KB_PositiveNumber(itemID)
   if itemID then
-    local key, blocked = _KB_LookupItem(itemID)
+    local key, blocked = self:GetItemKeybind(itemID)
     if blocked then return nil, true end
     if key then
       _kbEquipSlotKeyCache[equipSlot] = key
@@ -749,14 +749,6 @@ local function _KB_LookupEquipmentSlot(equipSlot)
 
   _kbEquipSlotKeyCache[equipSlot] = false
   return nil, false
-end
-
-function Cooldowns:GetItemKeybind(itemID)
-  return _KB_LookupItem(itemID)
-end
-
-function Cooldowns:GetEquipmentSlotKeybind(equipSlot)
-  return _KB_LookupEquipmentSlot(equipSlot)
 end
 
 local function _KB_EnsureHotKeyFontString(item)
@@ -792,19 +784,9 @@ local function _KB_ClearItem(item)
 end
 
 local function _KB_GetSpellIDsFromItem(item)
-  local cooldownInfo
-  if type(item.GetCooldownInfo) == "function" then
-    cooldownInfo = item:GetCooldownInfo()
-    if _KB_IsSecret(cooldownInfo) then
-      return nil, nil, true
-    end
-  end
-
-  if cooldownInfo == nil then
-    cooldownInfo = item.cooldownInfo
-    if _KB_IsSecret(cooldownInfo) then
-      return nil, nil, true
-    end
+  local cooldownInfo = item:GetCooldownInfo()
+  if _KB_IsSecret(cooldownInfo) then
+    return nil, nil, true
   end
 
   if type(cooldownInfo) ~= "table" then
@@ -839,19 +821,13 @@ local function _KB_GetItemKeybind(item, baseSpellID, overrideSpellID)
     if key then return key, false end
   end
 
-  if type(item.GetEquipSlot) == "function" then
-    local equipSlot = item:GetEquipSlot()
-    if _KB_IsSecret(equipSlot) then return nil, true end
-    equipSlot = _KB_PositiveNumber(equipSlot)
-    if equipSlot then
-      local key, blocked = _KB_LookupEquipmentSlot(equipSlot)
-      if blocked then return nil, true end
-      if key then return key, false end
-    end
-  end
-
-  if type(item.GetSpellCategory) ~= "function" then
-    return nil, false
+  local equipSlot = item:GetEquipSlot()
+  if _KB_IsSecret(equipSlot) then return nil, true end
+  equipSlot = _KB_PositiveNumber(equipSlot)
+  if equipSlot then
+    local key, blocked = Cooldowns:GetEquipmentSlotKeybind(equipSlot)
+    if blocked then return nil, true end
+    if key then return key, false end
   end
 
   local categoryID = item:GetSpellCategory()
@@ -862,13 +838,11 @@ local function _KB_GetItemKeybind(item, baseSpellID, overrideSpellID)
   local itemIDs = Cooldowns:GetConsumableCategoryItemIDs(categoryID)
   if not itemIDs then return nil, false end
 
-  if type(item.GetSpellCategoryTooltipItemID) == "function" then
-    local displayedItemID = item:GetSpellCategoryTooltipItemID()
-    if _KB_IsSecret(displayedItemID) then return nil, true end
-    local key, blocked = _KB_LookupItem(displayedItemID)
-    if blocked then return nil, true end
-    if key then return key, false end
-  end
+  local displayedItemID = item:GetSpellCategoryTooltipItemID()
+  if _KB_IsSecret(displayedItemID) then return nil, true end
+  local key, blocked = Cooldowns:GetItemKeybind(displayedItemID)
+  if blocked then return nil, true end
+  if key then return key, false end
 
   for index = 1, #itemIDs do
     local itemID = itemIDs[index]
@@ -876,7 +850,7 @@ local function _KB_GetItemKeybind(item, baseSpellID, overrideSpellID)
       return nil, true
     end
 
-    local key, blocked = _KB_LookupItem(itemID)
+    local key, blocked = Cooldowns:GetItemKeybind(itemID)
     if blocked then return nil, true end
     if key then return key, false end
   end

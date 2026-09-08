@@ -32,6 +32,7 @@ local PreviewBox = ns.PreviewBox
 local BarWidget = ns.BarWidget
 local Presentation = ns.Presentation
 local PCMPresentation = ns.PCMPresentation
+local AuraWidget = ns.AuraWidget
 local IconSkin = ns.IconSkin
 local IconSettings = ns.PCMIconSettings
 local Round = ns.Pixel.Round
@@ -86,6 +87,54 @@ local function PCMPreview_Clamp(value, minimum, maximum)
   end
 
   return value
+end
+
+local function PCMPreview_GlowColor(color, fallback)
+  color = type(color) == "table" and color or fallback or { 1, 1, 1, 1 }
+  return {
+    tonumber(color[1] or color.r) or 1,
+    tonumber(color[2] or color.g) or 1,
+    tonumber(color[3] or color.b) or 1,
+    tonumber(color[4] or color.a) or 1,
+  }
+end
+
+local function PCMPreview_ConfigureGlow(owner, frame, width, height, style, color, options)
+  style = style or "NONE"
+  if style == "NONE" then
+    if owner.__puiPCMPreviewGlow then
+      owner.__puiPCMPreviewGlow.root:Hide()
+    end
+    return
+  end
+
+  color = PCMPreview_GlowColor(color, { 1, 0.55, 0.1, 1 })
+  if not owner.__puiPCMPreviewGlow then
+    owner.__puiPCMPreviewGlow = AuraWidget.CreateSlotGlow(
+      frame,
+      width,
+      height,
+      style,
+      color,
+      options
+    )
+  else
+    AuraWidget.ConfigureSlotGlow(
+      owner.__puiPCMPreviewGlow,
+      width,
+      height,
+      style,
+      color,
+      options
+    )
+  end
+  owner.__puiPCMPreviewGlow.root:Show()
+end
+
+local function PCMPreview_HideGlow(owner)
+  if owner.__puiPCMPreviewGlow then
+    owner.__puiPCMPreviewGlow.root:Hide()
+  end
 end
 
 local function PCMPreview_GetDisplayScale(panel)
@@ -357,15 +406,6 @@ local function PCMPreview_CreateBar(parent)
   chargePresentation.frame:SetFrameLevel(frame:GetFrameLevel() + 1)
   chargePresentation.frame:Hide()
 
-  local customGlowFrame = CreateFrame("Frame", nil, frame)
-  customGlowFrame:SetAllPoints(frame)
-  customGlowFrame:SetFrameLevel(frame:GetFrameLevel() + 6)
-  customGlowFrame:EnableMouse(false)
-  customGlowFrame:Hide()
-  local customGlowBorder = PCMPresentation.CreateCustomBarBuffGlowBorder(
-    customGlowFrame
-  )
-
   local durationFrame = CreateFrame("Frame", nil, parent)
   local durationStatus = CreateFrame("StatusBar", nil, durationFrame)
   local durationValueTextFrame = CreateFrame("Frame", nil, durationFrame)
@@ -432,8 +472,6 @@ local function PCMPreview_CreateBar(parent)
   bar.chargePresentation = chargePresentation
   bar.chargeRoot = chargePresentation.slotsContainer
   bar.chargeSlots = chargePresentation.chargeSlots
-  bar.customGlowFrame = customGlowFrame
-  bar.customGlowBorder = customGlowBorder
   bar.durationFrame = durationFrame
   bar.durationStatus = durationStatus
   bar.durationValueText = durationValueText
@@ -1007,34 +1045,18 @@ local function PCMPreview_ConfigureBuffBarPanel(panel, style)
   style = type(style) == "table" and style or {}
   local config = type(style.buffBar) == "table" and style.buffBar or {}
   local colors = Theme.GetColors()
-  local vertical = config.orientation == "VERTICAL"
-  local length = PCMPreview_Clamp(config.width or 250, 120, 400)
-  local thickness = PCMPreview_Clamp(config.height or 20, 8, 40)
+  local vertical, _, thickness, iconPlacement, showIcon, iconSize, barWidth, barHeight, rowWidth, rowHeight =
+    ns.Modules.PCM_BuffBars.GetLayoutGeometry(config)
   local spacing = PCMPreview_Clamp(config.rowSpacing or 1, 0, 40)
-  local iconGap = PCMPreview_Clamp(config.iconGap or config.padding or 1, 0, 20)
   local content = panel.__puiPCMPreviewContent
   local previewZoom = PCMPreview_GetDisplayScale(panel)
-  local displayLength = math_max(30, Round(length * previewZoom))
   local displayThickness = math_max(6, Round(thickness * previewZoom))
   local displaySpacing = Round(spacing * previewZoom)
-  local displayIconGap = Round(iconGap * previewZoom)
-  local iconPlacement = config.iconPlacement or (vertical and "TOP" or "LEFT")
-  local showIcon = iconPlacement ~= "HIDE"
-  local displayIconSize = displayThickness
-  local barWidth = vertical and displayThickness or displayLength
-  local barHeight = vertical and displayLength or displayThickness
-  local rowWidth = barWidth
-  local rowHeight = barHeight
-
-  if showIcon then
-    if vertical then
-      rowWidth = math_max(rowWidth, displayIconSize)
-      rowHeight = rowHeight + displayIconSize + displayIconGap
-    else
-      rowWidth = rowWidth + displayIconSize + displayIconGap
-      rowHeight = math_max(rowHeight, displayIconSize)
-    end
-  end
+  local displayIconSize = math_max(1, Round(iconSize * previewZoom))
+  barWidth = math_max(1, Round(barWidth * previewZoom))
+  barHeight = math_max(1, Round(barHeight * previewZoom))
+  rowWidth = math_max(1, Round(rowWidth * previewZoom))
+  rowHeight = math_max(1, Round(rowHeight * previewZoom))
 
   local labelWidth = vertical and 0 or math_max(88, Round(132 * previewZoom))
   local labelGap = vertical and 0 or Round(6 * previewZoom)
@@ -1135,17 +1157,17 @@ local function PCMPreview_ConfigureBuffBarPanel(panel, style)
       if vertical then
         if iconPlacement == "BOTTOM" then
           bar.iconFrame:SetPoint("BOTTOM", bar.frame, "BOTTOM", 0, 0)
-          bar.status:SetPoint("BOTTOM", bar.iconFrame, "TOP", 0, displayIconGap)
+          bar.status:SetPoint("BOTTOM", bar.iconFrame, "TOP", 0, 0)
         else
           bar.iconFrame:SetPoint("TOP", bar.frame, "TOP", 0, 0)
-          bar.status:SetPoint("TOP", bar.iconFrame, "BOTTOM", 0, -displayIconGap)
+          bar.status:SetPoint("TOP", bar.iconFrame, "BOTTOM", 0, 0)
         end
       elseif iconPlacement == "RIGHT" then
         bar.iconFrame:SetPoint("RIGHT", bar.frame, "RIGHT", 0, 0)
-        bar.status:SetPoint("RIGHT", bar.iconFrame, "LEFT", -displayIconGap, 0)
+        bar.status:SetPoint("RIGHT", bar.iconFrame, "LEFT", 0, 0)
       else
         bar.iconFrame:SetPoint("LEFT", bar.frame, "LEFT", 0, 0)
-        bar.status:SetPoint("LEFT", bar.iconFrame, "RIGHT", displayIconGap, 0)
+        bar.status:SetPoint("LEFT", bar.iconFrame, "RIGHT", 0, 0)
       end
     else
       bar.status:SetPoint("CENTER", bar.frame, "CENTER", 0, 0)
@@ -1347,19 +1369,6 @@ local function PCMPreview_GetCustomPath(entry)
   }
 end
 
-
-
-local function PCMPreview_EnsureStackSegments(bar, count)
-  bar.stackSegments = PCMPresentation.EnsureStackSegments(bar, count)
-end
-
-local function PCMPreview_EnsureChargeSlots(bar, count)
-  bar.chargeSlots = PCMPresentation.EnsureChargeSlots(
-    bar.chargePresentation,
-    count
-  )
-end
-
 local function PCMPreview_ResetCustomBar(bar)
   BarWidget.ApplyBorder(bar.barFrame, 0, { 0, 0, 0, 0 })
   bar.barFrame:ClearAllPoints()
@@ -1371,7 +1380,7 @@ local function PCMPreview_ResetCustomBar(bar)
   bar.icon:Hide()
   bar.chargeRoot:Hide()
   bar.chargePresentation.frame:Hide()
-  bar.customGlowFrame:Hide()
+  PCMPreview_HideGlow(bar)
   bar.valueText:Show()
   bar.durationFrame:Hide()
   bar.durationStatus:SetValue(1)
@@ -2087,17 +2096,29 @@ local function PCMPreview_ConfigureCustomBar(
     bar.valueText:SetPoint("CENTER", bar.status, "CENTER", 0, 0)
   end
 
-  local buffGlowSpellID = tonumber(config.buffGlowSpellID)
-  if config.buffGlowEnabled == true
-    and buffGlowSpellID
-    and buffGlowSpellID > 0
-  then
-    PCMPresentation.ConfigureCustomBarBuffGlowBorder(
-      bar.customGlowBorder,
-      bar.customGlowFrame,
-      config,
-      zoom
+  local auraTracker = entry.kind == "duration" or entry.kind == "stack"
+  local activeGlow = not auraTracker and config.activeAuraEnabled == true
+    and config.activeGlowStyle ~= "NONE"
+  local glowStyle = activeGlow and config.activeGlowStyle or "NONE"
+  local glowColor = activeGlow and config.activeGlowColor or config.buffGlowColor
+  if auraTracker and glowStyle == "NONE" and config.buffGlowEnabled == true then
+    glowStyle = config.activeGlowStyle
+    if glowStyle == nil or glowStyle == "NONE" then
+      glowStyle = "PIXEL"
+    end
+  end
+
+  if glowStyle ~= "NONE" then
+    PCMPreview_ConfigureGlow(
+      bar,
+      bar.frame,
+      math_max(1, bar.frame:GetWidth()),
+      math_max(1, bar.frame:GetHeight()),
+      glowStyle,
+      glowColor,
+      { pixelThickness = (tonumber(config.buffGlowThickness) or 2) * zoom }
     )
+    bar.__puiPCMPreviewGlow.root:Hide()
     bar.__puiPCMPreviewCustomGlowEnabled = true
   end
 
@@ -2176,9 +2197,7 @@ local function PCMPreview_ConfigureCustomPanel(box, panel)
       icon = entry.texture,
       cooldownText = countdownText,
       chargeText = countText,
-      glow = config.buffGlowEnabled == true
-        or previewActive and iconConfig.cooldownGlowStyle ~= "NONE"
-        or statefulIcon and not previewActive and iconConfig.readyGlowStyle ~= "NONE",
+      glow = false,
     })
 
     icon.cooldown:SetDrawSwipe(previewActive and iconConfig.showSwipe == true)
@@ -2228,15 +2247,27 @@ local function PCMPreview_ConfigureCustomPanel(box, panel)
       icon.customBlizzardBorder:SetPoint("BOTTOMRIGHT", icon.frame, "BOTTOMRIGHT", 12, -12)
     end
     icon.customBlizzardBorder:SetShown(iconConfig.chromeStyle == "BLIZZARD")
-    local previewGlowColor = config.buffGlowEnabled == true and config.buffGlowColor
-      or previewActive and iconConfig.cooldownGlowColor
-      or iconConfig.readyGlowColor
-    icon.glow:SetVertexColor(
-      previewGlowColor[1] or previewGlowColor.r or 1,
-      previewGlowColor[2] or previewGlowColor.g or 1,
-      previewGlowColor[3] or previewGlowColor.b or 1,
-      previewGlowColor[4] or previewGlowColor.a or 1
-    )
+
+    local auraTracker = entry.kind == "duration" or entry.kind == "stack"
+    local auraGlowStyle = iconConfig.activeAuraGlowStyle or "NONE"
+    local auraGlowColor = iconConfig.activeAuraGlowColor
+    if auraTracker and auraGlowStyle == "NONE" and config.buffGlowEnabled == true then
+      auraGlowStyle = config.activeGlowStyle
+      if auraGlowStyle == nil or auraGlowStyle == "NONE" then
+        auraGlowStyle = "PIXEL"
+      end
+      auraGlowColor = config.buffGlowColor
+    end
+    icon.__puiPCMPreviewReadyGlowStyle = statefulIcon and iconConfig.readyGlowStyle or "NONE"
+    icon.__puiPCMPreviewReadyGlowColor = iconConfig.readyGlowColor
+    icon.__puiPCMPreviewCooldownGlowStyle = statefulIcon and iconConfig.cooldownGlowStyle or "NONE"
+    icon.__puiPCMPreviewCooldownGlowColor = iconConfig.cooldownGlowColor
+    icon.__puiPCMPreviewAuraGlowStyle = auraGlowStyle
+    icon.__puiPCMPreviewAuraGlowColor = auraGlowColor
+    icon.__puiPCMPreviewAutoAura = auraTracker or iconConfig.activeAuraEnabled == true
+    icon.__puiPCMPreviewGlowState = nil
+    PCMPreview_HideGlow(icon)
+
     icon.frame:ClearAllPoints()
     icon.frame:SetPoint(
       "TOP",
@@ -2599,8 +2630,15 @@ local function PCMPreview_UpdateIcon(icon, phase)
   if icon.__puiPCMPreviewStateViewerKey then
     previewState = IconSettings:GetPreviewState(icon.__puiPCMPreviewStateViewerKey)
   end
-  local cooldownActive = previewState == "COOLDOWN" or (previewState == nil and autoCooldownActive)
-  local auraActive = previewState == "AURA" or icon.__puiPCMPreviewAuraMode == true
+  local auraElapsed = (phase + (icon.__puiPCMPreviewPhaseOffset or 0)) % 12
+  local autoAuraActive = previewState == nil
+    and icon.__puiPCMPreviewAutoAura == true
+    and auraElapsed >= 8
+  local cooldownActive = previewState == "COOLDOWN"
+    or (previewState == nil and autoCooldownActive and not autoAuraActive)
+  local auraActive = previewState == "AURA"
+    or icon.__puiPCMPreviewAuraMode == true
+    or autoAuraActive
 
   local alpha
   local saturation
@@ -2641,8 +2679,31 @@ local function PCMPreview_UpdateIcon(icon, phase)
     icon.chargeText:SetText(tostring(math_min(3, charge)))
   end
 
-  if icon.glow:IsShown() then
-    icon.glow:SetAlpha(0.35 + 0.45 * (1 - remaining / duration))
+  local glowState = auraActive and "AURA" or cooldownActive and "COOLDOWN" or "READY"
+  if glowState ~= icon.__puiPCMPreviewGlowState then
+    icon.__puiPCMPreviewGlowState = glowState
+    local style
+    local color
+    if glowState == "AURA" then
+      style = icon.__puiPCMPreviewAuraGlowStyle
+      color = icon.__puiPCMPreviewAuraGlowColor
+    elseif glowState == "COOLDOWN" then
+      style = icon.__puiPCMPreviewCooldownGlowStyle
+      color = icon.__puiPCMPreviewCooldownGlowColor
+    else
+      style = icon.__puiPCMPreviewReadyGlowStyle
+      color = icon.__puiPCMPreviewReadyGlowColor
+    end
+
+    PCMPreview_ConfigureGlow(
+      icon,
+      icon.frame,
+      math_max(1, icon.frame:GetWidth()),
+      math_max(1, icon.frame:GetHeight()),
+      style or "NONE",
+      color,
+      nil
+    )
   end
 end
 
@@ -2686,13 +2747,13 @@ local function PCMPreview_UpdateBar(bar, phase)
 
   local mode = bar.__puiPCMPreviewMode
 
-  if bar.__puiPCMPreviewCustomGlowEnabled then
+  if bar.__puiPCMPreviewCustomGlowEnabled and bar.__puiPCMPreviewGlow then
     local glowElapsed = (
       phase + (bar.__puiPCMPreviewPhaseOffset or 0)
     ) % 8
-    bar.customGlowFrame:SetShown(glowElapsed < 3)
+    bar.__puiPCMPreviewGlow.root:SetShown(glowElapsed < 3)
   else
-    bar.customGlowFrame:Hide()
+    PCMPreview_HideGlow(bar)
   end
 
   if mode == "charge" then
@@ -2996,8 +3057,6 @@ PCMPreview_SortedKeys = P:Def("SortedKeys", PCMPreview_SortedKeys)
 PCMPreview_GetCustomEntries = P:Def("GetCustomEntries", PCMPreview_GetCustomEntries)
 PCMPreview_GetCustomPath = P:Def("GetCustomPath", PCMPreview_GetCustomPath)
 PCMPreview_GetClassBarColor = P:Def("GetClassBarColor", PCMPreview_GetClassBarColor)
-PCMPreview_EnsureStackSegments = P:Def("EnsureStackSegments", PCMPreview_EnsureStackSegments)
-PCMPreview_EnsureChargeSlots = P:Def("EnsureChargeSlots", PCMPreview_EnsureChargeSlots)
 PCMPreview_ResetCustomBar = P:Def("ResetCustomBar", PCMPreview_ResetCustomBar)
 PCMPreview_LayoutCustomFrame = P:Def("LayoutCustomFrame", PCMPreview_LayoutCustomFrame)
 PCMPreview_ConfigureStackSegments = P:Def("ConfigureStackSegments", PCMPreview_ConfigureStackSegments)
