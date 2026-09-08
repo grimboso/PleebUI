@@ -73,12 +73,10 @@ local DEFAULTS = {
 }
 
 local playerAuraFont = CreateFont("PUI_PlayerAuraFont")
-local legacyAuraParent = CreateFrame("Frame", nil, UIParent)
+local blizzardAuraParent = CreateFrame("Frame", nil, UIParent)
 local buttonParts = setmetatable({}, { __mode = "k" })
 
-if legacyAuraParent then
-  legacyAuraParent:Hide()
-end
+blizzardAuraParent:Hide()
 
 local function CopyTable(src)
   local out = {}
@@ -624,7 +622,7 @@ local function ActivateAuraRuntime(kind)
   return activeRuntime
 end
 
-local function CaptureLegacyOffsets()
+local function CaptureBlizzardAuraOffsets()
   if not PlayerBuffs.defaultBuffOffsets then
     local x, y = GetTopRightOffsets(_G.BuffFrame)
     PlayerBuffs.defaultBuffOffsets = { x = x, y = y }
@@ -636,8 +634,8 @@ local function CaptureLegacyOffsets()
   end
 end
 
-local function DisableLegacyAuraFrames()
-  if PlayerBuffs.legacyFramesDisabled then
+local function DisableBlizzardAuraFrames()
+  if PlayerBuffs.blizzardFramesDisabled then
     return
   end
 
@@ -645,9 +643,9 @@ local function DisableLegacyAuraFrames()
   local debuffFrame = _G.DebuffFrame
   local deadlyDebuffFrame = _G.DeadlyDebuffFrame
 
-  PlayerBuffs.legacyBuffParent = buffFrame:GetParent()
-  PlayerBuffs.legacyDebuffParent = debuffFrame:GetParent()
-  PlayerBuffs.legacyDeadlyDebuffParent = deadlyDebuffFrame:GetParent()
+  PlayerBuffs.blizzardBuffParent = buffFrame:GetParent()
+  PlayerBuffs.blizzardDebuffParent = debuffFrame:GetParent()
+  PlayerBuffs.blizzardDeadlyDebuffParent = deadlyDebuffFrame:GetParent()
 
   buffFrame:UnregisterEvent("UNIT_AURA")
   buffFrame:UnregisterEvent("GROUP_ROSTER_UPDATE")
@@ -677,15 +675,15 @@ local function DisableLegacyAuraFrames()
   buffFrame:Hide()
   debuffFrame:Hide()
   deadlyDebuffFrame:Hide()
-  buffFrame:SetParent(legacyAuraParent)
-  debuffFrame:SetParent(legacyAuraParent)
-  deadlyDebuffFrame:SetParent(legacyAuraParent)
+  buffFrame:SetParent(blizzardAuraParent)
+  debuffFrame:SetParent(blizzardAuraParent)
+  deadlyDebuffFrame:SetParent(blizzardAuraParent)
 
-  PlayerBuffs.legacyFramesDisabled = true
+  PlayerBuffs.blizzardFramesDisabled = true
 end
 
-local function RestoreLegacyAuraFrames()
-  if not PlayerBuffs.legacyFramesDisabled then
+local function RestoreBlizzardAuraFrames()
+  if not PlayerBuffs.blizzardFramesDisabled then
     return
   end
 
@@ -693,13 +691,13 @@ local function RestoreLegacyAuraFrames()
   local debuffFrame = _G.DebuffFrame
   local deadlyDebuffFrame = _G.DeadlyDebuffFrame
 
-  buffFrame:SetParent(PlayerBuffs.legacyBuffParent)
-  debuffFrame:SetParent(PlayerBuffs.legacyDebuffParent)
-  deadlyDebuffFrame:SetParent(PlayerBuffs.legacyDeadlyDebuffParent)
+  buffFrame:SetParent(PlayerBuffs.blizzardBuffParent)
+  debuffFrame:SetParent(PlayerBuffs.blizzardDebuffParent)
+  deadlyDebuffFrame:SetParent(PlayerBuffs.blizzardDeadlyDebuffParent)
 
-  PlayerBuffs.legacyBuffParent = nil
-  PlayerBuffs.legacyDebuffParent = nil
-  PlayerBuffs.legacyDeadlyDebuffParent = nil
+  PlayerBuffs.blizzardBuffParent = nil
+  PlayerBuffs.blizzardDebuffParent = nil
+  PlayerBuffs.blizzardDeadlyDebuffParent = nil
 
   buffFrame:RegisterUnitEvent("UNIT_AURA", "player", "vehicle")
   buffFrame:RegisterEvent("GROUP_ROSTER_UPDATE")
@@ -731,7 +729,7 @@ local function RestoreLegacyAuraFrames()
   buffFrame:UpdateShownState()
   debuffFrame:UpdateShownState()
 
-  PlayerBuffs.legacyFramesDisabled = nil
+  PlayerBuffs.blizzardFramesDisabled = nil
 end
 
 local function EnsureRuntime()
@@ -739,7 +737,7 @@ local function EnsureRuntime()
     return false
   end
 
-  CaptureLegacyOffsets()
+  CaptureBlizzardAuraOffsets()
 
   PlayerBuffs.runtimeVariants = {
     buffs = {},
@@ -994,7 +992,7 @@ function PlayerBuffs:ApplySettings(flags)
 
   if db.enabled == false then
     SetRuntimeEnabled(false)
-    RestoreLegacyAuraFrames()
+    RestoreBlizzardAuraFrames()
     self:RefreshMover()
     return
   end
@@ -1005,7 +1003,7 @@ function PlayerBuffs:ApplySettings(flags)
   end
 
   local runtimeCreated = EnsureRuntime()
-  DisableLegacyAuraFrames()
+  DisableBlizzardAuraFrames()
   self.runtimeEnabled = true
 
   if runtimeCreated or applyAll or applyStyle or applyBuffSize then
@@ -1065,10 +1063,10 @@ function PlayerBuffs:UpdateUnit(event, unit)
 end
 
 function PlayerBuffs:OnRegenEnabled()
-  if self.pendingLegacyRestore then
-    self.pendingLegacyRestore = nil
+  if self.pendingBlizzardRestore then
+    self.pendingBlizzardRestore = nil
     self:UnregisterEvent("PLAYER_REGEN_ENABLED")
-    RestoreLegacyAuraFrames()
+    RestoreBlizzardAuraFrames()
     return
   end
 
@@ -1234,7 +1232,7 @@ end
 function PlayerBuffs:OnEnable()
   local db = GetProfileDB()
   self.db = db
-  self.pendingLegacyRestore = nil
+  self.pendingBlizzardRestore = nil
 
   if db.enabled == false then
     return
@@ -1252,10 +1250,10 @@ function PlayerBuffs:OnDisable()
   SetRuntimeEnabled(false)
 
   if InCombatLockdown() then
-    self.pendingLegacyRestore = true
+    self.pendingBlizzardRestore = true
     self:RegisterEvent("PLAYER_REGEN_ENABLED", "OnRegenEnabled")
   else
-    RestoreLegacyAuraFrames()
+    RestoreBlizzardAuraFrames()
   end
 
   self:RefreshMover()
@@ -1289,9 +1287,9 @@ end
   CreateAuraRuntime = P:Def("CreateAuraRuntime", CreateAuraRuntime)
   DisableAuraRuntime = P:Def("DisableAuraRuntime", DisableAuraRuntime)
   ActivateAuraRuntime = P:Def("ActivateAuraRuntime", ActivateAuraRuntime)
-  CaptureLegacyOffsets = P:Def("CaptureLegacyOffsets", CaptureLegacyOffsets)
-  DisableLegacyAuraFrames = P:Def("DisableLegacyAuraFrames", DisableLegacyAuraFrames)
-  RestoreLegacyAuraFrames = P:Def("RestoreLegacyAuraFrames", RestoreLegacyAuraFrames)
+  CaptureBlizzardAuraOffsets = P:Def("CaptureBlizzardAuraOffsets", CaptureBlizzardAuraOffsets)
+  DisableBlizzardAuraFrames = P:Def("DisableBlizzardAuraFrames", DisableBlizzardAuraFrames)
+  RestoreBlizzardAuraFrames = P:Def("RestoreBlizzardAuraFrames", RestoreBlizzardAuraFrames)
   EnsureRuntime = P:Def("EnsureRuntime", EnsureRuntime)
   SetRuntimeEnabled = P:Def("SetRuntimeEnabled", SetRuntimeEnabled)
   ResolveApplyFlags = P:Def("ResolveApplyFlags", ResolveApplyFlags)
