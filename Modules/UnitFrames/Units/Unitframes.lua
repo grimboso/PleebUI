@@ -1097,13 +1097,11 @@ function UF:SuspendFrameElements(frame)
   frame.__puiElementsPaused = true
   frame:PauseAllElements()
 
-  if frame.Untag then
-    for index = 1, #TAG_TEXT_FIELDS do
-      local fontString = frame[TAG_TEXT_FIELDS[index]]
-      if fontString and fontString.__puiTagString then
-        frame:Untag(fontString)
-        fontString.__puiTagString = nil
-      end
+  for index = 1, #TAG_TEXT_FIELDS do
+    local fontString = frame[TAG_TEXT_FIELDS[index]]
+    if fontString and fontString.__puiTagString then
+      frame:Untag(fontString)
+      fontString.__puiTagString = nil
     end
   end
 end
@@ -1572,7 +1570,6 @@ function UF:EnsureMovers()
         and db.enabled ~= false
         and cfg
         and cfg.enabled ~= false
-        and ns.Flags
         and ns.Flags.IsEditing == true
     end,
     onGhostSavePosition = SavePosition,
@@ -1872,7 +1869,7 @@ function UF:OnEnable()
     self:SafeRefresh("all")
   end)
 
-  self.__puiLastFrameScale = ns.FrameScale:GetMult()
+  self.__puiLastFrameScale = ns.FrameScale:BestOnePixel()
 
   if not self.__puiFrameScaleListener then
     self.__puiFrameScaleListener = function(_, scale)
