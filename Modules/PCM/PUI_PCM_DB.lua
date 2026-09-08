@@ -10,6 +10,8 @@ local P = select(1, ns.Pleebug:DropIn(ns, { name = "PCM", bucket = "DB" }))
 local _G = _G
 local InCombatLockdown = _G.InCombatLockdown
 local math_floor = _G.math.floor
+local RAID_CLASS_COLORS = _G.RAID_CLASS_COLORS
+local _, PLAYER_CLASS = UnitClass("player")
 
 local function _PCM_DB_Attach(Cooldowns)
   local Theme = ns.Theme
@@ -1555,11 +1557,8 @@ local function _PCM_DB_Attach(Cooldowns)
 
     -- Seed barColor to class color if requested and missing/invalid
     if entry.useClassColor and type(entry.barColor) ~= "table" then
-      local class = select(2, UnitClass("player"))
-      local cc = class and _G.RAID_CLASS_COLORS and _G.RAID_CLASS_COLORS[class] or nil
-      if cc then
-        entry.barColor = { tonumber(cc.r) or 1, tonumber(cc.g) or 1, tonumber(cc.b) or 1, 1 }
-      end
+      local cc = RAID_CLASS_COLORS[PLAYER_CLASS]
+      entry.barColor = { cc.r, cc.g, cc.b, 1 }
     end
     if entry.fontSize < 8 then entry.fontSize = 8 end
     if entry.fontSize > 28 then entry.fontSize = 28 end

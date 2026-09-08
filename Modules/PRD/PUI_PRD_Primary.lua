@@ -15,9 +15,10 @@ local _PUI_PRD_ApplyNativeTextConfig
 
 
 local P = ns.Pleebug:DropIn({}, { name = "PRD_Primary" })
+local _, PLAYER_CLASS = UnitClass("player")
 
 local function _IsPUI_SecureFrame(f)
-  return f and (not f.IsForbidden or not f:IsForbidden())
+  return f and not f:IsForbidden()
 end
 
 local GetTime = _G.GetTime
@@ -414,18 +415,12 @@ local function _PUI_PRD_GetNativeBarConfig(self, role)
 end
 
 local function _PUI_PRD_GetClassColor()
-  local _, classToken = UnitClass("player")
-  local c = classToken and RAID_CLASS_COLORS and RAID_CLASS_COLORS[classToken]
-
-  if c then
-    return c.r or 1, c.g or 1, c.b or 1, c.a or 1
-  end
-
-  return 1, 1, 1, 1
+  local c = RAID_CLASS_COLORS[PLAYER_CLASS]
+  return c.r, c.g, c.b, c.a or 1
 end
 
 local function _PUI_PRD_ApplyNativeBarTexture(self, bar, role)
-  if not bar or not bar.SetStatusBarTexture then
+  if not bar then
     return
   end
 
@@ -441,32 +436,26 @@ local function _PUI_PRD_ApplyNativeBarTexture(self, bar, role)
     bar:SetStatusBarTexture(tex)
   end
 
-  local sbtex = bar.GetStatusBarTexture and bar:GetStatusBarTexture() or nil
+  local sbtex = bar:GetStatusBarTexture()
   if sbtex then
-    if sbtex.SetHorizTile then
-      sbtex:SetHorizTile(false)
-    end
-    if sbtex.SetVertTile then
-      sbtex:SetVertTile(false)
-    end
-    if cfg.squareTexture ~= false and sbtex.SetTexCoord then
+    sbtex:SetHorizTile(false)
+    sbtex:SetVertTile(false)
+    if cfg.squareTexture ~= false then
       sbtex:SetTexCoord(0, 1, 0, 1)
     end
-    if sbtex.SetDrawLayer then
-      sbtex:SetDrawLayer("ARTWORK", 1)
-    end
+    sbtex:SetDrawLayer("ARTWORK", 1)
   end
 end
 
 local function _PUI_PRD_ApplyNativeBarColor(bar, cfg)
-  if not bar or not bar.SetStatusBarColor then
+  if not bar then
     return
   end
 
   cfg = cfg or {}
   local mode = cfg.colorMode or "DEFAULT"
 
-  if not bar.__puiDefaultStatusBarColor and bar.GetStatusBarColor then
+  if not bar.__puiDefaultStatusBarColor then
     local r, g, b, a = bar:GetStatusBarColor()
     bar.__puiDefaultStatusBarColor = { r or 1, g or 1, b or 1, a or 1 }
   end
