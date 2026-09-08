@@ -4872,7 +4872,7 @@ function Cooldowns:OnEnable()
   _PCM_SetChildModulesEnabled(true)
   self:_Keybinds_Enable()
 
-  self.__puiFrameScale = FrameScale:GetMult()
+  self.__puiFrameScale = FrameScale:BestOnePixel()
   FrameScale:RegisterScaleListener(_PCM_OnFrameScaleChanged)
 
   _PCM_RunInitialViewerPass(self)

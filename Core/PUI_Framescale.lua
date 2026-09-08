@@ -29,10 +29,6 @@ local function NotifyScaleChanged()
   end
 end
 
-function FrameScale:GetMult()
-  return px
-end
-
 function FrameScale:GetUIScale()
   return ClampUIScale(Addon:GetGlobalOptionsDB().UIScale)
 end
