@@ -1891,7 +1891,7 @@ local function GetPRDResourceInfo()
   local className, classToken = UnitClass("player")
   local _, primaryToken = UnitPowerType("player")
   PRD:GetSecondaryDefinition()
-  local resourceOptions = PRD:GetSecondaryResourceOptions()
+  local resourceOptions = ns.PRDSecondary:GetResourceOptionsForClass(classToken)
   local resourceNames = {}
   local resources = {}
   local primaryLabel = POWER_LABELS[primaryToken] or primaryToken or "Primary Resource"

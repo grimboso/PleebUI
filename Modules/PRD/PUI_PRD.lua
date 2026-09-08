@@ -1337,10 +1337,6 @@ local function _PRD_AppendStackKey(order, seen, key)
   seen[key] = true
 end
 
-function M:GetSecondaryResourceOptions(includeAllSpecs)
-  return ns.PRDSecondary:GetResourceOptionsForClass(PLAYER_CLASS, includeAllSpecs)
-end
-
 function M:IsSecondaryResourceEnabled(resourceKey)
   local db = self.db and self.db.profile
   if not db or not db.secondary then
@@ -1373,7 +1369,7 @@ function M:NormalizeStackOrder()
 
   local normalized = {}
   local seen = {}
-  local resourceOptions = self:GetSecondaryResourceOptions(true)
+  local resourceOptions = ns.PRDSecondary:GetResourceOptionsForClass(PLAYER_CLASS, true)
   self:GetSecondaryDefinition()
   local resources = self.secondaryResources or {}
   local existing = db.stackOrder
@@ -2504,7 +2500,6 @@ end
   M.ApplyOuterBorder = P:Def("ApplyOuterBorder", M.ApplyOuterBorder)
   M.CreateFrames = P:Def("CreateFrames", M.CreateFrames)
   _PRD_AppendStackKey = P:Def("_PRD_AppendStackKey", _PRD_AppendStackKey)
-  M.GetSecondaryResourceOptions = P:Def("GetSecondaryResourceOptions", M.GetSecondaryResourceOptions)
   M.IsSecondaryResourceEnabled = P:Def("IsSecondaryResourceEnabled", M.IsSecondaryResourceEnabled)
   M.SetSecondaryResourceEnabled = P:Def("SetSecondaryResourceEnabled", M.SetSecondaryResourceEnabled)
   M.NormalizeStackOrder = P:Def("NormalizeStackOrder", M.NormalizeStackOrder)
