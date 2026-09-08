@@ -95,9 +95,7 @@ local function StylePanel(panel)
   panel.title:SetTextColor(colors.text[1], colors.text[2], colors.text[3], colors.text[4] or 1)
   panel.description:SetTextColor(colors.text[1], colors.text[2], colors.text[3], (colors.text[4] or 1) * 0.72)
   Theme.WidgetSkins.CloseButton(panel.closeButton)
-  if panel.allSettingsButton then
-    Theme.WidgetSkins.UIButton(panel.allSettingsButton)
-  end
+  Theme.WidgetSkins.UIButton(panel.allSettingsButton)
   if panel.scroll and panel.scroll.ScrollBar then
     Theme.WidgetSkins.Scrollbar(panel.scroll.ScrollBar)
   end
@@ -234,9 +232,7 @@ local function AddControl(panel, control)
       control.set(value == true)
     end)
   elseif control.type == "slider" then
-    if widget.SetCommitOnRelease then
-      widget:SetCommitOnRelease(control.commitOnRelease == true)
-    end
+    widget:SetCommitOnRelease(control.commitOnRelease == true)
     widget:SetSliderValues(control.min, control.max, control.step or 1)
     local value = control.get()
     widget:SetValue(tonumber(value) or control.min)
