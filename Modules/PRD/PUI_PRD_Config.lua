@@ -2545,6 +2545,7 @@ do
     end
 
     PRD_EnsureDefaults(db)
+    db.syncCVar = nil
     PRD_NormalizeBarColorConfig(db.health, "health")
     PRD_NormalizeBarColorConfig(db.primary, "primary")
     PRD_ValidateDB(db)
@@ -2784,25 +2785,11 @@ do
               Addon:ApplyOptionsChange("PRD", { secondaryRebuild = true, secondaryText = true, layout = true })
             end,
           },
-          syncCVar = {
-            type = "toggle",
-            name = "Sync Blizzard PRD CVar",
-            desc = "Keeps Blizzard's Personal Resource Display CVar in sync with the module enabled state.",
-            order = 5,
-
-            get = function()
-              return db.syncCVar ~= false
-            end,
-            set = function(_, val)
-              db.syncCVar = not not val
-              Addon:ApplyOptionsChange("PRD", { cvar = true })
-            end,
-          },
           showBarText = {
             type = "toggle",
             name = "Show bar text",
             desc = "Shows Blizzard's resource values on the Personal Resource Display.",
-            order = 6,
+            order = 5,
             get = function()
               return PRD:GetBlizzardShowBarText()
             end,

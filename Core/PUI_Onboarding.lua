@@ -31,7 +31,6 @@ local PROGRESS_INNER_WIDTH = PROGRESS_WIDTH - 4
 local PREVIEW_UPDATE_INTERVAL = 1 / 30
 local ACTION_BUTTON_SPACING = 8
 local COOLDOWN_MANAGER_CVAR = "cooldownViewerEnabled"
-local PERSONAL_RESOURCE_DISPLAY_CVAR = "nameplateShowSelf"
 
 local activeFlow
 local currentPage = 1
@@ -358,8 +357,6 @@ end
 
 LayoutProfileChoiceControls = function(host)
   local width = math_min(520, math_max(320, host:GetWidth() - 48))
-  local buttonWidth = (width - ACTION_BUTTON_SPACING) / 2
-
   host.ProfileWidget:SetWidth(width)
   host.ProfileWidget:SetHeight(64)
   host.ProfileWidget.frame:ClearAllPoints()
@@ -367,20 +364,14 @@ LayoutProfileChoiceControls = function(host)
   host.ProfileWidget.frame:Show()
 
   host.EnableCooldownManager:ClearAllPoints()
-  host.EnableCooldownManager:SetSize(buttonWidth, 32)
-  host.EnableCooldownManager:SetPoint("TOPLEFT", host.ProfileWidget.frame, "BOTTOMLEFT", 0, -10)
-
-  host.EnablePersonalResourceDisplay:ClearAllPoints()
-  host.EnablePersonalResourceDisplay:SetSize(buttonWidth, 32)
-  host.EnablePersonalResourceDisplay:SetPoint("TOPRIGHT", host.ProfileWidget.frame, "BOTTOMRIGHT", 0, -10)
+  host.EnableCooldownManager:SetSize(width, 32)
+  host.EnableCooldownManager:SetPoint("TOP", host.ProfileWidget.frame, "BOTTOM", 0, -10)
 end
 
 RefreshProfileChoiceControls = function(host)
   local values, order = Addon:GetInstallerExistingProfiles()
   local hasProfiles = #order > 0
   local cooldownManagerEnabled = C_CVar.GetCVar(COOLDOWN_MANAGER_CVAR) == "1"
-  local personalResourceDisplayEnabled = C_CVar.GetCVar(PERSONAL_RESOURCE_DISPLAY_CVAR) == "1"
-
   host.CurrentProfile:SetText("New profile: " .. tostring(Addon.db:GetCurrentProfile()))
   host.ProfileWidget:SetList(values, order)
   host.ProfileWidget:SetValue(nil)
@@ -390,9 +381,6 @@ RefreshProfileChoiceControls = function(host)
 
   host.EnableCooldownManager:SetText(cooldownManagerEnabled and "Disable Cooldown Manager" or "Enable Cooldown Manager")
   host.EnableCooldownManager:SetEnabled(true)
-
-  host.EnablePersonalResourceDisplay:SetText(personalResourceDisplayEnabled and "Disable Personal Resource Display" or "Enable Personal Resource Display")
-  host.EnablePersonalResourceDisplay:SetEnabled(true)
 
   LayoutProfileChoiceControls(host)
 end
@@ -406,18 +394,6 @@ local function ToggleCooldownManager(host)
     SetStatus("Cooldown Manager disabled. It will unload after the next UI reload.")
   else
     SetStatus("Cooldown Manager enabled. It will load after the next UI reload.")
-  end
-end
-
-local function TogglePersonalResourceDisplay(host)
-  local enabled = C_CVar.GetCVar(PERSONAL_RESOURCE_DISPLAY_CVAR) == "1"
-  C_CVar.SetCVar(PERSONAL_RESOURCE_DISPLAY_CVAR, enabled and "0" or "1")
-  RefreshProfileChoiceControls(host)
-
-  if enabled then
-    SetStatus("Personal Resource Display disabled for this character.")
-  else
-    SetStatus("Personal Resource Display enabled for this character.")
   end
 end
 
@@ -461,20 +437,13 @@ local function BuildProfileChoiceControls(frame, colors)
   SkinWizardButton(enableCooldownManager)
   host.EnableCooldownManager = enableCooldownManager
 
-  local enablePersonalResourceDisplay = CreateFrame("Button", nil, host, "UIPanelButtonTemplate")
-  enablePersonalResourceDisplay:SetScript("OnClick", function()
-    TogglePersonalResourceDisplay(host)
-  end)
-  SkinWizardButton(enablePersonalResourceDisplay)
-  host.EnablePersonalResourceDisplay = enablePersonalResourceDisplay
-
   local explanation = host:CreateFontString(nil, "OVERLAY")
   explanation:SetPoint("BOTTOMLEFT", host, "BOTTOMLEFT", 24, 20)
   explanation:SetPoint("BOTTOMRIGHT", host, "BOTTOMRIGHT", -24, 20)
   explanation:SetJustifyH("CENTER")
   explanation:SetWordWrap(true)
   ApplyWizardFont(explanation, "body", 12)
-  explanation:SetText("Choose Blizzard displays for this character, or load an existing PleebUI profile.")
+  explanation:SetText("Choose whether Blizzard's Cooldown Manager is enabled for this character, or load an existing PleebUI profile.")
   host.Explanation = explanation
 
   host:SetScript("OnSizeChanged", LayoutProfileChoiceControls)
@@ -935,7 +904,6 @@ RefreshWizardTheme = function()
 
   Theme.WidgetSkins.Dropdown(frame.ProfileChoiceHost.ProfileWidget)
   SkinWizardButton(frame.ProfileChoiceHost.EnableCooldownManager)
-  SkinWizardButton(frame.ProfileChoiceHost.EnablePersonalResourceDisplay)
   Theme.WidgetSkins.Dropdown(frame.AccessibilityHost.FontWidget)
   Theme.ApplyAce3Skin(frame.AccessibilityHost.SizeWidget)
   Theme.WidgetSkins.Dropdown(frame.AccessibilityHost.OutlineWidget)
@@ -2170,32 +2138,36 @@ local function RefreshPRDPreview(host)
   local previewHeight = 28 + totalHeight
   preview:SetHeight(previewHeight)
 
-  RefreshPRDPreviewBar(
-    preview.Bars.health,
-    healthTexture,
-    healthColor,
-    GetPreviewColor(healthCfg.style.bgColor, { 0, 0, 0, 0.65 }),
-    GetPreviewColor(healthCfg.style.borderColor, { 0.20, 0.20, 0.24, 1 }),
-    healthCfg.style.borderSize or 1,
-    76,
-    "Health  76%"
-  )
+  if entries.health.visible then
+    RefreshPRDPreviewBar(
+      preview.Bars.health,
+      healthTexture,
+      healthColor,
+      GetPreviewColor(healthCfg.style.bgColor, { 0, 0, 0, 0.65 }),
+      GetPreviewColor(healthCfg.style.borderColor, { 0.20, 0.20, 0.24, 1 }),
+      healthCfg.style.borderSize or 1,
+      76,
+      "Health  76%"
+    )
+  end
 
-  RefreshPRDPreviewBar(
-    preview.Bars.primary,
-    primaryTexture,
-    info.primaryColor,
-    GetPreviewColor(primaryCfg.style.bgColor, { 0, 0, 0, 0.65 }),
-    GetPreviewColor(primaryCfg.style.borderColor, { 0.20, 0.20, 0.24, 1 }),
-    primaryCfg.style.borderSize or 1,
-    64,
-    info.primaryLabel .. "  64%"
-  )
+  if entries.primary.visible then
+    RefreshPRDPreviewBar(
+      preview.Bars.primary,
+      primaryTexture,
+      info.primaryColor,
+      GetPreviewColor(primaryCfg.style.bgColor, { 0, 0, 0, 0.65 }),
+      GetPreviewColor(primaryCfg.style.borderColor, { 0.20, 0.20, 0.24, 1 }),
+      primaryCfg.style.borderSize or 1,
+      64,
+      info.primaryLabel .. "  64%"
+    )
+  end
 
   for index = 1, #info.resources do
     local resource = info.resources[index]
     local entry = entries[resource.definition.resourceKey]
-    if entry then
+    if entry and entry.visible then
       local config = entry.config
       RefreshPRDSecondaryBar(
         entry.bar,
@@ -2325,7 +2297,7 @@ local function BuildPRDControls(frame, colors)
 
   host.EnabledWidget = CreateInstallerWidget(host, "CheckBox", "Enable PleebUI PRD", function(_, _, value)
     local PRD = ns.Modules.PRD
-    PRD:SetModuleEnabled(value, { syncCVar = true })
+    PRD:SetModuleEnabled(value)
     RefreshPRDControls(host)
     SetStatus(value and "PleebUI Personal Resource Display enabled." or "PleebUI Personal Resource Display disabled.")
   end)

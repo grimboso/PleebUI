@@ -316,13 +316,6 @@ local function PRD_BuildCombatBarSmartSnap(owner, getState)
   }
 end
 
-local function _PUI_PRD_SeedCVarOnFirstLogin()
-  local cur = GetCVar("nameplateShowSelf")
-  if cur ~= "1" then
-    SetCVar("nameplateShowSelf", "1")
-  end
-end
-
 function M:NormalizeDruidFormPrimary(config)
   if type(config) ~= "table" then
     return nil
@@ -472,35 +465,6 @@ function M:OnInitialize()
     self:ReassertBlizzardPRDRoot()
   end, self)
 
-  -- Only seed the Blizzard PRD CVar on the very first login (fresh install).
-  local g = Addon.db and Addon.db.global
-  local rc = g and tonumber(g.reloadCount) or nil
-  if rc and rc <= 1 then
-    _PUI_PRD_SeedCVarOnFirstLogin()
-  end
-end
-
-
-
--- CVar that controls Blizzard Personal Resource Display.
-local PRD_CVAR_NAME = "nameplateShowSelf"
-
--- Keep Blizzard CVar aligned with our enabled state when profile.syncCVar is on.
-function M:SyncCVarFromSettings()
-  if not self.db or not self.db.profile then
-    return
-  end
-
-  local profile = self.db.profile
-  if profile.syncCVar == false then
-    return
-  end
-
-  local desired = (profile.enabled and "1" or "0")
-  local current = GetCVar(PRD_CVAR_NAME)
-  if current ~= desired then
-    SetCVar(PRD_CVAR_NAME, desired)
-  end
 end
 
 function M:GetBlizzardShowBarText()
@@ -576,7 +540,7 @@ function M:IsModuleEnabled()
      and self.db.profile.enabled == true
 end
 
-function M:SetModuleEnabled(enabled, opts)
+function M:SetModuleEnabled(enabled)
   if not self.db or not self.db.profile then
     return false
   end
@@ -596,14 +560,6 @@ function M:SetModuleEnabled(enabled, opts)
     self:Disable()
   else
     self:StopRuntime()
-  end
-
-  if opts and opts.syncCVar then
-    local desired = want and "1" or "0"
-    local current = GetCVar(PRD_CVAR_NAME)
-    if current ~= desired then
-      SetCVar(PRD_CVAR_NAME, desired)
-    end
   end
 
   return true
@@ -889,10 +845,6 @@ end
 function M:ApplyRequestedFlags(flags)
   ns.PRDPreview.MarkDirty()
 
-  if flags and flags.cvar then
-    self:SyncCVarFromSettings()
-  end
-
   if not self:IsEnabled() then
     return
   end
@@ -1045,7 +997,6 @@ function M:OnEnable()
   end
   self._puiShutdownCleanupPending = nil
   self._puiNativeRestorePending = nil
-  self:SyncCVarFromSettings()
   self:RegisterEvent("PLAYER_ALIVE", "ReassertBlizzardPRDRoot")
   self:RegisterEvent("PLAYER_UNGHOST", "ReassertBlizzardPRDRoot")
 
@@ -1060,14 +1011,6 @@ function M:OnEnable()
     self:RequestInitialSettleRefresh()
   end
 
-  if self.db.profile.syncCVar == false then
-    local v = GetCVar("nameplateShowSelf")
-    if v and v ~= "1" and not self._puiWarnedCVar then
-      self._puiWarnedCVar = true
-      print("|cff33ff99PleebUI|r PRD module is enabled, but Blizzard Personal Resource Display is disabled (CVar nameplateShowSelf = " .. tostring(v) .. ").")
-      print("Enable 'Sync Blizzard Personal Resource Display CVar' in PleebUI PRD settings to auto-fix this.")
-    end
-  end
 end
 
 function M:StopRuntime()
@@ -2417,8 +2360,6 @@ function M:ApplySettings(flags)
     return
   end
 
-  self:SyncCVarFromSettings()
-
   if flags and flags.theme == true then
     self:RequestRefresh({
       health = true,
@@ -2451,23 +2392,19 @@ function M:OnNewProfile()
   if self.db and self.db.char then
     self.db.char.__puiSeededHidePrimaryBySpec = false
   end
-  _PUI_PRD_SeedCVarOnFirstLogin()
   self:NormalizeProfile()
   self:SeedHidePrimaryBySpec()
 end
 
 function M:OnDisable()
   self:StopRuntime()
-  self:SyncCVarFromSettings()
 end
 
-  _PUI_PRD_SeedCVarOnFirstLogin = P:Def("_PUI_PRD_SeedCVarOnFirstLogin", _PUI_PRD_SeedCVarOnFirstLogin)
   M.NormalizeDruidFormPrimary = P:Def("NormalizeDruidFormPrimary", M.NormalizeDruidFormPrimary)
   M.NormalizeDruidFormSettings = P:Def("NormalizeDruidFormSettings", M.NormalizeDruidFormSettings)
   M.InvalidateRuntimeConfig = P:Def("InvalidateRuntimeConfig", M.InvalidateRuntimeConfig)
   M.SeedHidePrimaryBySpec = P:Def("SeedHidePrimaryBySpec", M.SeedHidePrimaryBySpec)
   M.OnInitialize = P:Def("OnInitialize", M.OnInitialize)
-  M.SyncCVarFromSettings = P:Def("SyncCVarFromSettings", M.SyncCVarFromSettings)
   M.GetBlizzardShowBarText = P:Def("GetBlizzardShowBarText", M.GetBlizzardShowBarText)
   M.SetBlizzardShowBarText = P:Def("SetBlizzardShowBarText", M.SetBlizzardShowBarText)
   M.IsModuleEnabled = P:Def("IsModuleEnabled", M.IsModuleEnabled)

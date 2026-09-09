@@ -1151,12 +1151,6 @@ function M:RestoreBlizzardBars()
   _RestoreOriginalBarLayout(self, "health", healthBar)
   _RestoreOriginalBarLayout(self, "primary", primaryBar)
 
-  local root = self.blizz and self.blizz.root
-  if root then
-    root:SetupHealthBar()
-    root:SetupPowerBar()
-  end
-
   self._puiOriginalLayout = nil
   self._puiOriginalHealthColor = nil
   self._puiNativeRestorePending = nil
