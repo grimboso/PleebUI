@@ -3,6 +3,7 @@ local _, ns = ...
 local Addon = ns.Addon
 local Cooldowns = ns.Modules.CooldownManager
 local Theme = ns.Theme
+local OptionsUtil = ns.OptionsUtil
 local AceHooks = ns.AceHooks
 local AuraWidget = ns.AuraWidget
 local AceGUI = LibStub("AceGUI-3.0")
@@ -16,6 +17,8 @@ local draft
 local page = 1
 local previewState = "COOLDOWN"
 local previewStartedAt = 0
+local closeCallback
+local createdTrackerKey
 local PREVIEW_SECONDS = 3
 
 local PAGES = {
@@ -54,6 +57,11 @@ local function NewDraft()
     maximum = 3,
     width = 250,
     height = 25,
+    orientation = "horizontal",
+    fillDirection = "RIGHT",
+    barMode = "fill",
+    texture = "Pleebar",
+    showText = true,
     showBarIcon = true,
     combatOnly = false,
     showOnlyWhenActive = false,
@@ -69,6 +77,9 @@ local function NewDraft()
     readyGlowStyle = "NONE",
     cooldownGlowStyle = "NONE",
     activeGlowStyle = "PROC",
+    activeAuraSource = "CDM",
+    activeAuraSpellID = nil,
+    activeAuraHideViewerIcon = false,
     addColorShift = false,
     hideViewerIcon = false,
     icon = {
@@ -319,6 +330,31 @@ local function AddDropdown(label, values, sorting, value, callback, state)
   return widget
 end
 
+local function AddEditBox(label, value, callback, state)
+  local widget = AceGUI:Create("PUI_EditBox")
+  widget:SetLabel(label)
+  widget:SetText(value or "")
+  widget:SetWidth(235)
+  widget:SetCallback("OnEnterPressed", function(_, _, entered)
+    callback(entered)
+    PreviewChanged(state)
+  end)
+  controls:AddChild(widget)
+  return widget
+end
+
+local function BuildStatusbarList()
+  local values = OptionsUtil.BuildStatusbarValues(false)
+  local sorting = {}
+  for key in pairs(values) do
+    sorting[#sorting + 1] = key
+  end
+  table.sort(sorting, function(a, b)
+    return tostring(values[a]) < tostring(values[b])
+  end)
+  return values, sorting
+end
+
 local function CreateWindowButton(parent, text, width, callback)
   local widget = AceGUI:Create("PUI_Button")
   widget:SetText(text)
@@ -414,13 +450,41 @@ local function SetPage(newPage)
       AddSlider("Button size", draft.icon.size, 20, 96, 1, function(value) draft.icon.size = math.floor(value + 0.5) end)
       AddCheckbox("Show swipe", draft.icon.showSwipe, function(value) draft.icon.showSwipe = value end, "COOLDOWN")
       AddCheckbox("Show countdown", draft.icon.showDuration, function(value) draft.icon.showDuration = value end, "COOLDOWN")
+      AddCheckbox("Show tooltip", draft.icon.showTooltip, function(value) draft.icon.showTooltip = value end)
       if draft.kind == "charge" or draft.kind == "stack" then
         AddCheckbox(draft.kind == "charge" and "Show charge count" or "Show stack count", draft.icon.showCount, function(value) draft.icon.showCount = value end, "ACTIVE")
+      end
+      if draft.kind == "charge" then
+        AddCheckbox("Show charge pips", draft.icon.showPips, function(value) draft.icon.showPips = value end, "RECHARGING")
       end
     else
       AddSlider("Bar width", draft.width, 80, 600, 1, function(value) draft.width = math.floor(value + 0.5) end)
       AddSlider("Bar height", draft.height, 6, 50, 1, function(value) draft.height = math.floor(value + 0.5) end)
-      AddCheckbox("Show icon beside bar", draft.showBarIcon, function(value) draft.showBarIcon = value end)
+      AddDropdown("Orientation", {
+        horizontal = "Horizontal",
+        vertical = "Vertical",
+      }, { "horizontal", "vertical" }, draft.orientation, function(value)
+        draft.orientation = value == "vertical" and "vertical" or "horizontal"
+        draft.fillDirection = draft.orientation == "vertical" and "UP" or "RIGHT"
+        SetPage(4)
+      end)
+      AddDropdown("Fill direction", draft.orientation == "vertical" and {
+        UP = "Up",
+        DOWN = "Down",
+      } or {
+        LEFT = "Left",
+        RIGHT = "Right",
+      }, draft.orientation == "vertical" and { "UP", "DOWN" } or { "LEFT", "RIGHT" }, draft.fillDirection, function(value)
+        draft.fillDirection = value
+      end)
+      AddDropdown(draft.kind == "cooldown" and "Bar mode" or "Timer direction", {
+        fill = "Fill",
+        drain = "Drain",
+      }, { "fill", "drain" }, draft.barMode, function(value) draft.barMode = value == "drain" and "drain" or "fill" end)
+      local textures, textureOrder = BuildStatusbarList()
+      AddDropdown("Bar texture", textures, textureOrder, draft.texture, function(value) draft.texture = value end)
+      AddCheckbox("Show text", draft.showText, function(value) draft.showText = value end)
+      AddCheckbox(draft.kind == "duration" and "Show duration icon" or "Show icon beside bar", draft.showBarIcon, function(value) draft.showBarIcon = value end)
     end
     if draft.kind == "stack" then
       AddCheckbox("Add stack color shift", draft.addColorShift, function(value) draft.addColorShift = value end, "ACTIVE")
@@ -440,6 +504,34 @@ local function SetPage(newPage)
       AddCheckbox(draft.kind == "charge" and "Desaturate while recharging" or "Desaturate while on cooldown", draft.desaturateCooldown, function(value) draft.desaturateCooldown = value end, draft.kind == "charge" and "RECHARGING" or "COOLDOWN")
 
       AddCheckbox("Show while aura is active", draft.showActive, function(value) draft.showActive = value end, "ACTIVE")
+      if draft.showActive then
+        AddDropdown("Active aura source", {
+          CDM = "Buff from CDM",
+          CUSTOM = "Custom player buff",
+        }, { "CDM", "CUSTOM" }, draft.activeAuraSource, function(value)
+          draft.activeAuraSource = value == "CUSTOM" and "CUSTOM" or "CDM"
+          draft.activeAuraSpellID = nil
+          SetPage(5)
+        end, "ACTIVE")
+
+        if draft.activeAuraSource == "CUSTOM" then
+          AddEditBox("Custom active buff spell ID", draft.activeAuraSpellID and tostring(draft.activeAuraSpellID) or "", function(value)
+            local spellID = tonumber(value)
+            draft.activeAuraSpellID = spellID and spellID > 0 and math.floor(spellID) or nil
+            SetPage(5)
+          end, "ACTIVE")
+        else
+          local values, sorting = Cooldowns:GetCustomBarSpellDropdown("aura")
+          AddDropdown("Active buff from CDM", values, sorting, draft.activeAuraSpellID and tostring(draft.activeAuraSpellID) or "none", function(value)
+            draft.activeAuraSpellID = value ~= "none" and tonumber(value) or nil
+            SetPage(5)
+          end, "ACTIVE")
+        end
+
+        AddCheckbox("Hide active aura from buff icon viewer", draft.activeAuraHideViewerIcon, function(value)
+          draft.activeAuraHideViewerIcon = value
+        end, "ACTIVE")
+      end
     else
       draft.showActive = true
       AddCheckbox("Show only while aura is active", draft.showOnlyWhenActive, function(value) draft.showOnlyWhenActive = value end, "ACTIVE")
@@ -457,7 +549,10 @@ local function SetPage(newPage)
   frame.Previous:SetDisabled(page <= 1)
   frame.Next.frame:SetShown(page < #PAGES)
   frame.Finish.frame:SetShown(page == #PAGES)
-  frame.Finish:SetDisabled(draft.spellID == nil)
+  local activeAuraRequired = (draft.kind == "cooldown" or draft.kind == "charge")
+    and draft.showActive == true
+    and tonumber(draft.activeAuraSpellID) == nil
+  frame.Finish:SetDisabled(draft.spellID == nil or activeAuraRequired)
   ApplyPreviewState(previewState)
 end
 
@@ -596,9 +691,17 @@ local function BuildFrame()
     ApplyDraftToIcon()
     local key = ns.PCM_CreateCustomTrackerFromDraft(draft)
     if key then
+      createdTrackerKey = key
       draft = nil
       page = 1
       window:Hide()
+
+      C_Timer.After(0, function()
+        local path = { "CooldownManager", "custom_bars", key }
+        if not Addon:NavigateOpenOptionsPath(path) then
+          Addon:OpenOptions(path, false, true)
+        end
+      end)
     end
   end)
   finish.frame:ClearAllPoints()
@@ -616,15 +719,28 @@ local function BuildFrame()
       )
     end
   end)
-  window:SetScript("OnHide", StopPreviewGlow)
+  window:SetScript("OnHide", function()
+    StopPreviewGlow()
+
+    local callback = closeCallback
+    local key = createdTrackerKey
+    closeCallback = nil
+    createdTrackerKey = nil
+    if callback then
+      C_Timer.After(0, function()
+        callback(key)
+      end)
+    end
+  end)
   return window
 end
 
-function Installer:Open()
+function Installer:Open(onClose)
   if not draft then
     draft = NewDraft()
     page = 1
   end
+  closeCallback = onClose
   frame = frame or BuildFrame()
   ApplyWindowSkin(frame)
   frame:Show()

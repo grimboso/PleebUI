@@ -3802,10 +3802,20 @@ local function _PCM_ApplyInstallerDraft(cfg, draft)
   cfg.readyGlowStyle = draft.readyGlowStyle
   cfg.cooldownGlowStyle = draft.cooldownGlowStyle
   cfg.activeGlowStyle = draft.activeGlowStyle
+  cfg.activeGlowColor = draft.icon.activeAuraGlowColor
+  cfg.buffGlowColor = draft.icon.activeAuraGlowColor
   cfg.buffGlowEnabled = cfg.presentation == "BAR" and draft.showActive == true
     and draft.activeGlowStyle ~= nil and draft.activeGlowStyle ~= "NONE"
-  cfg.buffGlowSource = "CDM"
-  cfg.buffGlowSpellID = tonumber(draft.spellID)
+
+  if draft.kind == "cooldown" or draft.kind == "charge" then
+    cfg.buffGlowSource = draft.activeAuraSource == "CUSTOM" and "CUSTOM" or "CDM"
+    cfg.buffGlowSpellID = tonumber(draft.activeAuraSpellID)
+    cfg.buffGlowHideViewerIcon = draft.activeAuraHideViewerIcon == true
+  else
+    cfg.buffGlowSource = "CDM"
+    cfg.buffGlowSpellID = tonumber(draft.spellID)
+  end
+
   if draft.kind == "duration" or draft.kind == "stack" then
     cfg.auraTrackMode = draft.auraTrackMode == "target_debuff"
       and "target_debuff" or "player_buff"
@@ -3818,8 +3828,27 @@ local function _PCM_ApplyInstallerDraft(cfg, draft)
     cfg.icon = nil
     cfg.width = tonumber(draft.width) or cfg.width
     cfg.height = tonumber(draft.height) or cfg.height
-    cfg.showIcon = draft.showBarIcon ~= false
-    cfg.showSpellIconNextToBar = draft.showBarIcon ~= false
+    cfg.orientation = draft.orientation == "vertical" and "vertical" or "horizontal"
+    cfg.fillDirection = draft.fillDirection
+    cfg.showText = draft.showText ~= false
+
+    if draft.kind == "cooldown" then
+      cfg.direction = draft.barMode == "drain" and "drain" or "fill"
+      cfg.texture = draft.texture
+      cfg.showIcon = draft.showBarIcon ~= false
+    elseif draft.kind == "charge" then
+      cfg.durationBarFillMode = draft.barMode == "drain" and "drain" or "fill"
+      cfg.texture = draft.texture
+      cfg.showIcon = draft.showBarIcon ~= false
+    elseif draft.kind == "duration" then
+      cfg.durationBarFillMode = draft.barMode == "drain" and "drain" or "fill"
+      cfg.durationTexture = draft.texture
+      cfg.durationHideIconFrame = draft.showBarIcon ~= true
+    else
+      cfg.durationBarFillMode = draft.barMode == "drain" and "drain" or "fill"
+      cfg.stackTexture = draft.texture
+      cfg.showSpellIconNextToBar = draft.showBarIcon ~= false
+    end
   end
 
   local spellID = tonumber(draft.spellID)
