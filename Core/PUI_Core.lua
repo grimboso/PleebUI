@@ -22,6 +22,8 @@ ns.Flags = {
   OptionsReady = false,
 }
 
+ns.InstallFlowVersion = 2
+
 local AceAddon = LibStub("AceAddon-3.0")
 local AceDB = LibStub("AceDB-3.0")
 local AceSerializer = LibStub("AceSerializer-3.0")
@@ -124,6 +126,12 @@ local DB_DEFAULTS = {
     blizzardFonts = {},
     pui = {
       schemaVersion = 6,
+
+      onboarding = {
+        schemaVersion = 0,
+        installComplete = false,
+        installVersion = 0,
+      },
 
       media = {
         iconTextGlobalFont  = "FiraSans Heavy",
@@ -317,6 +325,9 @@ function Addon:OnProfileChanged(event, db, newProfile)
 
   ns.FrameUtil.BeginProfileTransition()
   self:EnsureSchema()
+  local onboarding = self.db.profile.pui.onboarding
+  ns.Flags.FirstRunPending = onboarding.installComplete ~= true
+    or (tonumber(onboarding.installVersion) or 0) < ns.InstallFlowVersion
   self:StaggeredUpdateAll({ profile = true, profileChanged = true, movers = true, layout = true, options = true, theme = true, fonts = true })
 end
 
@@ -335,7 +346,19 @@ end
 function Addon:OnNewProfile(event, db)
   ns.FrameUtil.BeginProfileTransition()
   self:EnsureSchema()
+
+  local onboarding = self.db.profile.pui.onboarding
+  onboarding.installComplete = false
+  onboarding.installVersion = 0
+  ns.Flags.FirstRunPending = true
+
   self:StaggeredUpdateAll({ profile = true, profileNew = true, movers = true, layout = true, options = true, theme = true, fonts = true })
+
+  C_Timer.After(0, function()
+    if Addon:IsInstallWizardPending() then
+      Addon:ShowInstallWizard(false)
+    end
+  end)
 end
 
 local function _PUI_InstallCopyProfileConfirm(db)
@@ -396,11 +419,24 @@ function Addon:EnsureSchema()
   _PUI_EnsureTable(p, "blizzardFonts")
 
   local pui = _PUI_EnsureTable(p, "pui")
+  local profileOnboarding = _PUI_EnsureTable(pui, "onboarding")
   local puiMedia = _PUI_EnsureTable(pui, "media")
   local puiOptions = _PUI_EnsureTable(pui, "options")
   _PUI_EnsureTable(puiOptions, "skin")
   local globalPUI = _PUI_EnsureTable(g, "pui")
   local globalOptions = _PUI_EnsureTable(globalPUI, "options")
+
+  if (tonumber(profileOnboarding.schemaVersion) or 0) < 1 then
+    local legacyOnboarding = self.db.char and self.db.char.onboarding
+    local legacyComplete = self.__puiCreatedCharacterProfile ~= true
+      and (type(legacyOnboarding) == "table"
+        and legacyOnboarding.installComplete == true
+        or self.db.global.installed == true)
+
+    profileOnboarding.installComplete = legacyComplete
+    profileOnboarding.installVersion = legacyComplete and ns.InstallFlowVersion or 0
+    profileOnboarding.schemaVersion = 1
+  end
 
   if puiMedia.iconTextGlobalFont == nil or puiMedia.iconTextGlobalFont == "" then
     puiMedia.iconTextGlobalFont = "FiraSans Heavy"
@@ -819,7 +855,9 @@ function Addon:OnInitialize()
     characterOnboarding.schemaVersion = 1
   end
 
-  ns.Flags.FirstRunPending = characterOnboarding.installComplete ~= true
+  local profileOnboarding = self.db.profile.pui.onboarding
+  ns.Flags.FirstRunPending = profileOnboarding.installComplete ~= true
+    or (tonumber(profileOnboarding.installVersion) or 0) < ns.InstallFlowVersion
 
   self.db.global.reloadCount = previousReloadCount + 1
   self:Print("PleebUI loaded. Reload count: " .. self.db.global.reloadCount)

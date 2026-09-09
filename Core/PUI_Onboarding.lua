@@ -21,7 +21,7 @@ local math_floor = _G.math.floor
 local math_max = _G.math.max
 local math_min = _G.math.min
 
-local INSTALL_FLOW_VERSION = 1
+local INSTALL_FLOW_VERSION = ns.InstallFlowVersion
 local WIZARD_WIDTH = 920
 local WIZARD_HEIGHT = 820
 local WIZARD_MIN_WIDTH = 760
@@ -38,6 +38,7 @@ local currentPage = 1
 local wizardFrame
 local wizardScaleSnapshot
 local RefreshWizardTheme
+local RefreshWizardPage
 local LayoutProfileChoiceControls
 local RefreshProfileChoiceControls
 local LayoutUnitFrameControls
@@ -46,9 +47,10 @@ local LayoutPRDControls
 local RefreshPRDControls
 local LayoutQualityControls
 local RefreshQualityControls
+local OpenCustomTrackerInstallerFromWizard
 
 local function GetInstallOnboardingDB()
-  return Addon.db.char.onboarding
+  return Addon.db.profile.pui.onboarding
 end
 
 local function SetStatus(text)
@@ -482,6 +484,26 @@ local function BuildProfileChoiceControls(frame, colors)
   return host
 end
 
+OpenCustomTrackerInstallerFromWizard = function()
+  local opener = wizardFrame
+  if not opener then
+    return
+  end
+
+  opener:Hide()
+  ns.PCMCustomTrackerInstaller:Open(function(createdTrackerKey)
+    if createdTrackerKey then
+      return
+    end
+
+    if wizardFrame and activeFlow then
+      wizardFrame:Show()
+      RefreshWizardPage()
+      wizardFrame:Raise()
+    end
+  end)
+end
+
 local INSTALL_FLOW = {
   title = "PleebUI Setup",
   skipText = "Skip setup",
@@ -518,9 +540,15 @@ local INSTALL_FLOW = {
     },
     {
       title = "Cooldown Manager and custom trackers",
-      body = "Use /cd to choose spells for Blizzard's Cooldown Manager. PleebUI can also track your potions, Healthstones, combat resurrection items, and equipped on-use trinkets. Create separate cooldown, charge, duration, or stack buttons and bars under PleebUI > Cooldown Manager > Custom Trackers.",
-      note = "Enable the Consumable Tracker below. The preview shows each custom tracker type.",
+      body = "Use /cd to choose spells for Blizzard's Cooldown Manager. PleebUI can also track your potions, Healthstones, combat resurrection items, and equipped on-use trinkets. Create separate cooldown, charge, duration, or stack buttons and bars under PleebUI > Cooldown Manager > Custom Trackers. You can create your first custom tracker now or return to it later from the Custom Trackers page.",
+      note = "Enable the Consumable Tracker below. The preview shows each tracker type; the guided tracker setup opens the complete settings page when it finishes.",
       preview = "customBars",
+      actions = {
+        {
+          text = "Create custom tracker",
+          func = OpenCustomTrackerInstallerFromWizard,
+        },
+      },
     },
     {
       title = "Finish setup",
@@ -2530,7 +2558,7 @@ local function HideActionButtons(frame)
   end
 end
 
-local function RefreshWizardPage()
+RefreshWizardPage = function()
   local frame = wizardFrame
   local flow = activeFlow
   local page = flow.pages[currentPage]
@@ -2877,7 +2905,9 @@ local function ShowInstallFlow()
 end
 
 function Addon:IsInstallWizardPending()
-  return GetInstallOnboardingDB().installComplete ~= true
+  local db = GetInstallOnboardingDB()
+  return db.installComplete ~= true
+    or (tonumber(db.installVersion) or 0) < INSTALL_FLOW_VERSION
 end
 
 function Addon:ShowInstallWizard(force)
