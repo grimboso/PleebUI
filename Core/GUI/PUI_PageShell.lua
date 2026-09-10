@@ -122,6 +122,7 @@ local function PUI_PageShell_RebuildLayout(self)
   self.header:SetFrameLevel(shellLevel + 10)
   self.stickyStrip:SetFrameLevel(shellLevel + 12)
   self.contentHost:SetFrameLevel(shellLevel + 14)
+  self.nativeHost:SetFrameLevel(shellLevel + 15)
   self.previewDock:SetFrameLevel(shellLevel + 60)
   self.previewHost:SetFrameLevel(shellLevel + 61)
   self.headerActions:SetFrameLevel(shellLevel + 80)
@@ -235,7 +236,11 @@ local function PUI_PageShell_RebuildLayout(self)
   self.acdHost:SetPoint("TOPLEFT", self.contentHost, "TOPLEFT", 10, -10)
   self.acdHost:SetPoint("BOTTOMRIGHT", self.contentHost, "BOTTOMRIGHT", -10, 10)
   self.acdHost:SetClipsChildren(true)
-  self.acdHost:Show()
+
+  self.nativeHost:ClearAllPoints()
+  self.nativeHost:SetPoint("TOPLEFT", self.contentHost, "TOPLEFT", 10, -10)
+  self.nativeHost:SetPoint("BOTTOMRIGHT", self.contentHost, "BOTTOMRIGHT", -10, 10)
+  self.nativeHost:SetClipsChildren(true)
 
   PUI_PageShell_SyncACDContainer(self)
 
@@ -323,6 +328,7 @@ function PageShell.Create(parent)
   shell.previewDock = CreateFrame("Frame", nil, shell.body)
   shell.scrollContent = CreateFrame("Frame", nil, shell.body)
   shell.acdHost = CreateFrame("Frame", nil, shell.scrollContent)
+  shell.nativeHost = CreateFrame("Frame", nil, shell.scrollContent)
 
   shell.scrollContent.__puiACDHostContainer = true
   shell.scrollContent.__puiAceGUIOwnedByPleebUI = true
@@ -365,6 +371,12 @@ function PageShell.Create(parent)
   shell.acdHost:SetHeight(1)
   shell.acdHost:SetClipsChildren(true)
   shell.acdHost:Show()
+
+  shell.nativeHost:SetPoint("TOPLEFT", shell.contentHost, "TOPLEFT", 10, -10)
+  shell.nativeHost:SetPoint("TOPRIGHT", shell.contentHost, "TOPRIGHT", -10, -10)
+  shell.nativeHost:SetHeight(1)
+  shell.nativeHost:SetClipsChildren(true)
+  shell.nativeHost:Hide()
 
   shell.previewHost = CreateFrame("Frame", nil, shell.previewDock)
   shell.previewHost:SetPoint("TOPLEFT", shell.previewDock, "TOPLEFT", 0, 0)
@@ -451,6 +463,9 @@ function PageShell.Create(parent)
     local parent = self.acdHost
     local container = self.acdContainer
 
+    self.nativeHost:Hide()
+    self.acdHost:Show()
+
     if not container then
       container = AceGUI:Create("SimpleGroup")
       container.parent = nil
@@ -479,6 +494,22 @@ function PageShell.Create(parent)
     container.frame:Show()
 
     return container
+  end
+
+  function shell:GetNativeContentHost()
+    if self.__puiLayoutDirty == true or self.__puiACDContainerLayoutReady ~= true then
+      self.__puiLayoutDirty = nil
+      PUI_PageShell_RebuildLayout(self)
+    end
+
+    if self.acdContainer then
+      self.acdContainer:ReleaseChildren()
+      self.acdContainer.frame:Hide()
+    end
+
+    self.acdHost:Hide()
+    self.nativeHost:Show()
+    return self.nativeHost
   end
 
   function shell:SetHeaderActionsShown(enabled)
@@ -558,6 +589,7 @@ function PageShell.Create(parent)
     PUI_PageShell_ClearHostChildren(self.stickyStrip)
     PUI_PageShell_ClearHostChildren(self.previewHost)
     PUI_PageShell_ClearHostChildren(self.acdHost, self.acdContainer and self.acdContainer.frame or nil)
+    PUI_PageShell_ClearHostChildren(self.nativeHost)
 
     self.__puiLayoutSuspended = wasSuspended or nil
     PUI_PageShell_RequestLayout(self)
@@ -574,6 +606,7 @@ function PageShell.Create(parent)
     PUI_PageShell_ClearHostChildren(self.headerActions)
     PUI_PageShell_ClearHostChildren(self.previewHost)
     PUI_PageShell_ClearHostChildren(self.acdHost, self.acdContainer and self.acdContainer.frame or nil)
+    PUI_PageShell_ClearHostChildren(self.nativeHost)
 
     if preserveSticky ~= true then
       self:SetStickyShown(false)
