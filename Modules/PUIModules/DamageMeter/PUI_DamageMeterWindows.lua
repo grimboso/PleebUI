@@ -52,9 +52,6 @@ local GetWindowSelection = Sessions.GetWindowSelection
 local SetWindowSelection = Sessions.SetWindowSelection
 local IsAvailableSessionSelection = Sessions.IsAvailableSessionSelection
 local GetCombatSession = Sessions.GetCombatSession
-local AcquireRefreshSessionCache = Sessions.AcquireRefreshSessionCache
-local ReleaseRefreshSessionCache = Sessions.ReleaseRefreshSessionCache
-local GetRefreshSession = Sessions.GetRefreshSession
 local GetSessionDisplay = Sessions.GetSessionDisplay
 local FormatDuration = Sessions.FormatDuration
 local SetDeathTimeText = Sessions.SetDeathTimeText
@@ -540,6 +537,8 @@ local function CompileWindowRuntime(window, windowDB)
   runtime.meter = windowDB.meter
   runtime.session = windowDB.session
   runtime.alwaysShowMe = windowDB.alwaysShowMe == true
+  runtime.syncSegments = windowDB.syncSegments == true
+  runtime.autoCurrentOnCombat = windowDB.autoCurrentOnCombat == true
   return runtime
 end
 
@@ -1287,27 +1286,61 @@ local function SelectWindowMeter(window, meterKey)
   UpdateBreakdownForWindow(window)
 end
 
-local function SelectWindowSession(window, sessionKey)
+local function ApplyWindowSegmentSelection(window, sessionKey, selection, refresh)
   local windowDB = GetWindowDB(window.index)
-  windowDB.session = sessionKey or "CURRENT"
-  SetWindowSelection(window.index, nil)
-  window.firstSource = 1
-  window.needsCombatRefresh = nil
-  RefreshWindow(window, nil, windowDB)
-  UpdateBreakdownForWindow(window)
-end
-
-local function SelectWindowRecord(window, selection)
-  local windowDB = GetWindowDB(window.index)
+  if sessionKey then
+    windowDB.session = sessionKey
+    window.runtime.session = sessionKey
+    selection = nil
+  end
   SetWindowSelection(window.index, selection)
   window.firstSource = 1
   window.needsCombatRefresh = nil
-
-  if DamageMeters.breakdownSelection and DamageMeters.breakdownSelection.ownerWindow == window then
+  if refresh == false then
+    return
+  end
+  if selection
+    and DamageMeters.breakdownSelection
+    and DamageMeters.breakdownSelection.ownerWindow == window
+  then
     Breakdown.Close()
   end
-
   RefreshWindow(window, nil, windowDB)
+  if not selection then
+    UpdateBreakdownForWindow(window)
+  end
+end
+
+local function SelectWindowSegment(window, sessionKey, selection)
+  if window.runtime.syncSegments ~= true then
+    ApplyWindowSegmentSelection(window, sessionKey, selection, true)
+    return
+  end
+  for index = 1, DamageMeters.runtimeWindowCount do
+    local syncedWindow = DamageMeters.windows[index]
+    if syncedWindow.runtime.syncSegments == true then
+      ApplyWindowSegmentSelection(
+        syncedWindow,
+        sessionKey,
+        selection,
+        true
+      )
+    end
+  end
+end
+
+function DamageMeters:SelectCurrentSessionsOnCombat()
+  local changed = false
+  for index = 1, self.runtimeWindowCount do
+    local window = self.windows[index]
+    if window.runtime.autoCurrentOnCombat == true
+      and GetWindowSelection(window.runtime) ~= nil
+    then
+      ApplyWindowSegmentSelection(window, "CURRENT", nil, false)
+      changed = true
+    end
+  end
+  return changed
 end
 
 local function CreateDamageMeterWindow(index)
@@ -1840,25 +1873,12 @@ function DamageMeters:RefreshWindows()
   if not self.runtimeEnabled or not self.runtimeVisible then
     return
   end
-
-  local sessionCache = AcquireRefreshSessionCache()
   for index = 1, self.runtimeWindowCount do
     local window = self.windows[index]
     if window and window.frame:IsShown() then
-      local windowRuntime = window.runtime
-      if window.navigationMode then
-        RefreshWindow(window, nil, windowRuntime)
-      else
-        RefreshWindow(
-          window,
-          GetRefreshSession(sessionCache, windowRuntime, windowRuntime.meter),
-          windowRuntime
-        )
-      end
+      RefreshWindow(window, nil, window.runtime)
     end
   end
-  ReleaseRefreshSessionCache(sessionCache)
-
   Breakdown.Refresh()
 end
 
@@ -1874,8 +1894,6 @@ function DamageMeters:RefreshWindowsForMeterType(meterType, sessionID)
   if not self.runtimeEnabled or not self.runtimeVisible then
     return
   end
-
-  local sessionCache = AcquireRefreshSessionCache()
   for index = 1, self.runtimeWindowCount do
     local window = self.windows[index]
     if window and window.frame:IsShown() then
@@ -1883,20 +1901,10 @@ function DamageMeters:RefreshWindowsForMeterType(meterType, sessionID)
       if METER_TYPES[windowRuntime.meter] == meterType
         and DoesWindowSessionMatchEvent(windowRuntime, sessionID)
       then
-        if window.navigationMode then
-          RefreshWindow(window, nil, windowRuntime)
-        else
-          RefreshWindow(
-            window,
-            GetRefreshSession(sessionCache, windowRuntime, windowRuntime.meter),
-            windowRuntime
-          )
-        end
+        RefreshWindow(window, nil, windowRuntime)
       end
     end
   end
-  ReleaseRefreshSessionCache(sessionCache)
-
   local selection = self.breakdownSelection
   if selection then
     local ownerRuntime = selection.ownerWindow.runtime
@@ -2010,24 +2018,15 @@ function DamageMeters:RefreshDirtyWindows()
   if not self.runtimeEnabled or not self.runtimeVisible then
     return
   end
-
-  local sessionCache = AcquireRefreshSessionCache()
   for index = 1, self.runtimeWindowCount do
     local window = self.windows[index]
     if window and window.needsCombatRefresh then
       window.needsCombatRefresh = nil
       if window.frame:IsShown() then
-        local windowRuntime = window.runtime
-        RefreshWindow(
-          window,
-          GetRefreshSession(sessionCache, windowRuntime, windowRuntime.meter),
-          windowRuntime
-        )
+        RefreshWindow(window, nil, window.runtime)
       end
     end
   end
-  ReleaseRefreshSessionCache(sessionCache)
-
   if self.breakdownNeedsCombatRefresh then
     self.breakdownNeedsCombatRefresh = nil
     Breakdown.Refresh()
@@ -2092,26 +2091,7 @@ function DamageMeters:SetWindowsVisible(visible)
   end
 
   db.visible = false
-  self.runtimeVisible = false
-  self:CancelCombatRefresh()
-  self:CancelTargetAnalysisRefresh()
-  self:UnregisterWindowMovers()
-
-  Breakdown.Close()
-  SegmentPicker.Hide()
-
-  if self.windows then
-    for index = 1, MAX_WINDOWS do
-      local window = self.windows[index]
-      if window then
-        window.dragState = nil
-        window.resizeState = nil
-        window.dragDriver:Hide()
-        window.resizeDriver:Hide()
-        window.frame:Hide()
-      end
-    end
-  end
+  self:ApplySettings()
 end
 
 function DamageMeters:ToggleWindows()
@@ -2271,8 +2251,8 @@ UpdateBreakdownForWindow = P:Def("UpdateBreakdownForWindow", UpdateBreakdownForW
 SetWindowNavigationMode = P:Def("SetWindowNavigationMode", SetWindowNavigationMode)
 ShowMeterNavigation = P:Def("ShowMeterNavigation", ShowMeterNavigation)
 SelectWindowMeter = P:Def("SelectWindowMeter", SelectWindowMeter)
-SelectWindowSession = P:Def("SelectWindowSession", SelectWindowSession)
-SelectWindowRecord = P:Def("SelectWindowRecord", SelectWindowRecord)
+ApplyWindowSegmentSelection = P:Def("ApplyWindowSegmentSelection", ApplyWindowSegmentSelection)
+SelectWindowSegment = P:Def("SelectWindowSegment", SelectWindowSegment)
 CreateDamageMeterWindow = P:Def("CreateDamageMeterWindow", CreateDamageMeterWindow)
 DoesWindowSessionMatchEvent = P:Def("DoesWindowSessionMatchEvent", DoesWindowSessionMatchEvent)
 
@@ -2296,6 +2276,7 @@ DamageMeters.MarkCurrentWindowsDirty = P:Def("DamageMeters.MarkCurrentWindowsDir
 DamageMeters.RefreshCombatWindowSlot = P:Def("DamageMeters.RefreshCombatWindowSlot", DamageMeters.RefreshCombatWindowSlot)
 DamageMeters.RefreshDirtyWindows = P:Def("DamageMeters.RefreshDirtyWindows", DamageMeters.RefreshDirtyWindows)
 DamageMeters.RefreshSelectionWindows = P:Def("DamageMeters.RefreshSelectionWindows", DamageMeters.RefreshSelectionWindows)
+DamageMeters.SelectCurrentSessionsOnCombat = P:Def("DamageMeters.SelectCurrentSessionsOnCombat", DamageMeters.SelectCurrentSessionsOnCombat)
 DamageMeters.ResetWindowPosition = P:Def("DamageMeters.ResetWindowPosition", DamageMeters.ResetWindowPosition)
 DamageMeters.HasShownWindow = P:Def("DamageMeters.HasShownWindow", DamageMeters.HasShownWindow)
 DamageMeters.SetWindowsVisible = P:Def("DamageMeters.SetWindowsVisible", DamageMeters.SetWindowsVisible)
@@ -2314,6 +2295,5 @@ Windows.RefreshWindow = RefreshWindow
 Windows.SetWindowNavigationMode = SetWindowNavigationMode
 Windows.ShowMeterNavigation = ShowMeterNavigation
 Windows.SelectWindowMeter = SelectWindowMeter
-Windows.SelectWindowSession = SelectWindowSession
-Windows.SelectWindowRecord = SelectWindowRecord
+Windows.SelectWindowSegment = SelectWindowSegment
 Windows.RANK_TEXT = RANK_TEXT
