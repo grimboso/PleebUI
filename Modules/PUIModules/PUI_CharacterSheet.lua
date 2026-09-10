@@ -2093,9 +2093,24 @@ local function CS_SkinEquipmentManagerPane()
   CS_SkinButton(_G.PaperDollFrameEquipSet)
   CS_SkinButton(_G.PaperDollFrameSaveSet)
 
+  if not CharacterSheet._equipmentSetDialogHooked then
+    hooksecurefunc("StaticPopup_Show", function(which, _, _, data)
+      if which ~= "CONFIRM_SAVE_EQUIPMENT_SET" and which ~= "CONFIRM_OVERWRITE_EQUIPMENT_SET" then
+        return
+      end
+
+      local dialog = StaticPopup_FindVisible(which, data)
+      if dialog then
+        dialog:SetFrameStrata("FULLSCREEN_DIALOG")
+      end
+    end)
+    CharacterSheet._equipmentSetDialogHooked = true
+  end
+
   if _G.GearManagerPopupFrame then
     if not _G.GearManagerPopupFrame._puiCharHooked then
       _G.GearManagerPopupFrame:HookScript("OnShow", function(frame)
+        frame:SetFrameStrata("FULLSCREEN_DIALOG")
         StripTextures(frame, true)
         CS_ApplyBackdrop(frame, CS_BG)
       end)
@@ -2103,6 +2118,7 @@ local function CS_SkinEquipmentManagerPane()
     end
 
     if _G.GearManagerPopupFrame:IsShown() then
+      _G.GearManagerPopupFrame:SetFrameStrata("FULLSCREEN_DIALOG")
       CS_ApplyBackdrop(_G.GearManagerPopupFrame, CS_BG)
     end
   end
