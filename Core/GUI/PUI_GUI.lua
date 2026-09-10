@@ -972,11 +972,16 @@ local function _PUI_DoesOptionsPathExist(path)
     local childRec = registry[segment]
 
     if type(childRec) == "table" and childRec.parentKey == path[i - 1] then
-      current = {
-        type = "group",
+      current = _PUI_CreateProviderOption({
+        key = segment,
         name = childRec.name or childRec.label or segment,
-        args = {},
-      }
+        label = childRec.label or childRec.name or segment,
+        order = childRec.order or 50,
+        parentKey = childRec.parentKey,
+        factory = childRec.factory,
+        meta = type(childRec.meta) == "table" and childRec.meta or {},
+        rec = childRec,
+      }, path)
     else
       local args = current and current.args
       if type(args) ~= "table" or type(args[segment]) ~= "table" then
@@ -1166,6 +1171,7 @@ local PUI_ROOT_NAV_SECTION_ORDER = {
   { key = "General", label = "General" },
   { key = "CombatFrames", label = "Combat UI" },
   { key = "Interface", label = "Interface" },
+  { key = "Plugins", label = "Plugins" },
 }
 
 local PUI_ROOT_NAV_SECTION_BY_KEY = {
@@ -1221,7 +1227,10 @@ local function _PUI_InsertRootNavSections(nodes)
 
   for i = 1, #nodes do
     local node = nodes[i]
-    local sectionKey = PUI_ROOT_NAV_SECTION_BY_KEY[node and node.key] or "Other"
+    local meta = type(node and node.meta) == "table" and node.meta or nil
+    local sectionKey = (meta and meta.navSection)
+      or PUI_ROOT_NAV_SECTION_BY_KEY[node and node.key]
+      or "Other"
 
     grouped[sectionKey] = grouped[sectionKey] or {}
     grouped[sectionKey][#grouped[sectionKey] + 1] = node
@@ -1817,7 +1826,7 @@ local function _PUI_StyleRootNavButton(btn, node, isSelected)
   else
     btn.__puiRootNavIcon:SetTexture(nil)
     btn.__puiRootNavIcon:Hide()
-    btn.__puiRootNavGlyph:SetText(PUI_ROOT_NAV_GLYPH_BY_KEY[node.key] or string.sub(node.label, 1, 2))
+    btn.__puiRootNavGlyph:SetText(meta.navGlyph or PUI_ROOT_NAV_GLYPH_BY_KEY[node.key] or string.sub(node.label, 1, 2))
     btn.__puiRootNavGlyph:SetTextColor(accent[1], accent[2], accent[3], disabled and 0.45 or 0.95)
     btn.__puiRootNavGlyph:Show()
   end
@@ -2910,10 +2919,16 @@ local function _PUI_GetPageShellInfo(path)
   local registry = ns.Registry.Options
   local safePath = _PUI_CopyOptionsPath(path)
   local rootKey = safePath and safePath[1] or nil
-  local leafKey = safePath and safePath[#safePath] or nil
   local rootRec = rootKey and registry[rootKey] or nil
-  local leafRec = leafKey and registry[leafKey] or nil
-  local activeRec = leafRec or rootRec
+  local activeRec = rootRec
+
+  for index = safePath and #safePath or 0, 2, -1 do
+    local record = registry[safePath[index]]
+    if record then
+      activeRec = record
+      break
+    end
+  end
 
   if type(activeRec) ~= "table" then
     return nil
@@ -2954,7 +2969,9 @@ local function _PUI_GetPageShellInfo(path)
     rootKey,
     "default"
   ))
-  local previewAllowed = rootKey == "unitframes"
+  local previewAllowed = rootMeta.allowPreview == true
+    or activeMeta.allowPreview == true
+    or rootKey == "unitframes"
     or rootKey == "ACTIONBARS"
     or rootKey == "CooldownManager"
     or rootKey == "PRD"
