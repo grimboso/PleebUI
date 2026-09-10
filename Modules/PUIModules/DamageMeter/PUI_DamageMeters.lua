@@ -571,6 +571,9 @@ function DamageMeters:RegisterRuntimeEvents()
 
   self:ReconcileRuntimeState()
   History:Resume()
+  if self.playerInCombat or self.waitingForGroupCombatEnd then
+    self:SelectCurrentSessionsOnCombat()
+  end
   self.runtimeEventsRegistered = true
   for index = 1, #RUNTIME_EVENTS do
     local event = RUNTIME_EVENTS[index]
@@ -670,12 +673,15 @@ function DamageMeters:ApplySettings()
   self:ApplyWindowConfiguration()
   self:CancelCombatRefresh()
   self:CancelHistoryCaptureRetry()
-  self:RegisterRuntimeEvents()
-  self:ScheduleHistoryCaptureRetry(0.3)
   if self.runtimeVisible and self:HasShownWindow() then
+    self:RegisterRuntimeEvents()
+    self:ScheduleHistoryCaptureRetry(0.3)
     self:RefreshWindows()
   else
     self:CancelTargetAnalysisRefresh()
+    self:CancelEncounterEndRefresh()
+    self:UnregisterRuntimeEvents()
+    SegmentPicker.Hide()
   end
 end
 
@@ -693,7 +699,7 @@ function DamageMeters:PLAYER_REGEN_DISABLED()
   self.playerInCombat = true
   self.waitingForGroupCombatEnd = false
   self:CancelHistoryCaptureRetry()
-
+  self:SelectCurrentSessionsOnCombat()
   if self.breakdownSelection
     and (self.breakdownSelection.sessionID ~= nil or self.breakdownSelection.isLocalPlayer ~= true)
   then
@@ -770,11 +776,15 @@ function DamageMeters:UNIT_FLAGS(_, unit)
   self.waitingForGroupCombatEnd = true
   Breakdown.InvalidateTargetAnalysisCache()
   self:CancelHistoryCaptureRetry()
-
+  local selectionChanged = self:SelectCurrentSessionsOnCombat()
   if self.breakdownSelection
     and (self.breakdownSelection.sessionID ~= nil or self.breakdownSelection.isLocalPlayer ~= true)
   then
     Breakdown.Close()
+  end
+  if selectionChanged then
+    self:CancelCombatRefresh()
+    self:RefreshWindows()
   end
 end
 
@@ -786,6 +796,7 @@ function DamageMeters:ENCOUNTER_START(_, encounterID, encounterName, difficultyI
   self.playerInCombat = true
   self.waitingForGroupCombatEnd = false
   self:CancelHistoryCaptureRetry()
+  self:SelectCurrentSessionsOnCombat()
   if self.breakdownSelection
     and (self.breakdownSelection.sessionID ~= nil or self.breakdownSelection.isLocalPlayer ~= true)
   then
@@ -840,7 +851,9 @@ function DamageMeters:PLAYER_ENTERING_WORLD()
   self.combatGeneration = (self.combatGeneration or 0) + 1
   self.playerInCombat = IsPlainUnitInCombat("player")
   self.waitingForGroupCombatEnd = not self.playerInCombat and IsGroupInCombat()
-
+  if self.playerInCombat or self.waitingForGroupCombatEnd then
+    self:SelectCurrentSessionsOnCombat()
+  end
   History:ReconcileDungeonState()
 
   if self.breakdownSelection then
