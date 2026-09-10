@@ -1307,3 +1307,14 @@ end
   PlayerBuffs.OnInitialize = P:Def("PlayerBuffs.OnInitialize", PlayerBuffs.OnInitialize)
   PlayerBuffs.OnEnable = P:Def("PlayerBuffs.OnEnable", PlayerBuffs.OnEnable)
   PlayerBuffs.OnDisable = P:Def("PlayerBuffs.OnDisable", PlayerBuffs.OnDisable)
+
+_G.PleebUIAPI:RegisterPlugin("PleebUI_PlayerBuffs", {
+  name = "Player Buffs",
+}):RegisterEditModeParticipant("runtime", {
+  order = 150,
+  onChanged = function(enable)
+    if enable then
+      PlayerBuffs:EnsureMovers()
+    end
+  end,
+})
