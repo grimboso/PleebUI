@@ -1985,3 +1985,12 @@ local P = select(1, ns.Pleebug:DropIn(UF, { name = "UnitFrames.Core" }))
   DisableBlizzardUnit = P:Def("DisableBlizzardUnit", DisableBlizzardUnit)
   GetUnitFrameOptionsTab = P:Def("GetUnitFrameOptionsTab", GetUnitFrameOptionsTab)
   RefreshAuraSnapMovers = P:Def("RefreshAuraSnapMovers", RefreshAuraSnapMovers)
+
+_G.PleebUIAPI:RegisterPlugin("PleebUI_UnitFrames", {
+  name = "Unit Frames",
+}):RegisterEditModeParticipant("singleUnits", {
+  order = 100,
+  onChanged = function(enable)
+    UF:SetMoversVisible(enable)
+  end,
+})
