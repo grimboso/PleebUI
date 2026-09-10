@@ -300,7 +300,14 @@ function ChatLinks:OnInitialize()
     },
   })
 
-  ns.Registry.EditModeParticipants.chat = self
+  _G.PleebUIAPI:RegisterPlugin("PleebUI_Chat", {
+    name = "Chat",
+  }):RegisterEditModeParticipant("runtime", {
+    order = 20,
+    onChanged = function(enable)
+      self:OnEditModeChanged(enable)
+    end,
+  })
 end
 
 local HISTORY_VERSION = 2
