@@ -1579,6 +1579,16 @@ end
   DragonridingProvider = P:Def("DragonridingProvider", DragonridingProvider)
 
 
+_G.PleebUIAPI:RegisterPlugin("PleebUI_Skyriding", {
+  name = "Skyriding",
+}):RegisterEditModeParticipant("runtime", {
+  order = 140,
+  onChanged = function(enable)
+    Dragonriding:SetMoversVisible(enable)
+  end,
+})
+
+
 
 Addon:RegisterOptionsSection("Dragonriding", DragonridingProvider, 30, "Skyriding", nil, {
   preview = false,
