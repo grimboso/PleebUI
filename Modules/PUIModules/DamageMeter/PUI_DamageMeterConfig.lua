@@ -69,6 +69,8 @@ local DEFAULTS = {
       [1] = {
         meter = "DAMAGE_DONE",
         session = "CURRENT",
+        syncSegments = false,
+        autoCurrentOnCombat = false,
         locked = true,
         shown = true,
         width = 320,
@@ -95,6 +97,8 @@ local function GetWindowDB(index)
     windowDB = {
       meter = "DAMAGE_DONE",
       session = "CURRENT",
+      syncSegments = false,
+      autoCurrentOnCombat = false,
       locked = true,
       shown = true,
       width = 320,
@@ -164,6 +168,8 @@ local function SanitizeProfile()
     windowDB.locked = windowDB.locked ~= false
     windowDB.shown = windowDB.shown ~= false
     windowDB.alwaysShowMe = windowDB.alwaysShowMe == true
+    windowDB.syncSegments = windowDB.syncSegments == true
+    windowDB.autoCurrentOnCombat = windowDB.autoCurrentOnCombat == true
     windowDB.width = Clamp(math_floor(windowDB.width or 320), 220, 700)
     windowDB.height = Clamp(math_floor(windowDB.height or 180), 90, 600)
     windowDB.x = Round(windowDB.x or defaultPosition.x)
