@@ -669,3 +669,12 @@ end
   CastBar.OnEnable = P:Def("CastBar.OnEnable", CastBar.OnEnable)
   CastBar.OnDisable = P:Def("CastBar.OnDisable", CastBar.OnDisable)
   CastBar.SoftRebuild = P:Def("CastBar.SoftRebuild", CastBar.SoftRebuild)
+
+_G.PleebUIAPI:RegisterPlugin("PleebUI_UnitFrames", {
+  name = "Unit Frames",
+}):RegisterEditModeParticipant("castbars", {
+  order = 130,
+  onChanged = function(enable)
+    CastBar:SetMoversVisible(enable)
+  end,
+})
