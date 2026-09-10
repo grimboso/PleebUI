@@ -201,8 +201,7 @@ local Clamp = ns.DamageMeterUtil.Clamp
 local GetWindowDB = Config.GetWindowDB
 local GetWindowSelection = Sessions.GetWindowSelection
 local WindowSelectionsEqual = Sessions.WindowSelectionsEqual
-local SelectWindowSession = Windows.SelectWindowSession
-local SelectWindowRecord = Windows.SelectWindowRecord
+local SelectWindowSegment = Windows.SelectWindowSegment
 local PAD_LOCKED_TEXTURE = Constants.PAD_LOCKED_TEXTURE
 local PAD_UNLOCKED_TEXTURE = Constants.PAD_UNLOCKED_TEXTURE
 local TRASH_TEXTURE = Constants.TRASH_TEXTURE
@@ -1008,11 +1007,11 @@ function SegmentPicker.CreateRow(picker, panel, parent, index)
       return
     end
 
-    if data.sessionKey then
-      SelectWindowSession(self.picker.ownerWindow, data.sessionKey)
-    else
-      SelectWindowRecord(self.picker.ownerWindow, data.selection)
-    end
+    SelectWindowSegment(
+      self.picker.ownerWindow,
+      data.sessionKey,
+      data.selection
+    )
     SegmentPicker.RefreshSelectionStyle(self.picker)
     SegmentPicker.Refresh(self.picker)
   end)
@@ -1139,7 +1138,7 @@ function SegmentPicker.Ensure()
     button.text = buttonText
 
     button:SetScript("OnClick", function(self)
-      SelectWindowSession(picker.ownerWindow, self.sessionKey)
+      SelectWindowSegment(picker.ownerWindow, self.sessionKey, nil)
       SegmentPicker.RefreshSelectionStyle(picker)
       SegmentPicker.Refresh(picker)
     end)
@@ -1383,6 +1382,26 @@ local function ShowWindowConfigMenu(window)
       function()
         windowDB.alwaysShowMe = windowDB.alwaysShowMe ~= true
         Windows.RefreshWindow(window, nil, windowDB)
+      end
+    )
+    rootDescription:CreateCheckbox(
+      "Sync segment selection",
+      function()
+        return windowDB.syncSegments == true
+      end,
+      function()
+        windowDB.syncSegments = windowDB.syncSegments ~= true
+        window.runtime.syncSegments = windowDB.syncSegments
+      end
+    )
+    rootDescription:CreateCheckbox(
+      "Switch to Current on combat",
+      function()
+        return windowDB.autoCurrentOnCombat == true
+      end,
+      function()
+        windowDB.autoCurrentOnCombat = windowDB.autoCurrentOnCombat ~= true
+        window.runtime.autoCurrentOnCombat = windowDB.autoCurrentOnCombat
       end
     )
     rootDescription:CreateDivider()
