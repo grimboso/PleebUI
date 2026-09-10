@@ -1243,3 +1243,12 @@ local P = select(1, ns.Pleebug:DropIn(PartyFrames, { name = "UnitFrames.Party" }
   IteratePartyMemberFrames = P:Def("IteratePartyMemberFrames", IteratePartyMemberFrames)
   IteratePartyFrames = P:Def("IteratePartyFrames", IteratePartyFrames)
   RefreshPartyAuraFrame = P:Def("RefreshPartyAuraFrame", RefreshPartyAuraFrame)
+
+_G.PleebUIAPI:RegisterPlugin("PleebUI_UnitFrames", {
+  name = "Unit Frames",
+}):RegisterEditModeParticipant("party", {
+  order = 110,
+  onChanged = function(enable)
+    PartyFrames:SetMoversVisible(enable)
+  end,
+})
