@@ -6,9 +6,14 @@ local CreateFrame = _G.CreateFrame
 local UIParent = _G.UIParent
 local math_max = _G.math.max
 
+local CURRENT_RELEASE_VERSION = _G.C_AddOns.GetAddOnMetadata(ns.Name, "Version")
+if CURRENT_RELEASE_VERSION == "@project-version@" then
+  CURRENT_RELEASE_VERSION = "v1.2.3"
+end
+
 local CURRENT_RELEASE = {
-  version = "1.4.5",
-  intro = "PleebUI 1.4.5 brings together the major features introduced throughout 1.4 with additional usability improvements and a large round of fixes, cleanup, and Midnight 12.1 stability work.",
+  version = CURRENT_RELEASE_VERSION,
+  intro = "This release brings together the current feature set with additional usability improvements, fixes, cleanup, and Midnight 12.1 stability work.",
   items = {
     {
       title = "Consumable Tracker",
@@ -76,8 +81,8 @@ local CURRENT_RELEASE = {
       location = "PleebUI What's New",
     },
     {
-      title = "1.4.5 fixes and polish",
-      description = "This release also includes fixes and cleanup across the 1.4 systems, including Action Bars, Unit Frames, the Character Sheet, the Consumable Tracker, Cooldown Manager, settings navigation, and other Midnight-sensitive lifecycle and restricted-execution paths.",
+      title = "Release fixes and polish",
+      description = "This release also includes fixes and cleanup across Action Bars, Unit Frames, the Character Sheet, the Consumable Tracker, Cooldown Manager, settings navigation, and other Midnight-sensitive lifecycle and restricted-execution paths.",
       location = "Applies automatically",
     },
   },
