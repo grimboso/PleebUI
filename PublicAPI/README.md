@@ -2,7 +2,7 @@
 
 PleebUI exposes `PleebUIAPI` for addons that want to use PleebUI Edit Mode movers or add configuration pages to the PleebUI options window.
 
-The current API version is `1.0`.
+The current API version is `1.1`.
 
 ## Loading PleebUI first
 
@@ -58,7 +58,7 @@ Breaking contract changes increment `VERSION`. Backwards-compatible additions in
 
 Plugin pages appear beneath a single addon entry in the `Plugins` navigation group. The group is hidden when no plugin has registered an options page.
 
-`getOptions` returns a normal AceConfig group table. The callback reads and writes the plugin's own database.
+An options page can use either an AceConfig table or addon-owned native frames. The plugin continues to read and write its own database.
 
 ```lua
 plugin:RegisterOptionsPage("general", {
@@ -100,6 +100,47 @@ Supported page fields:
 - `page`: preview and page lifecycle metadata.
 - `allowPreview`: allow a supplied page preview callback.
 
+### Native-frame pages
+
+Small addons do not need to bundle Ace libraries. Supply `buildPage` instead of `getOptions` and create ordinary World of Warcraft frames beneath the provided host:
+
+```lua
+local page
+
+plugin:RegisterOptionsPage("general", {
+  name = "General",
+  order = 10,
+  buildPage = function(host, context)
+    if not page then
+      page = CreateFrame("Frame", nil, host)
+
+      local title = page:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+      title:SetPoint("TOPLEFT", page, "TOPLEFT", 12, -12)
+      title:SetText("Plugin settings")
+    end
+
+    page:SetParent(host)
+    page:ClearAllPoints()
+    page:SetAllPoints(host)
+
+    return page
+  end,
+  refreshPage = function(host, context)
+    -- Refresh retained controls from the plugin database.
+  end,
+  onPageHide = function(host, context)
+    -- Stop previews, close dropdowns, and clear input focus.
+  end,
+  customPageOwnsHeader = false,
+})
+```
+
+`buildPage` is called whenever the page is mounted and may return its retained root frame. PleebUI reparents and shows that root beneath the page host. Reuse frames instead of rebuilding the page on every visit. `refreshPage` runs after mounting. `onPageHide` runs before the page is replaced or the PleebUI options window closes.
+
+Set `customPageOwnsHeader` when the returned page already contains its own title and description. PleebUI then gives the native page the full content height instead of drawing a second page header.
+
+The context contains `optionsFrame`, `shell`, `path`, `pluginKey`, and `pageKey`. These are page-lifecycle values, not plugin configuration storage.
+
 Notify PleebUI after changing page topology or dynamically generated controls:
 
 ```lua
@@ -122,7 +163,7 @@ plugin:UnregisterOptionsPage("general")
 
 When the final page is removed, PleebUI also removes the plugin's navigation entry.
 
-API version 1 accepts AceConfig option tables. It does not embed arbitrary custom canvas frames.
+API version 1.1 supports AceConfig tables and native-frame pages. Native pages must parent all visible controls to the supplied host and must not move or resize the PleebUI options window.
 
 ## Direct movers
 
