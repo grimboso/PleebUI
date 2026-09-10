@@ -4695,11 +4695,14 @@ function Cooldowns:_SetupGlowHooks()
 end
 
 local function _PCM_RegisterEditModeParticipant(self)
-  ns.Registry.EditModeParticipants.pcm = {
-    OnEditModeChanged = function(_, enable)
+  _G.PleebUIAPI:RegisterPlugin("PleebUI_CooldownManager", {
+    name = "Cooldown Manager",
+  }):RegisterEditModeParticipant("runtime", {
+    order = 40,
+    onChanged = function(enable)
       self:_OnEditModeChanged(enable)
     end,
-  }
+  })
 end
 
 
