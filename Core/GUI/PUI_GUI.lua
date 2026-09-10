@@ -367,6 +367,7 @@ local _PUI_GetStoredOptionsPath
 local _PUI_GetCurrentOptionsPath
 local _PUI_GetFallbackOptionsPath
 local _PUI_RefreshCustomPageShell
+local _PUI_HideActiveCustomOptionsPage
 
 local function _PUI_GetFirstSelectableRegistryKey()
   local nodes = _PUI_GetSortedRegistryNodes()
@@ -2992,6 +2993,9 @@ local function _PUI_GetPageShellInfo(path)
     previewHeight = previewHeight,
     previewStateKey = previewStateKey,
     pageSupportsPreview = pageSupportsPreview,
+    customPage = activeRec.customPage,
+    pluginKey = activeRec.ownerKey,
+    pluginPageKey = activeRec.pluginPageKey,
   }
 end
 
@@ -3221,6 +3225,8 @@ local function _PUI_EnsureCustomOptionsFrame()
 
       LibStub("AceGUI-3.0"):ClearFocus()
 
+      _PUI_HideActiveCustomOptionsPage(self)
+
       local shell = self.__puiPageShell
       local container = shell and shell.acdContainer
       if container then
@@ -3261,7 +3267,57 @@ end
 
 local _PUI_RefreshShellNavigationContext
 
+_PUI_HideActiveCustomOptionsPage = function(frame)
+  local active = frame and frame.__puiActiveCustomOptionsPage
+  if not active then
+    return
+  end
+
+  frame.__puiActiveCustomOptionsPage = nil
+
+  if type(active.page.onHide) == "function" then
+    active.page.onHide(active.host, active.context)
+  end
+
+  if active.root and active.root.Hide then
+    active.root:Hide()
+  end
+
+  if active.restoreSpecialFrame and active.rootName then
+    local exists
+    for index = 1, #UISpecialFrames do
+      if UISpecialFrames[index] == active.rootName then
+        exists = true
+        break
+      end
+    end
+
+    if not exists then
+      UISpecialFrames[#UISpecialFrames + 1] = active.rootName
+    end
+  end
+end
+
+local function _PUI_SuspendEmbeddedSpecialFrame(root)
+  local rootName = root and root.GetName and root:GetName() or nil
+  local removed
+
+  if not rootName then
+    return nil, false
+  end
+
+  for index = #UISpecialFrames, 1, -1 do
+    if UISpecialFrames[index] == rootName then
+      table.remove(UISpecialFrames, index)
+      removed = true
+    end
+  end
+
+  return rootName, removed == true
+end
+
 _PUI_RefreshCustomPageShell = function(frame, path)
+  _PUI_HideActiveCustomOptionsPage(frame)
   frame.__puiCustomBodyBuilt = nil
 
   local info = _PUI_GetPageShellInfo(path)
@@ -3354,6 +3410,12 @@ _PUI_RefreshCustomPageShell = function(frame, path)
 
   _PUI_RefreshShellNavigationContext(frame, shell, info.path)
 
+  if info.customPage and info.customPage.ownsHeader then
+    shell:SetTitle("")
+    shell:SetDescription("")
+    shell:SetHelpText("")
+  end
+
   shell:SetPreviewShown(wantsPreview, info.previewWidth, info.previewHeight)
   frame.__puiCustomContentTopInset = 0
   shell:EndLayoutBatch()
@@ -3372,7 +3434,7 @@ _PUI_RefreshCustomPageShell = function(frame, path)
     end
   end
 
-  return shell
+  return shell, info
 end
 
 local PUI_SHELL_TOP_TAB_UX = {
@@ -3647,15 +3709,48 @@ local function _PUI_RenderCustomOptionsPath(frame, AceConfigDialog, APP, path)
   _PUI_RememberLastSectionFromPath(requestedPath)
   _PUI_RefreshRootRegistryNav(frame)
 
-  local shell = _PUI_RefreshCustomPageShell(frame, requestedPath)
-  local container = _PUI_GetShellACDContainer(frame, shell)
+  local shell, info = _PUI_RefreshCustomPageShell(frame, requestedPath)
 
-  if #requestedPath > 1 then
-    AceConfigDialog:SelectGroup(APP, unpack(requestedPath))
+  if info.customPage then
+    local host = shell:GetNativeContentHost()
+    local context = {
+      optionsFrame = frame,
+      shell = shell,
+      path = _PUI_CopyOptionsPath(requestedPath),
+      pluginKey = info.pluginKey,
+      pageKey = info.pluginPageKey,
+    }
+    local root = info.customPage.build(host, context)
+    local rootName, restoreSpecialFrame = _PUI_SuspendEmbeddedSpecialFrame(root)
+
+    if root and root.GetObjectType and root.SetParent and root.Show then
+      root:SetParent(host)
+      root:Show()
+    end
+
+    frame.__puiActiveCustomOptionsPage = {
+      page = info.customPage,
+      host = host,
+      context = context,
+      root = root,
+      rootName = rootName,
+      restoreSpecialFrame = restoreSpecialFrame,
+    }
+
+    if type(info.customPage.refresh) == "function" then
+      info.customPage.refresh(host, context)
+    end
+  else
+    local container = _PUI_GetShellACDContainer(frame, shell)
+
+    if #requestedPath > 1 then
+      AceConfigDialog:SelectGroup(APP, unpack(requestedPath))
+    end
+
+    ns.Theme.ResetWidgetRowBackgrounds()
+    AceConfigDialog:Open(APP, container, unpack(renderPath))
   end
 
-  ns.Theme.ResetWidgetRowBackgrounds()
-  AceConfigDialog:Open(APP, container, unpack(renderPath))
   Addon:HandleOptionsPathOpened(requestedPath)
 
   frame.__puiLastRenderedOptionsPathKey = pathKey
