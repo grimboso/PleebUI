@@ -600,7 +600,14 @@ end
 
 function HunterTools:OnInitialize()
   NormalizeDB()
-  ns.Registry.EditModeParticipants.hunterTools = self
+  _G.PleebUIAPI:RegisterPlugin("PleebUI_HunterTools", {
+    name = "Hunter Tools",
+  }):RegisterEditModeParticipant("runtime", {
+    order = 30,
+    onChanged = function(enable)
+      self:OnEditModeChanged(enable)
+    end,
+  })
 
   Addon:RegisterOptionsSection(
     "HunterTools",
