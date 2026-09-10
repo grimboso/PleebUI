@@ -10,6 +10,7 @@ ns.Registry = {
   Modules = {},
   Options = {},
   Movers = {},
+  Plugins = {},
   Widgets = {},
   EditModeParticipants = {},
   TestModeParticipants = {},
@@ -1459,7 +1460,7 @@ function Addon:RegisterOptionsSection(key, factory, order, label, parentKey, met
   local ux = PUI_OPTIONS_SECTION_UX[key]
   local finalMeta = PUI_MergeOptionsMeta(meta, ux and ux.meta)
 
-  ns.Registry.Options[key] = {
+  local record = {
     key       = key,
     name      = (ux and ux.label) or label or key,
     label     = (ux and ux.label) or label or key,
@@ -1470,5 +1471,18 @@ function Addon:RegisterOptionsSection(key, factory, order, label, parentKey, met
     parentKey = parentKey,
     meta      = finalMeta,
   }
+
+  ns.Registry.Options[key] = record
+  return record
+end
+
+function Addon:UnregisterOptionsSection(key)
+  local record = key and ns.Registry.Options[key] or nil
+  if not record then
+    return nil
+  end
+
+  ns.Registry.Options[key] = nil
+  return record
 end
 
