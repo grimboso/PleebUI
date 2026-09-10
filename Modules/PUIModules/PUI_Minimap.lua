@@ -72,7 +72,14 @@ function MinimapModule:OnInitialize()
 
 
   ns.MinimapData.Initialize()
-  ns.Registry.EditModeParticipants.minimap = self
+  _G.PleebUIAPI:RegisterPlugin("PleebUI_Minimap", {
+    name = "Minimap",
+  }):RegisterEditModeParticipant("runtime", {
+    order = 10,
+    onChanged = function(enable)
+      self:OnEditModeChanged(enable)
+    end,
+  })
 end
 
 
