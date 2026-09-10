@@ -5,7 +5,7 @@ local FrameUtil = ns.FrameUtil
 
 local API = {
   VERSION = 1,
-  MINOR_VERSION = 0,
+  MINOR_VERSION = 1,
 }
 
 local PluginMixin = {}
@@ -252,8 +252,14 @@ function PluginMixin:_RefreshOptionsRootCacheMode()
 end
 
 function PluginMixin:RegisterOptionsPage(pageKey, spec)
-  if not IsValidKey(pageKey) or type(spec) ~= "table" or type(spec.getOptions) ~= "function" then
-    return false, "Options pages require a key and getOptions function."
+  if not IsValidKey(pageKey)
+    or type(spec) ~= "table"
+    or (
+      type(spec.getOptions) ~= "function"
+      and type(spec.buildPage) ~= "function"
+    )
+  then
+    return false, "Options pages require a key and getOptions or buildPage function."
   end
 
   self:_EnsureOptionsRoot()
@@ -269,7 +275,15 @@ function PluginMixin:RegisterOptionsPage(pageKey, spec)
 
   local provider = {
     GetOptions = function()
-      return page.spec.getOptions(plugin, page.key)
+      if type(page.spec.getOptions) == "function" then
+        return page.spec.getOptions(plugin, page.key)
+      end
+
+      return {
+        type = "group",
+        name = page.name,
+        args = {},
+      }
     end,
   }
 
@@ -288,6 +302,21 @@ function PluginMixin:RegisterOptionsPage(pageKey, spec)
   record.pluginPageKey = pageKey
   record.dynamicOptions = page.dynamicOptions or nil
   record.disableProviderCache = spec.disableProviderCache == true or nil
+
+  if type(spec.buildPage) == "function" then
+    record.customPage = {
+      ownsHeader = spec.customPageOwnsHeader == true,
+      build = function(host, context)
+        return page.spec.buildPage(host, context, plugin, page.key)
+      end,
+      refresh = type(spec.refreshPage) == "function" and function(host, context)
+        return page.spec.refreshPage(host, context, plugin, page.key)
+      end or nil,
+      onHide = type(spec.onPageHide) == "function" and function(host, context)
+        return page.spec.onPageHide(host, context, plugin, page.key)
+      end or nil,
+    }
+  end
 
   self.optionsPages[pageKey] = page
   self:_RefreshOptionsRootCacheMode()
