@@ -14,7 +14,6 @@ local C_DamageMeter = _G.C_DamageMeter
 local DAMAGE_METER_COMBAT_NUMBER = _G.DAMAGE_METER_COMBAT_NUMBER
 local math_floor = _G.math.floor
 local math_max = _G.math.max
-local pairs = _G.pairs
 local string_format = _G.string.format
 local type = _G.type
 
@@ -231,34 +230,6 @@ local function GetCombatSessionSource(
 end
 
 local NO_COMBAT_SESSION = {}
-
-local function AcquireRefreshSessionCache()
-  local cache = DamageMeters.refreshSessionCache
-  if not cache then
-    cache = {}
-    DamageMeters.refreshSessionCache = cache
-  end
-
-  return cache
-end
-
-local function ReleaseRefreshSessionCache(cache)
-  for key in pairs(cache) do
-    cache[key] = nil
-  end
-end
-
-local function GetRefreshSession(cache, windowDB, meterKey)
-  local cacheKey = meterKey .. "\31" .. GetSessionStateKey(windowDB)
-  local session = cache[cacheKey]
-  if session == nil then
-    session = GetCombatSession(windowDB, meterKey) or NO_COMBAT_SESSION
-    cache[cacheKey] = session
-  end
-
-  return session
-end
-
 local function GetSessionDisplay(windowDB, session)
   local selection = GetWindowSelection(windowDB)
   if IsAvailableSessionSelection(selection) then
@@ -318,9 +289,6 @@ GetAvailableSessionInfo = P:Def("GetAvailableSessionInfo", GetAvailableSessionIn
 GetSessionStateKey = P:Def("GetSessionStateKey", GetSessionStateKey)
 GetCombatSession = P:Def("GetCombatSession", GetCombatSession)
 GetCombatSessionSource = P:Def("GetCombatSessionSource", GetCombatSessionSource)
-AcquireRefreshSessionCache = P:Def("AcquireRefreshSessionCache", AcquireRefreshSessionCache)
-ReleaseRefreshSessionCache = P:Def("ReleaseRefreshSessionCache", ReleaseRefreshSessionCache)
-GetRefreshSession = P:Def("GetRefreshSession", GetRefreshSession)
 GetSessionDisplay = P:Def("GetSessionDisplay", GetSessionDisplay)
 SetNumericText = P:Def("SetNumericText", SetNumericText)
 SetDeathTimeText = P:Def("SetDeathTimeText", SetDeathTimeText)
@@ -340,9 +308,6 @@ Sessions.GetAvailableSessionInfo = GetAvailableSessionInfo
 Sessions.GetSessionStateKey = GetSessionStateKey
 Sessions.GetCombatSession = GetCombatSession
 Sessions.GetCombatSessionSource = GetCombatSessionSource
-Sessions.AcquireRefreshSessionCache = AcquireRefreshSessionCache
-Sessions.ReleaseRefreshSessionCache = ReleaseRefreshSessionCache
-Sessions.GetRefreshSession = GetRefreshSession
 Sessions.GetSessionDisplay = GetSessionDisplay
 Sessions.SetNumericText = SetNumericText
 Sessions.SetDeathTimeText = SetDeathTimeText
