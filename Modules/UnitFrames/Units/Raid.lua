@@ -1537,3 +1537,12 @@ local P = select(1, ns.Pleebug:DropIn(RaidFrames, { name = "UnitFrames.Raid" }))
   RefreshRaidFrameConfiguration = P:Def("RefreshRaidFrameConfiguration", RefreshRaidFrameConfiguration)
   IterateRaidFrames = P:Def("IterateRaidFrames", IterateRaidFrames)
   RefreshRaidAuraFrame = P:Def("RefreshRaidAuraFrame", RefreshRaidAuraFrame)
+
+_G.PleebUIAPI:RegisterPlugin("PleebUI_UnitFrames", {
+  name = "Unit Frames",
+}):RegisterEditModeParticipant("raid", {
+  order = 120,
+  onChanged = function(enable)
+    RaidFrames:SetMoversVisible(enable)
+  end,
+})
