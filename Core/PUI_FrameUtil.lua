@@ -5727,6 +5727,29 @@ function FrameUtil:RefreshAllGhostMovers()
   end
 end
 
+function FrameUtil:ReleaseGhostMover(key)
+  if not key then
+    return false
+  end
+
+  local helper = GhostMoverHelpers[key]
+  local ghost = helper and helper.frame or nil
+
+  self:UnregisterMover(key)
+  GhostMoverHelpers[key] = nil
+
+  if ghost then
+    ghost:Hide()
+    ghost:EnableMouse(false)
+    if ghost.EnableMouseWheel then
+      ghost:EnableMouseWheel(false)
+    end
+    ghost:ClearAllPoints()
+  end
+
+  return true
+end
+
 function FrameUtil.CompleteProfileTransition()
   if FrameUtil._profileTransitionActive ~= true then
     return
@@ -6053,6 +6076,59 @@ function FrameUtil._EnsureObjectiveTrackerMover()
   })
 end
 
+function FrameUtil.RegisterEditModeParticipant(key, participant, order)
+  if type(key) ~= "string"
+    or key == ""
+    or type(participant) ~= "table"
+    or type(participant.OnEditModeChanged) ~= "function"
+  then
+    return false
+  end
+
+  ns.Registry.EditModeParticipants[key] = {
+    key = key,
+    order = tonumber(order) or 50,
+    participant = participant,
+  }
+
+  if ns.Flags.IsEditing then
+    participant:OnEditModeChanged(true)
+  end
+
+  return true
+end
+
+function FrameUtil.UnregisterEditModeParticipant(key)
+  local registration = key and ns.Registry.EditModeParticipants[key] or nil
+  if not registration then
+    return false
+  end
+
+  if ns.Flags.IsEditing then
+    registration.participant:OnEditModeChanged(false)
+  end
+
+  ns.Registry.EditModeParticipants[key] = nil
+  return true
+end
+
+local function GetSortedEditModeParticipants()
+  local participants = {}
+
+  for _, registration in pairs(ns.Registry.EditModeParticipants) do
+    participants[#participants + 1] = registration
+  end
+
+  _G.table.sort(participants, function(first, second)
+    if first.order == second.order then
+      return first.key < second.key
+    end
+    return first.order < second.order
+  end)
+
+  return participants
+end
+
 function FrameUtil.OnEditModeChanged(enable)
   enable = not not enable
 
@@ -6060,10 +6136,9 @@ function FrameUtil.OnEditModeChanged(enable)
     ns.TestMode:SetActive(false, "edit-mode")
   end
 
-  for _, participant in pairs(ns.Registry.EditModeParticipants) do
-    if type(participant.OnEditModeChanged) == "function" then
-      participant:OnEditModeChanged(enable)
-    end
+  local participants = GetSortedEditModeParticipants()
+  for index = 1, #participants do
+    participants[index].participant:OnEditModeChanged(enable)
   end
 
   FrameUtil._InitEditModeConfig()
@@ -6137,18 +6212,8 @@ function FrameUtil.OnEditModeChanged(enable)
     end
   end
 
-  local unitFrames = ns.Modules.UnitFrames
-  unitFrames:SetMoversVisible(enable)
-  ns.Modules.PartyFrames:SetMoversVisible(enable)
-  ns.Modules.RaidFrames:SetMoversVisible(enable)
-  ns.Modules.CastBar:SetMoversVisible(enable)
-
-  ns.Modules.Dragonriding:SetMoversVisible(enable)
-
   if enable then
     ns.TestMode:SetActive(true, "edit-mode")
-    ns.Modules.PlayerBuffs:EnsureMovers()
-
     FrameUtil._RefreshSelectionVisuals()
   end
 end
