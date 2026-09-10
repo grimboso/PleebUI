@@ -51,6 +51,10 @@ For a manual installation:
 
 Use the packaged `PleebUI-v*.zip` asset, not GitHub's automatically generated source-code archives.
 
+## Addon integration
+
+Addon authors can register PleebUI Edit Mode movers and options pages through the [PleebUI Public API](PublicAPI/README.md).
+
 
 ## Feedback and issues
 
