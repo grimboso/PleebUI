@@ -19,6 +19,7 @@
   <Script file="GUI\PUI_PageShell.lua"/>
   <Script file="GUI\PUI_PreviewBox.lua"/>
   <Script file="GUI\PUI_GUI.lua"/>
+  <Script file="PUI_PublicAPI.lua"/>
   <Script file="PUI_EditMode_QuickSettings.lua"/>
   <Script file="PUI_TestMode.lua"/>
   <Script file="PUI_Onboarding.lua"/>
