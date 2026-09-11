@@ -64,7 +64,7 @@ function Tags.GetDeadStatusText(text)
   )
 end
 
-local function Tags_GetNSRTDisplayName(unit)
+function Tags.GetDisplayName(unit)
   local fallback = UnitName(unit)
 
   if UseNSRTNicknames ~= true then
@@ -109,7 +109,7 @@ function Tags.RegisterOUFTags()
       return ""
     end
 
-    return Tags_GetNSRTDisplayName(u)
+    return Tags.GetDisplayName(u)
   end)
 
   RegisterTag(oUF, "pui:curhp", "UNIT_HEALTH UNIT_MAXHEALTH", function(u)
@@ -179,6 +179,7 @@ end
 function Tags.RefreshNicknames()
   RefreshNicknameSetting()
   Tags.RefreshAllNicknameTags()
+  ns.PublicAPI:_NotifyUnitFrameDisplayNameChanged()
 end
 
 function Tags.RegisterNicknameCallback()
@@ -219,5 +220,5 @@ end
   Tags.RefreshNicknames = P:Def("Tags.RefreshNicknames", Tags.RefreshNicknames)
   Tags.RegisterNicknameCallback = P:Def("Tags.RegisterNicknameCallback", Tags.RegisterNicknameCallback)
   Tags.UnregisterNicknameCallback = P:Def("Tags.UnregisterNicknameCallback", Tags.UnregisterNicknameCallback)
-  Tags_GetNSRTDisplayName = P:Def("Tags_GetNSRTDisplayName", Tags_GetNSRTDisplayName)
+  Tags.GetDisplayName = P:Def("Tags.GetDisplayName", Tags.GetDisplayName)
   RegisterTag = P:Def("RegisterTag", RegisterTag)
