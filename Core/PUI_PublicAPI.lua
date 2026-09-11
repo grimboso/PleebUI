@@ -5,11 +5,12 @@ local FrameUtil = ns.FrameUtil
 
 local API = {
   VERSION = 1,
-  MINOR_VERSION = 1,
+  MINOR_VERSION = 2,
 }
 
 local PluginMixin = {}
 local plugins = ns.Registry.Plugins
+local unitFrameDisplayNameListeners = {}
 
 local MOVER_OPTION_KEYS = {
   "label",
@@ -162,6 +163,34 @@ end
 
 function API:GetPlugin(key)
   return IsValidKey(key) and plugins[key] or nil
+end
+
+function API:GetUnitFrameDisplayName(unit)
+  return ns.UFTags.GetDisplayName(unit)
+end
+
+function API:RegisterUnitFrameDisplayNameListener(owner, callback)
+  if type(owner) ~= "table" or type(callback) ~= "function" then
+    return false, "Display-name listeners require an owner and callback."
+  end
+
+  unitFrameDisplayNameListeners[owner] = callback
+  return true
+end
+
+function API:UnregisterUnitFrameDisplayNameListener(owner)
+  if not unitFrameDisplayNameListeners[owner] then
+    return false
+  end
+
+  unitFrameDisplayNameListeners[owner] = nil
+  return true
+end
+
+function API:_NotifyUnitFrameDisplayNameChanged()
+  for owner, callback in pairs(unitFrameDisplayNameListeners) do
+    callback(owner)
+  end
 end
 
 function API:RegisterPlugin(key, metadata)
