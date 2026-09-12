@@ -3,14 +3,6 @@ local _, ns = ...
 local AceHooks = {}
 ns.AceHooks = AceHooks
 
-local PUI_EXTERNAL_SKIN_ADDONS = {
-  PPP = true,
-  PleeBar = true,
-  Pleebar = true,
-  PleebPotReminder = true,
-  PleebDefensives = true,
-}
-
 local PUI_SELF_OWNED_WIDGET_TYPES = {
   PUI_Button = true,
   PUI_Checkbox = true,
@@ -56,82 +48,6 @@ local function _PUI_InstallAceTooltipHook(tooltip)
   tooltip.__puiAceTooltipBackgroundHooked = true
   tooltip:HookScript("OnShow", _PUI_RefreshAceTooltipBackground)
   tooltip:HookScript("OnHide", _PUI_HideAceTooltipBackground)
-end
-
-local function _PUI_IsExternalSkinAddon(addonName)
-  return PUI_EXTERNAL_SKIN_ADDONS[addonName] == true
-end
-
-local function _PUI_MarkExternalSkinOwner(owner)
-  if not owner then
-    return false
-  end
-
-  owner.__puiAceGUIOwnedByPleebUI = true
-
-  if owner.frame then
-    owner.frame.__puiAceGUIOwnedByPleebUI = true
-  end
-
-  if owner.obj then
-    owner.obj.__puiAceGUIOwnedByPleebUI = true
-  end
-
-  return true
-end
-
-local function _PUI_InstallExternalSkinBridge()
-  local bridge = _G.PleebUI_AceSkinBridge or {}
-  _G.PleebUI_AceSkinBridge = bridge
-  bridge.allowedAddons = PUI_EXTERNAL_SKIN_ADDONS
-
-  function bridge:Begin(addonName, rootOwner)
-    if not _PUI_IsExternalSkinAddon(addonName) then
-      return nil
-    end
-
-    _PUI_MarkExternalSkinOwner(rootOwner)
-    return nil
-  end
-
-  bridge.End = nil
-
-  function bridge:MarkFrame(addonName, owner)
-    if not _PUI_IsExternalSkinAddon(addonName) then
-      return false
-    end
-
-    return _PUI_MarkExternalSkinOwner(owner)
-  end
-
-  function bridge:TakeOwnership(addonName, owner)
-    if not _PUI_IsExternalSkinAddon(addonName) or not owner then
-      return false
-    end
-
-    if owner.__puiAceGUIOwnedByPleebUI == true then
-      return true
-    end
-
-    return AceHooks.TakeOwnership(owner)
-  end
-
-  function bridge:GetTheme(addonName)
-    if not _PUI_IsExternalSkinAddon(addonName) then
-      return nil
-    end
-
-    return ns.Theme.GetColors(), ns.Theme.GetEdgeSize()
-  end
-
-  function bridge:ApplyFont(addonName, fontString, size, outline)
-    if not _PUI_IsExternalSkinAddon(addonName) or not fontString then
-      return false
-    end
-
-    ns.Theme.ApplyFont(fontString, "body", size, outline)
-    return true
-  end
 end
 
 local function _PUI_InstallAceGUIHooks()
@@ -308,7 +224,6 @@ function AceHooks.RefreshOwnedWidgets()
 end
 
 function AceHooks.Install()
-  _PUI_InstallExternalSkinBridge()
   _PUI_InstallAceGUIHooks()
   _PUI_InstallAceConfigDialogHooks()
 end
