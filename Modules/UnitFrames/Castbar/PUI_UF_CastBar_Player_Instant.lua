@@ -15,6 +15,7 @@ local C_Spell = C_Spell
 local C_DurationUtil = C_DurationUtil
 local CreateFrame = CreateFrame
 
+local CB_GCD_DUMMY_SPELL_ID = 61304
 local CB_INSTANT_CLEANUP_DURATION = 1.50
 
 local function CB_OnInstantCleanupFinished(group)
@@ -25,7 +26,7 @@ local function CB_OnInstantCleanupFinished(group)
 end
 
 function Module:OnCreate(bar)
-  bar.__puiInstantDuration = C_DurationUtil.CreateDuration()
+  bar.__puiInstantFallbackDuration = C_DurationUtil.CreateDuration()
   bar.__puiInstantSpellNames = {}
   bar.__puiInstantSpellTextures = {}
 
@@ -170,8 +171,11 @@ local function CB_PresentInstant(bar, spellID)
     bar.__puiInstantSpellTextures[spellID] = spellTexture
   end
 
-  local duration = bar.__puiInstantDuration
-  duration:SetTimeFromStart(GetTime(), CB_INSTANT_CLEANUP_DURATION)
+  local duration = C_Spell.GetSpellCooldownDuration(CB_GCD_DUMMY_SPELL_ID)
+  if not duration or duration:IsZero() then
+    duration = bar.__puiInstantFallbackDuration
+    duration:SetTimeFromStart(GetTime(), CB_INSTANT_CLEANUP_DURATION)
+  end
 
   local element = bar.instantStatus
   element:SetStatusBarColor(
