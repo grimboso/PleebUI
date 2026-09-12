@@ -127,7 +127,7 @@ function CastBar:UpdateUnitLayout(unit, resolvedConfig, overrideBar, presentatio
   local texture = BarWidget.ResolveStatusBarTexture(cfg.texture)
   bar.__puiNormalTexture = texture
 
-m  if unit == "player" then
+  if unit == "player" then
     if cfg.instantCastTexture ~= "" then
       bar.__puiInstantTexture = BarWidget.ResolveStatusBarTexture(cfg.instantCastTexture)
     else
