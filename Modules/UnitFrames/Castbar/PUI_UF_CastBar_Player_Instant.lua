@@ -10,9 +10,11 @@ local Module = {}
 ns.PUICastBarPlayerInstant = Module
 
 
+local GetTime = GetTime
 local C_Spell = C_Spell
+local C_DurationUtil = C_DurationUtil
+local CreateFrame = CreateFrame
 
-local CB_GCD_DUMMY_SPELL_ID = 61304
 local CB_INSTANT_CLEANUP_DURATION = 1.50
 
 local function CB_OnInstantCleanupFinished(group)
@@ -23,6 +25,7 @@ local function CB_OnInstantCleanupFinished(group)
 end
 
 function Module:OnCreate(bar)
+  bar.__puiInstantDuration = C_DurationUtil.CreateDuration()
   bar.__puiInstantSpellNames = {}
   bar.__puiInstantSpellTextures = {}
 
@@ -51,20 +54,35 @@ function Module:MarkSpellSent(castGUID, spellID)
   end
 
   self.sentCastGUID = castGUID
+  self.sentSpellID = spellID
   self.pendingCastGUID = nil
   self.pendingSpellID = nil
 end
 
-function Module:MarkRealCast(bar, castGUID)
-  if self.enabled ~= true or not castGUID then
+function Module:MarkRealCast(bar, castGUID, spellID)
+  if self.enabled ~= true or not castGUID or not spellID then
+    return
+  end
+
+  local matchesSent = self.sentCastGUID == castGUID and self.sentSpellID == spellID
+  local matchesPending = self.pendingCastGUID == castGUID and self.pendingSpellID == spellID
+  if not matchesSent and not matchesPending then
     return
   end
 
   self.realCastGUID = castGUID
+  self.realSpellID = spellID
 
-  if self.pendingCastGUID == castGUID then
+  if matchesSent then
+    self.sentCastGUID = nil
+    self.sentSpellID = nil
+  end
+
+  if matchesPending then
     self.pendingCastGUID = nil
     self.pendingSpellID = nil
+    self.pendingBar = nil
+    self.pendingFrame:Hide()
   end
 
   if bar and bar.__puiInstantCast then
@@ -72,24 +90,29 @@ function Module:MarkRealCast(bar, castGUID)
   end
 end
 
-function Module:MarkRealCastEnded(castGUID)
-  if self.realCastGUID == castGUID then
+function Module:MarkRealCastEnded(castGUID, spellID)
+  if self.realCastGUID == castGUID and self.realSpellID == spellID then
     self.realCastGUID = nil
+    self.realSpellID = nil
   end
 end
 
-function Module:MarkCastFailed(castGUID)
-  if self.realCastGUID == castGUID then
+function Module:MarkCastFailed(castGUID, spellID)
+  if self.realCastGUID == castGUID and self.realSpellID == spellID then
     self.realCastGUID = nil
+    self.realSpellID = nil
   end
 
-  if self.sentCastGUID == castGUID then
+  if self.sentCastGUID == castGUID and self.sentSpellID == spellID then
     self.sentCastGUID = nil
+    self.sentSpellID = nil
   end
 
-  if self.pendingCastGUID == castGUID then
+  if self.pendingCastGUID == castGUID and self.pendingSpellID == spellID then
     self.pendingCastGUID = nil
     self.pendingSpellID = nil
+    self.pendingBar = nil
+    self.pendingFrame:Hide()
   end
 end
 
@@ -119,16 +142,20 @@ function Module:StopActive(owner)
   local bar = owner.__puiPlayerCastBar
 
   self.sentCastGUID = nil
+  self.sentSpellID = nil
   self.realCastGUID = nil
+  self.realSpellID = nil
   self.pendingCastGUID = nil
   self.pendingSpellID = nil
+  self.pendingBar = nil
+  self.pendingFrame:Hide()
 
   if bar and bar.__puiInstantCast then
     self:Stop(bar, false)
   end
 end
 
-local function CB_PresentInstant(bar, spellID, duration)
+local function CB_PresentInstant(bar, spellID)
   local spellName = bar.__puiInstantSpellNames[spellID]
   local spellTexture = bar.__puiInstantSpellTextures[spellID]
 
@@ -142,6 +169,9 @@ local function CB_PresentInstant(bar, spellID, duration)
     bar.__puiInstantSpellNames[spellID] = spellName
     bar.__puiInstantSpellTextures[spellID] = spellTexture
   end
+
+  local duration = bar.__puiInstantDuration
+  duration:SetTimeFromStart(GetTime(), CB_INSTANT_CLEANUP_DURATION)
 
   local element = bar.instantStatus
   element:SetStatusBarColor(
@@ -186,6 +216,28 @@ local function CB_PresentInstant(bar, spellID, duration)
   bar.__puiInstantCleanupGroup:Play()
 end
 
+local function CB_ProcessPendingInstant(frame)
+  frame:Hide()
+
+  local bar = Module.pendingBar
+  local castGUID = Module.pendingCastGUID
+  local spellID = Module.pendingSpellID
+
+  Module.pendingBar = nil
+  Module.pendingCastGUID = nil
+  Module.pendingSpellID = nil
+
+  if Module.enabled ~= true or not bar or not castGUID or not spellID then
+    return
+  end
+
+  if Module.realCastGUID == castGUID and Module.realSpellID == spellID then
+    return
+  end
+
+  CB_PresentInstant(bar, spellID)
+end
+
 function Module:SetEnabled(owner, enabled)
   if enabled == true then
     self.enabled = true
@@ -196,50 +248,35 @@ function Module:SetEnabled(owner, enabled)
   self:StopActive(owner)
 end
 
-function Module:HandleSucceeded(castGUID, spellID)
+function Module:HandleSucceeded(owner, castGUID, spellID)
   if self.enabled ~= true
     or not castGUID
     or not spellID
     or self.sentCastGUID ~= castGUID
+    or self.sentSpellID ~= spellID
   then
     return
   end
 
   self.sentCastGUID = nil
+  self.sentSpellID = nil
 
-  if self.realCastGUID == castGUID then
+  if self.realCastGUID == castGUID and self.realSpellID == spellID then
     return
   end
 
+  self.pendingBar = owner.__puiPlayerCastBar
   self.pendingCastGUID = castGUID
   self.pendingSpellID = spellID
-end
-
-function Module:HandleCooldownUpdate(owner)
-  if self.enabled ~= true or not self.pendingSpellID then
-    return
-  end
-
-  local castGUID = self.pendingCastGUID
-  local spellID = self.pendingSpellID
-
-  self.pendingCastGUID = nil
-  self.pendingSpellID = nil
-
-  if self.realCastGUID == castGUID then
-    return
-  end
-
-  local cooldownInfo = C_Spell.GetSpellCooldown(spellID)
-  if cooldownInfo.isOnGCD ~= true then
-    return
-  end
-
-  local duration = C_Spell.GetSpellCooldownDuration(CB_GCD_DUMMY_SPELL_ID)
-  CB_PresentInstant(owner.__puiPlayerCastBar, spellID, duration)
+  self.pendingFrame:Show()
 end
 
 
 local P = select(1, ns.Pleebug:DropIn(Module, { name = "UnitFrames.CastBar.Instant" }))
 
 CB_PresentInstant = P:Def("Instant.Present", CB_PresentInstant)
+CB_ProcessPendingInstant = P:Def("Instant.Pending", CB_ProcessPendingInstant)
+
+Module.pendingFrame = CreateFrame("Frame")
+Module.pendingFrame:SetScript("OnUpdate", CB_ProcessPendingInstant)
+Module.pendingFrame:Hide()
