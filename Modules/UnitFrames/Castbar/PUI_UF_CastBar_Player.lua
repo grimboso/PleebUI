@@ -43,8 +43,21 @@ function CastBar:CreatePlayerCastbarExtras(frame, holder, element, unit)
 
   element.SafeZone = holder.safeZone
 
-  holder.instantOverlay = element:CreateTexture(nil, "OVERLAY", nil, 2)
-  holder.instantOverlay:SetAllPoints(element)
+  holder.instantStatus = CreateFrame("StatusBar", nil, holder)
+  holder.instantStatus:SetAllPoints(element)
+  holder.instantStatus:SetMinMaxValues(0, 1)
+  holder.instantStatus:SetValue(0)
+  holder.instantStatus:Hide()
+  frame.instantStatus = holder.instantStatus
+
+  holder.instantSpellName = holder.instantStatus:CreateFontString(nil, "OVERLAY")
+  holder.instantSpellName:SetJustifyH("LEFT")
+  self.SetFont(holder.instantSpellName, nil, 14, "OUTLINE")
+  holder.instantSpellName:Hide()
+  frame.instantSpellName = holder.instantSpellName
+
+  holder.instantOverlay = holder.instantStatus:CreateTexture(nil, "OVERLAY", nil, 2)
+  holder.instantOverlay:SetAllPoints(holder.instantStatus)
   holder.instantOverlay:Hide()
   frame.instantOverlay = holder.instantOverlay
 
@@ -69,6 +82,7 @@ function CastBar:LayoutPlayerCastbar(bar, unit, cfg, statusHost)
     bar.safeZoneBorder:SetBackdrop(backdrop)
   end
 
+  CastBar.GetBorder(bar.instantStatus, cfg)
   ns.PUICastBarPlayerChannelTicks:OnLayout(bar, statusHost, cfg)
 
   if PLAYER_CLASS == "EVOKER" then
@@ -77,8 +91,8 @@ function CastBar:LayoutPlayerCastbar(bar, unit, cfg, statusHost)
 end
 
 function CastBar:PlayerPostCastStart(element, unit, bar, cfg, spellID, isChanneling)
-  if not (element.__puiTestCasting or element.__puiTestChanneling) then
-    ns.PUICastBarPlayerInstant:MarkRealCast(bar)
+  if not (element.__puiTestCasting or element.__puiTestChanneling) and bar.__puiInstantCast then
+    ns.PUICastBarPlayerInstant:Stop(bar, true)
   end
 
   element.curStage = 0
@@ -155,17 +169,47 @@ function CastBar:PlayerPostCastFail(element, unit, bar, cfg)
   ns.PUICastBarPlayerChannelTicks:Hide(bar)
 end
 
-local function PlayerSpellcastSent(_, _, _, _, castGUID, spellID)
-  ns.PUICastBarPlayerInstant:MarkSpellSent(castGUID, spellID)
-end
-
-local function PlayerSpellcastSucceeded(_, _, _, castGUID, spellID)
-  if CastBar.__puiUseDisintegrateLogic == true then
-    ns.PUICastBarPlayerDisintegrate:HandleSucceeded(CastBar, spellID)
+local function PlayerSpellcastEvent(_, event, _, arg2, arg3, arg4)
+  if event == "SPELL_UPDATE_COOLDOWN" then
+    ns.PUICastBarPlayerInstant:HandleCooldownUpdate(CastBar)
+    return
   end
 
-  if CastBar.__puiPlayerInstantEventsEnabled == true then
-    ns.PUICastBarPlayerInstant:HandleSucceeded(castGUID, spellID)
+  if event == "UNIT_SPELLCAST_SENT" then
+    ns.PUICastBarPlayerInstant:MarkSpellSent(arg3, arg4)
+    return
+  end
+
+  local castGUID = arg2
+  local spellID = arg3
+
+  if event == "UNIT_SPELLCAST_SUCCEEDED" then
+    if CastBar.__puiUseDisintegrateLogic == true then
+      ns.PUICastBarPlayerDisintegrate:HandleSucceeded(CastBar, spellID)
+    end
+
+    if CastBar.__puiPlayerInstantEventsEnabled == true then
+      ns.PUICastBarPlayerInstant:HandleSucceeded(castGUID, spellID)
+    end
+    return
+  end
+
+  if CastBar.__puiPlayerInstantEventsEnabled ~= true then
+    return
+  end
+
+  if event == "UNIT_SPELLCAST_START"
+    or event == "UNIT_SPELLCAST_CHANNEL_START"
+    or event == "UNIT_SPELLCAST_EMPOWER_START"
+  then
+    ns.PUICastBarPlayerInstant:MarkRealCast(CastBar.__puiPlayerCastBar, castGUID)
+  elseif event == "UNIT_SPELLCAST_FAILED"
+    or event == "UNIT_SPELLCAST_FAILED_QUIET"
+    or event == "UNIT_SPELLCAST_INTERRUPTED"
+  then
+    ns.PUICastBarPlayerInstant:MarkCastFailed(castGUID)
+  else
+    ns.PUICastBarPlayerInstant:MarkRealCastEnded(castGUID)
   end
 end
 
@@ -180,26 +224,34 @@ function CastBar:RefreshPlayerSpellcastEvents()
   self.__puiPlayerInstantEventsEnabled = instantEnabled or nil
   ns.PUICastBarPlayerInstant:SetEnabled(self, instantEnabled)
 
-  if instantEnabled then
-    if not self.__puiPlayerSentEventFrame then
-      self.__puiPlayerSentEventFrame = CreateFrame("Frame")
-      self.__puiPlayerSentEventFrame:SetScript("OnEvent", PlayerSpellcastSent)
+  if not succeededEnabled then
+    if self.__puiPlayerSpellcastEventFrame then
+      self.__puiPlayerSpellcastEventFrame:UnregisterAllEvents()
     end
-
-    self.__puiPlayerSentEventFrame:RegisterUnitEvent("UNIT_SPELLCAST_SENT", "player")
-  elseif self.__puiPlayerSentEventFrame then
-    self.__puiPlayerSentEventFrame:UnregisterAllEvents()
+    return
   end
 
-  if succeededEnabled then
-    if not self.__puiPlayerSucceededEventFrame then
-      self.__puiPlayerSucceededEventFrame = CreateFrame("Frame")
-      self.__puiPlayerSucceededEventFrame:SetScript("OnEvent", PlayerSpellcastSucceeded)
-    end
+  if not self.__puiPlayerSpellcastEventFrame then
+    self.__puiPlayerSpellcastEventFrame = CreateFrame("Frame")
+    self.__puiPlayerSpellcastEventFrame:SetScript("OnEvent", PlayerSpellcastEvent)
+  end
 
-    self.__puiPlayerSucceededEventFrame:RegisterUnitEvent("UNIT_SPELLCAST_SUCCEEDED", "player")
-  elseif self.__puiPlayerSucceededEventFrame then
-    self.__puiPlayerSucceededEventFrame:UnregisterAllEvents()
+  local frame = self.__puiPlayerSpellcastEventFrame
+  frame:UnregisterAllEvents()
+  frame:RegisterUnitEvent("UNIT_SPELLCAST_SUCCEEDED", "player")
+
+  if instantEnabled then
+    frame:RegisterUnitEvent("UNIT_SPELLCAST_SENT", "player")
+    frame:RegisterUnitEvent("UNIT_SPELLCAST_START", "player")
+    frame:RegisterUnitEvent("UNIT_SPELLCAST_STOP", "player")
+    frame:RegisterUnitEvent("UNIT_SPELLCAST_CHANNEL_START", "player")
+    frame:RegisterUnitEvent("UNIT_SPELLCAST_CHANNEL_STOP", "player")
+    frame:RegisterUnitEvent("UNIT_SPELLCAST_EMPOWER_START", "player")
+    frame:RegisterUnitEvent("UNIT_SPELLCAST_EMPOWER_STOP", "player")
+    frame:RegisterUnitEvent("UNIT_SPELLCAST_FAILED", "player")
+    frame:RegisterUnitEvent("UNIT_SPELLCAST_FAILED_QUIET", "player")
+    frame:RegisterUnitEvent("UNIT_SPELLCAST_INTERRUPTED", "player")
+    frame:RegisterEvent("SPELL_UPDATE_COOLDOWN")
   end
 end
 
@@ -275,12 +327,8 @@ function CastBar:DisablePlayerCastbarEvents()
 
   self.__puiPlayerInstantEventsEnabled = nil
 
-  if self.__puiPlayerSentEventFrame then
-    self.__puiPlayerSentEventFrame:UnregisterAllEvents()
-  end
-
-  if self.__puiPlayerSucceededEventFrame then
-    self.__puiPlayerSucceededEventFrame:UnregisterAllEvents()
+  if self.__puiPlayerSpellcastEventFrame then
+    self.__puiPlayerSpellcastEventFrame:UnregisterAllEvents()
   end
 
   ns.PUICastBarPlayerInstant:SetEnabled(self, false)
@@ -288,8 +336,7 @@ end
 
 
 
-  PlayerSpellcastSent = P:Def("PlayerSpellcastSent", PlayerSpellcastSent)
-  PlayerSpellcastSucceeded = P:Def("PlayerSpellcastSucceeded", PlayerSpellcastSucceeded)
+  PlayerSpellcastEvent = P:Def("PlayerSpellcastEvent", PlayerSpellcastEvent)
   CastBar.RefreshPlayerSpellcastEvents = P:Def("CastBar.RefreshPlayerSpellcastEvents", CastBar.RefreshPlayerSpellcastEvents)
   CastBar.SPELL_ACTIVATION_OVERLAY_GLOW_SHOW = P:Def("CastBar.SPELL_ACTIVATION_OVERLAY_GLOW_SHOW", CastBar.SPELL_ACTIVATION_OVERLAY_GLOW_SHOW)
   CastBar.SPELL_ACTIVATION_OVERLAY_GLOW_HIDE = P:Def("CastBar.SPELL_ACTIVATION_OVERLAY_GLOW_HIDE", CastBar.SPELL_ACTIVATION_OVERLAY_GLOW_HIDE)

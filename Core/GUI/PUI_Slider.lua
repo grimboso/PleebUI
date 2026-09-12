@@ -185,7 +185,8 @@ local function LayoutWidget(self, width)
   self.editbox:SetPoint("TOPRIGHT", self.frame, "TOPRIGHT", -geom.controlRight, -geom.controlTop)
   self.editbox:SetSize(valueWidth, geom.controlHeight)
 
-  self.thumb:SetSize(8, geom.controlHeight - 4)
+  local thumbSize = geom.controlHeight - 4
+  self.thumb:SetSize(thumbSize, thumbSize)
   LayoutControlChrome(self.slider, self.sliderChrome)
   LayoutControlChrome(self.editbox, self.editboxChrome)
 end

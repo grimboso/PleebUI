@@ -58,7 +58,6 @@ local defaults = {
       instantCastUseOverlay = true,
       instantCastOverlayTexture = "PUI Stripes",
       instantCastOverlayAlpha = 0.35,
-      instantCastNoGCDDuration = 1.50,
       showEmpowerHold = true,
 
       empowerSegmentColors = {

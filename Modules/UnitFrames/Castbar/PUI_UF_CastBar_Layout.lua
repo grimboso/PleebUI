@@ -16,7 +16,6 @@ local type = type
 local math_max = math.max
 
 local Round = ns.Pixel.Round
-local CB_DEFAULT_INSTANT_DURATION = 1.50
 
 local function CB_SetCastbarElementEnabled(bar, enabled)
   local frame = bar.__puiUnitFrame
@@ -128,13 +127,15 @@ function CastBar:UpdateUnitLayout(unit, resolvedConfig, overrideBar, presentatio
   local texture = BarWidget.ResolveStatusBarTexture(cfg.texture)
   bar.__puiNormalTexture = texture
 
-  if unit == "player" then
+m  if unit == "player" then
     if cfg.instantCastTexture ~= "" then
       bar.__puiInstantTexture = BarWidget.ResolveStatusBarTexture(cfg.instantCastTexture)
     else
       bar.__puiInstantTexture = texture
     end
 
+    bar.instantStatus:SetStatusBarTexture(bar.__puiInstantTexture)
+    bar.instantStatus:SetReverseFill(cfg.reverseFill == true)
     bar.instantOverlay:SetTexture(BarWidget.ResolveStatusBarTexture(cfg.instantCastOverlayTexture))
     bar.instantOverlay:SetAlpha(CastBar.Clamp(cfg.instantCastOverlayAlpha, 0, 1))
     bar.__puiInstantAlpha = CastBar.Clamp(cfg.instantCastAlpha, 0.10, 1)
@@ -147,12 +148,6 @@ function CastBar:UpdateUnitLayout(unit, resolvedConfig, overrideBar, presentatio
     else
       bar.__puiInstantTimerDirection = Enum.StatusBarTimerDirection.RemainingTime
     end
-
-    local fallbackDuration = tonumber(cfg.instantCastNoGCDDuration) or CB_DEFAULT_INSTANT_DURATION
-    bar.__puiInstantFallbackDurationSeconds = fallbackDuration
-    bar.__puiInstantExpirationAnimation:SetDuration(
-      fallbackDuration > 0 and fallbackDuration or CB_DEFAULT_INSTANT_DURATION
-    )
   end
 
   bar.status:SetStatusBarTexture(texture)
@@ -212,6 +207,19 @@ function CastBar:UpdateUnitLayout(unit, resolvedConfig, overrideBar, presentatio
       Round(cfg.text.offY or 0)
     )
 
+    if unit == "player" then
+      CastBar.SetFont(bar.instantSpellName, cfg.text.useGlobalFont == true and nil or cfg.text.fontKey, cfg.text.size, cfg.text.flags)
+      bar.instantSpellName:SetTextColor(r, g, b, a)
+      bar.instantSpellName:ClearAllPoints()
+      bar.instantSpellName:SetPoint(
+        anchor,
+        bar.instantStatus,
+        anchor,
+        Round(cfg.text.offX or 6),
+        Round(cfg.text.offY or 0)
+      )
+    end
+
     if not CastBar.ShouldShowSpellName(cfg) then
       bar.spellName:Hide()
     else
@@ -220,8 +228,14 @@ function CastBar:UpdateUnitLayout(unit, resolvedConfig, overrideBar, presentatio
 
     if anchor:find("RIGHT") then
       bar.spellName:SetJustifyH("RIGHT")
+      if unit == "player" then
+        bar.instantSpellName:SetJustifyH("RIGHT")
+      end
     else
       bar.spellName:SetJustifyH("LEFT")
+      if unit == "player" then
+        bar.instantSpellName:SetJustifyH("LEFT")
+      end
     end
   end
 
