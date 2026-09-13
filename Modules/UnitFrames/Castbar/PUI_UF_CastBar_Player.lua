@@ -204,7 +204,7 @@ local function PlayerSpellcastEvent(_, event, _, arg2, arg3, arg4)
   then
     ns.PUICastBarPlayerInstant:MarkCastFailed(castGUID, spellID)
   else
-    ns.PUICastBarPlayerInstant:MarkRealCastEnded(castGUID, spellID)
+    ns.PUICastBarPlayerInstant:MarkRealCastEnded(castGUID)
   end
 end
 

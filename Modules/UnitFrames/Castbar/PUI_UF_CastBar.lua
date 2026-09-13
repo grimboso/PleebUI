@@ -334,6 +334,10 @@ end
 local function CB_HideHolderAfterOUFHide(bar)
   bar.timeTextBinding:Disable()
 
+  if bar.__puiInstantCast then
+    return
+  end
+
   bar.__puiIsIdle = true
   bar.__puiCastbarEditMoverVisible = nil
 

@@ -84,38 +84,22 @@ local function PUI_PageShell_GetPreviewHeightBounds(self)
     )
 end
 
-local function PUI_PageShell_QueueACDLayout(self)
-  if self.__puiACDLayoutQueued then
-    return
-  end
-
-  self.__puiACDLayoutQueued = true
-
-  C_Timer.After(0, function()
-    self.__puiACDLayoutQueued = nil
-
-    if self.acdScroll then
-      self.acdScroll:DoLayout()
-    end
-  end)
-end
-
-local function PUI_PageShell_SyncACDViewport(self)
+local function PUI_PageShell_SyncACDContainer(self)
   local parent = self.acdHost
-  local scroll = self.acdScroll
+  local container = self.acdContainer
 
-  if not scroll then
+  if not container then
     return
   end
 
-  if scroll.frame.__puiACDAnchorParent ~= parent then
-    scroll.frame:ClearAllPoints()
-    scroll.frame:SetPoint("TOPLEFT", parent, "TOPLEFT", 0, 0)
-    scroll.frame:SetPoint("BOTTOMRIGHT", parent, "BOTTOMRIGHT", 0, 0)
-    scroll.frame.__puiACDAnchorParent = parent
+  if container.frame.__puiACDAnchorParent ~= parent then
+    container.frame:ClearAllPoints()
+    container.frame:SetPoint("TOPLEFT", parent, "TOPLEFT", 0, 0)
+    container.frame:SetPoint("BOTTOMRIGHT", parent, "BOTTOMRIGHT", 0, 0)
+    container.frame.__puiACDAnchorParent = parent
   end
 
-  scroll.frame:SetClipsChildren(true)
+  container.frame:SetClipsChildren(true)
 end
 
 local function PUI_PageShell_RebuildLayout(self)
@@ -258,7 +242,7 @@ local function PUI_PageShell_RebuildLayout(self)
   self.nativeHost:SetPoint("BOTTOMRIGHT", self.contentHost, "BOTTOMRIGHT", -10, 10)
   self.nativeHost:SetClipsChildren(true)
 
-  PUI_PageShell_SyncACDViewport(self)
+  PUI_PageShell_SyncACDContainer(self)
 
   self.__puiLayoutDirty = nil
   self.__puiACDContainerLayoutReady = true
@@ -477,55 +461,36 @@ function PageShell.Create(parent)
     end
 
     local parent = self.acdHost
-    local scroll = self.acdScroll
     local container = self.acdContainer
 
     self.nativeHost:Hide()
     self.acdHost:Show()
 
     if not container then
-      scroll = AceGUI:Create("ScrollFrame")
-      scroll.parent = nil
-      scroll.__puiACDHostContainer = true
-      scroll.frame.__puiACDHostContainer = true
-      scroll.content.__puiACDHostContainer = true
-      scroll:SetLayout("Flow")
-      scroll:SetFullWidth(true)
-      scroll:SetFullHeight(true)
-
-      ns.AceHooks.TakeOwnership(scroll)
-
-      parent:SetClipsChildren(true)
-      scroll.frame:SetParent(parent)
-      scroll.frame.__puiACDAnchorParent = nil
-
       container = AceGUI:Create("SimpleGroup")
+      container.parent = nil
       container.__puiACDHostContainer = true
       container.__puiAceGUIOwnedByPleebUI = true
       container.frame.__puiACDHostContainer = true
       container.frame.__puiAceGUIOwnedByPleebUI = true
       container.content.__puiACDHostContainer = true
       container.content.__puiAceGUIOwnedByPleebUI = true
-      container:SetLayout("Flow")
-      container:SetAutoAdjustHeight(true)
+      container:SetLayout("Fill")
+      container:SetAutoAdjustHeight(false)
       container:SetFullWidth(true)
+      container:SetFullHeight(true)
 
-      scroll:AddChild(container)
+      parent:SetClipsChildren(true)
+      container.frame:SetParent(parent)
+      container.frame.__puiACDAnchorParent = nil
 
-      container.frame:HookScript("OnSizeChanged", function()
-        PUI_PageShell_QueueACDLayout(self)
-      end)
-
-      self.acdScroll = scroll
       self.acdContainer = container
     end
 
-    scroll.frame:SetFrameStrata(parent:GetFrameStrata())
-    scroll.frame:SetFrameLevel(parent:GetFrameLevel() + 1)
-    container.frame:SetFrameLevel(parent:GetFrameLevel() + 2)
+    container.frame:SetFrameStrata(parent:GetFrameStrata())
+    container.frame:SetFrameLevel(parent:GetFrameLevel() + 1)
 
-    PUI_PageShell_SyncACDViewport(self)
-    scroll.frame:Show()
+    PUI_PageShell_SyncACDContainer(self)
     container.frame:Show()
 
     return container
@@ -539,11 +504,7 @@ function PageShell.Create(parent)
 
     if self.acdContainer then
       self.acdContainer:ReleaseChildren()
-    end
-
-    if self.acdScroll then
-      self.acdScroll:SetScroll(0)
-      self.acdScroll.frame:Hide()
+      self.acdContainer.frame:Hide()
     end
 
     self.acdHost:Hide()
@@ -627,12 +588,8 @@ function PageShell.Create(parent)
     PUI_PageShell_ClearHostChildren(self.headerActions)
     PUI_PageShell_ClearHostChildren(self.stickyStrip)
     PUI_PageShell_ClearHostChildren(self.previewHost)
-    PUI_PageShell_ClearHostChildren(self.acdHost, self.acdScroll and self.acdScroll.frame or nil)
+    PUI_PageShell_ClearHostChildren(self.acdHost, self.acdContainer and self.acdContainer.frame or nil)
     PUI_PageShell_ClearHostChildren(self.nativeHost)
-
-    if self.acdScroll then
-      self.acdScroll:SetScroll(0)
-    end
 
     self.__puiLayoutSuspended = wasSuspended or nil
     PUI_PageShell_RequestLayout(self)
@@ -648,12 +605,8 @@ function PageShell.Create(parent)
     self:SetPreviewShown(false, self.__puiPreviewWidth)
     PUI_PageShell_ClearHostChildren(self.headerActions)
     PUI_PageShell_ClearHostChildren(self.previewHost)
-    PUI_PageShell_ClearHostChildren(self.acdHost, self.acdScroll and self.acdScroll.frame or nil)
+    PUI_PageShell_ClearHostChildren(self.acdHost, self.acdContainer and self.acdContainer.frame or nil)
     PUI_PageShell_ClearHostChildren(self.nativeHost)
-
-    if self.acdScroll then
-      self.acdScroll:SetScroll(0)
-    end
 
     if preserveSticky ~= true then
       self:SetStickyShown(false)
