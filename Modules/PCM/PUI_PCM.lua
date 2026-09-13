@@ -2728,7 +2728,7 @@ local function _PCM_ResetAcquiredItemState(itemFrame)
   __PUI_PCM_ItemRulePassStamp[itemFrame] = nil
 end
 
-local function _PCM_HandleViewerAcquire(frame, key, itemFrame, isRebind)
+local function _PCM_HandleViewerAcquire(frame, key, itemFrame, isRebind, expectInitialRebind)
   if not frame or not key or not itemFrame then
     return
   end
@@ -2746,6 +2746,12 @@ local function _PCM_HandleViewerAcquire(frame, key, itemFrame, isRebind)
 
   if isRebind ~= true then
     _PCM_ParkViewerItem(frame, itemFrame)
+  end
+
+  -- Blizzard assigns the cooldown identity after OnAcquireItemFrame. Let the
+  -- hooked SetCooldownID apply identity presentation once that data exists.
+  if expectInitialRebind == true then
+    return
   end
 
   if _PCM_IsRefreshBlocked() then
@@ -5073,9 +5079,9 @@ PCMRuntime:RegisterSubscriber("Core", {
     end
   end,
 
-  OnItemAcquired = function(key, viewer, itemFrame)
+  OnItemAcquired = function(key, viewer, itemFrame, _, expectInitialRebind)
     if _PCM_IsCoreViewerKey(key) then
-      _PCM_HandleViewerAcquire(viewer, key, itemFrame, false)
+      _PCM_HandleViewerAcquire(viewer, key, itemFrame, false, expectInitialRebind)
     end
   end,
 
@@ -5085,9 +5091,11 @@ PCMRuntime:RegisterSubscriber("Core", {
     end
   end,
 
-  OnItemRebound = function(key, viewer, itemFrame)
+  OnItemRebound = function(key, viewer, itemFrame, initialBind)
     if _PCM_IsCoreViewerKey(key) then
-      IconSettings:ClearItemBinding(itemFrame)
+      if initialBind ~= true then
+        IconSettings:ClearItemBinding(itemFrame)
+      end
       _PCM_HandleViewerAcquire(viewer, key, itemFrame, true)
     end
   end,
