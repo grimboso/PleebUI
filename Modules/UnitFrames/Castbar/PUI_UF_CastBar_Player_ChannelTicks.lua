@@ -10,7 +10,7 @@ local Module = {}
 ns.PUICastBarPlayerChannelTicks = Module
 
 local _G = _G
-local AuraUtil = _G.AuraUtil
+local C_UnitAuras = _G.C_UnitAuras
 local issecretvalue = _G.issecretvalue
 local pairs = _G.pairs
 local math_max = _G.math.max
@@ -236,7 +236,7 @@ function Module:GetChannelTickCount(spellID)
   end
 
   local aura = CB_CHANNEL_TICK_AURA_OVERRIDES[spellID]
-  if aura and AuraUtil.FindAuraBySpellId(aura.spellID, "player", "HELPFUL") ~= nil then
+  if aura and C_UnitAuras.GetPlayerAuraBySpellID(aura.spellID) ~= nil then
     return aura.tickCount
   end
 
