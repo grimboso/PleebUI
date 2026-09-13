@@ -169,7 +169,7 @@ function CastBar:PlayerPostCastFail(element, unit, bar, cfg)
   ns.PUICastBarPlayerChannelTicks:Hide(bar)
 end
 
-local function PlayerSpellcastEvent(_, event, _, arg2, arg3, arg4)
+local function PlayerSpellcastEvent(_, event, _, arg2, arg3, arg4, arg5, arg6)
   if event == "UNIT_SPELLCAST_SENT" then
     ns.PUICastBarPlayerInstant:MarkSpellSent(arg3, arg4)
     return
@@ -184,7 +184,7 @@ local function PlayerSpellcastEvent(_, event, _, arg2, arg3, arg4)
     end
 
     if CastBar.__puiPlayerInstantEventsEnabled == true then
-      ns.PUICastBarPlayerInstant:HandleSucceeded(CastBar, castGUID, spellID)
+      ns.PUICastBarPlayerInstant:HandleSucceeded(CastBar, castGUID, spellID, arg4)
     end
     return
   end
@@ -197,14 +197,17 @@ local function PlayerSpellcastEvent(_, event, _, arg2, arg3, arg4)
     or event == "UNIT_SPELLCAST_CHANNEL_START"
     or event == "UNIT_SPELLCAST_EMPOWER_START"
   then
-    ns.PUICastBarPlayerInstant:MarkRealCast(CastBar.__puiPlayerCastBar, castGUID, spellID)
-  elseif event == "UNIT_SPELLCAST_FAILED"
-    or event == "UNIT_SPELLCAST_FAILED_QUIET"
-    or event == "UNIT_SPELLCAST_INTERRUPTED"
-  then
-    ns.PUICastBarPlayerInstant:MarkCastFailed(castGUID, spellID)
+    ns.PUICastBarPlayerInstant:MarkRealCast(CastBar.__puiPlayerCastBar, castGUID, spellID, arg4)
+  elseif event == "UNIT_SPELLCAST_STOP" then
+    ns.PUICastBarPlayerInstant:MarkRealCastEnded(arg4)
+  elseif event == "UNIT_SPELLCAST_CHANNEL_STOP" then
+    ns.PUICastBarPlayerInstant:MarkRealCastEnded(arg5)
+  elseif event == "UNIT_SPELLCAST_EMPOWER_STOP" then
+    ns.PUICastBarPlayerInstant:MarkRealCastEnded(arg6)
+  elseif event == "UNIT_SPELLCAST_INTERRUPTED" then
+    ns.PUICastBarPlayerInstant:MarkCastFailed(castGUID, spellID, arg5)
   else
-    ns.PUICastBarPlayerInstant:MarkRealCastEnded(castGUID)
+    ns.PUICastBarPlayerInstant:MarkCastFailed(castGUID, spellID, arg4)
   end
 end
 
