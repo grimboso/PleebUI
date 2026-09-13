@@ -81,6 +81,7 @@ CastBar.UnitLookup = {
 
 function CastBar:RefreshFromProfile()
   self:NormalizeConfigProfile()
+  self:RefreshPlayerSpellcastEvents()
   self:UpdateAllLayouts()
 end
 
