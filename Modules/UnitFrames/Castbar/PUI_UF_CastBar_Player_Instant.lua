@@ -60,25 +60,21 @@ function Module:MarkSpellSent(castGUID, spellID)
   self.pendingSpellID = nil
 end
 
-function Module:MarkRealCast(bar, castGUID, spellID)
-  if self.enabled ~= true or not castGUID or not spellID then
+function Module:MarkRealCast(bar, castGUID, spellID, castBarID)
+  if self.enabled ~= true or not castGUID or not spellID or not castBarID then
     return
   end
 
   self.realCastGUID = castGUID
+  self.realSpellID = spellID
+  self.realCastBarID = castBarID
 
-  local matchesSent = self.sentCastGUID == castGUID and self.sentSpellID == spellID
-  local matchesPending = self.pendingCastGUID == castGUID and self.pendingSpellID == spellID
-  if not matchesSent and not matchesPending then
-    return
-  end
-
-  if matchesSent then
+  if self.sentCastGUID == castGUID and self.sentSpellID == spellID then
     self.sentCastGUID = nil
     self.sentSpellID = nil
   end
 
-  if matchesPending then
+  if self.pendingSpellID == spellID then
     self.pendingCastGUID = nil
     self.pendingSpellID = nil
     self.pendingBar = nil
@@ -90,15 +86,21 @@ function Module:MarkRealCast(bar, castGUID, spellID)
   end
 end
 
-function Module:MarkRealCastEnded(castGUID)
-  if self.realCastGUID == castGUID then
+function Module:MarkRealCastEnded(castBarID)
+  if self.realCastBarID == castBarID then
     self.realCastGUID = nil
+    self.realSpellID = nil
+    self.realCastBarID = nil
   end
 end
 
-function Module:MarkCastFailed(castGUID, spellID)
-  if self.realCastGUID == castGUID then
+function Module:MarkCastFailed(castGUID, spellID, castBarID)
+  if self.realCastBarID == castBarID
+    or (self.realCastGUID == castGUID and self.realSpellID == spellID)
+  then
     self.realCastGUID = nil
+    self.realSpellID = nil
+    self.realCastBarID = nil
   end
 
   if self.sentCastGUID == castGUID and self.sentSpellID == spellID then
@@ -142,6 +144,8 @@ function Module:StopActive(owner)
   self.sentCastGUID = nil
   self.sentSpellID = nil
   self.realCastGUID = nil
+  self.realSpellID = nil
+  self.realCastBarID = nil
   self.pendingCastGUID = nil
   self.pendingSpellID = nil
   self.pendingBar = nil
@@ -231,7 +235,7 @@ local function CB_ProcessPendingInstant(frame)
     return
   end
 
-  if Module.realCastGUID == castGUID then
+  if Module.realSpellID == spellID then
     return
   end
 
@@ -248,7 +252,7 @@ function Module:SetEnabled(owner, enabled)
   self:StopActive(owner)
 end
 
-function Module:HandleSucceeded(owner, castGUID, spellID)
+function Module:HandleSucceeded(owner, castGUID, spellID, castBarID)
   if self.enabled ~= true
     or not castGUID
     or not spellID
@@ -261,7 +265,7 @@ function Module:HandleSucceeded(owner, castGUID, spellID)
   self.sentCastGUID = nil
   self.sentSpellID = nil
 
-  if self.realCastGUID == castGUID then
+  if castBarID ~= nil or self.realSpellID == spellID then
     return
   end
 
