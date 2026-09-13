@@ -214,7 +214,9 @@ end
 function CastBar:RefreshPlayerSpellcastEvents()
   local cfg = self:GetUnitConfig("player")
   local playerBar = self:GetBar("player")
-  local playerBarEnabled = playerBar ~= nil and cfg.enabled ~= false
+  local playerBarEnabled = self.db.profile.enabled ~= false
+    and playerBar ~= nil
+    and cfg.enabled ~= false
   local instantEnabled = playerBarEnabled and cfg.showInstantCasts ~= false
   local succeededEnabled = playerBarEnabled and (instantEnabled or self.__puiUseDisintegrateLogic == true)
 
