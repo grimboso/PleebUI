@@ -178,6 +178,12 @@ local function _KB_InvalidateAll()
   _kbMainBarSlots = nil
 end
 
+local function _KB_InvalidateActionContent()
+  _KB_InvalidateBindings()
+  wipe(_kbItemSlots)
+  _kbItemMapBuilt = false
+end
+
 local function _KB_RefreshActionSlotSnapshot()
   wipe(_kbActionSlotKnown)
   wipe(_kbActionSlotType)
@@ -1001,6 +1007,7 @@ end
 local _kbActive = false
 local _kbDirty = false
 local _kbFullRebuild = false
+local _kbContentRebuild = false
 local _kbBindingRebuild = false
 local _kbBootstrapEventsRegistered = false
 local _kbMappingEventsRegistered = false
@@ -1024,19 +1031,17 @@ local _KB_BINDING_REBUILD_EVENTS = {
 local _kbEventFrame = CreateFrame("Frame")
 _kbEventFrame:Hide()
 
-local function _KB_DoRefresh(full, bindings)
+local function _KB_DoRefresh(full, content, bindings)
   if not _kbActive then
     return
   end
 
   if full then
     _KB_InvalidateAll()
+  elseif content then
+    _KB_InvalidateActionContent()
   elseif bindings then
     _KB_InvalidateBindings()
-  end
-
-  if full or bindings then
-    _KB_BuildFallbackMaps()
   end
 
   _KB_ApplyAll()
@@ -1052,10 +1057,12 @@ local function _KB_OnRefreshFrameUpdate(self)
   _kbDirty = false
 
   local full = _kbFullRebuild
+  local content = _kbContentRebuild
   local bindings = _kbBindingRebuild
   _kbFullRebuild = false
+  _kbContentRebuild = false
   _kbBindingRebuild = false
-  _KB_DoRefresh(full, bindings)
+  _KB_DoRefresh(full, content, bindings)
 end
 
 _KB_ScheduleRebuild = function(mode)
@@ -1065,6 +1072,8 @@ _KB_ScheduleRebuild = function(mode)
 
   if mode == true then
     _kbFullRebuild = true
+  elseif mode == "content" then
+    _kbContentRebuild = true
   elseif mode == false then
     _kbBindingRebuild = true
   end
@@ -1152,7 +1161,7 @@ local function _KB_OnEvent(_, event, arg1)
 
   if event == "ACTIONBAR_SLOT_CHANGED" then
     if _KB_ActionSlotContentChanged(arg1) then
-      _KB_ScheduleRebuild(true)
+      _KB_ScheduleRebuild("content")
     end
     return
   end
@@ -1191,7 +1200,12 @@ function Cooldowns:ApplyKeybindTextRulesNow(viewerKey)
   if viewerKey then
     _KB_ApplyToViewer(viewerKey)
   elseif _kbActive then
-    _KB_DoRefresh(true)
+    _kbEventFrame:Hide()
+    _kbDirty = false
+    _kbFullRebuild = false
+    _kbContentRebuild = false
+    _kbBindingRebuild = false
+    _KB_DoRefresh(true, false, false)
   else
     _KB_ClearAll()
   end
@@ -1244,6 +1258,7 @@ function Cooldowns:_Keybinds_Disable()
   _kbActive = false
   _kbDirty = false
   _kbFullRebuild = false
+  _kbContentRebuild = false
   _kbBindingRebuild = false
   _kbEventFrame:Hide()
   _KB_UnregisterMappingEvents()
@@ -1281,6 +1296,7 @@ _KB_IsEssentialViewerKey = P:Def("_KB_IsEssentialViewerKey", _KB_IsEssentialView
 _KB_IsMappedActionSlot = P:Def("_KB_IsMappedActionSlot", _KB_IsMappedActionSlot)
 _KB_InvalidateBindings = P:Def("_KB_InvalidateBindings", _KB_InvalidateBindings)
 _KB_InvalidateAll = P:Def("_KB_InvalidateAll", _KB_InvalidateAll)
+_KB_InvalidateActionContent = P:Def("_KB_InvalidateActionContent", _KB_InvalidateActionContent)
 _KB_RefreshActionSlotSnapshot = P:Def("_KB_RefreshActionSlotSnapshot", _KB_RefreshActionSlotSnapshot)
 _KB_ActionSlotContentChanged = P:Def("_KB_ActionSlotContentChanged", _KB_ActionSlotContentChanged)
 _KB_BuildMainBarSlots = P:Def("_KB_BuildMainBarSlots", _KB_BuildMainBarSlots)
