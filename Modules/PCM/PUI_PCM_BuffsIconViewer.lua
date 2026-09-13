@@ -324,7 +324,7 @@ local _ApplyLiveIconFonts
 local _ApplyManualHiddenState
 local _Buffs_ApplyCentered
 
-local function _PrepareBuffIcon(icon, desiredSize, fontDB, IS)
+local function _PrepareBuffIcon(icon, desiredSize, fontDB, IS, applyIdentity)
   if not _IsIconFrame(icon) then
     return
   end
@@ -366,7 +366,9 @@ local function _PrepareBuffIcon(icon, desiredSize, fontDB, IS)
     Hooks.HookScript(icon, "OnHide", "BUFFS_Icon_OnHide", QueueBuffIconVisibilityRefresh)
   end
 
-  Cooldowns:ApplyNativeIndividualIconSettings(icon, VIEWER_KEY, "AURA")
+  if applyIdentity ~= false then
+    Cooldowns:ApplyNativeIndividualIconSettings(icon, VIEWER_KEY, "AURA")
+  end
 end
 
 local function _PrepareBuffIcons(iconList, desiredSize, fontDB, IS)
@@ -520,7 +522,7 @@ local function _PrepareBuffIconsForViewer(viewer, container, desiredSize)
   _prepNeeded = false
 end
 
-local function _SkinAndParkBuffIcon(viewer, itemFrame)
+local function _SkinAndParkBuffIcon(viewer, itemFrame, expectInitialRebind)
   if not _PCM_BuffsEnabled() then
     return
   end
@@ -543,7 +545,7 @@ local function _SkinAndParkBuffIcon(viewer, itemFrame)
     _rt_fontDB = fontDB
   end
 
-  _PrepareBuffIcon(itemFrame, desiredSize, fontDB, IconSkin)
+  _PrepareBuffIcon(itemFrame, desiredSize, fontDB, IconSkin, expectInitialRebind ~= true)
   Hooks.HookIconFrame(itemFrame, VIEWER_KEY)
 
   local fd = Hooks.GetFrameData(itemFrame)
@@ -573,7 +575,7 @@ local function _SkinAndParkBuffIcon(viewer, itemFrame)
   fd.locking = false
 end
 
-local function _RefreshReboundBuffIcon(itemFrame)
+local function _RefreshReboundBuffIcon(itemFrame, initialBind)
   if not _PCM_BuffsEnabled() or not (itemFrame and _IsIconFrame(itemFrame)) then
     return
   end
@@ -587,7 +589,9 @@ local function _RefreshReboundBuffIcon(itemFrame)
     _rt_fontDB = fontDB
   end
 
-  Cooldowns:ClearNativeIndividualIconSettings(itemFrame, VIEWER_KEY)
+  if initialBind ~= true then
+    Cooldowns:ClearNativeIndividualIconSettings(itemFrame, VIEWER_KEY)
+  end
   _PrepareBuffIcon(itemFrame, desiredSize, fontDB, IconSkin)
 
   _RefreshBuffIconVisibility(itemFrame)
@@ -1577,10 +1581,10 @@ PCMRuntime:RegisterSubscriber("BuffIcons", {
     end
   end,
 
-  OnItemAcquired = function(key, viewer, itemFrame)
+  OnItemAcquired = function(key, viewer, itemFrame, _, expectInitialRebind)
     if key == VIEWER_KEY and _PCM_BuffsEnabled() then
       Cooldowns:ClearNativeIndividualIconSettings(itemFrame, VIEWER_KEY)
-      _SkinAndParkBuffIcon(viewer, itemFrame)
+      _SkinAndParkBuffIcon(viewer, itemFrame, expectInitialRebind)
       _AddBuffItem(viewer, itemFrame)
     end
   end,
@@ -1592,9 +1596,9 @@ PCMRuntime:RegisterSubscriber("BuffIcons", {
     end
   end,
 
-  OnItemRebound = function(key, _, itemFrame)
+  OnItemRebound = function(key, _, itemFrame, initialBind)
     if key == VIEWER_KEY and _PCM_BuffsEnabled() then
-      _RefreshReboundBuffIcon(itemFrame)
+      _RefreshReboundBuffIcon(itemFrame, initialBind)
     end
   end,
 
