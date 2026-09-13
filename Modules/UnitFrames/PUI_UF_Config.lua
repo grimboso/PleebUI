@@ -1153,6 +1153,7 @@ local function UFCB_BuildGeneralAurasArgs()
       set = function(_, v)
         if UFCB_BlockCombat() then return end
         cbDB.enabled = v and true or false
+        CastBar:RefreshPlayerSpellcastEvents()
         CB_RefreshUnit()
       end,
     }
@@ -6490,7 +6491,17 @@ local function UFCB_BuildCastbarArgs(unitKey)
   end
 
   local args = {
-    enabled = BuildCastbarToggle(cfg, "enabled", "Enable cast bar", 1, {  defaultTrue = true }),
+    enabled = BuildCastbarToggle(cfg, "enabled", "Enable cast bar", 1, {
+      defaultTrue = true,
+      set = function(_, v)
+        if UFCB_BlockCombat() then return end
+        cfg.enabled = v and true or false
+        if castbarUnit == "player" then
+          CastBar:RefreshPlayerSpellcastEvents()
+        end
+        refresh()
+      end,
+    }),
     width = BuildCastbarRange(cfg, "width", "Width (bar + icon)", 2, 120, 400, {
       set = function(_, value)
         if UFCB_BlockCombat() then return end
@@ -6588,7 +6599,15 @@ local function UFCB_BuildCastbarArgs(unitKey)
       args = {
         showIcon = BuildCastbarToggle(cfg, "showIcon", "Show Spell Icon", 1, {  defaultTrue = true }),
         showPingOverlay = BuildCastbarToggle(cfg, "showPingOverlay", "Show Latency (Ping) overlay", 2, {  defaultTrue = true }),
-        showName = BuildCastbarToggle(text, "showName", "Enable Spell Name", 3, {  defaultTrue = true }),
+        showName = BuildCastbarToggle(text, "showName", "Enable Spell Name", 3, {
+          defaultTrue = true,
+          set = function(_, v)
+            if UFCB_BlockCombat() then return end
+            text.showName = v and true or false
+            cfg.__puiShowSpellName = v and true or false
+            refresh()
+          end,
+        }),
         showCast = BuildCastbarToggle(time, "showCast", "Enable Cast Time", 4, {
           
           defaultTrue = true,
