@@ -292,7 +292,14 @@ local function AcquireItem(entry, itemFrame, reason, suppressGeneration, expectI
     itemState.expectInitialRebind = expectInitialRebind == true
   end
 
-  Dispatch("OnItemAcquired", entry.key, entry.frame, itemFrame, reason or "acquire")
+  Dispatch(
+    "OnItemAcquired",
+    entry.key,
+    entry.frame,
+    itemFrame,
+    reason or "acquire",
+    expectInitialRebind == true
+  )
   if suppressGeneration ~= true then
     MarkItemMembershipChanged(entry, reason or "acquire")
   end
