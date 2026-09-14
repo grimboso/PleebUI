@@ -10,7 +10,6 @@ local Module = {}
 ns.PUICastBarPlayerChannelTicks = Module
 
 local _G = _G
-local C_UnitAuras = _G.C_UnitAuras
 local issecretvalue = _G.issecretvalue
 local pairs = _G.pairs
 local math_max = _G.math.max
@@ -41,25 +40,10 @@ local CB_CHANNEL_TICK_SPELLS = {
   [113656] = 4,
 }
 
-local CB_CHANNEL_TICK_AURA_OVERRIDES = {
-  [47757] = {
-    spellID = 373183,
-    tickCount = 6,
-  },
-  [47758] = {
-    spellID = 373183,
-    tickCount = 6,
-  },
-}
-
 local CB_MAX_CHANNEL_TICK_MARKERS = 0
 
 for _, tickCount in pairs(CB_CHANNEL_TICK_SPELLS) do
   CB_MAX_CHANNEL_TICK_MARKERS = math_max(CB_MAX_CHANNEL_TICK_MARKERS, tickCount - 1)
-end
-
-for _, aura in pairs(CB_CHANNEL_TICK_AURA_OVERRIDES) do
-  CB_MAX_CHANNEL_TICK_MARKERS = math_max(CB_MAX_CHANNEL_TICK_MARKERS, aura.tickCount - 1)
 end
 
 local function CB_CreateTicks(bar, element)
@@ -230,17 +214,7 @@ function Module:Hide(bar)
 end
 
 function Module:GetChannelTickCount(spellID)
-  local ticks = CB_CHANNEL_TICK_SPELLS[spellID] or 0
-  if ticks <= 0 then
-    return 0
-  end
-
-  local aura = CB_CHANNEL_TICK_AURA_OVERRIDES[spellID]
-  if aura and C_UnitAuras.GetPlayerAuraBySpellID(aura.spellID) ~= nil then
-    return aura.tickCount
-  end
-
-  return ticks
+  return CB_CHANNEL_TICK_SPELLS[spellID] or 0
 end
 
 function Module:Update(bar, element, cfg, spellID)
