@@ -94,7 +94,7 @@ function Module:MarkRealCast(bar, castGUID, spellID, castBarID)
     self.sentGCDStartTime = nil
   end
 
-  if self.pendingCastGUID == castGUID or self.pendingSpellID == spellID then
+  if self.pendingSpellID == spellID then
     self.pendingCastGUID = nil
     self.pendingSpellID = nil
     self.pendingGCDStartTime = nil
@@ -257,7 +257,7 @@ local function CB_ProcessPendingInstant(frame)
     return
   end
 
-  if Module.realCastGUID == castGUID then
+  if Module.realSpellID == spellID then
     return
   end
 
@@ -296,7 +296,7 @@ function Module:HandleSucceeded(owner, castGUID, spellID, castBarID)
   self.sentSpellID = nil
   self.sentGCDStartTime = nil
 
-  if castBarID ~= nil or self.realCastGUID == castGUID then
+  if castBarID ~= nil or self.realSpellID == spellID then
     return
   end
 
