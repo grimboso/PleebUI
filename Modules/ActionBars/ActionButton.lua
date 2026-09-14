@@ -9,12 +9,16 @@ local Engine = {
   actionSlotButtons = {},
   rangeActionCounts = {},
   spellEventButtons = {},
-  spellEventButtonBuckets = {},
   flyoutButtons = {},
+  summonPetButtons = {},
+  pendingButtonRefreshes = {},
+  flushingButtonRefreshes = {},
+  pendingIconButtons = {},
+  flushingIconButtons = {},
   flashingButtons = setmetatable({}, { __mode = "k" }),
   flashingButtonCount = 0,
   flashTime = 0,
-  contentIndexesDirty = true,
+  runtimeFlushID = 0,
 }
 ns.ActionButtonEngine = Engine
 
@@ -30,7 +34,7 @@ local SetBinding = SetBinding
 local issecretvalue = issecretvalue
 local C_ActionBar = C_ActionBar
 local C_Spell = C_Spell
-local GetActionCooldown = C_ActionBar.GetActionCooldown
+local EMPTY_COOLDOWN_DURATION = C_DurationUtil.CreateDuration()
 local GetActionCooldownDuration = C_ActionBar.GetActionCooldownDuration
 local GetActionCharges = C_ActionBar.GetActionCharges
 local GetActionChargeDuration = C_ActionBar.GetActionChargeDuration
@@ -42,7 +46,6 @@ local ActionButtonSpellAlertManager = ActionButtonSpellAlertManager
 local ActionButton_UpdateRangeIndicator = ActionButton_UpdateRangeIndicator
 local ClearNewActionHighlight = ClearNewActionHighlight
 local pairs = pairs
-local ipairs = ipairs
 local select = select
 local type = type
 local tostring = tostring
@@ -269,23 +272,7 @@ local function UpdateButtonUsable(button, action, isUsable, notEnoughMana)
 end
 
 local function GetButtonSpellID(button)
-  local action = button and button.action
-  if not action then
-    return nil
-  end
-
-  local actionType, actionID, actionSubType = GetActionInfo(action)
-  if issecretvalue(actionType) or issecretvalue(actionID) or issecretvalue(actionSubType) then
-    return nil
-  end
-
-  if actionType == "spell" then
-    return actionID
-  end
-  if actionType == "macro" and actionSubType == "spell" then
-    return actionID
-  end
-  return nil
+  return button and button.__puiSpellEventID or nil
 end
 
 local function UpdateButtonSpellAlert(button)
@@ -375,15 +362,6 @@ local function FlashDriverOnUpdate(_, elapsed)
   end
 end
 
-local function PetStateRefreshOnUpdate(frame)
-  frame:Hide()
-
-  if Engine.enabled then
-    Engine:RefreshStateAndFlash()
-  end
-end
-
-
 local function ApplyButtonFlashState(button, isAttack, isCurrent, isAutoRepeat, skipStateRefresh)
   if (isAttack and isCurrent) or isAutoRepeat then
     button:StartFlash(skipStateRefresh)
@@ -409,6 +387,30 @@ local function UpdateButtonFlash(button, skipStateRefresh)
   ApplyButtonFlashState(button, isAttack, isCurrent, isAutoRepeat, skipStateRefresh)
 end
 
+local function UpdateButtonStateAndFlash(button)
+  local action = button.action
+  if not action then
+    button:SetChecked(false)
+    button:StopFlash(true)
+    return
+  end
+
+  local isAttack = C_ActionBar.IsAttackAction(action)
+  local isCurrent = C_ActionBar.IsCurrentAction(action)
+  local isAutoRepeat = C_ActionBar.IsAutoRepeatAction(action)
+  local isAutoCastPet = C_ActionBar.IsAutoCastPetAction(action)
+  if issecretvalue(isAttack)
+    or issecretvalue(isCurrent)
+    or issecretvalue(isAutoRepeat)
+    or issecretvalue(isAutoCastPet)
+  then
+    return
+  end
+
+  ApplyButtonCheckedState(button, isCurrent, isAutoRepeat, isAutoCastPet)
+  ApplyButtonFlashState(button, isAttack, isCurrent, isAutoRepeat, true)
+end
+
 local function UpdateButtonProfessionQuality(button)
   local isItem = C_ActionBar.IsItemAction(button.action)
   if issecretvalue(isItem) then
@@ -432,6 +434,15 @@ local function UpdateButtonProfessionQuality(button)
   end
 
   button:ClearProfessionQuality()
+end
+
+local function UpdateButtonEquipped(button)
+  button:UpdateProfessionQuality()
+
+  local isEquipped = C_ActionBar.IsEquippedAction(button.action)
+  if not issecretvalue(isEquipped) then
+    button.Border:SetShown(isEquipped == true)
+  end
 end
 
 local function UpdateButtonAssistedCombat(button)
@@ -475,7 +486,7 @@ end
 
 local function OnHide(button)
   Engine:UnregisterButtonRangeCheck(button)
-  button:StopFlash()
+  button:StopFlash(true)
   Engine:UnregisterButtonTopology(button)
 end
 
@@ -587,7 +598,7 @@ local function SpellVFXCastingAnimOnHide(frame)
   local button = frame:GetParent()
   button:ClearReticle()
   button.cooldown:SetSwipeColor(0, 0, 0, 1)
-  UpdateButtonCooldown(button, false)
+  UpdateButtonCooldown(button, false, false)
 end
 
 local function SpellVFXCastingFinishAnimOnFinished(animation)
@@ -694,8 +705,8 @@ function Engine:CreateButton(name, header)
     if self.action then
       ClearNewActionHighlight(self.action, true)
     end
-    Engine.contentIndexesDirty = true
-    Engine:RefreshButton(self)
+    Engine:ApplyButtonSecureState(self)
+    Engine:QueueButtonRefresh(self)
   end
 
   SetupSecureDragAndClick(button, header)
@@ -728,6 +739,105 @@ function Engine:ConfigureButton(button, bindingAction, barLabel, buttonIndex)
   end
 
   self:UpdateButtonHotkey(button)
+end
+
+local function RemoveIndexedButton(buttons, button, indexField)
+  local index = button[indexField]
+  if not index then
+    return
+  end
+
+  local lastIndex = #buttons
+  local lastButton = buttons[lastIndex]
+
+  if index ~= lastIndex then
+    buttons[index] = lastButton
+    lastButton[indexField] = index
+  end
+
+  buttons[lastIndex] = nil
+  button[indexField] = nil
+end
+
+function Engine:UnregisterButtonContent(button)
+  local spellID = button.__puiSpellEventID
+  if spellID and button.__puiSpellEventIndex then
+    local buttons = self.spellEventButtons[spellID]
+    if buttons then
+      RemoveIndexedButton(buttons, button, "__puiSpellEventIndex")
+      if #buttons == 0 then
+        self.spellEventButtons[spellID] = nil
+      end
+    else
+      button.__puiSpellEventIndex = nil
+    end
+  end
+
+  if button.__puiFlyoutIndex then
+    RemoveIndexedButton(self.flyoutButtons, button, "__puiFlyoutIndex")
+  end
+
+  if button.__puiSummonPetIndex then
+    RemoveIndexedButton(self.summonPetButtons, button, "__puiSummonPetIndex")
+  end
+
+  button.__puiSpellEventID = nil
+  button.__puiFlyoutID = nil
+  button.__puiContentActionType = nil
+  button.__puiContentActionID = nil
+  button.__puiContentActionSubType = nil
+end
+
+function Engine:RefreshButtonContent(button)
+  if not button.__puiActiveButtonIndex or not button.action or not button.__puiHasAction then
+    self:UnregisterButtonContent(button)
+    return
+  end
+
+  local actionType, actionID, actionSubType = GetActionInfo(button.action)
+  if issecretvalue(actionType) or issecretvalue(actionID) or issecretvalue(actionSubType) then
+    self:UnregisterButtonContent(button)
+    return
+  end
+
+  if button.__puiContentActionType == actionType
+    and button.__puiContentActionID == actionID
+    and button.__puiContentActionSubType == actionSubType
+  then
+    return
+  end
+
+  self:UnregisterButtonContent(button)
+  button.__puiContentActionType = actionType
+  button.__puiContentActionID = actionID
+  button.__puiContentActionSubType = actionSubType
+
+  if (actionType == "spell" or (actionType == "macro" and actionSubType == "spell"))
+    and type(actionID) == "number"
+    and actionID > 0
+  then
+    local buttons = self.spellEventButtons[actionID]
+    if not buttons then
+      buttons = {}
+      self.spellEventButtons[actionID] = buttons
+    end
+
+    local index = #buttons + 1
+    buttons[index] = button
+    button.__puiSpellEventID = actionID
+    button.__puiSpellEventIndex = index
+  end
+
+  if actionType == "flyout" and type(actionID) == "number" and actionID > 0 then
+    local index = #self.flyoutButtons + 1
+    self.flyoutButtons[index] = button
+    button.__puiFlyoutID = actionID
+    button.__puiFlyoutIndex = index
+  elseif actionType == "summonpet" then
+    local index = #self.summonPetButtons + 1
+    self.summonPetButtons[index] = button
+    button.__puiSummonPetIndex = index
+  end
 end
 
 -- Blizzard override buttons share these action slots, so PleebUI keeps its range subscribers addon-owned.
@@ -766,6 +876,7 @@ function Engine:UnregisterButtonRangeCheck(button)
 end
 
 function Engine:ClearButton(button)
+  self:UnregisterButtonContent(button)
   button.__puiHasAction = false
   button.icon:Hide()
   button.icon:SetDesaturated(false)
@@ -773,14 +884,11 @@ function Engine:ClearButton(button)
   button.Count:SetText("")
   button.Name:SetText("")
   button.Border:Hide()
-  button.cooldown:Clear()
-  button.chargeCooldown:Clear()
-  button.lossOfControlCooldown:Clear()
-  button.__puiNormalCooldownActive = false
-  button.__puiChargeCooldownActive = false
+  button.cooldown:SetCooldownFromDurationObject(EMPTY_COOLDOWN_DURATION, true)
+  button.chargeCooldown:SetCooldownFromDurationObject(EMPTY_COOLDOWN_DURATION, true)
+  button.lossOfControlCooldown:SetCooldownFromDurationObject(EMPTY_COOLDOWN_DURATION, true)
   button.__puiHasChargeCooldown = nil
-  button.__puiLossOfControlCooldownActive = false
-  button.__puiLossOfControlReplacesNormal = false
+  button.__puiLossOfControlReplacesNormal = nil
   button:StopFlash(true)
   button:SetChecked(false)
   button:ClearFlash()
@@ -797,107 +905,68 @@ function Engine:UpdateCount(button)
   end
 end
 
-local function SetNormalCooldownActive(button, action, active)
-  if active then
-    button.cooldown:SetCooldownFromDurationObject(GetActionCooldownDuration(action))
-  elseif button.__puiNormalCooldownActive ~= false then
-    button.cooldown:Clear()
-  end
-
-  button.__puiNormalCooldownActive = active
-end
-
-local function SetChargeCooldownActive(button, action, active)
-  if active then
-    button.chargeCooldown:SetCooldownFromDurationObject(GetActionChargeDuration(action))
-  elseif button.__puiChargeCooldownActive ~= false then
-    button.chargeCooldown:Clear()
-  end
-
-  button.__puiChargeCooldownActive = active
-end
-
 local function RefreshButtonChargeCapability(button)
-  local action = button.action
-  if not action or not button.__puiHasAction then
-    button.__puiHasChargeCooldown = nil
-    SetChargeCooldownActive(button, action, false)
-    return false
-  end
-
-  local chargeInfo = GetActionCharges(action)
+  local chargeInfo = GetActionCharges(button.action)
   local hasChargeCooldown = chargeInfo.maxCharges > 0
   button.__puiHasChargeCooldown = hasChargeCooldown
-
-  if not hasChargeCooldown then
-    SetChargeCooldownActive(button, action, false)
-  end
-
   return hasChargeCooldown
 end
 
-local function RefreshLossOfControlCooldown(button, action, refreshVisual)
+local function RefreshLossOfControlCooldown(button)
+  local action = button.action
   local lossOfControlInfo = GetActionLossOfControlCooldownInfo(action)
-  local active = lossOfControlInfo.isActive
   local replacesNormal = lossOfControlInfo.shouldReplaceNormalCooldown
-  local wasActive = button.__puiLossOfControlCooldownActive
 
-  button.__puiLossOfControlCooldownActive = active
   button.__puiLossOfControlReplacesNormal = replacesNormal
-
-  if active then
-    if refreshVisual or wasActive ~= true then
-      button.lossOfControlCooldown:SetCooldownFromDurationObject(GetActionLossOfControlCooldownDuration(action))
-    end
-  elseif wasActive ~= false then
-    button.lossOfControlCooldown:Clear()
-  end
+  button.lossOfControlCooldown:SetCooldownFromDurationObject(
+    GetActionLossOfControlCooldownDuration(action),
+    true
+  )
 
   return replacesNormal
 end
 
-UpdateButtonCooldown = function(button, refreshLossOfControl)
+UpdateButtonCooldown = function(button, refreshCharge, refreshLossOfControl)
   local action = button.action
   if not action or not button.__puiHasAction then
-    if button.__puiNormalCooldownActive ~= false then
-      button.cooldown:Clear()
-      button.__puiNormalCooldownActive = false
-    end
-    if button.__puiChargeCooldownActive ~= false then
-      button.chargeCooldown:Clear()
-      button.__puiChargeCooldownActive = false
-    end
-    if button.__puiLossOfControlCooldownActive ~= false then
-      button.lossOfControlCooldown:Clear()
-      button.__puiLossOfControlCooldownActive = false
-    end
+    button.cooldown:SetCooldownFromDurationObject(EMPTY_COOLDOWN_DURATION, true)
+    button.chargeCooldown:SetCooldownFromDurationObject(EMPTY_COOLDOWN_DURATION, true)
+    button.lossOfControlCooldown:SetCooldownFromDurationObject(EMPTY_COOLDOWN_DURATION, true)
+    button.__puiHasChargeCooldown = nil
+    button.__puiLossOfControlReplacesNormal = nil
     return
   end
 
-  local replaceNormalCooldown = button.__puiLossOfControlReplacesNormal == true
-  if refreshLossOfControl
-    or button.__puiLossOfControlCooldownActive == true
-    or button.__puiLossOfControlReplacesNormal == nil
-  then
-    replaceNormalCooldown = RefreshLossOfControlCooldown(button, action, refreshLossOfControl == true)
-  end
-
-  local cooldownInfo = GetActionCooldown(action)
-  SetNormalCooldownActive(button, action, not replaceNormalCooldown and cooldownInfo.isActive)
-
-  if replaceNormalCooldown then
-    SetChargeCooldownActive(button, action, false)
-    return
+  local replaceNormalCooldown = button.__puiLossOfControlReplacesNormal
+  local lossOfControlInitialized = replaceNormalCooldown ~= nil
+  if refreshLossOfControl or not lossOfControlInitialized then
+    replaceNormalCooldown = RefreshLossOfControlCooldown(button)
   end
 
   local hasChargeCooldown = button.__puiHasChargeCooldown
-  if hasChargeCooldown == nil then
+  local chargeInitialized = hasChargeCooldown ~= nil
+  if refreshCharge or not chargeInitialized then
     hasChargeCooldown = RefreshButtonChargeCapability(button)
   end
 
-  if hasChargeCooldown then
-    local chargeInfo = GetActionCharges(action)
-    SetChargeCooldownActive(button, action, chargeInfo.isActive)
+  if replaceNormalCooldown then
+    if refreshLossOfControl or not lossOfControlInitialized then
+      button.cooldown:SetCooldownFromDurationObject(EMPTY_COOLDOWN_DURATION, true)
+    end
+  else
+    button.cooldown:SetCooldownFromDurationObject(GetActionCooldownDuration(action), true)
+  end
+
+  if refreshCharge
+    or refreshLossOfControl
+    or not chargeInitialized
+    or (hasChargeCooldown and not replaceNormalCooldown)
+  then
+    if replaceNormalCooldown or not hasChargeCooldown then
+      button.chargeCooldown:SetCooldownFromDurationObject(EMPTY_COOLDOWN_DURATION, true)
+    else
+      button.chargeCooldown:SetCooldownFromDurationObject(GetActionChargeDuration(action), true)
+    end
   end
 end
 
@@ -951,20 +1020,16 @@ function Engine:RefreshButton(button)
     return
   end
 
+  self:RefreshButtonContent(button)
+
   button:SetAlpha(1)
   button.icon:SetTexture(C_ActionBar.GetActionTexture(action))
   button.icon:Show()
   button.icon:SetDesaturated(false)
 
-  button:UpdateState()
+  UpdateButtonStateAndFlash(button)
   button:UpdateUsable()
-  button:UpdateProfessionQuality()
-  button:UpdateFlash(true)
-
-  local isEquipped = C_ActionBar.IsEquippedAction(action)
-  if not issecretvalue(isEquipped) then
-    button.Border:SetShown(isEquipped == true)
-  end
+  UpdateButtonEquipped(button)
 
   local usesActionText = C_ActionBar.UsesActionText(action)
   if not issecretvalue(usesActionText) then
@@ -976,8 +1041,7 @@ function Engine:RefreshButton(button)
   end
 
   self:UpdateCount(button)
-  button.__puiHasChargeCooldown = nil
-  UpdateButtonCooldown(button, true)
+  UpdateButtonCooldown(button, true, true)
   button:UpdateFlyout()
   button:UpdateSpellAlert()
   button:UpdateAssistedCombatRotationFrame()
@@ -1065,9 +1129,9 @@ function Engine:UnregisterButtonTopology(button)
     return
   end
 
-  local changed = false
-  local activeIndex = button.__puiActiveButtonIndex
+  self:UnregisterButtonContent(button)
 
+  local activeIndex = button.__puiActiveButtonIndex
   if activeIndex then
     local lastIndex = #self.activeButtons
     local lastButton = self.activeButtons[lastIndex]
@@ -1079,15 +1143,12 @@ function Engine:UnregisterButtonTopology(button)
 
     self.activeButtons[lastIndex] = nil
     button.__puiActiveButtonIndex = nil
-    changed = true
   end
 
   local indexedAction = button.__puiIndexedAction
   local actionSlotIndex = button.__puiActionSlotIndex
-
   if indexedAction and actionSlotIndex then
     local buttons = self.actionSlotButtons[indexedAction]
-
     if buttons then
       local lastIndex = #buttons
       local lastButton = buttons[lastIndex]
@@ -1098,7 +1159,6 @@ function Engine:UnregisterButtonTopology(button)
       end
 
       buttons[lastIndex] = nil
-
       if #buttons == 0 then
         self.actionSlotButtons[indexedAction] = nil
       end
@@ -1106,11 +1166,6 @@ function Engine:UnregisterButtonTopology(button)
 
     button.__puiIndexedAction = nil
     button.__puiActionSlotIndex = nil
-    changed = true
-  end
-
-  if changed then
-    self.contentIndexesDirty = true
   end
 end
 
@@ -1125,7 +1180,6 @@ function Engine:RegisterButtonTopology(button)
   end
 
   local action = button.action
-
   if button.__puiIndexedAction and button.__puiIndexedAction ~= action then
     self:UnregisterButtonTopology(button)
   end
@@ -1134,7 +1188,6 @@ function Engine:RegisterButtonTopology(button)
     local activeIndex = #self.activeButtons + 1
     self.activeButtons[activeIndex] = button
     button.__puiActiveButtonIndex = activeIndex
-    self.contentIndexesDirty = true
   end
 
   if button.__puiIndexedAction == action and button.__puiActionSlotIndex then
@@ -1142,7 +1195,6 @@ function Engine:RegisterButtonTopology(button)
   end
 
   local buttons = self.actionSlotButtons[action]
-
   if not buttons then
     buttons = {}
     self.actionSlotButtons[action] = buttons
@@ -1152,200 +1204,96 @@ function Engine:RegisterButtonTopology(button)
   buttons[actionSlotIndex] = button
   button.__puiIndexedAction = action
   button.__puiActionSlotIndex = actionSlotIndex
-  self.contentIndexesDirty = true
-end
-
-function Engine:RebuildContentIndexes()
-  if not self.contentIndexesDirty then
-    return
-  end
-
-  for _, bucket in ipairs(self.spellEventButtonBuckets) do
-    wipe(bucket)
-  end
-  wipe(self.spellEventButtons)
-  wipe(self.flyoutButtons)
-
-  local eventBucketCount = 0
-  for buttonIndex = 1, #self.activeButtons do
-    local button = self.activeButtons[buttonIndex]
-    local action = button.action
-
-    local actionType, actionID, actionSubType = GetActionInfo(action)
-    local actionInfoReadable = not issecretvalue(actionType)
-      and not issecretvalue(actionID)
-      and not issecretvalue(actionSubType)
-
-    if actionInfoReadable
-      and (actionType == "spell" or (actionType == "macro" and actionSubType == "spell"))
-      and type(actionID) == "number"
-      and actionID > 0
-    then
-      local eventBucket = self.spellEventButtons[actionID]
-      if not eventBucket then
-        eventBucketCount = eventBucketCount + 1
-        eventBucket = self.spellEventButtonBuckets[eventBucketCount]
-        if not eventBucket then
-          eventBucket = {}
-          self.spellEventButtonBuckets[eventBucketCount] = eventBucket
-        end
-        self.spellEventButtons[actionID] = eventBucket
-      end
-      eventBucket[#eventBucket + 1] = button
-    end
-
-    if actionInfoReadable
-      and actionType == "flyout"
-      and type(actionID) == "number"
-      and actionID > 0
-    then
-      self.flyoutButtons[#self.flyoutButtons + 1] = button
-    end
-  end
-
-  self.contentIndexesDirty = nil
-end
-
-function Engine:RefreshCounts()
-  for index = 1, #self.activeButtons do
-    local button = self.activeButtons[index]
-    self:UpdateCount(button)
-    RefreshButtonChargeCapability(button)
-  end
-end
-
-function Engine:RefreshCooldowns(refreshLossOfControl)
-  for index = 1, #self.activeButtons do
-    local button = self.activeButtons[index]
-
-    if button.__puiHasAction then
-      UpdateButtonCooldown(button, refreshLossOfControl == true)
-    end
-  end
-
-  if not GameTooltip:IsForbidden() then
-    local tooltipOwner = GameTooltip:GetOwner()
-
-    if tooltipOwner
-      and self.buttons[tooltipOwner]
-      and tooltipOwner.__puiActionActive
-      and tooltipOwner.__puiHasAction
-      and Core:ShouldShowActionTooltip()
-    then
-      tooltipOwner:SetTooltip()
-    end
-  end
-end
-
-function Engine:RefreshIcons()
-  for index = 1, #self.activeButtons do
-    local button = self.activeButtons[index]
-
-    if button.__puiHasAction then
-      button.icon:SetTexture(C_ActionBar.GetActionTexture(button.action))
-    end
-  end
-end
-
-function Engine:RefreshEquipped()
-  for index = 1, #self.activeButtons do
-    local button = self.activeButtons[index]
-
-    if button.__puiHasAction then
-      button:UpdateProfessionQuality()
-
-      local isEquipped = C_ActionBar.IsEquippedAction(button.action)
-      if not issecretvalue(isEquipped) then
-        button.Border:SetShown(isEquipped == true)
-      end
-    end
-  end
 end
 
 function Engine:RefreshUsable(changes)
-  if changes then
-    for changeIndex = 1, #changes do
-      local change = changes[changeIndex]
-      local action = change.slot
+  for changeIndex = 1, #changes do
+    local change = changes[changeIndex]
+    local action = change.slot
 
-      if not issecretvalue(action) then
-        local buttons = self.actionSlotButtons[action]
-        if buttons then
-          for buttonIndex = 1, #buttons do
-            buttons[buttonIndex]:UpdateUsable(action, change.usable, change.noMana)
-          end
+    if not issecretvalue(action) then
+      local buttons = self.actionSlotButtons[action]
+      if buttons then
+        for buttonIndex = 1, #buttons do
+          buttons[buttonIndex]:UpdateUsable(action, change.usable, change.noMana)
         end
       end
     end
+  end
+end
+
+function Engine:RefreshAllButtons()
+  for button in pairs(self.buttons) do
+    if button.__puiActionActive then
+      self:RefreshButton(button)
+    end
+  end
+end
+
+function Engine:QueueButtonRefresh(button)
+  if self.pendingFullRefresh
+    or not button
+    or not button.__puiActionActive
+    or button.__puiRuntimeRefreshQueued
+  then
     return
   end
 
-  for index = 1, #self.activeButtons do
-    self.activeButtons[index]:UpdateUsable()
-  end
+  button.__puiRuntimeRefreshQueued = true
+  local buttons = self.pendingButtonRefreshes
+  buttons[#buttons + 1] = button
+  self.runtimeUpdateFrame:Show()
 end
 
-function Engine:RefreshState()
-  for index = 1, #self.activeButtons do
-    local button = self.activeButtons[index]
-
-    if button.__puiHasAction then
-      button:UpdateState()
-    end
+function Engine:QueueButtonIcon(button)
+  if self.pendingFullRefresh
+    or not button
+    or not button.__puiActionActive
+    or button.__puiRuntimeIconQueued
+  then
+    return
   end
+
+  button.__puiRuntimeIconQueued = true
+  local buttons = self.pendingIconButtons
+  buttons[#buttons + 1] = button
+  self.runtimeUpdateFrame:Show()
 end
 
-function Engine:RefreshStateAndFlash()
-  for index = 1, #self.activeButtons do
-    local button = self.activeButtons[index]
-
-    if button.__puiHasAction then
-      local action = button.action
-      local isAttack = C_ActionBar.IsAttackAction(action)
-      local isCurrent = C_ActionBar.IsCurrentAction(action)
-      local isAutoRepeat = C_ActionBar.IsAutoRepeatAction(action)
-      local isAutoCastPet = C_ActionBar.IsAutoCastPetAction(action)
-
-      if not issecretvalue(isAttack)
-        and not issecretvalue(isCurrent)
-        and not issecretvalue(isAutoRepeat)
-        and not issecretvalue(isAutoCastPet)
-      then
-        ApplyButtonCheckedState(button, isCurrent, isAutoRepeat, isAutoCastPet)
-        ApplyButtonFlashState(button, isAttack, isCurrent, isAutoRepeat, true)
-      end
-    end
-  end
+function Engine:QueueAllButtonRefresh()
+  self.pendingFullRefresh = true
+  self.runtimeUpdateFrame:Show()
 end
 
-function Engine:RefreshActionSlot(action)
-  self.contentIndexesDirty = true
-
+function Engine:QueueActionSlotRefresh(action)
   if action == 0 then
     for button in pairs(self.buttons) do
       if button.__puiActionActive then
         self:ApplyButtonSecureState(button)
-        self:RefreshButton(button)
       end
     end
-  else
-    local buttons = self.actionSlotButtons[action]
-    if buttons then
-      for index = 1, #buttons do
-        local button = buttons[index]
-        self:ApplyButtonSecureState(button)
-        self:RefreshButton(button)
-      end
-    end
+    self:QueueAllButtonRefresh()
+    return
+  end
+
+  local buttons = self.actionSlotButtons[action]
+  if not buttons then
+    return
+  end
+
+  for index = 1, #buttons do
+    local button = buttons[index]
+    self:ApplyButtonSecureState(button)
+    self:QueueButtonRefresh(button)
   end
 end
 
-function Engine:RefreshSpellActions(spellID)
+function Engine:QueueSpellActionRefresh(spellID)
   if issecretvalue(spellID) then
     return
   end
   if spellID == nil then
-    self:RefreshAllButtons()
+    self:QueueAllButtonRefresh()
     return
   end
 
@@ -1358,63 +1306,245 @@ function Engine:RefreshSpellActions(spellID)
     local buttons = self.actionSlotButtons[actionSlots[slotIndex]]
     if buttons then
       for buttonIndex = 1, #buttons do
-        self:RefreshButton(buttons[buttonIndex])
+        self:QueueButtonRefresh(buttons[buttonIndex])
       end
     end
   end
 end
 
-function Engine:RefreshAllButtons()
-  self.contentIndexesDirty = true
+function Engine:QueueSummonPetIcons()
+  for index = 1, #self.summonPetButtons do
+    self:QueueButtonIcon(self.summonPetButtons[index])
+  end
+end
 
-  for button in pairs(self.buttons) do
+function Engine:QueueRuntimeUpdate(kind, value)
+  if self.pendingFullRefresh then
+    return
+  end
+
+  if kind == "cooldown" then
+    self.pendingCooldownRefresh = true
+  elseif kind == "charges" then
+    self.pendingChargeRefresh = true
+  elseif kind == "lossOfControl" then
+    self.pendingLossOfControlRefresh = true
+  elseif kind == "icons" then
+    self.pendingIconRefresh = true
+  elseif kind == "equipped" then
+    self.pendingEquippedRefresh = true
+  elseif kind == "usable" then
+    self.pendingUsableRefresh = true
+  elseif kind == "state" then
+    self.pendingStateRefresh = true
+  elseif kind == "stateAndFlash" then
+    self.pendingStateAndFlashRefresh = true
+  elseif kind == "assisted" then
+    self.pendingAssistedCombatRefresh = true
+  elseif kind == "combatFlash" then
+    self.pendingCombatFlash = value
+  elseif kind == "autoRepeatFlash" then
+    self.pendingAutoRepeatFlash = value
+  end
+
+  self.runtimeUpdateFrame:Show()
+end
+
+local function RefreshCooldownTooltip(flushID)
+  if GameTooltip:IsForbidden() then
+    return
+  end
+
+  local tooltipOwner = GameTooltip:GetOwner()
+  if tooltipOwner
+    and tooltipOwner.__puiRuntimeFlushID ~= flushID
+    and Engine.buttons[tooltipOwner]
+    and tooltipOwner.__puiActionActive
+    and tooltipOwner.__puiHasAction
+    and Core:ShouldShowActionTooltip()
+  then
+    tooltipOwner:SetTooltip()
+  end
+end
+
+function Engine:FlushRuntimeUpdate()
+  local refreshButtons = self.pendingButtonRefreshes
+  self.pendingButtonRefreshes = self.flushingButtonRefreshes
+  self.flushingButtonRefreshes = refreshButtons
+  wipe(self.pendingButtonRefreshes)
+
+  local iconButtons = self.pendingIconButtons
+  self.pendingIconButtons = self.flushingIconButtons
+  self.flushingIconButtons = iconButtons
+  wipe(self.pendingIconButtons)
+
+  local fullRefresh = self.pendingFullRefresh
+  local cooldownRefresh = self.pendingCooldownRefresh
+  local chargeRefresh = self.pendingChargeRefresh
+  local lossOfControlRefresh = self.pendingLossOfControlRefresh
+  local iconRefresh = self.pendingIconRefresh
+  local equippedRefresh = self.pendingEquippedRefresh
+  local usableRefresh = self.pendingUsableRefresh
+  local stateRefresh = self.pendingStateRefresh
+  local stateAndFlashRefresh = self.pendingStateAndFlashRefresh
+  local assistedCombatRefresh = self.pendingAssistedCombatRefresh
+  local combatFlash = self.pendingCombatFlash
+  local autoRepeatFlash = self.pendingAutoRepeatFlash
+
+  self.pendingFullRefresh = nil
+  self.pendingCooldownRefresh = nil
+  self.pendingChargeRefresh = nil
+  self.pendingLossOfControlRefresh = nil
+  self.pendingIconRefresh = nil
+  self.pendingEquippedRefresh = nil
+  self.pendingUsableRefresh = nil
+  self.pendingStateRefresh = nil
+  self.pendingStateAndFlashRefresh = nil
+  self.pendingAssistedCombatRefresh = nil
+  self.pendingCombatFlash = nil
+  self.pendingAutoRepeatFlash = nil
+
+  self.runtimeFlushID = self.runtimeFlushID + 1
+  local flushID = self.runtimeFlushID
+
+  if fullRefresh then
+    for index = 1, #refreshButtons do
+      refreshButtons[index].__puiRuntimeRefreshQueued = nil
+    end
+    for index = 1, #iconButtons do
+      iconButtons[index].__puiRuntimeIconQueued = nil
+    end
+    wipe(refreshButtons)
+    wipe(iconButtons)
+    self:RefreshAllButtons()
+    return
+  end
+
+  for index = 1, #refreshButtons do
+    local button = refreshButtons[index]
+    button.__puiRuntimeRefreshQueued = nil
+
     if button.__puiActionActive then
       self:RefreshButton(button)
+      button.__puiRuntimeFlushID = flushID
     end
   end
-end
+  wipe(refreshButtons)
 
-function Engine:UpdateCombatFlash(inCombat)
+  if not iconRefresh then
+    for index = 1, #iconButtons do
+      local button = iconButtons[index]
+      button.__puiRuntimeIconQueued = nil
+
+      if button.__puiRuntimeFlushID ~= flushID and button.__puiHasAction then
+        button.icon:SetTexture(C_ActionBar.GetActionTexture(button.action))
+      end
+    end
+  else
+    for index = 1, #iconButtons do
+      iconButtons[index].__puiRuntimeIconQueued = nil
+    end
+  end
+  wipe(iconButtons)
+
+  local hasBroadRefresh = cooldownRefresh
+    or chargeRefresh
+    or lossOfControlRefresh
+    or iconRefresh
+    or equippedRefresh
+    or usableRefresh
+    or stateRefresh
+    or stateAndFlashRefresh
+    or assistedCombatRefresh
+    or combatFlash ~= nil
+    or autoRepeatFlash ~= nil
+
+  if not hasBroadRefresh then
+    return
+  end
+
   for index = 1, #self.activeButtons do
     local button = self.activeButtons[index]
-    if button.__puiHasAction then
-      local isAttack = C_ActionBar.IsAttackAction(button.action)
-      if not issecretvalue(isAttack) and isAttack then
-        if inCombat then
-          button:StartFlash()
-        else
-          button:StopFlash()
+    if button.__puiRuntimeFlushID ~= flushID and button.__puiHasAction then
+      if stateAndFlashRefresh then
+        UpdateButtonStateAndFlash(button)
+      elseif stateRefresh then
+        button:UpdateState()
+      end
+
+      local refreshCheckedState = false
+      local isAttack
+
+      if combatFlash ~= nil then
+        isAttack = C_ActionBar.IsAttackAction(button.action)
+        if not issecretvalue(isAttack) and isAttack then
+          if combatFlash then
+            button:StartFlash(true)
+          else
+            button:StopFlash(true)
+          end
+          refreshCheckedState = true
         end
+      end
+
+      if autoRepeatFlash ~= nil then
+        if autoRepeatFlash then
+          local isAutoRepeat = C_ActionBar.IsAutoRepeatAction(button.action)
+          if not issecretvalue(isAutoRepeat) and isAutoRepeat then
+            button:StartFlash(true)
+            refreshCheckedState = true
+          end
+        elseif button:IsFlashing() then
+          if isAttack == nil then
+            isAttack = C_ActionBar.IsAttackAction(button.action)
+          end
+          if not issecretvalue(isAttack) and not isAttack then
+            button:StopFlash(true)
+            refreshCheckedState = true
+          end
+        end
+      end
+
+      if refreshCheckedState and not stateAndFlashRefresh and not stateRefresh then
+        button:UpdateState()
+      end
+
+      if usableRefresh then
+        button:UpdateUsable()
+      end
+
+      if iconRefresh then
+        button.icon:SetTexture(C_ActionBar.GetActionTexture(button.action))
+      end
+
+      if equippedRefresh then
+        UpdateButtonEquipped(button)
+      end
+
+      if chargeRefresh then
+        self:UpdateCount(button)
+      end
+
+      if cooldownRefresh or chargeRefresh or lossOfControlRefresh then
+        UpdateButtonCooldown(button, chargeRefresh == true, lossOfControlRefresh == true)
+      end
+
+      if assistedCombatRefresh then
+        button:UpdateAssistedCombatRotationFrame()
       end
     end
   end
-end
 
-function Engine:UpdateAutoRepeatFlash(starting)
-  for index = 1, #self.activeButtons do
-    local button = self.activeButtons[index]
-    if button.__puiHasAction then
-      if starting then
-        local isAutoRepeat = C_ActionBar.IsAutoRepeatAction(button.action)
-        if not issecretvalue(isAutoRepeat) and isAutoRepeat then
-          button:StartFlash()
-        end
-      elseif button:IsFlashing() then
-        local isAttack = C_ActionBar.IsAttackAction(button.action)
-        if not issecretvalue(isAttack) and not isAttack then
-          button:StopFlash()
-        end
-      end
-    end
+  if cooldownRefresh or chargeRefresh or lossOfControlRefresh then
+    RefreshCooldownTooltip(flushID)
   end
 end
 
-function Engine:RefreshAssistedCombat()
-  for index = 1, #self.activeButtons do
-    local button = self.activeButtons[index]
-    if button.__puiHasAction then
-      button:UpdateAssistedCombatRotationFrame()
-    end
+local function RuntimeUpdateOnUpdate(frame)
+  frame:Hide()
+
+  if Engine.enabled then
+    Engine:FlushRuntimeUpdate()
   end
 end
 
@@ -1423,7 +1553,6 @@ function Engine:UpdateProcGlow(spellID, shown)
     return
   end
 
-  self:RebuildContentIndexes()
   local buttons = self.spellEventButtons[spellID]
   if buttons then
     for buttonIndex = 1, #buttons do
@@ -1437,19 +1566,12 @@ function Engine:UpdateProcGlow(spellID, shown)
 
   for index = 1, #self.flyoutButtons do
     local button = self.flyoutButtons[index]
-    local actionType, flyoutID = GetActionInfo(button.action)
-    if not issecretvalue(actionType)
-      and not issecretvalue(flyoutID)
-      and actionType == "flyout"
-      and type(flyoutID) == "number"
-    then
-      local containsSpell = FlyoutHasSpell(flyoutID, spellID)
-      if not issecretvalue(containsSpell) and containsSpell then
-        if shown then
-          ActionButtonSpellAlertManager:ShowAlert(button)
-        else
-          ActionButtonSpellAlertManager:HideAlert(button)
-        end
+    local containsSpell = FlyoutHasSpell(button.__puiFlyoutID, spellID)
+    if not issecretvalue(containsSpell) and containsSpell then
+      if shown then
+        ActionButtonSpellAlertManager:ShowAlert(button)
+      else
+        ActionButtonSpellAlertManager:HideAlert(button)
       end
     end
   end
@@ -1508,7 +1630,7 @@ end
 
 function Engine:OnEvent(event, arg1, arg2, ...)
   if event == "ACTIONBAR_SLOT_CHANGED" then
-    self:RefreshActionSlot(arg1)
+    self:QueueActionSlotRefresh(arg1)
   elseif event == "ACTION_RANGE_CHECK_UPDATE" then
     local buttons = self.actionSlotButtons[arg1]
     if buttons then
@@ -1522,21 +1644,21 @@ function Engine:OnEvent(event, arg1, arg2, ...)
   elseif event == "ACTION_USABLE_CHANGED" then
     self:RefreshUsable(arg1)
   elseif event == "ACTIONBAR_UPDATE_COOLDOWN" then
-    self:RefreshCooldowns(false)
+    self:QueueRuntimeUpdate("cooldown")
   elseif event == "SPELL_UPDATE_CHARGES" then
-    self:RefreshCounts()
+    self:QueueRuntimeUpdate("charges")
   elseif event == "SPELL_UPDATE_ICON" then
-    self:RefreshSpellActions(arg1)
+    self:QueueSpellActionRefresh(arg1)
   elseif event == "UPDATE_SHAPESHIFT_FORM" then
-    self:RefreshIcons()
+    self:QueueRuntimeUpdate("icons")
   elseif event == "PLAYER_EQUIPMENT_CHANGED" then
-    self:RefreshEquipped()
+    self:QueueRuntimeUpdate("equipped")
   elseif event == "START_AUTOREPEAT_SPELL" then
-    self:UpdateAutoRepeatFlash(true)
+    self:QueueRuntimeUpdate("autoRepeatFlash", true)
   elseif event == "STOP_AUTOREPEAT_SPELL" then
-    self:UpdateAutoRepeatFlash(false)
+    self:QueueRuntimeUpdate("autoRepeatFlash", false)
   elseif event == "LOSS_OF_CONTROL_ADDED" or event == "LOSS_OF_CONTROL_UPDATE" then
-    self:RefreshCooldowns(true)
+    self:QueueRuntimeUpdate("lossOfControl")
   elseif event == "SPELL_ACTIVATION_OVERLAY_GLOW_SHOW" then
     self:UpdateProcGlow(arg1, true)
   elseif event == "SPELL_ACTIVATION_OVERLAY_GLOW_HIDE" then
@@ -1551,21 +1673,21 @@ function Engine:OnEvent(event, arg1, arg2, ...)
   elseif event == "PLAYER_REGEN_DISABLED" or event == "PLAYER_REGEN_ENABLED" then
     self:RefreshTooltipPolicy()
   elseif event == "PET_STABLE_UPDATE" or event == "PET_STABLE_SHOW" then
-    self:RefreshAllButtons()
+    self:QueueAllButtonRefresh()
   elseif event == "UPDATE_SUMMONPETS_ACTION" then
-    self:RefreshIcons()
+    self:QueueSummonPetIcons()
   elseif event == "PLAYER_MOUNT_DISPLAY_CHANGED" then
-    self:RefreshUsable()
+    self:QueueRuntimeUpdate("usable")
   elseif event == "PET_BAR_UPDATE" or event == "UNIT_FLAGS" or event == "UNIT_AURA" then
-    self.petStateRefreshFrame:Show()
+    self:QueueRuntimeUpdate("stateAndFlash")
   elseif event == "UNIT_ENTERED_VEHICLE" or event == "UNIT_EXITED_VEHICLE" then
-    self:RefreshState()
+    self:QueueRuntimeUpdate("state")
   elseif event == "COMPANION_UPDATE" and arg1 == "MOUNT" then
-    self:RefreshState()
+    self:QueueRuntimeUpdate("state")
   elseif event == "PLAYER_ENTER_COMBAT" then
-    self:UpdateCombatFlash(true)
+    self:QueueRuntimeUpdate("combatFlash", true)
   elseif event == "PLAYER_LEAVE_COMBAT" then
-    self:UpdateCombatFlash(false)
+    self:QueueRuntimeUpdate("combatFlash", false)
   else
     self:DispatchSpellCastVisual(event, arg1, arg2, ...)
   end
@@ -1586,11 +1708,11 @@ function Engine:Enable()
     self.eventFrame = frame
   end
 
-  if not self.petStateRefreshFrame then
-    self.petStateRefreshFrame = CreateFrame("Frame")
-    self.petStateRefreshFrame:SetScript("OnUpdate", PetStateRefreshOnUpdate)
+  if not self.runtimeUpdateFrame then
+    self.runtimeUpdateFrame = CreateFrame("Frame")
+    self.runtimeUpdateFrame:SetScript("OnUpdate", RuntimeUpdateOnUpdate)
   end
-  self.petStateRefreshFrame:Hide()
+  self.runtimeUpdateFrame:Hide()
 
   frame:RegisterEvent("ACTIONBAR_SLOT_CHANGED")
   frame:RegisterEvent("ACTION_RANGE_CHECK_UPDATE")
@@ -1643,7 +1765,7 @@ function Engine:Enable()
 
   EventRegistry:RegisterCallback("AssistedCombatManager.OnSetActionSpell", function()
     if Engine.enabled then
-      Engine:RefreshAssistedCombat()
+      Engine:QueueRuntimeUpdate("assisted")
     end
   end, self)
 end
@@ -1665,7 +1787,9 @@ function Engine:Disable()
     self:UnregisterButtonRangeCheck(button)
     self:UnregisterButtonTopology(button)
     self:SyncActionUIButton(button, nil)
-    button:StopFlash()
+    button.__puiRuntimeRefreshQueued = nil
+    button.__puiRuntimeIconQueued = nil
+    button:StopFlash(true)
     ActionButtonSpellAlertManager:HideAlert(button)
   end
 
@@ -1673,8 +1797,8 @@ function Engine:Disable()
     self.flashDriver:Hide()
   end
 
-  if self.petStateRefreshFrame then
-    self.petStateRefreshFrame:Hide()
+  if self.runtimeUpdateFrame then
+    self.runtimeUpdateFrame:Hide()
   end
 
   wipe(self.flashingButtons)
@@ -1684,11 +1808,24 @@ function Engine:Disable()
   wipe(self.actionSlotButtons)
   wipe(self.rangeActionCounts)
   wipe(self.spellEventButtons)
-  for _, bucket in ipairs(self.spellEventButtonBuckets) do
-    wipe(bucket)
-  end
   wipe(self.flyoutButtons)
-  self.contentIndexesDirty = true
+  wipe(self.summonPetButtons)
+  wipe(self.pendingButtonRefreshes)
+  wipe(self.flushingButtonRefreshes)
+  wipe(self.pendingIconButtons)
+  wipe(self.flushingIconButtons)
+  self.pendingFullRefresh = nil
+  self.pendingCooldownRefresh = nil
+  self.pendingChargeRefresh = nil
+  self.pendingLossOfControlRefresh = nil
+  self.pendingIconRefresh = nil
+  self.pendingEquippedRefresh = nil
+  self.pendingUsableRefresh = nil
+  self.pendingStateRefresh = nil
+  self.pendingStateAndFlashRefresh = nil
+  self.pendingAssistedCombatRefresh = nil
+  self.pendingCombatFlash = nil
+  self.pendingAutoRepeatFlash = nil
 end
 
 Engine.CreateButton = P:Def("Engine:CreateButton", Engine.CreateButton)
@@ -1696,39 +1833,39 @@ Engine.ConfigureButton = P:Def("Engine:ConfigureButton", Engine.ConfigureButton)
 Engine.UpdateButtonHotkey = P:Def("Engine:UpdateButtonHotkey", Engine.UpdateButtonHotkey)
 Engine.SyncActionUIButton = P:Def("Engine:SyncActionUIButton", Engine.SyncActionUIButton)
 Engine.RefreshButton = P:Def("Engine:RefreshButton", Engine.RefreshButton)
+Engine.RefreshButtonContent = P:Def("Engine:RefreshButtonContent", Engine.RefreshButtonContent)
+Engine.UnregisterButtonContent = P:Def("Engine:UnregisterButtonContent", Engine.UnregisterButtonContent)
 Engine.RefreshTooltipPolicy = P:Def("Engine:RefreshTooltipPolicy", Engine.RefreshTooltipPolicy)
 Engine.ApplyButtonSecureState = P:Def("Engine:ApplyButtonSecureState", Engine.ApplyButtonSecureState)
 Engine.SetButtonAction = P:Def("Engine:SetButtonAction", Engine.SetButtonAction)
 Engine.DeactivateButton = P:Def("Engine:DeactivateButton", Engine.DeactivateButton)
 Engine.RegisterButtonTopology = P:Def("Engine:RegisterButtonTopology", Engine.RegisterButtonTopology)
 Engine.UnregisterButtonTopology = P:Def("Engine:UnregisterButtonTopology", Engine.UnregisterButtonTopology)
-Engine.RebuildContentIndexes = P:Def("Engine:RebuildContentIndexes", Engine.RebuildContentIndexes)
+Engine.RefreshUsable = P:Def("Engine:RefreshUsable", Engine.RefreshUsable)
+Engine.RefreshAllButtons = P:Def("Engine:RefreshAllButtons", Engine.RefreshAllButtons)
+Engine.QueueButtonRefresh = P:Def("Engine:QueueButtonRefresh", Engine.QueueButtonRefresh)
+Engine.QueueButtonIcon = P:Def("Engine:QueueButtonIcon", Engine.QueueButtonIcon)
+Engine.QueueAllButtonRefresh = P:Def("Engine:QueueAllButtonRefresh", Engine.QueueAllButtonRefresh)
+Engine.QueueActionSlotRefresh = P:Def("Engine:QueueActionSlotRefresh", Engine.QueueActionSlotRefresh)
+Engine.QueueSpellActionRefresh = P:Def("Engine:QueueSpellActionRefresh", Engine.QueueSpellActionRefresh)
+Engine.QueueSummonPetIcons = P:Def("Engine:QueueSummonPetIcons", Engine.QueueSummonPetIcons)
+Engine.QueueRuntimeUpdate = P:Def("Engine:QueueRuntimeUpdate", Engine.QueueRuntimeUpdate)
+Engine.FlushRuntimeUpdate = P:Def("Engine:FlushRuntimeUpdate", Engine.FlushRuntimeUpdate)
+Engine.UpdateProcGlow = P:Def("Engine:UpdateProcGlow", Engine.UpdateProcGlow)
+Engine.DispatchSpellCastVisual = P:Def("Engine:DispatchSpellCastVisual", Engine.DispatchSpellCastVisual)
+Engine.Enable = P:Def("Engine:Enable", Engine.Enable)
+Engine.Disable = P:Def("Engine:Disable", Engine.Disable)
 
 GetButtonSpellID = P:Def("ActionButton:GetButtonSpellID", GetButtonSpellID)
 UpdateButtonState = P:Def("ActionButton:UpdateState", UpdateButtonState)
+UpdateButtonStateAndFlash = P:Def("ActionButton:UpdateStateAndFlash", UpdateButtonStateAndFlash)
 UpdateButtonUsable = P:Def("ActionButton:UpdateUsable", UpdateButtonUsable)
 UpdateButtonSpellAlert = P:Def("ActionButton:UpdateSpellAlert", UpdateButtonSpellAlert)
 UpdateButtonFlash = P:Def("ActionButton:UpdateFlash", UpdateButtonFlash)
 UpdateButtonProfessionQuality = P:Def("ActionButton:UpdateProfessionQuality", UpdateButtonProfessionQuality)
 UpdateButtonAssistedCombat = P:Def("ActionButton:UpdateAssistedCombat", UpdateButtonAssistedCombat)
-
-Engine.RefreshCounts = P:Def("Engine:RefreshCounts", Engine.RefreshCounts)
-Engine.RefreshCooldowns = P:Def("Engine:RefreshCooldowns", Engine.RefreshCooldowns)
-Engine.RefreshIcons = P:Def("Engine:RefreshIcons", Engine.RefreshIcons)
-Engine.RefreshEquipped = P:Def("Engine:RefreshEquipped", Engine.RefreshEquipped)
-Engine.RefreshUsable = P:Def("Engine:RefreshUsable", Engine.RefreshUsable)
-Engine.RefreshState = P:Def("Engine:RefreshState", Engine.RefreshState)
-Engine.RefreshStateAndFlash = P:Def("Engine:RefreshStateAndFlash", Engine.RefreshStateAndFlash)
-Engine.RefreshActionSlot = P:Def("Engine:RefreshActionSlot", Engine.RefreshActionSlot)
-Engine.RefreshSpellActions = P:Def("Engine:RefreshSpellActions", Engine.RefreshSpellActions)
-Engine.RefreshAllButtons = P:Def("Engine:RefreshAllButtons", Engine.RefreshAllButtons)
-Engine.UpdateCombatFlash = P:Def("Engine:UpdateCombatFlash", Engine.UpdateCombatFlash)
-Engine.UpdateAutoRepeatFlash = P:Def("Engine:UpdateAutoRepeatFlash", Engine.UpdateAutoRepeatFlash)
-Engine.RefreshAssistedCombat = P:Def("Engine:RefreshAssistedCombat", Engine.RefreshAssistedCombat)
-Engine.UpdateProcGlow = P:Def("Engine:UpdateProcGlow", Engine.UpdateProcGlow)
-Engine.DispatchSpellCastVisual = P:Def("Engine:DispatchSpellCastVisual", Engine.DispatchSpellCastVisual)
-Engine.Enable = P:Def("Engine:Enable", Engine.Enable)
-Engine.Disable = P:Def("Engine:Disable", Engine.Disable)
+UpdateButtonCooldown = P:Def("ActionButton:UpdateCooldown", UpdateButtonCooldown)
+UpdateButtonEquipped = P:Def("ActionButton:UpdateEquipped", UpdateButtonEquipped)
 OnEnter = P:Def("ActionButton:OnEnter", OnEnter)
 OnLeave = P:Def("ActionButton:OnLeave", OnLeave)
 OnShow = P:Def("ActionButton:OnShow", OnShow)
