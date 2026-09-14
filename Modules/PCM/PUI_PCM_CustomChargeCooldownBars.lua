@@ -568,8 +568,9 @@ _CSB_UpdateOneBar = function(barData, cfg, chargeInfo)
     chargeInfo = C_Spell.GetSpellCharges(spellID)
   end
 
-  local duration = C_Spell.GetSpellChargeDuration(spellID)
-  barData.__puiChargeActive = chargeInfo.isActive == true
+  local active = chargeInfo.isActive == true
+  local duration = active and C_Spell.GetSpellChargeDuration(spellID) or nil
+  barData.__puiChargeActive = active
 
   barData.frame:SetShown(barEnabled)
 
@@ -580,7 +581,11 @@ _CSB_UpdateOneBar = function(barData, cfg, chargeInfo)
 
   if barEnabled then
     PCMPresentation.ApplyChargeCount(barData, chargeInfo.currentCharges)
-    _CSB_ApplyDurationState(barData, cfg, duration)
+    if active then
+      _CSB_ApplyDurationState(barData, cfg, duration)
+    else
+      _CSB_ClearDurationState(barData)
+    end
   else
     _CSB_ClearDurationState(barData)
   end
@@ -589,7 +594,7 @@ _CSB_UpdateOneBar = function(barData, cfg, chargeInfo)
     duration,
     chargeInfo.currentCharges,
     barData.maxCharges,
-    chargeInfo.isActive == true
+    active
   )
   _CSB_ApplyStateAppearance(barData, cfg)
 end
@@ -753,7 +758,14 @@ _CSB_UpdateAll = function()
     local key = keys[i]
     local barData = bars[key]
     if barData and barData.frame and barData.cfg then
-      _CSB_UpdateOneBar(barData, barData.cfg)
+      local spellID = tonumber(barData.cfg.trackedSpellID)
+      local chargeInfo = spellID and C_Spell.GetSpellCharges(spellID) or nil
+      if chargeInfo then
+        local active = chargeInfo.isActive == true
+        if active or barData.__puiChargeActive ~= active then
+          _CSB_UpdateOneBar(barData, barData.cfg, chargeInfo)
+        end
+      end
     end
   end
 end
