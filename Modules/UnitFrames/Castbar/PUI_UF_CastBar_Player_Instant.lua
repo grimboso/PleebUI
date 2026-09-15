@@ -79,7 +79,7 @@ function Module:MarkSpellSent(castGUID, spellID)
   self.pendingGCDStartTime = nil
 end
 
-function Module:MarkRealCast(bar, castGUID, spellID, castBarID)
+function Module:MarkRealCast(bar, castGUID, spellID, castBarID, isChannelStart)
   if self.enabled ~= true or not castGUID or not spellID or not castBarID then
     return
   end
@@ -94,7 +94,7 @@ function Module:MarkRealCast(bar, castGUID, spellID, castBarID)
     self.sentGCDStartTime = nil
   end
 
-  if self.pendingSpellID == spellID then
+  if isChannelStart == true or self.pendingSpellID == spellID then
     self.pendingCastGUID = nil
     self.pendingSpellID = nil
     self.pendingGCDStartTime = nil
