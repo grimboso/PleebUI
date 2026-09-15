@@ -3787,8 +3787,6 @@ function ns.PCM_ApplyInstallerDraft(cfg, draft)
     if draft.kind == "stack" and draft.addColorShift == true then
       AuraWidget.AddStackColorThreshold(cfg, cfg.maxStacks)
     end
-  elseif draft.kind == "charge" then
-    cfg.maxCharges = tonumber(draft.maximum) or cfg.maxCharges
   end
 
   if cfg.presentation == "BUTTON" then
@@ -5744,8 +5742,11 @@ local function _PCM_BuildChargeCooldownBarLeafArgs(id)
     local CM, root, cfg = GetCfg()
     local spellID = cfg and CM:GetTrackedSpellIDForCurrentSpec(cfg) or nil
     local chargeInfo = spellID and C_Spell.GetSpellCharges(spellID) or nil
-    local maxCharges = chargeInfo and chargeInfo.maxCharges or nil
+    if _G.issecretvalue(chargeInfo) or type(chargeInfo) ~= "table" then
+      return 2
+    end
 
+    local maxCharges = chargeInfo.maxCharges
     if _G.issecretvalue(maxCharges) then
       return 2
     end

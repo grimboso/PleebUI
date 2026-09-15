@@ -485,6 +485,9 @@ local function _PCM_EnsureEditModeLayout()
   end
 
   if not LibEditModeOverride:AreLayoutsLoaded() then
+    if InCombatLockdown() then
+      return false
+    end
     LibEditModeOverride:LoadLayouts()
   end
 
@@ -546,7 +549,7 @@ local function _PCM_GetViewerEditModeCheckbox(viewerKey, setting, allowedViewers
 end
 
 local function _PCM_SetViewerEditModeCheckbox(viewerKey, setting, enabled, allowedViewers)
-  if not allowedViewers[viewerKey] then
+  if not allowedViewers[viewerKey] or InCombatLockdown() then
     return false
   end
 
@@ -601,6 +604,10 @@ function Cooldowns:FlushPendingEditModeChanges()
   LibEditModeOverride:ApplyChanges()
   ns.Flags.__puiLEMApplyInProgress = nil
   return true
+end
+
+function Cooldowns:CanChangeViewerEditModeSettings()
+  return not InCombatLockdown() and LibEditModeOverride:IsReady()
 end
 
 function Cooldowns:GetViewerTooltipsEnabled(viewerKey)
@@ -1389,6 +1396,10 @@ function Cooldowns:SetDurationCountEnabled(viewerKey, enabled)
   self:_RequestViewerRefresh("icons")
 
   ns._PCM_RunUnifiedViewerItemPass(nil, false, false)
+end
+
+function Cooldowns:GetDurationCountEnabled(viewerKey)
+  return _PCM_GetDurationCountEnabledCached(viewerKey)
 end
 
 
@@ -5342,6 +5353,7 @@ end
   _PCM_GetViewerEditModeCheckbox = P:Def('_PCM_GetViewerEditModeCheckbox', _PCM_GetViewerEditModeCheckbox)
   _PCM_SetViewerEditModeCheckbox = P:Def('_PCM_SetViewerEditModeCheckbox', _PCM_SetViewerEditModeCheckbox)
   Cooldowns.FlushPendingEditModeChanges = P:Def('Cooldowns:FlushPendingEditModeChanges', Cooldowns.FlushPendingEditModeChanges)
+  Cooldowns.CanChangeViewerEditModeSettings = P:Def('Cooldowns:CanChangeViewerEditModeSettings', Cooldowns.CanChangeViewerEditModeSettings)
   Cooldowns.GetViewerTooltipsEnabled = P:Def('Cooldowns:GetViewerTooltipsEnabled', Cooldowns.GetViewerTooltipsEnabled)
   Cooldowns.SetViewerTooltipsEnabled = P:Def('Cooldowns:SetViewerTooltipsEnabled', Cooldowns.SetViewerTooltipsEnabled)
   Cooldowns.GetViewerHideWhenInactive = P:Def('Cooldowns:GetViewerHideWhenInactive', Cooldowns.GetViewerHideWhenInactive)
@@ -5378,6 +5390,7 @@ end
   _PCM_GetSwipeFlagsCached = P:Def('_PCM_GetSwipeFlagsCached', _PCM_GetSwipeFlagsCached)
   _ShouldUseAuraCooldownOverride = P:Def('_ShouldUseAuraCooldownOverride', _ShouldUseAuraCooldownOverride)
   Cooldowns.SetDurationCountEnabled = P:Def('Cooldowns:SetDurationCountEnabled', Cooldowns.SetDurationCountEnabled)
+  Cooldowns.GetDurationCountEnabled = P:Def('Cooldowns:GetDurationCountEnabled', Cooldowns.GetDurationCountEnabled)
   Cooldowns._ApplyDurationCountRule = P:Def('Cooldowns:_ApplyDurationCountRule', Cooldowns._ApplyDurationCountRule)
   _ResolveViewerKeyFromItem = P:Def('_ResolveViewerKeyFromItem', _ResolveViewerKeyFromItem)
   _ApplyBorderToFrame = P:Def('_ApplyBorderToFrame', _ApplyBorderToFrame)

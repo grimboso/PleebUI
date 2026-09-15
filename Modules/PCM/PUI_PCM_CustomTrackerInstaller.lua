@@ -330,10 +330,10 @@ local function SetPage(newPage)
   elseif page == 2 then
     AddHeading("What to track")
     AddDescription("Cooldown tracks one spell cooldown. Charge cooldown also shows recharge progress and available charges. Aura stacks tracks stack count with optional duration. Aura duration tracks the remaining time of a buff or debuff.")
-    AddButton("Cooldown", function() draft.kind = "cooldown" draft.maximum = 1 PreviewChanged(DefaultPreviewState()) SetPage(3) end)
-    AddButton("Charge cooldown", function() draft.kind = "charge" draft.maximum = 2 PreviewChanged(DefaultPreviewState()) SetPage(3) end)
+    AddButton("Cooldown", function() draft.kind = "cooldown" PreviewChanged(DefaultPreviewState()) SetPage(3) end)
+    AddButton("Charge cooldown", function() draft.kind = "charge" PreviewChanged(DefaultPreviewState()) SetPage(3) end)
     AddButton("Aura stacks", function() draft.kind = "stack" draft.maximum = 3 PreviewChanged(DefaultPreviewState()) SetPage(3) end)
-    AddButton("Aura duration", function() draft.kind = "duration" draft.maximum = 1 PreviewChanged(DefaultPreviewState()) SetPage(3) end)
+    AddButton("Aura duration", function() draft.kind = "duration" PreviewChanged(DefaultPreviewState()) SetPage(3) end)
   elseif page == 3 then
     AddHeading("Spell")
     if draft.kind == "cooldown" or draft.kind == "charge" then
@@ -374,9 +374,7 @@ local function SetPage(newPage)
       end, "ACTIVE")
     end
 
-    if draft.kind == "charge" then
-      AddSlider("Charges", draft.maximum, 2, 3, 1, function(value) draft.maximum = math.floor(value + 0.5) end, "RECHARGING")
-    elseif draft.kind == "stack" then
+    if draft.kind == "stack" then
       AddSlider("Maximum stacks", draft.maximum, 2, 60, 1, function(value) draft.maximum = math.floor(value + 0.5) end, "ACTIVE")
     end
   elseif page == 4 then
