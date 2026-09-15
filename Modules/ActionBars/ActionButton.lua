@@ -1328,8 +1328,8 @@ function Engine:QueueRuntimeUpdate(kind, value)
 
   if kind == "cooldown" then
     self.pendingCooldownRefresh = true
-  elseif kind == "charges" then
-    self.pendingChargeRefresh = true
+  elseif kind == "chargeCount" then
+    self.pendingChargeCountRefresh = true
   elseif kind == "lossOfControl" then
     self.pendingLossOfControlRefresh = true
   elseif kind == "icons" then
@@ -1413,18 +1413,23 @@ local function FlushQueuedIconRefreshes(self, iconButtons, iconRefresh, flushID)
   wipe(iconButtons)
 end
 
-local function FlushCooldownRefresh(self, flushID, chargeRefresh)
+local function FlushCooldownAndCountRefresh(self, flushID, cooldownRefresh, chargeCountRefresh)
   for index = 1, #self.activeButtons do
     local button = self.activeButtons[index]
     if button.__puiRuntimeFlushID ~= flushID and button.__puiHasAction then
-      if chargeRefresh then
+      if chargeCountRefresh then
         self:UpdateCount(button)
+        RefreshButtonChargeCapability(button)
       end
-      UpdateButtonCooldown(button, chargeRefresh == true, false)
+      if cooldownRefresh then
+        UpdateButtonCooldown(button, false, false)
+      end
     end
   end
 
-  RefreshCooldownTooltip(flushID)
+  if cooldownRefresh then
+    RefreshCooldownTooltip(flushID)
+  end
 end
 
 local function FlushIconRefresh(self, flushID)
@@ -1440,7 +1445,7 @@ local function FlushBroadRefresh(
   self,
   flushID,
   cooldownRefresh,
-  chargeRefresh,
+  chargeCountRefresh,
   lossOfControlRefresh,
   iconRefresh,
   equippedRefresh,
@@ -1509,12 +1514,13 @@ local function FlushBroadRefresh(
         UpdateButtonEquipped(button)
       end
 
-      if chargeRefresh then
+      if chargeCountRefresh then
         self:UpdateCount(button)
+        RefreshButtonChargeCapability(button)
       end
 
-      if cooldownRefresh or chargeRefresh or lossOfControlRefresh then
-        UpdateButtonCooldown(button, chargeRefresh == true, lossOfControlRefresh == true)
+      if cooldownRefresh or lossOfControlRefresh then
+        UpdateButtonCooldown(button, false, lossOfControlRefresh == true)
       end
 
       if assistedCombatRefresh then
@@ -1523,7 +1529,7 @@ local function FlushBroadRefresh(
     end
   end
 
-  if cooldownRefresh or chargeRefresh or lossOfControlRefresh then
+  if cooldownRefresh or lossOfControlRefresh then
     RefreshCooldownTooltip(flushID)
   end
 end
@@ -1541,7 +1547,7 @@ function Engine:FlushRuntimeUpdate()
 
   local fullRefresh = self.pendingFullRefresh
   local cooldownRefresh = self.pendingCooldownRefresh
-  local chargeRefresh = self.pendingChargeRefresh
+  local chargeCountRefresh = self.pendingChargeCountRefresh
   local lossOfControlRefresh = self.pendingLossOfControlRefresh
   local iconRefresh = self.pendingIconRefresh
   local equippedRefresh = self.pendingEquippedRefresh
@@ -1554,7 +1560,7 @@ function Engine:FlushRuntimeUpdate()
 
   self.pendingFullRefresh = nil
   self.pendingCooldownRefresh = nil
-  self.pendingChargeRefresh = nil
+  self.pendingChargeCountRefresh = nil
   self.pendingLossOfControlRefresh = nil
   self.pendingIconRefresh = nil
   self.pendingEquippedRefresh = nil
@@ -1582,7 +1588,7 @@ function Engine:FlushRuntimeUpdate()
   end
 
   local hasBroadRefresh = cooldownRefresh
-    or chargeRefresh
+    or chargeCountRefresh
     or lossOfControlRefresh
     or iconRefresh
     or equippedRefresh
@@ -1607,13 +1613,13 @@ function Engine:FlushRuntimeUpdate()
     or combatFlash ~= nil
     or autoRepeatFlash ~= nil
 
-  if (cooldownRefresh or chargeRefresh) and not hasNonCooldownRefresh then
-    FlushCooldownRefresh(self, flushID, chargeRefresh)
+  if (cooldownRefresh or chargeCountRefresh) and not hasNonCooldownRefresh then
+    FlushCooldownAndCountRefresh(self, flushID, cooldownRefresh, chargeCountRefresh)
     return
   end
 
   local hasNonIconRefresh = cooldownRefresh
-    or chargeRefresh
+    or chargeCountRefresh
     or lossOfControlRefresh
     or equippedRefresh
     or usableRefresh
@@ -1632,7 +1638,7 @@ function Engine:FlushRuntimeUpdate()
     self,
     flushID,
     cooldownRefresh,
-    chargeRefresh,
+    chargeCountRefresh,
     lossOfControlRefresh,
     iconRefresh,
     equippedRefresh,
@@ -1751,7 +1757,7 @@ function Engine:OnEvent(event, arg1, arg2, ...)
   elseif event == "ACTIONBAR_UPDATE_COOLDOWN" then
     self:QueueRuntimeUpdate("cooldown")
   elseif event == "SPELL_UPDATE_CHARGES" then
-    self:QueueRuntimeUpdate("charges")
+    self:QueueRuntimeUpdate("chargeCount")
   elseif event == "SPELL_UPDATE_ICON" then
     self:QueueSpellIcons(arg1)
   elseif event == "UPDATE_SHAPESHIFT_FORM" then
@@ -1921,7 +1927,7 @@ function Engine:Disable()
   wipe(self.flushingIconButtons)
   self.pendingFullRefresh = nil
   self.pendingCooldownRefresh = nil
-  self.pendingChargeRefresh = nil
+  self.pendingChargeCountRefresh = nil
   self.pendingLossOfControlRefresh = nil
   self.pendingIconRefresh = nil
   self.pendingEquippedRefresh = nil
@@ -1958,7 +1964,7 @@ Engine.QueueRuntimeUpdate = P:Def("Engine:QueueRuntimeUpdate", Engine.QueueRunti
 FlushFullRefresh = P:Def("Engine:FlushFullRefresh", FlushFullRefresh)
 FlushQueuedButtonRefreshes = P:Def("Engine:FlushQueuedButtonRefreshes", FlushQueuedButtonRefreshes)
 FlushQueuedIconRefreshes = P:Def("Engine:FlushQueuedIconRefreshes", FlushQueuedIconRefreshes)
-FlushCooldownRefresh = P:Def("Engine:FlushCooldownRefresh", FlushCooldownRefresh)
+FlushCooldownAndCountRefresh = P:Def("Engine:FlushCooldownAndCountRefresh", FlushCooldownAndCountRefresh)
 FlushIconRefresh = P:Def("Engine:FlushIconRefresh", FlushIconRefresh)
 FlushBroadRefresh = P:Def("Engine:FlushBroadRefresh", FlushBroadRefresh)
 if ns.Pleebug:GetLoadMode() ~= "full" then
