@@ -26,6 +26,8 @@ local table_sort = _G.table.sort
 local time = _G.time
 local type = _G.type
 
+local PENDING_CAPTURE_MAX_AGE = 3600
+
 local function IsSecret(value)
   return issecretvalue(value) == true
 end
@@ -47,6 +49,7 @@ local function GetHistoryStorage(self)
   charDB.history = charDB.history or {}
   charDB.history.savedSegments = charDB.history.savedSegments or {}
   charDB.history.savedDungeons = charDB.history.savedDungeons or {}
+  charDB.history.pendingBossCaptures = charDB.history.pendingBossCaptures or {}
   charDB.history.dungeonStatistics = nil
   charDB.history.raidProgression = nil
   charDB.history.savedRaids = nil
@@ -73,7 +76,7 @@ local function HasPlainSourceIdentity(source)
     or (type(name) == "string" and name ~= "")
 end
 
-local function CopyCombatSource(source, validateOnly)
+local function CopyCombatSource(source)
   if IsSecret(source) or not source then
     return nil
   end
@@ -147,10 +150,6 @@ local function CopyCombatSource(source, validateOnly)
   local factionGroup = source.factionGroup
   if IsSecret(factionGroup) then
     return nil
-  end
-
-  if validateOnly then
-    return true
   end
 
   return {
@@ -355,90 +354,33 @@ local function CopyDeathRecap(recapID)
   }
 end
 
-local function CanReadCombatSessionSummary(session)
+local function CopyCombatSessionSummary(session)
   if IsSecret(session) or not session then
-    return false
+    return nil
   end
 
   local combatSources = session.combatSources
-  if IsSecret(combatSources) or not combatSources then
-    return false
+  if IsSecret(combatSources) or type(combatSources) ~= "table" then
+    return nil
   end
 
   local durationSeconds = session.durationSeconds
   local maxAmount = session.maxAmount
   local totalAmount = session.totalAmount
   if durationSeconds ~= nil and not IsPlainNumber(durationSeconds) then
-    return false
+    return nil
   end
   if not IsPlainNumber(maxAmount) or not IsPlainNumber(totalAmount) then
-    return false
-  end
-
-  for index = 1, #combatSources do
-    if not CopyCombatSource(combatSources[index], true) then
-      return false
-    end
-  end
-
-  return true
-end
-
-local function ShouldCaptureSourceDetails(meterType)
-  return meterType ~= Enum.DamageMeterType.Dps
-    and meterType ~= Enum.DamageMeterType.Hps
-    and meterType ~= Enum.DamageMeterType.Deaths
-end
-
-local function CopyCombatSession(sessionID, sessionType, meterType, session, summaryReady)
-  if not summaryReady and not CanReadCombatSessionSummary(session) then
     return nil
   end
 
-  local combatSources = session.combatSources
-  local durationSeconds = session.durationSeconds
-  local maxAmount = session.maxAmount
-  local totalAmount = session.totalAmount
-  local captureSourceDetails = ShouldCaptureSourceDetails(meterType)
-  local requireUnitDetails = meterType == Enum.DamageMeterType.EnemyDamageTaken
   local copiedSources = {}
   for index = 1, #combatSources do
     local source = CopyCombatSource(combatSources[index])
     if not source then
       return nil
     end
-
-    local hasSourceGUID = type(source.sourceGUID) == "string" and source.sourceGUID ~= ""
-    local hasSourceCreatureID = type(source.sourceCreatureID) == "number"
-    if captureSourceDetails and (hasSourceGUID or hasSourceCreatureID) then
-      local sessionSource
-      if sessionID then
-        sessionSource = C_DamageMeter.GetCombatSessionSourceFromID(
-          sessionID,
-          meterType,
-          source.sourceGUID,
-          source.sourceCreatureID
-        )
-      else
-        sessionSource = C_DamageMeter.GetCombatSessionSourceFromType(
-          sessionType,
-          meterType,
-          source.sourceGUID,
-          source.sourceCreatureID
-        )
-      end
-      local copiedSessionSource = CopyCombatSessionSource(sessionSource, requireUnitDetails)
-      if not copiedSessionSource then
-        return nil
-      end
-      source.combatSessionSource = copiedSessionSource
-    end
-
-    if meterType == Enum.DamageMeterType.Deaths then
-      source.deathRecapData = CopyDeathRecap(source.deathRecapID)
-    end
-
-    copiedSources[#copiedSources + 1] = source
+    copiedSources[index] = source
   end
 
   return {
@@ -449,12 +391,40 @@ local function CopyCombatSession(sessionID, sessionType, meterType, session, sum
   }
 end
 
+local function ShouldCaptureSourceDetails(meterType)
+  return meterType ~= Enum.DamageMeterType.Dps
+    and meterType ~= Enum.DamageMeterType.Hps
+    and meterType ~= Enum.DamageMeterType.Deaths
+end
+
+local function CopyCombatSourceDetails(sessionID, sessionType, meterType, source)
+  local requireUnitDetails = meterType == Enum.DamageMeterType.EnemyDamageTaken
+  local sessionSource
+  if sessionID then
+    sessionSource = C_DamageMeter.GetCombatSessionSourceFromID(
+      sessionID,
+      meterType,
+      source.sourceGUID,
+      source.sourceCreatureID
+    )
+  else
+    sessionSource = C_DamageMeter.GetCombatSessionSourceFromType(
+      sessionType,
+      meterType,
+      source.sourceGUID,
+      source.sourceCreatureID
+    )
+  end
+
+  return CopyCombatSessionSource(sessionSource, requireUnitDetails)
+end
+
 local function CompressHistoryData(data)
   local serialized = C_EncodingUtil.SerializeCBOR(data)
   return C_EncodingUtil.CompressString(
     serialized,
     Enum.CompressionMethod.Deflate,
-    Enum.CompressionLevel.OptimizeForSize
+    Enum.CompressionLevel.OptimizeForSpeed
   )
 end
 
@@ -757,6 +727,7 @@ local function GetNextHistoryRecordID(storage, prefix)
 end
 
 function History:ApplyTrackingOptions()
+  self:CancelCaptureWork()
   self:PruneSavedSegments()
   self:PruneSavedDungeons()
 end
@@ -768,10 +739,10 @@ function History:Initialize(owner, meterTypes)
   self.latestSessionID = nil
   self.activeEncounter = nil
   self.savedDungeonDataByID = {}
-  self.pendingCaptures = {}
+  self.captureWork = nil
   self.paused = true
 
-  GetHistoryStorage(self)
+  self.pendingCaptures = GetHistoryStorage(self).pendingBossCaptures
   self:ApplyTrackingOptions()
 end
 
@@ -813,6 +784,7 @@ end
 function History:Pause()
   self.paused = true
   self.activeEncounter = nil
+  self:CancelCaptureWork()
 end
 
 function History:Resume()
@@ -870,6 +842,7 @@ end
 
 
 function History:OnBlizzardReset()
+  self:CancelCaptureWork()
   local activeDungeon = self:GetActiveDungeon()
   if activeDungeon then
     activeDungeon.segments = {}
@@ -877,6 +850,7 @@ function History:OnBlizzardReset()
 
   self.sessionRecords = {}
   self.pendingCaptures = {}
+  GetHistoryStorage(self).pendingBossCaptures = self.pendingCaptures
   self.latestSessionID = nil
   if self.activeEncounter then
     self.activeEncounter.sessionID = nil
@@ -1156,64 +1130,125 @@ function History:GetSelectionDisplay(selection)
   return nil, nil
 end
 
-function History:CaptureTypedSessionSnapshot(sessionType)
-  local snapshot = {
-    durationSeconds = 0,
-    meters = {},
-  }
-  local sessions = {}
-
-  for meterKey, meterType in pairs(self.meterTypes) do
-    local session = C_DamageMeter.GetCombatSessionFromType(sessionType, meterType)
-    if IsSecret(session) or not session or not CanReadCombatSessionSummary(session) then
-      return snapshot, false
-    end
-    sessions[meterKey] = session
+local function BuildCaptureMeterList(meterTypes)
+  local meters = {}
+  for meterKey, meterType in pairs(meterTypes) do
+    meters[#meters + 1] = {
+      key = meterKey,
+      type = meterType,
+    }
   end
-
-  for meterKey, meterType in pairs(self.meterTypes) do
-    local copied = CopyCombatSession(nil, sessionType, meterType, sessions[meterKey], true)
-    if not copied then
-      return snapshot, false
-    end
-    snapshot.meters[meterKey] = copied
-  end
-
-  local durationSeconds = C_DamageMeter.GetSessionDurationSeconds(sessionType)
-  if not IsPlainNumber(durationSeconds) then
-    return snapshot, false
-  end
-  snapshot.durationSeconds = durationSeconds
-  return snapshot, true
+  table_sort(meters, function(left, right)
+    return left.type < right.type
+  end)
+  return meters
 end
 
-function History:CaptureSessionSnapshot(sessionID, durationSeconds)
-  local snapshot = {
-    durationSeconds = durationSeconds or 0,
-    meters = {},
+local function CreateSnapshotCapture(self, sessionID, sessionType, durationSeconds)
+  self.captureMeters = self.captureMeters or BuildCaptureMeterList(self.meterTypes)
+  return {
+    sessionID = sessionID,
+    sessionType = sessionType,
+    meterIndex = 1,
+    stage = "SUMMARY",
+    snapshot = {
+      durationSeconds = durationSeconds or 0,
+      meters = {},
+    },
   }
-  local sessions = {}
+end
 
-  for meterKey, meterType in pairs(self.meterTypes) do
-    local session = C_DamageMeter.GetCombatSessionFromID(sessionID, meterType)
-    if IsSecret(session) or not session or not CanReadCombatSessionSummary(session) then
-      return snapshot, false
+local function GetSnapshotCombatSession(capture, meterType)
+  if capture.sessionID then
+    return C_DamageMeter.GetCombatSessionFromID(capture.sessionID, meterType)
+  end
+  return C_DamageMeter.GetCombatSessionFromType(capture.sessionType, meterType)
+end
+
+local function AdvanceSnapshotMeter(self, capture)
+  capture.meterIndex = capture.meterIndex + 1
+  capture.sourceIndex = nil
+  if capture.meterIndex <= #self.captureMeters then
+    capture.stage = "SUMMARY"
+    return "PROGRESS"
+  end
+  if capture.sessionType then
+    capture.stage = "DURATION"
+    return "PROGRESS"
+  end
+  return "COMPLETE"
+end
+
+local function ProcessSnapshotCapture(self, capture)
+  if capture.stage == "DURATION" then
+    local durationSeconds = C_DamageMeter.GetSessionDurationSeconds(capture.sessionType)
+    if not IsPlainNumber(durationSeconds) then
+      return "WAIT"
     end
-    sessions[meterKey] = session
+    capture.snapshot.durationSeconds = durationSeconds
+    return "COMPLETE"
   end
 
-  for meterKey, meterType in pairs(self.meterTypes) do
-    local copied = CopyCombatSession(sessionID, nil, meterType, sessions[meterKey], true)
+  local meter = self.captureMeters[capture.meterIndex]
+  if not meter then
+    return "COMPLETE"
+  end
+
+  if capture.stage == "SUMMARY" then
+    local session = GetSnapshotCombatSession(capture, meter.type)
+    local copied = CopyCombatSessionSummary(session)
     if not copied then
-      return snapshot, false
+      return "WAIT"
     end
-    snapshot.meters[meterKey] = copied
-    if snapshot.durationSeconds <= 0 and copied.durationSeconds > 0 then
-      snapshot.durationSeconds = copied.durationSeconds
+
+    capture.snapshot.meters[meter.key] = copied
+    if capture.snapshot.durationSeconds <= 0 and copied.durationSeconds > 0 then
+      capture.snapshot.durationSeconds = copied.durationSeconds
     end
+
+    if ShouldCaptureSourceDetails(meter.type) and #copied.combatSources > 0 then
+      capture.stage = "SOURCE_DETAILS"
+      capture.sourceIndex = 1
+      return "PROGRESS"
+    end
+    if meter.type == Enum.DamageMeterType.Deaths and #copied.combatSources > 0 then
+      capture.stage = "DEATH_RECAP"
+      capture.sourceIndex = 1
+      return "PROGRESS"
+    end
+    return AdvanceSnapshotMeter(self, capture)
   end
 
-  return snapshot, true
+  local copiedSession = capture.snapshot.meters[meter.key]
+  local source = copiedSession and copiedSession.combatSources[capture.sourceIndex]
+  if not source then
+    return "WAIT"
+  end
+
+  if capture.stage == "SOURCE_DETAILS" then
+    local hasSourceGUID = type(source.sourceGUID) == "string" and source.sourceGUID ~= ""
+    local hasSourceCreatureID = type(source.sourceCreatureID) == "number"
+    if hasSourceGUID or hasSourceCreatureID then
+      local copiedDetails = CopyCombatSourceDetails(
+        capture.sessionID,
+        capture.sessionType,
+        meter.type,
+        source
+      )
+      if not copiedDetails then
+        return "WAIT"
+      end
+      source.combatSessionSource = copiedDetails
+    end
+  else
+    source.deathRecapData = CopyDeathRecap(source.deathRecapID)
+  end
+
+  capture.sourceIndex = capture.sourceIndex + 1
+  if capture.sourceIndex <= #copiedSession.combatSources then
+    return "PROGRESS"
+  end
+  return AdvanceSnapshotMeter(self, capture)
 end
 
 function History:CreateSavedBossKillSegment(record, encounter, durationSeconds)
@@ -1496,12 +1531,30 @@ function History:QueueOwnedCapture(record)
     return false
   end
 
-  self.pendingCaptures[record.sessionID] = record
+  self.pendingCaptures[record.sessionID] = {
+    sessionID = record.sessionID,
+    runID = record.runID,
+    startedAt = record.startedAt,
+    endedAt = record.endedAt,
+    encounter = {
+      encounterID = encounter.encounterID,
+      encounterName = encounter.encounterName,
+      difficultyID = encounter.difficultyID,
+      difficultyName = encounter.difficultyName,
+      groupSize = encounter.groupSize,
+      instanceType = encounter.instanceType,
+      instanceID = encounter.instanceID,
+      instanceName = encounter.instanceName,
+      instanceDifficultyID = encounter.instanceDifficultyID,
+      success = encounter.success,
+      endedAt = encounter.endedAt,
+    },
+  }
   return true
 end
 
 function History:HasPendingCaptures()
-  if next(self.pendingCaptures) then
+  if self.captureWork or next(self.pendingCaptures) then
     return true
   end
 
@@ -1509,19 +1562,35 @@ function History:HasPendingCaptures()
   return activeDungeon and activeDungeon.completionPending == true or false
 end
 
-function History:ProcessPendingCaptures()
-  if not next(self.pendingCaptures) or not self:CanReadFinishedSessions() then
-    return false
+local function PrunePendingCaptures(self)
+  local options = GetHistoryOptions(self)
+  local activeDungeon = self:GetActiveDungeon()
+  local currentTime = time()
+  for sessionID, record in pairs(self.pendingCaptures) do
+    local endedAt = record and record.endedAt
+    local encounter = record and record.encounter
+    local expired = not IsPlainNumber(endedAt)
+      or currentTime - endedAt > PENDING_CAPTURE_MAX_AGE
+    local keepBossKill = IsPlainNumber(sessionID)
+      and encounter
+      and encounter.endedAt
+      and encounter.success == 1
+      and not (activeDungeon and record.runID == activeDungeon.runID)
+      and options.saveBossKills == true
+      and options.bossKillsToKeep > 0
+      and not expired
+    if not keepBossKill then
+      self.pendingCaptures[sessionID] = nil
+    end
   end
+end
 
-  local availableSessionIDs = self:GetAvailableSessionIDs()
-  if not availableSessionIDs then
-    return false
-  end
-
+local function CreateBossCaptureWork(self, availableSessionIDs)
   local records = {}
   for _, record in pairs(self.pendingCaptures) do
-    records[#records + 1] = record
+    if availableSessionIDs[record.sessionID] then
+      records[#records + 1] = record
+    end
   end
   table_sort(records, function(left, right)
     local leftStartedAt = IsPlainNumber(left.startedAt) and left.startedAt or 0
@@ -1532,40 +1601,44 @@ function History:ProcessPendingCaptures()
     return leftStartedAt < rightStartedAt
   end)
 
-  local changed = false
-  local options = GetHistoryOptions(self)
-  for index = 1, #records do
-    local record = records[index]
-    local sessionID = record.sessionID
-    local encounter = record.encounter
-    local activeDungeon = self:GetActiveDungeon()
-    local isDungeonBoss = activeDungeon and record.runID == activeDungeon.runID
-    local keepBossKill = encounter
-      and encounter.endedAt
-      and encounter.success == 1
-      and not isDungeonBoss
-      and options.saveBossKills == true
-      and options.bossKillsToKeep > 0
+  local record = records[1]
+  if not record then
+    return nil
+  end
+  return {
+    kind = "BOSS",
+    generation = self.owner.combatGeneration,
+    record = record,
+    snapshotCapture = CreateSnapshotCapture(self, record.sessionID, nil, 0),
+  }
+end
 
-    if not keepBossKill then
-      self.pendingCaptures[sessionID] = nil
-    elseif availableSessionIDs[sessionID] then
-      local snapshot, captureComplete = self:CaptureSessionSnapshot(sessionID, 0)
-      if captureComplete then
-        local segment = self:CreateSavedBossKillSegment(
-          record,
-          encounter,
-          snapshot.durationSeconds
-        )
-        segment.meters = snapshot.meters
-        self:AddSavedSegment(segment)
-        self.pendingCaptures[sessionID] = nil
-        changed = true
-      end
-    end
+local function ProcessBossCaptureWork(self, work)
+  local status = ProcessSnapshotCapture(self, work.snapshotCapture)
+  if status ~= "COMPLETE" then
+    return status
   end
 
-  return changed
+  local record = work.record
+  if self.pendingCaptures[record.sessionID] ~= record then
+    return "CANCEL"
+  end
+
+  local encounter = record.encounter
+  local snapshot = work.snapshotCapture.snapshot
+  local segment = self:CreateSavedBossKillSegment(
+    record,
+    encounter,
+    snapshot.durationSeconds
+  )
+  segment.meters = snapshot.meters
+  self:AddSavedSegment(segment)
+  self.pendingCaptures[record.sessionID] = nil
+  return "COMPLETE"
+end
+
+function History:CancelCaptureWork()
+  self.captureWork = nil
 end
 
 function History:OnEncounterStart(encounterID, encounterName, difficultyID, groupSize)
@@ -1629,6 +1702,10 @@ function History:StartDungeon(mapID, beginNewRun)
     return false
   end
 
+  if beginNewRun == true then
+    self:CancelCaptureWork()
+  end
+
   local storage = GetHistoryStorage(self)
   if beginNewRun == true
     and storage.activeDungeon
@@ -1668,6 +1745,8 @@ function History:MarkDungeonCompleted()
   if not activeDungeon then
     return false
   end
+
+  self:CancelCaptureWork()
 
   local completionInfo = C_ChallengeMode.GetChallengeCompletionInfo()
   activeDungeon.completionPending = true
@@ -1734,14 +1813,14 @@ function History:MarkDungeonCompleted()
   return true
 end
 
-function History:FinalizePendingDungeon()
+local function CreateDungeonCaptureWork(self, availableSessionIDs)
   local storage = GetHistoryStorage(self)
   local activeDungeon = storage.activeDungeon
   if not activeDungeon
     or activeDungeon.modelVersion ~= 6
     or activeDungeon.completionPending ~= true
   then
-    return false
+    return nil, false
   end
 
   local options = GetHistoryOptions(self)
@@ -1749,36 +1828,11 @@ function History:FinalizePendingDungeon()
   local keepKeystone = options.saveKeystones == true and options.dungeonSummariesToKeep > 0
   if not keepBossKills and not keepKeystone then
     storage.activeDungeon = nil
-    return true
-  end
-
-  if not self:CanReadFinishedSessions() then
-    return false
-  end
-
-  local availableSessionIDs = self:GetAvailableSessionIDs()
-  if not availableSessionIDs then
-    return false
+    return nil, true
   end
 
   local dungeonSegments = activeDungeon.segments or {}
-  local overallSnapshot
-  if keepKeystone then
-    local overallComplete
-    overallSnapshot, overallComplete = self:CaptureTypedSessionSnapshot(
-      Enum.DamageMeterSessionType.Overall
-    )
-    if not overallComplete then
-      return false
-    end
-
-    local damageDone = overallSnapshot.meters.DAMAGE_DONE
-    if not damageDone or #damageDone.combatSources == 0 then
-      return false
-    end
-  end
-
-  local capturedBossSegments = {}
+  local bossSegments = {}
   for index = 1, #dungeonSegments do
     local dungeonSegment = dungeonSegments[index]
     local sessionID = dungeonSegment.sessionID
@@ -1787,18 +1841,30 @@ function History:FinalizePendingDungeon()
       and sessionID > 0
       and availableSessionIDs[sessionID]
     then
-      local snapshot, captureComplete = self:CaptureSessionSnapshot(sessionID, 0)
-      if not captureComplete then
-        return false
-      end
-      capturedBossSegments[#capturedBossSegments + 1] = BuildCapturedDungeonSegment(
-        dungeonSegment,
-        snapshot
-      )
+      bossSegments[#bossSegments + 1] = dungeonSegment
     end
   end
 
-  if keepBossKills then
+  return {
+    kind = "DUNGEON",
+    generation = self.owner.combatGeneration,
+    activeDungeon = activeDungeon,
+    keepBossKills = keepBossKills,
+    keepKeystone = keepKeystone,
+    bossSegments = bossSegments,
+    bossIndex = 1,
+    capturedBossSegments = {},
+    phase = keepKeystone and "OVERALL" or "BOSSES",
+  }, false
+end
+
+local function BuildDungeonCaptureResult(self, work)
+  local activeDungeon = work.activeDungeon
+  local overallSnapshot = work.overallSnapshot
+  local capturedBossSegments = work.capturedBossSegments
+
+  if work.keepBossKills then
+    local bossKillSegments = {}
     for index = 1, #capturedBossSegments do
       local dungeonSegment = capturedBossSegments[index]
       local encounter = BuildEncounterFromDungeonSegment(dungeonSegment)
@@ -1815,15 +1881,15 @@ function History:FinalizePendingDungeon()
           dungeonSegment.durationSeconds
         )
         segment.meters = dungeonSegment.meters
-        self:AddSavedSegment(segment)
+        bossKillSegments[#bossKillSegments + 1] = segment
       end
     end
+    work.bossKillSegments = bossKillSegments
   end
 
-  local savedID
-  if keepKeystone then
+  if work.keepKeystone then
     EnrichDungeonMembersFromMeters(activeDungeon, overallSnapshot.meters)
-    local saved = {
+    work.saved = {
       id = activeDungeon.runID,
       modelVersion = 5,
       bossSessionIDs = BuildRetainedDungeonBossSessionIDs(capturedBossSegments),
@@ -1850,19 +1916,164 @@ function History:FinalizePendingDungeon()
       isEligibleForScore = activeDungeon.isEligibleForScore,
       members = activeDungeon.members or {},
     }
-    local savedData = {
+    work.savedData = {
       overallMeters = overallSnapshot.meters,
       segments = BuildRetainedDungeonSegments(capturedBossSegments),
     }
-    saved.compressedData = CompressHistoryData(savedData)
-    self.savedDungeonDataByID[saved.id] = savedData
+  end
+end
+
+local function CommitDungeonCapture(self, work)
+  local storage = GetHistoryStorage(self)
+  if storage.activeDungeon ~= work.activeDungeon then
+    return false
+  end
+
+  local bossKillSegments = work.bossKillSegments or {}
+  if #bossKillSegments > 0 then
+    local savedSegments = self:GetSavedSegments()
+    for index = 1, #bossKillSegments do
+      savedSegments[#savedSegments + 1] = bossKillSegments[index]
+    end
+    self:PruneSavedSegments()
+  end
+
+  local saved = work.saved
+  if saved then
+    self.savedDungeonDataByID[saved.id] = work.savedData
     table_insert(storage.savedDungeons, 1, saved)
-    savedID = saved.id
     self:PruneSavedDungeons()
   end
 
   storage.activeDungeon = nil
-  return true, savedID, false
+  return true
+end
+
+local function ProcessDungeonCaptureWork(self, work)
+  if GetHistoryStorage(self).activeDungeon ~= work.activeDungeon then
+    return "CANCEL"
+  end
+
+  if work.phase == "OVERALL" then
+    work.snapshotCapture = work.snapshotCapture or CreateSnapshotCapture(
+      self,
+      nil,
+      Enum.DamageMeterSessionType.Overall,
+      0
+    )
+    local status = ProcessSnapshotCapture(self, work.snapshotCapture)
+    if status ~= "COMPLETE" then
+      return status
+    end
+
+    local snapshot = work.snapshotCapture.snapshot
+    local damageDone = snapshot.meters.DAMAGE_DONE
+    if not damageDone or #damageDone.combatSources == 0 then
+      return "WAIT"
+    end
+    work.overallSnapshot = snapshot
+    work.snapshotCapture = nil
+    work.phase = "BOSSES"
+    return "PROGRESS"
+  end
+
+  if work.phase == "BOSSES" then
+    local dungeonSegment = work.bossSegments[work.bossIndex]
+    if not dungeonSegment then
+      work.phase = "BUILD"
+      return "PROGRESS"
+    end
+
+    work.snapshotCapture = work.snapshotCapture or CreateSnapshotCapture(
+      self,
+      dungeonSegment.sessionID,
+      nil,
+      0
+    )
+    local status = ProcessSnapshotCapture(self, work.snapshotCapture)
+    if status ~= "COMPLETE" then
+      return status
+    end
+
+    work.capturedBossSegments[#work.capturedBossSegments + 1] = BuildCapturedDungeonSegment(
+      dungeonSegment,
+      work.snapshotCapture.snapshot
+    )
+    work.snapshotCapture = nil
+    work.bossIndex = work.bossIndex + 1
+    return "PROGRESS"
+  end
+
+  if work.phase == "BUILD" then
+    BuildDungeonCaptureResult(self, work)
+    work.phase = work.keepKeystone and "COMPRESS" or "COMMIT"
+    return "PROGRESS"
+  end
+
+  if work.phase == "COMPRESS" then
+    work.saved.compressedData = CompressHistoryData(work.savedData)
+    work.phase = "COMMIT"
+    return "PROGRESS"
+  end
+
+  if not CommitDungeonCapture(self, work) then
+    return "CANCEL"
+  end
+  return "COMPLETE"
+end
+
+function History:ProcessCaptureWork()
+  if not self:CanReadFinishedSessions() then
+    self:CancelCaptureWork()
+    return false, false, self:HasPendingCaptures()
+  end
+
+  local work = self.captureWork
+  if not work then
+    PrunePendingCaptures(self)
+    local availableSessionIDs = self:GetAvailableSessionIDs()
+    if not availableSessionIDs then
+      return false, false, self:HasPendingCaptures()
+    end
+
+    work = CreateBossCaptureWork(self, availableSessionIDs)
+    if not work then
+      local changed
+      work, changed = CreateDungeonCaptureWork(self, availableSessionIDs)
+      if changed then
+        return true, false, false
+      end
+    end
+    if not work then
+      return false, false, next(self.pendingCaptures) ~= nil
+    end
+    self.captureWork = work
+  end
+
+  if work.generation ~= self.owner.combatGeneration then
+    self:CancelCaptureWork()
+    return false, false, true
+  end
+
+  local status
+  if work.kind == "BOSS" then
+    status = ProcessBossCaptureWork(self, work)
+  else
+    status = ProcessDungeonCaptureWork(self, work)
+  end
+
+  if status == "PROGRESS" then
+    return false, true, false
+  end
+
+  self:CancelCaptureWork()
+  if status == "COMPLETE" then
+    return true, self:HasPendingCaptures(), false
+  end
+  if status == "CANCEL" then
+    return false, self:HasPendingCaptures(), false
+  end
+  return false, false, true
 end
 
 function History:ResetDungeon()
@@ -1876,6 +2087,7 @@ function History:ResetDungeon()
     return
   end
 
+  self:CancelCaptureWork()
   storage.activeDungeon = nil
 end
 
@@ -1927,6 +2139,7 @@ end
 
 
 function History:ClearUnsaved()
+  self:CancelCaptureWork()
   self.sessionRecords = {}
   self.latestSessionID = nil
   self.activeEncounter = nil
@@ -1934,6 +2147,7 @@ function History:ClearUnsaved()
   self.pendingCaptures = {}
 
   local storage = GetHistoryStorage(self)
+  storage.pendingBossCaptures = self.pendingCaptures
   local savedSegments = storage.savedSegments
   for index = #savedSegments, 1, -1 do
     if savedSegments[index].isSaved ~= true then
