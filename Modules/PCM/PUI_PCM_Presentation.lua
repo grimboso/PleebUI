@@ -9,7 +9,6 @@ local Theme = ns.Theme
 local LSM = ns.LSM
 local Round = ns.Pixel.Round
 local LCG = LibStub("LibCustomGlow-1.0")
-local Hooks = ns.PCMHooks
 
 local PCMPresentation = {}
 ns.PCMPresentation = PCMPresentation
@@ -949,7 +948,7 @@ function PCMPresentation.ApplyCustomTrackerStateGlow(trackKey, targetFrame, styl
 end
 
 local function CustomBarBuffGlowRestyleLocked()
-  return Hooks.IsAddonRestricted() or C_Secrets.ShouldAurasBeSecret() == true
+  return C_Secrets.ShouldAurasBeSecret() == true
 end
 
 local function IsCustomBarAuraGlowEnabled(cfg)
@@ -1083,11 +1082,6 @@ local function CustomBarBuffGlowSpellSetsMatch(left, right)
 end
 
 local function ApplyCustomBarBuffGlowTrack(track)
-  if CustomBarBuffGlowRestyleLocked() then
-    track.stylePending = true
-    return
-  end
-
   local spellID = tonumber(track.spellID)
   if track.enabled ~= true or not track.anchorFrame or not spellID or spellID <= 0 then
     track.stylePending = nil
@@ -1145,13 +1139,7 @@ local function QueueCustomBarBuffGlow(trackKey)
   CustomBarBuffGlowEventFrame:RegisterEvent("ADDON_RESTRICTION_STATE_CHANGED")
 end
 
-local function FlushCustomBarBuffGlows(_, event, _, restrictionState)
-  if event == "ADDON_RESTRICTION_STATE_CHANGED"
-    and restrictionState ~= Enum.AddOnRestrictionState.Inactive
-  then
-    return
-  end
-
+local function FlushCustomBarBuffGlows()
   if CustomBarBuffGlowRestyleLocked() then
     return
   end
@@ -1159,7 +1147,7 @@ local function FlushCustomBarBuffGlows(_, event, _, restrictionState)
   for trackKey in pairs(CustomBarBuffGlowPending) do
     local track = CustomBarBuffGlowTracks[trackKey]
     if track and track.stylePending then
-      ApplyCustomBarBuffGlowTrack(track)
+      ConfigureCustomBarBuffGlowButton(track, false)
     end
     CustomBarBuffGlowPending[trackKey] = nil
   end

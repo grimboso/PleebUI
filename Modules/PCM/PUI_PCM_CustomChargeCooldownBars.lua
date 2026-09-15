@@ -11,7 +11,6 @@ local C_Spell = _G.C_Spell
 local C_SpellBook = _G.C_SpellBook
 local Cooldowns = ns.Modules.CooldownManager
 local PCMRuntime = ns.PCMRuntime
-local Hooks = ns.PCMHooks
 local P = ns.Pleebug:DropIn(Cooldowns, { name = "PCM", bucket = "CustomChargeCooldownBars" })
 
 
@@ -51,6 +50,12 @@ __PUI_PCM_CooldownStackBars.chargeUpdateFrame:Hide()
 local INTERP = Enum.StatusBarInterpolation.None
 local DIR_ELAPSED = Enum.StatusBarTimerDirection.ElapsedTime
 
+
+local function _CSB_Snap(value)
+  value = tonumber(value) or 0
+
+  return Round(value)
+end
 
 local function _CSB_GetClassColor()
   if _CSB_ClassColorR then
@@ -186,8 +191,8 @@ local function _CSB_RegisterMover(barData, cfg)
       "CENTER",
       UIParent,
       "CENTER",
-      Round(tonumber(entry.posX) or 0),
-      Round(tonumber(entry.posY) or 0)
+      _CSB_Snap(entry.posX),
+      _CSB_Snap(entry.posY)
     )
   end
 
@@ -562,9 +567,8 @@ _CSB_UpdateOneBar = function(barData, cfg, chargeInfo)
     chargeInfo = C_Spell.GetSpellCharges(spellID)
   end
 
-  local active = chargeInfo.isActive == true
-  local duration = active and C_Spell.GetSpellChargeDuration(spellID) or nil
-  barData.__puiChargeActive = active
+  local duration = C_Spell.GetSpellChargeDuration(spellID)
+  barData.__puiChargeActive = chargeInfo.isActive == true
 
   barData.frame:SetShown(barEnabled)
 
@@ -575,11 +579,7 @@ _CSB_UpdateOneBar = function(barData, cfg, chargeInfo)
 
   if barEnabled then
     PCMPresentation.ApplyChargeCount(barData, chargeInfo.currentCharges)
-    if active then
-      _CSB_ApplyDurationState(barData, cfg, duration)
-    else
-      _CSB_ClearDurationState(barData)
-    end
+    _CSB_ApplyDurationState(barData, cfg, duration)
   else
     _CSB_ClearDurationState(barData)
   end
@@ -588,7 +588,7 @@ _CSB_UpdateOneBar = function(barData, cfg, chargeInfo)
     duration,
     chargeInfo.currentCharges,
     barData.maxCharges,
-    active
+    chargeInfo.isActive == true
   )
   _CSB_ApplyStateAppearance(barData, cfg)
 end
@@ -621,11 +621,6 @@ _CSB_ApplyVisibility = function(barData, cfg)
 end
 
 _CSB_RebuildAll = function()
-  if Hooks.IsAddonRestricted() then
-    __PUI_PCM_CooldownStackBars.pendingSpecTalentRefresh = true
-    return
-  end
-
   if InCombatLockdown() then
     __PUI_PCM_CooldownStackBars.pendingSpecTalentRefresh = true
   end
@@ -750,10 +745,6 @@ _CSB_RebuildAll = function()
 end
 
 _CSB_UpdateAll = function()
-  if Hooks.IsAddonRestricted() then
-    return
-  end
-
   local keys = __PUI_PCM_CooldownStackBars.keys
   local bars = __PUI_PCM_CooldownStackBars.bars
 
@@ -761,14 +752,7 @@ _CSB_UpdateAll = function()
     local key = keys[i]
     local barData = bars[key]
     if barData and barData.frame and barData.cfg then
-      local spellID = tonumber(barData.cfg.trackedSpellID)
-      local chargeInfo = spellID and C_Spell.GetSpellCharges(spellID) or nil
-      if chargeInfo then
-        local active = chargeInfo.isActive == true
-        if active or barData.__puiChargeActive ~= active then
-          _CSB_UpdateOneBar(barData, barData.cfg, chargeInfo)
-        end
-      end
+      _CSB_UpdateOneBar(barData, barData.cfg)
     end
   end
 end
@@ -788,11 +772,6 @@ __PUI_PCM_CooldownStackBars.chargeUpdateFrame:SetScript("OnUpdate", function(fra
 
   local host = __PUI_PCM_CooldownStackBars
   if host.chargeUpdateQueued ~= true then
-    return
-  end
-
-  if Hooks.IsAddonRestricted() then
-    frame:Show()
     return
   end
 
@@ -903,11 +882,6 @@ end
 function Cooldowns:CooldownStackBars_Rebuild()
   if not ns.PCM_IsModuleEnabledFast() then
     self:CooldownStackBars_Disable()
-    return
-  end
-
-  if Hooks.IsAddonRestricted() then
-    __PUI_PCM_CooldownStackBars.pendingSpecTalentRefresh = true
     return
   end
 
@@ -1041,11 +1015,6 @@ function Cooldowns:CooldownStackBars_RefreshAfterTalentSwap()
     return
   end
 
-  if Hooks.IsAddonRestricted() then
-    __PUI_PCM_CooldownStackBars.pendingSpecTalentRefresh = true
-    return
-  end
-
   __PUI_PCM_CooldownStackBars.pendingSpecTalentRefresh = false
   _CSB_ClearKnownSpellCache()
   self:CooldownStackBars_Rebuild()
@@ -1063,9 +1032,7 @@ PCMRuntime:RegisterSubscriber("CooldownStackBars", {
         Cooldowns:CooldownStackBars_RefreshAfterTalentSwap()
       end
     elseif event == "ADDON_RESTRICTION_STATE_CHANGED" then
-      local _, state = ...
-      if state == Enum.AddOnRestrictionState.Inactive
-        and __PUI_PCM_CooldownStackBars.pendingSpecTalentRefresh
+      if __PUI_PCM_CooldownStackBars.pendingSpecTalentRefresh
         and not ns.PCM_IsTransitionPending()
       then
         Cooldowns:CooldownStackBars_RefreshAfterTalentSwap()
@@ -1121,6 +1088,7 @@ function Cooldowns:_CooldownStackBars_SoftRebuild(flags)
 end
 
 
+  _CSB_Snap = P:Def('_CSB_Snap', _CSB_Snap)
   _CSB_GetClassColor = P:Def('_CSB_GetClassColor', _CSB_GetClassColor)
   _CSB_IsTrackedSpellKnown = P:Def('_CSB_IsTrackedSpellKnown', _CSB_IsTrackedSpellKnown)
   _CSB_SetFontStringShown = P:Def('_CSB_SetFontStringShown', _CSB_SetFontStringShown)

@@ -7,7 +7,6 @@ local UIParent = UIParent
 local GameTooltip = GameTooltip
 local C_Timer = C_Timer
 local C_Secrets = C_Secrets
-local Hooks = ns.PCMHooks
 local Presentation = ns.Presentation
 local AuraSlotDriver = ns.AuraSlotDriver
 local AuraWidget = ns.AuraWidget
@@ -976,11 +975,7 @@ function CustomIcons:UpdateCharge(key, duration, currentCharges, maximum, active
     end
   end
   if cooldownShown then
-    if active == true then
-      cooldown:SetCooldownFromDurationObject(duration, true)
-    else
-      cooldown:Clear()
-    end
+    cooldown:SetCooldownFromDurationObject(duration, true)
   end
 
   local chargeTextShown = record.icon.showCount == true
@@ -1226,7 +1221,7 @@ function CustomIcons:RefreshAllVisibility()
 end
 
 function CustomIcons:FlushAuraStyles()
-  if Hooks.IsAddonRestricted() or C_Secrets.ShouldAurasBeSecret() == true then return end
+  if C_Secrets.ShouldAurasBeSecret() == true then return end
   for _, record in pairs(records) do
     if record.runtimeEnabled then
       if record.auraParts then

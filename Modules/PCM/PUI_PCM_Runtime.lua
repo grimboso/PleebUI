@@ -136,122 +136,6 @@ local function ClearWorkQueue()
   state.workTail = nil
 end
 
-local function DispatchItemReleased(entry, itemFrame, reason)
-  local itemState = state.itemEntry[itemFrame]
-  if Hooks.IsAddonRestricted() then
-    if itemState and itemState.pendingAcquireEntry == entry then
-      itemState.pendingAcquireEntry = nil
-      itemState.pendingAcquireReason = nil
-      itemState.pendingAcquireInitial = nil
-      itemState.pendingRebindEntry = nil
-      itemState.pendingRebindInitial = nil
-      return
-    end
-
-    if itemState then
-      itemState.pendingReleaseEntry = entry
-      itemState.pendingReleaseReason = reason or "release"
-    end
-    return
-  end
-
-  Dispatch("OnItemReleased", entry.key, entry.frame, itemFrame, reason or "release")
-end
-
-local function DispatchItemAcquired(entry, itemFrame, reason, initial)
-  local itemState = state.itemEntry[itemFrame]
-  if Hooks.IsAddonRestricted() then
-    if itemState and itemState.pendingReleaseEntry == entry then
-      itemState.pendingReleaseEntry = nil
-      itemState.pendingReleaseReason = nil
-    end
-
-    if itemState then
-      itemState.pendingAcquireEntry = entry
-      itemState.pendingAcquireReason = reason or "acquire"
-      itemState.pendingAcquireInitial = initial == true
-    end
-    return
-  end
-
-  if itemState and itemState.pendingReleaseEntry == entry then
-    itemState.pendingReleaseEntry = nil
-    itemState.pendingReleaseReason = nil
-  end
-
-  Dispatch(
-    "OnItemAcquired",
-    entry.key,
-    entry.frame,
-    itemFrame,
-    reason or "acquire",
-    initial == true
-  )
-end
-
-local function DispatchItemRebound(entry, itemFrame, initial)
-  local itemState = state.itemEntry[itemFrame]
-  if Hooks.IsAddonRestricted() then
-    if itemState then
-      itemState.pendingRebindEntry = entry
-      itemState.pendingRebindInitial = initial == true
-    end
-    return
-  end
-
-  Dispatch("OnItemRebound", entry.key, entry.frame, itemFrame, initial == true)
-end
-
-local function FlushDeferredCallbacks()
-  if Hooks.IsAddonRestricted() then
-    return
-  end
-
-  for itemFrame, itemState in pairs(state.itemEntry) do
-    local entry = itemState.entry
-    local pendingReleaseEntry = itemState.pendingReleaseEntry
-    local pendingAcquireEntry = itemState.pendingAcquireEntry
-    local pendingRebindEntry = itemState.pendingRebindEntry
-    local pendingReleaseReason = itemState.pendingReleaseReason
-    local pendingAcquireReason = itemState.pendingAcquireReason
-    local pendingAcquireInitial = itemState.pendingAcquireInitial
-    local pendingRebindInitial = itemState.pendingRebindInitial
-
-    itemState.pendingReleaseEntry = nil
-    itemState.pendingReleaseReason = nil
-    itemState.pendingAcquireEntry = nil
-    itemState.pendingAcquireReason = nil
-    itemState.pendingAcquireInitial = nil
-    itemState.pendingRebindEntry = nil
-    itemState.pendingRebindInitial = nil
-
-    if pendingReleaseEntry and pendingAcquireEntry ~= pendingReleaseEntry then
-      Dispatch(
-        "OnItemReleased",
-        pendingReleaseEntry.key,
-        pendingReleaseEntry.frame,
-        itemFrame,
-        pendingReleaseReason or "release"
-      )
-    end
-
-    if pendingAcquireEntry and entry == pendingAcquireEntry and pendingAcquireEntry.itemSet[itemFrame] == true then
-      Dispatch(
-        "OnItemAcquired",
-        pendingAcquireEntry.key,
-        pendingAcquireEntry.frame,
-        itemFrame,
-        pendingAcquireReason or "acquire",
-        pendingAcquireInitial == true
-      )
-    end
-
-    if pendingRebindEntry and entry == pendingRebindEntry and pendingRebindEntry.itemSet[itemFrame] == true then
-      Dispatch("OnItemRebound", pendingRebindEntry.key, pendingRebindEntry.frame, itemFrame, pendingRebindInitial == true)
-    end
-  end
-end
-
 local function MarkViewerDirty(entry, mask, reason)
   if not state.enabled or not entry then
     return
@@ -271,11 +155,6 @@ local function FlushRuntime(frame)
   frame:Hide()
 
   if not state.enabled then
-    return
-  end
-
-  if Hooks.IsAddonRestricted() then
-    frame:Show()
     return
   end
 
@@ -379,7 +258,7 @@ local function HookItem(entry, itemFrame)
 
     local initialBind = current.expectInitialRebind == true
     current.expectInitialRebind = nil
-    DispatchItemRebound(currentEntry, frame, initialBind)
+    Dispatch("OnItemRebound", currentEntry.key, currentEntry.frame, frame, initialBind)
     MarkViewerDirty(currentEntry, Runtime.Dirty.CONTENT, "rebind")
   end)
 end
@@ -393,7 +272,7 @@ local function AcquireItem(entry, itemFrame, reason, suppressGeneration, expectI
   if previousEntry and previousEntry ~= entry and previousEntry.itemSet[itemFrame] == true then
     previousEntry.itemSet[itemFrame] = nil
     RemoveItemFromList(previousEntry, itemFrame)
-    DispatchItemReleased(previousEntry, itemFrame, "viewer-changed")
+    Dispatch("OnItemReleased", previousEntry.key, previousEntry.frame, itemFrame, "viewer-changed")
     MarkItemMembershipChanged(previousEntry, "viewer-changed")
   end
 
@@ -413,7 +292,7 @@ local function AcquireItem(entry, itemFrame, reason, suppressGeneration, expectI
     itemState.expectInitialRebind = expectInitialRebind == true
   end
 
-  DispatchItemAcquired(entry, itemFrame, reason or "acquire", expectInitialRebind == true)
+  Dispatch("OnItemAcquired", entry.key, entry.frame, itemFrame, reason or "acquire")
   if suppressGeneration ~= true then
     MarkItemMembershipChanged(entry, reason or "acquire")
   end
@@ -434,7 +313,7 @@ local function ReleaseItem(entry, itemFrame, reason, suppressGeneration)
     itemState.expectInitialRebind = nil
   end
 
-  DispatchItemReleased(entry, itemFrame, reason or "release")
+  Dispatch("OnItemReleased", entry.key, entry.frame, itemFrame, reason or "release")
   if suppressGeneration ~= true then
     MarkItemMembershipChanged(entry, reason or "release")
   end
@@ -656,10 +535,6 @@ function Runtime:GetViewer(key)
   end
 
   if state.enabled then
-    if Hooks.IsAddonRestricted() then
-      return entry.frame
-    end
-
     self:BindViewer(key, "get")
     return entry.frame
   end
@@ -729,11 +604,6 @@ function Runtime:BindViewer(key, reason)
     return nil, false
   end
 
-  if Hooks.IsAddonRestricted() then
-    self:QueueViewerScan(key, reason or "bind-blocked")
-    return entry.frame, false
-  end
-
   local viewer = entry.resolver()
   if viewer and viewer:IsForbidden() then
     viewer = nil
@@ -766,11 +636,6 @@ function Runtime:BindViewer(key, reason)
 end
 
 function Runtime:RefreshViewer(key, reason)
-  if Hooks.IsAddonRestricted() then
-    self:QueueViewerScan(key, reason or "refresh")
-    return
-  end
-
   local viewer, changed = self:BindViewer(key, reason or "refresh")
   local entry = state.viewers[key]
   if viewer and entry and not changed then
@@ -779,11 +644,6 @@ function Runtime:RefreshViewer(key, reason)
 end
 
 function Runtime:RefreshAllViewers(reason)
-  if Hooks.IsAddonRestricted() then
-    self:QueueAllViewerScans(reason or "refresh-all")
-    return
-  end
-
   for index = 1, #state.viewerOrder do
     self:RefreshViewer(state.viewerOrder[index], reason or "refresh-all")
   end
@@ -822,7 +682,7 @@ local function OnRuntimeEvent(_, event, ...)
     return
   end
 
-  local arg1, arg2 = ...
+  local arg1 = ...
 
   if event == "ADDON_LOADED" and arg1 ~= "Blizzard_CooldownViewer" then
     return
@@ -841,11 +701,7 @@ local function OnRuntimeEvent(_, event, ...)
 
   Dispatch("OnLifecycleEvent", event, ...)
 
-  if event == "ADDON_RESTRICTION_STATE_CHANGED" and arg2 == Enum.AddOnRestrictionState.Inactive then
-    Runtime:QueueAllViewerScans("restriction-end")
-    FlushDeferredCallbacks()
-    Runtime:Flush()
-  elseif event == "PLAYER_ENTERING_WORLD" then
+  if event == "PLAYER_ENTERING_WORLD" then
     -- Core owns startup reconciliation. Flush the work it queued immediately
     -- because a reload can enter PLAYER_ENTERING_WORLD before combat lockdown.
     Runtime:Flush()
@@ -885,16 +741,6 @@ function Runtime:Disable()
       entry.frame = nil
     end
   end
-
-  for _, itemState in pairs(state.itemEntry) do
-    itemState.pendingReleaseEntry = nil
-    itemState.pendingReleaseReason = nil
-    itemState.pendingAcquireEntry = nil
-    itemState.pendingAcquireReason = nil
-    itemState.pendingAcquireInitial = nil
-    itemState.pendingRebindEntry = nil
-    itemState.pendingRebindInitial = nil
-  end
 end
 
 OnRuntimeEvent = P:Def("Runtime.OnRuntimeEvent", OnRuntimeEvent)
@@ -917,10 +763,6 @@ Runtime:RegisterViewer("BuffBarCooldownViewer", function()
 end)
 
 Dispatch = P:Def("Runtime.Dispatch", Dispatch)
-DispatchItemReleased = P:Def("Runtime.DispatchItemReleased", DispatchItemReleased)
-DispatchItemAcquired = P:Def("Runtime.DispatchItemAcquired", DispatchItemAcquired)
-DispatchItemRebound = P:Def("Runtime.DispatchItemRebound", DispatchItemRebound)
-FlushDeferredCallbacks = P:Def("Runtime.FlushDeferredCallbacks", FlushDeferredCallbacks)
 MarkViewerDirty = P:Def("Runtime.MarkViewerDirty", MarkViewerDirty)
 MarkItemMembershipChanged = P:Def("Runtime.MarkItemMembershipChanged", MarkItemMembershipChanged)
 FlushRuntime = P:Def("Runtime.FlushRuntime", FlushRuntime)

@@ -344,12 +344,42 @@ local function GetSpellTexture(spellID)
   return not IsSecret(texture) and texture or nil
 end
 
-local function ResolveBagItem(definition)
+local function ResolveBagItem(definition, preferKeybind)
+  local firstOwnedItemID
+  local firstOwnedCount
+
   for index = 1, #definition.itemIDs do
     local itemID = definition.itemIDs[index]
     local count = GetItemCount(definition, itemID)
+
     if count and count > 0 then
-      return itemID, count, true
+      if not firstOwnedItemID then
+        firstOwnedItemID = itemID
+        firstOwnedCount = count
+      end
+
+      if not preferKeybind then
+        return itemID, count, true
+      end
+
+      local key = Cooldowns:GetItemKeybind(itemID)
+      if key then
+        return itemID, count, true
+      end
+    end
+  end
+
+  if firstOwnedItemID then
+    return firstOwnedItemID, firstOwnedCount, true
+  end
+
+  if preferKeybind then
+    for index = 1, #definition.itemIDs do
+      local itemID = definition.itemIDs[index]
+      local key = Cooldowns:GetItemKeybind(itemID)
+      if key then
+        return itemID, 0, false
+      end
     end
   end
 
@@ -586,7 +616,7 @@ local function ResolveDefinition(definition, cfg)
     local itemID, count, available, trinketKind, trackedSpellIDs, filtered = ResolveTrinket(definition, cfg)
     return itemID, nil, count, available, trinketKind, BuildDurationSpellIDs(definition, itemID, trackedSpellIDs), filtered
   end
-  local itemID, count, available = ResolveBagItem(definition)
+  local itemID, count, available = ResolveBagItem(definition, cfg.showKeybinds == true)
   return itemID, nil, count, available, nil, BuildDurationSpellIDs(definition, itemID), false
 end
 
@@ -1587,9 +1617,11 @@ function Cooldowns:ConsumableTracker_RefreshKeybinds()
     return
   end
 
+  RefreshDefinitions(IsBagItemDefinition)
+
   for index = 1, #Tracker.icons do
     local icon = Tracker.icons[index]
-    if icon.frame:IsShown() then
+    if icon.frame:IsShown() and not IsBagItemDefinition(icon.definition) then
       icon.keybindText:SetText(GetKeybind(icon.definition, icon.itemID, icon.spellID))
     end
   end

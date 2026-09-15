@@ -417,10 +417,6 @@ local function _Refresh()
     return
   end
 
-  if PCMHooks.IsAddonRestricted() then
-    return
-  end
-
   local viewer = PCMRuntime:GetViewer("BuffBarCooldownViewer")
   if not viewer or viewer:IsForbidden() then
     _Init()
