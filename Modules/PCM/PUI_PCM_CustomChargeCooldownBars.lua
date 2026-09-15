@@ -11,6 +11,7 @@ local C_Spell = _G.C_Spell
 local C_SpellBook = _G.C_SpellBook
 local Cooldowns = ns.Modules.CooldownManager
 local PCMRuntime = ns.PCMRuntime
+local Hooks = ns.PCMHooks
 local P = ns.Pleebug:DropIn(Cooldowns, { name = "PCM", bucket = "CustomChargeCooldownBars" })
 
 
@@ -620,6 +621,11 @@ _CSB_ApplyVisibility = function(barData, cfg)
 end
 
 _CSB_RebuildAll = function()
+  if Hooks.IsAddonRestricted() then
+    __PUI_PCM_CooldownStackBars.pendingSpecTalentRefresh = true
+    return
+  end
+
   if InCombatLockdown() then
     __PUI_PCM_CooldownStackBars.pendingSpecTalentRefresh = true
   end
@@ -744,6 +750,10 @@ _CSB_RebuildAll = function()
 end
 
 _CSB_UpdateAll = function()
+  if Hooks.IsAddonRestricted() then
+    return
+  end
+
   local keys = __PUI_PCM_CooldownStackBars.keys
   local bars = __PUI_PCM_CooldownStackBars.bars
 
@@ -778,6 +788,11 @@ __PUI_PCM_CooldownStackBars.chargeUpdateFrame:SetScript("OnUpdate", function(fra
 
   local host = __PUI_PCM_CooldownStackBars
   if host.chargeUpdateQueued ~= true then
+    return
+  end
+
+  if Hooks.IsAddonRestricted() then
+    frame:Show()
     return
   end
 
@@ -888,6 +903,11 @@ end
 function Cooldowns:CooldownStackBars_Rebuild()
   if not ns.PCM_IsModuleEnabledFast() then
     self:CooldownStackBars_Disable()
+    return
+  end
+
+  if Hooks.IsAddonRestricted() then
+    __PUI_PCM_CooldownStackBars.pendingSpecTalentRefresh = true
     return
   end
 
@@ -1021,6 +1041,11 @@ function Cooldowns:CooldownStackBars_RefreshAfterTalentSwap()
     return
   end
 
+  if Hooks.IsAddonRestricted() then
+    __PUI_PCM_CooldownStackBars.pendingSpecTalentRefresh = true
+    return
+  end
+
   __PUI_PCM_CooldownStackBars.pendingSpecTalentRefresh = false
   _CSB_ClearKnownSpellCache()
   self:CooldownStackBars_Rebuild()
@@ -1038,7 +1063,9 @@ PCMRuntime:RegisterSubscriber("CooldownStackBars", {
         Cooldowns:CooldownStackBars_RefreshAfterTalentSwap()
       end
     elseif event == "ADDON_RESTRICTION_STATE_CHANGED" then
-      if __PUI_PCM_CooldownStackBars.pendingSpecTalentRefresh
+      local _, state = ...
+      if state == Enum.AddOnRestrictionState.Inactive
+        and __PUI_PCM_CooldownStackBars.pendingSpecTalentRefresh
         and not ns.PCM_IsTransitionPending()
       then
         Cooldowns:CooldownStackBars_RefreshAfterTalentSwap()
