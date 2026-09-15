@@ -2028,18 +2028,18 @@ do
     end
 
     local defaults = {
-      healthPotion = { enabled = true, missing = "GRAY", order = 1 },
-      lightsPotential = { enabled = true, missing = "GRAY", order = 2 },
-      recklessness = { enabled = true, missing = "GRAY", order = 3 },
-      liquidLuster = { enabled = true, missing = "GRAY", order = 4 },
+      healthPotion = { enabled = true, missing = "HIDE", order = 1 },
+      lightsPotential = { enabled = true, missing = "HIDE", order = 2 },
+      recklessness = { enabled = true, missing = "HIDE", order = 3 },
+      liquidLuster = { enabled = true, missing = "HIDE", order = 4 },
       lightfusedMana = { enabled = false, missing = "HIDE", order = 5 },
       invisibilityPotion = { enabled = false, missing = "HIDE", order = 6 },
-      healthstone = { enabled = true, missing = "GRAY", order = 7 },
+      healthstone = { enabled = true, missing = "HIDE", order = 7 },
       demonicHealthstone = { enabled = true, missing = "HIDE", order = 8 },
-      combatRes = { enabled = true, missing = "GRAY", order = 9 },
+      combatRes = { enabled = true, missing = "HIDE", order = 9 },
       trinket1 = { enabled = true, missing = "HIDE", order = 10 },
       trinket2 = { enabled = true, missing = "HIDE", order = 11 },
-      racial = { enabled = true, missing = "GRAY", order = 12 },
+      racial = { enabled = true, missing = "HIDE", order = 12 },
     }
 
     for key, values in pairs(defaults) do

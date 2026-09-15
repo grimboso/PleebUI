@@ -2392,6 +2392,10 @@ local function BuildPRDControls(frame, colors)
   end)
 
   host.ResourceWidgets = {}
+  host.DisplayWidgets = {}
+  host.ClassResourceWidgets = {}
+  host.TrackedEffectWidgets = {}
+  host.AppearanceWidgets = {}
 
   local function CreateSectionLabel(text)
     local label = host:CreateFontString(nil, "OVERLAY")
@@ -2428,6 +2432,20 @@ local function BuildPRDControls(frame, colors)
     SetStatus(string.format("PRD border size: %d", value))
   end)
   host.BorderWidget:SetSliderValues(0, 12, 1)
+
+  host.DisplayWidgets = {
+    host.EnabledWidget,
+    host.HealthWidget,
+    host.PrimaryWidget,
+    host.SecondaryWidget,
+  }
+  host.ClassResourceWidgets = {}
+  host.TrackedEffectWidgets = {}
+  host.AppearanceWidgets = {
+    host.TextureWidget,
+    host.WidthWidget,
+    host.BorderWidget,
+  }
 
   host.ControlWidgets = {
     host.EnabledWidget,

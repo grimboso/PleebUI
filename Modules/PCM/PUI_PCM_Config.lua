@@ -790,7 +790,6 @@ local function _PCM_BuildBuffIconsTabArgs()
       type = "group",
       name = "General",
       order = 5,
-      inline = true,
       args = {
         showTooltips = args.showTooltips,
         hideWhenInactive = args.hideWhenInactive,
@@ -807,7 +806,6 @@ local function _PCM_BuildBuffIconsTabArgs()
       type = "group",
       name = "Layout",
       order = 10,
-      inline = true,
       args = {
         growth = args.growth,
         iconSize = args.iconSize,
@@ -819,7 +817,6 @@ local function _PCM_BuildBuffIconsTabArgs()
       type = "group",
       name = "Borders",
       order = 20,
-      inline = true,
       args = {
         viewerBorderColor = args.viewerBorderColor,
       },
@@ -828,7 +825,6 @@ local function _PCM_BuildBuffIconsTabArgs()
       type = "group",
       name = "Cooldown text",
       order = 30,
-      inline = true,
       args = {
         CountSize = args.CountSize,
         CountFont = args.CountFont,
@@ -842,7 +838,6 @@ local function _PCM_BuildBuffIconsTabArgs()
       type = "group",
       name = "Stack text",
       order = 40,
-      inline = true,
       args = {
         StackSize = args.StackSize,
         StackFont = args.StackFont,
@@ -2831,9 +2826,6 @@ local function _PCM_BuildCooldownViewerTreeArgs(cm, viewerKey, viewerLabel, opts
     "iconSpacing",
     "iconsPerRow",
     "growUp",
-  })
-
-  AddGroup("appearance", "Appearance", {
     "borderThickness",
     "borderColor",
   })
@@ -8735,7 +8727,10 @@ local function PCMOptionsProvider(Addon)
           childGroups = "tree",
           args = buildTab and _PCM_BuildCustomBarsManagerArgs() or {},
         }
-      elseif info.key == "cooldowns_essential" or info.key == "cooldowns_utility" then
+      elseif info.key == "cooldowns_essential"
+        or info.key == "cooldowns_utility"
+        or info.key == "buff_icons"
+      then
         options.args[info.key] = {
           type = "group",
           name = info.label,

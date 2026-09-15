@@ -1358,16 +1358,16 @@ _ShouldUseAuraCooldownOverride = function(itemFrame, viewerKey)
     return false
   end
 
-  if flags.durationOn or flags.durationCountOn then
-    return false
-  end
-
   if not (flags.gcdOn or flags.cooldownOn) then
     return false
   end
 
   if flags.forceCooldownSwipe == true then
     return true
+  end
+
+  if flags.durationOn or flags.durationCountOn then
+    return false
   end
 
   return itemFrame.cooldownUseAuraDisplayTime == true
@@ -1427,19 +1427,6 @@ function Cooldowns:_ApplyDurationCountRule(itemFrame, viewerKey)
   end
 
   cd:SetHideCountdownNumbers(enabled ~= true)
-
-  if enabled then
-    local fs
-    if cd.GetCountdownFontString then
-      fs = cd:GetCountdownFontString()
-    elseif cd.Timer then
-      fs = cd.Timer
-    end
-
-    if fs and fs.SetTextColor and not (cooldownText and cooldownText.color) then
-      fs:SetTextColor(0, 1, 0, 1)
-    end
-  end
 
   return true
 end

@@ -295,7 +295,7 @@ local function CreateWindowButton(parent, text, width, callback)
   local widget = AceGUI:Create("PUI_Button")
   widget:SetText(text)
   widget:SetWidth(width)
-  widget:SetHeight(24)
+  widget:SetHeight(32)
   widget:SetCallback("OnClick", callback)
   widget.frame:SetParent(parent)
   widget.frame:Show()
@@ -593,15 +593,15 @@ local function BuildFrame()
   controls.frame:SetPoint("BOTTOMRIGHT", window, "BOTTOMRIGHT", -620, 66)
   controls:SetWidth(540)
   controls:SetHeight(410)
+  controls.frame:Show()
 
-  local previous = CreateWindowButton(window, "Previous", 110, function()
+  local previous = CreateWindowButton(window, "Previous", 160, function()
     SetPage(page - 1)
   end)
   previous.frame:ClearAllPoints()
-  previous.frame:SetPoint("BOTTOMLEFT", window, "BOTTOMLEFT", 24, 22)
   window.Previous = previous
 
-  local discard = CreateWindowButton(window, "Discard draft", 110, function()
+  local discard = CreateWindowButton(window, "Discard draft", 160, function()
     draft = nil
     page = 1
     window:Hide()
@@ -610,14 +610,16 @@ local function BuildFrame()
   discard.frame:SetPoint("BOTTOM", window, "BOTTOM", 0, 22)
   window.Discard = discard
 
-  local nextButton = CreateWindowButton(window, "Next", 110, function()
+  previous.frame:SetPoint("RIGHT", discard.frame, "LEFT", -12, 0)
+
+  local nextButton = CreateWindowButton(window, "Next", 160, function()
     SetPage(page + 1)
   end)
   nextButton.frame:ClearAllPoints()
-  nextButton.frame:SetPoint("BOTTOMRIGHT", window, "BOTTOMRIGHT", -24, 22)
+  nextButton.frame:SetPoint("LEFT", discard.frame, "RIGHT", 12, 0)
   window.Next = nextButton
 
-  local finish = CreateWindowButton(window, "Finish tracker", 130, function()
+  local finish = CreateWindowButton(window, "Finish tracker", 160, function()
     local key = ns.PCM_CreateCustomTrackerFromDraft(draft)
     if key then
       local returnToCustomTrackerPage = closeCallback ~= nil
@@ -638,7 +640,7 @@ local function BuildFrame()
     end
   end)
   finish.frame:ClearAllPoints()
-  finish.frame:SetPoint("BOTTOMRIGHT", window, "BOTTOMRIGHT", -24, 22)
+  finish.frame:SetPoint("LEFT", discard.frame, "RIGHT", 12, 0)
   window.Finish = finish
 
   CreatePreview(window)
