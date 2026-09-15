@@ -551,8 +551,7 @@ local function RunScheduledEncounterEndRefresh()
 
   DamageMeters.playerInCombat = false
   DamageMeters.waitingForGroupCombatEnd = false
-  local finishedSessionID = History:OnCombatEnded()
-  DamageMeters:RetainFinishedCurrentSession(finishedSessionID)
+  DamageMeters.currentDisplaySessionID = History:OnCombatEnded()
   DamageMeters:CancelCombatRefresh()
   DamageMeters:RefreshWindows()
   DamageMeters:ScheduleHistoryCaptureWork(0.3)
@@ -690,6 +689,7 @@ end
 
 function DamageMeters:ClearUnsavedCombatHistory()
   self:ClearAllWindowSelections()
+  self.currentDisplaySessionID = nil
   History:ClearUnsaved()
   C_DamageMeter.ResetAllCombatSessions()
 end
@@ -740,8 +740,7 @@ function DamageMeters:PLAYER_REGEN_ENABLED()
 
   self.playerInCombat = false
   self.waitingForGroupCombatEnd = false
-  local finishedSessionID = History:OnCombatEnded()
-  self:RetainFinishedCurrentSession(finishedSessionID)
+  self.currentDisplaySessionID = History:OnCombatEnded()
   self:CancelCombatRefresh()
   self:RefreshWindows()
   self:ScheduleHistoryCaptureWork(0.3)
@@ -765,8 +764,7 @@ function DamageMeters:UNIT_FLAGS(_, unit)
     end
 
     self.waitingForGroupCombatEnd = false
-    local finishedSessionID = History:OnCombatEnded()
-    self:RetainFinishedCurrentSession(finishedSessionID)
+    self.currentDisplaySessionID = History:OnCombatEnded()
     self:CancelCombatRefresh()
     self:RefreshWindows()
     self:ScheduleHistoryCaptureWork(0.3)
@@ -965,6 +963,7 @@ end
 function DamageMeters:DAMAGE_METER_RESET()
   self:CancelCombatRefresh()
   self:CancelHistoryCaptureWork()
+  self.currentDisplaySessionID = nil
   History:OnBlizzardReset()
   Breakdown.Close()
   Breakdown.InvalidateTargetAnalysisCache()
