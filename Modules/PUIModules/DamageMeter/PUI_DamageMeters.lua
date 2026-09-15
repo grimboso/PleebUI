@@ -205,6 +205,7 @@ local LAUNCHER_FALLBACK_ICON = Constants.LAUNCHER_FALLBACK_ICON
 local RUNTIME_EVENTS = Constants.RUNTIME_EVENTS
 local METER_TYPES = Constants.METER_TYPES
 local IsSecret = Util.IsSecret
+local HISTORY_CAPTURE_RETRY_DELAYS = { 0.5, 1, 2 }
 
 SegmentPicker.rowCount = 12
 SegmentPicker.rowHeight = 26
@@ -450,20 +451,26 @@ function DamageMeters:ScheduleTargetAnalysisRefresh()
   self.targetAnalysisRefreshTimer = C_Timer.NewTimer(0.1, RunScheduledTargetAnalysisRefresh)
 end
 
-function DamageMeters:CancelHistoryCaptureRetry()
-  if self.historyCaptureRetryTimer then
-    self.historyCaptureRetryTimer:Cancel()
-    self.historyCaptureRetryTimer = nil
+function DamageMeters:CancelHistoryCaptureWork()
+  if self.historyCaptureWorkTimer then
+    self.historyCaptureWorkTimer:Cancel()
+    self.historyCaptureWorkTimer = nil
   end
+  self.historyCaptureRetryIndex = 0
+  History:CancelCaptureWork()
 end
 
-local function RunHistoryCaptureRetry()
-  DamageMeters.historyCaptureRetryTimer = nil
+local function RunHistoryCaptureWork()
+  DamageMeters.historyCaptureWorkTimer = nil
   DamageMeters:ProcessHistoryCaptures()
 end
 
-function DamageMeters:ScheduleHistoryCaptureRetry(delay)
-  if self.historyCaptureRetryTimer
+function DamageMeters:ScheduleHistoryCaptureWork(delay, preserveRetryIndex)
+  if preserveRetryIndex ~= true then
+    self.historyCaptureRetryIndex = 0
+  end
+
+  if self.historyCaptureWorkTimer
     or not self.runtimeEnabled
     or self.playerInCombat
     or self.waitingForGroupCombatEnd
@@ -472,9 +479,9 @@ function DamageMeters:ScheduleHistoryCaptureRetry(delay)
     return
   end
 
-  self.historyCaptureRetryTimer = C_Timer.NewTimer(
+  self.historyCaptureWorkTimer = C_Timer.NewTimer(
     delay or 0.3,
-    RunHistoryCaptureRetry
+    RunHistoryCaptureWork
   )
 end
 
@@ -483,14 +490,7 @@ function DamageMeters:ProcessHistoryCaptures()
     return
   end
 
-  local changed = History:ProcessPendingCaptures()
-  local activeDungeon = History:GetActiveDungeon()
-  if activeDungeon and activeDungeon.completionPending == true then
-    local finalized = History:FinalizePendingDungeon()
-    if finalized then
-      changed = true
-    end
-  end
+  local changed, workRemaining, retryNeeded = History:ProcessCaptureWork()
 
   if changed then
     self:RefreshSelectionWindows()
@@ -498,6 +498,19 @@ function DamageMeters:ProcessHistoryCaptures()
     if picker and picker:IsShown() then
       SegmentPicker.ReloadData(picker)
     end
+  end
+
+  if workRemaining then
+    self:ScheduleHistoryCaptureWork(0, true)
+  elseif retryNeeded then
+    local retryIndex = (self.historyCaptureRetryIndex or 0) + 1
+    local retryDelay = HISTORY_CAPTURE_RETRY_DELAYS[retryIndex]
+    if retryDelay then
+      self.historyCaptureRetryIndex = retryIndex
+      self:ScheduleHistoryCaptureWork(retryDelay, true)
+    end
+  else
+    self.historyCaptureRetryIndex = 0
   end
 end
 
@@ -541,7 +554,7 @@ local function RunScheduledEncounterEndRefresh()
   History:OnCombatEnded()
   DamageMeters:CancelCombatRefresh()
   DamageMeters:RefreshWindows()
-  DamageMeters:ScheduleHistoryCaptureRetry(0.3)
+  DamageMeters:ScheduleHistoryCaptureWork(0.3)
 end
 
 function DamageMeters:ScheduleEncounterEndRefresh(success)
@@ -607,7 +620,7 @@ function DamageMeters:SetRuntimeEnabled(enabled)
     self.playerInCombat = false
     self.waitingForGroupCombatEnd = false
     self:CancelCombatRefresh()
-    self:CancelHistoryCaptureRetry()
+    self:CancelHistoryCaptureWork()
     self:CancelTargetAnalysisRefresh()
     self:CancelEncounterEndRefresh()
     self:UnregisterRuntimeEvents()
@@ -661,10 +674,10 @@ function DamageMeters:ApplySettings()
 
   self:ApplyWindowConfiguration()
   self:CancelCombatRefresh()
-  self:CancelHistoryCaptureRetry()
+  self:CancelHistoryCaptureWork()
   if self.runtimeVisible and self:HasShownWindow() then
     self:RegisterRuntimeEvents()
-    self:ScheduleHistoryCaptureRetry(0.3)
+    self:ScheduleHistoryCaptureWork(0.3)
     self:RefreshWindows()
   else
     self:CancelTargetAnalysisRefresh()
@@ -687,7 +700,7 @@ function DamageMeters:PLAYER_REGEN_DISABLED()
   self.combatGeneration = (self.combatGeneration or 0) + 1
   self.playerInCombat = true
   self.waitingForGroupCombatEnd = false
-  self:CancelHistoryCaptureRetry()
+  self:CancelHistoryCaptureWork()
   self:SelectCurrentSessionsOnCombat()
   if self.breakdownSelection
     and (self.breakdownSelection.sessionID ~= nil or self.breakdownSelection.isLocalPlayer ~= true)
@@ -708,7 +721,7 @@ function DamageMeters:ADDON_RESTRICTION_STATE_CHANGED(_, restrictionType, state)
     return
   end
 
-  self:ScheduleHistoryCaptureRetry(0.3)
+  self:ScheduleHistoryCaptureWork(0.3)
 end
 
 function DamageMeters:PLAYER_REGEN_ENABLED()
@@ -729,7 +742,7 @@ function DamageMeters:PLAYER_REGEN_ENABLED()
   History:OnCombatEnded()
   self:CancelCombatRefresh()
   self:RefreshWindows()
-  self:ScheduleHistoryCaptureRetry(0.3)
+  self:ScheduleHistoryCaptureWork(0.3)
 end
 
 function DamageMeters:UNIT_FLAGS(_, unit)
@@ -753,7 +766,7 @@ function DamageMeters:UNIT_FLAGS(_, unit)
     History:OnCombatEnded()
     self:CancelCombatRefresh()
     self:RefreshWindows()
-    self:ScheduleHistoryCaptureRetry(0.3)
+    self:ScheduleHistoryCaptureWork(0.3)
     return
   end
 
@@ -764,7 +777,7 @@ function DamageMeters:UNIT_FLAGS(_, unit)
   self.combatGeneration = (self.combatGeneration or 0) + 1
   self.waitingForGroupCombatEnd = true
   Breakdown.InvalidateTargetAnalysisCache()
-  self:CancelHistoryCaptureRetry()
+  self:CancelHistoryCaptureWork()
   local selectionChanged = self:SelectCurrentSessionsOnCombat()
   if self.breakdownSelection
     and (self.breakdownSelection.sessionID ~= nil or self.breakdownSelection.isLocalPlayer ~= true)
@@ -784,7 +797,7 @@ function DamageMeters:ENCOUNTER_START(_, encounterID, encounterName, difficultyI
   self.combatGeneration = (self.combatGeneration or 0) + 1
   self.playerInCombat = true
   self.waitingForGroupCombatEnd = false
-  self:CancelHistoryCaptureRetry()
+  self:CancelHistoryCaptureWork()
   self:SelectCurrentSessionsOnCombat()
   if self.breakdownSelection
     and (self.breakdownSelection.sessionID ~= nil or self.breakdownSelection.isLocalPlayer ~= true)
@@ -822,7 +835,7 @@ end
 
 function DamageMeters:CHALLENGE_MODE_COMPLETED()
   History:MarkDungeonCompleted()
-  self:ScheduleHistoryCaptureRetry(0.3)
+  self:ScheduleHistoryCaptureWork(0.3)
 end
 
 function DamageMeters:CHALLENGE_MODE_RESET()
@@ -857,7 +870,7 @@ function DamageMeters:PLAYER_ENTERING_WORLD()
 
   self:CancelCombatRefresh()
   self:ReconcileAvailableSessionSelections()
-  self:ScheduleHistoryCaptureRetry(0.3)
+  self:ScheduleHistoryCaptureWork(0.3)
   self:RefreshWindows()
 end
 
@@ -925,7 +938,7 @@ function DamageMeters:DAMAGE_METER_COMBAT_SESSION_UPDATED(_, meterType, sessionI
   end
 
   self:RefreshWindowsForMeterType(meterType, sessionID)
-  self:ScheduleHistoryCaptureRetry(0.3)
+  self:ScheduleHistoryCaptureWork(0.3)
 end
 
 function DamageMeters:DAMAGE_METER_CURRENT_SESSION_UPDATED()
@@ -948,7 +961,7 @@ end
 
 function DamageMeters:DAMAGE_METER_RESET()
   self:CancelCombatRefresh()
-  self:CancelHistoryCaptureRetry()
+  self:CancelHistoryCaptureWork()
   History:OnBlizzardReset()
   Breakdown.Close()
   Breakdown.InvalidateTargetAnalysisCache()
@@ -1182,7 +1195,7 @@ StartCombatRefreshCycle = P:Def("StartCombatRefreshCycle", StartCombatRefreshCyc
 RunScheduledCombatRefresh = P:Def("RunScheduledCombatRefresh", RunScheduledCombatRefresh)
 EnsureCombatRefreshDriver = P:Def("EnsureCombatRefreshDriver", EnsureCombatRefreshDriver)
 RunScheduledTargetAnalysisRefresh = P:Def("RunScheduledTargetAnalysisRefresh", RunScheduledTargetAnalysisRefresh)
-RunHistoryCaptureRetry = P:Def("RunHistoryCaptureRetry", RunHistoryCaptureRetry)
+RunHistoryCaptureWork = P:Def("RunHistoryCaptureWork", RunHistoryCaptureWork)
 RunScheduledEncounterEndRefresh = P:Def("RunScheduledEncounterEndRefresh", RunScheduledEncounterEndRefresh)
 CreateLauncherIcon = P:Def("CreateLauncherIcon", CreateLauncherIcon)
 BuildLauncherMenu = P:Def("BuildLauncherMenu", BuildLauncherMenu)
@@ -1192,8 +1205,8 @@ DamageMeters.CompileRuntimeConfig = P:Def("DamageMeters.CompileRuntimeConfig", D
 DamageMeters.ScheduleCombatRefresh = P:Def("DamageMeters.ScheduleCombatRefresh", DamageMeters.ScheduleCombatRefresh)
 DamageMeters.CancelTargetAnalysisRefresh = P:Def("DamageMeters.CancelTargetAnalysisRefresh", DamageMeters.CancelTargetAnalysisRefresh)
 DamageMeters.ScheduleTargetAnalysisRefresh = P:Def("DamageMeters.ScheduleTargetAnalysisRefresh", DamageMeters.ScheduleTargetAnalysisRefresh)
-DamageMeters.CancelHistoryCaptureRetry = P:Def("DamageMeters.CancelHistoryCaptureRetry", DamageMeters.CancelHistoryCaptureRetry)
-DamageMeters.ScheduleHistoryCaptureRetry = P:Def("DamageMeters.ScheduleHistoryCaptureRetry", DamageMeters.ScheduleHistoryCaptureRetry)
+DamageMeters.CancelHistoryCaptureWork = P:Def("DamageMeters.CancelHistoryCaptureWork", DamageMeters.CancelHistoryCaptureWork)
+DamageMeters.ScheduleHistoryCaptureWork = P:Def("DamageMeters.ScheduleHistoryCaptureWork", DamageMeters.ScheduleHistoryCaptureWork)
 DamageMeters.ProcessHistoryCaptures = P:Def("DamageMeters.ProcessHistoryCaptures", DamageMeters.ProcessHistoryCaptures)
 DamageMeters.CancelEncounterEndRefresh = P:Def("DamageMeters.CancelEncounterEndRefresh", DamageMeters.CancelEncounterEndRefresh)
 DamageMeters.ScheduleEncounterEndRefresh = P:Def("DamageMeters.ScheduleEncounterEndRefresh", DamageMeters.ScheduleEncounterEndRefresh)
