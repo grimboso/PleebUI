@@ -204,12 +204,20 @@ function Addon:ApplyCombatReadabilityPreset()
   if PRD and PRD.db and PRD.db.profile then
     local db = PRD.db.profile
 
-    ApplyCombatReadabilityPRDText(db.appearance and db.appearance.text, 16)
-    ApplyCombatReadabilityPRDStyle(db.appearance and db.appearance.style)
     ApplyCombatReadabilityPRDText(db.health and db.health.text, 16)
     ApplyCombatReadabilityPRDStyle(db.health and db.health.style)
     ApplyCombatReadabilityPRDText(db.primary and db.primary.text, 16)
     ApplyCombatReadabilityPRDStyle(db.primary and db.primary.style)
+
+    local _, classToken = UnitClass("player")
+    local resources = ns.PRDSecondary:GetResourceOptionsForClass(classToken) or {}
+    for i = 1, #resources do
+      local settings = ns.PRDSecondary:GetResourceSettings(db, resources[i].key)
+      if settings then
+        ApplyCombatReadabilityPRDText(settings.text, 16)
+        ApplyCombatReadabilityPRDStyle(settings.style)
+      end
+    end
 
     local text = db.text
     if type(text) == "table" then
@@ -360,35 +368,33 @@ LayoutProfileChoiceControls = function(host)
   host.ProfileWidget:SetWidth(width)
   host.ProfileWidget:SetHeight(64)
   host.ProfileWidget.frame:ClearAllPoints()
-  host.ProfileWidget.frame:SetPoint("TOP", host.ContinueTitle, "BOTTOM", 0, -54)
+  host.ProfileWidget.frame:SetPoint("TOP", host.CurrentProfile, "BOTTOM", 0, -28)
   host.ProfileWidget.frame:Show()
-
-  host.EnableCooldownManager:ClearAllPoints()
-  host.EnableCooldownManager:SetSize(width, 32)
-  host.EnableCooldownManager:SetPoint("TOP", host.ProfileWidget.frame, "BOTTOM", 0, -10)
 end
 
 RefreshProfileChoiceControls = function(host)
   local values, order = Addon:GetInstallerExistingProfiles()
   local hasProfiles = #order > 0
-  local cooldownManagerEnabled = C_CVar.GetCVar(COOLDOWN_MANAGER_CVAR) == "1"
-  host.CurrentProfile:SetText("New profile: " .. tostring(Addon.db:GetCurrentProfile()))
+  host.CurrentProfile:SetText("Current profile: " .. tostring(Addon.db:GetCurrentProfile()))
   host.ProfileWidget:SetList(values, order)
   host.ProfileWidget:SetValue(nil)
   host.ProfileWidget:SetDisabled(not hasProfiles)
-  host.ProfileWidget:SetLabel(hasProfiles and "Use an existing profile" or "No existing profiles")
+  host.ProfileWidget:SetLabel(hasProfiles and "Replace with an existing profile" or "No other profiles available")
   host.ProfileWidget.frame:Show()
-
-  host.EnableCooldownManager:SetText(cooldownManagerEnabled and "Disable Cooldown Manager" or "Enable Cooldown Manager")
-  host.EnableCooldownManager:SetEnabled(true)
 
   LayoutProfileChoiceControls(host)
 end
 
-local function ToggleCooldownManager(host)
+local function RefreshCooldownManagerButton(button)
+  local enabled = C_CVar.GetCVar(COOLDOWN_MANAGER_CVAR) == "1"
+  button:SetText(enabled and "Disable Cooldown Manager" or "Enable Cooldown Manager")
+  button:SetEnabled(true)
+end
+
+local function ToggleCooldownManager(button)
   local enabled = C_CVar.GetCVar(COOLDOWN_MANAGER_CVAR) == "1"
   C_CVar.SetCVar(COOLDOWN_MANAGER_CVAR, enabled and "0" or "1")
-  RefreshProfileChoiceControls(host)
+  RefreshCooldownManagerButton(button)
 
   if enabled then
     SetStatus("Cooldown Manager disabled. It will unload after the next UI reload.")
@@ -399,7 +405,7 @@ end
 
 local function BuildProfileChoiceControls(frame, colors)
   local host = CreateFrame("Frame", nil, frame, "BackdropTemplate")
-  host:SetHeight(300)
+  host:SetHeight(230)
 
   Theme.SetSquareBackdrop(host, {
     bg = colors.background,
@@ -411,7 +417,7 @@ local function BuildProfileChoiceControls(frame, colors)
   continueTitle:SetPoint("TOPRIGHT", host, "TOPRIGHT", -24, -24)
   continueTitle:SetJustifyH("CENTER")
   ApplyWizardFont(continueTitle, "title", 28)
-  continueTitle:SetText("Create a new profile")
+  continueTitle:SetText("Use this character profile")
   host.ContinueTitle = continueTitle
 
   local currentProfile = host:CreateFontString(nil, "OVERLAY")
@@ -422,7 +428,7 @@ local function BuildProfileChoiceControls(frame, colors)
   host.CurrentProfile = currentProfile
 
   local profileWidget = AceGUI:Create("Dropdown")
-  profileWidget:SetLabel("Use an existing profile")
+  profileWidget:SetLabel("Replace with an existing profile")
   profileWidget:SetCallback("OnValueChanged", function(_, _, value)
     ActivateExistingProfileAndExit(value)
   end)
@@ -430,20 +436,13 @@ local function BuildProfileChoiceControls(frame, colors)
   ns.AceHooks.TakeOwnership(profileWidget)
   host.ProfileWidget = profileWidget
 
-  local enableCooldownManager = CreateFrame("Button", nil, host, "UIPanelButtonTemplate")
-  enableCooldownManager:SetScript("OnClick", function()
-    ToggleCooldownManager(host)
-  end)
-  SkinWizardButton(enableCooldownManager)
-  host.EnableCooldownManager = enableCooldownManager
-
   local explanation = host:CreateFontString(nil, "OVERLAY")
   explanation:SetPoint("BOTTOMLEFT", host, "BOTTOMLEFT", 24, 20)
   explanation:SetPoint("BOTTOMRIGHT", host, "BOTTOMRIGHT", -24, 20)
   explanation:SetJustifyH("CENTER")
   explanation:SetWordWrap(true)
   ApplyWizardFont(explanation, "body", 12)
-  explanation:SetText("Choose whether Blizzard's Cooldown Manager is enabled for this character, or load an existing PleebUI profile.")
+  explanation:SetText("PleebUI has prepared a profile for this character. Continue with it, or choose another profile above to replace it.")
   host.Explanation = explanation
 
   host:SetScript("OnSizeChanged", LayoutProfileChoiceControls)
@@ -479,13 +478,13 @@ local INSTALL_FLOW = {
   pages = {
     {
       title = "Choose a profile",
-      body = "Choose Blizzard displays for this character, or use an existing PleebUI profile.",
-      note = "Your selection only affects this character.",
+      body = "PleebUI has already prepared a profile for this character. Continue with it, or replace it with another existing profile.",
+      note = "Choosing another profile reloads the UI and only changes this character's active profile.",
       profileChoice = true,
     },
     {
       title = "Text, colors, and UI scale",
-      body = "Choose a font, text style, color preset, and UI scale.",
+      body = "Choose a font, text style, color preset, and UI scale. The combat readability preset increases text, aura, border, and tracker readability across PleebUI.",
       note = "These settings are shared across PleebUI.",
       accessibility = true,
     },
@@ -497,20 +496,20 @@ local INSTALL_FLOW = {
     },
     {
       title = "Personal Resource Display",
-      body = "Choose which bars are shown and how they are stacked.\n\n• Use the arrows beside each preview bar to change its top-to-bottom order.\n• Class resources and tracked effects can be enabled separately for your current specialization.\n• Shared width, texture, and border apply to bars that remain in the main stack.",
+      body = "Choose which bars are shown and how they are stacked.\n\n• Use the arrows beside each preview bar to change its top-to-bottom order.\n• Class resources and tracked effects are grouped separately for your current specialization.\n• Main stack width, texture, and border apply only to bars that are not detached.",
       note = "Use Personal Resource Display settings to detach bars or change heights, text, colors, and class-specific options.",
       prd = true,
     },
     {
       title = "Everyday shortcuts",
-      body = "Choose the shortcuts and warnings you want to use.",
-      note = "More options are under Quality of Life.",
+      body = "Choose automation, interface shortcuts, and warnings you want to use.",
+      note = "Allowed invite sources and more detailed behavior are under Quality of Life.",
       quality = true,
     },
     {
-      title = "Cooldown Manager and custom trackers",
-      body = "Use /cd to choose spells for Blizzard's Cooldown Manager. PleebUI can also track your potions, Healthstones, combat resurrection items, and equipped on-use trinkets. Create separate cooldown, charge, duration, or stack buttons and bars under PleebUI > Cooldown Manager > Custom Trackers. You can create your first custom tracker now or return to it later from the Custom Trackers page.",
-      note = "Enable the Consumable Tracker below. The preview shows each tracker type; the guided tracker setup opens the complete settings page when it finishes.",
+      title = "Cooldowns and trackers",
+      body = "Choose whether Blizzard's Cooldown Manager is enabled, turn on PleebUI's Consumable Tracker, and preview the custom tracker types. Use /cd to choose Blizzard Cooldown Manager spells.",
+      note = "The Consumable Tracker covers potions, Healthstones, combat resurrection items, and equipped on-use trinkets. Custom trackers can be created here or later under Cooldown Manager > Custom Trackers.",
       preview = "customBars",
       actions = {
         {
@@ -802,7 +801,7 @@ local function BuildAccessibilityControls(frame, colors)
       end,
     },
     {
-      text = "Restore",
+      text = "Restore previous scale",
       func = RestoreOpeningScale,
     },
   }
@@ -825,7 +824,7 @@ local function BuildAccessibilityControls(frame, colors)
   host.PresetLabel = presetLabel
 
   local readabilityButton = CreateFrame("Button", nil, host, "UIPanelButtonTemplate")
-  readabilityButton:SetText("Combat readability")
+  readabilityButton:SetText("Improve combat readability")
   readabilityButton:SetScript("OnClick", function()
     Addon:ApplyCombatReadabilityPreset()
   end)
@@ -903,13 +902,15 @@ RefreshWizardTheme = function()
   frame.ResizeTexture:SetVertexColor(accentColor[1], accentColor[2], accentColor[3], 0.35)
 
   Theme.WidgetSkins.Dropdown(frame.ProfileChoiceHost.ProfileWidget)
-  SkinWizardButton(frame.ProfileChoiceHost.EnableCooldownManager)
   Theme.WidgetSkins.Dropdown(frame.AccessibilityHost.FontWidget)
   Theme.ApplyAce3Skin(frame.AccessibilityHost.SizeWidget)
   Theme.WidgetSkins.Dropdown(frame.AccessibilityHost.OutlineWidget)
 
   if frame.PreviewHost.ConsumableTrackerWidget then
     Theme.ApplyAce3Skin(frame.PreviewHost.ConsumableTrackerWidget)
+  end
+  if frame.PreviewHost.CooldownManagerButton then
+    SkinWizardButton(frame.PreviewHost.CooldownManagerButton)
   end
 
   for i = 1, #frame.AccessibilityHost.ScaleButtons do
@@ -1173,7 +1174,7 @@ end
 
 local function BuildCustomBarsPreview(frame, colors)
   local host = CreateFrame("Frame", nil, frame, "BackdropTemplate")
-  host:SetHeight(190)
+  host:SetHeight(282)
   Theme.SetSquareBackdrop(host, {
     bg = colors.background,
     border = colors.border,
@@ -1183,13 +1184,50 @@ local function BuildCustomBarsPreview(frame, colors)
   local baseBackground = { 0.12, 0.12, 0.12, 0.95 }
   local baseBorder = { 0.20, 0.20, 0.24, 1.00 }
 
-  local chargeRow = CreatePreviewRow(host, "Charge Cooldown Bar", -8, 38)
+  local cooldownManagerLabel = host:CreateFontString(nil, "OVERLAY")
+  cooldownManagerLabel:SetPoint("TOPLEFT", host, "TOPLEFT", 12, -14)
+  ApplyWizardFont(cooldownManagerLabel, "body", 12)
+  cooldownManagerLabel:SetText("Blizzard Cooldown Manager")
+
+  local cooldownManagerButton = CreateFrame("Button", nil, host, "UIPanelButtonTemplate")
+  cooldownManagerButton:SetSize(220, 28)
+  cooldownManagerButton:SetPoint("TOPRIGHT", host, "TOPRIGHT", -12, -8)
+  cooldownManagerButton:SetScript("OnClick", function(self)
+    ToggleCooldownManager(self)
+  end)
+  SkinWizardButton(cooldownManagerButton)
+  host.CooldownManagerButton = cooldownManagerButton
+
+  local consumableLabel = host:CreateFontString(nil, "OVERLAY")
+  consumableLabel:SetPoint("TOPLEFT", host, "TOPLEFT", 12, -52)
+  ApplyWizardFont(consumableLabel, "body", 12)
+  consumableLabel:SetText("PleebUI Consumable Tracker")
+
+  local consumableWidget = AceGUI:Create("CheckBox")
+  consumableWidget:SetLabel("Show consumables and equipped on-use trinkets")
+  consumableWidget:SetCallback("OnValueChanged", function(_, _, value)
+    local cooldowns = ns.Modules.CooldownManager
+    cooldowns:SetConsumableTrackerEnabled(value == true)
+    SetStatus(value and "Consumable Tracker enabled." or "Consumable Tracker disabled.")
+  end)
+  consumableWidget:SetWidth(420)
+  consumableWidget.frame:SetParent(host)
+  consumableWidget.frame:SetPoint("TOPLEFT", host, "TOPLEFT", 8, -64)
+  ns.AceHooks.TakeOwnership(consumableWidget)
+  host.ConsumableTrackerWidget = consumableWidget
+
+  local customTrackerLabel = host:CreateFontString(nil, "OVERLAY")
+  customTrackerLabel:SetPoint("TOPLEFT", host, "TOPLEFT", 12, -100)
+  ApplyWizardFont(customTrackerLabel, "body", 12)
+  customTrackerLabel:SetText("Custom tracker examples")
+
+  local chargeRow = CreatePreviewRow(host, "Charge cooldown", -114, 32)
   host.ChargeBars, host.ChargeTexts = CreateChargePreview(chargeRow, defaults.charge)
 
-  local stackRow = CreatePreviewRow(host, "Stack Duration Bar", -52, 40)
+  local stackRow = CreatePreviewRow(host, "Stack duration", -152, 34)
   host.StackSegments, host.StackText = CreateStackPreview(stackRow, defaults.stack)
 
-  local cooldownRow = CreatePreviewRow(host, "Regular Cooldown Bar", -100, 36)
+  local cooldownRow = CreatePreviewRow(host, "Cooldown", -194, 32)
   host.CooldownBar, host.CooldownText = CreatePreviewBar(
     cooldownRow,
     defaults.cooldown,
@@ -1199,7 +1237,7 @@ local function BuildCustomBarsPreview(frame, colors)
   )
   host.CooldownBar:SetMinMaxValues(0, 10)
 
-  local durationRow = CreatePreviewRow(host, "Regular Duration Bar", -144, 36)
+  local durationRow = CreatePreviewRow(host, "Duration", -232, 32)
   host.DurationBar, host.DurationText = CreatePreviewBar(
     durationRow,
     defaults.duration,
@@ -1209,21 +1247,11 @@ local function BuildCustomBarsPreview(frame, colors)
   )
   host.DurationBar:SetMinMaxValues(0, 8)
 
-  local consumableWidget = AceGUI:Create("CheckBox")
-  consumableWidget:SetLabel("Enable Consumable Tracker")
-  consumableWidget:SetCallback("OnValueChanged", function(_, _, value)
-    local cooldowns = ns.Modules.CooldownManager
-    cooldowns:SetConsumableTrackerEnabled(value == true)
-    SetStatus(value and "Consumable Tracker enabled." or "Consumable Tracker disabled.")
-  end)
-  consumableWidget:SetWidth(320)
-  consumableWidget.frame:SetParent(host)
-  consumableWidget.frame:SetPoint("TOPLEFT", host, "TOPLEFT", 12, -188)
-  consumableWidget.frame:Hide()
-  ns.AceHooks.TakeOwnership(consumableWidget)
-  host.ConsumableTrackerWidget = consumableWidget
-
   host:SetScript("OnShow", function(self)
+    RefreshCooldownManagerButton(self.CooldownManagerButton)
+    self.ConsumableTrackerWidget:SetValue(
+      ns.Modules.CooldownManager:GetConsumableTrackerEnabled()
+    )
     self.animationTime = 0
     self.updateElapsed = PREVIEW_UPDATE_INTERVAL
     UpdateCustomBarsPreview(self, 0)
@@ -1417,7 +1445,7 @@ local function LayoutPreviewAuraIcons(group, layout)
   end
 end
 
-local function RefreshPreviewAuraGroup(preview, group, display, auraDB, spellIDs, shown)
+local function RefreshPreviewAuraGroup(preview, group, display, auraDB, spellIDs, shown, visibility)
   if not display then
     group:Hide()
     return
@@ -1425,6 +1453,7 @@ local function RefreshPreviewAuraGroup(preview, group, display, auraDB, spellIDs
 
   local layout = ns.UFAuraContainers.BuildDisplayLayout(preview, display)
   local appearance = ns.UFAuraFilters.BuildEffectiveAppearance(auraDB, display)
+  local visibleIconCount = visibility == "PLAYER" and math_min(2, #group.Icons) or #group.Icons
 
   group:ClearAllPoints()
   group:SetPoint(
@@ -1446,7 +1475,7 @@ local function RefreshPreviewAuraGroup(preview, group, display, auraDB, spellIDs
     button.Duration:SetText(i == 1 and "8" or "")
     button.Count:SetText(i == 3 and "2" or "")
     SetPreviewBorder(button, borderColor, borderSize)
-    button:Show()
+    button:SetShown(i <= visibleIconCount)
   end
 
   group:SetShown(shown)
@@ -1524,6 +1553,8 @@ local function RefreshUnitFramePreview(host)
   local aurasEnabled = auraDB.enabled ~= false
   local showDebuffs = UF:GetQuickSetupValue("showDebuffs")
   local showBuffs = UF:GetQuickSetupValue("showBuffs")
+  local debuffVisibility = UF:GetQuickSetupValue("debuffVisibility")
+  local buffVisibility = UF:GetQuickSetupValue("buffVisibility")
 
   RefreshPreviewAuraGroup(
     preview,
@@ -1531,7 +1562,8 @@ local function RefreshUnitFramePreview(host)
     debuffDisplay,
     auraDB,
     PREVIEW_DEBUFF_SPELL_IDS,
-    aurasEnabled and showDebuffs
+    aurasEnabled and showDebuffs,
+    debuffVisibility
   )
 
   RefreshPreviewAuraGroup(
@@ -1540,7 +1572,8 @@ local function RefreshUnitFramePreview(host)
     buffDisplay,
     auraDB,
     PREVIEW_BUFF_SPELL_IDS,
-    aurasEnabled and showBuffs
+    aurasEnabled and showBuffs,
+    buffVisibility
   )
 end
 
@@ -1675,7 +1708,7 @@ local function BuildUnitFrameControls(frame, colors)
     SetStatus(value and "Player health uses the class color." or "Player health uses the configured health color.")
   end)
 
-  host.PortraitWidget = CreateInstallerWidget(host, "CheckBox", "Show portraits", function(_, _, value)
+  host.PortraitWidget = CreateInstallerWidget(host, "CheckBox", "Show portraits on supported frames", function(_, _, value)
     if BlockUnitFrameInstallerChange() then return end
     local UF = ns.UnitFrames
     UF:SetQuickSetupValue("portraitsEnabled", value)
@@ -1706,7 +1739,7 @@ local function BuildUnitFrameControls(frame, colors)
   auraSectionLabel:SetText("Player Buffs and Debuffs")
   host.AuraSectionLabel = auraSectionLabel
 
-  host.AurasEnabledWidget = CreateInstallerWidget(host, "CheckBox", "Enable all unit frame auras", function(_, _, value)
+  host.AurasEnabledWidget = CreateInstallerWidget(host, "CheckBox", "Show unit frame auras", function(_, _, value)
     if BlockUnitFrameInstallerChange() then return end
     local UF = ns.UnitFrames
     UF:SetQuickSetupValue("aurasEnabled", value)
@@ -2187,7 +2220,8 @@ end
 
 local function RefreshPRDResourceWidgets(host, info)
   local PRD = ns.Modules.PRD
-  local activeWidgets = {}
+  local classWidgets = {}
+  local trackedWidgets = {}
 
   for _, widget in pairs(host.ResourceWidgets) do
     widget.frame:Hide()
@@ -2212,35 +2246,58 @@ local function RefreshPRDResourceWidgets(host, info)
     widget:SetValue(PRD:IsSecondaryResourceEnabled(resourceKey))
     widget:SetDisabled(PRD:GetQuickSetupValue("showSecondary") ~= true)
     widget.frame:Show()
-    activeWidgets[#activeWidgets + 1] = widget
+
+    local target = resource.category == "TRACKED_EFFECT" and trackedWidgets or classWidgets
+    target[#target + 1] = widget
   end
 
-  return activeWidgets
+  return classWidgets, trackedWidgets
+end
+
+local function LayoutPRDSection(host, label, widgets, topOffset)
+  if #widgets == 0 then
+    label:Hide()
+    return topOffset
+  end
+
+  label:ClearAllPoints()
+  label:SetPoint("TOPLEFT", host, "TOPLEFT", 12, -topOffset)
+  label:SetPoint("RIGHT", host, "RIGHT", -12, 0)
+  label:Show()
+
+  local widgetOffset = topOffset + 22
+  local rowCount = math_floor((#widgets + 3) / 4)
+  LayoutInstallerWidgetGrid(host, widgets, 4, widgetOffset, 66)
+
+  return widgetOffset + rowCount * 66 + 8
 end
 
 LayoutPRDControls = function(host)
   local previewHeight = RefreshPRDPreview(host)
   local topOffset = math_max(132, previewHeight + 28)
-  local rowCount = math_max(1, math_floor((#host.ControlWidgets + 3) / 4))
-  local requiredHeight = math_max(278, topOffset + rowCount * 66 + 12)
 
   host.PreviewArea:SetHeight(math_max(112, previewHeight + 8))
+  topOffset = LayoutPRDSection(host, host.DisplaySectionLabel, host.DisplayWidgets, topOffset)
+  topOffset = LayoutPRDSection(host, host.ClassResourceSectionLabel, host.ClassResourceWidgets, topOffset)
+  topOffset = LayoutPRDSection(host, host.TrackedEffectSectionLabel, host.TrackedEffectWidgets, topOffset)
+  topOffset = LayoutPRDSection(host, host.AppearanceSectionLabel, host.AppearanceWidgets, topOffset)
+
+  local requiredHeight = math_max(278, topOffset + 4)
   if host:GetHeight() ~= requiredHeight then
     host:SetHeight(requiredHeight)
   end
-  LayoutInstallerWidgetGrid(host, host.ControlWidgets, 4, topOffset, 66)
 end
 
 RefreshPRDControls = function(host)
   local PRD = ns.Modules.PRD
   local info = GetPRDResourceInfo()
-  local resourceWidgets = RefreshPRDResourceWidgets(host, info)
+  local classWidgets, trackedWidgets = RefreshPRDResourceWidgets(host, info)
   local hasSecondary = #info.resources > 0 or #info.resourceOptions > 0
 
   host.EnabledWidget:SetValue(PRD:IsModuleEnabled())
   host.HealthWidget:SetValue(PRD:GetQuickSetupValue("showHealth"))
   host.PrimaryWidget:SetValue(PRD:GetQuickSetupValue("showPrimary"))
-  host.SecondaryWidget:SetLabel("Enable secondary displays")
+  host.SecondaryWidget:SetLabel("Enable class resources and tracked effects")
   host.SecondaryWidget:SetValue(PRD:GetQuickSetupValue("showSecondary"))
   host.SecondaryWidget:SetDisabled(not hasSecondary)
   host.TextureWidget:SetList(OptionsUtil.BuildStatusbarValues(false))
@@ -2248,23 +2305,34 @@ RefreshPRDControls = function(host)
   host.WidthWidget:SetValue(PRD:GetQuickSetupValue("width"))
   host.BorderWidget:SetValue(PRD:GetQuickSetupValue("borderSize"))
 
-  host.ControlWidgets = {
+  host.DisplayWidgets = {
     host.EnabledWidget,
     host.HealthWidget,
     host.PrimaryWidget,
     host.SecondaryWidget,
   }
+  host.ClassResourceWidgets = classWidgets
+  host.TrackedEffectWidgets = trackedWidgets
+  host.AppearanceWidgets = {
+    host.TextureWidget,
+    host.WidthWidget,
+    host.BorderWidget,
+  }
 
-  for i = 1, #resourceWidgets do
-    host.ControlWidgets[#host.ControlWidgets + 1] = resourceWidgets[i]
-  end
+  host.ControlWidgets = {}
+  local groups = {
+    host.DisplayWidgets,
+    host.ClassResourceWidgets,
+    host.TrackedEffectWidgets,
+    host.AppearanceWidgets,
+  }
 
-  host.ControlWidgets[#host.ControlWidgets + 1] = host.TextureWidget
-  host.ControlWidgets[#host.ControlWidgets + 1] = host.WidthWidget
-  host.ControlWidgets[#host.ControlWidgets + 1] = host.BorderWidget
-
-  for i = 1, #host.ControlWidgets do
-    host.ControlWidgets[i].frame:Show()
+  for groupIndex = 1, #groups do
+    local widgets = groups[groupIndex]
+    for i = 1, #widgets do
+      host.ControlWidgets[#host.ControlWidgets + 1] = widgets[i]
+      widgets[i].frame:Show()
+    end
   end
 
   LayoutPRDControls(host)
@@ -2316,23 +2384,36 @@ local function BuildPRDControls(frame, colors)
     SetStatus(value and "PRD primary resource shown." or "PRD primary resource hidden.")
   end)
 
-  host.SecondaryWidget = CreateInstallerWidget(host, "CheckBox", "Enable secondary displays", function(_, _, value)
+  host.SecondaryWidget = CreateInstallerWidget(host, "CheckBox", "Enable class resources and tracked effects", function(_, _, value)
     local PRD = ns.Modules.PRD
     PRD:SetQuickSetupValue("showSecondary", value)
     RefreshPRDControls(host)
-    SetStatus(value and "PRD secondary displays enabled." or "PRD secondary displays disabled.")
+    SetStatus(value and "PRD class resources and tracked effects enabled." or "PRD class resources and tracked effects disabled.")
   end)
 
   host.ResourceWidgets = {}
 
-  host.TextureWidget = CreateInstallerWidget(host, "LSM30_Statusbar", "Shared PRD texture", function(_, _, value)
+  local function CreateSectionLabel(text)
+    local label = host:CreateFontString(nil, "OVERLAY")
+    label:SetJustifyH("LEFT")
+    ApplyWizardFont(label, "body", 12)
+    label:SetText(text)
+    return label
+  end
+
+  host.DisplaySectionLabel = CreateSectionLabel("Display")
+  host.ClassResourceSectionLabel = CreateSectionLabel("Class resources")
+  host.TrackedEffectSectionLabel = CreateSectionLabel("Tracked effects")
+  host.AppearanceSectionLabel = CreateSectionLabel("Main stack appearance")
+
+  host.TextureWidget = CreateInstallerWidget(host, "LSM30_Statusbar", "Main stack texture", function(_, _, value)
     local PRD = ns.Modules.PRD
     PRD:SetQuickSetupValue("texture", value)
     RefreshPRDControls(host)
     SetStatus("PRD texture applied: " .. tostring(value))
   end)
 
-  host.WidthWidget = CreateInstallerWidget(host, "PUI_Slider", "Shared PRD width", function(_, _, value)
+  host.WidthWidget = CreateInstallerWidget(host, "PUI_Slider", "Main stack width", function(_, _, value)
     local PRD = ns.Modules.PRD
     PRD:SetQuickSetupValue("width", value)
     RefreshPRDControls(host)
@@ -2340,7 +2421,7 @@ local function BuildPRDControls(frame, colors)
   end)
   host.WidthWidget:SetSliderValues(120, 600, 1)
 
-  host.BorderWidget = CreateInstallerWidget(host, "PUI_Slider", "Shared border size", function(_, _, value)
+  host.BorderWidget = CreateInstallerWidget(host, "PUI_Slider", "Main stack border size", function(_, _, value)
     local PRD = ns.Modules.PRD
     PRD:SetQuickSetupValue("borderSize", value)
     RefreshPRDControls(host)
@@ -2363,8 +2444,27 @@ local function BuildPRDControls(frame, colors)
   return host
 end
 
+local function LayoutQualitySection(host, label, widgets, topOffset)
+  label:ClearAllPoints()
+  label:SetPoint("TOPLEFT", host, "TOPLEFT", 12, -topOffset)
+  label:SetPoint("RIGHT", host, "RIGHT", -12, 0)
+
+  local widgetOffset = topOffset + 22
+  local rowCount = math_floor((#widgets + 2) / 3)
+  LayoutInstallerWidgetGrid(host, widgets, 3, widgetOffset, 68)
+
+  return widgetOffset + rowCount * 68 + 8
+end
+
 LayoutQualityControls = function(host)
-  LayoutInstallerWidgetGrid(host, host.ControlWidgets, 3, 18, 68)
+  local topOffset = 16
+  topOffset = LayoutQualitySection(host, host.AutomationSectionLabel, host.AutomationWidgets, topOffset)
+  topOffset = LayoutQualitySection(host, host.InterfaceSectionLabel, host.InterfaceWidgets, topOffset)
+  topOffset = LayoutQualitySection(host, host.WarningSectionLabel, host.WarningWidgets, topOffset)
+  local requiredHeight = topOffset + 4
+  if host:GetHeight() ~= requiredHeight then
+    host:SetHeight(requiredHeight)
+  end
 end
 
 RefreshQualityControls = function(host)
@@ -2400,7 +2500,7 @@ end
 
 local function BuildQualityControls(frame, colors)
   local host = CreateFrame("Frame", nil, frame, "BackdropTemplate")
-  host:SetHeight(224)
+  host:SetHeight(356)
 
   Theme.SetSquareBackdrop(host, {
     bg = colors.background,
@@ -2424,7 +2524,7 @@ local function BuildQualityControls(frame, colors)
   )
 
   host.FasterMovieSkipWidget = AddToggle(
-    "Faster movie skip",
+    "Skip movies faster",
     "fasterMovieSkip",
     "Faster movie skip enabled.",
     "Faster movie skip disabled."
@@ -2452,9 +2552,9 @@ local function BuildQualityControls(frame, colors)
   )
 
   host.AutoInvitesWidget = AddToggle(
-    "Auto accept trusted invites",
+    "Auto accept allowed invites",
     "autoAcceptInvites",
-    "Trusted invites will be accepted automatically.",
+    "Invites from allowed sources will be accepted automatically.",
     "Automatic invite acceptance disabled."
   )
 
@@ -2479,13 +2579,40 @@ local function BuildQualityControls(frame, colors)
     "Pet warnings disabled."
   )
 
-  host.ControlWidgets = {
+  local function CreateSectionLabel(text)
+    local label = host:CreateFontString(nil, "OVERLAY")
+    label:SetJustifyH("LEFT")
+    ApplyWizardFont(label, "body", 12)
+    label:SetText(text)
+    return label
+  end
+
+  host.AutomationSectionLabel = CreateSectionLabel("Automation")
+  host.InterfaceSectionLabel = CreateSectionLabel("Interface")
+  host.WarningSectionLabel = CreateSectionLabel("Warnings")
+
+  host.AutomationWidgets = {
     host.FasterLootingWidget,
-    host.FasterMovieSkipWidget,
     host.AutoRepairWidget,
     host.AutoSellJunkWidget,
     host.AutoKeystoneWidget,
     host.AutoInvitesWidget,
+  }
+  host.InterfaceWidgets = {
+    host.FasterMovieSkipWidget,
+    host.MaxCameraZoomWidget,
+    host.HideTalkingHeadWidget,
+  }
+  host.WarningWidgets = {
+    host.PetWarningsWidget,
+  }
+  host.ControlWidgets = {
+    host.FasterLootingWidget,
+    host.AutoRepairWidget,
+    host.AutoSellJunkWidget,
+    host.AutoKeystoneWidget,
+    host.AutoInvitesWidget,
+    host.FasterMovieSkipWidget,
     host.MaxCameraZoomWidget,
     host.HideTalkingHeadWidget,
     host.PetWarningsWidget,
@@ -2562,7 +2689,6 @@ RefreshWizardPage = function()
   local showPRD = page.prd == true
   local showQuality = page.quality == true
   local showPreview = page.preview == "customBars"
-  local showConsumableInstallerToggle = showPreview
 
   frame.ProfileChoiceHost:SetShown(showProfileChoice)
   frame.AccessibilityHost:SetShown(showAccessibility)
@@ -2571,14 +2697,11 @@ RefreshWizardPage = function()
   frame.QualityHost:SetShown(showQuality)
   frame.PreviewHost:SetShown(showPreview)
 
-  if frame.PreviewHost.ConsumableTrackerWidget then
-    frame.PreviewHost:SetHeight(showConsumableInstallerToggle and 232 or 190)
-    frame.PreviewHost.ConsumableTrackerWidget.frame:SetShown(showConsumableInstallerToggle)
-    if showConsumableInstallerToggle then
-      frame.PreviewHost.ConsumableTrackerWidget:SetValue(
-        ns.Modules.CooldownManager:GetConsumableTrackerEnabled()
-      )
-    end
+  if showPreview then
+    RefreshCooldownManagerButton(frame.PreviewHost.CooldownManagerButton)
+    frame.PreviewHost.ConsumableTrackerWidget:SetValue(
+      ns.Modules.CooldownManager:GetConsumableTrackerEnabled()
+    )
   end
 
   local contentHosts = {
