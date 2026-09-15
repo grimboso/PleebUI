@@ -551,7 +551,8 @@ local function RunScheduledEncounterEndRefresh()
 
   DamageMeters.playerInCombat = false
   DamageMeters.waitingForGroupCombatEnd = false
-  History:OnCombatEnded()
+  local finishedSessionID = History:OnCombatEnded()
+  DamageMeters:RetainFinishedCurrentSession(finishedSessionID)
   DamageMeters:CancelCombatRefresh()
   DamageMeters:RefreshWindows()
   DamageMeters:ScheduleHistoryCaptureWork(0.3)
@@ -739,7 +740,8 @@ function DamageMeters:PLAYER_REGEN_ENABLED()
 
   self.playerInCombat = false
   self.waitingForGroupCombatEnd = false
-  History:OnCombatEnded()
+  local finishedSessionID = History:OnCombatEnded()
+  self:RetainFinishedCurrentSession(finishedSessionID)
   self:CancelCombatRefresh()
   self:RefreshWindows()
   self:ScheduleHistoryCaptureWork(0.3)
@@ -763,7 +765,8 @@ function DamageMeters:UNIT_FLAGS(_, unit)
     end
 
     self.waitingForGroupCombatEnd = false
-    History:OnCombatEnded()
+    local finishedSessionID = History:OnCombatEnded()
+    self:RetainFinishedCurrentSession(finishedSessionID)
     self:CancelCombatRefresh()
     self:RefreshWindows()
     self:ScheduleHistoryCaptureWork(0.3)
