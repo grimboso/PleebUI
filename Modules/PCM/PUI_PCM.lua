@@ -477,8 +477,31 @@ local _PCM_HIDE_WHEN_INACTIVE_VIEWER_KEY_SET = {
   BuffBarCooldownViewer = true,
 }
 
+local _PCM_EDIT_MODE_RESTRICTION_TYPES = {
+  Enum.AddOnRestrictionType.Combat,
+  Enum.AddOnRestrictionType.Encounter,
+  Enum.AddOnRestrictionType.ChallengeMode,
+  Enum.AddOnRestrictionType.PvPMatch,
+  Enum.AddOnRestrictionType.Map,
+  Enum.AddOnRestrictionType.Chat,
+}
+
 local PCMEditModeChangesPending = false
-local PCMProfileEditModeSyncPending = false
+
+local function _PCM_IsEditModeLayoutMutationBlocked()
+  if InCombatLockdown() then
+    return true
+  end
+
+  for index = 1, #_PCM_EDIT_MODE_RESTRICTION_TYPES do
+    local restrictionType = _PCM_EDIT_MODE_RESTRICTION_TYPES[index]
+    if C_RestrictedActions.GetAddOnRestrictionState(restrictionType) ~= Enum.AddOnRestrictionState.Inactive then
+      return true
+    end
+  end
+
+  return false
+end
 
 local function _PCM_EnsureEditModeLayout()
   if not LibEditModeOverride:IsReady() then
@@ -486,6 +509,9 @@ local function _PCM_EnsureEditModeLayout()
   end
 
   if not LibEditModeOverride:AreLayoutsLoaded() then
+    if _PCM_IsEditModeLayoutMutationBlocked() then
+      return false
+    end
     LibEditModeOverride:LoadLayouts()
   end
 
@@ -525,32 +551,29 @@ local function _PCM_EnsureEditableEditModeLayout()
   return true, true
 end
 
-local function _PCM_GetProfileEditModeCheckbox(viewerKey, field, allowedViewers)
+local function _PCM_GetViewerEditModeCheckbox(viewerKey, setting, allowedViewers)
   if not allowedViewers[viewerKey] then
     return false
   end
 
-  local cm = Cooldowns._GetModuleDB()
-  cm.editModeSettings = cm.editModeSettings or {}
-  cm.editModeSettings[field] = cm.editModeSettings[field] or {}
-  return cm.editModeSettings[field][viewerKey] ~= false
-end
-
-local function _PCM_SetProfileEditModeCheckbox(viewerKey, field, enabled, allowedViewers)
-  if not allowedViewers[viewerKey] then
+  local viewer = PCMRuntime:GetViewer(viewerKey)
+  if not viewer or (viewer.IsForbidden and viewer:IsForbidden()) then
     return false
   end
 
-  local cm = Cooldowns._GetModuleDB()
-  cm.editModeSettings = cm.editModeSettings or {}
-  cm.editModeSettings[field] = cm.editModeSettings[field] or {}
-  cm.editModeSettings[field][viewerKey] = enabled == true
-  PCMProfileEditModeSyncPending = true
-  return true
+  if not _PCM_EnsureEditModeLayout() then
+    return false
+  end
+
+  if not LibEditModeOverride:HasEditModeSettings(viewer) then
+    return false
+  end
+
+  return LibEditModeOverride:GetFrameSetting(viewer, setting) == 1
 end
 
-local function _PCM_ApplyViewerEditModeCheckbox(viewerKey, setting, enabled, allowedViewers)
-  if not allowedViewers[viewerKey] or InCombatLockdown() then
+local function _PCM_SetViewerEditModeCheckbox(viewerKey, setting, enabled, allowedViewers)
+  if not allowedViewers[viewerKey] or _PCM_IsEditModeLayoutMutationBlocked() then
     return false
   end
 
@@ -583,41 +606,7 @@ local function _PCM_ApplyViewerEditModeCheckbox(viewerKey, setting, enabled, all
   return true
 end
 
-local function _PCM_SyncProfileEditModeSettings()
-  if InCombatLockdown() then
-    PCMProfileEditModeSyncPending = true
-    return false
-  end
-
-  local synchronized = true
-
-  for viewerKey in pairs(_PCM_TOOLTIP_VIEWER_KEY_SET) do
-    synchronized = _PCM_ApplyViewerEditModeCheckbox(
-      viewerKey,
-      Enum.EditModeCooldownViewerSetting.ShowTooltips,
-      _PCM_GetProfileEditModeCheckbox(viewerKey, "showTooltips", _PCM_TOOLTIP_VIEWER_KEY_SET),
-      _PCM_TOOLTIP_VIEWER_KEY_SET
-    ) and synchronized
-  end
-
-  for viewerKey in pairs(_PCM_HIDE_WHEN_INACTIVE_VIEWER_KEY_SET) do
-    synchronized = _PCM_ApplyViewerEditModeCheckbox(
-      viewerKey,
-      Enum.EditModeCooldownViewerSetting.HideWhenInactive,
-      _PCM_GetProfileEditModeCheckbox(viewerKey, "hideWhenInactive", _PCM_HIDE_WHEN_INACTIVE_VIEWER_KEY_SET),
-      _PCM_HIDE_WHEN_INACTIVE_VIEWER_KEY_SET
-    ) and synchronized
-  end
-
-  PCMProfileEditModeSyncPending = not synchronized
-  return synchronized
-end
-
 function Cooldowns:FlushPendingEditModeChanges()
-  if PCMProfileEditModeSyncPending then
-    _PCM_SyncProfileEditModeSettings()
-  end
-
   if not PCMEditModeChangesPending then
     return false
   end
@@ -630,7 +619,7 @@ function Cooldowns:FlushPendingEditModeChanges()
     return false
   end
 
-  if InCombatLockdown() then
+  if _PCM_IsEditModeLayoutMutationBlocked() then
     return false
   end
 
@@ -641,42 +630,42 @@ function Cooldowns:FlushPendingEditModeChanges()
   return true
 end
 
+function Cooldowns:CanChangeViewerEditModeSettings()
+  return not _PCM_IsEditModeLayoutMutationBlocked()
+end
+
 function Cooldowns:GetViewerTooltipsEnabled(viewerKey)
-  return _PCM_GetProfileEditModeCheckbox(
+  return _PCM_GetViewerEditModeCheckbox(
     viewerKey,
-    "showTooltips",
+    Enum.EditModeCooldownViewerSetting.ShowTooltips,
     _PCM_TOOLTIP_VIEWER_KEY_SET
   )
 end
 
 function Cooldowns:SetViewerTooltipsEnabled(viewerKey, enabled)
-  local saved = _PCM_SetProfileEditModeCheckbox(
+  return _PCM_SetViewerEditModeCheckbox(
     viewerKey,
-    "showTooltips",
+    Enum.EditModeCooldownViewerSetting.ShowTooltips,
     enabled,
     _PCM_TOOLTIP_VIEWER_KEY_SET
   )
-  _PCM_SyncProfileEditModeSettings()
-  return saved
 end
 
 function Cooldowns:GetViewerHideWhenInactive(viewerKey)
-  return _PCM_GetProfileEditModeCheckbox(
+  return _PCM_GetViewerEditModeCheckbox(
     viewerKey,
-    "hideWhenInactive",
+    Enum.EditModeCooldownViewerSetting.HideWhenInactive,
     _PCM_HIDE_WHEN_INACTIVE_VIEWER_KEY_SET
   )
 end
 
 function Cooldowns:SetViewerHideWhenInactive(viewerKey, enabled)
-  local saved = _PCM_SetProfileEditModeCheckbox(
+  return _PCM_SetViewerEditModeCheckbox(
     viewerKey,
-    "hideWhenInactive",
+    Enum.EditModeCooldownViewerSetting.HideWhenInactive,
     enabled,
     _PCM_HIDE_WHEN_INACTIVE_VIEWER_KEY_SET
   )
-  _PCM_SyncProfileEditModeSettings()
-  return saved
 end
 
 
@@ -3241,8 +3230,6 @@ local function _ProtectViewerAnchors_Icons(frame, key)
 end
 
 function Cooldowns:_OnRegenEnabled()
-  self:FlushPendingEditModeChanges()
-
   if _PCM_IsTransitionPending() then
     _PCM_QueueTransitionFlush()
   end
@@ -3825,7 +3812,7 @@ function Cooldowns:_OnBlizzardEditModeChanged(enable)
   self.__puiPCM_BlizzardEditModeRetakePending = nil
   _RetakeBlizzardEditModeOwnership(self)
 
-  if LibEditModeOverride:IsReady() then
+  if LibEditModeOverride:IsReady() and not _PCM_IsEditModeLayoutMutationBlocked() then
     LibEditModeOverride:LoadLayouts()
   end
 
@@ -4896,9 +4883,6 @@ local function _PCM_RunInitialViewerPass(owner)
     end
   end
 
-  _PCM_SyncProfileEditModeSettings()
-  owner:FlushPendingEditModeChanges()
-
   PCMRuntime:QueueAllViewerScans("initial-viewer-pass")
   PCMRuntime:MarkAllViewersDirty(PCM_REFRESH_FULL, "initial-viewer-pass")
 end
@@ -5086,7 +5070,7 @@ local function _PCM_RuntimeLifecycleEvent(event, ...)
     return
   end
 
-  local arg1 = ...
+  local arg1, arg2 = ...
 
   if event == "PLAYER_ENTERING_WORLD" then
     Cooldowns:_OnPlayerEnteringWorld()
@@ -5094,6 +5078,10 @@ local function _PCM_RuntimeLifecycleEvent(event, ...)
     Cooldowns:_OnLoadingScreenDisabled()
   elseif event == "PLAYER_REGEN_ENABLED" then
     Cooldowns:_OnRegenEnabled()
+  elseif event == "ADDON_RESTRICTION_STATE_CHANGED" then
+    if arg2 == Enum.AddOnRestrictionState.Inactive then
+      Cooldowns:FlushPendingEditModeChanges()
+    end
   elseif event == "PLAYER_SPECIALIZATION_CHANGED" then
     Cooldowns:_OnPlayerSpecializationChanged(event, arg1)
   elseif event == "ACTIVE_PLAYER_SPECIALIZATION_CHANGED"
@@ -5247,9 +5235,6 @@ function Cooldowns:ApplySettings(flags)
   end
 
   if flags.profile == true then
-    PCMProfileEditModeSyncPending = true
-    _PCM_SyncProfileEditModeSettings()
-    self:FlushPendingEditModeChanges()
     self:ApplyKeybindTextRulesNow(nil)
   end
 end
@@ -5399,13 +5384,13 @@ end
   Cooldowns.IterateViewers = P:Def('Cooldowns:IterateViewers', Cooldowns.IterateViewers)
   Cooldowns.GetViewerInfo = P:Def('Cooldowns:GetViewerInfo', Cooldowns.GetViewerInfo)
   Cooldowns.GetViewerFrame = P:Def('Cooldowns:GetViewerFrame', Cooldowns.GetViewerFrame)
+  _PCM_IsEditModeLayoutMutationBlocked = P:Def('_PCM_IsEditModeLayoutMutationBlocked', _PCM_IsEditModeLayoutMutationBlocked)
   _PCM_EnsureEditModeLayout = P:Def('_PCM_EnsureEditModeLayout', _PCM_EnsureEditModeLayout)
   _PCM_EnsureEditableEditModeLayout = P:Def('_PCM_EnsureEditableEditModeLayout', _PCM_EnsureEditableEditModeLayout)
-  _PCM_GetProfileEditModeCheckbox = P:Def('_PCM_GetProfileEditModeCheckbox', _PCM_GetProfileEditModeCheckbox)
-  _PCM_SetProfileEditModeCheckbox = P:Def('_PCM_SetProfileEditModeCheckbox', _PCM_SetProfileEditModeCheckbox)
-  _PCM_ApplyViewerEditModeCheckbox = P:Def('_PCM_ApplyViewerEditModeCheckbox', _PCM_ApplyViewerEditModeCheckbox)
-  _PCM_SyncProfileEditModeSettings = P:Def('_PCM_SyncProfileEditModeSettings', _PCM_SyncProfileEditModeSettings)
+  _PCM_GetViewerEditModeCheckbox = P:Def('_PCM_GetViewerEditModeCheckbox', _PCM_GetViewerEditModeCheckbox)
+  _PCM_SetViewerEditModeCheckbox = P:Def('_PCM_SetViewerEditModeCheckbox', _PCM_SetViewerEditModeCheckbox)
   Cooldowns.FlushPendingEditModeChanges = P:Def('Cooldowns:FlushPendingEditModeChanges', Cooldowns.FlushPendingEditModeChanges)
+  Cooldowns.CanChangeViewerEditModeSettings = P:Def('Cooldowns:CanChangeViewerEditModeSettings', Cooldowns.CanChangeViewerEditModeSettings)
   Cooldowns.GetViewerTooltipsEnabled = P:Def('Cooldowns:GetViewerTooltipsEnabled', Cooldowns.GetViewerTooltipsEnabled)
   Cooldowns.SetViewerTooltipsEnabled = P:Def('Cooldowns:SetViewerTooltipsEnabled', Cooldowns.SetViewerTooltipsEnabled)
   Cooldowns.GetViewerHideWhenInactive = P:Def('Cooldowns:GetViewerHideWhenInactive', Cooldowns.GetViewerHideWhenInactive)
