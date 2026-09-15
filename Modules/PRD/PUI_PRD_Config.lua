@@ -2622,6 +2622,33 @@ do
     self:InvalidateRuntimeConfig()
   end
 
+  local function PRD_GetMainStackAppearanceTargets(s)
+    local targets = {}
+    local db = s.db
+
+    if db.detachHealth ~= true then
+      targets[#targets + 1] = s.healthCfg
+    end
+
+    if s.primaryCfg.detached ~= true then
+      targets[#targets + 1] = s.primaryCfg
+    end
+
+    local resourceOptions = ns.PRDSecondary:GetResourceOptionsForClass(PLAYER_CLASS) or {}
+    for i = 1, #resourceOptions do
+      local settings = ns.PRDSecondary:GetResourceSettings(db, resourceOptions[i].key)
+      if settings and settings.detached ~= true then
+        targets[#targets + 1] = settings
+      end
+    end
+
+    if #targets == 0 then
+      targets[1] = s.healthCfg
+    end
+
+    return targets
+  end
+
   function PRD:GetQuickSetupValue(key)
     local s = GetPRDState()
     if not s then
@@ -2637,11 +2664,13 @@ do
     elseif key == "showSecondary" then
       return s.secondaryCfg.enabled ~= false
     elseif key == "texture" then
-      return s.appearance.texture or "Pleebar"
+      local targets = PRD_GetMainStackAppearanceTargets(s)
+      return targets[1].texture or "Pleebar"
     elseif key == "width" then
       return Clamp(s.size.width or 240, 120, 600)
     elseif key == "borderSize" then
-      return Clamp(s.appearance.style.borderSize or 1, 0, 12)
+      local targets = PRD_GetMainStackAppearanceTargets(s)
+      return Clamp(targets[1].style.borderSize or 1, 0, 12)
     end
 
     return nil
@@ -2667,7 +2696,10 @@ do
       s.secondaryCfg.enabled = value and true or false
       Addon:ApplyOptionsChange("PRD", { secondaryRebuild = true, secondaryText = true, layout = true })
     elseif key == "texture" then
-      s.appearance.texture = value
+      local targets = PRD_GetMainStackAppearanceTargets(s)
+      for i = 1, #targets do
+        targets[i].texture = value
+      end
       Addon:ApplyOptionsChange("PRD", { health = true, primary = true, secondaryAppearance = true, layout = true })
     elseif key == "width" then
       s.size.width = Clamp(value, 120, 600)
@@ -2675,7 +2707,10 @@ do
       FrameUtil.RefreshSmartSnapState("PRD")
     elseif key == "borderSize" then
       local borderSize = Clamp(value, 0, 12)
-      s.appearance.style.borderSize = borderSize
+      local targets = PRD_GetMainStackAppearanceTargets(s)
+      for i = 1, #targets do
+        targets[i].style.borderSize = borderSize
+      end
       Addon:ApplyOptionsChange("PRD", {
         health = true,
         primary = true,
