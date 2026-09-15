@@ -79,51 +79,26 @@ function Module:MarkSpellSent(castGUID, spellID)
   self.pendingGCDStartTime = nil
 end
 
-function Module:MarkRealCast(bar, castGUID, spellID, castBarID, isChannelStart)
-  if self.enabled ~= true or not castGUID or not spellID or not castBarID then
+function Module:CancelForCastStart(bar)
+  if self.enabled ~= true then
     return
   end
 
-  self.realCastGUID = castGUID
-  self.realSpellID = spellID
-  self.realCastBarID = castBarID
-
-  if self.sentCastGUID == castGUID and self.sentSpellID == spellID then
-    self.sentCastGUID = nil
-    self.sentSpellID = nil
-    self.sentGCDStartTime = nil
-  end
-
-  if isChannelStart == true or self.pendingSpellID == spellID then
-    self.pendingCastGUID = nil
-    self.pendingSpellID = nil
-    self.pendingGCDStartTime = nil
-    self.pendingBar = nil
-    self.pendingFrame:Hide()
-  end
+  self.sentCastGUID = nil
+  self.sentSpellID = nil
+  self.sentGCDStartTime = nil
+  self.pendingCastGUID = nil
+  self.pendingSpellID = nil
+  self.pendingGCDStartTime = nil
+  self.pendingBar = nil
+  self.pendingFrame:Hide()
 
   if bar and bar.__puiInstantCast then
     self:Stop(bar, true)
   end
 end
 
-function Module:MarkRealCastEnded(castBarID)
-  if self.realCastBarID == castBarID then
-    self.realCastGUID = nil
-    self.realSpellID = nil
-    self.realCastBarID = nil
-  end
-end
-
-function Module:MarkCastFailed(castGUID, spellID, castBarID)
-  if self.realCastBarID == castBarID
-    or (self.realCastGUID == castGUID and self.realSpellID == spellID)
-  then
-    self.realCastGUID = nil
-    self.realSpellID = nil
-    self.realCastBarID = nil
-  end
-
+function Module:MarkCastFailed(castGUID, spellID)
   if self.sentCastGUID == castGUID and self.sentSpellID == spellID then
     self.sentCastGUID = nil
     self.sentSpellID = nil
@@ -167,9 +142,6 @@ function Module:StopActive(owner)
   self.sentCastGUID = nil
   self.sentSpellID = nil
   self.sentGCDStartTime = nil
-  self.realCastGUID = nil
-  self.realSpellID = nil
-  self.realCastBarID = nil
   self.pendingCastGUID = nil
   self.pendingSpellID = nil
   self.pendingGCDStartTime = nil
@@ -257,10 +229,6 @@ local function CB_ProcessPendingInstant(frame)
     return
   end
 
-  if Module.realSpellID == spellID then
-    return
-  end
-
   local duration, gcdStartTime, cleanupDuration = CB_GetPublicGCDDuration()
   if not duration or gcdStartTime == previousGCDStartTime then
     duration = bar.__puiInstantFallbackDuration
@@ -296,7 +264,7 @@ function Module:HandleSucceeded(owner, castGUID, spellID, castBarID)
   self.sentSpellID = nil
   self.sentGCDStartTime = nil
 
-  if castBarID ~= nil or self.realSpellID == spellID then
+  if castBarID ~= nil then
     return
   end
 
