@@ -91,8 +91,8 @@ function CastBar:LayoutPlayerCastbar(bar, unit, cfg, statusHost)
 end
 
 function CastBar:PlayerPostCastStart(element, unit, bar, cfg, spellID, isChanneling)
-  if not (element.__puiTestCasting or element.__puiTestChanneling) and bar.__puiInstantCast then
-    ns.PUICastBarPlayerInstant:Stop(bar, true)
+  if not (element.__puiTestCasting or element.__puiTestChanneling) then
+    ns.PUICastBarPlayerInstant:CancelForCastStart(bar)
   end
 
   element.curStage = 0
@@ -169,7 +169,7 @@ function CastBar:PlayerPostCastFail(element, unit, bar, cfg)
   ns.PUICastBarPlayerChannelTicks:Hide(bar)
 end
 
-local function PlayerSpellcastEvent(_, event, _, arg2, arg3, arg4, arg5, arg6)
+local function PlayerSpellcastEvent(_, event, _, arg2, arg3, arg4)
   if event == "UNIT_SPELLCAST_SENT" then
     ns.PUICastBarPlayerInstant:MarkSpellSent(arg3, arg4)
     return
@@ -193,27 +193,11 @@ local function PlayerSpellcastEvent(_, event, _, arg2, arg3, arg4, arg5, arg6)
     return
   end
 
-  if event == "UNIT_SPELLCAST_START"
-    or event == "UNIT_SPELLCAST_CHANNEL_START"
-    or event == "UNIT_SPELLCAST_EMPOWER_START"
+  if event == "UNIT_SPELLCAST_FAILED"
+    or event == "UNIT_SPELLCAST_FAILED_QUIET"
+    or event == "UNIT_SPELLCAST_INTERRUPTED"
   then
-    ns.PUICastBarPlayerInstant:MarkRealCast(
-      CastBar.__puiPlayerCastBar,
-      castGUID,
-      spellID,
-      arg4,
-      event == "UNIT_SPELLCAST_CHANNEL_START"
-    )
-  elseif event == "UNIT_SPELLCAST_STOP" then
-    ns.PUICastBarPlayerInstant:MarkRealCastEnded(arg4)
-  elseif event == "UNIT_SPELLCAST_CHANNEL_STOP" then
-    ns.PUICastBarPlayerInstant:MarkRealCastEnded(arg5)
-  elseif event == "UNIT_SPELLCAST_EMPOWER_STOP" then
-    ns.PUICastBarPlayerInstant:MarkRealCastEnded(arg6)
-  elseif event == "UNIT_SPELLCAST_INTERRUPTED" then
-    ns.PUICastBarPlayerInstant:MarkCastFailed(castGUID, spellID, arg5)
-  else
-    ns.PUICastBarPlayerInstant:MarkCastFailed(castGUID, spellID, arg4)
+    ns.PUICastBarPlayerInstant:MarkCastFailed(castGUID, spellID)
   end
 end
 
@@ -248,12 +232,6 @@ function CastBar:RefreshPlayerSpellcastEvents()
 
   if instantEnabled then
     frame:RegisterUnitEvent("UNIT_SPELLCAST_SENT", "player")
-    frame:RegisterUnitEvent("UNIT_SPELLCAST_START", "player")
-    frame:RegisterUnitEvent("UNIT_SPELLCAST_STOP", "player")
-    frame:RegisterUnitEvent("UNIT_SPELLCAST_CHANNEL_START", "player")
-    frame:RegisterUnitEvent("UNIT_SPELLCAST_CHANNEL_STOP", "player")
-    frame:RegisterUnitEvent("UNIT_SPELLCAST_EMPOWER_START", "player")
-    frame:RegisterUnitEvent("UNIT_SPELLCAST_EMPOWER_STOP", "player")
     frame:RegisterUnitEvent("UNIT_SPELLCAST_FAILED", "player")
     frame:RegisterUnitEvent("UNIT_SPELLCAST_FAILED_QUIET", "player")
     frame:RegisterUnitEvent("UNIT_SPELLCAST_INTERRUPTED", "player")
