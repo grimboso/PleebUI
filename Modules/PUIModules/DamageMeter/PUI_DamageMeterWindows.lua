@@ -1334,11 +1334,43 @@ function DamageMeters:SelectCurrentSessionsOnCombat()
   for index = 1, self.runtimeWindowCount do
     local window = self.windows[index]
     if window.runtime.autoCurrentOnCombat == true
-      and GetWindowSelection(window.runtime) ~= nil
+      and (window.runtime.session ~= "CURRENT"
+        or GetWindowSelection(window.runtime) ~= nil)
     then
       ApplyWindowSegmentSelection(window, "CURRENT", nil, false)
       changed = true
     end
+  end
+  return changed
+end
+
+function DamageMeters:RetainFinishedCurrentSession(sessionID)
+  if not sessionID then
+    return false
+  end
+
+  local changed = false
+  local closeBreakdown = false
+  for index = 1, self.runtimeWindowCount do
+    local window = self.windows[index]
+    if window.runtime.session == "CURRENT"
+      and GetWindowSelection(window.runtime) == nil
+    then
+      ApplyWindowSegmentSelection(window, nil, {
+        kind = "SESSION_AVAILABLE",
+        sessionID = sessionID,
+      }, false)
+      changed = true
+      if self.breakdownSelection
+        and self.breakdownSelection.ownerWindow == window
+      then
+        closeBreakdown = true
+      end
+    end
+  end
+
+  if closeBreakdown then
+    Breakdown.Close()
   end
   return changed
 end
@@ -2277,6 +2309,7 @@ DamageMeters.RefreshCombatWindowSlot = P:Def("DamageMeters.RefreshCombatWindowSl
 DamageMeters.RefreshDirtyWindows = P:Def("DamageMeters.RefreshDirtyWindows", DamageMeters.RefreshDirtyWindows)
 DamageMeters.RefreshSelectionWindows = P:Def("DamageMeters.RefreshSelectionWindows", DamageMeters.RefreshSelectionWindows)
 DamageMeters.SelectCurrentSessionsOnCombat = P:Def("DamageMeters.SelectCurrentSessionsOnCombat", DamageMeters.SelectCurrentSessionsOnCombat)
+DamageMeters.RetainFinishedCurrentSession = P:Def("DamageMeters.RetainFinishedCurrentSession", DamageMeters.RetainFinishedCurrentSession)
 DamageMeters.ResetWindowPosition = P:Def("DamageMeters.ResetWindowPosition", DamageMeters.ResetWindowPosition)
 DamageMeters.HasShownWindow = P:Def("DamageMeters.HasShownWindow", DamageMeters.HasShownWindow)
 DamageMeters.SetWindowsVisible = P:Def("DamageMeters.SetWindowsVisible", DamageMeters.SetWindowsVisible)
