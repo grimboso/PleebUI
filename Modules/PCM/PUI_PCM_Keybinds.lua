@@ -241,56 +241,33 @@ local function _KB_ActionSlotContentChanged(slot)
 end
 
 
-local function _KB_MapWholePage(target, page)
-  if _KB_IsSecret(page) then
-    return false
-  end
-
-  page = _KB_PositiveNumber(page)
-  if not page then
-    return false
-  end
-
-  local base = (page - 1) * _KB_SLOTS_PER_PAGE
-  for index = 1, _KB_SLOTS_PER_PAGE do
-    target[base + index] = index
-  end
-  return true
-end
-
-local function _KB_MapMainPage(target, page)
-  if _KB_IsSecret(page) then
-    return false
-  end
-
-  page = _KB_PositiveNumber(page)
-  if not page then
-    return false
-  end
-
-  local base = (page - 1) * _KB_SLOTS_PER_PAGE
+local function _KB_BuildMainBarSlots()
+  local target = {}
   local mapped = false
 
   for bindingIndex = 1, _KB_SLOTS_PER_PAGE do
     local button = _G["PUI_ActionButton" .. bindingIndex]
-    local actionButtonIndex = button and _KB_PositiveNumber(button.__puiActionButtonIndex) or nil
-    if actionButtonIndex then
-      target[base + actionButtonIndex] = bindingIndex
+    local actionSlot = button and _KB_PositiveNumber(button.action) or nil
+    if actionSlot then
+      target[actionSlot] = bindingIndex
       mapped = true
     end
   end
 
   if mapped then
-    return true
+    return target
   end
 
-  return _KB_MapWholePage(target, page)
-end
+  local page = _KB_PositiveNumber(C_ActionBar.GetActionBarPage())
+  if not page then
+    return target
+  end
 
-local function _KB_BuildMainBarSlots()
-  local target = {}
-  _KB_MapMainPage(target, 1)
-  _KB_MapMainPage(target, 2)
+  local base = (page - 1) * _KB_SLOTS_PER_PAGE
+  for bindingIndex = 1, _KB_SLOTS_PER_PAGE do
+    target[base + bindingIndex] = bindingIndex
+  end
+
   return target
 end
 
@@ -1019,8 +996,23 @@ local _KB_BOOTSTRAP_EVENTS = {
 
 local _KB_MAPPING_EVENTS = {
   "ACTIONBAR_SLOT_CHANGED",
+  "ACTIONBAR_PAGE_CHANGED",
+  "UPDATE_BONUS_ACTIONBAR",
+  "UPDATE_VEHICLE_ACTIONBAR",
+  "UPDATE_OVERRIDE_ACTIONBAR",
+  "UPDATE_POSSESS_BAR",
+  "UPDATE_SHAPESHIFT_FORM",
   "UPDATE_BINDINGS",
   "UPDATE_MACROS",
+}
+
+local _KB_MAIN_BAR_REBUILD_EVENTS = {
+  ACTIONBAR_PAGE_CHANGED = true,
+  UPDATE_BONUS_ACTIONBAR = true,
+  UPDATE_VEHICLE_ACTIONBAR = true,
+  UPDATE_OVERRIDE_ACTIONBAR = true,
+  UPDATE_POSSESS_BAR = true,
+  UPDATE_SHAPESHIFT_FORM = true,
 }
 
 local _KB_BINDING_REBUILD_EVENTS = {
@@ -1163,6 +1155,12 @@ local function _KB_OnEvent(_, event, arg1)
     if _KB_ActionSlotContentChanged(arg1) then
       _KB_ScheduleRebuild("content")
     end
+    return
+  end
+
+  if _KB_MAIN_BAR_REBUILD_EVENTS[event] then
+    _kbMainBarSlots = nil
+    _KB_ScheduleRebuild(false)
     return
   end
 
