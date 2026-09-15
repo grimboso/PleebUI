@@ -549,29 +549,15 @@ local function PCMPreview_GetViewerBorder(root, viewerKey)
   }
 end
 
-local function PCMPreview_GetIconBorder(root, viewerKey, buffIcon)
-  local borders = type(root) == "table" and root.borders or {}
-  local iconRoot = type(borders.icon) == "table" and borders.icon or {}
-  local viewers = type(iconRoot.viewers) == "table" and iconRoot.viewers or {}
-  local config = type(viewers[viewerKey]) == "table" and viewers[viewerKey] or {}
-
-  if buffIcon then
-    return {
-      buff = config.buffColor or config.color or { 0, 0, 0, 1 },
-      debuff = config.debuffColor or config.buffColor or config.color or { 0.65, 0.18, 0.18, 1 },
-      pandemic = config.pandemicColor or config.buffColor or config.color or { 0.95, 0.45, 0.18, 1 },
-    }
-  end
-
-  return config.color or { 0, 0, 0, 1 }
-end
-
 local function PCMPreview_GetViewerCounts(root, viewerKey)
   local counts = type(root) == "table" and root.count or {}
   local config = type(counts[viewerKey]) == "table" and counts[viewerKey] or {}
 
   return {
     cooldown = config.cooldown ~= false,
+    duration = type(root.durationCount) ~= "table"
+      or type(root.durationCount[viewerKey]) ~= "table"
+      or root.durationCount[viewerKey].enabled ~= false,
     buff = config.buff ~= false,
     charge = config.charge ~= false,
     keybind = config.keybind ~= false,
@@ -611,17 +597,20 @@ local function PCMPreview_GetEffectiveIconSwipe(entry, viewerSwipe)
   local record = IconSettings:GetRecordForEntry(entry, false)
   local override = record and record.swipe
   local drawEdge = viewerSwipe.drawEdge
+  local showCooldown = viewerSwipe.cooldown
+  local showDuration = viewerSwipe.duration
   if override and override.drawEdge ~= nil then
     drawEdge = override.drawEdge
   end
 
-  local show = viewerSwipe.cooldown
   if override and override.show ~= nil then
-    show = override.show == true
+    showCooldown = override.show == true
+    showDuration = override.show == true
   end
 
   return {
-    show = show,
+    showCooldown = showCooldown,
+    showDuration = showDuration,
     color = override and override.color or viewerSwipe.color,
     drawEdge = drawEdge,
     reverse = override and override.reverse == true,
@@ -744,7 +733,7 @@ local function PCMPreview_ConfigureViewerPanel(box, panel, definition, root)
   local defaultWidth = viewerKey == "EssentialCooldownViewer" and 400 or 300
   local style = PCMPreview_GetViewerStyle(root, viewerKey, defaultWidth)
   local viewerBorder = PCMPreview_GetViewerBorder(root, viewerKey)
-  local iconBorder = PCMPreview_GetIconBorder(root, viewerKey, false)
+  local iconBorder = viewerBorder.color
   local counts = PCMPreview_GetViewerCounts(root, viewerKey)
   local swipe = PCMPreview_GetViewerSwipe(root, viewerKey)
   local cooldownFont = PCMPreview_GetFontConfig(root, viewerKey, "cooldown")
@@ -823,8 +812,10 @@ local function PCMPreview_ConfigureViewerPanel(box, panel, definition, root)
     icon.cooldown:SetDrawEdge(effectiveSwipe.drawEdge)
     icon.cooldown:SetReverse(effectiveSwipe.reverse)
     icon.cooldown:SetSwipeColor(swipeR, swipeG, swipeB, swipeA)
-    icon.cooldown:SetShown(effectiveSwipe.show)
-    icon.__puiPCMPreviewCooldownEnabled = effectiveSwipe.show
+    icon.cooldown:SetShown(effectiveSwipe.showCooldown)
+    icon.__puiPCMPreviewCooldownEnabled = effectiveSwipe.showCooldown
+    icon.__puiPCMPreviewCooldownSwipeEnabled = effectiveSwipe.showCooldown
+    icon.__puiPCMPreviewDurationSwipeEnabled = effectiveSwipe.showDuration
     icon.__puiPCMPreviewReadyAlpha = appearance and appearance.readyAlpha or 1
     icon.__puiPCMPreviewCooldownAlpha = appearance and appearance.cooldownAlpha or 1
     icon.__puiPCMPreviewDuration = 7 + index * 2
@@ -874,8 +865,11 @@ local function PCMPreview_ConfigureViewerPanel(box, panel, definition, root)
     )
 
     local showCooldownText = cooldownShown == nil and counts.cooldown or cooldownShown
+    local showDurationText = cooldownShown == nil and counts.duration or cooldownShown
     local showChargeText = chargeShown == nil and counts.charge or chargeShown
     local showKeybindText = keybindShown == nil and counts.keybind or keybindShown
+    icon.__puiPCMPreviewCooldownTextEnabled = showCooldownText
+    icon.__puiPCMPreviewDurationTextEnabled = showDurationText
     icon.cooldownText:SetShown(showCooldownText)
     icon.chargeText:SetShown(showChargeText and index % 2 == 0)
     icon.keybindText:SetShown(showKeybindText)
@@ -924,12 +918,11 @@ local function PCMPreview_ConfigureViewerPanel(box, panel, definition, root)
   end
 end
 
-local function PCMPreview_ConfigureBuffIconPanel(box, panel, root)
+local function PCMPreview_ConfigureBuffIconPanel(box, panel, root, pcmRoot)
   local viewerKey = "BuffIconCooldownViewer"
   local path = { "CooldownManager", "buff_icons" }
   local style = PCMPreview_GetViewerStyle(root, viewerKey, 300)
-  local viewerBorder = PCMPreview_GetViewerBorder(root, viewerKey)
-  local borders = PCMPreview_GetIconBorder(root, viewerKey, true)
+  local viewerBorder = PCMPreview_GetViewerBorder(pcmRoot, viewerKey)
   local countFont = PCMPreview_GetFontConfig(root, viewerKey, "cooldown")
   local stackFont = PCMPreview_GetFontConfig(root, viewerKey, "charge")
   local displayScale = PCMPreview_GetDisplayScale(panel)
@@ -964,13 +957,11 @@ local function PCMPreview_ConfigureBuffIconPanel(box, panel, root)
     local appearance = record and record.appearance or nil
     local swipe = PCMPreview_GetEffectiveIconSwipe(entry, {
       cooldown = true,
+      duration = true,
       drawEdge = true,
       color = { 0, 0, 0, 0.8 },
     })
-    local br, bg, bb, ba = PCMPreview_ColorComponents(
-      borders.buff,
-      { 0, 0, 0, 1 }
-    )
+    local br, bg, bb, ba = PCMPreview_ColorComponents(viewerBorder.color, { 0, 0, 0, 1 })
 
     local customTexture = appearance and appearance.texture or nil
     icon.icon:SetTexture(customTexture or entry.texture)
@@ -985,8 +976,10 @@ local function PCMPreview_ConfigureBuffIconPanel(box, panel, root)
     icon.cooldown:SetReverse(swipe.reverse)
     local sr, sg, sb, sa = PCMPreview_ColorComponents(swipe.color, { 0, 0, 0, 0.8 })
     icon.cooldown:SetSwipeColor(sr, sg, sb, sa)
-    icon.cooldown:SetShown(swipe.show)
-    icon.__puiPCMPreviewCooldownEnabled = swipe.show
+    icon.cooldown:SetShown(swipe.showDuration)
+    icon.__puiPCMPreviewCooldownEnabled = swipe.showDuration
+    icon.__puiPCMPreviewCooldownSwipeEnabled = nil
+    icon.__puiPCMPreviewDurationSwipeEnabled = nil
     icon.__puiPCMPreviewDuration = 9 + index * 2
     icon.__puiPCMPreviewPhaseOffset = index * 0.6
     icon.__puiPCMPreviewCooldownCycle = nil
@@ -1760,8 +1753,19 @@ local function PCMPreview_ConfigureStackSegments(bar, config, zoom)
   bar.__puiPCMPreviewStackReverse = bar.stackReverse
 end
 
-local function PCMPreview_ConfigureChargeSlots(bar, config, zoom, texture)
-  local maxCharges = PCMPreview_Clamp(config.maxCharges or 2, 1, 60)
+local function PCMPreview_GetLiveMaxCharges(spellID)
+  local chargeInfo = spellID and C_Spell.GetSpellCharges(spellID) or nil
+  local maxCharges = chargeInfo and chargeInfo.maxCharges or nil
+
+  if _G.issecretvalue(maxCharges) then
+    return 2
+  end
+
+  return PCMPreview_Clamp(maxCharges or 2, 1, 60)
+end
+
+local function PCMPreview_ConfigureChargeSlots(bar, config, spellID, zoom, texture)
+  local maxCharges = PCMPreview_GetLiveMaxCharges(spellID)
   local r, g, b, a = PCMPreview_GetClassBarColor(
     config,
     { 0.28, 0.67, 0.95, 1 }
@@ -2087,7 +2091,7 @@ local function PCMPreview_ConfigureCustomBar(
     PCMPreview_ConfigureStackSegments(bar, config, zoom)
     PCMPreview_ConfigureDurationVisuals(bar, config, entry, zoom)
   elseif entry.kind == "charge" then
-    PCMPreview_ConfigureChargeSlots(bar, config, zoom, entry.texture)
+    PCMPreview_ConfigureChargeSlots(bar, config, entry.spellID, zoom, entry.texture)
   elseif entry.kind == "duration" then
     bar.valueText:SetPoint("CENTER", bar.status, "CENTER", 0, 0)
     bar.valueText:SetShown((tonumber(config.durationCountFontSize) or 0) > 0)
@@ -2611,7 +2615,7 @@ local function PCMPreview_Configure(box)
   elseif panelKey == "utility" then
     PCMPreview_ConfigureViewerPanel(box, panels.utility, VIEWERS[2], DB.GetPCMRoot())
   elseif panelKey == "buffs" then
-    PCMPreview_ConfigureBuffIconPanel(box, panels.buffs, DB.GetProfileBuffsDB())
+    PCMPreview_ConfigureBuffIconPanel(box, panels.buffs, DB.GetProfileBuffsDB(), DB.GetPCMRoot())
   elseif panelKey == "buffBars" then
     PCMPreview_ConfigureBuffBarPanel(panels.buffBars, DB.GetStyleDB())
   elseif panelKey == "consumables" then
@@ -2639,6 +2643,22 @@ local function PCMPreview_UpdateIcon(icon, phase)
   local auraActive = previewState == "AURA"
     or icon.__puiPCMPreviewAuraMode == true
     or autoAuraActive
+
+  if icon.__puiPCMPreviewCooldownSwipeEnabled ~= nil then
+    local showSwipe = auraActive and icon.__puiPCMPreviewDurationSwipeEnabled
+      or cooldownActive and icon.__puiPCMPreviewCooldownSwipeEnabled
+      or false
+    icon.cooldown:SetShown(showSwipe)
+    icon.__puiPCMPreviewCooldownEnabled = showSwipe
+  end
+
+  if icon.__puiPCMPreviewCooldownTextEnabled ~= nil then
+    icon.cooldownText:SetShown(
+      auraActive and icon.__puiPCMPreviewDurationTextEnabled
+        or cooldownActive and icon.__puiPCMPreviewCooldownTextEnabled
+        or false
+    )
+  end
 
   local alpha
   local saturation
@@ -3044,7 +3064,6 @@ PCMPreview_EnsureIconCount = P:Def("EnsureIconCount", PCMPreview_EnsureIconCount
 PCMPreview_EnsureBarCount = P:Def("EnsureBarCount", PCMPreview_EnsureBarCount)
 PCMPreview_GetViewerStyle = P:Def("GetViewerStyle", PCMPreview_GetViewerStyle)
 PCMPreview_GetViewerBorder = P:Def("GetViewerBorder", PCMPreview_GetViewerBorder)
-PCMPreview_GetIconBorder = P:Def("GetIconBorder", PCMPreview_GetIconBorder)
 PCMPreview_GetViewerCounts = P:Def("GetViewerCounts", PCMPreview_GetViewerCounts)
 PCMPreview_GetViewerSwipe = P:Def("GetViewerSwipe", PCMPreview_GetViewerSwipe)
 PCMPreview_GetEffectiveIconText = P:Def("GetEffectiveIconText", PCMPreview_GetEffectiveIconText)
