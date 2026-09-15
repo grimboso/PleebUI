@@ -297,7 +297,7 @@ end
 
 local function SetPreviewBorder(frame, color, thickness)
   local border = frame.__puiPreviewBorder
-  thickness = math_max(0, ns.Pixel.Round((tonumber(thickness) or 0) * ns.FrameScale:BestOnePixel()))
+  thickness = math_max(0, ns.Pixel.Round((tonumber(thickness) or 0) * ns.Pixel.GetOnePixel()))
 
   border[1]:SetHeight(thickness)
   border[2]:SetHeight(thickness)

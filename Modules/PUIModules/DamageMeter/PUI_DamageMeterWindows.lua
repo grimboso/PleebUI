@@ -43,7 +43,7 @@ local MINIMIZE_TEXTURE = Constants.MINIMIZE_TEXTURE
 local CONFIG_TEXTURE = Constants.CONFIG_TEXTURE
 local DEFAULT_WINDOW_POSITIONS = Config.DEFAULT_WINDOW_POSITIONS
 
-local Round = ns.DamageMeterUtil.Round
+local Round = ns.Pixel.Round
 local Clamp = ns.DamageMeterUtil.Clamp
 local GetViewportRowCount = ns.DamageMeterUtil.GetViewportRowCount
 local IsSecret = ns.DamageMeterUtil.IsSecret

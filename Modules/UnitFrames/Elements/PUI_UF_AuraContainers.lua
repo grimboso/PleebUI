@@ -28,6 +28,8 @@ local AuraFilters = ns.UFAuraFilters
 local AuraHighlight = ns.UFAuraHighlight
 local AuraLayout = ns.UFAuraLayout
 
+local SUPPORTS_NATIVE_AURA_TRACKING_ENABLE = select(4, _G.GetBuildInfo()) >= 120105
+
 local SORT_METHODS = {
   BIG_DEFENSIVE = AuraContainerSortMethod.BigDefensive,
   INDEX = AuraContainerSortMethod.AuraInstanceIDOnly,
@@ -293,6 +295,14 @@ local function SetSlotRuntimeTracking(runtime, enabled)
     return
   end
 
+  if SUPPORTS_NATIVE_AURA_TRACKING_ENABLE then
+    if runtime.nativeTrackingEnabled ~= enabled then
+      runtime.nativeTrackingEnabled = enabled
+      runtime.container:SetAuraSlotEnabled(runtime.key, enabled)
+    end
+    return
+  end
+
   if enabled then
     if runtime.candidatesRetired then
       runtime.container:SetAuraSlotCandidateFilters(
@@ -307,8 +317,25 @@ local function SetSlotRuntimeTracking(runtime, enabled)
   end
 end
 
-local function SetSharedGroupTracking(runtime, enabled)
-  if not runtime.sharedHost or runtime.displayType ~= "group" or not runtime.groupKey then
+local function SetGroupRuntimeTracking(runtime, enabled)
+  if runtime.displayType ~= "group" or not runtime.groupKey then
+    return
+  end
+
+  if SUPPORTS_NATIVE_AURA_TRACKING_ENABLE then
+    local trackingEnabled = enabled and runtime.configuredEnabled == true
+    if runtime.nativeTrackingEnabled ~= trackingEnabled then
+      runtime.nativeTrackingEnabled = trackingEnabled
+      runtime.container:SetAuraGroupEnabled(runtime.groupKey, trackingEnabled)
+
+      if runtime.encounterGroupKey then
+        runtime.container:SetAuraGroupEnabled(runtime.encounterGroupKey, trackingEnabled)
+      end
+    end
+    return
+  end
+
+  if not runtime.sharedHost then
     return
   end
 
@@ -339,12 +366,13 @@ local function SetRuntimeEnabled(runtime, enabled)
     )
   end
 
+  SetSlotRuntimeTracking(runtime, enabled)
+  SetGroupRuntimeTracking(runtime, enabled)
+
   if runtime.enabled == enabled then
     return
   end
 
-  SetSlotRuntimeTracking(runtime, enabled)
-  SetSharedGroupTracking(runtime, enabled)
   runtime.enabled = enabled
 
   if runtime.sharedHost then
@@ -508,10 +536,13 @@ local function ConfigureAuraGroup(
   local sortMethod = SORT_METHODS[display.sortMethod] or AuraContainerSortMethod.ExpirationOnly
   local sortDirection = SORT_DIRECTIONS[display.sortDirection] or AuraContainerSortDirection.Normal
   local layoutSignature = BuildAuraGroupLayoutSignature(layout, layoutIndex)
-  local maxFrameCount = runtime.configuredEnabled == true
-    and (not runtime.sharedHost or runtime.enabled ~= false)
-    and layout.maxIcons
-    or 0
+  local maxFrameCount = layout.maxIcons
+  if not SUPPORTS_NATIVE_AURA_TRACKING_ENABLE then
+    maxFrameCount = runtime.configuredEnabled == true
+      and (not runtime.sharedHost or runtime.enabled ~= false)
+      and layout.maxIcons
+      or 0
+  end
 
   runtime.layoutMaxIcons = layout.maxIcons
   options.__puiAuraKind = display.auraType == "HARMFUL" and "debuffs" or "buffs"
@@ -974,7 +1005,7 @@ AcquireSharedAuraHost = P:Def("AcquireSharedAuraHost", AcquireSharedAuraHost)
 UpdateSharedAuraHost = P:Def("UpdateSharedAuraHost", UpdateSharedAuraHost)
 RegisterSharedRuntime = P:Def("RegisterSharedRuntime", RegisterSharedRuntime)
 SetSlotRuntimeTracking = P:Def("SetSlotRuntimeTracking", SetSlotRuntimeTracking)
-SetSharedGroupTracking = P:Def("SetSharedGroupTracking", SetSharedGroupTracking)
+SetGroupRuntimeTracking = P:Def("SetGroupRuntimeTracking", SetGroupRuntimeTracking)
 IsDisplayEnabled = P:Def("IsDisplayEnabled", IsDisplayEnabled)
 SetRuntimeEnabled = P:Def("SetRuntimeEnabled", SetRuntimeEnabled)
 SetRuntimeShown = P:Def("SetRuntimeShown", SetRuntimeShown)

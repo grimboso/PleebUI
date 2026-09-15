@@ -1,6 +1,7 @@
 local _, ns = ...
 local Addon = ns.Addon
 local FrameScale = Addon:NewModule("FrameScale", "NumyAceEvent-3.0")
+local Pixel = ns.Pixel
 
 local registered = {}
 local basePx = 1
@@ -92,7 +93,7 @@ function FrameScale:ApplyPendingUIScale()
   end
 end
 
-function FrameScale:Scale(value)
+function Pixel.Round(value)
   if px == 1 or value == 0 then
     return value
   end
@@ -107,12 +108,96 @@ function FrameScale:Scale(value)
   return quotient * px
 end
 
-ns.Pixel.Round = function(value)
-  return FrameScale:Scale(value)
+function Pixel.GetOnePixel()
+  return px
 end
 
-function FrameScale:BestOnePixel()
-  return px
+local function ScalePointArgument(value)
+  if type(value) == "number" then
+    return Pixel.Round(value)
+  end
+
+  return value
+end
+
+-- PleebUI owns pixel rounding, so addon-owned textures must not apply a second native snap.
+function Pixel.DisableSnap(object)
+  if object.SetSnapToPixelGrid then
+    object:SetSnapToPixelGrid(false)
+    object:SetTexelSnappingBias(0)
+    return
+  end
+
+  if object.GetStatusBarTexture then
+    local texture = object:GetStatusBarTexture()
+    if texture and texture.SetSnapToPixelGrid then
+      texture:SetSnapToPixelGrid(false)
+      texture:SetTexelSnappingBias(0)
+    end
+  end
+end
+
+function Pixel.SetTexture(object, ...)
+  object:SetTexture(...)
+  Pixel.DisableSnap(object)
+end
+
+function Pixel.SetColorTexture(object, ...)
+  object:SetColorTexture(...)
+  Pixel.DisableSnap(object)
+end
+
+function Pixel.SetStatusBarTexture(object, ...)
+  object:SetStatusBarTexture(...)
+  Pixel.DisableSnap(object)
+end
+
+function Pixel.SetTexCoord(object, ...)
+  object:SetTexCoord(...)
+  Pixel.DisableSnap(object)
+end
+
+function Pixel.SetVertexColor(object, ...)
+  object:SetVertexColor(...)
+  Pixel.DisableSnap(object)
+end
+
+function Pixel.Point(object, point, relativeTo, relativePoint, offsetX, offsetY, ...)
+  if relativeTo == nil then
+    relativeTo = object:GetParent()
+  end
+
+  Pixel.DisableSnap(object)
+  object:SetPoint(
+    point,
+    ScalePointArgument(relativeTo),
+    ScalePointArgument(relativePoint),
+    ScalePointArgument(offsetX),
+    ScalePointArgument(offsetY),
+    ...
+  )
+end
+
+function Pixel.Size(object, width, height, ...)
+  local scaledWidth = Pixel.Round(width)
+
+  Pixel.DisableSnap(object)
+  object:SetSize(scaledWidth, height and Pixel.Round(height) or scaledWidth, ...)
+end
+
+function Pixel.Width(object, width, ...)
+  Pixel.DisableSnap(object)
+  object:SetWidth(Pixel.Round(width), ...)
+end
+
+function Pixel.Height(object, height, ...)
+  Pixel.DisableSnap(object)
+  object:SetHeight(Pixel.Round(height), ...)
+end
+
+function Pixel.AllPoints(object, relativeTo, ...)
+  Pixel.DisableSnap(object)
+  object:SetAllPoints(relativeTo, ...)
 end
 
 function FrameScale:RegisterScaleListener(func)

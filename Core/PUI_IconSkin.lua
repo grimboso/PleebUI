@@ -701,7 +701,7 @@ function IconSkin.ApplyBorder(target, opts)
   -- This makes 1 = 1 physical pixel, 2 = 2px, etc, instead of raw UI units
   -- that can disappear at some UI scales.
   if thickness > 0 then
-    local onePixel = ns.FrameScale:BestOnePixel()
+    local onePixel = ns.Pixel.GetOnePixel()
     if onePixel and onePixel > 0 then
       thickness = thickness * onePixel
     end

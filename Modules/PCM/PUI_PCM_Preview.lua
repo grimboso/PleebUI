@@ -646,7 +646,7 @@ local function PCMPreview_LayoutViewerIcons(panel, icons, config)
       config.fixedWidth - (row1Count - 1) * config.spacing
     ) / row1Count
 
-    local onePixel = ns.FrameScale:BestOnePixel()
+    local onePixel = ns.Pixel.GetOnePixel()
     row1ConfiguredSize = math_floor(row1ConfiguredSize / onePixel) * onePixel
   end
 
@@ -660,7 +660,7 @@ local function PCMPreview_LayoutViewerIcons(panel, icons, config)
 
     row2ConfiguredSize = math_min(row1ConfiguredSize, fittedRow2Size)
 
-    local onePixel = ns.FrameScale:BestOnePixel()
+    local onePixel = ns.Pixel.GetOnePixel()
     row2ConfiguredSize = math_floor(row2ConfiguredSize / onePixel) * onePixel
     row2ConfiguredSize = math_max(1, row2ConfiguredSize)
   end

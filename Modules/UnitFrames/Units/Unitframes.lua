@@ -1844,7 +1844,7 @@ function UF:OnEnable()
     self:SafeRefresh("all")
   end)
 
-  self.__puiLastFrameScale = ns.FrameScale:BestOnePixel()
+  self.__puiLastFrameScale = ns.Pixel.GetOnePixel()
 
   if not self.__puiFrameScaleListener then
     self.__puiFrameScaleListener = function(_, scale)

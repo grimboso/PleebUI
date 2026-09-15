@@ -56,7 +56,7 @@ local function CB_GetBorder(frame, cfg)
   end
 
   local thickness = Round(
-    logicalThickness * ns.FrameScale:BestOnePixel()
+    logicalThickness * ns.Pixel.GetOnePixel()
   )
 
   if not frame.border or not frame.border.SetBackdrop then

@@ -292,7 +292,7 @@ local function RefreshStyleCache(db)
   local borderSize = Clamp(db and db.borderSize, 0, 8)
   local borderThickness = math_max(
     0,
-    Round(borderSize * ns.FrameScale:BestOnePixel())
+    Round(borderSize * ns.Pixel.GetOnePixel())
   )
 
   local changed = puiStyleCache.serial == 0
@@ -529,7 +529,7 @@ local function CreateAuraRuntime(kind, variantKey)
   container:SetFrameStrata("LOW")
   container:SetFlowLayoutAnchorPoint("TOPRIGHT")
   container:SetFlowLayoutAxis(AnchorUtil.FlowLayoutAxis.Horizontal)
-  container:SetFlowLayoutMaximumLineSize(width + ns.FrameScale:BestOnePixel())
+  container:SetFlowLayoutMaximumLineSize(width + ns.Pixel.GetOnePixel())
   container:SetFlowLayoutGrowthDirection(AnchorUtil.FlowDirection.Left, AnchorUtil.FlowDirection.Down)
   container:SetFlowLayoutPadding(0, 0, 0, 0)
   container:SetUnit(GetActiveUnit())

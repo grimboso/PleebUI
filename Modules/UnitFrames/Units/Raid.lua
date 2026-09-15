@@ -44,7 +44,8 @@ local RF_GROUP_LABEL_HEIGHT = 14
 local RF_GROUP_SIDE_LABEL_WIDTH = 26
 local RF_GROUP_SIDE_LABEL_OFFSET = 6
 
-local Round = ns.Pixel.Round
+local Pixel = ns.Pixel
+local Round = Pixel.Round
 
 local function MoveBlizzardRaidFrameToHiddenParent(frame)
   if not frame or frame:IsForbidden() then
@@ -589,8 +590,8 @@ function RaidFrames:LayoutTestFrames(frames, groupFrames, groupCount, membersPer
           y = groupRow * (height + rowSpacing + groupSpacing) * yMultiplier
         end
 
-        groupFrame:SetSize(groupWidth, groupHeight)
-        groupFrame:SetPoint(groupAnchorPoint, anchor, groupAnchorPoint, Round(x), Round(y))
+        Pixel.Size(groupFrame, groupWidth, groupHeight)
+        Pixel.Point(groupFrame, groupAnchorPoint, anchor, groupAnchorPoint, x, y)
         groupFrame:Show()
       else
         groupFrame:Hide()
@@ -608,20 +609,22 @@ function RaidFrames:LayoutTestFrames(frames, groupFrames, groupCount, membersPer
 
         if groupFrame then
           if childPoint == "LEFT" or childPoint == "RIGHT" then
-            frame:SetPoint(
+            Pixel.Point(
+              frame,
               childPoint,
               groupFrame,
               childPoint,
-              Round((memberIndex - 1) * (width + columnSpacing) * xMultiplier),
+              (memberIndex - 1) * (width + columnSpacing) * xMultiplier,
               0
             )
           else
-            frame:SetPoint(
+            Pixel.Point(
+              frame,
               childPoint,
               groupFrame,
               childPoint,
               0,
-              Round((memberIndex - 1) * (height + rowSpacing) * yMultiplier)
+              (memberIndex - 1) * (height + rowSpacing) * yMultiplier
             )
           end
           frame:Show()
@@ -669,7 +672,7 @@ function RaidFrames:LayoutTestFrames(frames, groupFrames, groupCount, membersPer
           y = (groupIndex - 1) * (height + rowSpacing) * outerYMultiplier
         end
 
-        frame:SetPoint(anchorPoint, anchor, anchorPoint, Round(x), Round(y))
+        Pixel.Point(frame, anchorPoint, anchor, anchorPoint, x, y)
         frame:Show()
       else
         frame:Hide()
@@ -677,9 +680,9 @@ function RaidFrames:LayoutTestFrames(frames, groupFrames, groupCount, membersPer
     end
   end
 
-  anchor:SetSize(Round(totalWidth), Round(totalHeight))
+  Pixel.Size(anchor, totalWidth, totalHeight)
   if self.mover then
-    self.mover:SetSize(Round(totalWidth), Round(totalHeight))
+    Pixel.Size(self.mover, totalWidth, totalHeight)
     FrameUtil:RefreshMoverOverlay("RaidFrames")
   end
 
@@ -786,7 +789,7 @@ function RaidFrames:EnsureAnchor()
   end
 
   self.anchor = CreateFrame("Frame", "PleebUI_RaidFramesAnchor", UIParent)
-  self.anchor:SetSize(Round(1), Round(1))
+  Pixel.Size(self.anchor, 1, 1)
   return self.anchor
 end
 
@@ -806,8 +809,8 @@ function RaidFrames:ApplyAnchor()
   })
 
   self.anchor:ClearAllPoints()
-  self.anchor:SetPoint(db.point or "BOTTOMLEFT", _G[db.relativeTo or "UIParent"] or UIParent, db.relativePoint or db.point or "BOTTOMLEFT", Round(db.x or 0), Round(db.y or 0))
-  self.anchor:SetSize(Round(width or 1), Round(height or 1))
+  Pixel.Point(self.anchor, db.point or "BOTTOMLEFT", _G[db.relativeTo or "UIParent"] or UIParent, db.relativePoint or db.point or "BOTTOMLEFT", db.x or 0, db.y or 0)
+  Pixel.Size(self.anchor, width or 1, height or 1)
 
   FrameUtil.EnsureHeaderMover(self, "RaidFrames", "PleebUI_RaidFramesMover", self.anchor, db, {
     defaultPoint = db.point or "BOTTOMLEFT",
@@ -902,8 +905,8 @@ function RaidFrames:LayoutHeaders()
       header:ClearAllPoints()
       RF_ClearHeaderChildPoints(header)
 
-      header:SetSize(Round(width or 1), Round(height or 1))
-      header:SetPoint(point, self.anchor, point, Round(x or 0), Round(y or 0))
+      Pixel.Size(header, width or 1, height or 1)
+      Pixel.Point(header, point, self.anchor, point, x or 0, y or 0)
       header:Show()
     end
   end

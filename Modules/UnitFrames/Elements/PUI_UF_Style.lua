@@ -21,6 +21,7 @@ local Theme = ns.Theme
 local UFHealth = ns.UFHealth
 local UFHealPrediction = ns.UFHealPrediction
 local UFPortrait = ns.UFPortrait
+local Pixel = ns.Pixel
 
 local DEFAULT_STATUSBAR_TEXTURE = Theme.GetBarTexture()
 local BASE_COLORS = {
@@ -60,7 +61,7 @@ end
 local P = select(1, ns.Pleebug:DropIn(UFStyle, { name = "UnitFrames.Style" }))
 
 
-local Round = ns.Pixel.Round
+local Round = Pixel.Round
 
 local function GetConfigMediaOverride(config, kind)
   if type(config) ~= "table" then
@@ -217,13 +218,13 @@ function UFStyle.ApplyStyleIfNeeded(frame, unit)
   if unit and frame.Health then
     local texH = UFStyle.ResolveStatusbarTexture("health", unit, frame.config)
     frame.__puiUF_healthTexPath = texH
-    frame.Health:SetStatusBarTexture(texH)
+    Pixel.SetStatusBarTexture(frame.Health, texH)
   end
 
   if unit and frame.Power then
     local texP = UFStyle.ResolveStatusbarTexture("power", unit, frame.config)
     frame.__puiUF_powerTexPath = texP
-    frame.Power:SetStatusBarTexture(texP)
+    Pixel.SetStatusBarTexture(frame.Power, texP)
   end
 end
 
@@ -348,7 +349,7 @@ function UFStyle.CalculateFrameLayout(cfg, db, opts)
     placement = "inside"
   end
 
-  local onePixel = ns.FrameScale:BestOnePixel()
+  local onePixel = ns.Pixel.GetOnePixel()
   local borderSize = math_max(1, BASE_SIZES.edgeSize + slider)
   local edgeSize = Round(borderSize * onePixel)
   local inset = Round(BASE_SIZES.inset * onePixel)
@@ -447,11 +448,11 @@ function UFStyle.ConfigureFrameChrome(frame, layout, colors)
 
   if not frame.__pui_bg then
     local t = frame:CreateTexture(nil, "BACKGROUND")
-    t:SetAllPoints(frame)
+    Pixel.AllPoints(t, frame)
     frame.__pui_bg = t
   end
 
-  frame.__pui_bg:SetColorTexture(bg[1], bg[2], bg[3], bg[4] or 1)
+  Pixel.SetColorTexture(frame.__pui_bg, bg[1], bg[2], bg[3], bg[4] or 1)
 
   ns.IconSkin.ApplyBorder(frame, {
     enabled = true,

@@ -43,7 +43,7 @@ local function ClampBorderSize(value, fallback)
 end
 
 local function ScaleBorderSize(value)
-  return Round(value * ns.FrameScale:BestOnePixel())
+  return Round(value * ns.Pixel.GetOnePixel())
 end
 
 local function GetGlobalUFProfile()

@@ -144,7 +144,7 @@ local function EnsureSquareBorder(button, key, subLevel)
 end
 
 local function ApplySquareBorderLayout(border, button, size, manageVisibility)
-  size = math_max(0, Round((tonumber(size) or 0) * ns.FrameScale:BestOnePixel()))
+  size = math_max(0, Round((tonumber(size) or 0) * ns.Pixel.GetOnePixel()))
 
   border.Top:ClearAllPoints()
   border.Top:SetPoint("TOPLEFT", button, "TOPLEFT", 0, 0)

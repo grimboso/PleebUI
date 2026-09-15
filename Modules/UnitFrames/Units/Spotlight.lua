@@ -416,7 +416,7 @@ function Spotlight.EnsurePlaceholders(owner, anchor)
     local placeholder = owner.spotlightPlaceholders[index]
     if not placeholder then
       placeholder = CreateFrame("Frame", "PleebUI_RaidSpotlightPlaceholder" .. tostring(index), anchor, "BackdropTemplate")
-      local edgeSize = ns.FrameScale:BestOnePixel()
+      local edgeSize = ns.Pixel.GetOnePixel()
       placeholder:SetBackdrop({
         bgFile = "Interface\\Buttons\\WHITE8x8",
         edgeFile = "Interface\\Buttons\\WHITE8x8",
@@ -438,7 +438,7 @@ function Spotlight.EnsurePlaceholders(owner, anchor)
       owner.spotlightPlaceholders[index] = placeholder
     end
 
-    local edgeSize = ns.FrameScale:BestOnePixel()
+    local edgeSize = ns.Pixel.GetOnePixel()
     if placeholder.__puiBackdropEdgeSize ~= edgeSize then
       placeholder:SetBackdrop({
         bgFile = "Interface\\Buttons\\WHITE8x8",

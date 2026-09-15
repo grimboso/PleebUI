@@ -28,7 +28,7 @@ function CastBar:CreatePlayerCastbarExtras(frame, holder, element, unit)
   holder.safeZoneBorder:SetFrameLevel((element:GetFrameLevel() or 0) + 5)
   holder.__puiSafeZoneBorderBackdrop = {
     edgeFile = "Interface\\Buttons\\WHITE8X8",
-    edgeSize = ns.FrameScale:BestOnePixel(),
+    edgeSize = ns.Pixel.GetOnePixel(),
   }
   holder.safeZoneBorder:SetBackdrop(holder.__puiSafeZoneBorderBackdrop)
   holder.safeZoneBorder:SetBackdropBorderColor(1, 0.15, 0.15, 0.90)
@@ -74,7 +74,7 @@ function CastBar:BindPlayerCastbarElement(frame, element, unit)
 end
 
 function CastBar:LayoutPlayerCastbar(bar, unit, cfg, statusHost)
-  local edgeSize = ns.FrameScale:BestOnePixel()
+  local edgeSize = ns.Pixel.GetOnePixel()
   local backdrop = bar.__puiSafeZoneBorderBackdrop
 
   if backdrop.edgeSize ~= edgeSize then

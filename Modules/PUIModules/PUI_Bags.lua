@@ -4,7 +4,8 @@ local Addon = ns.Addon
 local Theme = ns.Theme
 local FrameScale = ns.FrameScale
 local IconSkin = ns.IconSkin
-local Round = ns.Pixel.Round
+local Pixel = ns.Pixel
+local Round = Pixel.Round
 
 local CreateFrame = _G.CreateFrame
 local InCombatLockdown = _G.InCombatLockdown
@@ -142,7 +143,7 @@ end
 local function RefreshItemButtonTheme(button)
   local colors = Theme.GetColors()
   local border = itemBorders[button] or CreateItemBorder(button)
-  local edge = FrameScale:BestOnePixel()
+  local edge = Pixel.GetOnePixel()
 
   border.top:SetHeight(edge)
   border.bottom:SetHeight(edge)

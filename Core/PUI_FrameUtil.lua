@@ -22,7 +22,8 @@ local math_min = _G.math.min
 local math_max = _G.math.max
 local math_floor = _G.math.floor
 
-local Round = ns.Pixel.Round
+local Pixel = ns.Pixel
+local Round = Pixel.Round
 local LSM = ns.LSM
 
 ns.FrameUtil = ns.FrameUtil or {}
@@ -141,7 +142,7 @@ local function MoveEntryTo(entry, x, y, silent)
   local frame = entry.frame
 
   frame:ClearAllPoints()
-  frame:SetPoint("CENTER", UIParent, "CENTER", x, y)
+  Pixel.Point(frame, "CENTER", UIParent, "CENTER", x, y)
 
   if not silent then
     FinalizeEntryMove(entry)
@@ -291,10 +292,10 @@ function FrameUtil.UpdateLinearHeaderAnchorSize(owner, opts)
     totalHeight = (height * count) + (spacing * (count - 1))
   end
 
-  owner.anchor:SetSize(totalWidth, totalHeight)
+  Pixel.Size(owner.anchor, totalWidth, totalHeight)
 
   if owner.mover then
-    owner.mover:SetSize(totalWidth, totalHeight)
+    Pixel.Size(owner.mover, totalWidth, totalHeight)
   end
 end
 
@@ -424,23 +425,23 @@ function FrameUtil.EnsureHeaderMover(owner, key, frameName, anchor, db, opts)
 
   if not mover.__pui_bg then
     local t = mover:CreateTexture(nil, "BACKGROUND")
-    t:SetAllPoints(mover)
+    Pixel.AllPoints(t, mover)
     mover.__pui_bg = t
   end
-  mover.__pui_bg:SetColorTexture(0, 0, 0, opts.overlayBelowFrame and 0 or 0.35)
+  Pixel.SetColorTexture(mover.__pui_bg, 0, 0, 0, opts.overlayBelowFrame and 0 or 0.35)
 
   ApplyHeaderMoverTheme(mover, opts.overlayBelowFrame == true)
 
   mover:ClearAllPoints()
-  mover:SetPoint(point, relativeTo, relativePoint, MoverRound(db.x or 0), MoverRound(db.y or 0))
-  mover:SetSize(MoverRound(width or 0), MoverRound(height or 0))
+  Pixel.Point(mover, point, relativeTo, relativePoint, db.x or 0, db.y or 0)
+  Pixel.Size(mover, width or 0, height or 0)
   mover.__puiUseOverlayDrag = opts.useOverlayDrag ~= false
 
   local editing = ns.Flags.IsEditing == true
   FrameUtil.SetMoverFrameVisible(mover, editing)
 
   anchor:ClearAllPoints()
-  anchor:SetPoint(anchorPoint, mover, anchorRelativePoint, 0, 0)
+  Pixel.Point(anchor, anchorPoint, mover, anchorRelativePoint, 0, 0)
 
   local function SavePosition(frame)
     local current = GetDB()
@@ -458,7 +459,7 @@ function FrameUtil.EnsureHeaderMover(owner, key, frameName, anchor, db, opts)
 
     if owner.anchor and owner.mover then
       owner.anchor:ClearAllPoints()
-      owner.anchor:SetPoint(anchorPoint, owner.mover, anchorRelativePoint, 0, 0)
+      Pixel.Point(owner.anchor, anchorPoint, owner.mover, anchorRelativePoint, 0, 0)
     end
   end
 
@@ -5216,7 +5217,7 @@ function FrameUtil._NudgeSelected(dx, dy)
     return
   end
 
-  local onePixel = ns.FrameScale:BestOnePixel()
+  local onePixel = ns.Pixel.GetOnePixel()
   local moveGroup = FrameUtil._GetSelectedMoveGroup(SelectedEntry, true)
   FrameUtil._MoveGroupBy(
     moveGroup,

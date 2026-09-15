@@ -15,7 +15,6 @@ local P = ns.Pleebug:DropIn(Cooldowns, { name = "PCM", bucket = "CustomChargeCoo
 
 
 local FrameUtil = ns.FrameUtil
-local FrameScale = ns.FrameScale
 local BarWidget = ns.BarWidget
 local Presentation = ns.Presentation
 local PCMPresentation = ns.PCMPresentation
@@ -51,12 +50,6 @@ __PUI_PCM_CooldownStackBars.chargeUpdateFrame:Hide()
 local INTERP = Enum.StatusBarInterpolation.None
 local DIR_ELAPSED = Enum.StatusBarTimerDirection.ElapsedTime
 
-
-local function _CSB_Snap(value)
-  value = tonumber(value) or 0
-
-  return FrameScale:Scale(value)
-end
 
 local function _CSB_GetClassColor()
   if _CSB_ClassColorR then
@@ -192,8 +185,8 @@ local function _CSB_RegisterMover(barData, cfg)
       "CENTER",
       UIParent,
       "CENTER",
-      _CSB_Snap(entry.posX),
-      _CSB_Snap(entry.posY)
+      Round(tonumber(entry.posX) or 0),
+      Round(tonumber(entry.posY) or 0)
     )
   end
 
@@ -1101,7 +1094,6 @@ function Cooldowns:_CooldownStackBars_SoftRebuild(flags)
 end
 
 
-  _CSB_Snap = P:Def('_CSB_Snap', _CSB_Snap)
   _CSB_GetClassColor = P:Def('_CSB_GetClassColor', _CSB_GetClassColor)
   _CSB_IsTrackedSpellKnown = P:Def('_CSB_IsTrackedSpellKnown', _CSB_IsTrackedSpellKnown)
   _CSB_SetFontStringShown = P:Def('_CSB_SetFontStringShown', _CSB_SetFontStringShown)

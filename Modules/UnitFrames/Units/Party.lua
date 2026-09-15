@@ -42,7 +42,8 @@ local ROLE_NAME_BY_ENUM = {
   [Enum.LFGRole.Damage] = "DAMAGER",
 }
 
-local Round = ns.Pixel.Round
+local Pixel = ns.Pixel
+local Round = Pixel.Round
 
 local DISABLED_PET_AURAS = { enabled = false }
 local DISABLED_PET_TRACKING = { enabled = false, tracks = {} }
@@ -201,7 +202,7 @@ local function ApplyAnchor(self)
   local width, height = UFStyle.ResolveFrameSize(db)
 
   anchor:ClearAllPoints()
-  anchor:SetPoint(point, _G[db.relativeTo or "UIParent"] or UIParent, db.relativePoint or point, Round(db.x or 0), Round(db.y or 0))
+  Pixel.Point(anchor, point, _G[db.relativeTo or "UIParent"] or UIParent, db.relativePoint or point, db.x or 0, db.y or 0)
 
   FrameUtil.UpdateLinearHeaderAnchorSize(self, {
     count = self.partyFrames and (self.partyPlayerFrame and 5 or 4) or ((db.showPlayer == true) and 5 or 4),
@@ -313,11 +314,11 @@ function PartyFrames:LayoutTestFrames(memberFrames, petFrames, memberCount)
       local offset = index - 1
 
       if isHorizontal then
-        frame:SetPoint("LEFT", anchor, "LEFT", offset * (width + spacing), 0)
+        Pixel.Point(frame, "LEFT", anchor, "LEFT", offset * (width + spacing), 0)
       elseif growsUp then
-        frame:SetPoint("BOTTOM", anchor, "BOTTOM", 0, offset * (height + spacing))
+        Pixel.Point(frame, "BOTTOM", anchor, "BOTTOM", 0, offset * (height + spacing))
       else
-        frame:SetPoint("TOP", anchor, "TOP", 0, -offset * (height + spacing))
+        Pixel.Point(frame, "TOP", anchor, "TOP", 0, -offset * (height + spacing))
       end
 
       frame:Show()
@@ -336,12 +337,13 @@ function PartyFrames:LayoutTestFrames(memberFrames, petFrames, memberCount)
     frame:ClearAllPoints()
 
     if showPets and index <= memberCount and owner then
-      frame:SetPoint(
+      Pixel.Point(
+        frame,
         petDB.anchorPoint or "TOP",
         owner,
         petDB.relativePoint or "BOTTOM",
-        Round(petDB.x or 0),
-        Round(petDB.y or -2)
+        petDB.x or 0,
+        petDB.y or -2
       )
       frame:Show()
     else
@@ -526,7 +528,7 @@ function PartyFrames:EnsureAnchor()
   end
 
   self.anchor = CreateFrame("Frame", "PleebUI_PartyFramesAnchor", UIParent)
-  self.anchor:SetSize(Round(1), Round(1))
+  Pixel.Size(self.anchor, 1, 1)
   return self.anchor
 end
 
@@ -593,14 +595,14 @@ function PartyFrames:LayoutPartyFrames()
     local offset = index - 1
 
     frame:ClearAllPoints()
-    frame:SetSize(width, height)
+    Pixel.Size(frame, width, height)
 
     if isHorizontal then
-      frame:SetPoint("LEFT", self.anchor, "LEFT", offset * (width + spacing), 0)
+      Pixel.Point(frame, "LEFT", self.anchor, "LEFT", offset * (width + spacing), 0)
     elseif growsUp then
-      frame:SetPoint("BOTTOM", self.anchor, "BOTTOM", 0, offset * (height + spacing))
+      Pixel.Point(frame, "BOTTOM", self.anchor, "BOTTOM", 0, offset * (height + spacing))
     else
-      frame:SetPoint("TOP", self.anchor, "TOP", 0, -offset * (height + spacing))
+      Pixel.Point(frame, "TOP", self.anchor, "TOP", 0, -offset * (height + spacing))
     end
   end
 end
@@ -653,7 +655,7 @@ function PartyFrames:LayoutPetFrames()
 
     if pet and owner then
       pet:ClearAllPoints()
-      pet:SetPoint(petDB.anchorPoint or "TOP", owner, petDB.relativePoint or "BOTTOM", Round(petDB.x or 0), Round(petDB.y or -2))
+      Pixel.Point(pet, petDB.anchorPoint or "TOP", owner, petDB.relativePoint or "BOTTOM", petDB.x or 0, petDB.y or -2)
     end
   end
 end

@@ -8,6 +8,7 @@ local ADDON_NAME, ns = ...
 
 ns.UFText = ns.UFText or {}
 local Text = ns.UFText
+local Pixel = ns.Pixel
 
 local _G = _G
 local CreateFrame = _G.CreateFrame
@@ -27,7 +28,7 @@ local P = select(1, ns.Pleebug:DropIn(Text, { name = "UnitFrames.Text" }))
 
 
 local function Round(v)
-  return ns.Pixel.Round(tonumber(v) or 0)
+  return Pixel.Round(tonumber(v) or 0)
 end
 
 local function ApplyFontStringFrameWidth(fontString, anchorFrame, offsetX)
@@ -37,7 +38,19 @@ local function ApplyFontStringFrameWidth(fontString, anchorFrame, offsetX)
   end
 
   local inset = math_abs(tonumber(offsetX) or 0)
-  fontString:SetWidth(Round(math_max(1, width - inset)))
+  Pixel.Width(fontString, math_max(1, width - inset))
+end
+
+local function ResolveHorizontalJustification(anchor, defaultHorizontal)
+  if anchor == "LEFT" or anchor == "TOPLEFT" or anchor == "BOTTOMLEFT" then
+    return "LEFT"
+  elseif anchor == "RIGHT" or anchor == "TOPRIGHT" or anchor == "BOTTOMRIGHT" then
+    return "RIGHT"
+  elseif anchor == "TOP" or anchor == "BOTTOM" or anchor == "CENTER" then
+    return "CENTER"
+  end
+
+  return defaultHorizontal
 end
 
 local HEALTH_TAGS = {
@@ -390,18 +403,12 @@ function Text.ApplyUnitTextLayout(frame, unit, cfg, useConfigText)
 
   if frame.NameText then
     local _, _, _, anchor, dx, dy = Text.ResolveFontForText(unit, "name", nil, cfg, useConfigText)
-    local justify = "LEFT"
-    if anchor == "CENTER" then
-      justify = "CENTER"
-    elseif anchor == "RIGHT" then
-      justify = "RIGHT"
-    end
-
     frame.__puiNameAnchor = anchor or "LEFT"
+    local justifyH = ResolveHorizontalJustification(frame.__puiNameAnchor, "LEFT")
 
     frame.NameText:ClearAllPoints()
-    frame.NameText:SetJustifyH(justify)
-    frame.NameText:SetPoint(frame.__puiNameAnchor, healthBar, frame.__puiNameAnchor, Round(dx or 0), Round(dy or 0))
+    frame.NameText:SetJustifyH(justifyH)
+    Pixel.Point(frame.NameText, frame.__puiNameAnchor, healthBar, frame.__puiNameAnchor, dx or 0, dy or 0)
     ApplyFontStringFrameWidth(frame.NameText, healthBar, dx)
 
     frame.NameText:SetMaxLines(1)
@@ -410,41 +417,22 @@ function Text.ApplyUnitTextLayout(frame, unit, cfg, useConfigText)
 
   if frame.HealthText then
     local _, _, _, anchor, dx, dy = Text.ResolveFontForText(unit, "health", nil, cfg, useConfigText)
-    local justify = "RIGHT"
-    if anchor == "CENTER" then
-      justify = "CENTER"
-    elseif anchor == "LEFT" then
-      justify = "LEFT"
-    end
-
     frame.__puiHealthAnchor = anchor or "RIGHT"
+    local justifyH = ResolveHorizontalJustification(frame.__puiHealthAnchor, "RIGHT")
 
     frame.HealthText:ClearAllPoints()
-    frame.HealthText:SetJustifyH(justify)
-    frame.HealthText:SetPoint(frame.__puiHealthAnchor, healthBar, frame.__puiHealthAnchor, Round(dx or 0), Round(dy or 0))
-
-    if frame.NameText
-      and (not cfg or not cfg.text or cfg.text.hideNameText ~= true)
-      and (not cfg or not cfg.text or cfg.text.hideHealthText ~= true)
-      and frame.__puiNameAnchor == "LEFT"
-      and frame.__puiHealthAnchor == "RIGHT"
-    then
-      frame.NameText:SetPoint("RIGHT", frame.HealthText, "LEFT", -Round(4), 0)
-    end
+    frame.HealthText:SetJustifyH(justifyH)
+    Pixel.Point(frame.HealthText, frame.__puiHealthAnchor, healthBar, frame.__puiHealthAnchor, dx or 0, dy or 0)
   end
 
   if frame.PowerText and powerBar then
     local _, _, _, anchor, dx, dy = Text.ResolveFontForText(unit, "power", nil, cfg, useConfigText)
-    local justify = "RIGHT"
-    if anchor == "CENTER" then
-      justify = "CENTER"
-    elseif anchor == "LEFT" then
-      justify = "LEFT"
-    end
+    anchor = anchor or "RIGHT"
+    local justifyH = ResolveHorizontalJustification(anchor, "RIGHT")
 
     frame.PowerText:ClearAllPoints()
-    frame.PowerText:SetJustifyH(justify)
-    frame.PowerText:SetPoint(anchor or "RIGHT", powerBar, anchor or "RIGHT", Round(dx or 0), Round(dy or 0))
+    frame.PowerText:SetJustifyH(justifyH)
+    Pixel.Point(frame.PowerText, anchor, powerBar, anchor, dx or 0, dy or 0)
   end
 end
 
@@ -512,7 +500,7 @@ function Text.Construct(frame, unit, cfg, deferLayout)
     parent:SetParent(frame.RaisedElementParent)
   end
 
-  parent:SetAllPoints(frame)
+  Pixel.AllPoints(parent, frame)
   parent:EnableMouse(false)
   parent:Show()
   frame.TextParent = parent
@@ -802,6 +790,7 @@ end
 
   Round = P:Def("Text.Round", Round)
   ApplyFontStringFrameWidth = P:Def("Text.ApplyFontStringFrameWidth", ApplyFontStringFrameWidth)
+  ResolveHorizontalJustification = P:Def("Text.ResolveHorizontalJustification", ResolveHorizontalJustification)
   ShouldShortenValues = P:Def("Text.ShouldShortenValues", ShouldShortenValues)
   Text.GetUnitTextConfig = P:Def("Text.GetUnitTextConfig", Text.GetUnitTextConfig)
   PickTextValue = P:Def("PickTextValue", PickTextValue)

@@ -16,6 +16,8 @@ ns.UFAuraHighlight = AuraHighlight
 
 local Round = ns.Pixel.Round
 
+local SUPPORTS_NATIVE_AURA_TRACKING_ENABLE = select(4, _G.GetBuildInfo()) >= 120105
+
 local DISABLED_CANDIDATE_FILTERS = {
   includeSpellIDs = {
     [0] = true,
@@ -242,10 +244,15 @@ function AuraHighlight.SetRuntimeEnabled(runtime, enabled)
   enabled = enabled == true
   if runtime.enabled ~= enabled then
     runtime.enabled = enabled
-    runtime.container:SetAuraSlotCandidateFilters(
-      runtime.slotKey,
-      enabled and ENABLED_CANDIDATE_FILTERS or DISABLED_CANDIDATE_FILTERS
-    )
+
+    if SUPPORTS_NATIVE_AURA_TRACKING_ENABLE then
+      runtime.container:SetAuraSlotEnabled(runtime.slotKey, enabled)
+    else
+      runtime.container:SetAuraSlotCandidateFilters(
+        runtime.slotKey,
+        enabled and ENABLED_CANDIDATE_FILTERS or DISABLED_CANDIDATE_FILTERS
+      )
+    end
   end
 end
 
@@ -261,9 +268,9 @@ function AuraHighlight.AttachContainer(frame, container)
     enabled = enabled,
   }
   local options = {
-    candidateFilters = enabled
+    candidateFilters = SUPPORTS_NATIVE_AURA_TRACKING_ENABLE
       and ENABLED_CANDIDATE_FILTERS
-      or DISABLED_CANDIDATE_FILTERS,
+      or (enabled and ENABLED_CANDIDATE_FILTERS or DISABLED_CANDIDATE_FILTERS),
   }
 
   options.initializeFrame = function(button)
@@ -271,6 +278,9 @@ function AuraHighlight.AttachContainer(frame, container)
   end
 
   runtime.slotKey = container:AddSlot("HARMFUL|RAID", options)
+  if SUPPORTS_NATIVE_AURA_TRACKING_ENABLE and not enabled then
+    container:SetAuraSlotEnabled(runtime.slotKey, false)
+  end
   return runtime
 end
 

@@ -473,9 +473,7 @@ end
 
 local function CreateEquippedBorderEdge(parent, alpha)
   local edge = parent:CreateTexture(nil, "OVERLAY")
-  edge:SetColorTexture(0, 1, 0, alpha)
-  edge:SetSnapToPixelGrid(false)
-  edge:SetTexelSnappingBias(0)
+  Pixel.SetColorTexture(edge, 0, 1, 0, alpha)
   return edge
 end
 
@@ -541,7 +539,7 @@ local function LayoutEquippedBorderVisual(button)
     return
   end
 
-  local onePixel = FrameScale:BestOnePixel()
+  local onePixel = Pixel.GetOnePixel()
   if visual.onePixel == onePixel then
     return
   end
@@ -946,7 +944,7 @@ local VERTICAL_CENTER_POINTS = {
 }
 
 local function SnapActionBarAnchorOffset(value, frameSize, frameCentered, relativeSize, relativeCentered)
-  local onePixel = FrameScale:BestOnePixel()
+  local onePixel = Pixel.GetOnePixel()
   local valuePixels = (tonumber(value) or 0) / onePixel
   local framePixels = math_floor(((tonumber(frameSize) or 0) / onePixel) + 0.5)
   local relativePixels = math_floor(((tonumber(relativeSize) or 0) / onePixel) + 0.5)

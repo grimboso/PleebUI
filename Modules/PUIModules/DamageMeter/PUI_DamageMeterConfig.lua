@@ -15,7 +15,7 @@ local BREAKDOWN_ROW_POOL_SIZE = Constants.BREAKDOWN_ROW_POOL_SIZE
 local METER_TYPES = Constants.METER_TYPES
 local SESSION_TYPES = Constants.SESSION_TYPES
 local Clamp = ns.DamageMeterUtil.Clamp
-local Round = ns.DamageMeterUtil.Round
+local Round = ns.Pixel.Round
 
 local DEFAULT_WINDOW_POSITIONS = {
   [1] = { x = 420, y = -250 },

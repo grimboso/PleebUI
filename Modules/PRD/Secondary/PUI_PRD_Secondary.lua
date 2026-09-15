@@ -373,7 +373,7 @@ end
 function Secondary.GetSecondaryDividerSize(secCfg)
   local size = Pixel.Round(tonumber(secCfg.dividerSize) or 1)
   if size < 1 then
-    size = ns.FrameScale:BestOnePixel() or Pixel.Round(1)
+    size = ns.Pixel.GetOnePixel() or Pixel.Round(1)
   end
   return size
 end

@@ -329,7 +329,7 @@ local function LayoutChargeSlots(parts, state)
   local borderSize = cfg.showSlotBorder == true
     and math_max(0, tonumber(cfg.slotBorderThickness) or 2) * scale
     or 0
-  local inset = borderSize * ns.FrameScale:BestOnePixel()
+  local inset = borderSize * ns.Pixel.GetOnePixel()
   local joinedSlots = spacing == 0
   local fillDirection = tostring(
     cfg.fillDirection or (vertical and "UP" or "RIGHT")
@@ -669,7 +669,7 @@ function PCMBarAdapter.ApplyGeometry(parts, state)
     0,
     tonumber(state.borderSize or cfg.borderSize or cfg.borderThickness) or 2
   )
-  local borderInset = borderSize * ns.FrameScale:BestOnePixel()
+  local borderInset = borderSize * ns.Pixel.GetOnePixel()
   parts.status:SetPoint("TOPLEFT", parts.barFrame, "TOPLEFT", borderInset, -borderInset)
   parts.status:SetPoint("BOTTOMRIGHT", parts.barFrame, "BOTTOMRIGHT", -borderInset, borderInset)
   parts.status:SetOrientation(vertical and "VERTICAL" or "HORIZONTAL")

@@ -1079,7 +1079,7 @@ function M:GetBarBorderThickness(style, owner)
     local minimum = math.min(width, height)
 
     if minimum > 0 then
-      local onePixel = ns.FrameScale:BestOnePixel()
+      local onePixel = ns.Pixel.GetOnePixel()
       local maximum = (minimum - onePixel) * 0.5
       if maximum < 0 then
         maximum = 0

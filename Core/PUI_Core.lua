@@ -32,11 +32,7 @@ local LibDeflate = LibStub("LibDeflate")
 local LibDualSpec = LibStub("LibDualSpec-1.0")
 ns.Pleebug = LibStub("LibPleebug-1")
 
-ns.Pixel = {
-  Round = function(value)
-    return ns.FrameScale:Scale(value)
-  end,
-}
+ns.Pixel = {}
 
 local Addon = AceAddon:NewAddon(ADDON_NAME, "NumyAceEvent-3.0")
 ns.Addon = Addon

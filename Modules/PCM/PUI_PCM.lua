@@ -2261,7 +2261,7 @@ local function _LayoutTwoRowWrap(frame, icons, key, count, firstRowLimit, iconSi
       fixedW - ((fittedColumns - 1) * spacing)
     ) / fittedColumns
 
-    local onePixel = ns.FrameScale:BestOnePixel()
+    local onePixel = ns.Pixel.GetOnePixel()
     row1IconSize = math.floor(row1IconSize / onePixel) * onePixel
   else
     row1IconSize = RoundPixel(row1IconSize)
@@ -2280,7 +2280,7 @@ local function _LayoutTwoRowWrap(frame, icons, key, count, firstRowLimit, iconSi
 
     row2IconSize = math.min(row1IconSize, fittedRow2Size)
 
-    local onePixel = ns.FrameScale:BestOnePixel()
+    local onePixel = ns.Pixel.GetOnePixel()
     row2IconSize = math.floor(row2IconSize / onePixel) * onePixel
     if row2IconSize < 1 then row2IconSize = 1 end
   end
@@ -4916,7 +4916,7 @@ function Cooldowns:OnEnable()
   _PCM_SetChildModulesEnabled(true)
   self:_Keybinds_Enable()
 
-  self.__puiFrameScale = FrameScale:BestOnePixel()
+  self.__puiFrameScale = Pixel.GetOnePixel()
   FrameScale:RegisterScaleListener(_PCM_OnFrameScaleChanged)
 
   _PCM_RunInitialViewerPass(self)

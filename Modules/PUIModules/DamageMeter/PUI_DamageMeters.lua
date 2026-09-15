@@ -159,10 +159,6 @@ Constants.SESSION_TYPES = {
   OVERALL = Enum.DamageMeterSessionType.Overall,
 }
 
-function Util.Round(value)
-  return ns.Pixel.Round(value)
-end
-
 function Util.Clamp(value, minimum, maximum)
   if value < minimum then
     return minimum
@@ -196,7 +192,6 @@ function Util.IsRatePrimaryMeter(meterKey)
   return meterKey == "DPS" or meterKey == "HPS"
 end
 
-Util.Round = P:Def("Round", Util.Round)
 Util.Clamp = P:Def("Clamp", Util.Clamp)
 Util.GetViewportRowCount = P:Def("GetViewportRowCount", Util.GetViewportRowCount)
 Util.IsSecret = P:Def("IsSecret", Util.IsSecret)

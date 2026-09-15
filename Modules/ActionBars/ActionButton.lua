@@ -965,7 +965,10 @@ UpdateButtonCooldown = function(button, refreshCharge, refreshLossOfControl)
     if replaceNormalCooldown or not hasChargeCooldown then
       button.chargeCooldown:SetCooldownFromDurationObject(EMPTY_COOLDOWN_DURATION, true)
     else
-      button.chargeCooldown:SetCooldownFromDurationObject(GetActionChargeDuration(action), true)
+      button.chargeCooldown:SetCooldownFromDurationObject(
+        GetActionChargeDuration(action) or EMPTY_COOLDOWN_DURATION,
+        true
+      )
     end
   end
 end
