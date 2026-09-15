@@ -492,17 +492,31 @@ function Addon:EnsureSchema()
   _PUI_EnsureTable(cm, "viewerSwipes")
   _PUI_EnsureTable(cm, "iconSettings")
   _PUI_EnsureTable(cm, "count")
+  local cmEditModeSettings = _PUI_EnsureTable(cm, "editModeSettings")
+  local cmViewerTooltips = _PUI_EnsureTable(cmEditModeSettings, "showTooltips")
+  local cmViewerHideWhenInactive = _PUI_EnsureTable(cmEditModeSettings, "hideWhenInactive")
+
+  if cmEditModeSettings.profileVersion == nil then
+    cmViewerHideWhenInactive.BuffIconCooldownViewer = true
+    cmViewerHideWhenInactive.BuffBarCooldownViewer = true
+    cmEditModeSettings.profileVersion = 1
+  end
+
+  if cmViewerTooltips.EssentialCooldownViewer == nil then cmViewerTooltips.EssentialCooldownViewer = true end
+  if cmViewerTooltips.UtilityCooldownViewer == nil then cmViewerTooltips.UtilityCooldownViewer = true end
+  if cmViewerTooltips.BuffIconCooldownViewer == nil then cmViewerTooltips.BuffIconCooldownViewer = true end
+  if cmViewerTooltips.BuffBarCooldownViewer == nil then cmViewerTooltips.BuffBarCooldownViewer = true end
+  if cmViewerHideWhenInactive.BuffIconCooldownViewer == nil then cmViewerHideWhenInactive.BuffIconCooldownViewer = true end
+  if cmViewerHideWhenInactive.BuffBarCooldownViewer == nil then cmViewerHideWhenInactive.BuffBarCooldownViewer = true end
 
   -- Borders structure + defaults
   local bModule  = _PUI_EnsureTable(cmBorders, "module")
   local bViewer  = _PUI_EnsureTable(cmBorders, "viewer")
-  local bIcon    = _PUI_EnsureTable(cmBorders, "icon")
   local bBuffBar = _PUI_EnsureTable(cmBorders, "buffBar")
 
   if cmBorders.enabled == nil then cmBorders.enabled = true end
   if bModule.enabled == nil then bModule.enabled = true end
   if bViewer.enabled == nil then bViewer.enabled = true end
-  if bIcon.enabled == nil then bIcon.enabled = true end
   if bBuffBar.enabled == nil then bBuffBar.enabled = true end
 
   -- Style defaults (so Options never has to seed)
@@ -522,10 +536,10 @@ function Addon:EnsureSchema()
   -- PCM Buffs root + minimal structure used by Options/runtimes
   local pb = _PUI_EnsureTable(p, "pcmBuffs")
   local pbStyle = _PUI_EnsureTable(pb, "style")
-  local pbBorders = _PUI_EnsureTable(pb, "borders")
 
   _PUI_EnsureTable(pbStyle, "viewerSizes")
   _PUI_EnsureTable(pbStyle, "viewerSpacing")
+  _PUI_EnsureTable(pbStyle, "viewerColumns")
   local pbViewerGrowth = _PUI_EnsureTable(pbStyle, "viewerGrowth")
 
   if pbStyle.iconSize == nil then pbStyle.iconSize = 36 end
@@ -533,9 +547,6 @@ function Addon:EnsureSchema()
   if pbViewerGrowth.BuffIconCooldownViewer == nil then pbViewerGrowth.BuffIconCooldownViewer = "CENTER" end
 
   pui.schemaVersion = PUI_SCHEMA_VERSION
-
-  local pbIcon = _PUI_EnsureTable(pbBorders, "icon")
-  _PUI_EnsureTable(pbIcon, "viewers")
 
   -- PCM Toggles (Core owns defaults)
   local t = _PUI_EnsureTable(p, "pcmToggles")
