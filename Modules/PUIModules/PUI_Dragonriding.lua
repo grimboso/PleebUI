@@ -183,7 +183,7 @@ end
 
 local _WS_INTERP = Enum.StatusBarInterpolation.ExponentialEaseOut
 local _TIMER_DIRECTION_ELAPSED = Enum.StatusBarTimerDirection.ElapsedTime
-local _CHARGE_INTERP = Enum.StatusBarInterpolation.Immediate
+local _CHARGE_INTERP = Enum.StatusBarInterpolation.ExponentialEaseOut
 
 local function _ClearRechargeBar(rechargeBar)
   if not rechargeBar then
@@ -209,11 +209,23 @@ local function _LayoutRechargeBar(baseBar, rechargeBar, maxCharges)
     return false
   end
 
+  local width = baseBar:GetWidth()
+  if rechargeBar.__puiDragonridingLayoutTexture == trackerTexture
+    and rechargeBar.__puiDragonridingLayoutMax == maxCharges
+    and rechargeBar.__puiDragonridingLayoutWidth == width
+  then
+    return true
+  end
+
+  rechargeBar.__puiDragonridingLayoutTexture = trackerTexture
+  rechargeBar.__puiDragonridingLayoutMax = maxCharges
+  rechargeBar.__puiDragonridingLayoutWidth = width
+
   rechargeBar:ClearAllPoints()
   rechargeBar:SetPoint("LEFT", trackerTexture, "RIGHT", 0, 0)
   rechargeBar:SetPoint("TOP", baseBar, "TOP", 0, 0)
   rechargeBar:SetPoint("BOTTOM", baseBar, "BOTTOM", 0, 0)
-  rechargeBar:SetWidth(Round(baseBar:GetWidth() / maxCharges))
+  rechargeBar:SetWidth(Round(width / maxCharges))
   return true
 end
 
@@ -270,11 +282,6 @@ local _cache = {
   swStart = 0,
   swDur   = 0,
   swRate  = 1,
-
-  wsStart   = 0,
-  wsDur     = 0,
-  wsEnabled = 1,
-  wsIsGCD   = false,
 }
 
 local function _RefreshGlidingState()
@@ -299,22 +306,6 @@ local function _RefreshSecondWindState()
   _cache.swStart = tonumber(start) or 0
   _cache.swDur   = tonumber(dur) or 0
   _cache.swRate  = tonumber(rate) or 1
-end
-
-local function _RefreshWhirlingSurgeState()
-  local cd = C_Spell.GetSpellCooldown(WHIRLING_SURGE_SPELL_ID)
-  if not cd then
-    _cache.wsStart   = 0
-    _cache.wsDur     = 0
-    _cache.wsEnabled = 1
-    _cache.wsIsGCD   = false
-    return
-  end
-
-  _cache.wsStart   = tonumber(cd.startTime) or 0
-  _cache.wsDur     = tonumber(cd.duration) or 0
-  _cache.wsEnabled = cd.isEnabled and 1 or 0
-  _cache.wsIsGCD   = cd.isOnGCD == true
 end
 
 local function _RefreshTickerState(runtime)
@@ -804,7 +795,6 @@ end
 
 local _vigorTimerCur, _vigorTimerMax, _vigorTimerStart, _vigorTimerDur, _vigorTimerRate
 local _swTimerCur, _swTimerMax, _swTimerStart, _swTimerDur, _swTimerRate
-local _wsLastSigStart, _wsLastSigDur, _wsLastSigEnabled, _wsLastSigIsGCD
 
 local function _ApplyVigorChargeState()
   if not vigorBar or not vigorRechargeBar then
@@ -866,43 +856,19 @@ local function _ApplySecondWindChargeState()
   _ApplyChargeBarState(swBar, swRechargeBar, SECOND_WIND_SPELL_ID, cur, max, charging)
 end
 
-local function _UpdateWSWithTimer(cdStart, cdDur, cdEnabled, isGCD)
-  if not wsBar then return end
-
-  local interp = _WS_INTERP
-
-  isGCD = isGCD and true or false
-  if _wsLastSigStart == cdStart
-    and _wsLastSigDur == cdDur
-    and _wsLastSigEnabled == cdEnabled
-    and _wsLastSigIsGCD == isGCD
-  then
-    return
-  end
-
-  _wsLastSigStart = cdStart
-  _wsLastSigDur = cdDur
-  _wsLastSigEnabled = cdEnabled
-  _wsLastSigIsGCD = isGCD
-
-  if isGCD then
-    _WS_SetReady(interp)
-    return
-  end
-
-  if cdEnabled == 0 or not (cdDur and cdDur > 2 and cdStart and cdStart > 0) then
-    _WS_SetReady(interp)
+local function _RefreshWhirlingSurgeTimer()
+  if not wsBar then
     return
   end
 
   local durationObject = C_Spell.GetSpellCooldownDuration(WHIRLING_SURGE_SPELL_ID, true)
   if not durationObject then
-    _WS_SetReady(interp)
+    _WS_SetReady(_WS_INTERP)
     return
   end
 
   wsBar:SetMinMaxValues(0, 1)
-  wsBar:SetTimerDuration(durationObject, interp, _TIMER_DIRECTION_ELAPSED)
+  wsBar:SetTimerDuration(durationObject, _WS_INTERP, _TIMER_DIRECTION_ELAPSED)
 end
 
 local function _ApplyChargeBars(runtime)
@@ -935,7 +901,7 @@ local function _ApplyWhirlingSurgeBar(runtime)
     if not wsBar:IsShown() then
       wsBar:Show()
     end
-    _UpdateWSWithTimer(_cache.wsStart or 0, _cache.wsDur or 0, _cache.wsEnabled, _cache.wsIsGCD)
+    _RefreshWhirlingSurgeTimer()
   elseif wsBar and wsBar:IsShown() then
     wsBar:Hide()
   end
@@ -997,7 +963,6 @@ local function _RefreshRuntimeState(owner)
 
     _RefreshVigorState()
     _RefreshSecondWindState()
-    _RefreshWhirlingSurgeState()
 
     if previousVigorMax ~= _cache.vigorMax or previousSecondWindMax ~= _cache.swMax then
       _RefreshMarkerLayout(_runtime)
@@ -1042,27 +1007,41 @@ function Dragonriding:_OnSpellUpdateCharges()
   local previousSecondWindMax = _cache.swMax
 
   _RefreshVigorState()
-  _RefreshSecondWindState()
 
-  if previousVigorMax ~= _cache.vigorMax or previousSecondWindMax ~= _cache.swMax then
+  if _runtime.swEnabled then
+    _RefreshSecondWindState()
+  end
+
+  if previousVigorMax ~= _cache.vigorMax
+    or (_runtime.swEnabled and previousSecondWindMax ~= _cache.swMax)
+  then
     _RefreshMarkerLayout(_runtime)
   end
 
   _ApplyChargeBars(_runtime)
-  _UpdateTexts(
-    _runtime,
-    _cache.vigorCur or 0,
-    _cache.vigorMax or 0,
-    _cache.speed or 0
-  )
+
+  if _runtime.showVigorText then
+    _UpdateTexts(
+      _runtime,
+      _cache.vigorCur or 0,
+      _cache.vigorMax or 0,
+      _cache.speed or 0
+    )
+  end
 end
 
-function Dragonriding:_OnSpellUpdateCooldown()
+function Dragonriding:_OnSpellUpdateCooldown(event, spellID, baseSpellID)
   if not _cache.gliding then
     return
   end
 
-  _RefreshWhirlingSurgeState()
+  if spellID ~= nil
+    and spellID ~= WHIRLING_SURGE_SPELL_ID
+    and baseSpellID ~= WHIRLING_SURGE_SPELL_ID
+  then
+    return
+  end
+
   _ApplyWhirlingSurgeBar(_runtime)
 end
 
@@ -1122,10 +1101,6 @@ function Dragonriding:OnDisable()
     BarWidget.StopTimerBar(wsBar)
     wsBar:Hide()
   end
-  _wsLastSigStart = nil
-  _wsLastSigDur = nil
-  _wsLastSigEnabled = nil
-  _wsLastSigIsGCD = nil
 
   if moverGhost then
     moverGhost:Hide()
@@ -1548,7 +1523,6 @@ end
   _RefreshGlidingState = P:Def("_RefreshGlidingState", _RefreshGlidingState)
   _RefreshVigorState = P:Def("_RefreshVigorState", _RefreshVigorState)
   _RefreshSecondWindState = P:Def("_RefreshSecondWindState", _RefreshSecondWindState)
-  _RefreshWhirlingSurgeState = P:Def("_RefreshWhirlingSurgeState", _RefreshWhirlingSurgeState)
   _RefreshTickerState = P:Def("_RefreshTickerState", _RefreshTickerState)
   _ApplyStyle = P:Def("_ApplyStyle", _ApplyStyle)
   _UpdateSegmentMarkers = P:Def("_UpdateSegmentMarkers", _UpdateSegmentMarkers)
@@ -1560,7 +1534,7 @@ end
   _WS_SetReady = P:Def("_WS_SetReady", _WS_SetReady)
   _ApplyVigorChargeState = P:Def("_ApplyVigorChargeState", _ApplyVigorChargeState)
   _ApplySecondWindChargeState = P:Def("_ApplySecondWindChargeState", _ApplySecondWindChargeState)
-  _UpdateWSWithTimer = P:Def("_UpdateWSWithTimer", _UpdateWSWithTimer)
+  _RefreshWhirlingSurgeTimer = P:Def("_RefreshWhirlingSurgeTimer", _RefreshWhirlingSurgeTimer)
   _ApplyChargeBars = P:Def("_ApplyChargeBars", _ApplyChargeBars)
   _ApplyWhirlingSurgeBar = P:Def("_ApplyWhirlingSurgeBar", _ApplyWhirlingSurgeBar)
   _Tick = P:Def("_Tick", _Tick)
