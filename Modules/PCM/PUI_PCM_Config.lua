@@ -101,6 +101,7 @@ local function _PCM_EnsureRootDefaults(cm)
 
   cm.borders.module  = cm.borders.module  or {}
   cm.borders.viewer  = cm.borders.viewer  or {}
+  cm.borders.icon    = cm.borders.icon    or {}
   cm.borders.buffBar = cm.borders.buffBar or {}
 
   if cm.borders.enabled == nil then
@@ -111,6 +112,9 @@ local function _PCM_EnsureRootDefaults(cm)
   end
   if cm.borders.viewer.enabled == nil then
     cm.borders.viewer.enabled = true
+  end
+  if cm.borders.icon.enabled == nil then
+    cm.borders.icon.enabled = true
   end
   if cm.borders.buffBar.enabled == nil then
     cm.borders.buffBar.enabled = true
@@ -208,12 +212,14 @@ local function _PCM_EnsureBuffRootDefaults(cm)
   local style = cm.style
   style.viewerSizes   = style.viewerSizes   or {}
   style.viewerSpacing = style.viewerSpacing or {}
-  style.viewerColumns = style.viewerColumns or {}
   style.viewerGrowth  = style.viewerGrowth  or {}
 
   if style.iconSize == nil then style.iconSize = 36 end
   if style.iconSpacing == nil then style.iconSpacing = 1 end
 
+  local borders = cm.borders
+  borders.icon = borders.icon or {}
+  borders.icon.viewers = borders.icon.viewers or {}
 end
 
 local function GetPCMBuffsRoot()
@@ -470,6 +476,25 @@ local function GetViewerFontConfig(viewerKey)
   return fonts, v
 end
 
+local function _PCM_GetBuffIconBorderDB(cm, viewerKey)
+  cm.borders = cm.borders or {}
+  cm.borders.icon = cm.borders.icon or {}
+  cm.borders.icon.viewers = cm.borders.icon.viewers or {}
+
+  local b = cm.borders.icon.viewers[viewerKey]
+  if not b then
+    b = {}
+    cm.borders.icon.viewers[viewerKey] = b
+  end
+
+  b.buffColor = b.buffColor or b.color or { r = 0, g = 0, b = 0, a = 1 }
+  b.debuffColor = b.debuffColor or b.buffColor
+  b.pandemicColor = b.pandemicColor or b.buffColor
+  b.color = b.buffColor
+
+  return b
+end
+
 local function _PCM_GetFontColorValue(tbl)
   local c = tbl and tbl.color or nil
   local r, g, b, a = 1, 1, 1, 1
@@ -512,7 +537,7 @@ local function _PCM_BuildBuffIconFontArgs(cm, viewerKey, prefix, fontKey, orderB
     min = 0,
     max = 48,
     step = 1,
-    
+
     get = function()
       local f = GetFontTable()
       local sz = tonumber(f.size) or 0
@@ -537,7 +562,7 @@ local function _PCM_BuildBuffIconFontArgs(cm, viewerKey, prefix, fontKey, orderB
     dialogControl = "LSM30_Font",
     name = prefix .. " font",
     order = orderBase + 2,
-    
+
     values = function()
       return OptionsUtil.BuildFontValues(false, "Use theme default", "")
     end,
@@ -556,7 +581,7 @@ local function _PCM_BuildBuffIconFontArgs(cm, viewerKey, prefix, fontKey, orderB
     type = "select",
     name = prefix .. " font outline",
     order = orderBase + 3,
-    
+
     values = function()
       return OptionsUtil.BuildOutlineValues(true, "Use theme default", "")
     end,
@@ -578,7 +603,7 @@ local function _PCM_BuildBuffIconFontArgs(cm, viewerKey, prefix, fontKey, orderB
     min = -64,
     max = 64,
     step = 1,
-    
+
     get = function()
       local f = GetFontTable()
       local off = tonumber(f.offsetX) or 0
@@ -600,7 +625,7 @@ local function _PCM_BuildBuffIconFontArgs(cm, viewerKey, prefix, fontKey, orderB
     min = -64,
     max = 64,
     step = 1,
-    
+
     get = function()
       local f = GetFontTable()
       local off = tonumber(f.offsetY) or 0
@@ -620,7 +645,7 @@ local function _PCM_BuildBuffIconFontArgs(cm, viewerKey, prefix, fontKey, orderB
     name = prefix .. " font color",
     order = orderBase + 6,
     hasAlpha = true,
-    
+
     get = function()
       return _PCM_GetFontColorValue(GetFontTable())
     end,
@@ -639,7 +664,6 @@ local _PCM_BuildIconOverrideTreeArgs
 
 local function _PCM_BuildBuffIconsTabArgs()
   local cm = GetPCMBuffsRoot()
-  local viewerCM = GetPCMRoot()
   local args = {}
   local viewerKey = "BuffIconCooldownViewer"
 
@@ -648,7 +672,7 @@ local function _PCM_BuildBuffIconsTabArgs()
       type = "description",
       name = "Buffs profile is not available.",
       order = 1,
-      
+
     }
     return args
   end
@@ -656,11 +680,7 @@ local function _PCM_BuildBuffIconsTabArgs()
   args.showTooltips = {
     type = "toggle",
     name = "Show tooltips",
-    desc = "Saved in Blizzard Edit Mode for this character.",
     order = 7,
-    disabled = function()
-      return not Cooldowns:CanChangeViewerEditModeSettings()
-    end,
     get = function()
       return Cooldowns:GetViewerTooltipsEnabled(viewerKey)
     end,
@@ -672,11 +692,7 @@ local function _PCM_BuildBuffIconsTabArgs()
   args.hideWhenInactive = {
     type = "toggle",
     name = "Hide when inactive",
-    desc = "Saved in Blizzard Edit Mode for this character.",
     order = 8,
-    disabled = function()
-      return not Cooldowns:CanChangeViewerEditModeSettings()
-    end,
     get = function()
       return Cooldowns:GetViewerHideWhenInactive(viewerKey)
     end,
@@ -710,7 +726,7 @@ local function _PCM_BuildBuffIconsTabArgs()
     min = 12,
     max = 86,
     step = 1,
-    
+
     get = function()
       return GetViewerIconSize(cm, viewerKey)
     end,
@@ -727,7 +743,7 @@ local function _PCM_BuildBuffIconsTabArgs()
     min = 0,
     max = 8,
     step = 1,
-    
+
     get = function()
       return GetViewerIconSpacing(cm, viewerKey)
     end,
@@ -737,41 +753,74 @@ local function _PCM_BuildBuffIconsTabArgs()
     end,
   }
 
-  args.iconsPerRow = {
-    type = "range",
-    name = "Max icons per row",
-    desc = "Set 0 to keep the Buff Icon viewer on one row.",
-    order = 12,
-    min = 0,
-    max = 40,
-    step = 1,
-
-    get = function()
-      return GetViewerIconsPerRow(cm, viewerKey)
-    end,
-    set = function(_, v)
-      SetViewerIconsPerRow(cm, viewerKey, v)
-      _PCM_RefreshBuffIconViewer(viewerKey)
-    end,
-  }
-
   args.viewerBorderColor = {
     type = "color",
     name = "Border color",
-    order = 20,
+    order = 12,
     hasAlpha = true,
-    
+
     get = function()
-      local _, vb = GetViewerBorderDB(viewerCM, viewerKey)
+      local _, vb = GetViewerBorderDB(cm, viewerKey)
       local c = vb.color or { 1, 1, 1, 1 }
       return c.r or c[1] or 1, c.g or c[2] or 1, c.b or c[3] or 1, c.a or c[4] or 1
     end,
     set = function(_, r, g, b, a)
-      local _, vb = GetViewerBorderDB(viewerCM, viewerKey)
+      local _, vb = GetViewerBorderDB(cm, viewerKey)
       vb.color = { r, g, b, a or 1 }
       vb.useModule = false
-      Cooldowns.SetViewerBorderColor(viewerKey, r, g, b, a or 1)
-      Cooldowns._RefreshViewerBordersOnly(viewerKey)
+      _PCM_RefreshBuffIconViewer(viewerKey)
+    end,
+  }
+
+  args.buffBorderColor = {
+    type = "color",
+    name = "Buff border color",
+    order = 20,
+    hasAlpha = true,
+
+    get = function()
+      local c = _PCM_GetBuffIconBorderDB(cm, viewerKey).buffColor
+      return c.r, c.g, c.b, c.a
+    end,
+    set = function(_, r, g, b, a)
+      local db = _PCM_GetBuffIconBorderDB(cm, viewerKey)
+      db.buffColor.r, db.buffColor.g, db.buffColor.b, db.buffColor.a = r, g, b, a
+      db.color = db.buffColor
+      _PCM_RefreshBuffIconViewer(viewerKey)
+    end,
+  }
+
+  args.debuffBorderColor = {
+    type = "color",
+    name = "Debuff border color",
+    order = 21,
+    hasAlpha = true,
+
+    get = function()
+      local c = _PCM_GetBuffIconBorderDB(cm, viewerKey).debuffColor
+      return c.r, c.g, c.b, c.a
+    end,
+    set = function(_, r, g, b, a)
+      local c = _PCM_GetBuffIconBorderDB(cm, viewerKey).debuffColor
+      c.r, c.g, c.b, c.a = r, g, b, a
+      _PCM_RefreshBuffIconViewer(viewerKey)
+    end,
+  }
+
+  args.pandemicBorderColor = {
+    type = "color",
+    name = "Pandemic border color",
+    order = 22,
+    hasAlpha = true,
+
+    get = function()
+      local c = _PCM_GetBuffIconBorderDB(cm, viewerKey).pandemicColor
+      return c.r, c.g, c.b, c.a
+    end,
+    set = function(_, r, g, b, a)
+      local c = _PCM_GetBuffIconBorderDB(cm, viewerKey).pandemicColor
+      c.r, c.g, c.b, c.a = r, g, b, a
+      _PCM_RefreshBuffIconViewer(viewerKey)
     end,
   }
 
@@ -812,7 +861,6 @@ local function _PCM_BuildBuffIconsTabArgs()
         growth = args.growth,
         iconSize = args.iconSize,
         iconSpacing = args.iconSpacing,
-        iconsPerRow = args.iconsPerRow,
       },
     },
     borders = {
@@ -822,6 +870,9 @@ local function _PCM_BuildBuffIconsTabArgs()
       inline = true,
       args = {
         viewerBorderColor = args.viewerBorderColor,
+        buffBorderColor = args.buffBorderColor,
+        debuffBorderColor = args.debuffBorderColor,
+        pandemicBorderColor = args.pandemicBorderColor,
       },
     },
     countText = {
@@ -870,6 +921,25 @@ local function _PCM_GetMainBuffBarsRoot()
 end
 
 
+local function _PCM_GetIconBorderViewerDB(cm, viewerKey)
+  cm.borders = cm.borders or {}
+  cm.borders.icon = cm.borders.icon or {}
+  cm.borders.icon.viewers = cm.borders.icon.viewers or {}
+
+  local b = cm.borders.icon.viewers[viewerKey]
+  if not b then
+    b = {}
+    cm.borders.icon.viewers[viewerKey] = b
+  end
+
+  if b.thickness == nil then
+    b.thickness = 1
+  end
+
+  b.color = b.color or { r = 0, g = 0, b = 0, a = 1 }
+  return b
+end
+
 local function _PCM_BuildCooldownViewerArgs(cm, viewerKey, opts)
   opts = opts or {}
   local args = {}
@@ -878,6 +948,10 @@ local function _PCM_BuildCooldownViewerArgs(cm, viewerKey, opts)
   local function GetViewerBorder()
     local _, viewerBorders = GetViewerBorderDB(cm, viewerKey)
     return viewerBorders
+  end
+
+  local function GetIconBorder()
+    return _PCM_GetIconBorderViewerDB(cm, viewerKey)
   end
 
   local function GetViewerFonts()
@@ -921,7 +995,7 @@ local function _PCM_BuildCooldownViewerArgs(cm, viewerKey, opts)
     type = "select",
     name = "Width mode",
     order = 10,
-    
+
     values = {
       icon = "Icon size",
       fixed = "Fixed width",
@@ -943,7 +1017,7 @@ local function _PCM_BuildCooldownViewerArgs(cm, viewerKey, opts)
     min = 12,
     max = 86,
     step = 1,
-    
+
     hidden = function()
       return GetViewerWidthMode(cm, viewerKey) == "fixed"
     end,
@@ -980,7 +1054,7 @@ local function _PCM_BuildCooldownViewerArgs(cm, viewerKey, opts)
     min = 0,
     max = 8,
     step = 1,
-    
+
     get = function()
       return GetViewerIconSpacing(cm, viewerKey)
     end,
@@ -1000,7 +1074,7 @@ local function _PCM_BuildCooldownViewerArgs(cm, viewerKey, opts)
       min = 0,
       max = 40,
       step = 1,
-      
+
       get = function()
         return GetViewerIconsPerRow(cm, viewerKey)
       end,
@@ -1028,16 +1102,29 @@ local function _PCM_BuildCooldownViewerArgs(cm, viewerKey, opts)
   args.showTooltips = {
     type = "toggle",
     name = "Show tooltips",
-    desc = "Saved in Blizzard Edit Mode for this character.",
     order = 16,
-    disabled = function()
-      return not Cooldowns:CanChangeViewerEditModeSettings()
-    end,
     get = function()
       return Cooldowns:GetViewerTooltipsEnabled(viewerKey)
     end,
     set = function(_, enabled)
       Cooldowns:SetViewerTooltipsEnabled(viewerKey, enabled == true)
+    end,
+  }
+
+  args.iconBorderColor = {
+    type = "color",
+    name = "Icon border color",
+    order = 20,
+    hasAlpha = true,
+
+    get = function()
+      local c = GetIconBorder().color or { r = 0, g = 0, b = 0, a = 1 }
+      return c.r or c[1] or 0, c.g or c[2] or 0, c.b or c[3] or 0, c.a or c[4] or 1
+    end,
+    set = function(_, r, g, b, a)
+      local c = GetIconBorder().color
+      c.r, c.g, c.b, c.a = r, g, b, a
+      _PCM_ConfigRefreshViewers(viewerKey, opts)
     end,
   }
 
@@ -1048,7 +1135,7 @@ local function _PCM_BuildCooldownViewerArgs(cm, viewerKey, opts)
     min = 0,
     max = 6,
     step = 1,
-    
+
     get = function()
       local t = GetViewerBorder().thickness or 2
       t = tonumber(t) or 2
@@ -1071,7 +1158,7 @@ local function _PCM_BuildCooldownViewerArgs(cm, viewerKey, opts)
     name = "Border color",
     order = 31,
     hasAlpha = true,
-    
+
     get = function()
       local c = GetViewerBorder().color or { 1, 1, 1, 1 }
       return c.r or c[1] or 1, c.g or c[2] or 1, c.b or c[3] or 1, c.a or c[4] or 1
@@ -1090,7 +1177,7 @@ local function _PCM_BuildCooldownViewerArgs(cm, viewerKey, opts)
     type = "toggle",
     name = "Show global cooldown swipe",
     order = 40,
-    
+
     get = function()
       local _, v = GetViewerSwipeDB(cm, viewerKey)
       return v and v.gcd ~= false or false
@@ -1106,7 +1193,7 @@ local function _PCM_BuildCooldownViewerArgs(cm, viewerKey, opts)
     type = "toggle",
     name = "Show cooldown swipe",
     order = 41,
-    
+
     get = function()
       local _, v = GetViewerSwipeDB(cm, viewerKey)
       return v and v.cooldown ~= false or false
@@ -1118,28 +1205,12 @@ local function _PCM_BuildCooldownViewerArgs(cm, viewerKey, opts)
     end,
   }
 
-  args.swipeDuration = {
-    type = "toggle",
-    name = "Show aura duration swipe",
-    order = 42,
-
-    get = function()
-      local _, v = GetViewerSwipeDB(cm, viewerKey)
-      return v and v.duration ~= false or false
-    end,
-    set = function(_, enabled)
-      local _, v = GetViewerSwipeDB(cm, viewerKey)
-      v.duration = enabled == true
-      _PCM_ConfigRefreshViewers(viewerKey, opts)
-    end,
-  }
-
   args.swipeColor = {
     type = "color",
     name = "Swipe color",
     order = 42,
     hasAlpha = true,
-    
+
     get = function()
       local _, v = GetViewerSwipeDB(cm, viewerKey)
       local c = v and v.swipeColor or { 0, 0, 0, 0.8 }
@@ -1156,7 +1227,7 @@ local function _PCM_BuildCooldownViewerArgs(cm, viewerKey, opts)
     type = "toggle",
     name = "Show swipe edge",
     order = 43,
-    
+
     get = function()
       local _, v = GetViewerSwipeDB(cm, viewerKey)
       return v and v.drawEdge ~= false or false
@@ -1172,7 +1243,7 @@ local function _PCM_BuildCooldownViewerArgs(cm, viewerKey, opts)
     type = "toggle",
     name = "Show cooldown text",
     order = 44,
-    
+
     get = function()
       cm.count = cm.count or {}
       cm.count[viewerKey] = cm.count[viewerKey] or {}
@@ -1183,24 +1254,11 @@ local function _PCM_BuildCooldownViewerArgs(cm, viewerKey, opts)
     end,
   }
 
-  args.countDuration = {
-    type = "toggle",
-    name = "Show aura duration text",
-    order = 45,
-
-    get = function()
-      return Cooldowns:GetDurationCountEnabled(viewerKey)
-    end,
-    set = function(_, enabled)
-      Cooldowns:SetDurationCountEnabled(viewerKey, enabled == true)
-    end,
-  }
-
   args.countCharge = {
     type = "toggle",
     name = "Show charge count",
     order = 45,
-    
+
     get = function()
       return Cooldowns:GetChargeCountEnabled(viewerKey)
     end,
@@ -1214,14 +1272,24 @@ local function _PCM_BuildCooldownViewerArgs(cm, viewerKey, opts)
     name = "Prefer cooldown display",
     desc = "Use cooldown swipe and text when both displays are available.",
     order = 46,
-    
+
     get = function()
       local _, v = GetViewerSwipeDB(cm, viewerKey)
       return v and v.forceCooldownSwipe == true or false
     end,
     set = function(_, enabled)
       local _, v = GetViewerSwipeDB(cm, viewerKey)
-      v.forceCooldownSwipe = enabled == true
+      local forceCooldown = enabled == true
+
+      v.forceCooldownSwipe = forceCooldown
+      v.duration = not forceCooldown
+
+      if forceCooldown then
+        v.cooldown = true
+        Cooldowns:SetCooldownCountEnabled(viewerKey, true)
+      end
+
+      Cooldowns:SetDurationCountEnabled(viewerKey, not forceCooldown)
       _PCM_ConfigRefreshViewers(viewerKey, opts)
     end,
   }
@@ -1230,7 +1298,7 @@ local function _PCM_BuildCooldownViewerArgs(cm, viewerKey, opts)
     type = "toggle",
     name = "Show buff stacks",
     order = 47,
-    
+
     hidden = true,
     get = function()
       return Cooldowns:GetBuffCountEnabled(viewerKey)
@@ -1244,7 +1312,7 @@ local function _PCM_BuildCooldownViewerArgs(cm, viewerKey, opts)
     type = "toggle",
     name = "Show keybinds",
     order = 50,
-    
+
     get = function()
       return Cooldowns:GetKeybindTextEnabled(viewerKey)
     end,
@@ -1261,7 +1329,7 @@ local function _PCM_BuildCooldownViewerArgs(cm, viewerKey, opts)
     min = 0,
     max = 48,
     step = 1,
-    
+
     get = function()
       local f = GetViewerFonts().cooldown or {}
       local sz = tonumber(f.size) or 0
@@ -1286,7 +1354,7 @@ local function _PCM_BuildCooldownViewerArgs(cm, viewerKey, opts)
     dialogControl = "LSM30_Font",
     name = "Cooldown font",
     order = 61,
-    
+
     values = function()
       return OptionsUtil.BuildFontValues(false, "Use theme default", "")
     end,
@@ -1306,7 +1374,7 @@ local function _PCM_BuildCooldownViewerArgs(cm, viewerKey, opts)
     type = "select",
     name = "Cooldown font outline",
     order = 62,
-    
+
     values = function()
       return OptionsUtil.BuildOutlineValues(true, "Use theme default", "")
     end,
@@ -1329,7 +1397,7 @@ local function _PCM_BuildCooldownViewerArgs(cm, viewerKey, opts)
     min = -64,
     max = 64,
     step = 1,
-    
+
     get = function()
       local f = GetViewerFonts().cooldown or {}
       local off = tonumber(f.offsetX) or 0
@@ -1352,7 +1420,7 @@ local function _PCM_BuildCooldownViewerArgs(cm, viewerKey, opts)
     min = -64,
     max = 64,
     step = 1,
-    
+
     get = function()
       local f = GetViewerFonts().cooldown or {}
       local off = tonumber(f.offsetY) or 0
@@ -1373,7 +1441,7 @@ local function _PCM_BuildCooldownViewerArgs(cm, viewerKey, opts)
     name = "Cooldown font color",
     order = 65,
     hasAlpha = true,
-    
+
     get = function()
       local f = GetViewerFonts().cooldown or {}
       local c = f.color or { 1, 1, 1, 1 }
@@ -1395,7 +1463,7 @@ local function _PCM_BuildCooldownViewerArgs(cm, viewerKey, opts)
     min = 0,
     max = 32,
     step = 1,
-    
+
     get = function()
       local f = GetViewerFonts().keybind or {}
       local sz = tonumber(f.size) or 0
@@ -1420,7 +1488,7 @@ local function _PCM_BuildCooldownViewerArgs(cm, viewerKey, opts)
     dialogControl = "LSM30_Font",
     name = "Keybind font",
     order = 71,
-    
+
     values = function()
       return OptionsUtil.BuildFontValues(false, "Use theme default", "")
     end,
@@ -1440,7 +1508,7 @@ local function _PCM_BuildCooldownViewerArgs(cm, viewerKey, opts)
     type = "select",
     name = "Keybind font outline",
     order = 72,
-    
+
     values = function()
       return OptionsUtil.BuildOutlineValues(true, "Use theme default", "")
     end,
@@ -1463,7 +1531,7 @@ local function _PCM_BuildCooldownViewerArgs(cm, viewerKey, opts)
     min = -64,
     max = 64,
     step = 1,
-    
+
     get = function()
       local f = GetViewerFonts().keybind or {}
       local off = tonumber(f.offsetX) or 0
@@ -1486,7 +1554,7 @@ local function _PCM_BuildCooldownViewerArgs(cm, viewerKey, opts)
     min = -64,
     max = 64,
     step = 1,
-    
+
     get = function()
       local f = GetViewerFonts().keybind or {}
       local off = tonumber(f.offsetY) or 0
@@ -1507,7 +1575,7 @@ local function _PCM_BuildCooldownViewerArgs(cm, viewerKey, opts)
     name = "Keybind font color",
     order = 75,
     hasAlpha = true,
-    
+
     get = function()
       local f = GetViewerFonts().keybind or {}
       local c = f.color or { 1, 1, 1, 1 }
@@ -1529,7 +1597,7 @@ local function _PCM_BuildCooldownViewerArgs(cm, viewerKey, opts)
     min = 0,
     max = 48,
     step = 1,
-    
+
     get = function()
       local f = GetViewerFonts().charge or {}
       local sz = tonumber(f.size) or 0
@@ -1554,7 +1622,7 @@ local function _PCM_BuildCooldownViewerArgs(cm, viewerKey, opts)
     dialogControl = "LSM30_Font",
     name = "Charge font",
     order = 81,
-    
+
     values = function()
       return OptionsUtil.BuildFontValues(false, "Use theme default", "")
     end,
@@ -1574,7 +1642,7 @@ local function _PCM_BuildCooldownViewerArgs(cm, viewerKey, opts)
     type = "select",
     name = "Charge font outline",
     order = 82,
-    
+
     values = function()
       return OptionsUtil.BuildOutlineValues(true, "Use theme default", "")
     end,
@@ -1597,7 +1665,7 @@ local function _PCM_BuildCooldownViewerArgs(cm, viewerKey, opts)
     min = -64,
     max = 64,
     step = 1,
-    
+
     get = function()
       local f = GetViewerFonts().charge or {}
       local off = tonumber(f.offsetX) or 0
@@ -1620,7 +1688,7 @@ local function _PCM_BuildCooldownViewerArgs(cm, viewerKey, opts)
     min = -64,
     max = 64,
     step = 1,
-    
+
     get = function()
       local f = GetViewerFonts().charge or {}
       local off = tonumber(f.offsetY) or 0
@@ -1641,7 +1709,7 @@ local function _PCM_BuildCooldownViewerArgs(cm, viewerKey, opts)
     name = "Charge font color",
     order = 85,
     hasAlpha = true,
-    
+
     get = function()
       local f = GetViewerFonts().charge or {}
       local c = f.color or { 1, 1, 1, 1 }
@@ -1673,7 +1741,7 @@ local function _PCM_BuildEssentialGlowArgs(cm)
     type = "toggle",
     name = "Enable custom glow",
     order = 1,
-    
+
     get = function()
       return glow.enabled ~= false
     end,
@@ -1687,7 +1755,7 @@ local function _PCM_BuildEssentialGlowArgs(cm)
     type = "select",
     name = "Glow style",
     order = 2,
-    
+
     values = {
       pixel = "Pixel glow",
       autocast = "Autocast glow",
@@ -1708,7 +1776,7 @@ local function _PCM_BuildEssentialGlowArgs(cm)
     name = "Glow color",
     order = 3,
     hasAlpha = true,
-    
+
     get = function()
       local c = glow.color or { 0.95, 0.95, 0.32, 1 }
       return c[1] or 1, c[2] or 1, c[3] or 0.32, c[4] or 1
@@ -1726,7 +1794,7 @@ local function _PCM_BuildEssentialGlowArgs(cm)
     min = 20,
     max = 200,
     step = 1,
-    
+
     get = function()
       local v = tonumber(glow.speed)
       if not v then v = 100 end
@@ -1746,7 +1814,7 @@ local function _PCM_BuildEssentialGlowArgs(cm)
     min = 0.5,
     max = 2.0,
     step = 0.05,
-    
+
     hidden = function()
       return CurrentGlowType() ~= "autocast"
     end,
@@ -1769,7 +1837,7 @@ local function _PCM_BuildEssentialGlowArgs(cm)
     min = 2,
     max = 16,
     step = 1,
-    
+
     hidden = function()
       local glowType = CurrentGlowType()
       return glowType ~= "pixel" and glowType ~= "autocast"
@@ -1793,7 +1861,7 @@ local function _PCM_BuildEssentialGlowArgs(cm)
     min = 1,
     max = 6,
     step = 1,
-    
+
     hidden = function()
       return CurrentGlowType() ~= "pixel"
     end,
@@ -2834,6 +2902,7 @@ local function _PCM_BuildCooldownViewerTreeArgs(cm, viewerKey, viewerLabel, opts
   })
 
   AddGroup("appearance", "Appearance", {
+    "iconBorderColor",
     "borderThickness",
     "borderColor",
   })
@@ -2841,7 +2910,6 @@ local function _PCM_BuildCooldownViewerTreeArgs(cm, viewerKey, viewerLabel, opts
   AddGroup("swipe", "Cooldown swipe", {
     "swipeGCD",
     "swipeCooldown",
-    "swipeDuration",
     "forceCooldown",
     "swipeColor",
     "swipeEdge",
@@ -2855,7 +2923,6 @@ local function _PCM_BuildCooldownViewerTreeArgs(cm, viewerKey, viewerLabel, opts
       inline = true,
       args = CollectArgs({
         "countCooldown",
-        "countDuration",
         "cooldownFontSize",
         "cooldownFont",
         "cooldownOutline",
@@ -2992,17 +3059,13 @@ local function _PCM_BuildBuffBarsTabArgs()
     type = "description",
     name = "Buff bar (tracked buffs)",
     order = 1,
-    
+
   }
 
   args.showTooltips = {
     type = "toggle",
     name = "Show tooltips",
-    desc = "Saved in Blizzard Edit Mode for this character.",
     order = 8,
-    disabled = function()
-      return not Cooldowns:CanChangeViewerEditModeSettings()
-    end,
     get = function()
       return Cooldowns:GetViewerTooltipsEnabled(viewerKey)
     end,
@@ -3014,11 +3077,7 @@ local function _PCM_BuildBuffBarsTabArgs()
   args.hideWhenInactive = {
     type = "toggle",
     name = "Hide when inactive",
-    desc = "Saved in Blizzard Edit Mode for this character.",
     order = 9,
-    disabled = function()
-      return not Cooldowns:CanChangeViewerEditModeSettings()
-    end,
     get = function()
       return Cooldowns:GetViewerHideWhenInactive(viewerKey)
     end,
@@ -3202,7 +3261,7 @@ local function _PCM_BuildBuffBarsTabArgs()
     min = 8,
     max = 40,
     step = 1,
-    
+
     get = function()
       local cm, style = _PCM_GetMainBuffBarsRoot()
       local bb = style and style.buffBar or nil
@@ -3228,7 +3287,7 @@ local function _PCM_BuildBuffBarsTabArgs()
     min = 120,
     max = 400,
     step = 4,
-    
+
     get = function()
       local cm, style = _PCM_GetMainBuffBarsRoot()
       local bb = style and style.buffBar or nil
@@ -3254,7 +3313,7 @@ local function _PCM_BuildBuffBarsTabArgs()
     min = 0,
     max = 6,
     step = 1,
-    
+
     get = function()
       local cm, style = _PCM_GetMainBuffBarsRoot()
       local bb = style and style.buffBar or nil
@@ -3282,7 +3341,7 @@ local function _PCM_BuildBuffBarsTabArgs()
     name = "Border color",
     order = 14,
     hasAlpha = true,
-    
+
     get = function()
       local cm, style = _PCM_GetMainBuffBarsRoot()
       local bb = style and style.buffBar or nil
@@ -3309,7 +3368,7 @@ local function _PCM_BuildBuffBarsTabArgs()
     min = 0,
     max = 40,
     step = 1,
-    
+
     get = function()
       local cm, style = _PCM_GetMainBuffBarsRoot()
       local bb = style and style.buffBar or nil
@@ -3336,7 +3395,7 @@ local function _PCM_BuildBuffBarsTabArgs()
     type = "select",
     name = "Bar texture",
     order = 16,
-    
+
     values = function()
       return OptionsUtil.BuildStatusbarValues(false)
     end,
@@ -3360,7 +3419,7 @@ local function _PCM_BuildBuffBarsTabArgs()
     type = "toggle",
     name = "Use class color",
     order = 17,
-    
+
     get = function()
       local cm, style = _PCM_GetMainBuffBarsRoot()
       return style and style.buffBarUseClassColor ~= false or false
@@ -3378,7 +3437,7 @@ local function _PCM_BuildBuffBarsTabArgs()
     name = "Bar color",
     order = 18,
     hasAlpha = true,
-    
+
     get = function()
       local cm, style = _PCM_GetMainBuffBarsRoot()
       local c = (style and style.buffBarColor) or { 1, 0.6, 0, 1 }
@@ -3401,7 +3460,7 @@ local function _PCM_BuildBuffBarsTabArgs()
     name = "Background color",
     order = 19,
     hasAlpha = true,
-    
+
     get = function()
       local cm, style = _PCM_GetMainBuffBarsRoot()
       local c = (style and style.buffBarBgColor) or { 0, 0, 0, 0.5 }
@@ -3573,7 +3632,6 @@ local function _PCM_CreateNewChargeCooldownBar(draft)
     showSlotBorder = true,
     slotBorderThickness = 2,
     slotBorderColor = { 0.20, 0.20, 0.24, 1.00 },
-    maxCharges = tonumber(draft.maximum) or 2,
   }, nextId)
 
   root[nextId] = cfg
@@ -3728,7 +3786,27 @@ local function _PCM_SaveTrackedSpellIdentity(cfg, specID, spellID)
   Cooldowns:NormalizeSpecAssignments(cfg)
 end
 
-local function _PCM_ApplyInstallerDraft(cfg, draft)
+function ns.PCM_ApplyInstallerDraft(cfg, draft)
+  local icon = draft.icon
+  icon.readyAlpha = draft.showReady and draft.readyAlpha or 0
+  icon.onCooldownAlpha = draft.showCooldown and draft.cooldownAlpha or 0
+  icon.desaturateReady = draft.desaturateReady == true
+  icon.desaturateCooldown = draft.desaturateCooldown == true
+  icon.readyGlowStyle = draft.readyGlowStyle
+  icon.cooldownGlowStyle = draft.cooldownGlowStyle
+  icon.activeAuraEnabled = (draft.kind == "cooldown" or draft.kind == "charge")
+    and draft.showActive == true
+  icon.activeAuraAlpha = draft.activeAlpha
+  icon.activeAuraDesaturate = draft.desaturateActive == true
+  icon.activeAuraGlowStyle = draft.customGlowEnabled == true
+    and draft.activeGlowStyle or "NONE"
+  icon.combatOnly = draft.combatOnly == true
+  icon.visibility = (draft.kind == "duration" or draft.kind == "stack")
+    and draft.showOnlyWhenActive == true and "ACTIVE" or "ALWAYS"
+  icon.showCount = (draft.kind == "charge" or draft.kind == "stack")
+    and icon.showCount ~= false
+  icon.showStackStrip = draft.kind == "stack" and draft.addColorShift == true
+
   cfg.presentation = draft.presentation == "BUTTON" and "BUTTON" or "BAR"
   cfg.hideOutOfCombat = draft.combatOnly == true
   cfg.outOfCombatAlpha = 0
@@ -3764,6 +3842,12 @@ local function _PCM_ApplyInstallerDraft(cfg, draft)
     cfg.auraTrackMode = draft.auraTrackMode == "target_debuff"
       and "target_debuff" or "player_buff"
     cfg.hideViewerIcon = draft.kind == "stack" and draft.hideViewerIcon == true
+    cfg.maxStacks = draft.kind == "stack" and (tonumber(draft.maximum) or 3) or 1
+    if draft.kind == "stack" and draft.addColorShift == true then
+      AuraWidget.AddStackColorThreshold(cfg, cfg.maxStacks)
+    end
+  elseif draft.kind == "charge" then
+    cfg.maxCharges = tonumber(draft.maximum) or cfg.maxCharges
   end
 
   if cfg.presentation == "BUTTON" then
@@ -3805,7 +3889,7 @@ function ns.PCM_CreateCustomTrackerFromDraft(draft)
   local kind = draft and draft.kind
   if kind == "cooldown" then
     local id, cfg = _PCM_CreateNewSpellBar(draft)
-    _PCM_ApplyInstallerDraft(cfg, draft)
+    ns.PCM_ApplyInstallerDraft(cfg, draft)
     Cooldowns.NormalizeSpellBarEntry(cfg, id)
     Cooldowns:SpellBars_Rebuild()
     local key = "spell:" .. tostring(id)
@@ -3815,7 +3899,7 @@ function ns.PCM_CreateCustomTrackerFromDraft(draft)
 
   if kind == "charge" then
     local id, cfg = _PCM_CreateNewChargeCooldownBar(draft)
-    _PCM_ApplyInstallerDraft(cfg, draft)
+    ns.PCM_ApplyInstallerDraft(cfg, draft)
     Cooldowns.NormalizeCooldownStackBarEntry(cfg, id)
     Cooldowns:CooldownStackBars_Rebuild()
     local key = "chargeSpell:" .. tostring(id)
@@ -3834,7 +3918,7 @@ function ns.PCM_CreateCustomTrackerFromDraft(draft)
     return nil
   end
 
-  _PCM_ApplyInstallerDraft(cfg, draft)
+  ns.PCM_ApplyInstallerDraft(cfg, draft)
   cfg.kind = kind
   local root = API.GetStackBarsDB()
   cfg.label = _PCM_MakeUniqueCustomBarLabel(
@@ -3843,10 +3927,6 @@ function ns.PCM_CreateCustomTrackerFromDraft(draft)
       .. (draft.presentation == "BUTTON" and "Button " or "Bar ")
       .. tostring(id)
   )
-  cfg.maxStacks = kind == "stack" and (tonumber(draft.maximum) or 3) or 1
-  if kind == "stack" and draft.addColorShift == true then
-    AuraWidget.AddStackColorThreshold(cfg, cfg.maxStacks)
-  end
   API.EnsureStackBarDefaults(cfg, id)
   API.RebuildCustomBars()
   local key = "bb:" .. tostring(id)
@@ -5099,7 +5179,7 @@ local function _PCM_BuildSpellBarLeafArgs(id)
     type = "toggle",
     name = "Enable tracker",
     order = 1,
-    
+
     get = function()
       local CM, root, cfg = GetCfg()
       return cfg and cfg.enabled ~= false or false
@@ -5116,7 +5196,7 @@ local function _PCM_BuildSpellBarLeafArgs(id)
     type = "execute",
     name = "Delete tracker",
     order = 3,
-    
+
     confirm = true,
     confirmText = "Delete this cooldown tracker?",
     func = function()
@@ -5144,7 +5224,7 @@ local function _PCM_BuildSpellBarLeafArgs(id)
     type = "toggle",
     name = "Show icon beside bar",
     order = 21,
-    
+
     get = function()
       local CM, root, cfg = GetCfg()
       return cfg and cfg.showIcon == true or false
@@ -5161,7 +5241,7 @@ local function _PCM_BuildSpellBarLeafArgs(id)
     type = "toggle",
     name = "Hide out of combat",
     order = 22,
-    
+
     get = function()
       local CM, root, cfg = GetCfg()
       return cfg and cfg.hideOutOfCombat == true or false
@@ -5184,7 +5264,7 @@ local function _PCM_BuildSpellBarLeafArgs(id)
     min = 0,
     max = 100,
     step = 1,
-    
+
     disabled = function()
       local CM, root, cfg = GetCfg()
       return not (cfg and cfg.hideOutOfCombat == true)
@@ -5211,7 +5291,7 @@ local function _PCM_BuildSpellBarLeafArgs(id)
     min = 80,
     max = 600,
     step = 1,
-    
+
     get = function()
       local CM, root, cfg = GetCfg()
       return (cfg and cfg.width) or 250
@@ -5231,7 +5311,7 @@ local function _PCM_BuildSpellBarLeafArgs(id)
     min = 6,
     max = 40,
     step = 1,
-    
+
     get = function()
       local CM, root, cfg = GetCfg()
       return (cfg and cfg.height) or 25
@@ -5261,7 +5341,6 @@ local function _PCM_BuildSpellBarLeafArgs(id)
       if not cfg then return end
       cfg.orientation = value == "vertical" and "vertical" or "horizontal"
       cfg.fillDirection = cfg.orientation == "vertical" and "UP" or "RIGHT"
-      cfg.iconAnchor = cfg.orientation == "vertical" and "top" or "left"
       RefreshRuntime({ presentation = true, layout = true })
     end,
   }
@@ -5321,7 +5400,7 @@ local function _PCM_BuildSpellBarLeafArgs(id)
     type = "select",
     name = "Bar texture",
     order = 35,
-    
+
     values = function()
       return OptionsUtil.BuildStatusbarValues(false)
     end,
@@ -5345,7 +5424,7 @@ local function _PCM_BuildSpellBarLeafArgs(id)
     type = "toggle",
     name = "Use class color",
     order = 40,
-    
+
     get = function()
       local CM, root, cfg = GetCfg()
       return cfg and cfg.useClassColor == true or false
@@ -5374,7 +5453,7 @@ local function _PCM_BuildSpellBarLeafArgs(id)
     name = "Bar color",
     order = 41,
     hasAlpha = true,
-    
+
     disabled = function()
       local CM, root, cfg = GetCfg()
       return cfg and cfg.useClassColor == true or false
@@ -5402,10 +5481,10 @@ local function _PCM_BuildSpellBarLeafArgs(id)
 
   flat.borderColor = {
     type = "color",
-    name = "Border color",
+    name = "Border / background color",
     order = 42,
     hasAlpha = true,
-    
+
     get = function()
       local CM, root, cfg = GetCfg()
       local c = cfg and cfg.borderColor or nil
@@ -5422,52 +5501,6 @@ local function _PCM_BuildSpellBarLeafArgs(id)
       local CM, root, cfg = GetCfg()
       if not cfg then return end
       cfg.borderColor = { r, g, b, a or 1 }
-      RefreshRuntime({ presentation = true })
-    end,
-  }
-
-  flat.borderSize = {
-    type = "range",
-    name = "Border thickness",
-    order = 43,
-    min = 0,
-    max = 6,
-    step = 1,
-
-    get = function()
-      local CM, root, cfg = GetCfg()
-      return cfg and (tonumber(cfg.borderSize) or 2) or 2
-    end,
-    set = function(_, value)
-      local CM, root, cfg = GetCfg()
-      if not cfg then return end
-      cfg.borderSize = tonumber(value) or 2
-      RefreshRuntime({ presentation = true })
-    end,
-  }
-
-  flat.backgroundColor = {
-    type = "color",
-    name = "Background color",
-    order = 44,
-    hasAlpha = true,
-
-    get = function()
-      local CM, root, cfg = GetCfg()
-      local c = cfg and cfg.backgroundColor or nil
-      local r, g, b, a = 0.12, 0.12, 0.12, 0.955
-      if type(c) == "table" then
-        r = tonumber(c[1]) or tonumber(c.r) or r
-        g = tonumber(c[2]) or tonumber(c.g) or g
-        b = tonumber(c[3]) or tonumber(c.b) or b
-        a = tonumber(c[4]) or tonumber(c.a) or a
-      end
-      return r, g, b, a
-    end,
-    set = function(_, r, g, b, a)
-      local CM, root, cfg = GetCfg()
-      if not cfg then return end
-      cfg.backgroundColor = { r, g, b, a or 1 }
       RefreshRuntime({ presentation = true })
     end,
   }
@@ -5496,7 +5529,7 @@ local function _PCM_BuildSpellBarLeafArgs(id)
     min = 8,
     max = 28,
     step = 1,
-    
+
     get = function()
       local CM, root, cfg = GetCfg()
       return (cfg and cfg.fontSize) or 14
@@ -5506,89 +5539,6 @@ local function _PCM_BuildSpellBarLeafArgs(id)
       if not cfg then return end
       cfg.fontSize = tonumber(v) or 14
       RefreshRuntime({ presentation = true })
-    end,
-  }
-
-  flat.font = {
-    type = "select",
-    dialogControl = "LSM30_Font",
-    name = "Timer font",
-    order = 61,
-    values = function()
-      return OptionsUtil.BuildFontValues(false, "Use theme default", "")
-    end,
-    get = function()
-      local CM, root, cfg = GetCfg()
-      return cfg and cfg.font or "PleebUI"
-    end,
-    set = function(_, key)
-      local CM, root, cfg = GetCfg()
-      if not cfg then return end
-      cfg.font = type(key) == "string" and key ~= "" and key or nil
-      RefreshRuntime({ presentation = true })
-    end,
-  }
-
-  flat.fontOutline = {
-    type = "select",
-    name = "Font outline",
-    order = 62,
-    values = function()
-      return OptionsUtil.BuildOutlineValues(true, "Use theme default", "")
-    end,
-    get = function()
-      local CM, root, cfg = GetCfg()
-      return cfg and cfg.fontOutline or ""
-    end,
-    set = function(_, key)
-      local CM, root, cfg = GetCfg()
-      if not cfg then return end
-      cfg.fontOutline = type(key) == "string" and key ~= "" and key or nil
-      RefreshRuntime({ presentation = true })
-    end,
-  }
-
-  flat.fontColor = {
-    type = "color",
-    name = "Font color",
-    order = 63,
-    hasAlpha = true,
-    get = function()
-      local CM, root, cfg = GetCfg()
-      return _PCM_GetColorComponents(cfg and cfg.fontColor, { 1, 1, 1, 1 })
-    end,
-    set = function(_, r, g, b, a)
-      local CM, root, cfg = GetCfg()
-      if not cfg then return end
-      cfg.fontColor = { r, g, b, a or 1 }
-      RefreshRuntime({ presentation = true })
-    end,
-  }
-
-  flat.iconAnchor = {
-    type = "select",
-    name = "Icon position",
-    order = 35,
-    values = function()
-      local CM, root, cfg = GetCfg()
-      if cfg and cfg.orientation == "vertical" then
-        return { top = "Top", bottom = "Bottom" }
-      end
-      return { left = "Left", right = "Right" }
-    end,
-    disabled = function()
-      local CM, root, cfg = GetCfg()
-      return not (cfg and cfg.showIcon == true)
-    end,
-    get = function()
-      local CM, root, cfg = GetCfg()
-      return cfg and cfg.iconAnchor or "left"
-    end,
-    set = function(_, value)
-      local CM, root, cfg = GetCfg()
-      if not cfg then return end
-      cfg.iconAnchor = value
-      RefreshRuntime({ presentation = true, layout = true })
     end,
   }
 
@@ -5632,7 +5582,6 @@ local function _PCM_BuildSpellBarLeafArgs(id)
         barMode = flat.barMode,
         fillDirection = flat.fillDirection,
         texture = flat.texture,
-        iconAnchor = flat.iconAnchor,
       },
     },
     barDesign = {
@@ -5644,9 +5593,7 @@ local function _PCM_BuildSpellBarLeafArgs(id)
       args = {
         useClassColor = flat.useClassColor,
         barColor = flat.barColor,
-        borderSize = flat.borderSize,
         borderColor = flat.borderColor,
-        backgroundColor = flat.backgroundColor,
       },
     },
     whenReady = stateGroups.ready,
@@ -5666,9 +5613,6 @@ local function _PCM_BuildSpellBarLeafArgs(id)
       args = {
         showText = flat.showText,
         fontSize = flat.fontSize,
-        font = flat.font,
-        fontOutline = flat.fontOutline,
-        fontColor = flat.fontColor,
       },
     },
   }
@@ -5719,27 +5663,11 @@ local function _PCM_BuildChargeCooldownBarLeafArgs(id)
     _PCM_ACD_NotifyPCM("chargeSpell:" .. tostring(id))
   end
 
-  local function GetLiveMaxCharges()
-    local CM, root, cfg = GetCfg()
-    local spellID = cfg and CM:GetTrackedSpellIDForCurrentSpec(cfg) or nil
-    local chargeInfo = spellID and C_Spell.GetSpellCharges(spellID) or nil
-    local maxCharges = chargeInfo and chargeInfo.maxCharges or nil
-
-    if _G.issecretvalue(maxCharges) then
-      return 2
-    end
-
-    maxCharges = math.floor((tonumber(maxCharges) or 2) + 0.5)
-    if maxCharges < 1 then maxCharges = 1 end
-    if maxCharges > 60 then maxCharges = 60 end
-    return maxCharges
-  end
-
   flat.enabled = {
     type = "toggle",
     name = "Enable tracker",
     order = 1,
-    
+
     get = function()
       local CM, root, cfg = GetCfg()
       return cfg and cfg.enabled ~= false or false
@@ -5756,7 +5684,7 @@ local function _PCM_BuildChargeCooldownBarLeafArgs(id)
     type = "execute",
     name = "Delete tracker",
     order = 3,
-    
+
     confirm = true,
     confirmText = "Delete this charge cooldown tracker?",
     func = function()
@@ -5780,11 +5708,34 @@ local function _PCM_BuildChargeCooldownBarLeafArgs(id)
     15
   )
 
+  flat.maxCharges = {
+    type = "range",
+    name = "Charges",
+    order = 20,
+    min = 2,
+    max = 3,
+    step = 1,
+
+    get = function()
+      local CM, root, cfg = GetCfg()
+      return (cfg and cfg.maxCharges) or 2
+    end,
+    set = function(_, v)
+      local CM, root, cfg = GetCfg()
+      if not cfg then return end
+      v = tonumber(v) or 2
+      if v < 2 then v = 2 end
+      if v > 3 then v = 3 end
+      cfg.maxCharges = v
+      RebuildRuntime()
+    end,
+  }
+
   flat.showIcon = {
     type = "toggle",
     name = "Show icon beside bar",
     order = 21,
-    
+
     get = function()
       local CM, root, cfg = GetCfg()
       return cfg and cfg.showIcon == true or false
@@ -5801,7 +5752,7 @@ local function _PCM_BuildChargeCooldownBarLeafArgs(id)
     type = "toggle",
     name = "Hide out of combat",
     order = 22,
-    
+
     get = function()
       local CM, root, cfg = GetCfg()
       return cfg and cfg.hideOutOfCombat == true or false
@@ -5824,7 +5775,7 @@ local function _PCM_BuildChargeCooldownBarLeafArgs(id)
     min = 0,
     max = 100,
     step = 1,
-    
+
     disabled = function()
       local CM, root, cfg = GetCfg()
       return not (cfg and cfg.hideOutOfCombat == true)
@@ -5851,7 +5802,7 @@ local function _PCM_BuildChargeCooldownBarLeafArgs(id)
     min = 80,
     max = 600,
     step = 1,
-    
+
     get = function()
       local CM, root, cfg = GetCfg()
       return (cfg and cfg.width) or 250
@@ -5871,7 +5822,7 @@ local function _PCM_BuildChargeCooldownBarLeafArgs(id)
     min = 6,
     max = 40,
     step = 1,
-    
+
     get = function()
       local CM, root, cfg = GetCfg()
       return (cfg and cfg.height) or 25
@@ -5960,7 +5911,7 @@ local function _PCM_BuildChargeCooldownBarLeafArgs(id)
     type = "select",
     name = "Bar texture",
     order = 35,
-    
+
     values = function()
       return OptionsUtil.BuildStatusbarValues(false)
     end,
@@ -6002,7 +5953,7 @@ local function _PCM_BuildChargeCooldownBarLeafArgs(id)
     dialogControl = "LSM30_Font",
     name = "Timer font",
     order = 33,
-    
+
     values = function()
       return OptionsUtil.BuildFontValues(false, "Use theme default", "")
     end,
@@ -6026,66 +5977,11 @@ local function _PCM_BuildChargeCooldownBarLeafArgs(id)
     end,
   }
 
-  flat.fontSize = {
-    type = "range",
-    name = "Font size",
-    order = 34,
-    min = 8,
-    max = 28,
-    step = 1,
-    get = function()
-      local CM, root, cfg = GetCfg()
-      return cfg and (tonumber(cfg.fontSize) or 14) or 14
-    end,
-    set = function(_, value)
-      local CM, root, cfg = GetCfg()
-      if not cfg then return end
-      cfg.fontSize = tonumber(value) or 14
-      RefreshRuntime({ presentation = true })
-    end,
-  }
-
-  flat.fontOutline = {
-    type = "select",
-    name = "Font outline",
-    order = 35,
-    values = function()
-      return OptionsUtil.BuildOutlineValues(true, "Use theme default", "")
-    end,
-    get = function()
-      local CM, root, cfg = GetCfg()
-      return cfg and cfg.fontOutline or ""
-    end,
-    set = function(_, key)
-      local CM, root, cfg = GetCfg()
-      if not cfg then return end
-      cfg.fontOutline = type(key) == "string" and key ~= "" and key or nil
-      RefreshRuntime({ presentation = true })
-    end,
-  }
-
-  flat.fontColor = {
-    type = "color",
-    name = "Font color",
-    order = 36,
-    hasAlpha = true,
-    get = function()
-      local CM, root, cfg = GetCfg()
-      return _PCM_GetColorComponents(cfg and cfg.fontColor, { 1, 1, 1, 1 })
-    end,
-    set = function(_, r, g, b, a)
-      local CM, root, cfg = GetCfg()
-      if not cfg then return end
-      cfg.fontColor = { r, g, b, a or 1 }
-      RefreshRuntime({ presentation = true })
-    end,
-  }
-
   flat.useClassColor = {
     type = "toggle",
     name = "Use class color",
     order = 40,
-    
+
     get = function()
       local CM, root, cfg = GetCfg()
       return cfg and cfg.useClassColor == true or false
@@ -6114,7 +6010,7 @@ local function _PCM_BuildChargeCooldownBarLeafArgs(id)
     name = "Bar color",
     order = 41,
     hasAlpha = true,
-    
+
     disabled = function()
       local CM, root, cfg = GetCfg()
       return cfg and cfg.useClassColor == true or false
@@ -6144,7 +6040,7 @@ local function _PCM_BuildChargeCooldownBarLeafArgs(id)
     type = "toggle",
     name = "Show slot borders",
     order = 43,
-    
+
     get = function()
       local CM, root, cfg = GetCfg()
       return cfg and cfg.showSlotBorder == true or false
@@ -6164,7 +6060,7 @@ local function _PCM_BuildChargeCooldownBarLeafArgs(id)
     min = 0,
     max = 5,
     step = 1,
-    
+
     disabled = function()
       local CM, root, cfg = GetCfg()
       return not (cfg and cfg.showSlotBorder == true)
@@ -6192,7 +6088,7 @@ local function _PCM_BuildChargeCooldownBarLeafArgs(id)
     name = "Slot border color",
     order = 45,
     hasAlpha = true,
-    
+
     disabled = function()
       local CM, root, cfg = GetCfg()
       return not (cfg and cfg.showSlotBorder == true)
@@ -6217,186 +6113,6 @@ local function _PCM_BuildChargeCooldownBarLeafArgs(id)
     end,
   }
 
-  flat.slotSpacing = {
-    type = "range",
-    name = "Slot spacing",
-    order = 46,
-    min = 0,
-    max = 20,
-    step = 1,
-    get = function()
-      local CM, root, cfg = GetCfg()
-      return cfg and (tonumber(cfg.slotSpacing) or 0) or 0
-    end,
-    set = function(_, value)
-      local CM, root, cfg = GetCfg()
-      if not cfg then return end
-      cfg.slotSpacing = tonumber(value) or 0
-      RefreshRuntime({ presentation = true })
-    end,
-  }
-
-  flat.slotBackgroundColor = {
-    type = "color",
-    name = "Slot background color",
-    order = 47,
-    hasAlpha = true,
-    get = function()
-      local CM, root, cfg = GetCfg()
-      return _PCM_GetColorComponents(cfg and cfg.slotBackgroundColor, { 0.12, 0.12, 0.12, 0.95 })
-    end,
-    set = function(_, r, g, b, a)
-      local CM, root, cfg = GetCfg()
-      if not cfg then return end
-      cfg.slotBackgroundColor = { r, g, b, a or 1 }
-      RefreshRuntime({ presentation = true })
-    end,
-  }
-
-  flat.opacity = {
-    type = "range",
-    name = "Bar opacity",
-    order = 48,
-    min = 0,
-    max = 100,
-    step = 1,
-    get = function()
-      local CM, root, cfg = GetCfg()
-      return math.floor(((cfg and tonumber(cfg.opacity)) or 1) * 100 + 0.5)
-    end,
-    set = function(_, value)
-      local CM, root, cfg = GetCfg()
-      if not cfg then return end
-      cfg.opacity = (tonumber(value) or 100) / 100
-      RefreshRuntime({ presentation = true })
-    end,
-  }
-
-  flat.useDifferentFullColor = {
-    type = "toggle",
-    name = "Use a different full-charge color",
-    order = 49,
-    get = function()
-      local CM, root, cfg = GetCfg()
-      return cfg and cfg.useDifferentFullColor == true or false
-    end,
-    set = function(_, value)
-      local CM, root, cfg = GetCfg()
-      if not cfg then return end
-      cfg.useDifferentFullColor = value == true
-      RefreshRuntime({ presentation = true })
-    end,
-  }
-
-  flat.fullChargeColor = {
-    type = "color",
-    name = "Full-charge color",
-    order = 50,
-    hasAlpha = true,
-    disabled = function()
-      local CM, root, cfg = GetCfg()
-      return not (cfg and cfg.useDifferentFullColor == true)
-    end,
-    get = function()
-      local CM, root, cfg = GetCfg()
-      return _PCM_GetColorComponents(cfg and cfg.fullChargeColor, cfg and cfg.barColor or { 1, 1, 1, 1 })
-    end,
-    set = function(_, r, g, b, a)
-      local CM, root, cfg = GetCfg()
-      if not cfg then return end
-      cfg.fullChargeColor = { r, g, b, a or 1 }
-      RefreshRuntime({ presentation = true })
-    end,
-  }
-
-  flat.rotateTexture = {
-    type = "select",
-    name = "Texture rotation",
-    order = 51,
-    values = {
-      AUTO = "Automatic",
-      ON = "Always rotate",
-      OFF = "Never rotate",
-    },
-    get = function()
-      local CM, root, cfg = GetCfg()
-      if cfg and cfg.rotateTexture == true then return "ON" end
-      if cfg and cfg.rotateTexture == false then return "OFF" end
-      return "AUTO"
-    end,
-    set = function(_, value)
-      local CM, root, cfg = GetCfg()
-      if not cfg then return end
-      cfg.rotateTexture = value == "ON" and true or value == "OFF" and false or nil
-      RefreshRuntime({ presentation = true })
-    end,
-  }
-
-  flat.dynamicTextOnSlot = {
-    type = "toggle",
-    name = "Follow the recharging slot",
-    order = 52,
-    get = function()
-      local CM, root, cfg = GetCfg()
-      return cfg and cfg.dynamicTextOnSlot ~= false or false
-    end,
-    set = function(_, value)
-      local CM, root, cfg = GetCfg()
-      if not cfg then return end
-      cfg.dynamicTextOnSlot = value == true
-      RefreshRuntime({ presentation = true })
-    end,
-  }
-
-  flat.usePerSlotColors = {
-    type = "toggle",
-    name = "Use per-slot colors",
-    order = 53,
-    get = function()
-      local CM, root, cfg = GetCfg()
-      return cfg and cfg.usePerSlotColors == true or false
-    end,
-    set = function(_, value)
-      local CM, root, cfg = GetCfg()
-      if not cfg then return end
-      cfg.usePerSlotColors = value == true
-      RefreshRuntime({ presentation = true })
-    end,
-  }
-
-  local slotColorArgs = {}
-  local defaultSlotColors = {
-    { 0.8, 0.2, 0.2, 1 },
-    { 0.8, 0.8, 0.2, 1 },
-    { 0.2, 0.8, 0.2, 1 },
-    { 0.2, 0.6, 0.8, 1 },
-    { 0.6, 0.2, 0.8, 1 },
-  }
-
-  for index = 1, GetLiveMaxCharges() do
-    local slotIndex = index
-    local field = "chargeSlot" .. slotIndex .. "Color"
-    slotColorArgs[field] = {
-      type = "color",
-      name = "Slot " .. slotIndex .. " color",
-      order = slotIndex,
-      hasAlpha = true,
-      get = function()
-        local CM, root, cfg = GetCfg()
-        return _PCM_GetColorComponents(
-          cfg and cfg[field],
-          defaultSlotColors[slotIndex] or cfg and cfg.barColor or { 1, 1, 1, 1 }
-        )
-      end,
-      set = function(_, r, g, b, a)
-        local CM, root, cfg = GetCfg()
-        if not cfg then return end
-        cfg[field] = { r, g, b, a or 1 }
-        RefreshRuntime({ presentation = true })
-      end,
-    }
-  end
-
   local stateGroups = _PCM_BuildCustomBarStateGroups(GetCfg, RebuildRuntime, true, 45)
 
   return {
@@ -6407,6 +6123,7 @@ local function _PCM_BuildChargeCooldownBarLeafArgs(id)
       inline = true,
       args = {
         enabled = flat.enabled,
+        maxCharges = flat.maxCharges,
         deleteBar = flat.deleteBar,
       },
     },
@@ -6451,26 +6168,7 @@ local function _PCM_BuildChargeCooldownBarLeafArgs(id)
         showSlotBorder = flat.showSlotBorder,
         slotBorderThickness = flat.slotBorderThickness,
         slotBorderColor = flat.slotBorderColor,
-        slotSpacing = flat.slotSpacing,
-        slotBackgroundColor = flat.slotBackgroundColor,
-        opacity = flat.opacity,
-        useDifferentFullColor = flat.useDifferentFullColor,
-        fullChargeColor = flat.fullChargeColor,
-        rotateTexture = flat.rotateTexture,
-        dynamicTextOnSlot = flat.dynamicTextOnSlot,
-        usePerSlotColors = flat.usePerSlotColors,
       },
-    },
-    slotColors = {
-      type = "group",
-      name = "Slot Colors",
-      order = 45,
-      inline = true,
-      hidden = function()
-        local CM, root, cfg = GetCfg()
-        return IsButtonTracker() or not (cfg and cfg.usePerSlotColors == true)
-      end,
-      args = slotColorArgs,
     },
     whenReady = stateGroups.ready,
     whenCooldown = stateGroups.cooldown,
@@ -6489,9 +6187,6 @@ local function _PCM_BuildChargeCooldownBarLeafArgs(id)
       args = {
         showText = flat.showText,
         font = flat.font,
-        fontSize = flat.fontSize,
-        fontOutline = flat.fontOutline,
-        fontColor = flat.fontColor,
       },
     },
   }
@@ -6988,7 +6683,7 @@ local function _PCM_BuildBuffBarLeafArgs(id)
     type = "toggle",
     name = "Enable tracker",
     order = 1,
-    
+
     get = function()
       local API, root, cfg = GetCfg()
       return cfg and cfg.enabled ~= false or false
@@ -7005,7 +6700,7 @@ local function _PCM_BuildBuffBarLeafArgs(id)
     type = "execute",
     name = "Delete tracker",
     order = 3,
-    
+
     confirm = true,
     confirmText = "Delete this aura tracker?",
     func = function()
@@ -7055,7 +6750,7 @@ local function _PCM_BuildBuffBarLeafArgs(id)
     min = 1,
     max = 30,
     step = 1,
-    
+
     hidden = function()
       return IsDuration()
     end,
@@ -7075,7 +6770,7 @@ local function _PCM_BuildBuffBarLeafArgs(id)
     type = "toggle",
     name = "Hide buff icon",
     order = 12,
-    
+
     hidden = function()
       return IsDuration()
     end,
@@ -7095,7 +6790,7 @@ local function _PCM_BuildBuffBarLeafArgs(id)
     type = "toggle",
     name = "Show icon",
     order = 12,
-    
+
     hidden = function()
       return not IsDuration()
     end,
@@ -7150,7 +6845,7 @@ local function _PCM_BuildBuffBarLeafArgs(id)
     type = "toggle",
     name = "Hide out of combat",
     order = 14,
-    
+
     get = function()
       local API, root, cfg = GetCfg()
       return cfg and cfg.hideOutOfCombat == true or false
@@ -7173,7 +6868,7 @@ local function _PCM_BuildBuffBarLeafArgs(id)
     min = 0,
     max = 100,
     step = 1,
-    
+
     disabled = function()
       local API, root, cfg = GetCfg()
       return not (cfg and cfg.hideOutOfCombat == true)
@@ -7200,7 +6895,7 @@ local function _PCM_BuildBuffBarLeafArgs(id)
     min = 50,
     max = 600,
     step = 1,
-    
+
     get = function()
       local API, root, cfg = GetCfg()
       local fallback = IsDuration() and 200 or 180
@@ -7221,7 +6916,7 @@ local function _PCM_BuildBuffBarLeafArgs(id)
     min = 5,
     max = 80,
     step = 1,
-    
+
     get = function()
       local API, root, cfg = GetCfg()
       local fallback = IsDuration() and 20 or 10
@@ -7239,7 +6934,7 @@ local function _PCM_BuildBuffBarLeafArgs(id)
     type = "select",
     name = "Bar texture",
     order = 22,
-    
+
     values = function()
       return OptionsUtil.BuildStatusbarValues(true, "Use theme default", "")
     end,
@@ -7267,7 +6962,7 @@ local function _PCM_BuildBuffBarLeafArgs(id)
     type = "select",
     name = "Orientation",
     order = 30,
-    
+
     values = {
       horizontal = "Horizontal",
       vertical = "Vertical",
@@ -7336,7 +7031,7 @@ local function _PCM_BuildBuffBarLeafArgs(id)
     type = "toggle",
     name = "Use class color",
     order = 40,
-    
+
     hidden = function()
       return IsDuration()
     end,
@@ -7357,7 +7052,7 @@ local function _PCM_BuildBuffBarLeafArgs(id)
     name = "Custom bar color",
     order = 41,
     hasAlpha = true,
-    
+
     hidden = function()
       return IsDuration()
     end,
@@ -7393,7 +7088,7 @@ local function _PCM_BuildBuffBarLeafArgs(id)
     min = 0,
     max = 12,
     step = 1,
-    
+
     get = function()
       local API, root, cfg = GetCfg()
       local fallback = IsDuration() and 2 or 2
@@ -7412,7 +7107,7 @@ local function _PCM_BuildBuffBarLeafArgs(id)
     name = "Border color",
     order = 51,
     hasAlpha = true,
-    
+
     get = function()
       local API, root, cfg = GetCfg()
       local c = cfg and cfg.borderColor or nil
@@ -7438,7 +7133,7 @@ local function _PCM_BuildBuffBarLeafArgs(id)
     name = "Background color",
     order = 52,
     hasAlpha = true,
-    
+
     hidden = function()
       return not IsDuration()
     end,
@@ -7486,7 +7181,7 @@ local function _PCM_BuildBuffBarLeafArgs(id)
     min = 0,
     max = 32,
     step = 1,
-    
+
     hidden = function()
       return IsDuration()
     end,
@@ -7509,7 +7204,7 @@ local function _PCM_BuildBuffBarLeafArgs(id)
     min = -50,
     max = 50,
     step = 1,
-    
+
     hidden = function()
       return IsDuration()
     end,
@@ -7532,7 +7227,7 @@ local function _PCM_BuildBuffBarLeafArgs(id)
     min = -50,
     max = 50,
     step = 1,
-    
+
     hidden = function()
       return IsDuration()
     end,
@@ -7607,7 +7302,7 @@ local function _PCM_BuildBuffBarLeafArgs(id)
     type = "toggle",
     name = "Enable indicator",
     order = 70,
-    
+
     hidden = function()
       return IsDuration()
     end,
@@ -7655,7 +7350,7 @@ local function _PCM_BuildBuffBarLeafArgs(id)
     min = 0,
     max = 20,
     step = 1,
-    
+
     hidden = function()
       if IsDuration() then
         return false
@@ -7705,7 +7400,7 @@ local function _PCM_BuildBuffBarLeafArgs(id)
     min = 2,
     max = 40,
     step = 1,
-    
+
     hidden = function()
       local API, root, cfg = GetCfg()
       if not cfg then return true end
@@ -7739,7 +7434,7 @@ local function _PCM_BuildBuffBarLeafArgs(id)
     name = "Bar color",
     order = 75,
     hasAlpha = true,
-    
+
     hidden = function()
       local API, root, cfg = GetCfg()
       if not cfg then return true end
@@ -7783,7 +7478,7 @@ local function _PCM_BuildBuffBarLeafArgs(id)
     min = 8,
     max = 86,
     step = 1,
-    
+
     hidden = function()
       local API, root, cfg = GetCfg()
       if not cfg then return true end
@@ -7820,7 +7515,7 @@ local function _PCM_BuildBuffBarLeafArgs(id)
     min = 0,
     max = 12,
     step = 1,
-    
+
     hidden = function()
       local API, root, cfg = GetCfg()
       if not cfg then return true end
@@ -7854,7 +7549,7 @@ local function _PCM_BuildBuffBarLeafArgs(id)
     name = "Icon border color",
     order = 78,
     hasAlpha = true,
-    
+
     hidden = function()
       local API, root, cfg = GetCfg()
       if not cfg then return true end
@@ -7895,7 +7590,7 @@ local function _PCM_BuildBuffBarLeafArgs(id)
     type = "toggle",
     name = "Hide spell icon",
     order = 79,
-    
+
     hidden = function()
       local API, root, cfg = GetCfg()
       if not cfg then return true end
@@ -7931,7 +7626,7 @@ local function _PCM_BuildBuffBarLeafArgs(id)
     min = 0,
     max = 32,
     step = 1,
-    
+
     hidden = function()
       return not IsDuration()
     end,
@@ -8778,11 +8473,13 @@ ns.Registry.Options.CooldownManager.dynamicOptions = true
   SetViewerIconsPerRow = P:Def('SetViewerIconsPerRow', SetViewerIconsPerRow)
   GetViewerSwipeDB = P:Def('GetViewerSwipeDB', GetViewerSwipeDB)
   GetViewerFontConfig = P:Def('GetViewerFontConfig', GetViewerFontConfig)
+  _PCM_GetBuffIconBorderDB = P:Def('_PCM_GetBuffIconBorderDB', _PCM_GetBuffIconBorderDB)
   _PCM_GetFontColorValue = P:Def('_PCM_GetFontColorValue', _PCM_GetFontColorValue)
   _PCM_RefreshBuffIconViewer = P:Def('_PCM_RefreshBuffIconViewer', _PCM_RefreshBuffIconViewer)
   _PCM_BuildBuffIconFontArgs = P:Def('_PCM_BuildBuffIconFontArgs', _PCM_BuildBuffIconFontArgs)
   _PCM_BuildBuffIconsTabArgs = P:Def('_PCM_BuildBuffIconsTabArgs', _PCM_BuildBuffIconsTabArgs)
   _PCM_GetMainBuffBarsRoot = P:Def('_PCM_GetMainBuffBarsRoot', _PCM_GetMainBuffBarsRoot)
+  _PCM_GetIconBorderViewerDB = P:Def('_PCM_GetIconBorderViewerDB', _PCM_GetIconBorderViewerDB)
   _PCM_BuildCooldownViewerArgs = P:Def('_PCM_BuildCooldownViewerArgs', _PCM_BuildCooldownViewerArgs)
   _PCM_BuildEssentialGlowArgs = P:Def('_PCM_BuildEssentialGlowArgs', _PCM_BuildEssentialGlowArgs)
   _PCM_GetIconFontValues = P:Def('_PCM_GetIconFontValues', _PCM_GetIconFontValues)
@@ -8836,4 +8533,4 @@ ns.Registry.Options.CooldownManager.dynamicOptions = true
   _PCM_BuildCustomBarsTreeNodes = P:Def('_PCM_BuildCustomBarsTreeNodes', _PCM_BuildCustomBarsTreeNodes)
   _PCM_RefreshCustomBarsOptionsTree = P:Def('_PCM_RefreshCustomBarsOptionsTree', _PCM_RefreshCustomBarsOptionsTree)
   ns.PCM_RefreshCustomBarsOptionsAfterSpecializationChange = P:Def('ns.PCM_RefreshCustomBarsOptionsAfterSpecializationChange', ns.PCM_RefreshCustomBarsOptionsAfterSpecializationChange)
-  
+
