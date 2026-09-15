@@ -1395,7 +1395,7 @@ local function ShowWindowConfigMenu(window)
       end
     )
     rootDescription:CreateCheckbox(
-      "Switch to Current on combat",
+      "Automatically switch to Current in combat",
       function()
         return windowDB.autoCurrentOnCombat == true
       end,
