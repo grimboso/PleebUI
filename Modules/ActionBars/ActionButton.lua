@@ -1291,12 +1291,12 @@ function Engine:QueueActionSlotRefresh(action)
   end
 end
 
-function Engine:QueueSpellActionRefresh(spellID)
+function Engine:QueueSpellIcons(spellID)
   if issecretvalue(spellID) then
     return
   end
   if spellID == nil then
-    self:QueueAllButtonRefresh()
+    self:QueueRuntimeUpdate("icons")
     return
   end
 
@@ -1309,7 +1309,7 @@ function Engine:QueueSpellActionRefresh(spellID)
     local buttons = self.actionSlotButtons[actionSlots[slotIndex]]
     if buttons then
       for buttonIndex = 1, #buttons do
-        self:QueueButtonRefresh(buttons[buttonIndex])
+        self:QueueButtonIcon(buttons[buttonIndex])
       end
     end
   end
@@ -1370,59 +1370,19 @@ local function RefreshCooldownTooltip(flushID)
   end
 end
 
-function Engine:FlushRuntimeUpdate()
-  local refreshButtons = self.pendingButtonRefreshes
-  self.pendingButtonRefreshes = self.flushingButtonRefreshes
-  self.flushingButtonRefreshes = refreshButtons
-  wipe(self.pendingButtonRefreshes)
-
-  local iconButtons = self.pendingIconButtons
-  self.pendingIconButtons = self.flushingIconButtons
-  self.flushingIconButtons = iconButtons
-  wipe(self.pendingIconButtons)
-
-  local fullRefresh = self.pendingFullRefresh
-  local cooldownRefresh = self.pendingCooldownRefresh
-  local chargeRefresh = self.pendingChargeRefresh
-  local lossOfControlRefresh = self.pendingLossOfControlRefresh
-  local iconRefresh = self.pendingIconRefresh
-  local equippedRefresh = self.pendingEquippedRefresh
-  local usableRefresh = self.pendingUsableRefresh
-  local stateRefresh = self.pendingStateRefresh
-  local stateAndFlashRefresh = self.pendingStateAndFlashRefresh
-  local assistedCombatRefresh = self.pendingAssistedCombatRefresh
-  local combatFlash = self.pendingCombatFlash
-  local autoRepeatFlash = self.pendingAutoRepeatFlash
-
-  self.pendingFullRefresh = nil
-  self.pendingCooldownRefresh = nil
-  self.pendingChargeRefresh = nil
-  self.pendingLossOfControlRefresh = nil
-  self.pendingIconRefresh = nil
-  self.pendingEquippedRefresh = nil
-  self.pendingUsableRefresh = nil
-  self.pendingStateRefresh = nil
-  self.pendingStateAndFlashRefresh = nil
-  self.pendingAssistedCombatRefresh = nil
-  self.pendingCombatFlash = nil
-  self.pendingAutoRepeatFlash = nil
-
-  self.runtimeFlushID = self.runtimeFlushID + 1
-  local flushID = self.runtimeFlushID
-
-  if fullRefresh then
-    for index = 1, #refreshButtons do
-      refreshButtons[index].__puiRuntimeRefreshQueued = nil
-    end
-    for index = 1, #iconButtons do
-      iconButtons[index].__puiRuntimeIconQueued = nil
-    end
-    wipe(refreshButtons)
-    wipe(iconButtons)
-    self:RefreshAllButtons()
-    return
+local function FlushFullRefresh(self, refreshButtons, iconButtons)
+  for index = 1, #refreshButtons do
+    refreshButtons[index].__puiRuntimeRefreshQueued = nil
   end
+  for index = 1, #iconButtons do
+    iconButtons[index].__puiRuntimeIconQueued = nil
+  end
+  wipe(refreshButtons)
+  wipe(iconButtons)
+  self:RefreshAllButtons()
+end
 
+local function FlushQueuedButtonRefreshes(self, refreshButtons, flushID)
   for index = 1, #refreshButtons do
     local button = refreshButtons[index]
     button.__puiRuntimeRefreshQueued = nil
@@ -1433,7 +1393,9 @@ function Engine:FlushRuntimeUpdate()
     end
   end
   wipe(refreshButtons)
+end
 
+local function FlushQueuedIconRefreshes(self, iconButtons, iconRefresh, flushID)
   if not iconRefresh then
     for index = 1, #iconButtons do
       local button = iconButtons[index]
@@ -1449,23 +1411,46 @@ function Engine:FlushRuntimeUpdate()
     end
   end
   wipe(iconButtons)
+end
 
-  local hasBroadRefresh = cooldownRefresh
-    or chargeRefresh
-    or lossOfControlRefresh
-    or iconRefresh
-    or equippedRefresh
-    or usableRefresh
-    or stateRefresh
-    or stateAndFlashRefresh
-    or assistedCombatRefresh
-    or combatFlash ~= nil
-    or autoRepeatFlash ~= nil
-
-  if not hasBroadRefresh then
-    return
+local function FlushCooldownRefresh(self, flushID, chargeRefresh)
+  for index = 1, #self.activeButtons do
+    local button = self.activeButtons[index]
+    if button.__puiRuntimeFlushID ~= flushID and button.__puiHasAction then
+      if chargeRefresh then
+        self:UpdateCount(button)
+      end
+      UpdateButtonCooldown(button, chargeRefresh == true, false)
+    end
   end
 
+  RefreshCooldownTooltip(flushID)
+end
+
+local function FlushIconRefresh(self, flushID)
+  for index = 1, #self.activeButtons do
+    local button = self.activeButtons[index]
+    if button.__puiRuntimeFlushID ~= flushID and button.__puiHasAction then
+      button.icon:SetTexture(C_ActionBar.GetActionTexture(button.action))
+    end
+  end
+end
+
+local function FlushBroadRefresh(
+  self,
+  flushID,
+  cooldownRefresh,
+  chargeRefresh,
+  lossOfControlRefresh,
+  iconRefresh,
+  equippedRefresh,
+  usableRefresh,
+  stateRefresh,
+  stateAndFlashRefresh,
+  assistedCombatRefresh,
+  combatFlash,
+  autoRepeatFlash
+)
   for index = 1, #self.activeButtons do
     local button = self.activeButtons[index]
     if button.__puiRuntimeFlushID ~= flushID and button.__puiHasAction then
@@ -1541,6 +1526,123 @@ function Engine:FlushRuntimeUpdate()
   if cooldownRefresh or chargeRefresh or lossOfControlRefresh then
     RefreshCooldownTooltip(flushID)
   end
+end
+
+function Engine:FlushRuntimeUpdate()
+  local refreshButtons = self.pendingButtonRefreshes
+  self.pendingButtonRefreshes = self.flushingButtonRefreshes
+  self.flushingButtonRefreshes = refreshButtons
+  wipe(self.pendingButtonRefreshes)
+
+  local iconButtons = self.pendingIconButtons
+  self.pendingIconButtons = self.flushingIconButtons
+  self.flushingIconButtons = iconButtons
+  wipe(self.pendingIconButtons)
+
+  local fullRefresh = self.pendingFullRefresh
+  local cooldownRefresh = self.pendingCooldownRefresh
+  local chargeRefresh = self.pendingChargeRefresh
+  local lossOfControlRefresh = self.pendingLossOfControlRefresh
+  local iconRefresh = self.pendingIconRefresh
+  local equippedRefresh = self.pendingEquippedRefresh
+  local usableRefresh = self.pendingUsableRefresh
+  local stateRefresh = self.pendingStateRefresh
+  local stateAndFlashRefresh = self.pendingStateAndFlashRefresh
+  local assistedCombatRefresh = self.pendingAssistedCombatRefresh
+  local combatFlash = self.pendingCombatFlash
+  local autoRepeatFlash = self.pendingAutoRepeatFlash
+
+  self.pendingFullRefresh = nil
+  self.pendingCooldownRefresh = nil
+  self.pendingChargeRefresh = nil
+  self.pendingLossOfControlRefresh = nil
+  self.pendingIconRefresh = nil
+  self.pendingEquippedRefresh = nil
+  self.pendingUsableRefresh = nil
+  self.pendingStateRefresh = nil
+  self.pendingStateAndFlashRefresh = nil
+  self.pendingAssistedCombatRefresh = nil
+  self.pendingCombatFlash = nil
+  self.pendingAutoRepeatFlash = nil
+
+  self.runtimeFlushID = self.runtimeFlushID + 1
+  local flushID = self.runtimeFlushID
+
+  if fullRefresh then
+    FlushFullRefresh(self, refreshButtons, iconButtons)
+    return
+  end
+
+  if #refreshButtons > 0 then
+    FlushQueuedButtonRefreshes(self, refreshButtons, flushID)
+  end
+
+  if #iconButtons > 0 then
+    FlushQueuedIconRefreshes(self, iconButtons, iconRefresh, flushID)
+  end
+
+  local hasBroadRefresh = cooldownRefresh
+    or chargeRefresh
+    or lossOfControlRefresh
+    or iconRefresh
+    or equippedRefresh
+    or usableRefresh
+    or stateRefresh
+    or stateAndFlashRefresh
+    or assistedCombatRefresh
+    or combatFlash ~= nil
+    or autoRepeatFlash ~= nil
+
+  if not hasBroadRefresh then
+    return
+  end
+
+  local hasNonCooldownRefresh = lossOfControlRefresh
+    or iconRefresh
+    or equippedRefresh
+    or usableRefresh
+    or stateRefresh
+    or stateAndFlashRefresh
+    or assistedCombatRefresh
+    or combatFlash ~= nil
+    or autoRepeatFlash ~= nil
+
+  if (cooldownRefresh or chargeRefresh) and not hasNonCooldownRefresh then
+    FlushCooldownRefresh(self, flushID, chargeRefresh)
+    return
+  end
+
+  local hasNonIconRefresh = cooldownRefresh
+    or chargeRefresh
+    or lossOfControlRefresh
+    or equippedRefresh
+    or usableRefresh
+    or stateRefresh
+    or stateAndFlashRefresh
+    or assistedCombatRefresh
+    or combatFlash ~= nil
+    or autoRepeatFlash ~= nil
+
+  if iconRefresh and not hasNonIconRefresh then
+    FlushIconRefresh(self, flushID)
+    return
+  end
+
+  FlushBroadRefresh(
+    self,
+    flushID,
+    cooldownRefresh,
+    chargeRefresh,
+    lossOfControlRefresh,
+    iconRefresh,
+    equippedRefresh,
+    usableRefresh,
+    stateRefresh,
+    stateAndFlashRefresh,
+    assistedCombatRefresh,
+    combatFlash,
+    autoRepeatFlash
+  )
 end
 
 local function RuntimeUpdateOnUpdate(frame)
@@ -1651,7 +1753,7 @@ function Engine:OnEvent(event, arg1, arg2, ...)
   elseif event == "SPELL_UPDATE_CHARGES" then
     self:QueueRuntimeUpdate("charges")
   elseif event == "SPELL_UPDATE_ICON" then
-    self:QueueSpellActionRefresh(arg1)
+    self:QueueSpellIcons(arg1)
   elseif event == "UPDATE_SHAPESHIFT_FORM" then
     self:QueueRuntimeUpdate("icons")
   elseif event == "PLAYER_EQUIPMENT_CHANGED" then
@@ -1850,10 +1952,18 @@ Engine.QueueButtonRefresh = P:Def("Engine:QueueButtonRefresh", Engine.QueueButto
 Engine.QueueButtonIcon = P:Def("Engine:QueueButtonIcon", Engine.QueueButtonIcon)
 Engine.QueueAllButtonRefresh = P:Def("Engine:QueueAllButtonRefresh", Engine.QueueAllButtonRefresh)
 Engine.QueueActionSlotRefresh = P:Def("Engine:QueueActionSlotRefresh", Engine.QueueActionSlotRefresh)
-Engine.QueueSpellActionRefresh = P:Def("Engine:QueueSpellActionRefresh", Engine.QueueSpellActionRefresh)
+Engine.QueueSpellIcons = P:Def("Engine:QueueSpellIcons", Engine.QueueSpellIcons)
 Engine.QueueSummonPetIcons = P:Def("Engine:QueueSummonPetIcons", Engine.QueueSummonPetIcons)
 Engine.QueueRuntimeUpdate = P:Def("Engine:QueueRuntimeUpdate", Engine.QueueRuntimeUpdate)
-Engine.FlushRuntimeUpdate = P:Def("Engine:FlushRuntimeUpdate", Engine.FlushRuntimeUpdate)
+FlushFullRefresh = P:Def("Engine:FlushFullRefresh", FlushFullRefresh)
+FlushQueuedButtonRefreshes = P:Def("Engine:FlushQueuedButtonRefreshes", FlushQueuedButtonRefreshes)
+FlushQueuedIconRefreshes = P:Def("Engine:FlushQueuedIconRefreshes", FlushQueuedIconRefreshes)
+FlushCooldownRefresh = P:Def("Engine:FlushCooldownRefresh", FlushCooldownRefresh)
+FlushIconRefresh = P:Def("Engine:FlushIconRefresh", FlushIconRefresh)
+FlushBroadRefresh = P:Def("Engine:FlushBroadRefresh", FlushBroadRefresh)
+if ns.Pleebug:GetLoadMode() ~= "full" then
+  Engine.FlushRuntimeUpdate = P:Def("Engine:FlushRuntimeUpdate", Engine.FlushRuntimeUpdate)
+end
 Engine.UpdateProcGlow = P:Def("Engine:UpdateProcGlow", Engine.UpdateProcGlow)
 Engine.DispatchSpellCastVisual = P:Def("Engine:DispatchSpellCastVisual", Engine.DispatchSpellCastVisual)
 Engine.Enable = P:Def("Engine:Enable", Engine.Enable)
