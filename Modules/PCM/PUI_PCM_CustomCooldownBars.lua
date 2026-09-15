@@ -644,8 +644,9 @@ local function _SB_UpdateVisibilityAll()
 end
 
 _SB_RebuildAll = function()
-  if InCombatLockdown() then
+  if InCombatLockdown() or Hooks.IsAddonRestricted() then
     __PUI_PCM_SpellBars.pendingSpecTalentRefresh = true
+    return
   end
 
   local root = Cooldowns.GetSpellBarsDB() or {}
@@ -980,6 +981,12 @@ end
 
 local function _SB_FlushCooldownUpdate()
   _SB_UpdateFrame:Hide()
+
+  if Hooks.IsAddonRestricted() then
+    _SB_UpdateFrame:Show()
+    return
+  end
+
   _SB_UpdateQueued = false
 
   local dirtySpellIDs = _SB_DirtyCooldownSpellIDs
@@ -1119,6 +1126,11 @@ function Cooldowns:SpellBars_Rebuild()
     return
   end
 
+  if Hooks.IsAddonRestricted() then
+    __PUI_PCM_SpellBars.pendingSpecTalentRefresh = true
+    return
+  end
+
   _SB_RebuildAll()
   _SB_SetCooldownEventRegistered(self, _SB_RuntimeEnabled and _SB_HasActiveCooldownPresentations())
   ns.Modules.PCM_BB:RefreshViewerHiddenState()
@@ -1201,6 +1213,11 @@ function Cooldowns:SpellBars_RefreshAfterTalentSwap()
     return
   end
 
+  if Hooks.IsAddonRestricted() then
+    __PUI_PCM_SpellBars.pendingSpecTalentRefresh = true
+    return
+  end
+
   __PUI_PCM_SpellBars.pendingSpecTalentRefresh = false
   _SB_ClearKnownSpellCache()
   self:SpellBars_Rebuild()
@@ -1228,6 +1245,14 @@ PCMRuntime:RegisterSubscriber("SpellBars", {
       or event == "TRAIT_CONFIG_UPDATED"
     then
       Cooldowns:_SpellBars_OnTalentUpdate(event, ...)
+    elseif event == "ADDON_RESTRICTION_STATE_CHANGED" then
+      local _, state = ...
+      if state == Enum.AddOnRestrictionState.Inactive
+        and __PUI_PCM_SpellBars.pendingSpecTalentRefresh
+        and not ns.PCM_IsTransitionPending()
+      then
+        Cooldowns:SpellBars_RefreshAfterTalentSwap()
+      end
     elseif event == "SPELLS_CHANGED" then
       if ns.PCM_IsTransitionPending() then
         __PUI_PCM_SpellBars.pendingSpecTalentRefresh = true
