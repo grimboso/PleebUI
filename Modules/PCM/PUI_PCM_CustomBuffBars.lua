@@ -1289,6 +1289,10 @@ _CustomBars_IsTrackedSpellAvailable = function(cfg)
     return cfg.__puiTrackedAvailable == true
   end
 
+  if Hooks.IsAddonRestricted() then
+    return cfg.__puiTrackedAvailable == true
+  end
+
   local cooldownID = ns.Modules.CooldownManager:ResolveCustomBarAuraEntry(
     trackedSpellID,
     cfg.__puiCooldownID
@@ -1297,8 +1301,11 @@ _CustomBars_IsTrackedSpellAvailable = function(cfg)
 
   if cooldownID then
     local info = C_CooldownViewer.GetCooldownViewerCooldownInfo(cooldownID)
-    if info and info.isKnown ~= nil then
-      available = info.isKnown == true
+    if info and not IsSecret(info) then
+      local isKnown = info.isKnown
+      if not IsSecret(isKnown) and isKnown ~= nil then
+        available = isKnown == true
+      end
     end
   end
 
@@ -1404,7 +1411,7 @@ _customBarsAuraDriver = {
 }
 
 function _customBarsAuraDriver:IsButtonRestyleLocked()
-  return C_Secrets.ShouldAurasBeSecret() == true
+  return Hooks.IsAddonRestricted() or C_Secrets.ShouldAurasBeSecret() == true
 end
 
 function _customBarsAuraDriver:InvalidateCandidateCache()
@@ -2629,6 +2636,11 @@ local function _BB_RebuildCustomBars()
     return
   end
 
+  if Hooks.IsAddonRestricted() then
+    BB.__puiPendingRebuild = true
+    return
+  end
+
   _CustomBars_RebuildAll()
 
   local db = _GetStackBarsDB()
@@ -2752,7 +2764,7 @@ function BB:_OnVisibilityEvent(event)
 end
 
 local function _BB_RefreshTrackedSpellAvailability()
-  if not _PCM_BB_Enabled() then
+  if not _PCM_BB_Enabled() or Hooks.IsAddonRestricted() then
     return false
   end
 
@@ -2785,7 +2797,7 @@ local function _BB_RefreshTrackedSpellAvailability()
 end
 
 local function _BB_QueueTrackedSpellAvailabilityRefresh()
-  if InCombatLockdown() then
+  if InCombatLockdown() or Hooks.IsAddonRestricted() then
     BB.__puiPendingTrackedAvailabilityRefresh = true
     return
   end
@@ -2801,15 +2813,22 @@ end
 _bbWorkFrame:SetScript("OnUpdate", function(frame)
   frame:Hide()
 
+  if Hooks.IsAddonRestricted() then
+    frame:Show()
+    return
+  end
+
   local rebuild = _bbRebuildQueued
+  local pendingRebuild = BB.__puiPendingRebuild == true
   local availability = _bbAvailabilityRefreshQueued
   local deferred = _bbDeferredFlushQueued
 
   _bbRebuildQueued = false
+  BB.__puiPendingRebuild = nil
   _bbAvailabilityRefreshQueued = false
   _bbDeferredFlushQueued = false
 
-  if rebuild and _PCM_BB_Enabled() then
+  if (rebuild or pendingRebuild) and _PCM_BB_Enabled() then
     API.RebuildCustomBars()
   end
 
@@ -2824,6 +2843,11 @@ _bbWorkFrame:SetScript("OnUpdate", function(frame)
 end)
 
 function API.RefreshAfterTalentSwap()
+  if Hooks.IsAddonRestricted() then
+    BB.__puiPendingTrackedAvailabilityRefresh = true
+    return
+  end
+
   _customBarsAuraDriver:InvalidateCandidateCache()
   API.RebuildCustomBars()
 end
@@ -2916,7 +2940,12 @@ PCMRuntime:RegisterSubscriber("CustomBuffBars", {
     elseif event == "PLAYER_REGEN_ENABLED" then
       BB:_OnPlayerRegenEnabled()
     elseif event == "ADDON_RESTRICTION_STATE_CHANGED" then
+      local _, state = ...
+      BB.__puiPendingRebuild = true
       _bbDeferredFlushQueued = true
+      if state == Enum.AddOnRestrictionState.Inactive then
+        _BB_QueueTrackedSpellAvailabilityRefresh()
+      end
       _BB_QueueWork()
     elseif event == "SPELLS_CHANGED" then
       BB:_OnSpellsChanged()
@@ -2958,6 +2987,7 @@ function BB:OnDisable()
   _bbRebuildQueued = false
   _bbAvailabilityRefreshQueued = false
   _bbDeferredFlushQueued = false
+  BB.__puiPendingRebuild = nil
   _bbStartupDid = false
 
   local viewer = _cache.viewer or PCMRuntime:GetViewer(VIEWER_KEY)
