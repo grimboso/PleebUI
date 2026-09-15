@@ -656,7 +656,11 @@ local function _PCM_BuildBuffIconsTabArgs()
   args.showTooltips = {
     type = "toggle",
     name = "Show tooltips",
+    desc = "Saved in Blizzard Edit Mode for this character.",
     order = 7,
+    disabled = function()
+      return not Cooldowns:CanChangeViewerEditModeSettings()
+    end,
     get = function()
       return Cooldowns:GetViewerTooltipsEnabled(viewerKey)
     end,
@@ -668,7 +672,11 @@ local function _PCM_BuildBuffIconsTabArgs()
   args.hideWhenInactive = {
     type = "toggle",
     name = "Hide when inactive",
+    desc = "Saved in Blizzard Edit Mode for this character.",
     order = 8,
+    disabled = function()
+      return not Cooldowns:CanChangeViewerEditModeSettings()
+    end,
     get = function()
       return Cooldowns:GetViewerHideWhenInactive(viewerKey)
     end,
@@ -1020,7 +1028,11 @@ local function _PCM_BuildCooldownViewerArgs(cm, viewerKey, opts)
   args.showTooltips = {
     type = "toggle",
     name = "Show tooltips",
+    desc = "Saved in Blizzard Edit Mode for this character.",
     order = 16,
+    disabled = function()
+      return not Cooldowns:CanChangeViewerEditModeSettings()
+    end,
     get = function()
       return Cooldowns:GetViewerTooltipsEnabled(viewerKey)
     end,
@@ -2986,7 +2998,11 @@ local function _PCM_BuildBuffBarsTabArgs()
   args.showTooltips = {
     type = "toggle",
     name = "Show tooltips",
+    desc = "Saved in Blizzard Edit Mode for this character.",
     order = 8,
+    disabled = function()
+      return not Cooldowns:CanChangeViewerEditModeSettings()
+    end,
     get = function()
       return Cooldowns:GetViewerTooltipsEnabled(viewerKey)
     end,
@@ -2998,7 +3014,11 @@ local function _PCM_BuildBuffBarsTabArgs()
   args.hideWhenInactive = {
     type = "toggle",
     name = "Hide when inactive",
+    desc = "Saved in Blizzard Edit Mode for this character.",
     order = 9,
+    disabled = function()
+      return not Cooldowns:CanChangeViewerEditModeSettings()
+    end,
     get = function()
       return Cooldowns:GetViewerHideWhenInactive(viewerKey)
     end,
