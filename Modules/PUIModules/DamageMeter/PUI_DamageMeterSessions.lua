@@ -96,10 +96,6 @@ function DamageMeters:ClearAllWindowSelections()
 end
 
 function DamageMeters:ReconcileAvailableSessionSelections()
-  if not self.windowSelections then
-    return
-  end
-
   local availableSessionIDs = {}
   local sessions = C_DamageMeter.GetAvailableCombatSessions()
   for index = 1, #sessions do
@@ -110,6 +106,16 @@ function DamageMeters:ReconcileAvailableSessionSelections()
     if sessionID > 0 then
       availableSessionIDs[sessionID] = true
     end
+  end
+
+  if self.currentDisplaySessionID
+    and not availableSessionIDs[self.currentDisplaySessionID]
+  then
+    self.currentDisplaySessionID = nil
+  end
+
+  if not self.windowSelections then
+    return
   end
 
   for index = 1, MAX_WINDOWS do
@@ -164,6 +170,17 @@ local function GetAvailableSessionInfo(sessionID)
   return nil
 end
 
+local function GetBlizzardSessionID(windowDB)
+  local selection = GetWindowSelection(windowDB)
+  if IsAvailableSessionSelection(selection) then
+    return selection.sessionID
+  end
+  if not selection and windowDB.session == "CURRENT" then
+    return DamageMeters.currentDisplaySessionID
+  end
+  return nil
+end
+
 local function GetSessionStateKey(windowDB)
   local selection = GetWindowSelection(windowDB)
   if IsAvailableSessionSelection(selection) then
@@ -171,6 +188,11 @@ local function GetSessionStateKey(windowDB)
   end
   if selection then
     return History:GetSelectionStateKey(selection)
+  end
+
+  local sessionID = GetBlizzardSessionID(windowDB)
+  if sessionID then
+    return "ID:" .. sessionID
   end
 
   return "TYPE:" .. windowDB.session
@@ -183,9 +205,10 @@ local function GetCombatSession(windowDB, meterKey)
   end
 
   local meterType = METER_TYPES[meterKey]
-  if IsAvailableSessionSelection(selection) then
-    if GetAvailableSessionInfo(selection.sessionID) then
-      return C_DamageMeter.GetCombatSessionFromID(selection.sessionID, meterType)
+  local sessionID = GetBlizzardSessionID(windowDB)
+  if sessionID then
+    if GetAvailableSessionInfo(sessionID) then
+      return C_DamageMeter.GetCombatSessionFromID(sessionID, meterType)
     end
     return nil
   end
@@ -200,12 +223,13 @@ local function GetCombatSessionSource(
   sourceCreatureID
 )
   local selection = GetWindowSelection(windowDB)
-  if IsAvailableSessionSelection(selection) then
-    if not GetAvailableSessionInfo(selection.sessionID) then
+  local sessionID = GetBlizzardSessionID(windowDB)
+  if sessionID then
+    if not GetAvailableSessionInfo(sessionID) then
       return nil
     end
     return C_DamageMeter.GetCombatSessionSourceFromID(
-      selection.sessionID,
+      sessionID,
       METER_TYPES[meterKey],
       sourceGUID,
       sourceCreatureID
@@ -286,6 +310,7 @@ IsHistorySelection = P:Def("IsHistorySelection", IsHistorySelection)
 WindowSelectionsEqual = P:Def("WindowSelectionsEqual", WindowSelectionsEqual)
 FormatDuration = P:Def("FormatDuration", FormatDuration)
 GetAvailableSessionInfo = P:Def("GetAvailableSessionInfo", GetAvailableSessionInfo)
+GetBlizzardSessionID = P:Def("GetBlizzardSessionID", GetBlizzardSessionID)
 GetSessionStateKey = P:Def("GetSessionStateKey", GetSessionStateKey)
 GetCombatSession = P:Def("GetCombatSession", GetCombatSession)
 GetCombatSessionSource = P:Def("GetCombatSessionSource", GetCombatSessionSource)
@@ -305,6 +330,7 @@ Sessions.IsHistorySelection = IsHistorySelection
 Sessions.WindowSelectionsEqual = WindowSelectionsEqual
 Sessions.FormatDuration = FormatDuration
 Sessions.GetAvailableSessionInfo = GetAvailableSessionInfo
+Sessions.GetBlizzardSessionID = GetBlizzardSessionID
 Sessions.GetSessionStateKey = GetSessionStateKey
 Sessions.GetCombatSession = GetCombatSession
 Sessions.GetCombatSessionSource = GetCombatSessionSource
