@@ -438,9 +438,7 @@ local function SetPage(newPage)
       end, "ACTIVE")
     end
 
-    if draft.kind == "charge" then
-      AddSlider("Charges", draft.maximum, 2, 3, 1, function(value) draft.maximum = math.floor(value + 0.5) end, "RECHARGING")
-    elseif draft.kind == "stack" then
+    if draft.kind == "stack" then
       AddSlider("Maximum stacks", draft.maximum, 2, 60, 1, function(value) draft.maximum = math.floor(value + 0.5) end, "ACTIVE")
     end
   elseif page == 4 then
