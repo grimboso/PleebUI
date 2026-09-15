@@ -3,6 +3,7 @@ local ADDON_NAME, ns = ...
 
 local Addon = ns.Addon
 local LSM = ns.LSM
+local Pixel = ns.Pixel
 local Theme = {
   WidgetSkins = {},
 }
@@ -592,11 +593,11 @@ local function _PUI_RestoreCreatedWidgetObject(object, state)
 
   for i = 1, #state.points do
     local point = state.points[i]
-    object:SetPoint(point[1], point[2], point[3], point[4], point[5])
+    Pixel.Point(object, point[1], point[2], point[3], point[4], point[5])
   end
 
-  object:SetWidth(state.width)
-  object:SetHeight(state.height)
+  Pixel.Width(object, state.width)
+  Pixel.Height(object, state.height)
   object:SetAlpha(state.alpha)
 
   if state.drawLayer then
@@ -645,13 +646,14 @@ local function _PUI_RestoreCreatedWidgetObject(object, state)
   if object:IsObjectType("Texture") then
     if state.atlas then
       object:SetAtlas(state.atlas)
+      Pixel.DisableSnap(object)
     else
-      object:SetTexture(state.texture)
+      Pixel.SetTexture(object, state.texture)
     end
 
-    object:SetTexCoord(unpack(state.texCoord))
+    Pixel.SetTexCoord(object, unpack(state.texCoord))
     if state.vertexColor[1] ~= nil then
-      object:SetVertexColor(unpack(state.vertexColor))
+      Pixel.SetVertexColor(object, unpack(state.vertexColor))
     end
     object:SetBlendMode(state.blendMode)
     object:SetHorizTile(state.horizTile)
@@ -965,7 +967,7 @@ local function SyncBackdropFrame(target, bg)
   if bg:GetParent() ~= target then
     bg:SetParent(target)
     bg:ClearAllPoints()
-    bg:SetAllPoints(target)
+    Pixel.AllPoints(bg, target)
   end
 
   bg.__puiIsBackdropFrame = true
@@ -987,7 +989,7 @@ local function EnsureBackdropFrame(target)
 
   if not bg then
     bg = CreateFrame("Frame", nil, target, "BackdropTemplate")
-    bg:SetAllPoints(target)
+    Pixel.AllPoints(bg, target)
     bg.__puiIsBackdropFrame = true
     Theme.MarkCreatedWidgetChrome(bg)
     target._puiBg = bg
@@ -1098,15 +1100,15 @@ function Theme.SetWidgetRowBackgroundIndex(widget, index)
 
   if not bg then
     bg = frame:CreateTexture(nil, "BACKGROUND")
-    bg:SetTexture("Interface\\Buttons\\WHITE8x8")
+    Pixel.SetTexture(bg, "Interface\\Buttons\\WHITE8x8")
     bg:SetIgnoreParentAlpha(true)
     Theme.MarkCreatedWidgetChrome(bg)
     frame.__puiWidgetRowBackground = bg
   end
 
   bg:ClearAllPoints()
-  bg:SetAllPoints(frame)
-  bg:SetColorTexture(color[1], color[2], color[3], alpha)
+  Pixel.AllPoints(bg, frame)
+  Pixel.SetColorTexture(bg, color[1], color[2], color[3], alpha)
   bg:Show()
 end
 
@@ -1163,7 +1165,7 @@ local function _PUI_ApplyCreatedWidgetSizing(widget, opts)
   widget.frame.height = height
 
   widget:SetHeight(height)
-  widget.frame:SetHeight(height)
+  Pixel.Height(widget.frame, height)
 end
 
 
@@ -1898,7 +1900,7 @@ local function EnsureStatusBarBorder(bar)
 
   local function NewEdge()
     local t = bar:CreateTexture(nil, "OVERLAY")
-    t:SetTexture(WHITE8)
+    Pixel.SetTexture(t, WHITE8)
     t:Hide()
     return t
   end
@@ -1937,32 +1939,32 @@ function Theme.ApplyStatusBarBorder(bar, opts)
 
   -- Top
   border.top:ClearAllPoints()
-  border.top:SetPoint("TOPLEFT", bar, "TOPLEFT", -thickness, thickness)
-  border.top:SetPoint("TOPRIGHT", bar, "TOPRIGHT", thickness, thickness)
-  border.top:SetHeight(thickness)
+  Pixel.Point(border.top, "TOPLEFT", bar, "TOPLEFT", -thickness, thickness)
+  Pixel.Point(border.top, "TOPRIGHT", bar, "TOPRIGHT", thickness, thickness)
+  Pixel.Height(border.top, thickness)
 
   -- Bottom
   border.bottom:ClearAllPoints()
-  border.bottom:SetPoint("BOTTOMLEFT", bar, "BOTTOMLEFT", -thickness, -thickness)
-  border.bottom:SetPoint("BOTTOMRIGHT", bar, "BOTTOMRIGHT", thickness, -thickness)
-  border.bottom:SetHeight(thickness)
+  Pixel.Point(border.bottom, "BOTTOMLEFT", bar, "BOTTOMLEFT", -thickness, -thickness)
+  Pixel.Point(border.bottom, "BOTTOMRIGHT", bar, "BOTTOMRIGHT", thickness, -thickness)
+  Pixel.Height(border.bottom, thickness)
 
   -- Left
   border.left:ClearAllPoints()
-  border.left:SetPoint("TOPLEFT", bar, "TOPLEFT", -thickness, thickness)
-  border.left:SetPoint("BOTTOMLEFT", bar, "BOTTOMLEFT", -thickness, -thickness)
-  border.left:SetWidth(thickness)
+  Pixel.Point(border.left, "TOPLEFT", bar, "TOPLEFT", -thickness, thickness)
+  Pixel.Point(border.left, "BOTTOMLEFT", bar, "BOTTOMLEFT", -thickness, -thickness)
+  Pixel.Width(border.left, thickness)
 
   -- Right
   border.right:ClearAllPoints()
-  border.right:SetPoint("TOPRIGHT", bar, "TOPRIGHT", thickness, thickness)
-  border.right:SetPoint("BOTTOMRIGHT", bar, "BOTTOMRIGHT", thickness, -thickness)
-  border.right:SetWidth(thickness)
+  Pixel.Point(border.right, "TOPRIGHT", bar, "TOPRIGHT", thickness, thickness)
+  Pixel.Point(border.right, "BOTTOMRIGHT", bar, "BOTTOMRIGHT", thickness, -thickness)
+  Pixel.Width(border.right, thickness)
 
-  border.top:SetVertexColor(r, g, b, a)
-  border.bottom:SetVertexColor(r, g, b, a)
-  border.left:SetVertexColor(r, g, b, a)
-  border.right:SetVertexColor(r, g, b, a)
+  Pixel.SetVertexColor(border.top, r, g, b, a)
+  Pixel.SetVertexColor(border.bottom, r, g, b, a)
+  Pixel.SetVertexColor(border.left, r, g, b, a)
+  Pixel.SetVertexColor(border.right, r, g, b, a)
 
   border.top:Show()
   border.bottom:Show()
@@ -1982,7 +1984,7 @@ function Theme.SkinStatusBar(bar, opts)
   StripStatusBarMasks(bar)
 
   if bar.SetStatusBarTexture then
-    bar:SetStatusBarTexture(texPath)
+    Pixel.SetStatusBarTexture(bar, texPath)
   end
 
   local tex = bar.GetStatusBarTexture and bar:GetStatusBarTexture()
@@ -1991,8 +1993,8 @@ function Theme.SkinStatusBar(bar, opts)
   end
 
   if bar.bg then
-    bar.bg:SetTexture(texPath)
-    bar.bg:SetVertexColor(0, 0, 0, 0.6)
+    Pixel.SetTexture(bar.bg, texPath)
+    Pixel.SetVertexColor(bar.bg, 0, 0, 0, 0.6)
   end
 
   local roleDef = Theme.statusBarRoles[role]
@@ -2013,7 +2015,7 @@ local function _PUI_EnsureTextureBackdrop(frame)
 
   local function CreateTexture(subLevel)
     local texture = frame:CreateTexture(nil, "BACKGROUND", nil, subLevel)
-    texture:SetTexture("Interface\\Buttons\\WHITE8x8")
+    Pixel.SetTexture(texture, "Interface\\Buttons\\WHITE8x8")
     Theme.MarkCreatedWidgetChrome(texture)
     return texture
   end
@@ -2036,28 +2038,28 @@ local function _PUI_SetTextureBackdrop(frame, preset, edgeSize)
     frame.__puiTextureBackdropEdgeSize = edgeSize
 
     backdrop.background:ClearAllPoints()
-    backdrop.background:SetPoint("TOPLEFT", frame, "TOPLEFT", 1, -1)
-    backdrop.background:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -1, 1)
+    Pixel.Point(backdrop.background, "TOPLEFT", frame, "TOPLEFT", 1, -1)
+    Pixel.Point(backdrop.background, "BOTTOMRIGHT", frame, "BOTTOMRIGHT", -1, 1)
 
     backdrop.top:ClearAllPoints()
-    backdrop.top:SetPoint("TOPLEFT", frame, "TOPLEFT", 0, 0)
-    backdrop.top:SetPoint("TOPRIGHT", frame, "TOPRIGHT", 0, 0)
-    backdrop.top:SetHeight(edgeSize)
+    Pixel.Point(backdrop.top, "TOPLEFT", frame, "TOPLEFT", 0, 0)
+    Pixel.Point(backdrop.top, "TOPRIGHT", frame, "TOPRIGHT", 0, 0)
+    Pixel.Height(backdrop.top, edgeSize)
 
     backdrop.bottom:ClearAllPoints()
-    backdrop.bottom:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 0, 0)
-    backdrop.bottom:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", 0, 0)
-    backdrop.bottom:SetHeight(edgeSize)
+    Pixel.Point(backdrop.bottom, "BOTTOMLEFT", frame, "BOTTOMLEFT", 0, 0)
+    Pixel.Point(backdrop.bottom, "BOTTOMRIGHT", frame, "BOTTOMRIGHT", 0, 0)
+    Pixel.Height(backdrop.bottom, edgeSize)
 
     backdrop.left:ClearAllPoints()
-    backdrop.left:SetPoint("TOPLEFT", frame, "TOPLEFT", 0, 0)
-    backdrop.left:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 0, 0)
-    backdrop.left:SetWidth(edgeSize)
+    Pixel.Point(backdrop.left, "TOPLEFT", frame, "TOPLEFT", 0, 0)
+    Pixel.Point(backdrop.left, "BOTTOMLEFT", frame, "BOTTOMLEFT", 0, 0)
+    Pixel.Width(backdrop.left, edgeSize)
 
     backdrop.right:ClearAllPoints()
-    backdrop.right:SetPoint("TOPRIGHT", frame, "TOPRIGHT", 0, 0)
-    backdrop.right:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", 0, 0)
-    backdrop.right:SetWidth(edgeSize)
+    Pixel.Point(backdrop.right, "TOPRIGHT", frame, "TOPRIGHT", 0, 0)
+    Pixel.Point(backdrop.right, "BOTTOMRIGHT", frame, "BOTTOMRIGHT", 0, 0)
+    Pixel.Width(backdrop.right, edgeSize)
 
     local showBorder = edgeSize > 0
     backdrop.top:SetShown(showBorder)
@@ -2075,11 +2077,11 @@ local function _PUI_SetTextureBackdrop(frame, preset, edgeSize)
   backdrop.bottom:SetShown(showBorder)
   backdrop.left:SetShown(showBorder)
   backdrop.right:SetShown(showBorder)
-  backdrop.background:SetVertexColor(bg[1], bg[2], bg[3], bg[4])
-  backdrop.top:SetVertexColor(border[1], border[2], border[3], border[4])
-  backdrop.bottom:SetVertexColor(border[1], border[2], border[3], border[4])
-  backdrop.left:SetVertexColor(border[1], border[2], border[3], border[4])
-  backdrop.right:SetVertexColor(border[1], border[2], border[3], border[4])
+  Pixel.SetVertexColor(backdrop.background, bg[1], bg[2], bg[3], bg[4])
+  Pixel.SetVertexColor(backdrop.top, border[1], border[2], border[3], border[4])
+  Pixel.SetVertexColor(backdrop.bottom, border[1], border[2], border[3], border[4])
+  Pixel.SetVertexColor(backdrop.left, border[1], border[2], border[3], border[4])
+  Pixel.SetVertexColor(backdrop.right, border[1], border[2], border[3], border[4])
 end
 
 function Theme.SetSquareBackdrop(frame, preset, edgeSize)
@@ -2151,14 +2153,14 @@ function Theme.SetAceTooltipSolidBackground(tooltip, enabled)
 
   if not background then
     background = tooltip:CreateTexture(nil, "BACKGROUND", nil, -8)
-    background:SetPoint("TOPLEFT", tooltip, "TOPLEFT", 2, -2)
-    background:SetPoint("BOTTOMRIGHT", tooltip, "BOTTOMRIGHT", -2, 2)
+    Pixel.Point(background, "TOPLEFT", tooltip, "TOPLEFT", 2, -2)
+    Pixel.Point(background, "BOTTOMRIGHT", tooltip, "BOTTOMRIGHT", -2, 2)
     tooltip.__puiAceTooltipSolidBackground = background
   end
 
   local colors = Theme.GetColors()
   local color = colors.background
-  background:SetColorTexture(color[1], color[2], color[3], 1)
+  Pixel.SetColorTexture(background, color[1], color[2], color[3], 1)
   background:Show()
 end
 

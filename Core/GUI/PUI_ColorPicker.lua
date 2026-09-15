@@ -1,6 +1,7 @@
 local ADDON_NAME, ns = ...
 
 local Theme = ns.Theme
+local Pixel = ns.Pixel
 local WidgetSkins = Theme.WidgetSkins
 
 function WidgetSkins.ColorPicker(widget)
@@ -27,8 +28,8 @@ function WidgetSkins.ColorPicker(widget)
   end
 
   swatchBG:ClearAllPoints()
-  swatchBG:SetPoint("LEFT", frame, "LEFT", controlLeft, controlYOffset)
-  swatchBG:SetSize(controlSize, controlSize)
+  Pixel.Point(swatchBG, "LEFT", frame, "LEFT", controlLeft, controlYOffset)
+  Pixel.Size(swatchBG, controlSize, controlSize)
   swatchBG:SetBackdrop({
     bgFile = "Interface\\Buttons\\WHITE8x8",
     edgeFile = "Interface\\Buttons\\WHITE8x8",
@@ -43,17 +44,17 @@ function WidgetSkins.ColorPicker(widget)
 
   checkers:ClearAllPoints()
   checkers:SetParent(swatchBG)
-  checkers:SetPoint("TOPLEFT", swatchBG, "TOPLEFT", 1, -1)
-  checkers:SetPoint("BOTTOMRIGHT", swatchBG, "BOTTOMRIGHT", -1, 1)
+  Pixel.Point(checkers, "TOPLEFT", swatchBG, "TOPLEFT", 1, -1)
+  Pixel.Point(checkers, "BOTTOMRIGHT", swatchBG, "BOTTOMRIGHT", -1, 1)
   checkers:SetDrawLayer("BACKGROUND")
   checkers:Show()
 
-  swatch:SetTexture("Interface\\Buttons\\WHITE8x8")
+  Pixel.SetTexture(swatch, "Interface\\Buttons\\WHITE8x8")
   swatch:ClearAllPoints()
   swatch:SetParent(swatchBG)
-  swatch:SetPoint("TOPLEFT", swatchBG, "TOPLEFT", 1, -1)
-  swatch:SetPoint("BOTTOMRIGHT", swatchBG, "BOTTOMRIGHT", -1, 1)
-  swatch:SetTexCoord(0, 1, 0, 1)
+  Pixel.Point(swatch, "TOPLEFT", swatchBG, "TOPLEFT", 1, -1)
+  Pixel.Point(swatch, "BOTTOMRIGHT", swatchBG, "BOTTOMRIGHT", -1, 1)
+  Pixel.SetTexCoord(swatch, 0, 1, 0, 1)
   swatch:SetDrawLayer("ARTWORK")
   swatch:Show()
 
@@ -61,9 +62,9 @@ function WidgetSkins.ColorPicker(widget)
   Theme.ApplyFont(label, "body")
   label:SetTextColor(textColor[1], textColor[2], textColor[3], textColor[4])
   label:ClearAllPoints()
-  label:SetPoint("LEFT", swatchBG, "RIGHT", controlGap, 0)
-  label:SetPoint("RIGHT", frame, "RIGHT", -controlRight, 0)
-  label:SetHeight(controlSize)
+  Pixel.Point(label, "LEFT", swatchBG, "RIGHT", controlGap, 0)
+  Pixel.Point(label, "RIGHT", frame, "RIGHT", -controlRight, 0)
+  Pixel.Height(label, controlSize)
   label:SetJustifyH("LEFT")
   label:SetJustifyV("MIDDLE")
 end

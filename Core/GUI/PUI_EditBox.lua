@@ -1,6 +1,7 @@
 local _, ns = ...
 
 local Theme = ns.Theme
+local Pixel = ns.Pixel
 local WidgetSkins = Theme.WidgetSkins
 local AceGUI = LibStub("AceGUI-3.0")
 
@@ -20,7 +21,7 @@ local WHITE8 = "Interface\\Buttons\\WHITE8x8"
 
 local function HideEditBoxTexture(texture)
   if texture then
-    texture:SetTexture(nil)
+    Pixel.SetTexture(texture, nil)
     texture:SetAlpha(0)
     texture:Hide()
   end
@@ -102,9 +103,9 @@ function WidgetSkins.EditBox(widget)
     end
 
     edit:ClearAllPoints()
-    edit:SetPoint("TOPLEFT", frame, "TOPLEFT", geom.controlLeft, -geom.controlTop)
-    edit:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -geom.controlRight, -geom.controlTop)
-    edit:SetHeight(controlHeight)
+    Pixel.Point(edit, "TOPLEFT", frame, "TOPLEFT", geom.controlLeft, -geom.controlTop)
+    Pixel.Point(edit, "TOPRIGHT", frame, "TOPRIGHT", -geom.controlRight, -geom.controlTop)
+    Pixel.Height(edit, controlHeight)
 
     local bg = Theme.EnsureBackdropFrame(edit)
     local edge = math.max(Theme.GetEdgeSize(), 2)
@@ -120,10 +121,10 @@ function WidgetSkins.EditBox(widget)
 
     bg:ClearAllPoints()
     if edit.NineSlice then
-      bg:SetAllPoints(edit)
+      Pixel.AllPoints(bg, edit)
     else
-      bg:SetPoint("TOPLEFT", edit, "TOPLEFT", 0, -2)
-      bg:SetPoint("BOTTOMRIGHT", edit, "BOTTOMRIGHT", -1, 1)
+      Pixel.Point(bg, "TOPLEFT", edit, "TOPLEFT", 0, -2)
+      Pixel.Point(bg, "BOTTOMRIGHT", edit, "BOTTOMRIGHT", -1, 1)
     end
 
     bg:SetFrameStrata(edit:GetFrameStrata())
@@ -132,9 +133,9 @@ function WidgetSkins.EditBox(widget)
     edit._puiBg = bg
 
     WidgetSkins.Button(button, widget)
-    button:SetSize(buttonWidth, controlHeight - 4)
+    Pixel.Size(button, buttonWidth, controlHeight - 4)
     button:ClearAllPoints()
-    button:SetPoint("RIGHT", bg, "RIGHT", -2, 0)
+    Pixel.Point(button, "RIGHT", bg, "RIGHT", -2, 0)
     button:SetParent(bg)
 
     Theme.ApplyFont(edit, "body")
@@ -158,9 +159,9 @@ function WidgetSkins.EditBox(widget)
     edit:SetJustifyV("MIDDLE")
 
     label:ClearAllPoints()
-    label:SetPoint("TOPLEFT", frame, "TOPLEFT", geom.labelLeft, -geom.labelTop)
-    label:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -geom.labelRight, -geom.labelTop)
-    label:SetHeight(geom.labelHeight)
+    Pixel.Point(label, "TOPLEFT", frame, "TOPLEFT", geom.labelLeft, -geom.labelTop)
+    Pixel.Point(label, "TOPRIGHT", frame, "TOPRIGHT", -geom.labelRight, -geom.labelTop)
+    Pixel.Height(label, geom.labelHeight)
     label:SetJustifyH("CENTER")
   end
 
@@ -182,7 +183,7 @@ local PUI_MULTILINE_EDITBOX_TYPE = "PUI_MultiLineEditBox"
 local PUI_MULTILINE_EDITBOX_VERSION = 1
 
 local function PUI_EditBox_SetTextureColor(texture, color, alphaMultiplier)
-  texture:SetColorTexture(
+  Pixel.SetColorTexture(texture,
     color[1],
     color[2],
     color[3],
@@ -192,7 +193,7 @@ end
 
 local function PUI_EditBox_CreateChrome(parent)
   local background = parent:CreateTexture(nil, "BACKGROUND")
-  background:SetTexture(WHITE8)
+  Pixel.SetTexture(background, WHITE8)
 
   local border = {
     top = parent:CreateTexture(nil, "BORDER"),
@@ -202,7 +203,7 @@ local function PUI_EditBox_CreateChrome(parent)
   }
 
   for _, texture in pairs(border) do
-    texture:SetTexture(WHITE8)
+    Pixel.SetTexture(texture, WHITE8)
   end
 
   return {
@@ -216,28 +217,28 @@ local function PUI_EditBox_LayoutChrome(parent, chrome)
   local border = chrome.border
 
   chrome.background:ClearAllPoints()
-  chrome.background:SetPoint("TOPLEFT", parent, "TOPLEFT", edge, -edge)
-  chrome.background:SetPoint("BOTTOMRIGHT", parent, "BOTTOMRIGHT", -edge, edge)
+  Pixel.Point(chrome.background, "TOPLEFT", parent, "TOPLEFT", edge, -edge)
+  Pixel.Point(chrome.background, "BOTTOMRIGHT", parent, "BOTTOMRIGHT", -edge, edge)
 
   border.top:ClearAllPoints()
-  border.top:SetPoint("TOPLEFT", parent, "TOPLEFT")
-  border.top:SetPoint("TOPRIGHT", parent, "TOPRIGHT")
-  border.top:SetHeight(edge)
+  Pixel.Point(border.top, "TOPLEFT", parent, "TOPLEFT")
+  Pixel.Point(border.top, "TOPRIGHT", parent, "TOPRIGHT")
+  Pixel.Height(border.top, edge)
 
   border.bottom:ClearAllPoints()
-  border.bottom:SetPoint("BOTTOMLEFT", parent, "BOTTOMLEFT")
-  border.bottom:SetPoint("BOTTOMRIGHT", parent, "BOTTOMRIGHT")
-  border.bottom:SetHeight(edge)
+  Pixel.Point(border.bottom, "BOTTOMLEFT", parent, "BOTTOMLEFT")
+  Pixel.Point(border.bottom, "BOTTOMRIGHT", parent, "BOTTOMRIGHT")
+  Pixel.Height(border.bottom, edge)
 
   border.left:ClearAllPoints()
-  border.left:SetPoint("TOPLEFT", parent, "TOPLEFT", 0, -edge)
-  border.left:SetPoint("BOTTOMLEFT", parent, "BOTTOMLEFT", 0, edge)
-  border.left:SetWidth(edge)
+  Pixel.Point(border.left, "TOPLEFT", parent, "TOPLEFT", 0, -edge)
+  Pixel.Point(border.left, "BOTTOMLEFT", parent, "BOTTOMLEFT", 0, edge)
+  Pixel.Width(border.left, edge)
 
   border.right:ClearAllPoints()
-  border.right:SetPoint("TOPRIGHT", parent, "TOPRIGHT", 0, -edge)
-  border.right:SetPoint("BOTTOMRIGHT", parent, "BOTTOMRIGHT", 0, edge)
-  border.right:SetWidth(edge)
+  Pixel.Point(border.right, "TOPRIGHT", parent, "TOPRIGHT", 0, -edge)
+  Pixel.Point(border.right, "BOTTOMRIGHT", parent, "BOTTOMRIGHT", 0, edge)
+  Pixel.Width(border.right, edge)
 end
 
 local function PUI_EditBox_SetChromeColors(chrome, backgroundColor, borderColor, alphaMultiplier)
@@ -298,23 +299,23 @@ local function PUI_EditBox_Layout(widget, width)
     or math_max(0, ((widget.frame:GetHeight() or geom.rowHeight) - geom.controlHeight) * 0.5)
 
   widget.label:ClearAllPoints()
-  widget.label:SetPoint("TOPLEFT", widget.frame, "TOPLEFT", geom.labelLeft, -geom.labelTop)
-  widget.label:SetPoint("TOPRIGHT", widget.frame, "TOPRIGHT", -geom.labelRight, -geom.labelTop)
-  widget.label:SetHeight(geom.labelHeight)
+  Pixel.Point(widget.label, "TOPLEFT", widget.frame, "TOPLEFT", geom.labelLeft, -geom.labelTop)
+  Pixel.Point(widget.label, "TOPRIGHT", widget.frame, "TOPRIGHT", -geom.labelRight, -geom.labelTop)
+  Pixel.Height(widget.label, geom.labelHeight)
 
   widget.editbox:ClearAllPoints()
-  widget.editbox:SetPoint("TOPLEFT", widget.frame, "TOPLEFT", geom.controlLeft, -controlTop)
-  widget.editbox:SetPoint("TOPRIGHT", widget.frame, "TOPRIGHT", -geom.controlRight, -controlTop)
-  widget.editbox:SetHeight(geom.controlHeight)
+  Pixel.Point(widget.editbox, "TOPLEFT", widget.frame, "TOPLEFT", geom.controlLeft, -controlTop)
+  Pixel.Point(widget.editbox, "TOPRIGHT", widget.frame, "TOPRIGHT", -geom.controlRight, -controlTop)
+  Pixel.Height(widget.editbox, geom.controlHeight)
 
   widget.button:ClearAllPoints()
-  widget.button:SetPoint("TOPRIGHT", widget.editbox, "TOPRIGHT", -2, -2)
-  widget.button:SetPoint("BOTTOMRIGHT", widget.editbox, "BOTTOMRIGHT", -2, 2)
-  widget.button:SetWidth(geom.buttonWidth)
+  Pixel.Point(widget.button, "TOPRIGHT", widget.editbox, "TOPRIGHT", -2, -2)
+  Pixel.Point(widget.button, "BOTTOMRIGHT", widget.editbox, "BOTTOMRIGHT", -2, 2)
+  Pixel.Width(widget.button, geom.buttonWidth)
 
   PUI_EditBox_LayoutChrome(widget.editbox, widget.editboxChrome)
   PUI_EditBox_LayoutChrome(widget.button, widget.buttonChrome)
-  widget.frame:SetWidth(frameWidth)
+  Pixel.Width(widget.frame, frameWidth)
 end
 
 local function PUI_EditBox_RefreshVisualState(widget)
@@ -560,7 +561,7 @@ local function PUI_EditBox_Constructor()
 
   local buttonText = button:CreateFontString(nil, "OVERLAY")
   buttonText.__puiOptionsFontOwned = true
-  buttonText:SetAllPoints(button)
+  Pixel.AllPoints(buttonText, button)
   buttonText:SetJustifyH("CENTER")
   buttonText:SetJustifyV("MIDDLE")
   Theme.ApplyFont(buttonText, "body")
@@ -599,27 +600,27 @@ local function PUI_MultiLine_Layout(widget)
   local buttonSpace = widget.disablebutton and 4 or (geom.controlHeight + 8)
 
   widget.label:ClearAllPoints()
-  widget.label:SetPoint("TOPLEFT", widget.frame, "TOPLEFT", geom.labelLeft, -geom.labelTop)
-  widget.label:SetPoint("TOPRIGHT", widget.frame, "TOPRIGHT", -geom.labelRight, -geom.labelTop)
-  widget.label:SetHeight(geom.labelHeight)
+  Pixel.Point(widget.label, "TOPLEFT", widget.frame, "TOPLEFT", geom.labelLeft, -geom.labelTop)
+  Pixel.Point(widget.label, "TOPRIGHT", widget.frame, "TOPRIGHT", -geom.labelRight, -geom.labelTop)
+  Pixel.Height(widget.label, geom.labelHeight)
 
   widget.button:ClearAllPoints()
-  widget.button:SetPoint("BOTTOMLEFT", widget.frame, "BOTTOMLEFT", geom.controlLeft, 4)
-  widget.button:SetSize(math_max(72, geom.buttonWidth * 2), geom.controlHeight)
+  Pixel.Point(widget.button, "BOTTOMLEFT", widget.frame, "BOTTOMLEFT", geom.controlLeft, 4)
+  Pixel.Size(widget.button, math_max(72, geom.buttonWidth * 2), geom.controlHeight)
 
   widget.scrollBG:ClearAllPoints()
-  widget.scrollBG:SetPoint("TOPLEFT", widget.frame, "TOPLEFT", geom.controlLeft, -labelBottom)
-  widget.scrollBG:SetPoint("TOPRIGHT", widget.frame, "TOPRIGHT", -geom.controlRight, -labelBottom)
-  widget.scrollBG:SetPoint("BOTTOMLEFT", widget.frame, "BOTTOMLEFT", geom.controlLeft, buttonSpace)
-  widget.scrollBG:SetPoint("BOTTOMRIGHT", widget.frame, "BOTTOMRIGHT", -geom.controlRight, buttonSpace)
+  Pixel.Point(widget.scrollBG, "TOPLEFT", widget.frame, "TOPLEFT", geom.controlLeft, -labelBottom)
+  Pixel.Point(widget.scrollBG, "TOPRIGHT", widget.frame, "TOPRIGHT", -geom.controlRight, -labelBottom)
+  Pixel.Point(widget.scrollBG, "BOTTOMLEFT", widget.frame, "BOTTOMLEFT", geom.controlLeft, buttonSpace)
+  Pixel.Point(widget.scrollBG, "BOTTOMRIGHT", widget.frame, "BOTTOMRIGHT", -geom.controlRight, buttonSpace)
 
   widget.scrollFrame:ClearAllPoints()
-  widget.scrollFrame:SetPoint("TOPLEFT", widget.scrollBG, "TOPLEFT", 5, -5)
-  widget.scrollFrame:SetPoint("BOTTOMRIGHT", widget.scrollBG, "BOTTOMRIGHT", -20, 5)
+  Pixel.Point(widget.scrollFrame, "TOPLEFT", widget.scrollBG, "TOPLEFT", 5, -5)
+  Pixel.Point(widget.scrollFrame, "BOTTOMRIGHT", widget.scrollBG, "BOTTOMRIGHT", -20, 5)
 
   widget.scrollBar:ClearAllPoints()
-  widget.scrollBar:SetPoint("TOPRIGHT", widget.scrollBG, "TOPRIGHT", -2, -3)
-  widget.scrollBar:SetPoint("BOTTOMRIGHT", widget.scrollBG, "BOTTOMRIGHT", -2, 3)
+  Pixel.Point(widget.scrollBar, "TOPRIGHT", widget.scrollBG, "TOPRIGHT", -2, -3)
+  Pixel.Point(widget.scrollBar, "BOTTOMRIGHT", widget.scrollBG, "BOTTOMRIGHT", -2, 3)
 
   PUI_EditBox_LayoutChrome(widget.scrollBG, widget.scrollChrome)
   PUI_EditBox_LayoutChrome(widget.button, widget.buttonChrome)
@@ -740,7 +741,7 @@ local function PUI_MultiLine_OnReceiveDrag(frame)
 end
 
 local function PUI_MultiLine_OnSizeChanged(scrollFrame, width)
-  scrollFrame.obj.editBox:SetWidth(width)
+  Pixel.Width(scrollFrame.obj.editBox, width)
 end
 
 local function PUI_MultiLine_OnTextChanged(editbox, userInput)
@@ -924,7 +925,7 @@ local function PUI_MultiLine_Constructor()
 
   local buttonText = button:CreateFontString(nil, "OVERLAY")
   buttonText.__puiOptionsFontOwned = true
-  buttonText:SetAllPoints(button)
+  Pixel.AllPoints(buttonText, button)
   buttonText:SetJustifyH("CENTER")
   buttonText:SetJustifyV("MIDDLE")
   Theme.ApplyFont(buttonText, "body")
@@ -945,7 +946,7 @@ local function PUI_MultiLine_Constructor()
   )
 
   editBox.__puiOptionsFontOwned = true
-  editBox:SetAllPoints(scrollFrame)
+  Pixel.AllPoints(editBox, scrollFrame)
   editBox:SetMultiLine(true)
   editBox:EnableMouse(true)
   editBox:SetAutoFocus(false)

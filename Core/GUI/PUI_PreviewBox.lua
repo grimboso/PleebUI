@@ -20,6 +20,7 @@ local tonumber = _G.tonumber
 local tostring = _G.tostring
 local type = _G.type
 local Theme = ns.Theme
+local Pixel = ns.Pixel
 
 local function PUI_PreviewBox_ApplyBackdrop(frame, bgColor, borderColor, edge)
   Theme.SetSquareBackdrop(frame, {
@@ -78,12 +79,12 @@ function PreviewBox.CreateInteraction(parent, anchor, options)
   local fill = button:CreateTexture(nil, "OVERLAY", nil, 6)
   local edges = {}
 
-  button:SetAllPoints(anchor or parent)
+  Pixel.AllPoints(button, anchor or parent)
   button:SetFrameLevel(options.frameLevel or (parent:GetFrameLevel() + 20))
   button:RegisterForClicks("LeftButtonUp")
 
-  fill:SetAllPoints(button)
-  fill:SetColorTexture(
+  Pixel.AllPoints(fill, button)
+  Pixel.SetColorTexture(fill,
     hoverColor[1] or 1,
     hoverColor[2] or 1,
     hoverColor[3] or 1,
@@ -93,7 +94,7 @@ function PreviewBox.CreateInteraction(parent, anchor, options)
 
   for index = 1, 4 do
     local edge = button:CreateTexture(nil, "OVERLAY", nil, 7)
-    edge:SetColorTexture(
+    Pixel.SetColorTexture(edge,
       hoverColor[1] or 1,
       hoverColor[2] or 1,
       hoverColor[3] or 1,
@@ -105,21 +106,21 @@ function PreviewBox.CreateInteraction(parent, anchor, options)
 
   local thickness = options.highlightThickness or 2
 
-  edges[1]:SetPoint("TOPLEFT", button, "TOPLEFT", 0, 0)
-  edges[1]:SetPoint("TOPRIGHT", button, "TOPRIGHT", 0, 0)
-  edges[1]:SetHeight(thickness)
+  Pixel.Point(edges[1], "TOPLEFT", button, "TOPLEFT", 0, 0)
+  Pixel.Point(edges[1], "TOPRIGHT", button, "TOPRIGHT", 0, 0)
+  Pixel.Height(edges[1], thickness)
 
-  edges[2]:SetPoint("BOTTOMLEFT", button, "BOTTOMLEFT", 0, 0)
-  edges[2]:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT", 0, 0)
-  edges[2]:SetHeight(thickness)
+  Pixel.Point(edges[2], "BOTTOMLEFT", button, "BOTTOMLEFT", 0, 0)
+  Pixel.Point(edges[2], "BOTTOMRIGHT", button, "BOTTOMRIGHT", 0, 0)
+  Pixel.Height(edges[2], thickness)
 
-  edges[3]:SetPoint("TOPLEFT", edges[1], "BOTTOMLEFT", 0, 0)
-  edges[3]:SetPoint("BOTTOMLEFT", edges[2], "TOPLEFT", 0, 0)
-  edges[3]:SetWidth(thickness)
+  Pixel.Point(edges[3], "TOPLEFT", edges[1], "BOTTOMLEFT", 0, 0)
+  Pixel.Point(edges[3], "BOTTOMLEFT", edges[2], "TOPLEFT", 0, 0)
+  Pixel.Width(edges[3], thickness)
 
-  edges[4]:SetPoint("TOPRIGHT", edges[1], "BOTTOMRIGHT", 0, 0)
-  edges[4]:SetPoint("BOTTOMRIGHT", edges[2], "TOPRIGHT", 0, 0)
-  edges[4]:SetWidth(thickness)
+  Pixel.Point(edges[4], "TOPRIGHT", edges[1], "BOTTOMRIGHT", 0, 0)
+  Pixel.Point(edges[4], "BOTTOMRIGHT", edges[2], "TOPRIGHT", 0, 0)
+  Pixel.Width(edges[4], thickness)
 
   button.__puiPreviewInteractionFill = fill
   button.__puiPreviewInteractionEdges = edges
@@ -264,7 +265,7 @@ function PreviewBox.CreateZoomControl(parent, options)
   local maximum = tonumber(options.maximum) or 200
   local step = tonumber(options.step) or 5
 
-  control:SetSize(
+  Pixel.Size(control,
     tonumber(options.width) or (sliderWidth + 92),
     tonumber(options.height) or sliderHeight
   )
@@ -272,8 +273,8 @@ function PreviewBox.CreateZoomControl(parent, options)
     tonumber(options.frameLevel) or (parent:GetFrameLevel() + 20)
   )
 
-  slider:SetPoint("CENTER", control, "CENTER", tonumber(options.sliderOffsetX) or 0, 0)
-  slider:SetSize(sliderWidth, sliderHeight)
+  Pixel.Point(slider, "CENTER", control, "CENTER", tonumber(options.sliderOffsetX) or 0, 0)
+  Pixel.Size(slider, sliderWidth, sliderHeight)
   slider:SetOrientation("HORIZONTAL")
   slider:SetHitRectInsets(0, 0, -8, -8)
   slider:SetMinMaxValues(minimum, maximum)
@@ -281,10 +282,10 @@ function PreviewBox.CreateZoomControl(parent, options)
   slider:SetObeyStepOnDrag(true)
 
   local track = slider:CreateTexture(nil, "ARTWORK")
-  track:SetPoint("LEFT", slider, "LEFT", 0, 0)
-  track:SetPoint("RIGHT", slider, "RIGHT", 0, 0)
-  track:SetHeight(4)
-  track:SetColorTexture(
+  Pixel.Point(track, "LEFT", slider, "LEFT", 0, 0)
+  Pixel.Point(track, "RIGHT", slider, "RIGHT", 0, 0)
+  Pixel.Height(track, 4)
+  Pixel.SetColorTexture(track,
     colors.border[1],
     colors.border[2],
     colors.border[3],
@@ -292,8 +293,8 @@ function PreviewBox.CreateZoomControl(parent, options)
   )
 
   local thumb = slider:CreateTexture(nil, "OVERLAY")
-  thumb:SetSize(10, sliderHeight)
-  thumb:SetColorTexture(
+  Pixel.Size(thumb, 10, sliderHeight)
+  Pixel.SetColorTexture(thumb,
     colors.accent[1],
     colors.accent[2],
     colors.accent[3],
@@ -301,13 +302,13 @@ function PreviewBox.CreateZoomControl(parent, options)
   )
   slider:SetThumbTexture(thumb)
 
-  label:SetPoint("RIGHT", slider, "LEFT", -gap, 0)
+  Pixel.Point(label, "RIGHT", slider, "LEFT", -gap, 0)
   label:SetJustifyH("RIGHT")
   Theme.ApplyFont(label, "tiny", tonumber(options.fontSize) or 9)
   label:SetText(options.label or "Zoom")
   label:SetShown(options.showLabel ~= false)
 
-  valueText:SetPoint("LEFT", slider, "RIGHT", gap, 0)
+  Pixel.Point(valueText, "LEFT", slider, "RIGHT", gap, 0)
   valueText:SetJustifyH("LEFT")
   Theme.ApplyFont(valueText, "tiny", tonumber(options.fontSize) or 9)
 
@@ -454,7 +455,7 @@ local function PUI_PreviewBox_ShowOptionGlow(targetFrame)
 
     local function CreateEdge()
       local edge = glow:CreateTexture(nil, "OVERLAY")
-      edge:SetColorTexture(1, 1, 1, 1)
+      Pixel.SetColorTexture(edge, 1, 1, 1, 1)
       return edge
     end
 
@@ -463,18 +464,18 @@ local function PUI_PreviewBox_ShowOptionGlow(targetFrame)
     glow.left = CreateEdge()
     glow.right = CreateEdge()
 
-    glow.top:SetHeight(2)
-    glow.top:SetPoint("TOPLEFT")
-    glow.top:SetPoint("TOPRIGHT")
-    glow.bottom:SetHeight(2)
-    glow.bottom:SetPoint("BOTTOMLEFT")
-    glow.bottom:SetPoint("BOTTOMRIGHT")
-    glow.left:SetWidth(2)
-    glow.left:SetPoint("TOPLEFT", glow.top, "BOTTOMLEFT")
-    glow.left:SetPoint("BOTTOMLEFT", glow.bottom, "TOPLEFT")
-    glow.right:SetWidth(2)
-    glow.right:SetPoint("TOPRIGHT", glow.top, "BOTTOMRIGHT")
-    glow.right:SetPoint("BOTTOMRIGHT", glow.bottom, "TOPRIGHT")
+    Pixel.Height(glow.top, 2)
+    Pixel.Point(glow.top, "TOPLEFT")
+    Pixel.Point(glow.top, "TOPRIGHT")
+    Pixel.Height(glow.bottom, 2)
+    Pixel.Point(glow.bottom, "BOTTOMLEFT")
+    Pixel.Point(glow.bottom, "BOTTOMRIGHT")
+    Pixel.Width(glow.left, 2)
+    Pixel.Point(glow.left, "TOPLEFT", glow.top, "BOTTOMLEFT")
+    Pixel.Point(glow.left, "BOTTOMLEFT", glow.bottom, "TOPLEFT")
+    Pixel.Width(glow.right, 2)
+    Pixel.Point(glow.right, "TOPRIGHT", glow.top, "BOTTOMRIGHT")
+    Pixel.Point(glow.right, "BOTTOMRIGHT", glow.bottom, "TOPRIGHT")
 
     PreviewBox.__puiOptionGlow = glow
   end
@@ -483,12 +484,12 @@ local function PUI_PreviewBox_ShowOptionGlow(targetFrame)
 
   glow:SetParent(targetFrame)
   glow:ClearAllPoints()
-  glow:SetAllPoints(targetFrame)
+  Pixel.AllPoints(glow, targetFrame)
   glow:SetFrameLevel(targetFrame:GetFrameLevel() + 20)
-  glow.top:SetColorTexture(color[1], color[2], color[3], 1)
-  glow.bottom:SetColorTexture(color[1], color[2], color[3], 1)
-  glow.left:SetColorTexture(color[1], color[2], color[3], 1)
-  glow.right:SetColorTexture(color[1], color[2], color[3], 1)
+  Pixel.SetColorTexture(glow.top, color[1], color[2], color[3], 1)
+  Pixel.SetColorTexture(glow.bottom, color[1], color[2], color[3], 1)
+  Pixel.SetColorTexture(glow.left, color[1], color[2], color[3], 1)
+  Pixel.SetColorTexture(glow.right, color[1], color[2], color[3], 1)
   glow.elapsed = 0
   glow:SetAlpha(1)
   glow:Show()
@@ -576,23 +577,23 @@ function PreviewBox.Create(parent)
   box:SetFrameLevel(parent:GetFrameLevel() + 1)
 
   box.title = box:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-  box.title:SetPoint("TOPLEFT", box, "TOPLEFT", 14, -12)
-  box.title:SetPoint("TOPRIGHT", box, "TOPRIGHT", -14, -12)
+  Pixel.Point(box.title, "TOPLEFT", box, "TOPLEFT", 14, -12)
+  Pixel.Point(box.title, "TOPRIGHT", box, "TOPRIGHT", -14, -12)
   box.title:SetJustifyH("LEFT")
   box.title:SetJustifyV("MIDDLE")
 
   box.description = box:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-  box.description:SetPoint("TOPLEFT", box.title, "BOTTOMLEFT", 0, -4)
-  box.description:SetPoint("TOPRIGHT", box.title, "BOTTOMRIGHT", 0, -4)
+  Pixel.Point(box.description, "TOPLEFT", box.title, "BOTTOMLEFT", 0, -4)
+  Pixel.Point(box.description, "TOPRIGHT", box.title, "BOTTOMRIGHT", 0, -4)
   box.description:SetJustifyH("LEFT")
   box.description:SetJustifyV("TOP")
   box.description:SetWordWrap(true)
 
   box.canvas = CreateFrame("Frame", nil, box)
   box.canvas:SetFrameLevel(box:GetFrameLevel() + 1)
-  box.canvas:SetPoint("TOPLEFT", box.description, "BOTTOMLEFT", 0, -12)
-  box.canvas:SetPoint("TOPRIGHT", box, "TOPRIGHT", -14, 0)
-  box.canvas:SetPoint("BOTTOMRIGHT", box, "BOTTOMRIGHT", -14, 14)
+  Pixel.Point(box.canvas, "TOPLEFT", box.description, "BOTTOMLEFT", 0, -12)
+  Pixel.Point(box.canvas, "TOPRIGHT", box, "TOPRIGHT", -14, 0)
+  Pixel.Point(box.canvas, "BOTTOMRIGHT", box, "BOTTOMRIGHT", -14, 14)
 
   PUI_PreviewBox_ApplyBackdrop(box, colors.background, colors.border, edge)
   PUI_PreviewBox_ApplyBackdrop(box.canvas, colors.background, colors.border, edge)

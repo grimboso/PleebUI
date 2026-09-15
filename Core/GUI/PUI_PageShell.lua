@@ -12,6 +12,7 @@ local tonumber = tonumber
 local type = type
 
 local Theme = ns.Theme
+local Pixel = ns.Pixel
 local AceGUI = LibStub("AceGUI-3.0")
 
 local PUI_PAGE_HEADER_HEIGHT = 78
@@ -94,8 +95,8 @@ local function PUI_PageShell_SyncACDContainer(self)
 
   if container.frame.__puiACDAnchorParent ~= parent then
     container.frame:ClearAllPoints()
-    container.frame:SetPoint("TOPLEFT", parent, "TOPLEFT", 0, 0)
-    container.frame:SetPoint("BOTTOMRIGHT", parent, "BOTTOMRIGHT", 0, 0)
+    Pixel.Point(container.frame, "TOPLEFT", parent, "TOPLEFT", 0, 0)
+    Pixel.Point(container.frame, "BOTTOMRIGHT", parent, "BOTTOMRIGHT", 0, 0)
     container.frame.__puiACDAnchorParent = parent
   end
 
@@ -129,50 +130,50 @@ local function PUI_PageShell_RebuildLayout(self)
 
   self.body:SetParent(self)
   self.body:ClearAllPoints()
-  self.body:SetPoint("TOPLEFT", self, "TOPLEFT", 0, 0)
-  self.body:SetPoint("BOTTOMRIGHT", self, "BOTTOMRIGHT", 0, 0)
+  Pixel.Point(self.body, "TOPLEFT", self, "TOPLEFT", 0, 0)
+  Pixel.Point(self.body, "BOTTOMRIGHT", self, "BOTTOMRIGHT", 0, 0)
   self.body:Show()
 
   self.contentHost:ClearAllPoints()
   self.header:ClearAllPoints()
   self.stickyStrip:ClearAllPoints()
 
-  self.header:SetPoint("TOPLEFT", self.body, "TOPLEFT", 0, 0)
-  self.header:SetPoint("TOPRIGHT", self.body, "TOPRIGHT", 0, 0)
+  Pixel.Point(self.header, "TOPLEFT", self.body, "TOPLEFT", 0, 0)
+  Pixel.Point(self.header, "TOPRIGHT", self.body, "TOPRIGHT", 0, 0)
 
   local textRightInset = hasHeaderActions and 190 or 16
 
   self.title:ClearAllPoints()
-  self.title:SetPoint("TOPLEFT", self.header, "TOPLEFT", 16, -9)
-  self.title:SetPoint("TOPRIGHT", self.header, "TOPRIGHT", -textRightInset, -9)
-  self.title:SetHeight(20)
+  Pixel.Point(self.title, "TOPLEFT", self.header, "TOPLEFT", 16, -9)
+  Pixel.Point(self.title, "TOPRIGHT", self.header, "TOPRIGHT", -textRightInset, -9)
+  Pixel.Height(self.title, 20)
 
   self.description:ClearAllPoints()
   if hasTitle then
-    self.description:SetPoint("TOPLEFT", self.title, "BOTTOMLEFT", 0, -1)
-    self.description:SetPoint("TOPRIGHT", self.title, "BOTTOMRIGHT", 0, -1)
+    Pixel.Point(self.description, "TOPLEFT", self.title, "BOTTOMLEFT", 0, -1)
+    Pixel.Point(self.description, "TOPRIGHT", self.title, "BOTTOMRIGHT", 0, -1)
   else
-    self.description:SetPoint("TOPLEFT", self.header, "TOPLEFT", 16, -9)
-    self.description:SetPoint("TOPRIGHT", self.header, "TOPRIGHT", -textRightInset, -9)
+    Pixel.Point(self.description, "TOPLEFT", self.header, "TOPLEFT", 16, -9)
+    Pixel.Point(self.description, "TOPRIGHT", self.header, "TOPRIGHT", -textRightInset, -9)
   end
-  self.description:SetHeight(16)
+  Pixel.Height(self.description, 16)
 
   self.helpLine:ClearAllPoints()
   if hasDescription then
-    self.helpLine:SetPoint("TOPLEFT", self.description, "BOTTOMLEFT", 0, -1)
-    self.helpLine:SetPoint("TOPRIGHT", self.description, "BOTTOMRIGHT", 0, -1)
+    Pixel.Point(self.helpLine, "TOPLEFT", self.description, "BOTTOMLEFT", 0, -1)
+    Pixel.Point(self.helpLine, "TOPRIGHT", self.description, "BOTTOMRIGHT", 0, -1)
   elseif hasTitle then
-    self.helpLine:SetPoint("TOPLEFT", self.title, "BOTTOMLEFT", 0, -1)
-    self.helpLine:SetPoint("TOPRIGHT", self.title, "BOTTOMRIGHT", 0, -1)
+    Pixel.Point(self.helpLine, "TOPLEFT", self.title, "BOTTOMLEFT", 0, -1)
+    Pixel.Point(self.helpLine, "TOPRIGHT", self.title, "BOTTOMRIGHT", 0, -1)
   else
-    self.helpLine:SetPoint("TOPLEFT", self.header, "TOPLEFT", 16, -9)
-    self.helpLine:SetPoint("TOPRIGHT", self.header, "TOPRIGHT", -textRightInset, -9)
+    Pixel.Point(self.helpLine, "TOPLEFT", self.header, "TOPLEFT", 16, -9)
+    Pixel.Point(self.helpLine, "TOPRIGHT", self.header, "TOPRIGHT", -textRightInset, -9)
   end
-  self.helpLine:SetHeight(14)
+  Pixel.Height(self.helpLine, 14)
 
   self.headerActions:ClearAllPoints()
-  self.headerActions:SetPoint("TOPRIGHT", self.header, "TOPRIGHT", -16, -10)
-  self.headerActions:SetSize(160, 22)
+  Pixel.Point(self.headerActions, "TOPRIGHT", self.header, "TOPRIGHT", -16, -10)
+  Pixel.Size(self.headerActions, 160, 22)
 
   local headerHeight = 0
   if hasTitle or hasDescription or hasHelp or hasHeaderActions then
@@ -180,10 +181,10 @@ local function PUI_PageShell_RebuildLayout(self)
   end
 
   if headerHeight > 0 then
-    self.header:SetHeight(headerHeight)
+    Pixel.Height(self.header, headerHeight)
     self.header:Show()
   else
-    self.header:SetHeight(1)
+    Pixel.Height(self.header, 1)
     self.header:Hide()
   end
 
@@ -193,11 +194,11 @@ local function PUI_PageShell_RebuildLayout(self)
   end
 
   local stickyHeight = tonumber(self.stickyStrip.__puiDesiredHeight) or 36
-  self.stickyStrip:SetHeight(stickyHeight)
+  Pixel.Height(self.stickyStrip, stickyHeight)
 
   if hasSticky then
-    self.stickyStrip:SetPoint("TOPLEFT", self.body, "TOPLEFT", 0, -contentTopOffset)
-    self.stickyStrip:SetPoint("TOPRIGHT", self.body, "TOPRIGHT", 0, -contentTopOffset)
+    Pixel.Point(self.stickyStrip, "TOPLEFT", self.body, "TOPLEFT", 0, -contentTopOffset)
+    Pixel.Point(self.stickyStrip, "TOPRIGHT", self.body, "TOPRIGHT", 0, -contentTopOffset)
     self.stickyStrip:Show()
     contentTopOffset = contentTopOffset + stickyHeight + gap
   else
@@ -205,15 +206,15 @@ local function PUI_PageShell_RebuildLayout(self)
   end
 
   local previewHeight = tonumber(self.__puiPreviewHeight) or 168
-  self.previewDock:SetHeight(previewHeight)
+  Pixel.Height(self.previewDock, previewHeight)
 
   if showPreview then
     local previewAnchorOffsetY = -contentTopOffset
 
     if self.__puiPreviewAnchorOffsetY ~= previewAnchorOffsetY then
       self.previewDock:ClearAllPoints()
-      self.previewDock:SetPoint("TOPLEFT", self.body, "TOPLEFT", 0, previewAnchorOffsetY)
-      self.previewDock:SetPoint("TOPRIGHT", self.body, "TOPRIGHT", 0, previewAnchorOffsetY)
+      Pixel.Point(self.previewDock, "TOPLEFT", self.body, "TOPLEFT", 0, previewAnchorOffsetY)
+      Pixel.Point(self.previewDock, "TOPRIGHT", self.body, "TOPRIGHT", 0, previewAnchorOffsetY)
       self.__puiPreviewAnchorOffsetY = previewAnchorOffsetY
     end
 
@@ -227,19 +228,19 @@ local function PUI_PageShell_RebuildLayout(self)
   local contentHeight = math_max(120, bodyHeight - contentTopOffset)
 
   self.contentHost.__puiMinimumHeight = contentHeight
-  self.contentHost:SetPoint("TOPLEFT", self.body, "TOPLEFT", 0, -contentTopOffset)
-  self.contentHost:SetPoint("TOPRIGHT", self.body, "TOPRIGHT", 0, -contentTopOffset)
-  self.contentHost:SetPoint("BOTTOMRIGHT", self.body, "BOTTOMRIGHT", 0, 0)
+  Pixel.Point(self.contentHost, "TOPLEFT", self.body, "TOPLEFT", 0, -contentTopOffset)
+  Pixel.Point(self.contentHost, "TOPRIGHT", self.body, "TOPRIGHT", 0, -contentTopOffset)
+  Pixel.Point(self.contentHost, "BOTTOMRIGHT", self.body, "BOTTOMRIGHT", 0, 0)
   self.contentHost:Show()
 
   self.acdHost:ClearAllPoints()
-  self.acdHost:SetPoint("TOPLEFT", self.contentHost, "TOPLEFT", 10, -10)
-  self.acdHost:SetPoint("BOTTOMRIGHT", self.contentHost, "BOTTOMRIGHT", -10, 10)
+  Pixel.Point(self.acdHost, "TOPLEFT", self.contentHost, "TOPLEFT", 10, -10)
+  Pixel.Point(self.acdHost, "BOTTOMRIGHT", self.contentHost, "BOTTOMRIGHT", -10, 10)
   self.acdHost:SetClipsChildren(true)
 
   self.nativeHost:ClearAllPoints()
-  self.nativeHost:SetPoint("TOPLEFT", self.contentHost, "TOPLEFT", 10, -10)
-  self.nativeHost:SetPoint("BOTTOMRIGHT", self.contentHost, "BOTTOMRIGHT", -10, 10)
+  Pixel.Point(self.nativeHost, "TOPLEFT", self.contentHost, "TOPLEFT", 10, -10)
+  Pixel.Point(self.nativeHost, "BOTTOMRIGHT", self.contentHost, "BOTTOMRIGHT", -10, 10)
   self.nativeHost:SetClipsChildren(true)
 
   PUI_PageShell_SyncACDContainer(self)
@@ -302,7 +303,7 @@ end
 
 function PageShell.Create(parent)
   local shell = CreateFrame("Frame", nil, parent)
-  shell:SetAllPoints(parent)
+  Pixel.AllPoints(shell, parent)
   shell:SetScript("OnSizeChanged", function(self, width, height)
     local roundedWidth = math.floor(width + 0.5)
     local roundedHeight = math.floor(height + 0.5)
@@ -360,27 +361,27 @@ function PageShell.Create(parent)
   shell.headerActions:Hide()
   shell.header:SetClipsChildren(true)
 
-  shell.contentHost:SetPoint("TOPLEFT", shell.body, "TOPLEFT", 0, 0)
-  shell.contentHost:SetPoint("TOPRIGHT", shell.body, "TOPRIGHT", 0, 0)
-  shell.contentHost:SetHeight(1)
+  Pixel.Point(shell.contentHost, "TOPLEFT", shell.body, "TOPLEFT", 0, 0)
+  Pixel.Point(shell.contentHost, "TOPRIGHT", shell.body, "TOPRIGHT", 0, 0)
+  Pixel.Height(shell.contentHost, 1)
   shell.contentHost:SetClipsChildren(true)
   shell.contentHost:Show()
 
-  shell.acdHost:SetPoint("TOPLEFT", shell.contentHost, "TOPLEFT", 10, -10)
-  shell.acdHost:SetPoint("TOPRIGHT", shell.contentHost, "TOPRIGHT", -10, -10)
-  shell.acdHost:SetHeight(1)
+  Pixel.Point(shell.acdHost, "TOPLEFT", shell.contentHost, "TOPLEFT", 10, -10)
+  Pixel.Point(shell.acdHost, "TOPRIGHT", shell.contentHost, "TOPRIGHT", -10, -10)
+  Pixel.Height(shell.acdHost, 1)
   shell.acdHost:SetClipsChildren(true)
   shell.acdHost:Show()
 
-  shell.nativeHost:SetPoint("TOPLEFT", shell.contentHost, "TOPLEFT", 10, -10)
-  shell.nativeHost:SetPoint("TOPRIGHT", shell.contentHost, "TOPRIGHT", -10, -10)
-  shell.nativeHost:SetHeight(1)
+  Pixel.Point(shell.nativeHost, "TOPLEFT", shell.contentHost, "TOPLEFT", 10, -10)
+  Pixel.Point(shell.nativeHost, "TOPRIGHT", shell.contentHost, "TOPRIGHT", -10, -10)
+  Pixel.Height(shell.nativeHost, 1)
   shell.nativeHost:SetClipsChildren(true)
   shell.nativeHost:Hide()
 
   shell.previewHost = CreateFrame("Frame", nil, shell.previewDock)
-  shell.previewHost:SetPoint("TOPLEFT", shell.previewDock, "TOPLEFT", 0, 0)
-  shell.previewHost:SetPoint("BOTTOMRIGHT", shell.previewDock, "BOTTOMRIGHT", 0, 0)
+  Pixel.Point(shell.previewHost, "TOPLEFT", shell.previewDock, "TOPLEFT", 0, 0)
+  Pixel.Point(shell.previewHost, "BOTTOMRIGHT", shell.previewDock, "BOTTOMRIGHT", 0, 0)
 
 
 
@@ -635,7 +636,7 @@ function PageShell.Ensure(parent)
   if shell then
     shell:SetParent(parent)
     shell:ClearAllPoints()
-    shell:SetAllPoints(parent)
+    Pixel.AllPoints(shell, parent)
     return shell
   end
 

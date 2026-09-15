@@ -1,6 +1,7 @@
 local _, ns = ...
 
 local Theme = ns.Theme
+local Pixel = ns.Pixel
 local WidgetSkins = Theme.WidgetSkins
 local AceGUI = LibStub("AceGUI-3.0")
 local CreateFrame = _G.CreateFrame
@@ -48,26 +49,26 @@ local function PUI_Label_UpdateLayout(widget)
     local imageWidth = image:GetWidth()
 
     if width - imageWidth < 200 or (label:GetText() or "") == "" then
-      image:SetPoint("TOP")
-      label:SetPoint("TOP", image, "BOTTOM")
-      label:SetPoint("LEFT")
-      label:SetWidth(width)
+      Pixel.Point(image, "TOP")
+      Pixel.Point(label, "TOP", image, "BOTTOM")
+      Pixel.Point(label, "LEFT")
+      Pixel.Width(label, width)
       height = image:GetHeight() + label:GetStringHeight()
     else
-      image:SetPoint("TOPLEFT")
+      Pixel.Point(image, "TOPLEFT")
 
       if image:GetHeight() > label:GetStringHeight() then
-        label:SetPoint("LEFT", image, "RIGHT", 4, 0)
+        Pixel.Point(label, "LEFT", image, "RIGHT", 4, 0)
       else
-        label:SetPoint("TOPLEFT", image, "TOPRIGHT", 4, 0)
+        Pixel.Point(label, "TOPLEFT", image, "TOPRIGHT", 4, 0)
       end
 
-      label:SetWidth(width - imageWidth - 4)
+      Pixel.Width(label, width - imageWidth - 4)
       height = math_max(image:GetHeight(), label:GetStringHeight())
     end
   else
-    label:SetPoint("TOPLEFT")
-    label:SetWidth(width)
+    Pixel.Point(label, "TOPLEFT")
+    Pixel.Width(label, width)
     height = label:GetStringHeight()
   end
 
@@ -76,7 +77,7 @@ local function PUI_Label_UpdateLayout(widget)
   end
 
   widget.resizing = true
-  frame:SetHeight(height)
+  Pixel.Height(frame, height)
   frame.height = height
   widget.resizing = nil
 end
@@ -110,16 +111,16 @@ local PUI_Label_Methods = {
   end,
 
   SetImage = function(self, path, ...)
-    self.image:SetTexture(path)
+    Pixel.SetTexture(self.image, path)
 
     if self.image:GetTexture() then
       self.imageshown = true
       local count = select("#", ...)
 
       if count == 4 or count == 8 then
-        self.image:SetTexCoord(...)
+        Pixel.SetTexCoord(self.image, ...)
       else
-        self.image:SetTexCoord(0, 1, 0, 1)
+        Pixel.SetTexCoord(self.image, 0, 1, 0, 1)
       end
     else
       self.imageshown = nil
@@ -143,7 +144,7 @@ local PUI_Label_Methods = {
   end,
 
   SetImageSize = function(self, width, height)
-    self.image:SetSize(width, height)
+    Pixel.Size(self.image, width, height)
     PUI_Label_UpdateLayout(self)
   end,
 
@@ -197,10 +198,10 @@ local PUI_Heading_Methods = {
     self.label:SetText(text or "")
 
     if text and text ~= "" then
-      self.left:SetPoint("RIGHT", self.label, "LEFT", -5, 0)
+      Pixel.Point(self.left, "RIGHT", self.label, "LEFT", -5, 0)
       self.right:Show()
     else
-      self.left:SetPoint("RIGHT", -3, 0)
+      Pixel.Point(self.left, "RIGHT", nil, nil, -3, 0)
       self.right:Hide()
     end
   end,
@@ -216,23 +217,23 @@ local function PUI_Heading_Constructor()
 
   local label = frame:CreateFontString(nil, "BACKGROUND", "GameFontNormal")
   label.__puiOptionsFontOwned = true
-  label:SetPoint("TOP")
-  label:SetPoint("BOTTOM")
+  Pixel.Point(label, "TOP")
+  Pixel.Point(label, "BOTTOM")
   label:SetJustifyH("CENTER")
 
   local left = frame:CreateTexture(nil, "BACKGROUND")
-  left:SetHeight(8)
-  left:SetPoint("LEFT", 3, 0)
-  left:SetPoint("RIGHT", label, "LEFT", -5, 0)
-  left:SetTexture(137057)
-  left:SetTexCoord(0.81, 0.94, 0.5, 1)
+  Pixel.Height(left, 8)
+  Pixel.Point(left, "LEFT", nil, nil, 3, 0)
+  Pixel.Point(left, "RIGHT", label, "LEFT", -5, 0)
+  Pixel.SetTexture(left, 137057)
+  Pixel.SetTexCoord(left, 0.81, 0.94, 0.5, 1)
 
   local right = frame:CreateTexture(nil, "BACKGROUND")
-  right:SetHeight(8)
-  right:SetPoint("RIGHT", -3, 0)
-  right:SetPoint("LEFT", label, "RIGHT", 5, 0)
-  right:SetTexture(137057)
-  right:SetTexCoord(0.81, 0.94, 0.5, 1)
+  Pixel.Height(right, 8)
+  Pixel.Point(right, "RIGHT", nil, nil, -3, 0)
+  Pixel.Point(right, "LEFT", label, "RIGHT", 5, 0)
+  Pixel.SetTexture(right, 137057)
+  Pixel.SetTexCoord(right, 0.81, 0.94, 0.5, 1)
 
   local widget = {
     type = PUI_HEADING_TYPE,

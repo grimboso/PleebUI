@@ -1,6 +1,7 @@
 local _, ns = ...
 
 local Theme = ns.Theme
+local Pixel = ns.Pixel
 local WidgetSkins = Theme.WidgetSkins
 local AceGUI = LibStub("AceGUI-3.0")
 local CreateFrame = _G.CreateFrame
@@ -17,7 +18,7 @@ local PUI_BUTTON_TEXT_PADDING = 30
 
 local function ClearTexture(texture)
   if texture then
-    texture:SetTexture(nil)
+    Pixel.SetTexture(texture, nil)
     texture:SetAlpha(0)
     texture:Hide()
   end
@@ -77,7 +78,7 @@ local function ApplyButtonVisual(button, fallbackText)
 
   local backdrop = button._puiBg
   backdrop:ClearAllPoints()
-  backdrop:SetAllPoints(button)
+  Pixel.AllPoints(backdrop, button)
   backdrop:SetFrameLevel(math.max(button:GetFrameLevel() - 1, 0))
   backdrop:Show()
 
@@ -130,9 +131,9 @@ function WidgetSkins.Button(widget, owner)
     local geom = Theme.GetWidgetRowGeometry()
 
     button:ClearAllPoints()
-    button:SetPoint("LEFT", outer, "LEFT", geom.controlLeft, geom.controlYOffset)
-    button:SetPoint("RIGHT", outer, "RIGHT", -geom.controlRight, geom.controlYOffset)
-    button:SetHeight(geom.controlHeight)
+    Pixel.Point(button, "LEFT", outer, "LEFT", geom.controlLeft, geom.controlYOffset)
+    Pixel.Point(button, "RIGHT", outer, "RIGHT", -geom.controlRight, geom.controlYOffset)
+    Pixel.Height(button, geom.controlHeight)
   end
 
   button:SetAlpha(1)
@@ -160,7 +161,7 @@ function WidgetSkins.Keybinding(widget)
   }, math.max(Theme.GetEdgeSize(), 2))
 
   msgframe.msg:ClearAllPoints()
-  msgframe.msg:SetPoint("CENTER", msgframe, "CENTER", 0, 0)
+  Pixel.Point(msgframe.msg, "CENTER", msgframe, "CENTER", 0, 0)
   Theme.ApplyFont(msgframe.msg, "body")
 end
 
@@ -175,8 +176,8 @@ local function PUI_Button_Layout(widget, width)
   )
 
   widget.button:ClearAllPoints()
-  widget.button:SetPoint("CENTER", widget.frame, "CENTER", 0, geom.controlYOffset)
-  widget.button:SetSize(buttonWidth, geom.controlHeight)
+  Pixel.Point(widget.button, "CENTER", widget.frame, "CENTER", 0, geom.controlYOffset)
+  Pixel.Size(widget.button, buttonWidth, geom.controlHeight)
 end
 
 local function PUI_Button_RefreshVisualState(widget)
@@ -331,8 +332,8 @@ local function PUI_Button_Constructor()
 
   local text = button:CreateFontString(nil, "OVERLAY")
   text.__puiOptionsFontOwned = true
-  text:SetPoint("LEFT", button, "LEFT", 8, 0)
-  text:SetPoint("RIGHT", button, "RIGHT", -8, 0)
+  Pixel.Point(text, "LEFT", button, "LEFT", 8, 0)
+  Pixel.Point(text, "RIGHT", button, "RIGHT", -8, 0)
   text:SetJustifyH("CENTER")
   text:SetJustifyV("MIDDLE")
   text:SetWordWrap(false)

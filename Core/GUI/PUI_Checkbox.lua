@@ -1,6 +1,7 @@
 local _, ns = ...
 
 local Theme = ns.Theme
+local Pixel = ns.Pixel
 local WidgetSkins = Theme.WidgetSkins
 local AceGUI = LibStub("AceGUI-3.0")
 local CreateFrame = _G.CreateFrame
@@ -14,7 +15,7 @@ local PUI_CHECKBOX_TYPE = "PUI_Checkbox"
 local PUI_CHECKBOX_VERSION = 1
 
 local function ClearTexture(texture)
-  texture:SetTexture(nil)
+  Pixel.SetTexture(texture, nil)
   texture:SetAlpha(0)
   texture:Hide()
 end
@@ -96,28 +97,28 @@ local function LayoutCheckboxChrome(frame, chrome, left, yOffset, size)
   local border = chrome.border
 
   chrome.background:ClearAllPoints()
-  chrome.background:SetPoint("LEFT", frame, "LEFT", left + edge, yOffset)
-  chrome.background:SetSize(size - edge * 2, size - edge * 2)
+  Pixel.Point(chrome.background, "LEFT", frame, "LEFT", left + edge, yOffset)
+  Pixel.Size(chrome.background, size - edge * 2, size - edge * 2)
 
   border.top:ClearAllPoints()
-  border.top:SetPoint("TOPLEFT", frame, "LEFT", left, yOffset + size * 0.5)
-  border.top:SetSize(size, edge)
+  Pixel.Point(border.top, "TOPLEFT", frame, "LEFT", left, yOffset + size * 0.5)
+  Pixel.Size(border.top, size, edge)
 
   border.bottom:ClearAllPoints()
-  border.bottom:SetPoint("BOTTOMLEFT", frame, "LEFT", left, yOffset - size * 0.5)
-  border.bottom:SetSize(size, edge)
+  Pixel.Point(border.bottom, "BOTTOMLEFT", frame, "LEFT", left, yOffset - size * 0.5)
+  Pixel.Size(border.bottom, size, edge)
 
   border.left:ClearAllPoints()
-  border.left:SetPoint("LEFT", frame, "LEFT", left, yOffset)
-  border.left:SetSize(edge, size - edge * 2)
+  Pixel.Point(border.left, "LEFT", frame, "LEFT", left, yOffset)
+  Pixel.Size(border.left, edge, size - edge * 2)
 
   border.right:ClearAllPoints()
-  border.right:SetPoint("RIGHT", frame, "LEFT", left + size, yOffset)
-  border.right:SetSize(edge, size - edge * 2)
+  Pixel.Point(border.right, "RIGHT", frame, "LEFT", left + size, yOffset)
+  Pixel.Size(border.right, edge, size - edge * 2)
 end
 
 local function SetCheckboxChromeColors(chrome, backgroundColor, borderColor)
-  chrome.background:SetColorTexture(
+  Pixel.SetColorTexture(chrome.background,
     backgroundColor[1],
     backgroundColor[2],
     backgroundColor[3],
@@ -125,7 +126,7 @@ local function SetCheckboxChromeColors(chrome, backgroundColor, borderColor)
   )
 
   for _, texture in pairs(chrome.border) do
-    texture:SetColorTexture(
+    Pixel.SetColorTexture(texture,
       borderColor[1],
       borderColor[2],
       borderColor[3],
@@ -145,8 +146,8 @@ local function LayoutCheckboxText(widget, visual, visualSize, text)
 
   if image and image:GetTexture() then
     image:ClearAllPoints()
-    image:SetPoint("LEFT", visual, "RIGHT", controlGap, 0)
-    image:SetSize(16, 16)
+    Pixel.Point(image, "LEFT", visual, "RIGHT", controlGap, 0)
+    Pixel.Size(image, 16, 16)
     image:Show()
     textLeft = textLeft + 16 + controlGap
   elseif image then
@@ -158,14 +159,14 @@ local function LayoutCheckboxText(widget, visual, visualSize, text)
   text:SetJustifyV("MIDDLE")
 
   if widget.__puiWrapLabel == true then
-    text:SetPoint("TOPLEFT", frame, "TOPLEFT", textLeft, -4)
-    text:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -controlRight, 4)
+    Pixel.Point(text, "TOPLEFT", frame, "TOPLEFT", textLeft, -4)
+    Pixel.Point(text, "BOTTOMRIGHT", frame, "BOTTOMRIGHT", -controlRight, 4)
     text:SetWordWrap(true)
     text:SetNonSpaceWrap(true)
   else
-    text:SetPoint("LEFT", frame, "LEFT", textLeft, geom.controlYOffset)
-    text:SetPoint("RIGHT", frame, "RIGHT", -controlRight, geom.controlYOffset)
-    text:SetHeight(geom.controlHeight)
+    Pixel.Point(text, "LEFT", frame, "LEFT", textLeft, geom.controlYOffset)
+    Pixel.Point(text, "RIGHT", frame, "RIGHT", -controlRight, geom.controlYOffset)
+    Pixel.Height(text, geom.controlHeight)
     text:SetWordWrap(false)
     text:SetNonSpaceWrap(false)
   end
@@ -188,28 +189,28 @@ local function RefreshCheckbox(widget)
   local value = widget:GetValue()
 
   anchor:ClearAllPoints()
-  anchor:SetPoint("LEFT", frame, "LEFT", geom.controlLeft, geom.controlYOffset)
-  anchor:SetSize(visualSize, visualSize)
+  Pixel.Point(anchor, "LEFT", frame, "LEFT", geom.controlLeft, geom.controlYOffset)
+  Pixel.Size(anchor, visualSize, visualSize)
 
   if isRadio then
     SetCheckboxChromeShown(chrome, false)
 
-    anchor:SetTexture(RADIO_TEXTURE)
-    anchor:SetTexCoord(0, 0.25, 0, 1)
+    Pixel.SetTexture(anchor, RADIO_TEXTURE)
+    Pixel.SetTexCoord(anchor, 0, 0.25, 0, 1)
     anchor:SetAlpha(1)
     anchor:Show()
 
     check:ClearAllPoints()
-    check:SetAllPoints(anchor)
-    check:SetTexture(RADIO_TEXTURE)
-    check:SetTexCoord(0.25, 0.5, 0, 1)
+    Pixel.AllPoints(check, anchor)
+    Pixel.SetTexture(check, RADIO_TEXTURE)
+    Pixel.SetTexCoord(check, 0.25, 0.5, 0, 1)
     check:SetBlendMode("ADD")
     check:SetAlpha(1)
 
     widget.highlight:ClearAllPoints()
-    widget.highlight:SetAllPoints(anchor)
-    widget.highlight:SetTexture(RADIO_TEXTURE)
-    widget.highlight:SetTexCoord(0.5, 0.75, 0, 1)
+    Pixel.AllPoints(widget.highlight, anchor)
+    Pixel.SetTexture(widget.highlight, RADIO_TEXTURE)
+    Pixel.SetTexCoord(widget.highlight, 0.5, 0.75, 0, 1)
     widget.highlight:SetBlendMode("ADD")
     widget.highlight:SetAlpha(1)
 
@@ -234,28 +235,30 @@ local function RefreshCheckbox(widget)
 
     local fillInset = math.max(3, math.floor(visualSize * 0.18 + 0.5))
     chrome.fill:ClearAllPoints()
-    chrome.fill:SetPoint(
+    Pixel.Point(
+      chrome.fill,
       "TOPLEFT",
       frame,
       "LEFT",
       geom.controlLeft + fillInset,
       geom.controlYOffset + visualSize * 0.5 - fillInset
     )
-    chrome.fill:SetPoint(
+    Pixel.Point(
+      chrome.fill,
       "BOTTOMRIGHT",
       frame,
       "LEFT",
       geom.controlLeft + visualSize - fillInset,
       geom.controlYOffset - visualSize * 0.5 + fillInset
     )
-    chrome.fill:SetTexture(WHITE8)
+    Pixel.SetTexture(chrome.fill, WHITE8)
 
     if value then
-      chrome.fill:SetVertexColor(checkedColor[1], checkedColor[2], checkedColor[3], 0.95)
+      Pixel.SetVertexColor(chrome.fill, checkedColor[1], checkedColor[2], checkedColor[3], 0.95)
       chrome.fill:Show()
     elseif widget.tristate and value == nil then
       local mutedText = colors.mutedText
-      chrome.fill:SetVertexColor(
+      Pixel.SetVertexColor(chrome.fill,
         mutedText[1],
         mutedText[2],
         mutedText[3],
@@ -384,7 +387,7 @@ local PUI_Checkbox_Methods = {
 
   OnWidthSet = function(self, width)
     if self.desc then
-      self.desc:SetWidth(math.max(1, width - 30))
+      Pixel.Width(self.desc, math.max(1, width - 30))
     end
     RefreshCheckbox(self)
   end,
@@ -434,25 +437,25 @@ local PUI_Checkbox_Methods = {
     local size = isRadio and 16 or 24
 
     self.__puiCheckboxControlType = isRadio and "radio" or "checkbox"
-    self.checkbg:SetSize(size, size)
+    Pixel.Size(self.checkbg, size, size)
 
     if isRadio then
-      self.checkbg:SetTexture(RADIO_TEXTURE)
-      self.checkbg:SetTexCoord(0, 0.25, 0, 1)
-      self.check:SetTexture(RADIO_TEXTURE)
-      self.check:SetTexCoord(0.25, 0.5, 0, 1)
+      Pixel.SetTexture(self.checkbg, RADIO_TEXTURE)
+      Pixel.SetTexCoord(self.checkbg, 0, 0.25, 0, 1)
+      Pixel.SetTexture(self.check, RADIO_TEXTURE)
+      Pixel.SetTexCoord(self.check, 0.25, 0.5, 0, 1)
       self.check:SetBlendMode("ADD")
-      self.highlight:SetTexture(RADIO_TEXTURE)
-      self.highlight:SetTexCoord(0.5, 0.75, 0, 1)
+      Pixel.SetTexture(self.highlight, RADIO_TEXTURE)
+      Pixel.SetTexCoord(self.highlight, 0.5, 0.75, 0, 1)
       self.highlight:SetBlendMode("ADD")
     else
-      self.checkbg:SetTexture(130755)
-      self.checkbg:SetTexCoord(0, 1, 0, 1)
-      self.check:SetTexture(130751)
-      self.check:SetTexCoord(0, 1, 0, 1)
+      Pixel.SetTexture(self.checkbg, 130755)
+      Pixel.SetTexCoord(self.checkbg, 0, 1, 0, 1)
+      Pixel.SetTexture(self.check, 130751)
+      Pixel.SetTexCoord(self.check, 0, 1, 0, 1)
       self.check:SetBlendMode("BLEND")
-      self.highlight:SetTexture(130753)
-      self.highlight:SetTexCoord(0, 1, 0, 1)
+      Pixel.SetTexture(self.highlight, 130753)
+      Pixel.SetTexCoord(self.highlight, 0, 1, 0, 1)
       self.highlight:SetBlendMode("ADD")
     end
 
@@ -485,8 +488,8 @@ local PUI_Checkbox_Methods = {
       if not self.desc then
         local desc = self.frame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
         desc.__puiOptionsFontOwned = true
-        desc:SetPoint("TOPLEFT", self.checkbg, "TOPRIGHT", 5, -21)
-        desc:SetPoint("RIGHT", self.frame, "RIGHT", -30, 0)
+        Pixel.Point(desc, "TOPLEFT", self.checkbg, "TOPRIGHT", 5, -21)
+        Pixel.Point(desc, "RIGHT", self.frame, "RIGHT", -30, 0)
         desc:SetJustifyH("LEFT")
         desc:SetJustifyV("TOP")
         self.desc = desc
@@ -503,14 +506,14 @@ local PUI_Checkbox_Methods = {
   end,
 
   SetImage = function(self, path, ...)
-    self.image:SetTexture(path)
+    Pixel.SetTexture(self.image, path)
 
     if self.image:GetTexture() then
       local count = select("#", ...)
       if count == 4 or count == 8 then
-        self.image:SetTexCoord(...)
+        Pixel.SetTexCoord(self.image, ...)
       else
-        self.image:SetTexCoord(0, 1, 0, 1)
+        Pixel.SetTexCoord(self.image, 0, 1, 0, 1)
       end
     end
 
@@ -532,29 +535,29 @@ local function PUI_Checkbox_Constructor()
   frame:SetScript("OnHide", PUI_Checkbox_OnHide)
 
   local checkbg = frame:CreateTexture(nil, "ARTWORK")
-  checkbg:SetPoint("TOPLEFT")
-  checkbg:SetSize(24, 24)
-  checkbg:SetTexture(130755)
+  Pixel.Point(checkbg, "TOPLEFT")
+  Pixel.Size(checkbg, 24, 24)
+  Pixel.SetTexture(checkbg, 130755)
 
   local check = frame:CreateTexture(nil, "OVERLAY")
-  check:SetAllPoints(checkbg)
-  check:SetTexture(130751)
+  Pixel.AllPoints(check, checkbg)
+  Pixel.SetTexture(check, 130751)
 
   local text = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
   text.__puiOptionsFontOwned = true
-  text:SetPoint("LEFT", checkbg, "RIGHT")
-  text:SetPoint("RIGHT")
-  text:SetHeight(18)
+  Pixel.Point(text, "LEFT", checkbg, "RIGHT")
+  Pixel.Point(text, "RIGHT")
+  Pixel.Height(text, 18)
   text:SetJustifyH("LEFT")
 
   local highlight = frame:CreateTexture(nil, "HIGHLIGHT")
-  highlight:SetAllPoints(checkbg)
-  highlight:SetTexture(130753)
+  Pixel.AllPoints(highlight, checkbg)
+  Pixel.SetTexture(highlight, 130753)
   highlight:SetBlendMode("ADD")
 
   local image = frame:CreateTexture(nil, "OVERLAY")
-  image:SetPoint("LEFT", checkbg, "RIGHT", 1, 0)
-  image:SetSize(16, 16)
+  Pixel.Point(image, "LEFT", checkbg, "RIGHT", 1, 0)
+  Pixel.Size(image, 16, 16)
 
   local widget = {
     type = PUI_CHECKBOX_TYPE,

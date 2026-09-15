@@ -1,6 +1,7 @@
 local _, ns = ...
 
 local Theme = ns.Theme
+local Pixel = ns.Pixel
 local AceGUI = LibStub("AceGUI-3.0")
 
 local TYPE = "PUI_Slider"
@@ -14,7 +15,7 @@ local tonumber = tonumber
 local type = type
 
 local function SetTextureColor(texture, color, alphaMultiplier)
-  texture:SetColorTexture(
+  Pixel.SetColorTexture(texture,
     color[1],
     color[2],
     color[3],
@@ -24,7 +25,7 @@ end
 
 local function CreateControlChrome(parent)
   local background = parent:CreateTexture(nil, "BACKGROUND")
-  background:SetTexture(WHITE8)
+  Pixel.SetTexture(background, WHITE8)
 
   local border = {
     top = parent:CreateTexture(nil, "BORDER"),
@@ -34,7 +35,7 @@ local function CreateControlChrome(parent)
   }
 
   for _, texture in pairs(border) do
-    texture:SetTexture(WHITE8)
+    Pixel.SetTexture(texture, WHITE8)
   end
 
   return {
@@ -48,28 +49,28 @@ local function LayoutControlChrome(parent, chrome)
   local border = chrome.border
 
   chrome.background:ClearAllPoints()
-  chrome.background:SetPoint("TOPLEFT", parent, "TOPLEFT", edge, -edge)
-  chrome.background:SetPoint("BOTTOMRIGHT", parent, "BOTTOMRIGHT", -edge, edge)
+  Pixel.Point(chrome.background, "TOPLEFT", parent, "TOPLEFT", edge, -edge)
+  Pixel.Point(chrome.background, "BOTTOMRIGHT", parent, "BOTTOMRIGHT", -edge, edge)
 
   border.top:ClearAllPoints()
-  border.top:SetPoint("TOPLEFT", parent, "TOPLEFT", 0, 0)
-  border.top:SetPoint("TOPRIGHT", parent, "TOPRIGHT", 0, 0)
-  border.top:SetHeight(edge)
+  Pixel.Point(border.top, "TOPLEFT", parent, "TOPLEFT", 0, 0)
+  Pixel.Point(border.top, "TOPRIGHT", parent, "TOPRIGHT", 0, 0)
+  Pixel.Height(border.top, edge)
 
   border.bottom:ClearAllPoints()
-  border.bottom:SetPoint("BOTTOMLEFT", parent, "BOTTOMLEFT", 0, 0)
-  border.bottom:SetPoint("BOTTOMRIGHT", parent, "BOTTOMRIGHT", 0, 0)
-  border.bottom:SetHeight(edge)
+  Pixel.Point(border.bottom, "BOTTOMLEFT", parent, "BOTTOMLEFT", 0, 0)
+  Pixel.Point(border.bottom, "BOTTOMRIGHT", parent, "BOTTOMRIGHT", 0, 0)
+  Pixel.Height(border.bottom, edge)
 
   border.left:ClearAllPoints()
-  border.left:SetPoint("TOPLEFT", parent, "TOPLEFT", 0, -edge)
-  border.left:SetPoint("BOTTOMLEFT", parent, "BOTTOMLEFT", 0, edge)
-  border.left:SetWidth(edge)
+  Pixel.Point(border.left, "TOPLEFT", parent, "TOPLEFT", 0, -edge)
+  Pixel.Point(border.left, "BOTTOMLEFT", parent, "BOTTOMLEFT", 0, edge)
+  Pixel.Width(border.left, edge)
 
   border.right:ClearAllPoints()
-  border.right:SetPoint("TOPRIGHT", parent, "TOPRIGHT", 0, -edge)
-  border.right:SetPoint("BOTTOMRIGHT", parent, "BOTTOMRIGHT", 0, edge)
-  border.right:SetWidth(edge)
+  Pixel.Point(border.right, "TOPRIGHT", parent, "TOPRIGHT", 0, -edge)
+  Pixel.Point(border.right, "BOTTOMRIGHT", parent, "BOTTOMRIGHT", 0, edge)
+  Pixel.Width(border.right, edge)
 end
 
 local function SetControlChromeColors(chrome, backgroundColor, borderColor, alphaMultiplier)
@@ -122,7 +123,7 @@ local function RefreshVisualState(self)
   SetControlChromeColors(self.sliderChrome, controlColor, borderColor, 1)
   SetControlChromeColors(self.editboxChrome, controlColor, editBorder, 1)
 
-  self.thumb:SetVertexColor(
+  Pixel.SetVertexColor(self.thumb,
     thumbColor[1],
     thumbColor[2],
     thumbColor[3],
@@ -166,27 +167,27 @@ local function LayoutWidget(self, width)
   local valueWidth, valueGap = GetValueGeometry(frameWidth, geom)
 
   self.label:ClearAllPoints()
-  self.label:SetPoint("TOPLEFT", self.frame, "TOPLEFT", geom.labelLeft, -geom.labelTop)
-  self.label:SetPoint("TOPRIGHT", self.frame, "TOPRIGHT", -geom.labelRight, -geom.labelTop)
-  self.label:SetHeight(geom.labelHeight)
+  Pixel.Point(self.label, "TOPLEFT", self.frame, "TOPLEFT", geom.labelLeft, -geom.labelTop)
+  Pixel.Point(self.label, "TOPRIGHT", self.frame, "TOPRIGHT", -geom.labelRight, -geom.labelTop)
+  Pixel.Height(self.label, geom.labelHeight)
 
   self.slider:ClearAllPoints()
-  self.slider:SetPoint("TOPLEFT", self.frame, "TOPLEFT", geom.controlLeft, -geom.controlTop)
-  self.slider:SetPoint(
+  Pixel.Point(self.slider, "TOPLEFT", self.frame, "TOPLEFT", geom.controlLeft, -geom.controlTop)
+  Pixel.Point(self.slider,
     "TOPRIGHT",
     self.frame,
     "TOPRIGHT",
     -(geom.controlRight + valueWidth + valueGap),
     -geom.controlTop
   )
-  self.slider:SetHeight(geom.controlHeight)
+  Pixel.Height(self.slider, geom.controlHeight)
 
   self.editbox:ClearAllPoints()
-  self.editbox:SetPoint("TOPRIGHT", self.frame, "TOPRIGHT", -geom.controlRight, -geom.controlTop)
-  self.editbox:SetSize(valueWidth, geom.controlHeight)
+  Pixel.Point(self.editbox, "TOPRIGHT", self.frame, "TOPRIGHT", -geom.controlRight, -geom.controlTop)
+  Pixel.Size(self.editbox, valueWidth, geom.controlHeight)
 
   local thumbSize = geom.controlHeight - 4
-  self.thumb:SetSize(thumbSize, thumbSize)
+  Pixel.Size(self.thumb, thumbSize, thumbSize)
   LayoutControlChrome(self.slider, self.sliderChrome)
   LayoutControlChrome(self.editbox, self.editboxChrome)
 end
@@ -456,7 +457,7 @@ local function Constructor()
   slider:SetScript("OnMouseWheel", SliderOnMouseWheel)
 
   local thumb = slider:GetThumbTexture()
-  thumb:SetTexCoord(0, 1, 0, 1)
+  Pixel.SetTexCoord(thumb, 0, 1, 0, 1)
 
   local lowtext = slider:CreateFontString(nil, "ARTWORK")
   lowtext.__puiOptionsFontOwned = true

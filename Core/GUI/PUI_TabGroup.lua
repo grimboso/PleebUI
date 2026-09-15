@@ -2,6 +2,7 @@ local _, ns = ...
 
 local Addon = ns.Addon
 local Theme = ns.Theme
+local Pixel = ns.Pixel
 local WidgetSkins = Theme.WidgetSkins
 local AceGUI = LibStub("AceGUI-3.0")
 
@@ -33,7 +34,7 @@ local function _PUI_HideNativeTab(tab)
   _PUI_SetNativeTabTextureAlpha(tab, 0)
   tab:SetAlpha(0)
   tab:EnableMouse(false)
-  tab:SetSize(1, 1)
+  Pixel.Size(tab, 1, 1)
   tab:Hide()
 end
 
@@ -62,24 +63,24 @@ local function _PUI_EnsureCustomTabButton(host, index)
   btn = CreateFrame("Button", nil, host, "BackdropTemplate")
   btn.__puiTabStripOwned = true
   btn.__puiUseTextureBackdrop = true
-  btn:SetHeight(30)
+  Pixel.Height(btn, 30)
   btn:EnableMouse(true)
 
   btn.__puiHover = btn:CreateTexture(nil, "BORDER")
-  btn.__puiHover:SetAllPoints(btn)
-  btn.__puiHover:SetTexture("Interface\\Buttons\\WHITE8x8")
+  Pixel.AllPoints(btn.__puiHover, btn)
+  Pixel.SetTexture(btn.__puiHover, "Interface\\Buttons\\WHITE8x8")
   btn.__puiHover:SetAlpha(0)
 
   btn.__puiAccent = btn:CreateTexture(nil, "ARTWORK")
-  btn.__puiAccent:SetPoint("BOTTOMLEFT", btn, "BOTTOMLEFT", 7, 0)
-  btn.__puiAccent:SetPoint("BOTTOMRIGHT", btn, "BOTTOMRIGHT", -7, 0)
-  btn.__puiAccent:SetHeight(2)
-  btn.__puiAccent:SetTexture("Interface\\Buttons\\WHITE8x8")
+  Pixel.Point(btn.__puiAccent, "BOTTOMLEFT", btn, "BOTTOMLEFT", 7, 0)
+  Pixel.Point(btn.__puiAccent, "BOTTOMRIGHT", btn, "BOTTOMRIGHT", -7, 0)
+  Pixel.Height(btn.__puiAccent, 2)
+  Pixel.SetTexture(btn.__puiAccent, "Interface\\Buttons\\WHITE8x8")
 
   btn.__puiLabel = btn:CreateFontString(nil, "OVERLAY", "GameFontNormal")
   btn.__puiLabel.__puiOptionsFontOwned = true
-  btn.__puiLabel:SetPoint("LEFT", btn, "LEFT", 12, 0)
-  btn.__puiLabel:SetPoint("RIGHT", btn, "RIGHT", -12, 0)
+  Pixel.Point(btn.__puiLabel, "LEFT", btn, "LEFT", 12, 0)
+  Pixel.Point(btn.__puiLabel, "RIGHT", btn, "RIGHT", -12, 0)
   btn.__puiLabel:SetJustifyH("CENTER")
   btn.__puiLabel:SetJustifyV("MIDDLE")
   btn.__puiLabel:SetWordWrap(false)
@@ -221,8 +222,8 @@ local function _PUI_LayoutCustomTabStrip(widget)
   host:SetFrameStrata(widget.frame:GetFrameStrata())
   host:SetFrameLevel(widget.frame:GetFrameLevel() + 20)
   host:ClearAllPoints()
-  host:SetPoint("TOPLEFT", widget.frame, "TOPLEFT", 0, -2)
-  host:SetPoint("TOPRIGHT", widget.frame, "TOPRIGHT", 0, -2)
+  Pixel.Point(host, "TOPLEFT", widget.frame, "TOPLEFT", 0, -2)
+  Pixel.Point(host, "TOPRIGHT", widget.frame, "TOPRIGHT", 0, -2)
 
   local desiredWidths = {}
   local totalDesiredWidth = 0
@@ -271,9 +272,9 @@ local function _PUI_LayoutCustomTabStrip(widget)
     btn:SetParent(host)
     btn:SetFrameStrata(host:GetFrameStrata())
     btn:SetFrameLevel(host:GetFrameLevel() + 1)
-    btn:SetSize(tabWidth, tabHeight)
+    Pixel.Size(btn, tabWidth, tabHeight)
     btn:ClearAllPoints()
-    btn:SetPoint("TOPLEFT", host, "TOPLEFT", x, 0)
+    Pixel.Point(btn, "TOPLEFT", host, "TOPLEFT", x, 0)
     btn:SetAlpha(btn.__puiDisabled and 0.45 or 1)
     btn:EnableMouse(not btn.__puiDisabled)
     btn:Show()
@@ -292,7 +293,7 @@ local function _PUI_LayoutCustomTabStrip(widget)
   end
 
   local hostHeight = tabHeight + 4
-  host:SetHeight(hostHeight)
+  Pixel.Height(host, hostHeight)
   host:Show()
 
   widget.borderoffset = hostHeight + 8
@@ -300,8 +301,8 @@ local function _PUI_LayoutCustomTabStrip(widget)
   widget.border:SetBackdropColor(0, 0, 0, 0)
   widget.border:SetBackdropBorderColor(0, 0, 0, 0)
   widget.border:ClearAllPoints()
-  widget.border:SetPoint("TOPLEFT", widget.frame, "TOPLEFT", 0, -widget.borderoffset)
-  widget.border:SetPoint("BOTTOMRIGHT", widget.frame, "BOTTOMRIGHT", 0, 0)
+  Pixel.Point(widget.border, "TOPLEFT", widget.frame, "TOPLEFT", 0, -widget.borderoffset)
+  Pixel.Point(widget.border, "BOTTOMRIGHT", widget.frame, "BOTTOMRIGHT", 0, 0)
 
   _PUI_UpdateTabGroupSelection(widget)
   widget.__puiTabLayoutInProgress = nil
