@@ -7,6 +7,7 @@ local UIParent = UIParent
 local GameTooltip = GameTooltip
 local C_Timer = C_Timer
 local C_Secrets = C_Secrets
+local Hooks = ns.PCMHooks
 local Presentation = ns.Presentation
 local AuraSlotDriver = ns.AuraSlotDriver
 local AuraWidget = ns.AuraWidget
@@ -1225,7 +1226,7 @@ function CustomIcons:RefreshAllVisibility()
 end
 
 function CustomIcons:FlushAuraStyles()
-  if C_Secrets.ShouldAurasBeSecret() == true then return end
+  if Hooks.IsAddonRestricted() or C_Secrets.ShouldAurasBeSecret() == true then return end
   for _, record in pairs(records) do
     if record.runtimeEnabled then
       if record.auraParts then
