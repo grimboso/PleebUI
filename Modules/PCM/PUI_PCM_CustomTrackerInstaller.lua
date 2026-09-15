@@ -576,7 +576,12 @@ local function SetPage(newPage)
       AddSlider(draft.kind == "charge" and "Recharging alpha" or "On cooldown alpha", draft.cooldownAlpha, 0, 100, 1, function(value) draft.cooldownAlpha = value end, draft.kind == "charge" and "RECHARGING" or "COOLDOWN")
       AddCheckbox(draft.kind == "charge" and "Desaturate while recharging" or "Desaturate while on cooldown", draft.desaturateCooldown, function(value) draft.desaturateCooldown = value end, draft.kind == "charge" and "RECHARGING" or "COOLDOWN")
 
-      AddCheckbox("Show while aura is active", draft.showActive, function(value) draft.showActive = value end, "ACTIVE")
+      AddCheckbox("Show while aura is active", draft.showActive, function(value)
+        draft.showActive = value
+        if not value then
+          draft.customGlowEnabled = false
+        end
+      end, "ACTIVE")
       AddDescription("Choose the active buff and glow on the Custom proc glow page.")
     else
       draft.showActive = true
@@ -594,6 +599,9 @@ local function SetPage(newPage)
     AddDescription("Show a glow on the tracked bar or icon when its configured buff or aura is active.")
     AddCheckbox("Enable Custom Proc Glows", draft.customGlowEnabled, function(value)
       draft.customGlowEnabled = value
+      if value then
+        draft.showActive = true
+      end
     end, "ACTIVE")
 
     if draft.customGlowEnabled then
