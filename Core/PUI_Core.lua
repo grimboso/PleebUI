@@ -492,22 +492,7 @@ function Addon:EnsureSchema()
   _PUI_EnsureTable(cm, "viewerSwipes")
   _PUI_EnsureTable(cm, "iconSettings")
   _PUI_EnsureTable(cm, "count")
-  local cmEditModeSettings = _PUI_EnsureTable(cm, "editModeSettings")
-  local cmViewerTooltips = _PUI_EnsureTable(cmEditModeSettings, "showTooltips")
-  local cmViewerHideWhenInactive = _PUI_EnsureTable(cmEditModeSettings, "hideWhenInactive")
-
-  if cmEditModeSettings.profileVersion == nil then
-    cmViewerHideWhenInactive.BuffIconCooldownViewer = true
-    cmViewerHideWhenInactive.BuffBarCooldownViewer = true
-    cmEditModeSettings.profileVersion = 1
-  end
-
-  if cmViewerTooltips.EssentialCooldownViewer == nil then cmViewerTooltips.EssentialCooldownViewer = true end
-  if cmViewerTooltips.UtilityCooldownViewer == nil then cmViewerTooltips.UtilityCooldownViewer = true end
-  if cmViewerTooltips.BuffIconCooldownViewer == nil then cmViewerTooltips.BuffIconCooldownViewer = true end
-  if cmViewerTooltips.BuffBarCooldownViewer == nil then cmViewerTooltips.BuffBarCooldownViewer = true end
-  if cmViewerHideWhenInactive.BuffIconCooldownViewer == nil then cmViewerHideWhenInactive.BuffIconCooldownViewer = true end
-  if cmViewerHideWhenInactive.BuffBarCooldownViewer == nil then cmViewerHideWhenInactive.BuffBarCooldownViewer = true end
+  cm.editModeSettings = nil
 
   -- Borders structure + defaults
   local bModule  = _PUI_EnsureTable(cmBorders, "module")
