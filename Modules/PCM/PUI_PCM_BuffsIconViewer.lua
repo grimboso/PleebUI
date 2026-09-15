@@ -930,7 +930,7 @@ local function _ApplyBuffIconLayout(viewer, holder, icons, padX, desiredSize, to
 end
 
 CenterVisibleBuffs = function(force)
-  if Hooks.InBlizzardEditMode() then
+  if Hooks.IsAddonRestricted() or Hooks.InBlizzardEditMode() then
     pendingRecenter = true
     return
   end
