@@ -243,6 +243,10 @@ local function _PCM_GetViewerKeyFromFrame(viewer)
 end
 
 local function _PCM_GetConfiguredViewerEntryCount(viewerKey)
+  if PCMHooks.IsAddonRestricted() then
+    return nil
+  end
+
   local category = _PCM_GetViewerCategoryEnum(viewerKey)
   if category == nil then
     return nil
@@ -265,7 +269,12 @@ local function _PCM_GetConfiguredViewerEntryCount(viewerKey)
 
   cached = 0
   for i = 1, #categories do
-    cached = cached + #C_CooldownViewer.GetCooldownViewerCategorySet(categories[i], false)
+    local categorySet = C_CooldownViewer.GetCooldownViewerCategorySet(categories[i], false)
+    if _PCM_IsSecret(categorySet) or type(categorySet) ~= "table" then
+      return nil
+    end
+
+    cached = cached + #categorySet
   end
 
   PCMCoreState.ConfiguredEntryCountCache[viewerKey] = cached
@@ -477,30 +486,10 @@ local _PCM_HIDE_WHEN_INACTIVE_VIEWER_KEY_SET = {
   BuffBarCooldownViewer = true,
 }
 
-local _PCM_EDIT_MODE_RESTRICTION_TYPES = {
-  Enum.AddOnRestrictionType.Combat,
-  Enum.AddOnRestrictionType.Encounter,
-  Enum.AddOnRestrictionType.ChallengeMode,
-  Enum.AddOnRestrictionType.PvPMatch,
-  Enum.AddOnRestrictionType.Map,
-  Enum.AddOnRestrictionType.Chat,
-}
-
 local PCMEditModeChangesPending = false
 
 local function _PCM_IsEditModeLayoutMutationBlocked()
-  if InCombatLockdown() then
-    return true
-  end
-
-  for index = 1, #_PCM_EDIT_MODE_RESTRICTION_TYPES do
-    local restrictionType = _PCM_EDIT_MODE_RESTRICTION_TYPES[index]
-    if C_RestrictedActions.GetAddOnRestrictionState(restrictionType) ~= Enum.AddOnRestrictionState.Inactive then
-      return true
-    end
-  end
-
-  return false
+  return PCMHooks.IsAddonRestricted()
 end
 
 local function _PCM_EnsureEditModeLayout()
@@ -712,6 +701,10 @@ local function _PCM_IsRefreshBlocked()
     return true
   end
 
+  if PCMHooks.IsAddonRestricted() then
+    return true
+  end
+
   return PCMHooks.InBlizzardEditMode()
 end
 
@@ -755,6 +748,10 @@ function Cooldowns:GetCustomBarSpellDropdown(kind)
   local entries = {}
 
   local function AddCategory(category)
+    if PCMHooks.IsAddonRestricted() then
+      return
+    end
+
     local cooldownIDs = C_CooldownViewer.GetCooldownViewerCategorySet(category, true)
     if _PCM_IsSecret(cooldownIDs) or type(cooldownIDs) ~= "table" then
       return
@@ -2923,6 +2920,12 @@ _PCM_RunHardViewerTransition = function(owner, invalidateClassSpellCache)
     return
   end
 
+  if PCMHooks.IsAddonRestricted() then
+    PCMRuntime:QueueAllViewerScans("hard-transition-blocked")
+    _PCM_MarkAllViewersDirty(owner)
+    return
+  end
+
   _PCM_InvalidateBuildKey()
   _PCM_InvalidateSkinCache()
 
@@ -3605,6 +3608,11 @@ local function _RefreshViewerBordersOnly(viewerKey)
     return
   end
 
+  if _PCM_IsRefreshBlocked() then
+    _PCM_QueueBlockedViewerRefresh(PCM_REFRESH_SKIN, viewerKey)
+    return
+  end
+
   -- Do not fight the user while the Edit Mode UI is open.
   if EditModeManagerFrame and EditModeManagerFrame.IsShown and EditModeManagerFrame:IsShown() then
     return
@@ -3719,7 +3727,7 @@ local function _RetakeBlizzardEditModeOwnership(self)
     return
   end
 
-  if PCMHooks.InBlizzardEditMode() then
+  if PCMHooks.IsAddonRestricted() or PCMHooks.InBlizzardEditMode() then
     return
   end
 
@@ -4427,6 +4435,11 @@ function Cooldowns:RefreshIndividualIconSettings(viewerKey)
     return
   end
 
+  if _PCM_IsRefreshBlocked() then
+    _PCM_QueueBlockedViewerRefresh(PCM_REFRESH_FULL, viewerKey)
+    return
+  end
+
   if viewerKey == "BuffIconCooldownViewer" then
     ns.Modules.PCM_Buffs:RefreshIndividualIconSettings()
     return
@@ -4555,7 +4568,7 @@ _PCM_ApplyIconAppearance = function(itemFrame, viewerKey, frameData)
 end
 
 function Cooldowns:ApplyNativeIndividualIconSettings(itemFrame, viewerKey, stateName)
-  if not itemFrame or not viewerKey then
+  if not itemFrame or not viewerKey or _PCM_IsRefreshBlocked() then
     return
   end
 
@@ -4575,7 +4588,7 @@ function Cooldowns:ApplyNativeIndividualIconSettings(itemFrame, viewerKey, state
 end
 
 function Cooldowns:ClearNativeIndividualIconSettings(itemFrame, viewerKey)
-  if not itemFrame then
+  if not itemFrame or _PCM_IsRefreshBlocked() then
     return
   end
   _PCM_ClearNativeIconPresentation(itemFrame, viewerKey)
@@ -4854,6 +4867,10 @@ local function _RunPCMStartupRefresh(self)
     return false
   end
 
+  if PCMHooks.IsAddonRestricted() then
+    return false
+  end
+
   if Addon:IsBlizzardEditModeActive() then
     return false
   end
@@ -5081,6 +5098,7 @@ local function _PCM_RuntimeLifecycleEvent(event, ...)
   elseif event == "ADDON_RESTRICTION_STATE_CHANGED" then
     if arg2 == Enum.AddOnRestrictionState.Inactive then
       Cooldowns:FlushPendingEditModeChanges()
+      _PCM_FlushBlockedViewerRefresh(Cooldowns)
     end
   elseif event == "PLAYER_SPECIALIZATION_CHANGED" then
     Cooldowns:_OnPlayerSpecializationChanged(event, arg1)
@@ -5302,6 +5320,10 @@ function Cooldowns:ResolveCustomBarAuraEntry(wantedSpellID, cachedCooldownID)
 
   wantedSpellID = tonumber(wantedSpellID)
   if not wantedSpellID or wantedSpellID <= 0 then
+    return nil, nil
+  end
+
+  if PCMHooks.IsAddonRestricted() then
     return nil, nil
   end
 
