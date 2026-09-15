@@ -483,14 +483,12 @@ function DamageMeters:ProcessHistoryCaptures()
     return
   end
 
-  local changed, retryCapture = History:ProcessPendingCaptures()
+  local changed = History:ProcessPendingCaptures()
   local activeDungeon = History:GetActiveDungeon()
   if activeDungeon and activeDungeon.completionPending == true then
     local finalized = History:FinalizePendingDungeon()
     if finalized then
       changed = true
-    else
-      retryCapture = true
     end
   end
 
@@ -500,10 +498,6 @@ function DamageMeters:ProcessHistoryCaptures()
     if picker and picker:IsShown() then
       SegmentPicker.ReloadData(picker)
     end
-  end
-
-  if retryCapture then
-    self:ScheduleHistoryCaptureRetry(0.3)
   end
 end
 

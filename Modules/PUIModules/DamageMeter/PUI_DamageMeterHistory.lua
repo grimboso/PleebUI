@@ -820,40 +820,6 @@ function History:Resume()
   self:ReconcileDungeonState()
 end
 
-local function SessionHasRestrictedValues(session)
-  if IsSecret(session) then
-    return true
-  end
-  if not session then
-    return false
-  end
-
-  local combatSources = session.combatSources
-  if IsSecret(combatSources) then
-    return true
-  end
-  if type(combatSources) ~= "table" then
-    return false
-  end
-
-  for index = 1, #combatSources do
-    local source = combatSources[index]
-    if IsSecret(source) then
-      return true
-    end
-    if source then
-      if IsSecret(source.name)
-        or IsSecret(source.sourceGUID)
-        or IsSecret(source.totalAmount)
-        or IsSecret(source.classFilename)
-      then
-        return true
-      end
-    end
-  end
-
-  return false
-end
 
 function History:CanReadFinishedSessions()
   if self.paused or InCombatLockdown() then
@@ -874,53 +840,9 @@ function History:CanReadFinishedSessions()
     return false
   end
 
-  if C_RestrictedActions.GetAddOnRestrictionState(Enum.AddOnRestrictionType.Combat) ~= 0 then
-    return false
-  end
-
-  for _, meterType in pairs(self.meterTypes) do
-    if SessionHasRestrictedValues(C_DamageMeter.GetCombatSessionFromType(
-      Enum.DamageMeterSessionType.Current,
-      meterType
-    )) then
-      return false
-    end
-    if SessionHasRestrictedValues(C_DamageMeter.GetCombatSessionFromType(
-      Enum.DamageMeterSessionType.Overall,
-      meterType
-    )) then
-      return false
-    end
-  end
-
-  local availableSessions = C_DamageMeter.GetAvailableCombatSessions()
-  if IsSecret(availableSessions) or type(availableSessions) ~= "table" then
-    return false
-  end
-
-  local firstIndex = math_max(1, #availableSessions - 2)
-  for index = firstIndex, #availableSessions do
-    local sessionInfo = availableSessions[index]
-    if IsSecret(sessionInfo) or not sessionInfo then
-      return false
-    end
-
-    local sessionID = sessionInfo.sessionID
-    if not IsPlainNumber(sessionID) or sessionID <= 0 then
-      return false
-    end
-
-    for _, meterType in pairs(self.meterTypes) do
-      if SessionHasRestrictedValues(C_DamageMeter.GetCombatSessionFromID(
-        sessionID,
-        meterType
-      )) then
-        return false
-      end
-    end
-  end
-
-  return true
+  return C_RestrictedActions.GetAddOnRestrictionState(
+    Enum.AddOnRestrictionType.Combat
+  ) == 0
 end
 
 function History:GetAvailableSessionIDs()
@@ -946,23 +868,6 @@ function History:GetAvailableSessionIDs()
   return sessionIDs
 end
 
-function History:IsSessionReady(sessionID)
-  if not IsPlainNumber(sessionID) or sessionID <= 0 then
-    return false
-  end
-
-  for _, meterType in pairs(self.meterTypes) do
-    local session = C_DamageMeter.GetCombatSessionFromID(sessionID, meterType)
-    if SessionHasRestrictedValues(session)
-      or not session
-      or not CanReadCombatSessionSummary(session)
-    then
-      return false
-    end
-  end
-
-  return true
-end
 
 function History:OnBlizzardReset()
   local activeDungeon = self:GetActiveDungeon()
@@ -1605,12 +1510,13 @@ function History:HasPendingCaptures()
 end
 
 function History:ProcessPendingCaptures()
-  if not next(self.pendingCaptures) then
-    return false, false
+  if not next(self.pendingCaptures) or not self:CanReadFinishedSessions() then
+    return false
   end
 
-  if not self:CanReadFinishedSessions() then
-    return false, true
+  local availableSessionIDs = self:GetAvailableSessionIDs()
+  if not availableSessionIDs then
+    return false
   end
 
   local records = {}
@@ -1627,7 +1533,6 @@ function History:ProcessPendingCaptures()
   end)
 
   local changed = false
-  local retryCapture = false
   local options = GetHistoryOptions(self)
   for index = 1, #records do
     local record = records[index]
@@ -1644,9 +1549,7 @@ function History:ProcessPendingCaptures()
 
     if not keepBossKill then
       self.pendingCaptures[sessionID] = nil
-    elseif not self:IsSessionReady(sessionID) then
-      retryCapture = true
-    else
+    elseif availableSessionIDs[sessionID] then
       local snapshot, captureComplete = self:CaptureSessionSnapshot(sessionID, 0)
       if captureComplete then
         local segment = self:CreateSavedBossKillSegment(
@@ -1658,13 +1561,11 @@ function History:ProcessPendingCaptures()
         self:AddSavedSegment(segment)
         self.pendingCaptures[sessionID] = nil
         changed = true
-      else
-        retryCapture = true
       end
     end
   end
 
-  return changed, retryCapture
+  return changed
 end
 
 function History:OnEncounterStart(encounterID, encounterName, difficultyID, groupSize)
@@ -1861,19 +1762,6 @@ function History:FinalizePendingDungeon()
   end
 
   local dungeonSegments = activeDungeon.segments or {}
-  for index = 1, #dungeonSegments do
-    local dungeonSegment = dungeonSegments[index]
-    local sessionID = dungeonSegment.sessionID
-    if dungeonSegment.encounterSuccess == 1
-      and IsPlainNumber(sessionID)
-      and sessionID > 0
-      and availableSessionIDs[sessionID]
-      and not self:IsSessionReady(sessionID)
-    then
-      return false
-    end
-  end
-
   local overallSnapshot
   if keepKeystone then
     local overallComplete
