@@ -13,6 +13,17 @@ local P = select(1, ns.Pleebug:DropIn(Hooks))
 local hooksecurefunc = hooksecurefunc
 local CreateFrame = CreateFrame
 local IsSecret = issecretvalue
+local C_RestrictedActions = C_RestrictedActions
+local InCombatLockdown = InCombatLockdown
+
+local _PCM_RESTRICTION_TYPES = {
+  Enum.AddOnRestrictionType.Combat,
+  Enum.AddOnRestrictionType.Encounter,
+  Enum.AddOnRestrictionType.ChallengeMode,
+  Enum.AddOnRestrictionType.PvPMatch,
+  Enum.AddOnRestrictionType.Map,
+  Enum.AddOnRestrictionType.Chat,
+}
 
 local rawFrame = CreateFrame("Frame")
 local RawClearAllPoints = rawFrame.ClearAllPoints
@@ -22,6 +33,22 @@ local RawSetScale = rawFrame.SetScale
 local RawSetAlpha = rawFrame.SetAlpha
 
 local FrameData = setmetatable({}, { __mode = "k" })
+
+local function IsAddonRestricted()
+  if InCombatLockdown() then
+    return true
+  end
+
+  for index = 1, #_PCM_RESTRICTION_TYPES do
+    if C_RestrictedActions.GetAddOnRestrictionState(_PCM_RESTRICTION_TYPES[index]) ~= Enum.AddOnRestrictionState.Inactive then
+      return true
+    end
+  end
+
+  return false
+end
+
+Hooks.IsAddonRestricted = IsAddonRestricted
 
 local EmptyFD = {}
 local function GetFrameData(frame)
@@ -542,6 +569,7 @@ function Hooks.HookViewerLayout(viewer, cb)
 end
 
 GetFrameData = P:Def("GetFrameData", GetFrameData)
+Hooks.IsAddonRestricted = P:Def("Hooks:IsAddonRestricted", Hooks.IsAddonRestricted)
 Hooks.PeekFrameData = P:Def("Hooks:PeekFrameData", Hooks.PeekFrameData)
 Hooks.GetItemViewerKey = P:Def("Hooks:GetItemViewerKey", Hooks.GetItemViewerKey)
 Hooks.SetItemViewerKey = P:Def("Hooks:SetItemViewerKey", Hooks.SetItemViewerKey)
