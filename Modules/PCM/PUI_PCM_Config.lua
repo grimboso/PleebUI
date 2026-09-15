@@ -3747,6 +3747,7 @@ local function _PCM_ApplyInstallerDraft(cfg, draft)
   cfg.activeGlowColor = draft.icon.activeAuraGlowColor
   cfg.buffGlowColor = draft.icon.activeAuraGlowColor
   cfg.buffGlowEnabled = draft.customGlowEnabled == true
+    and draft.showActive == true
     and draft.activeGlowStyle ~= nil and draft.activeGlowStyle ~= "NONE"
   cfg.buffGlowThickness = tonumber(draft.customGlowThickness) or cfg.buffGlowThickness
   cfg.buffGlowHideViewerIcon = draft.activeAuraHideViewerIcon == true
