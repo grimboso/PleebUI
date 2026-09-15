@@ -549,15 +549,29 @@ local function PCMPreview_GetViewerBorder(root, viewerKey)
   }
 end
 
+local function PCMPreview_GetIconBorder(root, viewerKey, buffIcon)
+  local borders = type(root) == "table" and root.borders or {}
+  local iconRoot = type(borders.icon) == "table" and borders.icon or {}
+  local viewers = type(iconRoot.viewers) == "table" and iconRoot.viewers or {}
+  local config = type(viewers[viewerKey]) == "table" and viewers[viewerKey] or {}
+
+  if buffIcon then
+    return {
+      buff = config.buffColor or config.color or { 0, 0, 0, 1 },
+      debuff = config.debuffColor or config.buffColor or config.color or { 0.65, 0.18, 0.18, 1 },
+      pandemic = config.pandemicColor or config.buffColor or config.color or { 0.95, 0.45, 0.18, 1 },
+    }
+  end
+
+  return config.color or { 0, 0, 0, 1 }
+end
+
 local function PCMPreview_GetViewerCounts(root, viewerKey)
   local counts = type(root) == "table" and root.count or {}
   local config = type(counts[viewerKey]) == "table" and counts[viewerKey] or {}
 
   return {
     cooldown = config.cooldown ~= false,
-    duration = type(root.durationCount) ~= "table"
-      or type(root.durationCount[viewerKey]) ~= "table"
-      or root.durationCount[viewerKey].enabled ~= false,
     buff = config.buff ~= false,
     charge = config.charge ~= false,
     keybind = config.keybind ~= false,
@@ -597,20 +611,17 @@ local function PCMPreview_GetEffectiveIconSwipe(entry, viewerSwipe)
   local record = IconSettings:GetRecordForEntry(entry, false)
   local override = record and record.swipe
   local drawEdge = viewerSwipe.drawEdge
-  local showCooldown = viewerSwipe.cooldown
-  local showDuration = viewerSwipe.duration
   if override and override.drawEdge ~= nil then
     drawEdge = override.drawEdge
   end
 
+  local show = viewerSwipe.cooldown
   if override and override.show ~= nil then
-    showCooldown = override.show == true
-    showDuration = override.show == true
+    show = override.show == true
   end
 
   return {
-    showCooldown = showCooldown,
-    showDuration = showDuration,
+    show = show,
     color = override and override.color or viewerSwipe.color,
     drawEdge = drawEdge,
     reverse = override and override.reverse == true,
@@ -733,7 +744,7 @@ local function PCMPreview_ConfigureViewerPanel(box, panel, definition, root)
   local defaultWidth = viewerKey == "EssentialCooldownViewer" and 400 or 300
   local style = PCMPreview_GetViewerStyle(root, viewerKey, defaultWidth)
   local viewerBorder = PCMPreview_GetViewerBorder(root, viewerKey)
-  local iconBorder = viewerBorder.color
+  local iconBorder = PCMPreview_GetIconBorder(root, viewerKey, false)
   local counts = PCMPreview_GetViewerCounts(root, viewerKey)
   local swipe = PCMPreview_GetViewerSwipe(root, viewerKey)
   local cooldownFont = PCMPreview_GetFontConfig(root, viewerKey, "cooldown")
@@ -812,10 +823,8 @@ local function PCMPreview_ConfigureViewerPanel(box, panel, definition, root)
     icon.cooldown:SetDrawEdge(effectiveSwipe.drawEdge)
     icon.cooldown:SetReverse(effectiveSwipe.reverse)
     icon.cooldown:SetSwipeColor(swipeR, swipeG, swipeB, swipeA)
-    icon.cooldown:SetShown(effectiveSwipe.showCooldown)
-    icon.__puiPCMPreviewCooldownEnabled = effectiveSwipe.showCooldown
-    icon.__puiPCMPreviewCooldownSwipeEnabled = effectiveSwipe.showCooldown
-    icon.__puiPCMPreviewDurationSwipeEnabled = effectiveSwipe.showDuration
+    icon.cooldown:SetShown(effectiveSwipe.show)
+    icon.__puiPCMPreviewCooldownEnabled = effectiveSwipe.show
     icon.__puiPCMPreviewReadyAlpha = appearance and appearance.readyAlpha or 1
     icon.__puiPCMPreviewCooldownAlpha = appearance and appearance.cooldownAlpha or 1
     icon.__puiPCMPreviewDuration = 7 + index * 2
@@ -865,11 +874,8 @@ local function PCMPreview_ConfigureViewerPanel(box, panel, definition, root)
     )
 
     local showCooldownText = cooldownShown == nil and counts.cooldown or cooldownShown
-    local showDurationText = cooldownShown == nil and counts.duration or cooldownShown
     local showChargeText = chargeShown == nil and counts.charge or chargeShown
     local showKeybindText = keybindShown == nil and counts.keybind or keybindShown
-    icon.__puiPCMPreviewCooldownTextEnabled = showCooldownText
-    icon.__puiPCMPreviewDurationTextEnabled = showDurationText
     icon.cooldownText:SetShown(showCooldownText)
     icon.chargeText:SetShown(showChargeText and index % 2 == 0)
     icon.keybindText:SetShown(showKeybindText)
@@ -918,11 +924,12 @@ local function PCMPreview_ConfigureViewerPanel(box, panel, definition, root)
   end
 end
 
-local function PCMPreview_ConfigureBuffIconPanel(box, panel, root, pcmRoot)
+local function PCMPreview_ConfigureBuffIconPanel(box, panel, root)
   local viewerKey = "BuffIconCooldownViewer"
   local path = { "CooldownManager", "buff_icons" }
   local style = PCMPreview_GetViewerStyle(root, viewerKey, 300)
-  local viewerBorder = PCMPreview_GetViewerBorder(pcmRoot, viewerKey)
+  local viewerBorder = PCMPreview_GetViewerBorder(root, viewerKey)
+  local borders = PCMPreview_GetIconBorder(root, viewerKey, true)
   local countFont = PCMPreview_GetFontConfig(root, viewerKey, "cooldown")
   local stackFont = PCMPreview_GetFontConfig(root, viewerKey, "charge")
   local displayScale = PCMPreview_GetDisplayScale(panel)
@@ -957,11 +964,13 @@ local function PCMPreview_ConfigureBuffIconPanel(box, panel, root, pcmRoot)
     local appearance = record and record.appearance or nil
     local swipe = PCMPreview_GetEffectiveIconSwipe(entry, {
       cooldown = true,
-      duration = true,
       drawEdge = true,
       color = { 0, 0, 0, 0.8 },
     })
-    local br, bg, bb, ba = PCMPreview_ColorComponents(viewerBorder.color, { 0, 0, 0, 1 })
+    local br, bg, bb, ba = PCMPreview_ColorComponents(
+      borders.buff,
+      { 0, 0, 0, 1 }
+    )
 
     local customTexture = appearance and appearance.texture or nil
     icon.icon:SetTexture(customTexture or entry.texture)
@@ -976,10 +985,8 @@ local function PCMPreview_ConfigureBuffIconPanel(box, panel, root, pcmRoot)
     icon.cooldown:SetReverse(swipe.reverse)
     local sr, sg, sb, sa = PCMPreview_ColorComponents(swipe.color, { 0, 0, 0, 0.8 })
     icon.cooldown:SetSwipeColor(sr, sg, sb, sa)
-    icon.cooldown:SetShown(swipe.showDuration)
-    icon.__puiPCMPreviewCooldownEnabled = swipe.showDuration
-    icon.__puiPCMPreviewCooldownSwipeEnabled = nil
-    icon.__puiPCMPreviewDurationSwipeEnabled = nil
+    icon.cooldown:SetShown(swipe.show)
+    icon.__puiPCMPreviewCooldownEnabled = swipe.show
     icon.__puiPCMPreviewDuration = 9 + index * 2
     icon.__puiPCMPreviewPhaseOffset = index * 0.6
     icon.__puiPCMPreviewCooldownCycle = nil
@@ -1753,19 +1760,8 @@ local function PCMPreview_ConfigureStackSegments(bar, config, zoom)
   bar.__puiPCMPreviewStackReverse = bar.stackReverse
 end
 
-local function PCMPreview_GetLiveMaxCharges(spellID)
-  local chargeInfo = spellID and C_Spell.GetSpellCharges(spellID) or nil
-  local maxCharges = chargeInfo and chargeInfo.maxCharges or nil
-
-  if _G.issecretvalue(maxCharges) then
-    return 2
-  end
-
-  return PCMPreview_Clamp(maxCharges or 2, 1, 60)
-end
-
-local function PCMPreview_ConfigureChargeSlots(bar, config, spellID, zoom, texture)
-  local maxCharges = PCMPreview_GetLiveMaxCharges(spellID)
+local function PCMPreview_ConfigureChargeSlots(bar, config, zoom, texture)
+  local maxCharges = PCMPreview_Clamp(config.maxCharges or 2, 1, 60)
   local r, g, b, a = PCMPreview_GetClassBarColor(
     config,
     { 0.28, 0.67, 0.95, 1 }
@@ -2087,14 +2083,14 @@ local function PCMPreview_ConfigureCustomBar(
       Round((config.fontOffsetX or 0) * zoom),
       Round((2 + (config.fontOffsetY or 0)) * zoom)
     )
-    bar.valueText:SetShown((tonumber(config.fontSize) or 0) > 0)
+    bar.valueText:SetShown(config.showText ~= false and (tonumber(config.fontSize) or 0) > 0)
     PCMPreview_ConfigureStackSegments(bar, config, zoom)
     PCMPreview_ConfigureDurationVisuals(bar, config, entry, zoom)
   elseif entry.kind == "charge" then
-    PCMPreview_ConfigureChargeSlots(bar, config, entry.spellID, zoom, entry.texture)
+    PCMPreview_ConfigureChargeSlots(bar, config, zoom, entry.texture)
   elseif entry.kind == "duration" then
     bar.valueText:SetPoint("CENTER", bar.status, "CENTER", 0, 0)
-    bar.valueText:SetShown((tonumber(config.durationCountFontSize) or 0) > 0)
+    bar.valueText:SetShown(config.showText ~= false and (tonumber(config.durationCountFontSize) or 0) > 0)
     PCMPreview_ConfigureDurationVisuals(bar, config, entry, zoom)
   else
     bar.valueText:SetPoint("CENTER", bar.status, "CENTER", 0, 0)
@@ -2522,6 +2518,425 @@ local function PCMPreview_ConfigureConsumablesPanel(box, panel)
 end
 
 
+local function PCMPreview_CopyInstallerValue(value)
+  if type(value) ~= "table" then
+    return value
+  end
+
+  local copy = {}
+  for key, child in pairs(value) do
+    copy[key] = PCMPreview_CopyInstallerValue(child)
+  end
+  return copy
+end
+
+local function PCMPreview_BuildInstallerEntry(draft)
+  local kind = draft.kind
+  local config
+
+  if kind == "cooldown" then
+    config = Cooldowns.NormalizeSpellBarEntry({}, nil)
+  elseif kind == "charge" then
+    config = Cooldowns.NormalizeCooldownStackBarEntry({}, nil)
+  else
+    config = BuffBars.EnsureStackBarDefaults({ kind = kind }, nil)
+  end
+
+  local previewDraft = PCMPreview_CopyInstallerValue(draft)
+  ns.PCM_ApplyInstallerDraft(config, previewDraft)
+
+  if kind == "cooldown" then
+    config = Cooldowns.NormalizeSpellBarEntry(config, nil)
+  elseif kind == "charge" then
+    config = Cooldowns.NormalizeCooldownStackBarEntry(config, nil)
+  else
+    config.kind = kind
+    config = BuffBars.EnsureStackBarDefaults(config, nil)
+  end
+
+  local spellID = tonumber(draft.spellID)
+  local texture = spellID and PCMPreview_GetSafeSpellTexture(spellID) or nil
+
+  return {
+    kind = kind,
+    title = "Preview",
+    spellID = spellID,
+    texture = texture or 134400,
+    config = config,
+  }
+end
+
+local function PCMPreview_EnsureInstallerIcon(host)
+  local icon = host.__puiPCMInstallerIcon
+  if icon then
+    return icon
+  end
+
+  icon = Presentation.Create("PCMIcon", host)
+  icon.frame:SetFrameLevel(host:GetFrameLevel() + 4)
+  icon.pips = {}
+  host.__puiPCMInstallerIcon = icon
+  return icon
+end
+
+local function PCMPreview_EnsureInstallerBar(host)
+  local bar = host.__puiPCMInstallerBar
+  if bar then
+    return bar
+  end
+
+  bar = PCMPreview_CreateBar(host)
+  host.__puiPCMInstallerBar = bar
+  return bar
+end
+
+local function PCMPreview_HideInstallerPips(icon)
+  for index = 1, #icon.pips do
+    icon.pips[index]:Hide()
+  end
+end
+
+local function PCMPreview_ConfigureInstallerPips(icon, count, current)
+  PCMPreview_HideInstallerPips(icon)
+  count = math_max(0, math_floor(tonumber(count) or 0))
+  if count == 0 then
+    return
+  end
+
+  local width = math_max(1, icon.frame:GetWidth())
+  local gap = 1
+  local pipWidth = math_max(1, (width - ((count - 1) * gap)) / count)
+
+  for index = 1, count do
+    local pip = icon.pips[index]
+    if not pip then
+      pip = CreateFrame("StatusBar", nil, icon.frame)
+      pip:SetStatusBarTexture(WHITE_TEXTURE)
+      pip:SetStatusBarColor(0.25, 0.75, 1, 1)
+      icon.pips[index] = pip
+    end
+
+    pip:ClearAllPoints()
+    pip:SetPoint("BOTTOMLEFT", icon.frame, "BOTTOMLEFT", (index - 1) * (pipWidth + gap), 0)
+    pip:SetSize(pipWidth, 3)
+    pip:SetMinMaxValues(index - 1, index)
+    pip:SetValue(current)
+    pip:Show()
+  end
+end
+
+local function PCMPreview_ConfigureInstallerStackStrip(icon, config, count)
+  local strip = icon.stackStrip
+  if not strip then
+    strip = CreateFrame("StatusBar", nil, icon.frame)
+    strip:SetStatusBarTexture(WHITE_TEXTURE)
+    icon.stackStrip = strip
+  end
+
+  local maximum = math_max(1, math_floor(tonumber(config.maxStacks) or 1))
+  local baseR, baseG, baseB, baseA = PCMPreview_GetClassBarColor(
+    config,
+    { 0.74, 0.48, 0.92, 1 }
+  )
+  local r, g, b, a = PCMPreview_GetStackSegmentColor(
+    config,
+    count,
+    baseR, baseG, baseB, baseA
+  )
+
+  strip:ClearAllPoints()
+  strip:SetPoint("BOTTOMLEFT", icon.frame, "BOTTOMLEFT", 1, 1)
+  strip:SetPoint("BOTTOMRIGHT", icon.frame, "BOTTOMRIGHT", -1, 1)
+  strip:SetHeight(3)
+  strip:SetMinMaxValues(0, maximum)
+  strip:SetValue(count)
+  strip:SetStatusBarColor(r, g, b, a)
+  strip:Show()
+end
+
+local function PCMPreview_GetInstallerState(draft, state)
+  local active = state == "ACTIVE"
+  local ready = state == "READY" or state == "INACTIVE"
+  local shown
+
+  if active then
+    shown = draft.showActive == true
+  elseif state == "INACTIVE" and (draft.kind == "duration" or draft.kind == "stack") then
+    shown = draft.showOnlyWhenActive ~= true
+  elseif ready then
+    shown = draft.showReady == true
+  else
+    shown = draft.showCooldown == true
+  end
+
+  local alpha = active and draft.activeAlpha
+    or ready and draft.readyAlpha
+    or draft.cooldownAlpha
+  local desaturated = active and draft.desaturateActive == true
+    or ready and draft.desaturateReady == true
+    or not active and not ready and draft.desaturateCooldown == true
+  local glowStyle = active and draft.activeGlowStyle
+    or ready and draft.readyGlowStyle
+    or draft.cooldownGlowStyle
+  local glowColor = active and draft.icon.activeAuraGlowColor
+    or ready and draft.icon.readyGlowColor
+    or draft.icon.cooldownGlowColor
+
+  if active and draft.customGlowEnabled ~= true then
+    glowStyle = "NONE"
+  end
+
+  return shown, (tonumber(alpha) or 0) / 100, desaturated, glowStyle or "NONE", glowColor, active
+end
+
+local function PCMPreview_RenderInstallerIcon(host, entry, draft, state)
+  local icon = PCMPreview_EnsureInstallerIcon(host)
+  local config = entry.config
+  local iconConfig = config.icon
+  local shown, alpha, desaturated, glowStyle, glowColor, active = PCMPreview_GetInstallerState(draft, state)
+  local maximum = entry.kind == "charge"
+      and math_max(1, math_floor(tonumber(config.maxCharges) or 2))
+    or entry.kind == "stack"
+      and math_max(1, math_floor(tonumber(config.maxStacks) or 3))
+    or 1
+  local count = entry.kind == "charge"
+      and (state == "READY" and maximum or math_max(1, maximum - 1))
+    or entry.kind == "stack"
+      and math_max(1, math_floor(maximum * 0.6 + 0.5))
+    or 0
+  local cooldownActive = state == "COOLDOWN" or state == "RECHARGING" or state == "ACTIVE"
+  local size = math_max(20, tonumber(iconConfig.size) or 40)
+
+  Presentation.Apply("PCMIcon", icon, {
+    size = size,
+    inset = 0,
+    backgroundColor = iconConfig.backgroundColor,
+    borderColor = iconConfig.borderColor,
+    borderSize = iconConfig.chromeStyle == "BLIZZARD" and 0
+      or iconConfig.chromeStyle == "SQUARE" and 1
+      or iconConfig.borderSize,
+    cooldownFont = {
+      font = iconConfig.font,
+      size = iconConfig.fontSize * iconConfig.durationTextScale / 100,
+      flags = iconConfig.outline,
+      color = iconConfig.durationTextColor,
+    },
+    chargeFont = {
+      font = iconConfig.font,
+      size = iconConfig.countFontSize * iconConfig.countTextScale / 100,
+      flags = iconConfig.outline,
+      color = iconConfig.countTextColor,
+    },
+    visible = true,
+  }, {
+    icon = entry.texture,
+    cooldownText = cooldownActive and iconConfig.showDuration == true and "3" or "",
+    chargeText = iconConfig.showCount == true and count > 0 and tostring(count) or "",
+    glow = false,
+  })
+
+  icon.frame:ClearAllPoints()
+  icon.frame:SetPoint("CENTER", host, "CENTER", 0, 12)
+  icon.frame:SetAlpha(shown and alpha or 0)
+  icon.icon:SetDesaturated(desaturated)
+  icon.cooldown:SetDrawSwipe(cooldownActive and iconConfig.showSwipe == true)
+  icon.cooldown:SetDrawEdge(cooldownActive and iconConfig.showSwipe == true)
+  icon.cooldown:SetShown(cooldownActive and iconConfig.showSwipe == true)
+  icon.cooldownText:SetShown(cooldownActive and iconConfig.showDuration == true)
+  icon.chargeText:SetShown(iconConfig.showCount == true and count > 0)
+
+  if cooldownActive and iconConfig.showSwipe == true then
+    icon.cooldown:SetCooldown(GetTime(), 3)
+  else
+    icon.cooldown:Clear()
+  end
+
+  PCMPreview_HideInstallerPips(icon)
+  if icon.stackStrip then
+    icon.stackStrip:Hide()
+  end
+
+  if entry.kind == "charge" and iconConfig.showPips == true then
+    PCMPreview_ConfigureInstallerPips(icon, maximum, count)
+  elseif entry.kind == "stack" and iconConfig.showStackStrip == true then
+    PCMPreview_ConfigureInstallerStackStrip(icon, config, count)
+  end
+
+  PCMPreview_ConfigureGlow(
+    icon,
+    icon.frame,
+    math_max(1, icon.frame:GetWidth()),
+    math_max(1, icon.frame:GetHeight()),
+    shown and glowStyle or "NONE",
+    glowColor,
+    active and { pixelThickness = tonumber(config.buffGlowThickness) or 2 } or nil
+  )
+
+  icon.frame:Show()
+  return icon
+end
+
+local function PCMPreview_SetInstallerBarDesaturated(bar, desaturated)
+  if bar.status and bar.status:GetStatusBarTexture() then
+    bar.status:GetStatusBarTexture():SetDesaturated(desaturated)
+  end
+  if bar.icon then
+    bar.icon:SetDesaturated(desaturated)
+  end
+  if bar.durationStatus and bar.durationStatus:GetStatusBarTexture() then
+    bar.durationStatus:GetStatusBarTexture():SetDesaturated(desaturated)
+  end
+  if bar.durationIcon then
+    bar.durationIcon:SetDesaturated(desaturated)
+  end
+  for index = 1, #(bar.chargeSlots or {}) do
+    local slot = bar.chargeSlots[index]
+    if slot and slot.fullBar and slot.fullBar:GetStatusBarTexture() then
+      slot.fullBar:GetStatusBarTexture():SetDesaturated(desaturated)
+    end
+  end
+end
+
+local function PCMPreview_SetInstallerDuration(bar, active)
+  local status = bar.__puiPCMPreviewDurationStatus
+  local text = bar.__puiPCMPreviewDurationText
+  local value = active and 0.6 or 0
+
+  if status then
+    status:SetMinMaxValues(0, 1)
+    status:SetValue(
+      bar.__puiPCMPreviewDurationDrain and (1 - value) or value
+    )
+  end
+
+  if text and text:IsShown() then
+    text:SetText(active and "3" or "")
+  end
+
+  if bar.__puiPCMPreviewDurationIcon then
+    bar.durationCooldown:SetShown(active)
+    if active then
+      bar.durationCooldown:SetCooldown(GetTime(), 5)
+    else
+      bar.durationCooldown:Clear()
+    end
+    if bar.durationIconText:IsShown() then
+      bar.durationIconText:SetText(active and "3" or "")
+    end
+  end
+end
+
+local function PCMPreview_RenderInstallerBar(host, entry, draft, state)
+  local bar = PCMPreview_EnsureInstallerBar(host)
+  local config = entry.config
+  local shown, alpha, desaturated, glowStyle, glowColor, active = PCMPreview_GetInstallerState(draft, state)
+
+  PCMPreview_ConfigureCustomBar(bar, entry, 1, host, 0, 1)
+  bar.frame:ClearAllPoints()
+  bar.frame:SetPoint("CENTER", host, "CENTER", 0, 12)
+  bar.frame:SetAlpha(shown and alpha or 0)
+  bar.label:Hide()
+  PCMPreview_SetInstallerBarDesaturated(bar, desaturated)
+
+  if entry.kind == "charge" then
+    local maximum = bar.__puiPCMPreviewMaxCharges or math_max(1, tonumber(config.maxCharges) or 2)
+    local count = state == "READY" and maximum or math_max(0, maximum - 1)
+    PCMPresentation.ApplyChargeCount(bar.chargePresentation, count)
+    for index = 1, maximum do
+      local slot = bar.chargeSlots[index]
+      if slot then
+        local recharging = state == "RECHARGING" and index == count + 1
+        slot.rechargeBar:SetShown(recharging)
+        if recharging then
+          slot.rechargeBar:SetMinMaxValues(0, 1)
+          slot.rechargeBar:SetValue(config.durationBarFillMode == "drain" and 0.35 or 0.65)
+        end
+      end
+    end
+  elseif entry.kind == "stack" then
+    local maximum = bar.__puiPCMPreviewMaxStacks or math_max(1, tonumber(config.maxStacks) or 3)
+    local count = state == "ACTIVE" and math_max(1, math_floor(maximum * 0.6 + 0.5)) or 0
+    for index = 1, maximum do
+      local segment = bar.stackSegments[index]
+      if segment then
+        local fillIndex = bar.__puiPCMPreviewStackReverse and (maximum - index + 1) or index
+        segment:SetValue(fillIndex <= count and 1 or 0)
+      end
+    end
+    if bar.valueText:IsShown() then
+      bar.valueText:SetText(tostring(count))
+    end
+    PCMPreview_SetInstallerDuration(bar, state == "ACTIVE")
+  elseif entry.kind == "duration" then
+    PCMPreview_SetInstallerDuration(bar, state == "ACTIVE")
+  else
+    local ready = state == "READY"
+    bar.status:SetMinMaxValues(0, 1)
+    bar.status:SetValue(
+      ready and (config.direction == "drain" and 0 or 1)
+        or config.direction == "drain" and 0.35 or 0.65
+    )
+    if bar.valueText:IsShown() then
+      bar.valueText:SetText(ready and "Ready" or state == "ACTIVE" and "Active" or "3")
+    end
+  end
+
+  PCMPreview_ConfigureGlow(
+    bar,
+    bar.frame,
+    math_max(1, bar.frame:GetWidth()),
+    math_max(1, bar.frame:GetHeight()),
+    shown and glowStyle or "NONE",
+    glowColor,
+    active and { pixelThickness = tonumber(config.buffGlowThickness) or 2 } or nil
+  )
+
+  bar.frame:Show()
+  return bar
+end
+
+function PCMPreview.RenderInstallerDraft(host, draft, state)
+  if not host or not draft then
+    return
+  end
+
+  local entry = PCMPreview_BuildInstallerEntry(draft)
+  local icon = host.__puiPCMInstallerIcon
+  local bar = host.__puiPCMInstallerBar
+
+  if draft.presentation == "BUTTON" then
+    if bar then
+      bar.frame:Hide()
+      PCMPreview_HideGlow(bar)
+    end
+    PCMPreview_RenderInstallerIcon(host, entry, draft, state)
+  else
+    if icon then
+      icon.frame:Hide()
+      PCMPreview_HideGlow(icon)
+    end
+    PCMPreview_RenderInstallerBar(host, entry, draft, state)
+  end
+end
+
+function PCMPreview.HideInstallerDraft(host)
+  if not host then
+    return
+  end
+
+  local icon = host.__puiPCMInstallerIcon
+  if icon then
+    PCMPreview_HideGlow(icon)
+    icon.frame:Hide()
+  end
+
+  local bar = host.__puiPCMInstallerBar
+  if bar then
+    PCMPreview_HideGlow(bar)
+    bar.frame:Hide()
+  end
+end
+
 local function PCMPreview_EnsureContents(box)
   if box.__puiPCMPreviewContentsReady then
     return
@@ -2615,7 +3030,7 @@ local function PCMPreview_Configure(box)
   elseif panelKey == "utility" then
     PCMPreview_ConfigureViewerPanel(box, panels.utility, VIEWERS[2], DB.GetPCMRoot())
   elseif panelKey == "buffs" then
-    PCMPreview_ConfigureBuffIconPanel(box, panels.buffs, DB.GetProfileBuffsDB(), DB.GetPCMRoot())
+    PCMPreview_ConfigureBuffIconPanel(box, panels.buffs, DB.GetProfileBuffsDB())
   elseif panelKey == "buffBars" then
     PCMPreview_ConfigureBuffBarPanel(panels.buffBars, DB.GetStyleDB())
   elseif panelKey == "consumables" then
@@ -2643,22 +3058,6 @@ local function PCMPreview_UpdateIcon(icon, phase)
   local auraActive = previewState == "AURA"
     or icon.__puiPCMPreviewAuraMode == true
     or autoAuraActive
-
-  if icon.__puiPCMPreviewCooldownSwipeEnabled ~= nil then
-    local showSwipe = auraActive and icon.__puiPCMPreviewDurationSwipeEnabled
-      or cooldownActive and icon.__puiPCMPreviewCooldownSwipeEnabled
-      or false
-    icon.cooldown:SetShown(showSwipe)
-    icon.__puiPCMPreviewCooldownEnabled = showSwipe
-  end
-
-  if icon.__puiPCMPreviewCooldownTextEnabled ~= nil then
-    icon.cooldownText:SetShown(
-      auraActive and icon.__puiPCMPreviewDurationTextEnabled
-        or cooldownActive and icon.__puiPCMPreviewCooldownTextEnabled
-        or false
-    )
-  end
 
   local alpha
   local saturation
@@ -3064,6 +3463,7 @@ PCMPreview_EnsureIconCount = P:Def("EnsureIconCount", PCMPreview_EnsureIconCount
 PCMPreview_EnsureBarCount = P:Def("EnsureBarCount", PCMPreview_EnsureBarCount)
 PCMPreview_GetViewerStyle = P:Def("GetViewerStyle", PCMPreview_GetViewerStyle)
 PCMPreview_GetViewerBorder = P:Def("GetViewerBorder", PCMPreview_GetViewerBorder)
+PCMPreview_GetIconBorder = P:Def("GetIconBorder", PCMPreview_GetIconBorder)
 PCMPreview_GetViewerCounts = P:Def("GetViewerCounts", PCMPreview_GetViewerCounts)
 PCMPreview_GetViewerSwipe = P:Def("GetViewerSwipe", PCMPreview_GetViewerSwipe)
 PCMPreview_GetEffectiveIconText = P:Def("GetEffectiveIconText", PCMPreview_GetEffectiveIconText)
