@@ -1325,6 +1325,29 @@ local function _PCM_DB_Attach(Cooldowns)
     if entry.maxCharges < 2 then entry.maxCharges = 2 end
     if entry.maxCharges > 3 then entry.maxCharges = 3 end
 
+    if entry.showText == nil then
+      entry.showText = true
+    else
+      entry.showText = not not entry.showText
+    end
+
+    entry.fontSize = tonumber(entry.fontSize) or 14
+    if entry.fontSize < 8 then entry.fontSize = 8 end
+    if entry.fontSize > 28 then entry.fontSize = 28 end
+
+    if type(entry.font) ~= "string" or entry.font == "" then
+      entry.font = Theme.GetFont("cooldown")
+    end
+
+    if type(entry.fontOutline) ~= "string" or entry.fontOutline == "" then
+      entry.fontOutline = Theme.GetFontRoleInfo("cooldown").outline or "OUTLINE"
+    end
+
+    if type(entry.fontColor) ~= "table" then
+      local color = Theme.GetColors().text
+      entry.fontColor = { color[1], color[2], color[3], color[4] }
+    end
+
     if type(entry.barColor) ~= "table" then
       entry.barColor = nil
     end
@@ -1347,6 +1370,40 @@ local function _PCM_DB_Attach(Cooldowns)
     if entry.slotBorderThickness == nil then entry.slotBorderThickness = 2 end
     if entry.slotBorderThickness < 0 then entry.slotBorderThickness = 0 end
     if entry.slotBorderThickness > 5 then entry.slotBorderThickness = 5 end
+
+    entry.slotSpacing = tonumber(entry.slotSpacing) or 0
+    if entry.slotSpacing < 0 then entry.slotSpacing = 0 end
+    if entry.slotSpacing > 20 then entry.slotSpacing = 20 end
+
+    if type(entry.slotBackgroundColor) ~= "table" then
+      entry.slotBackgroundColor = { 0.12, 0.12, 0.12, 0.95 }
+    end
+
+    entry.opacity = tonumber(entry.opacity) or 1
+    if entry.opacity < 0 then entry.opacity = 0 end
+    if entry.opacity > 1 then entry.opacity = 1 end
+
+    entry.useDifferentFullColor = entry.useDifferentFullColor == true
+    if type(entry.fullChargeColor) ~= "table" then
+      entry.fullChargeColor = { 1, 1, 1, 1 }
+    end
+
+    entry.usePerSlotColors = entry.usePerSlotColors == true
+    for index = 1, 60 do
+      local field = "chargeSlot" .. index .. "Color"
+      if entry[field] ~= nil and type(entry[field]) ~= "table" then
+        entry[field] = nil
+      end
+    end
+
+    if entry.rotateTexture ~= true and entry.rotateTexture ~= false then
+      entry.rotateTexture = nil
+    end
+    if entry.dynamicTextOnSlot == nil then
+      entry.dynamicTextOnSlot = true
+    else
+      entry.dynamicTextOnSlot = not not entry.dynamicTextOnSlot
+    end
 
     local root = _CooldownStackBars_GetProfileBars()
     if root and id ~= nil and root[id] ~= entry then
@@ -1393,8 +1450,16 @@ local function _PCM_DB_Attach(Cooldowns)
       entry.direction = "fill"
     end
 
-    if entry.fillDirection ~= "LEFT" and entry.fillDirection ~= "RIGHT" then
-      entry.fillDirection = "RIGHT"
+    if entry.orientation ~= "horizontal" and entry.orientation ~= "vertical" then
+      entry.orientation = "horizontal"
+    end
+
+    if entry.fillDirection ~= "LEFT"
+      and entry.fillDirection ~= "RIGHT"
+      and entry.fillDirection ~= "UP"
+      and entry.fillDirection ~= "DOWN"
+    then
+      entry.fillDirection = entry.orientation == "vertical" and "UP" or "RIGHT"
     end
 
     entry.width  = tonumber(entry.width)  or 250
@@ -1420,6 +1485,12 @@ local function _PCM_DB_Attach(Cooldowns)
     entry.texture = (type(entry.texture) == "string" and entry.texture ~= "") and entry.texture or "Pleebar"
 
     entry.fontSize = tonumber(entry.fontSize) or 14
+
+    if entry.showText == nil then
+      entry.showText = true
+    else
+      entry.showText = not not entry.showText
+    end
 
     if entry.useClassColor == nil then
       entry.useClassColor = true
@@ -1464,7 +1535,11 @@ local function _PCM_DB_Attach(Cooldowns)
       entry.fontColor = nil
     end
 
-    if entry.iconAnchor ~= "left" and entry.iconAnchor ~= "right" and entry.iconAnchor ~= "top" and entry.iconAnchor ~= "bottom" then
+    if entry.orientation == "vertical" then
+      if entry.iconAnchor ~= "top" and entry.iconAnchor ~= "bottom" then
+        entry.iconAnchor = "top"
+      end
+    elseif entry.iconAnchor ~= "left" and entry.iconAnchor ~= "right" then
       entry.iconAnchor = "left"
     end
 
@@ -1474,6 +1549,20 @@ local function _PCM_DB_Attach(Cooldowns)
 
     if type(entry.borderColor) ~= "table" then
       entry.borderColor = nil
+    end
+
+    entry.borderSize = tonumber(entry.borderSize) or 2
+    if entry.borderSize < 0 then entry.borderSize = 0 end
+    if entry.borderSize > 6 then entry.borderSize = 6 end
+
+    if type(entry.backgroundColor) ~= "table" then
+      local color = entry.borderColor or { 0.12, 0.12, 0.12, 0.955 }
+      entry.backgroundColor = {
+        color[1] or color.r or 0.12,
+        color[2] or color.g or 0.12,
+        color[3] or color.b or 0.12,
+        color[4] or color.a or 0.955,
+      }
     end
 
     -- Ensure the normalized entry is written back into the DB table.
@@ -1639,6 +1728,7 @@ do
     local style = cm.style
     style.viewerSizes   = style.viewerSizes   or {}
     style.viewerSpacing = style.viewerSpacing or {}
+    style.viewerColumns = style.viewerColumns or {}
     style.viewerGrowth  = style.viewerGrowth  or {}
 
     if style.iconSize == nil then style.iconSize = 36 end
@@ -1655,18 +1745,6 @@ do
 
     cm.anchor = cm.anchor or {}
     return cm.anchor
-  end
-
-  function E.GetProfileBuffsIconBorderDB()
-    local cm = E.GetProfileBuffsDB()
-    if not cm then
-      return nil
-    end
-
-    cm.borders = cm.borders or {}
-    cm.borders.icon = cm.borders.icon or {}
-    cm.borders.icon.viewers = cm.borders.icon.viewers or {}
-    return cm.borders.icon
   end
 
   function E.GetProfileBuffsViewerFontDB(viewerKey)
@@ -1991,7 +2069,6 @@ end
   E.GetViewerSwipeDB = P:Def('E.GetViewerSwipeDB', E.GetViewerSwipeDB)
   E.GetProfileBuffsDB = P:Def('E.GetProfileBuffsDB', E.GetProfileBuffsDB)
   E.GetProfileBuffsAnchorDB = P:Def('E.GetProfileBuffsAnchorDB', E.GetProfileBuffsAnchorDB)
-  E.GetProfileBuffsIconBorderDB = P:Def('E.GetProfileBuffsIconBorderDB', E.GetProfileBuffsIconBorderDB)
   E.GetProfileBuffsViewerFontDB = P:Def('E.GetProfileBuffsViewerFontDB', E.GetProfileBuffsViewerFontDB)
   E.EnsureViewerSubDB = P:Def('E.EnsureViewerSubDB', E.EnsureViewerSubDB)
   E.GetViewerCountDB = P:Def('E.GetViewerCountDB', E.GetViewerCountDB)
