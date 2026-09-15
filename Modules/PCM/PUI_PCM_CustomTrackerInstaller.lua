@@ -5,7 +5,6 @@ local Cooldowns = ns.Modules.CooldownManager
 local Theme = ns.Theme
 local OptionsUtil = ns.OptionsUtil
 local AceHooks = ns.AceHooks
-local AuraWidget = ns.AuraWidget
 local AceGUI = LibStub("AceGUI-3.0")
 
 local Installer = {}
@@ -16,7 +15,8 @@ local controls
 local draft
 local page = 1
 local previewState = "COOLDOWN"
-local previewStartedAt = 0
+local previewTimer
+local SchedulePreviewAdvance
 local closeCallback
 local createdTrackerKey
 local PREVIEW_SECONDS = 3
@@ -27,7 +27,7 @@ local PAGES = {
   "Choose a spell",
   "Style",
   "Behavior",
-  "Custom proc glow",
+  "Active glow",
 }
 
 local GLOW_STYLES = {
@@ -114,66 +114,13 @@ local function NewDraft()
   }
 end
 
-local function StopPreviewGlow()
-  if not frame then return end
-  for _, target in ipairs({ frame.PreviewButton, frame.PreviewBar }) do
-    if target.__puiPreviewGlow then
-      target.__puiPreviewGlow.root:Hide()
-    end
+local function DefaultPreviewState()
+  if draft.kind == "charge" then
+    return "RECHARGING"
+  elseif draft.kind == "duration" or draft.kind == "stack" then
+    return "ACTIVE"
   end
-end
-
-local function StartPreviewGlow(target, style, color)
-  StopPreviewGlow()
-  if style == "NONE" then return end
-
-  color = CopyColor(color, { 1, 0.55, 0.1, 1 })
-  local width = math.max(1, target:GetWidth())
-  local height = math.max(1, target:GetHeight())
-  if not target.__puiPreviewGlow then
-    target.__puiPreviewGlow = AuraWidget.CreateSlotGlow(
-      target,
-      width,
-      height,
-      style,
-      color
-    )
-  else
-    AuraWidget.ConfigureSlotGlow(
-      target.__puiPreviewGlow,
-      width,
-      height,
-      style,
-      color
-    )
-  end
-  target.__puiPreviewGlow.root:Show()
-end
-
-local function GetSpellTexture()
-  local spellID = tonumber(draft.spellID)
-  return spellID and C_Spell.GetSpellTexture(spellID) or 134400
-end
-
-local function ApplyDraftToIcon()
-  local icon = draft.icon
-  icon.readyAlpha = draft.showReady and draft.readyAlpha or 0
-  icon.onCooldownAlpha = draft.showCooldown and draft.cooldownAlpha or 0
-  icon.desaturateReady = draft.desaturateReady == true
-  icon.desaturateCooldown = draft.desaturateCooldown == true
-  icon.readyGlowStyle = draft.readyGlowStyle
-  icon.cooldownGlowStyle = draft.cooldownGlowStyle
-  icon.activeAuraEnabled = (draft.kind == "cooldown" or draft.kind == "charge")
-    and draft.showActive == true
-  icon.activeAuraAlpha = draft.activeAlpha
-  icon.activeAuraDesaturate = draft.desaturateActive == true
-  icon.activeAuraGlowStyle = draft.customGlowEnabled == true
-    and draft.activeGlowStyle or "NONE"
-  icon.combatOnly = draft.combatOnly == true
-  icon.visibility = (draft.kind == "duration" or draft.kind == "stack")
-    and draft.showOnlyWhenActive == true and "ACTIVE" or "ALWAYS"
-  icon.showCount = draft.kind == "charge" or draft.kind == "stack"
-  icon.showStackStrip = draft.kind == "stack" and draft.addColorShift == true
+  return "COOLDOWN"
 end
 
 local function PreviewStates()
@@ -193,120 +140,10 @@ end
 
 local function ApplyPreviewState(state)
   if not frame or not draft then return end
-  ApplyDraftToIcon()
   previewState = state
-  previewStartedAt = GetTime()
   frame.PreviewState:SetText(PreviewStateLabel(state))
-
-  local button = frame.PreviewButton
-  local bar = frame.PreviewBar
-  local isButton = draft.presentation == "BUTTON"
-  button:SetShown(isButton)
-  bar:SetShown(not isButton)
-  StopPreviewGlow()
-
-  local texture = GetSpellTexture()
-  local active = state == "ACTIVE"
-  local ready = state == "READY" or state == "INACTIVE"
-  local alpha = active and draft.activeAlpha or ready and draft.readyAlpha or draft.cooldownAlpha
-  local shown = active and draft.showActive or ready and draft.showReady or draft.showCooldown
-  if state == "INACTIVE" and (draft.kind == "duration" or draft.kind == "stack") then
-    shown = draft.showOnlyWhenActive ~= true
-  end
-  local desaturated = active and draft.desaturateActive
-    or ready and draft.desaturateReady
-    or not active and not ready and draft.desaturateCooldown
-  local glowStyle = active and draft.activeGlowStyle
-    or ready and draft.readyGlowStyle
-    or draft.cooldownGlowStyle
-
-  if isButton then
-    local size = tonumber(draft.icon.size) or 40
-    button:SetSize(size, size)
-    button.Icon:SetTexture(texture)
-    button.Icon:SetDesaturated(desaturated == true)
-    button:SetAlpha(shown and alpha / 100 or 0)
-    button.Count:SetShown(draft.icon.showCount == true
-      and (draft.kind == "charge" or draft.kind == "stack"))
-    button.Count:SetText(draft.kind == "charge" and "2" or draft.kind == "stack" and "3" or "")
-    button.Cooldown:SetDrawSwipe(draft.icon.showSwipe == true)
-    button.Cooldown:SetDrawEdge(draft.icon.showSwipe == true)
-    button.Cooldown:SetHideCountdownNumbers(draft.icon.showDuration ~= true)
-    if ready then
-      button.Cooldown:Clear()
-    else
-      button.Cooldown:SetCooldown(previewStartedAt, PREVIEW_SECONDS)
-    end
-    StartPreviewGlow(button, shown and draft.customGlowEnabled and glowStyle or "NONE", active and draft.icon.activeAuraGlowColor
-      or ready and draft.icon.readyGlowColor or draft.icon.cooldownGlowColor)
-  else
-    local width = tonumber(draft.width) or 250
-    local height = tonumber(draft.height) or 25
-    local vertical = draft.orientation == "vertical"
-    local iconShown = draft.showBarIcon == true
-    local iconSize = iconShown and height or 0
-    local barLength = iconShown and math.max(1, width - iconSize) or width
-    if iconShown and iconSize >= width then
-      iconSize = math.max(1, width - 1)
-      barLength = 1
-    end
-
-    if vertical then
-      bar:SetSize(math.max(height, iconSize), width)
-      bar.Fill:SetSize(height, barLength)
-      bar.Fill:ClearAllPoints()
-      bar.Icon:ClearAllPoints()
-      if iconShown then
-        bar.Icon:SetSize(iconSize, iconSize)
-        bar.Icon:SetPoint("TOP", bar, "TOP", 0, 0)
-        bar.Fill:SetPoint("TOP", bar.Icon, "BOTTOM", 0, 0)
-        bar.Icon:Show()
-      else
-        bar.Fill:SetPoint("TOP", bar, "TOP", 0, 0)
-        bar.Icon:Hide()
-      end
-    else
-      bar:SetSize(width, math.max(height, iconSize))
-      bar.Fill:SetSize(barLength, height)
-      bar.Fill:ClearAllPoints()
-      bar.Icon:ClearAllPoints()
-      if iconShown then
-        bar.Icon:SetSize(iconSize, iconSize)
-        bar.Icon:SetPoint("LEFT", bar, "LEFT", 0, 0)
-        bar.Fill:SetPoint("LEFT", bar.Icon, "RIGHT", 0, 0)
-        bar.Icon:Show()
-      else
-        bar.Fill:SetPoint("LEFT", bar, "LEFT", 0, 0)
-        bar.Icon:Hide()
-      end
-    end
-
-    bar.Fill:SetOrientation(vertical and "VERTICAL" or "HORIZONTAL")
-    local fillDirection = tostring(draft.fillDirection or (vertical and "UP" or "RIGHT")):upper()
-    bar.Fill:SetReverseFill(
-      vertical and fillDirection == "DOWN"
-        or not vertical and fillDirection == "LEFT"
-    )
-    bar.Icon:SetTexture(texture)
-    bar.Text:ClearAllPoints()
-    bar.Text:SetPoint("CENTER", bar.Fill, "CENTER", 0, 0)
-    bar:SetAlpha(shown and alpha / 100 or 0)
-    bar.Fill:GetStatusBarTexture():SetDesaturated(desaturated == true)
-    local progress = math.min(1, (GetTime() - previewStartedAt) / PREVIEW_SECONDS)
-    local value
-    if ready then
-      value = draft.barMode == "drain" and 0 or 1
-    elseif draft.barMode == "drain" then
-      value = 1 - progress
-    else
-      value = progress
-    end
-    bar.Fill:SetValue(value)
-    bar.Text:SetShown(draft.showText == true)
-    bar.Text:SetText(state == "INACTIVE" and "Inactive" or ready and "Ready" or active and "Active" or "3.0")
-    StartPreviewGlow(bar, shown and draft.customGlowEnabled and glowStyle or "NONE", active and draft.icon.activeAuraGlowColor
-      or ready and draft.icon.readyGlowColor or draft.icon.cooldownGlowColor)
-  end
+  ns.PCMPreview.RenderInstallerDraft(frame.PreviewHost, draft, state)
+  SchedulePreviewAdvance()
 end
 
 local function PreviewChanged(state)
@@ -323,6 +160,31 @@ local function NextPreviewState()
     end
   end
   ApplyPreviewState(states[nextIndex])
+end
+
+SchedulePreviewAdvance = function()
+  if previewTimer then
+    previewTimer:Cancel()
+    previewTimer = nil
+  end
+
+  if not frame or not frame:IsShown() or not draft then
+    return
+  end
+
+  previewTimer = C_Timer.NewTimer(PREVIEW_SECONDS, function()
+    previewTimer = nil
+    if frame:IsShown() and draft then
+      NextPreviewState()
+    end
+  end)
+end
+
+local function StopPreviewAdvance()
+  if previewTimer then
+    previewTimer:Cancel()
+    previewTimer = nil
+  end
 end
 
 local function AddHeading(text)
@@ -452,26 +314,26 @@ local function SetPage(newPage)
     AddDescription("Buttons and bars are independent trackers with their own settings and mover. You can create both for the same spell if you want both presentations.")
     AddButton("Button", function()
       draft.presentation = "BUTTON"
-      PreviewChanged("COOLDOWN")
+      PreviewChanged(DefaultPreviewState())
       SetPage(2)
     end)
     AddButton("Bar", function()
       draft.presentation = "BAR"
-      PreviewChanged("COOLDOWN")
+      PreviewChanged(DefaultPreviewState())
       SetPage(2)
     end)
     AddButton("Start over", function()
       draft = NewDraft()
-      PreviewChanged("COOLDOWN")
+      PreviewChanged(DefaultPreviewState())
       SetPage(1)
     end)
   elseif page == 2 then
-    AddHeading("Tracking intention")
+    AddHeading("What to track")
     AddDescription("Cooldown tracks one spell cooldown. Charge cooldown also shows recharge progress and available charges. Aura stacks tracks stack count with optional duration. Aura duration tracks the remaining time of a buff or debuff.")
-    AddButton("Cooldown", function() draft.kind = "cooldown" draft.maximum = 1 SetPage(3) end)
-    AddButton("Charge cooldown", function() draft.kind = "charge" draft.maximum = 2 SetPage(3) end)
-    AddButton("Aura stacks", function() draft.kind = "stack" draft.maximum = 3 SetPage(3) end)
-    AddButton("Aura duration", function() draft.kind = "duration" draft.maximum = 1 SetPage(3) end)
+    AddButton("Cooldown", function() draft.kind = "cooldown" draft.maximum = 1 PreviewChanged(DefaultPreviewState()) SetPage(3) end)
+    AddButton("Charge cooldown", function() draft.kind = "charge" draft.maximum = 2 PreviewChanged(DefaultPreviewState()) SetPage(3) end)
+    AddButton("Aura stacks", function() draft.kind = "stack" draft.maximum = 3 PreviewChanged(DefaultPreviewState()) SetPage(3) end)
+    AddButton("Aura duration", function() draft.kind = "duration" draft.maximum = 1 PreviewChanged(DefaultPreviewState()) SetPage(3) end)
   elseif page == 3 then
     AddHeading("Spell")
     if draft.kind == "cooldown" or draft.kind == "charge" then
@@ -504,7 +366,7 @@ local function SetPage(newPage)
     controls:AddChild(spellID)
 
     if draft.kind == "duration" or draft.kind == "stack" then
-      AddDropdown("Aura owner", {
+      AddDropdown("Track aura on", {
         player_buff = "Player buff",
         target_debuff = "Target debuff",
       }, { "player_buff", "target_debuff" }, draft.auraTrackMode, function(value)
@@ -512,19 +374,25 @@ local function SetPage(newPage)
       end, "ACTIVE")
     end
 
-    if draft.kind == "stack" then
+    if draft.kind == "charge" then
+      AddSlider("Charges", draft.maximum, 2, 3, 1, function(value) draft.maximum = math.floor(value + 0.5) end, "RECHARGING")
+    elseif draft.kind == "stack" then
       AddSlider("Maximum stacks", draft.maximum, 2, 60, 1, function(value) draft.maximum = math.floor(value + 0.5) end, "ACTIVE")
     end
   elseif page == 4 then
     AddHeading(draft.presentation == "BUTTON" and "Button style" or "Bar style")
     AddDescription("This controls the tracker's appearance. After finishing, use /pe to position the tracker and Smart Snap it to other buttons if wanted.")
     if draft.presentation == "BUTTON" then
+      local timedState = draft.kind == "charge" and "RECHARGING"
+        or (draft.kind == "duration" or draft.kind == "stack") and "ACTIVE"
+        or "COOLDOWN"
       AddSlider("Button size", draft.icon.size, 20, 96, 1, function(value) draft.icon.size = math.floor(value + 0.5) end)
-      AddCheckbox("Show swipe", draft.icon.showSwipe, function(value) draft.icon.showSwipe = value end, "COOLDOWN")
-      AddCheckbox("Show countdown", draft.icon.showDuration, function(value) draft.icon.showDuration = value end, "COOLDOWN")
-      AddCheckbox("Show tooltip", draft.icon.showTooltip, function(value) draft.icon.showTooltip = value end)
+      AddCheckbox("Show cooldown swipe", draft.icon.showSwipe, function(value) draft.icon.showSwipe = value end, timedState)
+      AddCheckbox("Show countdown", draft.icon.showDuration, function(value) draft.icon.showDuration = value end, timedState)
+      AddCheckbox("Show tooltip on hover", draft.icon.showTooltip, function(value) draft.icon.showTooltip = value end)
+      AddDescription("Tooltips apply to the live tracker. The setup preview stays display-only.")
       if draft.kind == "charge" or draft.kind == "stack" then
-        AddCheckbox(draft.kind == "charge" and "Show charge count" or "Show stack count", draft.icon.showCount, function(value) draft.icon.showCount = value end, "ACTIVE")
+        AddCheckbox(draft.kind == "charge" and "Show charge count" or "Show stack count", draft.icon.showCount, function(value) draft.icon.showCount = value end, draft.kind == "charge" and "RECHARGING" or "ACTIVE")
       end
       if draft.kind == "charge" then
         AddCheckbox("Show charge pips", draft.icon.showPips, function(value) draft.icon.showPips = value end, "RECHARGING")
@@ -538,7 +406,7 @@ local function SetPage(newPage)
       }, { "horizontal", "vertical" }, draft.orientation, function(value)
         draft.orientation = value == "vertical" and "vertical" or "horizontal"
         draft.fillDirection = draft.orientation == "vertical" and "UP" or "RIGHT"
-        PreviewChanged("COOLDOWN")
+        PreviewChanged(DefaultPreviewState())
         SetPage(4)
       end)
       AddDropdown("Fill direction", draft.orientation == "vertical" and {
@@ -550,21 +418,22 @@ local function SetPage(newPage)
       }, draft.orientation == "vertical" and { "UP", "DOWN" } or { "LEFT", "RIGHT" }, draft.fillDirection, function(value)
         draft.fillDirection = value
       end)
-      AddDropdown(draft.kind == "cooldown" and "Bar mode" or "Timer direction", {
-        fill = "Fill",
-        drain = "Drain",
+      AddDropdown("Timer fill", {
+        fill = "Fill as time passes",
+        drain = "Drain as time runs out",
       }, { "fill", "drain" }, draft.barMode, function(value) draft.barMode = value == "drain" and "drain" or "fill" end)
       local textures, textureOrder = BuildStatusbarList()
       AddDropdown("Bar texture", textures, textureOrder, draft.texture, function(value) draft.texture = value end)
       AddCheckbox("Show text", draft.showText, function(value) draft.showText = value end)
-      AddCheckbox(draft.kind == "duration" and "Show duration icon" or "Show icon beside bar", draft.showBarIcon, function(value) draft.showBarIcon = value end)
+      AddCheckbox(draft.kind == "duration" and "Show aura icon beside bar" or "Show icon beside bar", draft.showBarIcon, function(value) draft.showBarIcon = value end)
     end
     if draft.kind == "stack" then
-      AddCheckbox("Add stack color shift", draft.addColorShift, function(value) draft.addColorShift = value end, "ACTIVE")
+      AddCheckbox("Add stack color threshold", draft.addColorShift, function(value) draft.addColorShift = value end, "ACTIVE")
+      AddDescription("Creates a starter stack-color threshold. You can edit its stack count and color after creating the tracker.")
     end
   elseif page == 5 then
     AddHeading("Visibility and states")
-    AddDescription("The preview rotates through each supported state every three seconds. Changing a state option immediately previews that state. Alpha 0 fully hides that layer and disables its tooltip and glow.")
+    AddDescription("The preview rotates through each supported state every three seconds. Changing a state option immediately previews that state. Alpha 0 fully hides that state. Combat-only visibility applies to the live tracker; the setup preview stays visible while you configure it.")
     AddCheckbox("Only show in combat", draft.combatOnly, function(value) draft.combatOnly = value end)
     if draft.kind == "cooldown" or draft.kind == "charge" then
       AddCheckbox("Show while ready", draft.showReady, function(value) draft.showReady = value end, "READY")
@@ -575,6 +444,7 @@ local function SetPage(newPage)
       AddCheckbox(draft.kind == "charge" and "Show while recharging" or "Show while on cooldown", draft.showCooldown, function(value) draft.showCooldown = value end, draft.kind == "charge" and "RECHARGING" or "COOLDOWN")
       AddSlider(draft.kind == "charge" and "Recharging alpha" or "On cooldown alpha", draft.cooldownAlpha, 0, 100, 1, function(value) draft.cooldownAlpha = value end, draft.kind == "charge" and "RECHARGING" or "COOLDOWN")
       AddCheckbox(draft.kind == "charge" and "Desaturate while recharging" or "Desaturate while on cooldown", draft.desaturateCooldown, function(value) draft.desaturateCooldown = value end, draft.kind == "charge" and "RECHARGING" or "COOLDOWN")
+      AddDropdown(draft.kind == "charge" and "Recharging glow" or "On cooldown glow", GLOW_STYLES, GLOW_ORDER, draft.cooldownGlowStyle, function(value) draft.cooldownGlowStyle = value end, draft.kind == "charge" and "RECHARGING" or "COOLDOWN")
 
       AddCheckbox("Show while aura is active", draft.showActive, function(value)
         draft.showActive = value
@@ -582,12 +452,12 @@ local function SetPage(newPage)
           draft.customGlowEnabled = false
         end
       end, "ACTIVE")
-      AddDescription("Choose the active buff and glow on the Custom proc glow page.")
+      AddDescription("Choose the active buff and glow on the Active glow page.")
     else
       draft.showActive = true
       AddCheckbox("Show only while aura is active", draft.showOnlyWhenActive, function(value) draft.showOnlyWhenActive = value end, "ACTIVE")
       if draft.kind == "stack" then
-        AddCheckbox("Hide buff icon", draft.hideViewerIcon, function(value) draft.hideViewerIcon = value end)
+        AddCheckbox("Hide tracked aura in Buff Icon Viewer", draft.hideViewerIcon, function(value) draft.hideViewerIcon = value end)
       end
       AddSlider("Inactive alpha", draft.readyAlpha, 0, 100, 1, function(value) draft.readyAlpha = value end, "INACTIVE")
       AddCheckbox("Desaturate while inactive", draft.desaturateReady, function(value) draft.desaturateReady = value end, "INACTIVE")
@@ -595,9 +465,9 @@ local function SetPage(newPage)
     AddSlider("Active alpha", draft.activeAlpha, 0, 100, 1, function(value) draft.activeAlpha = value end, "ACTIVE")
     AddCheckbox("Desaturate while active", draft.desaturateActive, function(value) draft.desaturateActive = value end, "ACTIVE")
   elseif page == 6 then
-    AddHeading("Custom proc glows")
-    AddDescription("Show a glow on the tracked bar or icon when its configured buff or aura is active.")
-    AddCheckbox("Enable Custom Proc Glows", draft.customGlowEnabled, function(value)
+    AddHeading("Active glow")
+    AddDescription("Choose the glow used while the tracked aura or configured active buff is active. Ready and cooldown/recharging glows are configured separately on the previous page.")
+    AddCheckbox("Glow while active", draft.customGlowEnabled, function(value)
       draft.customGlowEnabled = value
       if value then
         draft.showActive = true
@@ -607,23 +477,26 @@ local function SetPage(newPage)
     if draft.customGlowEnabled then
       if draft.kind == "cooldown" or draft.kind == "charge" then
         AddDropdown("Buff source", {
-          CDM = "Buff from CDM",
+          CDM = "Cooldown Manager buff",
           CUSTOM = "Custom player buff",
         }, { "CDM", "CUSTOM" }, draft.activeAuraSource, function(value)
           draft.activeAuraSource = value == "CUSTOM" and "CUSTOM" or "CDM"
           draft.activeAuraSpellID = nil
+          SetPage(6)
         end, "ACTIVE")
 
         if draft.activeAuraSource == "CUSTOM" then
           AddEditBox("Custom buff spell ID", draft.activeAuraSpellID and tostring(draft.activeAuraSpellID) or "", function(value)
             local spellID = tonumber(value)
             draft.activeAuraSpellID = spellID and spellID > 0 and math.floor(spellID) or nil
+            SetPage(6)
           end, "ACTIVE")
         else
           local values, sorting = Cooldowns:GetCustomBarSpellDropdown("aura")
-          AddDescription("Select the CDM buff that triggers the active state and glow. Buffs shown in CDM are listed first.")
-          AddDropdown("CDM buff that triggers the glow", values, sorting, draft.activeAuraSpellID and tostring(draft.activeAuraSpellID) or "none", function(value)
+          AddDescription("Select the Cooldown Manager buff that triggers the active state and glow. Buffs shown in the Cooldown Manager are listed first.")
+          AddDropdown("Cooldown Manager buff", values, sorting, draft.activeAuraSpellID and tostring(draft.activeAuraSpellID) or "none", function(value)
             draft.activeAuraSpellID = value ~= "none" and tonumber(value) or nil
+            SetPage(6)
           end, "ACTIVE")
         end
       else
@@ -639,7 +512,7 @@ local function SetPage(newPage)
       AddColor("Glow color", draft.icon.activeAuraGlowColor, function(color)
         draft.icon.activeAuraGlowColor = color
       end, "ACTIVE")
-      AddCheckbox("Hide buff from buff icon viewer", draft.activeAuraHideViewerIcon, function(value)
+      AddCheckbox("Hide active buff in Buff Icon Viewer", draft.activeAuraHideViewerIcon, function(value)
         draft.activeAuraHideViewerIcon = value
       end, "ACTIVE")
     end
@@ -660,6 +533,7 @@ local function CreatePreview(parent)
   host:SetPoint("TOPRIGHT", parent, "TOPRIGHT", -24, -88)
   host:SetSize(600, 390)
   Theme.WidgetSkins.Frame(host)
+  parent.PreviewHost = host
 
   local title = host:CreateFontString(nil, "OVERLAY")
   title:SetPoint("TOP", host, "TOP", 0, -18)
@@ -670,47 +544,6 @@ local function CreatePreview(parent)
   state:SetPoint("TOP", title, "BOTTOM", 0, -8)
   Theme.ApplyFont(state, "body")
   parent.PreviewState = state
-
-  local button = CreateFrame("Frame", nil, host, "BackdropTemplate")
-  button:SetPoint("CENTER", host, "CENTER", 0, 12)
-  button:SetSize(40, 40)
-  Theme.WidgetSkins.Frame(button)
-  local icon = button:CreateTexture(nil, "ARTWORK")
-  icon:SetPoint("TOPLEFT", button, "TOPLEFT", 2, -2)
-  icon:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT", -2, 2)
-  icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
-  button.Icon = icon
-  local cooldown = CreateFrame("Cooldown", nil, button, "CooldownFrameTemplate")
-  cooldown:SetAllPoints(icon)
-  cooldown:SetDrawEdge(true)
-  button.Cooldown = cooldown
-  local count = button:CreateFontString(nil, "OVERLAY")
-  count:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT", -2, 2)
-  Theme.ApplyFont(count, "cooldown")
-  button.Count = count
-  parent.PreviewButton = button
-
-  local bar = CreateFrame("Frame", nil, host, "BackdropTemplate")
-  bar:SetPoint("CENTER", host, "CENTER", 0, 12)
-  bar:SetSize(250, 25)
-  Theme.WidgetSkins.Frame(bar)
-  local fill = CreateFrame("StatusBar", nil, bar)
-  fill:SetPoint("TOPLEFT", bar, "TOPLEFT", 2, -2)
-  fill:SetPoint("BOTTOMRIGHT", bar, "BOTTOMRIGHT", -2, 2)
-  fill:SetStatusBarTexture(Theme.GetBarTexture())
-  fill:SetStatusBarColor(0.25, 0.75, 1, 1)
-  fill:SetMinMaxValues(0, 1)
-  bar.Fill = fill
-  local barIcon = bar:CreateTexture(nil, "OVERLAY")
-  barIcon:SetPoint("RIGHT", bar, "LEFT", -4, 0)
-  barIcon:SetSize(25, 25)
-  barIcon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
-  bar.Icon = barIcon
-  local text = bar:CreateFontString(nil, "OVERLAY")
-  text:SetPoint("CENTER", bar, "CENTER", 0, 0)
-  Theme.ApplyFont(text, "cooldown")
-  bar.Text = text
-  parent.PreviewBar = bar
 end
 
 local function ApplyWindowSkin(window)
@@ -787,7 +620,6 @@ local function BuildFrame()
   window.Next = nextButton
 
   local finish = CreateWindowButton(window, "Finish tracker", 130, function()
-    ApplyDraftToIcon()
     local key = ns.PCM_CreateCustomTrackerFromDraft(draft)
     if key then
       local returnToCustomTrackerPage = closeCallback ~= nil
@@ -812,25 +644,9 @@ local function BuildFrame()
   window.Finish = finish
 
   CreatePreview(window)
-  window:SetScript("OnUpdate", function()
-    if GetTime() - previewStartedAt >= PREVIEW_SECONDS then
-      NextPreviewState()
-    elseif draft and draft.presentation == "BAR" and frame.PreviewBar:IsShown() then
-      local progress = math.min(1, (GetTime() - previewStartedAt) / PREVIEW_SECONDS)
-      local ready = previewState == "READY" or previewState == "INACTIVE"
-      local value
-      if ready then
-        value = draft.barMode == "drain" and 0 or 1
-      elseif draft.barMode == "drain" then
-        value = 1 - progress
-      else
-        value = progress
-      end
-      frame.PreviewBar.Fill:SetValue(value)
-    end
-  end)
   window:SetScript("OnHide", function()
-    StopPreviewGlow()
+    StopPreviewAdvance()
+    ns.PCMPreview.HideInstallerDraft(window.PreviewHost)
 
     local callback = closeCallback
     local key = createdTrackerKey
@@ -855,6 +671,7 @@ function Installer:Open(onClose)
   ApplyWindowSkin(frame)
   frame:Show()
   frame:Raise()
+  previewState = DefaultPreviewState()
   SetPage(page)
 end
 
