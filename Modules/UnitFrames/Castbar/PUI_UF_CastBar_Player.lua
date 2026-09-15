@@ -197,7 +197,13 @@ local function PlayerSpellcastEvent(_, event, _, arg2, arg3, arg4, arg5, arg6)
     or event == "UNIT_SPELLCAST_CHANNEL_START"
     or event == "UNIT_SPELLCAST_EMPOWER_START"
   then
-    ns.PUICastBarPlayerInstant:MarkRealCast(CastBar.__puiPlayerCastBar, castGUID, spellID, arg4)
+    ns.PUICastBarPlayerInstant:MarkRealCast(
+      CastBar.__puiPlayerCastBar,
+      castGUID,
+      spellID,
+      arg4,
+      event == "UNIT_SPELLCAST_CHANNEL_START"
+    )
   elseif event == "UNIT_SPELLCAST_STOP" then
     ns.PUICastBarPlayerInstant:MarkRealCastEnded(arg4)
   elseif event == "UNIT_SPELLCAST_CHANNEL_STOP" then
