@@ -52,6 +52,7 @@ local GetWindowSelection = Sessions.GetWindowSelection
 local SetWindowSelection = Sessions.SetWindowSelection
 local IsAvailableSessionSelection = Sessions.IsAvailableSessionSelection
 local GetCombatSession = Sessions.GetCombatSession
+local GetBlizzardSessionID = Sessions.GetBlizzardSessionID
 local GetSessionDisplay = Sessions.GetSessionDisplay
 local FormatDuration = Sessions.FormatDuration
 local SetDeathTimeText = Sessions.SetDeathTimeText
@@ -1330,7 +1331,8 @@ local function SelectWindowSegment(window, sessionKey, selection)
 end
 
 function DamageMeters:SelectCurrentSessionsOnCombat()
-  local changed = false
+  local changed = self.currentDisplaySessionID ~= nil
+  self.currentDisplaySessionID = nil
   for index = 1, self.runtimeWindowCount do
     local window = self.windows[index]
     if window.runtime.autoCurrentOnCombat == true
@@ -1340,37 +1342,6 @@ function DamageMeters:SelectCurrentSessionsOnCombat()
       ApplyWindowSegmentSelection(window, "CURRENT", nil, false)
       changed = true
     end
-  end
-  return changed
-end
-
-function DamageMeters:RetainFinishedCurrentSession(sessionID)
-  if not sessionID then
-    return false
-  end
-
-  local changed = false
-  local closeBreakdown = false
-  for index = 1, self.runtimeWindowCount do
-    local window = self.windows[index]
-    if window.runtime.session == "CURRENT"
-      and GetWindowSelection(window.runtime) == nil
-    then
-      ApplyWindowSegmentSelection(window, nil, {
-        kind = "SESSION_AVAILABLE",
-        sessionID = sessionID,
-      }, false)
-      changed = true
-      if self.breakdownSelection
-        and self.breakdownSelection.ownerWindow == window
-      then
-        closeBreakdown = true
-      end
-    end
-  end
-
-  if closeBreakdown then
-    Breakdown.Close()
   end
   return changed
 end
@@ -1891,8 +1862,9 @@ end
 
 local function DoesWindowSessionMatchEvent(windowRuntime, sessionID)
   local selection = GetWindowSelection(windowRuntime)
-  if IsAvailableSessionSelection(selection) then
-    return selection.sessionID == sessionID
+  local blizzardSessionID = GetBlizzardSessionID(windowRuntime)
+  if blizzardSessionID then
+    return blizzardSessionID == sessionID
   end
   if selection then
     return false
@@ -2309,7 +2281,6 @@ DamageMeters.RefreshCombatWindowSlot = P:Def("DamageMeters.RefreshCombatWindowSl
 DamageMeters.RefreshDirtyWindows = P:Def("DamageMeters.RefreshDirtyWindows", DamageMeters.RefreshDirtyWindows)
 DamageMeters.RefreshSelectionWindows = P:Def("DamageMeters.RefreshSelectionWindows", DamageMeters.RefreshSelectionWindows)
 DamageMeters.SelectCurrentSessionsOnCombat = P:Def("DamageMeters.SelectCurrentSessionsOnCombat", DamageMeters.SelectCurrentSessionsOnCombat)
-DamageMeters.RetainFinishedCurrentSession = P:Def("DamageMeters.RetainFinishedCurrentSession", DamageMeters.RetainFinishedCurrentSession)
 DamageMeters.ResetWindowPosition = P:Def("DamageMeters.ResetWindowPosition", DamageMeters.ResetWindowPosition)
 DamageMeters.HasShownWindow = P:Def("DamageMeters.HasShownWindow", DamageMeters.HasShownWindow)
 DamageMeters.SetWindowsVisible = P:Def("DamageMeters.SetWindowsVisible", DamageMeters.SetWindowsVisible)
