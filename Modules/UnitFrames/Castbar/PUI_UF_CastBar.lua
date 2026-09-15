@@ -475,21 +475,20 @@ local function CB_OUF_PostCastStart(element, unit, spellID, notInterruptible, di
   bar.__puiCastDelay = 0
   bar.__puiCastDelayTenths = 0
 
-  local channelDuration
   if resolvedUnit == "player" and bar.__puiTestPresentation ~= true then
-    channelDuration = UnitChannelDuration(resolvedUnit)
+    local channelDuration = UnitChannelDuration(resolvedUnit)
     bar.__puiChanneling = channelDuration ~= nil
       and UnitEmpoweredChannelDuration(resolvedUnit) == nil
+
+    if bar.__puiChanneling then
+      element:SetTimerDuration(
+        channelDuration,
+        element.smoothing,
+        Enum.StatusBarTimerDirection.RemainingTime
+      )
+    end
   else
     bar.__puiChanneling = element.__puiTestChanneling == true
-  end
-
-  if bar.__puiChanneling then
-    element:SetTimerDuration(
-      channelDuration,
-      element.smoothing,
-      Enum.StatusBarTimerDirection.RemainingTime
-    )
   end
 
   CB_SetIdleVisuals(bar, false)
