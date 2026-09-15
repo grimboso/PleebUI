@@ -3742,16 +3742,18 @@ local function _PCM_ApplyInstallerDraft(cfg, draft)
   cfg.activeAuraEnabled = draft.showActive == true
   cfg.readyGlowStyle = draft.readyGlowStyle
   cfg.cooldownGlowStyle = draft.cooldownGlowStyle
-  cfg.activeGlowStyle = draft.activeGlowStyle
+  cfg.activeGlowStyle = draft.customGlowEnabled == true
+    and draft.activeGlowStyle or "NONE"
   cfg.activeGlowColor = draft.icon.activeAuraGlowColor
   cfg.buffGlowColor = draft.icon.activeAuraGlowColor
-  cfg.buffGlowEnabled = cfg.presentation == "BAR" and draft.showActive == true
+  cfg.buffGlowEnabled = draft.customGlowEnabled == true
     and draft.activeGlowStyle ~= nil and draft.activeGlowStyle ~= "NONE"
+  cfg.buffGlowThickness = tonumber(draft.customGlowThickness) or cfg.buffGlowThickness
+  cfg.buffGlowHideViewerIcon = draft.activeAuraHideViewerIcon == true
 
   if draft.kind == "cooldown" or draft.kind == "charge" then
     cfg.buffGlowSource = draft.activeAuraSource == "CUSTOM" and "CUSTOM" or "CDM"
     cfg.buffGlowSpellID = tonumber(draft.activeAuraSpellID)
-    cfg.buffGlowHideViewerIcon = draft.activeAuraHideViewerIcon == true
   else
     cfg.buffGlowSource = "CDM"
     cfg.buffGlowSpellID = tonumber(draft.spellID)
