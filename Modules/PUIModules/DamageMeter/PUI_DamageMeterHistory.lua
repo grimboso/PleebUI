@@ -928,6 +928,7 @@ function History:OnCombatEnded()
   if record and not record.endedAt then
     SetRecordEnded(record, time(), GetTime())
   end
+  return record and sessionID or nil
 end
 
 function History:GetSavedSegments()
