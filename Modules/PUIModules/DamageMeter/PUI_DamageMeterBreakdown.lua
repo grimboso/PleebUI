@@ -52,20 +52,13 @@ local IsAvailableSessionSelection = Sessions.IsAvailableSessionSelection
 local GetSessionStateKey = Sessions.GetSessionStateKey
 local GetCombatSession = Sessions.GetCombatSession
 local GetCombatSessionSource = Sessions.GetCombatSessionSource
+local GetBlizzardSessionID = Sessions.GetBlizzardSessionID
 local GetSessionDisplay = Sessions.GetSessionDisplay
 local SetNumericText = Sessions.SetNumericText
 local CreateTextureButton = Windows.CreateTextureButton
 local SetHeaderButtonTooltip = Windows.SetHeaderButtonTooltip
 local ShowMeterNavigation = Windows.ShowMeterNavigation
 local RANK_TEXT = Windows.RANK_TEXT
-
-local function GetExplicitSessionID(windowDB)
-  local selection = GetWindowSelection(windowDB)
-  if IsAvailableSessionSelection(selection) then
-    return selection.sessionID
-  end
-  return nil
-end
 
 function Breakdown.GetDB()
   return DamageMeters.db.profile.breakdown
@@ -1604,7 +1597,7 @@ function Breakdown.Refresh()
   end
 
   selection.sessionKey = ownerDB.session
-  selection.sessionID = GetExplicitSessionID(ownerDB)
+  selection.sessionID = GetBlizzardSessionID(ownerDB)
 
   local sessionLabel = GetSessionDisplay(ownerDB)
   local entries
@@ -1751,7 +1744,7 @@ function Breakdown.OpenLiveEnemyPlayers(ownerWindow, row, source, pinned)
     mode = "LIVE_ENEMY_PLAYERS",
     meterKey = windowDB.meter,
     sessionKey = windowDB.session,
-    sessionID = GetExplicitSessionID(windowDB),
+    sessionID = GetBlizzardSessionID(windowDB),
     isLocalPlayer = false,
   }
 
@@ -1768,7 +1761,7 @@ function Breakdown.OpenLiveEnemyPlayers(ownerWindow, row, source, pinned)
   local sessionLabel = GetSessionDisplay(windowDB)
   breakdown.subtitle:SetText("Selected enemy · " .. sessionLabel)
 
-  local sessionID = GetExplicitSessionID(windowDB)
+  local sessionID = GetBlizzardSessionID(windowDB)
   local sessionType = sessionID and nil or SESSION_TYPES[windowDB.session]
   local liveSourceWindow = breakdown.liveSourceWindow
   liveSourceWindow:Hide()
@@ -1837,7 +1830,7 @@ function Breakdown.OpenForRow(row, pinned)
       mode = "DEATH_RECAP",
       meterKey = windowDB.meter,
       sessionKey = windowDB.session,
-      sessionID = GetExplicitSessionID(windowDB),
+      sessionID = GetBlizzardSessionID(windowDB),
       deathRecapID = recapID,
       storedDeathRecapData = storedDeathRecapData,
       isLocalPlayer = false,
@@ -1936,7 +1929,7 @@ function Breakdown.OpenForRow(row, pinned)
     mode = windowDB.meter == "ENEMY_DAMAGE_TAKEN" and "ENEMY_PLAYERS" or "SPELLS",
     meterKey = windowDB.meter,
     sessionKey = windowDB.session,
-    sessionID = GetExplicitSessionID(windowDB),
+    sessionID = GetBlizzardSessionID(windowDB),
     sourceGUID = sourceGUID,
     sourceCreatureID = sourceCreatureID,
     isLocalPlayer = row.isLocalPlayer == true,
@@ -1975,7 +1968,6 @@ function Breakdown.NavigateBack(window)
   ShowMeterNavigation(window)
 end
 
-GetExplicitSessionID = P:Def("GetExplicitSessionID", GetExplicitSessionID)
 Breakdown.GetDB = P:Def("GetBreakdownDB", Breakdown.GetDB)
 Breakdown.IsSourceBlocked = P:Def("SourceBreakdownBlocked", Breakdown.IsSourceBlocked)
 Breakdown.ShowSourceUnavailableTooltip = P:Def("ShowSourceUnavailableTooltip", Breakdown.ShowSourceUnavailableTooltip)
