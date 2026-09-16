@@ -8,10 +8,8 @@ local FrameScale = ns.FrameScale
 local Pixel = ns.Pixel
 local Round = Pixel.Round
 local IconSkin = ns.IconSkin
-local LSM = ns.LSM
 local LCG = LibStub("LibCustomGlow-1.0")
 local LibEditModeOverride = LibStub("LibEditModeOverride-1.0")
-local Theme = ns.Theme
 local PCMHooks = ns.PCMHooks
 local PCMRuntime = ns.PCMRuntime
 local PCM_DB = ns.PCM_DBExports
@@ -112,6 +110,7 @@ local PCMCoreState = {
   CountRulesDirty = true,
   CacheGen = 0,
   StaticPresentationGeneration = 1,
+  FontPresentationGeneration = 1,
   ViewerCountCache = {},
   DurationCountCache = {},
   SwipeFlagCache = {},
@@ -1082,45 +1081,6 @@ function Cooldowns:_ApplyChargeCountRule(itemFrame, viewerKey)
 
 end
 
-local function _PCM_FetchFontPath(fontKey)
-  if not fontKey or fontKey == "" then
-    return nil
-  end
-
-  local path = LSM:Fetch("font", fontKey)
-  if path and path ~= "" then
-    return path
-  end
-
-  return fontKey
-end
-
-local function _PCM_ApplyFontOptsToFontString(fs, opts)
-  if not (fs and opts and fs.SetFont) then
-    return
-  end
-
-  local curFont, _, curFlags = fs:GetFont()
-  local face = curFont
-
-  if opts.font then
-    face = _PCM_FetchFontPath(opts.font) or curFont
-  end
-
-  local roleDefaults = Theme.ResolveIconTextRole(opts.role) or {}
-  local baseSize = tonumber(opts.size or roleDefaults.size) or 12
-  fs:SetFont(face, Theme.ResolveFontSize(baseSize, "cooldownManager"), opts.flags or curFlags)
-
-  if opts.color and fs.SetTextColor then
-    fs:SetTextColor(
-      opts.color[1] or 1,
-      opts.color[2] or 1,
-      opts.color[3] or 1,
-      opts.color[4] or 1
-    )
-  end
-end
-
 function Cooldowns._ApplyFontsToItem(itemFrame, viewerKey)
   if not itemFrame or not viewerKey then
     return
@@ -1149,9 +1109,6 @@ function Cooldowns._ApplyFontsToItem(itemFrame, viewerKey)
 
   if cd and cooldownOpts then
     IconSkin.StyleCooldownText(cd, cooldownOpts)
-
-    local cdFS = cd.GetCountdownFontString and cd:GetCountdownFontString() or cd.text
-    _PCM_ApplyFontOptsToFontString(cdFS, cooldownOpts)
   end
 
   local chargeOpts = IconSettings:ResolveFontOptions(
@@ -1162,11 +1119,6 @@ function Cooldowns._ApplyFontsToItem(itemFrame, viewerKey)
   )
 
   IconSkin.StyleChargeText(itemFrame, chargeOpts or { role = "charge" })
-
-  if chargeOpts then
-    local chargeFS = _GetChargeFontString(itemFrame)
-    _PCM_ApplyFontOptsToFontString(chargeFS, chargeOpts)
-  end
 
   Cooldowns._ApplyKeybindFontStyle(itemFrame, viewerKey)
 end
@@ -1205,7 +1157,30 @@ function ns._PCM_ApplyUnifiedItemPass(itemFrame, viewerKey, applyFonts, useGenGu
   end
 
   if applyFonts ~= false then
-    Cooldowns._ApplyFontsToItem(itemFrame, viewerKey)
+    local record, entry, frameData = IconSettings:GetRecordForItem(itemFrame, viewerKey)
+    local settingsGeneration = IconSettings:GetSettingsGeneration()
+    local chargeText = _GetChargeFontString(itemFrame)
+    if frameData.iconFontPresentationGeneration ~= PCMCoreState.FontPresentationGeneration
+      or frameData.iconFontStaticGeneration ~= PCMCoreState.StaticPresentationGeneration
+      or frameData.iconFontSettingsGeneration ~= settingsGeneration
+      or frameData.iconFontViewerKey ~= viewerKey
+      or frameData.iconFontEntry ~= entry
+      or frameData.iconFontRecord ~= record
+      or frameData.iconFontCooldownFrame ~= itemFrame.Cooldown
+      or frameData.iconFontChargeText ~= chargeText
+      or frameData.iconFontKeybindText ~= frameData.keybindText
+    then
+      Cooldowns._ApplyFontsToItem(itemFrame, viewerKey)
+      frameData.iconFontPresentationGeneration = PCMCoreState.FontPresentationGeneration
+      frameData.iconFontStaticGeneration = PCMCoreState.StaticPresentationGeneration
+      frameData.iconFontSettingsGeneration = settingsGeneration
+      frameData.iconFontViewerKey = viewerKey
+      frameData.iconFontEntry = entry
+      frameData.iconFontRecord = record
+      frameData.iconFontCooldownFrame = itemFrame.Cooldown
+      frameData.iconFontChargeText = chargeText
+      frameData.iconFontKeybindText = frameData.keybindText
+    end
   end
 
   Cooldowns:_ApplyCooldownCountRule(itemFrame, viewerKey)
@@ -1516,12 +1491,6 @@ end
 
 local PCMIconRuntimeState = {
   viewerSwipeOptions = {},
-}
-
-local PCM_ICON_SETTINGS_VIEWERS = {
-  "EssentialCooldownViewer",
-  "UtilityCooldownViewer",
-  "BuffIconCooldownViewer",
 }
 
 function Cooldowns:InvalidateNativeIconViewerCache(viewerKey)
@@ -3171,6 +3140,10 @@ local function _ProtectViewerAnchors_Icons(frame, key)
 end
 
 function Cooldowns:_OnRegenEnabled()
+  if IconSettings:PrimeRuntimeCache() then
+    PCMRuntime:MarkAllViewersDirty(PCMRuntime.Dirty.SKIN, "icon-cache-ready")
+  end
+
   if _PCM_IsTransitionPending() then
     _PCM_QueueTransitionFlush()
   end
@@ -3615,6 +3588,7 @@ local function _RefreshViewerFontsOnly(viewerKey)
     return
   end
 
+  PCMCoreState.FontPresentationGeneration = PCMCoreState.FontPresentationGeneration + 1
   ns._PCM_RunUnifiedViewerItemPass(viewerKey, true, false)
 end
 
@@ -3650,7 +3624,7 @@ function Cooldowns:RefreshIconFonts()
     return
   end
 
-  ns._PCM_RunUnifiedViewerItemPass(nil, true, false)
+  _RefreshViewerFontsOnly(nil)
   self:ConsumableTracker_RefreshFonts()
 end
 
@@ -4811,9 +4785,7 @@ local function _PCM_RunInitialViewerPass(owner)
     return
   end
 
-  for index = 1, #PCM_ICON_SETTINGS_VIEWERS do
-    IconSettings:GetViewerEntries(PCM_ICON_SETTINGS_VIEWERS[index])
-  end
+  IconSettings:PrimeRuntimeCache()
 
   for _, info in owner:IterateViewers() do
     local key = info and info.key
@@ -5350,8 +5322,6 @@ end
   Cooldowns.GetChargeCountEnabled = P:Def('Cooldowns:GetChargeCountEnabled', Cooldowns.GetChargeCountEnabled)
   Cooldowns.SetChargeCountEnabled = P:Def('Cooldowns:SetChargeCountEnabled', Cooldowns.SetChargeCountEnabled)
   _GetChargeFontString = P:Def('_GetChargeFontString', _GetChargeFontString)
-  _PCM_FetchFontPath = P:Def('_PCM_FetchFontPath', _PCM_FetchFontPath)
-  _PCM_ApplyFontOptsToFontString = P:Def('_PCM_ApplyFontOptsToFontString', _PCM_ApplyFontOptsToFontString)
   Cooldowns._ApplyFontsToItem = P:Def('Cooldowns._ApplyFontsToItem', Cooldowns._ApplyFontsToItem)
   ns._PCM_ShouldSkipUnifiedItemPass = P:Def('ns._PCM_ShouldSkipUnifiedItemPass', ns._PCM_ShouldSkipUnifiedItemPass)
   ns._PCM_ApplyUnifiedItemPass = P:Def('ns._PCM_ApplyUnifiedItemPass', ns._PCM_ApplyUnifiedItemPass)
