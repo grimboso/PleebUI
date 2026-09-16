@@ -24,6 +24,7 @@ local Round = Pixel.Round
 local math_floor = _G.math.floor
 local tostring = _G.tostring
 local _CSB_KnownSpellCache = {}
+local _CSB_SpellAvailability = {}
 local _CSB_ClassColorR, _CSB_ClassColorG, _CSB_ClassColorB
 
 
@@ -621,6 +622,7 @@ _CSB_ApplyVisibility = function(barData, cfg)
 end
 
 _CSB_RebuildAll = function()
+  wipe(_CSB_SpellAvailability)
   if InCombatLockdown() then
     __PUI_PCM_CooldownStackBars.pendingSpecTalentRefresh = true
   end
@@ -663,6 +665,16 @@ _CSB_RebuildAll = function()
       shouldShow = chargeInfo ~= nil
     end
 
+    if cfg and cfg.enabled ~= false
+      and (cfg.presentation == "BAR" or cfg.presentation == "BUTTON")
+    then
+      _CSB_SpellAvailability[key] = {
+        cfg = cfg,
+        spellID = cfg.trackedSpellID,
+        available = shouldShow == true,
+      }
+    end
+
     if not shouldShow then
       local barData = bars[key]
       if not barData then
@@ -690,6 +702,7 @@ _CSB_RebuildAll = function()
       barData.hiddenBySpec = false
       barData.maxCharges = _CSB_ResolveMaxCharges(barData, cfg, chargeInfo)
       _CSB_ApplyResolvedMaxCharges(barData, barData.maxCharges)
+      _CSB_SpellAvailability[key].maxCharges = barData.maxCharges
 
       if cfg.presentation == "BUTTON" then
         FrameUtil:UnregisterMover("PCMChargeCooldownBar:" .. tostring(barData.id))
@@ -958,6 +971,9 @@ function Cooldowns:CooldownStackBars_Enable()
 end
 
 function Cooldowns:CooldownStackBars_Disable()
+  __PUI_PCM_CooldownStackBars.pendingSpellAvailabilityRefresh = nil
+  __PUI_PCM_CooldownStackBars.pendingSpecTalentRefresh = nil
+  wipe(_CSB_SpellAvailability)
   PCMRuntime:SetSubscriberEnabled("CooldownStackBars", false)
   _CSB_SetChargeEventRegistered(false)
 
@@ -1016,8 +1032,39 @@ function Cooldowns:CooldownStackBars_RefreshAfterTalentSwap()
   end
 
   __PUI_PCM_CooldownStackBars.pendingSpecTalentRefresh = false
+  __PUI_PCM_CooldownStackBars.pendingSpellAvailabilityRefresh = nil
   _CSB_ClearKnownSpellCache()
   self:CooldownStackBars_Rebuild()
+end
+
+local function _CSB_RefreshSpellAvailability()
+  if InCombatLockdown() or ns.PCM_IsTransitionPending() then
+    __PUI_PCM_CooldownStackBars.pendingSpellAvailabilityRefresh = true
+    return
+  end
+
+  __PUI_PCM_CooldownStackBars.pendingSpellAvailabilityRefresh = nil
+  for key, entry in pairs(_CSB_SpellAvailability) do
+    local spellID = entry.spellID
+    local available = spellID ~= nil
+      and C_SpellBook.IsSpellKnown(spellID, Enum.SpellBookSpellBank.Player)
+    local chargeInfo
+    if available then
+      chargeInfo = C_Spell.GetSpellCharges(spellID)
+      available = chargeInfo ~= nil
+    end
+    local maxCharges
+    if available then
+      maxCharges = entry.maxCharges
+      if not _G.issecretvalue(chargeInfo.maxCharges) then
+        maxCharges = _CSB_ResolveMaxCharges(__PUI_PCM_CooldownStackBars.bars[key], entry.cfg, chargeInfo)
+      end
+    end
+    if available ~= entry.available or maxCharges ~= entry.maxCharges then
+      Cooldowns:CooldownStackBars_RefreshAfterTalentSwap()
+      return
+    end
+  end
 end
 
 PCMRuntime:RegisterSubscriber("CooldownStackBars", {
@@ -1030,6 +1077,10 @@ PCMRuntime:RegisterSubscriber("CooldownStackBars", {
         and not ns.PCM_IsTransitionPending()
       then
         Cooldowns:CooldownStackBars_RefreshAfterTalentSwap()
+      elseif event == "PLAYER_REGEN_ENABLED"
+        and __PUI_PCM_CooldownStackBars.pendingSpellAvailabilityRefresh
+      then
+        _CSB_RefreshSpellAvailability()
       end
     elseif event == "ADDON_RESTRICTION_STATE_CHANGED" then
       if __PUI_PCM_CooldownStackBars.pendingSpecTalentRefresh
@@ -1045,11 +1096,7 @@ PCMRuntime:RegisterSubscriber("CooldownStackBars", {
     then
       Cooldowns:_CooldownStackBars_OnSpecTalentEvent(event, ...)
     elseif event == "SPELLS_CHANGED" then
-      if ns.PCM_IsTransitionPending() then
-        __PUI_PCM_CooldownStackBars.pendingSpecTalentRefresh = true
-      else
-        Cooldowns:CooldownStackBars_RefreshAfterTalentSwap()
-      end
+      _CSB_RefreshSpellAvailability()
     end
   end,
 })
@@ -1090,6 +1137,7 @@ end
 
   _CSB_Snap = P:Def('_CSB_Snap', _CSB_Snap)
   _CSB_GetClassColor = P:Def('_CSB_GetClassColor', _CSB_GetClassColor)
+  _CSB_RefreshSpellAvailability = P:Def('_CSB_RefreshSpellAvailability', _CSB_RefreshSpellAvailability)
   _CSB_IsTrackedSpellKnown = P:Def('_CSB_IsTrackedSpellKnown', _CSB_IsTrackedSpellKnown)
   _CSB_SetFontStringShown = P:Def('_CSB_SetFontStringShown', _CSB_SetFontStringShown)
   _CSB_DisableDurationBinding = P:Def('_CSB_DisableDurationBinding', _CSB_DisableDurationBinding)
