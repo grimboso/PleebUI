@@ -31,6 +31,9 @@ local _kbEquipSlotKeyCache = {}
 local _kbMacroSpellIDToKey = {}
 local _kbMacroSpellNameToKey = {}
 local _kbItemSlots = {}
+local _kbMacroItemToKey = {}
+local _kbMacroEquipSlotToKey = {}
+local _kbActionSnapshotReady = false
 local _kbItemMapBuilt = false
 local _kbMacroMapBuilt = false
 local _kbFallbackMapsBlocked = false
@@ -168,6 +171,8 @@ local function _KB_InvalidateBindings()
   wipe(_kbEquipSlotKeyCache)
   wipe(_kbMacroSpellIDToKey)
   wipe(_kbMacroSpellNameToKey)
+  wipe(_kbMacroItemToKey)
+  wipe(_kbMacroEquipSlotToKey)
   _kbMacroMapBuilt = false
   _kbFallbackMapsBlocked = false
 end
@@ -177,15 +182,18 @@ local function _KB_InvalidateAll()
   wipe(_kbItemSlots)
   _kbItemMapBuilt = false
   _kbMainBarSlots = nil
+  _kbActionSnapshotReady = false
 end
 
 local function _KB_InvalidateActionContent()
-  _KB_InvalidateBindings()
-  wipe(_kbItemSlots)
-  _kbItemMapBuilt = false
+  wipe(_kbSpellKeyCache)
+  wipe(_kbItemKeyCache)
+  wipe(_kbEquipSlotKeyCache)
+  _kbFallbackMapsBlocked = false
 end
 
 local function _KB_RefreshActionSlotSnapshot()
+  _kbActionSnapshotReady = true
   wipe(_kbActionSlotKnown)
   wipe(_kbActionSlotType)
   wipe(_kbActionSlotID)
@@ -226,14 +234,26 @@ local function _KB_ActionSlotContentChanged(slot)
         local normalizedType = actionType or false
         local normalizedID = actionID or false
 
-        if _kbActionSlotKnown[actionSlot]
-          and (_kbActionSlotType[actionSlot] ~= normalizedType or _kbActionSlotID[actionSlot] ~= normalizedID) then
+        local previousType = _kbActionSlotType[actionSlot]
+        if not _kbActionSlotKnown[actionSlot]
+          or previousType ~= normalizedType or _kbActionSlotID[actionSlot] ~= normalizedID then
           changed = true
+          if previousType == "item" or normalizedType == "item" then
+            _kbItemMapBuilt = false
+          end
+          if previousType == "macro" or normalizedType == "macro" then
+            _kbMacroMapBuilt = false
+          end
         end
 
         _kbActionSlotKnown[actionSlot] = true
         _kbActionSlotType[actionSlot] = normalizedType
         _kbActionSlotID[actionSlot] = normalizedID
+      elseif _kbActionSlotKnown[actionSlot] then
+        _kbActionSlotKnown[actionSlot] = nil
+        _kbItemMapBuilt = false
+        _kbMacroMapBuilt = false
+        changed = true
       end
     end
   end
@@ -474,8 +494,8 @@ end
 
 local function _KB_IndexMacroItem(itemID, key)
   itemID = _KB_PositiveNumber(itemID)
-  if itemID and _kbItemKeyCache[itemID] == nil then
-    _kbItemKeyCache[itemID] = key
+  if itemID and _kbMacroItemToKey[itemID] == nil then
+    _kbMacroItemToKey[itemID] = key
   end
 end
 
@@ -507,7 +527,7 @@ local function _KB_IndexMacroSlot(slot, actionID, key)
     local explicitItemID = value:match("^item:(%d+)$")
 
     if equipSlot == 13 or equipSlot == 14 then
-      _kbEquipSlotKeyCache[equipSlot] = _kbEquipSlotKeyCache[equipSlot] or key
+      _kbMacroEquipSlotToKey[equipSlot] = _kbMacroEquipSlotToKey[equipSlot] or key
     elseif explicitItemID then
       _KB_IndexMacroItem(explicitItemID, key)
     else
@@ -534,20 +554,25 @@ local function _KB_BuildFallbackMaps()
     return true
   end
 
+  if not _kbActionSnapshotReady then
+    _KB_RefreshActionSlotSnapshot()
+  end
   if needItems then
     wipe(_kbItemSlots)
   end
   if needMacros then
     wipe(_kbMacroSpellIDToKey)
     wipe(_kbMacroSpellNameToKey)
-    wipe(_kbEquipSlotKeyCache)
+    wipe(_kbMacroItemToKey)
+    wipe(_kbMacroEquipSlotToKey)
   end
 
   local blocked = false
   for slot = 1, 192 do
     if _KB_IsMappedActionSlot(slot) then
-      local actionType, actionID = GetActionInfo(slot)
-      if _KB_IsSecret(actionType) or _KB_IsSecret(actionID) then
+      local actionType = _kbActionSlotType[slot]
+      local actionID = _kbActionSlotID[slot]
+      if not _kbActionSlotKnown[slot] then
         blocked = true
       elseif needItems and actionType == "item" then
         local itemID = _KB_PositiveNumber(actionID)
@@ -576,8 +601,8 @@ local function _KB_BuildFallbackMaps()
     if needMacros then
       wipe(_kbMacroSpellIDToKey)
       wipe(_kbMacroSpellNameToKey)
-      wipe(_kbItemKeyCache)
-      wipe(_kbEquipSlotKeyCache)
+      wipe(_kbMacroItemToKey)
+      wipe(_kbMacroEquipSlotToKey)
     end
     _kbFallbackMapsBlocked = true
     return false
@@ -679,9 +704,10 @@ function Cooldowns:GetItemKeybind(itemID)
     end
   end
 
-  cached = _kbItemKeyCache[itemID]
-  if cached ~= nil then
-    return cached or nil, false
+  cached = _kbMacroItemToKey[itemID]
+  if cached then
+    _kbItemKeyCache[itemID] = cached
+    return cached, false
   end
 
   local slots = _kbItemSlots[itemID]
@@ -727,9 +753,10 @@ function Cooldowns:GetEquipmentSlotKeybind(equipSlot)
     end
   end
 
-  cached = _kbEquipSlotKeyCache[equipSlot]
-  if cached ~= nil then
-    return cached or nil, false
+  cached = _kbMacroEquipSlotToKey[equipSlot]
+  if cached then
+    _kbEquipSlotKeyCache[equipSlot] = cached
+    return cached, false
   end
 
   _kbEquipSlotKeyCache[equipSlot] = false
@@ -1037,18 +1064,19 @@ local function _KB_DoRefresh(full, content, bindings)
 
   if full then
     _KB_InvalidateAll()
-  elseif content then
-    _KB_InvalidateActionContent()
-  elseif bindings then
-    _KB_InvalidateBindings()
+    _KB_RefreshActionSlotSnapshot()
+  else
+    if content then
+      _KB_InvalidateActionContent()
+    end
+    if bindings then
+      _KB_InvalidateBindings()
+    end
   end
 
+  _KB_BuildFallbackMaps()
   _KB_ApplyAll()
   Cooldowns:ConsumableTracker_RefreshKeybinds()
-
-  if full then
-    _KB_RefreshActionSlotSnapshot()
-  end
 end
 
 local function _KB_OnRefreshFrameUpdate(self)
