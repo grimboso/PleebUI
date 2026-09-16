@@ -1761,6 +1761,8 @@ end
 local function UFCB_BuildSharedTextLeafArgs(opts)
   opts = opts or {}
   local outlineValues = UFCB_GetOutlineValues()
+  local typographyDisabled = opts.typographyDisabled or opts.disabled
+  local positionDisabled = opts.positionDisabled or opts.disabled
 
   local args = {
     fontSize = {
@@ -1770,7 +1772,7 @@ local function UFCB_BuildSharedTextLeafArgs(opts)
       min = opts.sizeMin or 8,
       max = opts.sizeMax or 32,
       step = opts.sizeStep or 1,
-      disabled = opts.disabled,
+      disabled = typographyDisabled,
       get = opts.getSize,
       set = opts.setSize,
     },
@@ -1778,6 +1780,7 @@ local function UFCB_BuildSharedTextLeafArgs(opts)
       type = "toggle",
       name = "Use global font",
       order = (opts.fontOrder or 3) - 0.5,
+      disabled = typographyDisabled,
       get = opts.getUseGlobalFont,
       set = opts.setUseGlobalFont,
     } or nil,
@@ -1788,9 +1791,9 @@ local function UFCB_BuildSharedTextLeafArgs(opts)
       order = opts.fontOrder or 3,
       values = OptionsUtil.BuildFontValues,
       disabled = function()
-        if type(opts.disabled) == "function" and opts.disabled() then
+        if type(typographyDisabled) == "function" and typographyDisabled() then
           return true
-        elseif opts.disabled == true then
+        elseif typographyDisabled == true then
           return true
         end
 
@@ -1808,7 +1811,7 @@ local function UFCB_BuildSharedTextLeafArgs(opts)
       name = opts.outlineName or "Outline",
       order = opts.outlineOrder or 4,
       values = outlineValues,
-      disabled = opts.disabled,
+      disabled = typographyDisabled,
       get = opts.getOutline,
       set = opts.setOutline,
     },
@@ -1817,7 +1820,7 @@ local function UFCB_BuildSharedTextLeafArgs(opts)
       name = opts.anchorName or "Anchor point",
       order = opts.anchorOrder or 5,
       values = opts.anchorValues or TEXT_ANCHOR_VALUES,
-      disabled = opts.disabled,
+      disabled = positionDisabled,
       get = opts.getAnchor,
       set = opts.setAnchor,
     },
@@ -1828,7 +1831,7 @@ local function UFCB_BuildSharedTextLeafArgs(opts)
       min = opts.offsetXMin or -40,
       max = opts.offsetXMax or 40,
       step = opts.offsetXStep or 1,
-      disabled = opts.disabled,
+      disabled = positionDisabled,
       get = opts.getOffsetX,
       set = opts.setOffsetX,
     },
@@ -1839,7 +1842,7 @@ local function UFCB_BuildSharedTextLeafArgs(opts)
       min = opts.offsetYMin or -40,
       max = opts.offsetYMax or 40,
       step = opts.offsetYStep or 1,
-      disabled = opts.disabled,
+      disabled = positionDisabled,
       get = opts.getOffsetY,
       set = opts.setOffsetY,
     },
@@ -1867,36 +1870,46 @@ local function UFCB_BuildUnitTextArgs(unitKey, kind)
   local baseName, baseHP, basePower = UF:GetBaseTextSizesForUnit(unitKey)
   local baseSize = (kind == "name") and baseName or ((kind == "health") and baseHP or basePower)
 
-  local fontKey, useGlobalFontKey, outlineKey
-  local anchorKey, offXKey, offYKey, defaultAnchor
+  local fontKey, useGlobalFontKey, outlineKey, customTypographyKey
+  local anchorKey, offXKey, offYKey, customPositionKey, defaultAnchor
   if kind == "name" then
     fontKey = "nameFont"
     useGlobalFontKey = "nameUseGlobalFont"
     outlineKey = "nameOutline"
+    customTypographyKey = "nameUseCustomTypography"
     anchorKey = "anchorName"
     offXKey = "offsetNameX"
     offYKey = "offsetNameY"
+    customPositionKey = "nameUseCustomPosition"
     defaultAnchor = "LEFT"
   elseif kind == "health" then
     fontKey = "healthFont"
     useGlobalFontKey = "healthUseGlobalFont"
     outlineKey = "healthOutline"
+    customTypographyKey = "healthUseCustomTypography"
     anchorKey = "anchorHealth"
     offXKey = "offsetHealthX"
     offYKey = "offsetHealthY"
+    customPositionKey = "healthUseCustomPosition"
     defaultAnchor = "RIGHT"
   else
     fontKey = "powerFont"
     useGlobalFontKey = "powerUseGlobalFont"
     outlineKey = "powerOutline"
+    customTypographyKey = "powerUseCustomTypography"
     anchorKey = "anchorPower"
     offXKey = "offsetPowerX"
     offYKey = "offsetPowerY"
+    customPositionKey = "powerUseCustomPosition"
     defaultAnchor = "RIGHT"
   end
 
-  local function IsOverride()
-    return text.useOverrideFont == true
+  local function UsesCustomTypography()
+    return text[customTypographyKey] == true
+  end
+
+  local function UsesCustomPosition()
+    return text[customPositionKey] == true
   end
 
   local function GetSizeKey()
@@ -1912,25 +1925,38 @@ local function UFCB_BuildUnitTextArgs(unitKey, kind)
     if kind == "health" then
       return UFCB_GetTextModeChoice(text.healthMode or defaultText.healthMode or "CUR", defaultText.healthMode or "CUR")
     elseif kind == "power" then
-      local cur = IsOverride() and text.powerMode or globalT.powerMode
+      local cur = text.powerMode or globalT.powerMode
       return UFCB_GetTextModeChoice(cur or defaultText.powerMode or globalTextDefaults.powerMode or "CUR", defaultText.powerMode or globalTextDefaults.powerMode or "CUR")
     end
     return nil
   end
 
   local prefixArgs = {
-    useOverrideFont = {
+    useCustomTypography = {
       type = "toggle",
-      name = "Use custom settings",
+      name = "Use custom typography",
       order = 1,
-      
-      desc = "When disabled, this frame uses the General tab's font and positioning settings.",
+      desc = "Use a custom font, size, and outline for this text.",
       get = function()
-        return IsOverride()
+        return UsesCustomTypography()
       end,
       set = function(_, v)
         if UFCB_BlockCombat() then return end
-        text.useOverrideFont = v and true or false
+        text[customTypographyKey] = v and true or false
+        UFCB_RefreshUFText()
+      end,
+    },
+    useCustomPosition = {
+      type = "toggle",
+      name = "Use custom position",
+      order = 4.5,
+      desc = "Use a custom anchor and offsets for this text.",
+      get = function()
+        return UsesCustomPosition()
+      end,
+      set = function(_, v)
+        if UFCB_BlockCombat() then return end
+        text[customPositionKey] = v and true or false
         UFCB_RefreshUFText()
       end,
     },
@@ -2057,9 +2083,6 @@ local function UFCB_BuildUnitTextArgs(unitKey, kind)
       name = (kind == "health") and "Health text mode" or "Power text mode",
       order = 8,
       values = TEXT_MODE_VALUES,
-      disabled = function()
-        return kind == "power" and not IsOverride()
-      end,
       get = function()
         if unitKey == "player" and kind == "health" then
           return UF:GetQuickSetupValue("healthMode")
@@ -2078,7 +2101,6 @@ local function UFCB_BuildUnitTextArgs(unitKey, kind)
         if kind == "health" then
           text.healthMode = v
         else
-          if not IsOverride() then return end
           text.powerMode = v
         end
 
@@ -2087,18 +2109,23 @@ local function UFCB_BuildUnitTextArgs(unitKey, kind)
     }
   end
 
-  local function CommonDisabled()
-    return not IsOverride()
+  local function TypographyDisabled()
+    return not UsesCustomTypography()
+  end
+
+  local function PositionDisabled()
+    return not UsesCustomPosition()
   end
 
   return UFCB_BuildSharedTextLeafArgs({
     prefixArgs = prefixArgs,
-    disabled = CommonDisabled,
+    typographyDisabled = TypographyDisabled,
+    positionDisabled = PositionDisabled,
     sizeName = "Font size",
     sizeOrder = 2,
     getSize = function()
       local key = GetSizeKey()
-      local v = IsOverride() and text[key] or globalT[key]
+      local v = UsesCustomTypography() and text[key] or globalT[key]
       if type(v) ~= "number" then
         v = baseSize
       end
@@ -2106,54 +2133,47 @@ local function UFCB_BuildUnitTextArgs(unitKey, kind)
     end,
     setSize = function(_, v)
       if UFCB_BlockCombat() then return end
-      if not IsOverride() then return end
+      if not UsesCustomTypography() then return end
       text[GetSizeKey()] = v
       UFCB_RefreshUFText()
     end,
     getUseGlobalFont = function()
-      local cur = IsOverride() and text[fontKey] or globalT.font
-      local flag = IsOverride() and text[useGlobalFontKey] or globalT.useGlobalFont
+      local cur = UsesCustomTypography() and text[fontKey] or globalT.font
+      local flag = UsesCustomTypography() and text[useGlobalFontKey] or globalT.useGlobalFont
       return UFCB_IsUsingGlobalFont(cur, flag)
     end,
     setUseGlobalFont = function(_, v)
       if UFCB_BlockCombat() then return end
 
-      if not IsOverride() then
-        text.useOverrideFont = true
-
-        if v ~= true and (type(text[fontKey]) ~= "string" or text[fontKey] == "") then
-          text[fontKey] = OptionsUtil.ResolveFontKey(globalT.font, globalT.useGlobalFont)
-        end
-      end
-
+      if not UsesCustomTypography() then return end
       text[useGlobalFontKey] = v and true or false
       UFCB_RefreshUFText()
     end,
     getFont = function()
-      local cur = IsOverride() and text[fontKey] or globalT.font
-      local flag = IsOverride() and text[useGlobalFontKey] or globalT.useGlobalFont
+      local cur = UsesCustomTypography() and text[fontKey] or globalT.font
+      local flag = UsesCustomTypography() and text[useGlobalFontKey] or globalT.useGlobalFont
       return OptionsUtil.ResolveFontKey(cur, flag)
     end,
     setFont = function(_, v)
       if UFCB_BlockCombat() then return end
-      if not IsOverride() then return end
+      if not UsesCustomTypography() then return end
       text[fontKey] = v
       text[useGlobalFontKey] = false
       UFCB_RefreshUFText()
     end,
     getOutline = function()
-      local cur = IsOverride() and text[outlineKey] or globalT.outline
+      local cur = UsesCustomTypography() and text[outlineKey] or globalT.outline
       return UFCB_GetGlobalOutlineValue(cur)
     end,
     setOutline = function(_, v)
       if UFCB_BlockCombat() then return end
-      if not IsOverride() then return end
+      if not UsesCustomTypography() then return end
       text[outlineKey] = UFCB_SetStoredOutline(v)
       UFCB_RefreshUFText()
     end,
     anchorValues = TEXT_ANCHOR_VALUES,
     getAnchor = function()
-      local cur = IsOverride() and text[anchorKey] or globalT[anchorKey]
+      local cur = UsesCustomPosition() and text[anchorKey] or globalT[anchorKey]
       if not cur or not TEXT_ANCHOR_VALUES[cur] then
         cur = defaultAnchor
       end
@@ -2161,29 +2181,29 @@ local function UFCB_BuildUnitTextArgs(unitKey, kind)
     end,
     setAnchor = function(_, v)
       if UFCB_BlockCombat() then return end
-      if not IsOverride() then return end
+      if not UsesCustomPosition() then return end
       text[anchorKey] = v
       UFCB_RefreshUFText()
     end,
     getOffsetX = function()
-      local v = IsOverride() and text[offXKey] or globalT[offXKey]
+      local v = UsesCustomPosition() and text[offXKey] or globalT[offXKey]
       if type(v) ~= "number" then v = 0 end
       return v
     end,
     setOffsetX = function(_, v)
       if UFCB_BlockCombat() then return end
-      if not IsOverride() then return end
+      if not UsesCustomPosition() then return end
       text[offXKey] = v
       UFCB_RefreshUFText()
     end,
     getOffsetY = function()
-      local v = IsOverride() and text[offYKey] or globalT[offYKey]
+      local v = UsesCustomPosition() and text[offYKey] or globalT[offYKey]
       if type(v) ~= "number" then v = 0 end
       return v
     end,
     setOffsetY = function(_, v)
       if UFCB_BlockCombat() then return end
-      if not IsOverride() then return end
+      if not UsesCustomPosition() then return end
       text[offYKey] = v
       UFCB_RefreshUFText()
     end,
