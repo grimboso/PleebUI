@@ -4,6 +4,7 @@
 local ADDON_NAME, ns = ...
 local Cooldowns = ns.Modules.CooldownManager
 local Hooks = ns.PCMHooks
+local IconSkin = ns.IconSkin
 local IconSettings = ns.PCMIconSettings
 local PCMRuntime = ns.PCMRuntime
 local LSM = ns.LSM
@@ -873,8 +874,14 @@ local function _KB_ApplyFontStyle(item, fs, viewerKey)
   end
 
   if fs.ClearAllPoints and fs.SetPoint then
+    local point, x, y = IconSkin.ResolveTextAnchor(
+      "keybind",
+      opts.point,
+      opts.offsetX,
+      opts.offsetY
+    )
     fs:ClearAllPoints()
-    fs:SetPoint("TOPLEFT", item, "TOPLEFT", opts.offsetX or 0, opts.offsetY or 0)
+    fs:SetPoint(point, item, point, x, y)
   end
 end
 
