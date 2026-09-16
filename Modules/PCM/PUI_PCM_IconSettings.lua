@@ -490,7 +490,8 @@ function IconSettings:ClearItemBinding(itemFrame)
   frameData.iconSettingsNeedsCooldownRefreshHook = nil
   frameData.iconSettingsNeedsChargeRefreshHook = nil
   frameData.iconSettingsForcesCooldownSource = nil
-  frameData.iconSettingsApplyingForcedCooldown = nil
+  frameData.iconForcedCooldownHideNumbers = nil
+  frameData.iconForcedRechargeHideNumbers = nil
   if frameData.iconCustomTextureApplied ~= nil then
     frameData.iconCustomTextureNeedsReconcile = true
   end
