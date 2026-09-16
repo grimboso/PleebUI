@@ -17,6 +17,7 @@ local FONT_FIELDS = {
   "size",
   "flags",
   "color",
+  "point",
   "offsetX",
   "offsetY",
 }
