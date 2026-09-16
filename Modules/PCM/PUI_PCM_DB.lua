@@ -224,7 +224,7 @@ local function _PCM_DB_Attach(Cooldowns)
       return false
     end
 
-    if cfg.font or cfg.size or cfg.flags or cfg.color then
+    if cfg.font or cfg.size or cfg.flags or cfg.color or cfg.point then
       return true
     end
     if cfg.offsetX ~= nil or cfg.offsetY ~= nil then
@@ -306,6 +306,8 @@ local function _PCM_DB_Attach(Cooldowns)
       offsetY = tonumber(cfg.offsetY) or 0
     end
 
+    local point = type(cfg.point) == "string" and cfg.point or nil
+
     local cached = bucket[role]
     if cached
       and cached.source == cfg
@@ -318,6 +320,7 @@ local function _PCM_DB_Attach(Cooldowns)
       and cached.color4 == color4
       and cached.offsetX == offsetX
       and cached.offsetY == offsetY
+      and cached.point == point
     then
       return cached.opts
     end
@@ -332,6 +335,7 @@ local function _PCM_DB_Attach(Cooldowns)
     opts.flags = flags
     opts.offsetX = offsetX
     opts.offsetY = offsetY
+    opts.point = point
 
     if color1 ~= nil then
       local c = opts.color
@@ -354,6 +358,7 @@ local function _PCM_DB_Attach(Cooldowns)
     cached.color4 = color4
     cached.offsetX = offsetX
     cached.offsetY = offsetY
+    cached.point = point
     cached.opts = opts
     bucket[role] = cached
 
