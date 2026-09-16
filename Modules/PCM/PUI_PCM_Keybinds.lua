@@ -33,6 +33,7 @@ local _kbMacroSpellNameToKey = {}
 local _kbItemSlots = {}
 local _kbMacroItemToKey = {}
 local _kbMacroEquipSlotToKey = {}
+local _kbMacroSlotEntries = {}
 local _kbActionSnapshotReady = false
 local _kbItemMapBuilt = false
 local _kbMacroMapBuilt = false
@@ -166,6 +167,7 @@ local function _KB_IsMappedActionSlot(slot)
 end
 
 local function _KB_InvalidateBindings()
+  wipe(_kbMacroSlotEntries)
   wipe(_kbSpellKeyCache)
   wipe(_kbItemKeyCache)
   wipe(_kbEquipSlotKeyCache)
@@ -243,6 +245,7 @@ local function _KB_ActionSlotContentChanged(slot)
           end
           if previousType == "macro" or normalizedType == "macro" then
             _kbMacroMapBuilt = false
+            _kbMacroSlotEntries[actionSlot] = nil
           end
         end
 
@@ -390,12 +393,15 @@ local function _KB_SpellName(spellID)
   if not spellID then return nil end
 
   local name = C_Spell.GetSpellName(spellID)
-  return not _KB_IsSecret(name) and type(name) == "string" and name ~= "" and name or nil
+  if _KB_IsSecret(name) then return nil, true end
+  return type(name) == "string" and name ~= "" and name or nil
 end
 
 local function _KB_SpellIDFromName(name)
   if _KB_IsSecret(name) or type(name) ~= "string" or name == "" then return nil end
-  return _KB_PositiveNumber(C_Spell.GetSpellIDForSpellIdentifier(name))
+  local spellID = C_Spell.GetSpellIDForSpellIdentifier(name)
+  if _KB_IsSecret(spellID) then return nil, true end
+  return _KB_PositiveNumber(spellID)
 end
 
 local function _KB_CacheSpell(baseSpellID, currentSpellID, key)
@@ -472,54 +478,71 @@ local function _KB_ResolveMacroIndex(slot, actionID)
   return nil
 end
 
-local function _KB_IndexMacroSpell(spellID, key)
+local function _KB_IndexMacroSpell(entry, spellID, key)
   local baseSpellID, currentSpellID, blocked = _KB_NormalizeSpellID(spellID)
-  if blocked or not baseSpellID then return end
+  if blocked then
+    entry.reusable = false
+    return
+  end
+  if not baseSpellID then return end
 
-  _kbMacroSpellIDToKey[baseSpellID] = _kbMacroSpellIDToKey[baseSpellID] or key
-  _kbMacroSpellIDToKey[currentSpellID] = _kbMacroSpellIDToKey[currentSpellID] or key
+  entry.spells[baseSpellID] = entry.spells[baseSpellID] or key
+  entry.spells[currentSpellID] = entry.spells[currentSpellID] or key
 
-  local name = _KB_SpellName(currentSpellID)
+  local name, nameBlocked = _KB_SpellName(currentSpellID)
+  if nameBlocked then entry.reusable = false end
   if name then
-    _kbMacroSpellNameToKey[name:lower()] = _kbMacroSpellNameToKey[name:lower()] or key
+    entry.names[name:lower()] = entry.names[name:lower()] or key
   end
 
   if baseSpellID ~= currentSpellID then
-    name = _KB_SpellName(baseSpellID)
+    name, nameBlocked = _KB_SpellName(baseSpellID)
+    if nameBlocked then entry.reusable = false end
     if name then
-      _kbMacroSpellNameToKey[name:lower()] = _kbMacroSpellNameToKey[name:lower()] or key
+      entry.names[name:lower()] = entry.names[name:lower()] or key
     end
   end
 end
 
-local function _KB_IndexMacroItem(itemID, key)
+local function _KB_IndexMacroItem(entry, itemID, key)
   itemID = _KB_PositiveNumber(itemID)
-  if itemID and _kbMacroItemToKey[itemID] == nil then
-    _kbMacroItemToKey[itemID] = key
+  if itemID and entry.items[itemID] == nil then
+    entry.items[itemID] = key
   end
 end
 
-local function _KB_IndexMacroSlot(slot, actionID, key)
+local function _KB_ReadMacroSlot(slot, actionID, key)
   local macroIndex = _KB_ResolveMacroIndex(slot, actionID)
   if not macroIndex then return end
 
+  local entry = { spells = {}, names = {}, items = {}, equipSlots = {}, reusable = true }
   local macroSpell = GetMacroSpell(macroIndex)
-  if not _KB_IsSecret(macroSpell) and macroSpell then
+  if _KB_IsSecret(macroSpell) then
+    entry.reusable = false
+  elseif macroSpell then
     if type(macroSpell) == "number" then
-      _KB_IndexMacroSpell(macroSpell, key)
+      _KB_IndexMacroSpell(entry, macroSpell, key)
     elseif type(macroSpell) == "string" then
-      local spellID = _KB_SpellIDFromName(macroSpell)
-      if spellID then _KB_IndexMacroSpell(spellID, key) end
+      local spellID, blocked = _KB_SpellIDFromName(macroSpell)
+      if blocked then entry.reusable = false end
+      if spellID then _KB_IndexMacroSpell(entry, spellID, key) end
     end
   end
 
   local _, _, macroItemID = GetMacroItem(macroIndex)
-  if not _KB_IsSecret(macroItemID) and macroItemID then
-    _KB_IndexMacroItem(macroItemID, key)
+  if _KB_IsSecret(macroItemID) then
+    entry.reusable = false
+  elseif macroItemID then
+    _KB_IndexMacroItem(entry, macroItemID, key)
   end
 
-  local values = _KB_ParseMacroBody(_KB_GetMacroBodySafe(macroIndex))
-  if not values then return end
+  local body = _KB_GetMacroBodySafe(macroIndex)
+  if not body then
+    entry.reusable = false
+    return entry
+  end
+  local values = _KB_ParseMacroBody(body)
+  if not values then return entry end
 
   for index = 1, #values do
     local value = values[index]
@@ -527,19 +550,48 @@ local function _KB_IndexMacroSlot(slot, actionID, key)
     local explicitItemID = value:match("^item:(%d+)$")
 
     if equipSlot == 13 or equipSlot == 14 then
-      _kbMacroEquipSlotToKey[equipSlot] = _kbMacroEquipSlotToKey[equipSlot] or key
+      entry.equipSlots[equipSlot] = entry.equipSlots[equipSlot] or key
     elseif explicitItemID then
-      _KB_IndexMacroItem(explicitItemID, key)
+      _KB_IndexMacroItem(entry, explicitItemID, key)
     else
       local itemID = C_Item.GetItemInfoInstant(value)
+      if _KB_IsSecret(itemID) then
+        entry.reusable = false
+      end
       if not _KB_IsSecret(itemID) and itemID then
-        _KB_IndexMacroItem(itemID, key)
+        _KB_IndexMacroItem(entry, itemID, key)
       else
-        _kbMacroSpellNameToKey[value:lower()] = _kbMacroSpellNameToKey[value:lower()] or key
-        local spellID = _KB_SpellIDFromName(value)
-        if spellID then _KB_IndexMacroSpell(spellID, key) end
+        entry.names[value:lower()] = entry.names[value:lower()] or key
+        local spellID, blocked = _KB_SpellIDFromName(value)
+        if blocked then entry.reusable = false end
+        if spellID then _KB_IndexMacroSpell(entry, spellID, key) end
       end
     end
+  end
+  return entry
+end
+
+local function _KB_IndexMacroSlot(slot, actionID, key)
+  local entry = _kbMacroSlotEntries[slot]
+  if not entry then
+    entry = _KB_ReadMacroSlot(slot, actionID, key)
+    if not entry then return end
+    if entry.reusable then
+      _kbMacroSlotEntries[slot] = entry
+    end
+  end
+
+  for spellID, binding in pairs(entry.spells) do
+    _kbMacroSpellIDToKey[spellID] = _kbMacroSpellIDToKey[spellID] or binding
+  end
+  for name, binding in pairs(entry.names) do
+    _kbMacroSpellNameToKey[name] = _kbMacroSpellNameToKey[name] or binding
+  end
+  for itemID, binding in pairs(entry.items) do
+    _kbMacroItemToKey[itemID] = _kbMacroItemToKey[itemID] or binding
+  end
+  for equipSlot, binding in pairs(entry.equipSlots) do
+    _kbMacroEquipSlotToKey[equipSlot] = _kbMacroEquipSlotToKey[equipSlot] or binding
   end
 end
 
