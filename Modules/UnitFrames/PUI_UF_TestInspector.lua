@@ -333,11 +333,21 @@ local function SetPowerTexture(context, value)
   end
 end
 
+local function GetTypographyOverrideKey(role)
+  if role == "name" then
+    return "nameUseCustomTypography"
+  elseif role == "health" then
+    return "healthUseCustomTypography"
+  end
+
+  return "powerUseCustomTypography"
+end
+
 local function GetFontValue(context, role)
   local key = role .. "Font"
   local globalKey = role .. "UseGlobalFont"
 
-  if context.family == "single" and context.text.useOverrideFont ~= true then
+  if context.family == "single" and context.text[GetTypographyOverrideKey(role)] ~= true then
     return ""
   end
 
@@ -359,7 +369,7 @@ local function SetFontValue(context, role, value)
   local globalKey = role .. "UseGlobalFont"
 
   if context.family == "single" then
-    context.text.useOverrideFont = true
+    context.text[GetTypographyOverrideKey(role)] = true
     context.text[key] = value
     context.text[globalKey] = value == ""
     Addon:ApplyOptionsChange("UnitFrames", { mode = "text" })
@@ -375,7 +385,7 @@ local function GetOutlineValue(context, role)
   local key = role .. "Outline"
 
   if context.family == "single" then
-    if context.text.useOverrideFont ~= true then
+    if context.text[GetTypographyOverrideKey(role)] ~= true then
       return context.profile.text and context.profile.text.outline or "OUTLINE"
     end
 
@@ -389,7 +399,7 @@ end
 
 local function SetOutlineValue(context, role, value)
   if context.family == "single" then
-    context.text.useOverrideFont = true
+    context.text[GetTypographyOverrideKey(role)] = true
     context.text[role .. "Outline"] = value
     Addon:ApplyOptionsChange("UnitFrames", { mode = "text" })
     return
@@ -405,7 +415,9 @@ local function GetTextSize(context, role)
     or "sizePower"
   local value = context.text[key]
 
-  if value == nil and context.family == "single" then
+  if context.family == "single" and context.text[GetTypographyOverrideKey(role)] ~= true then
+    value = context.profile.text and context.profile.text[key]
+  elseif value == nil and context.family == "single" then
     value = context.profile.text and context.profile.text[key]
   end
 
@@ -417,7 +429,7 @@ local function SetTextSize(context, role, value)
   context.text[key] = math_max(6, math_min(32, tonumber(value) or 12))
 
   if context.family == "single" then
-    context.text.useOverrideFont = true
+    context.text[GetTypographyOverrideKey(role)] = true
     Addon:ApplyOptionsChange("UnitFrames", { mode = "text" })
   else
     RequestGroupedRefresh(context.family)
