@@ -11,6 +11,8 @@ local STACK_COLOR_THRESHOLD_DEFAULT_COLOR = { 1, 0.82, 0, 1 }
 
 local applicationThresholdTracks = setmetatable({}, { __mode = "k" })
 local applicationThresholdViewerHooks = setmetatable({}, { __mode = "k" })
+local applicationThresholdViewerSnapshots = {}
+local applicationThresholdSnapshotGeneration = 0
 local applicationThresholdTickFrame
 local applicationThresholdWakeFrame
 local applicationThresholdIdleTicks = 0
@@ -142,11 +144,53 @@ local function ApplicationThresholdFrameMatches(frame, source)
   )
 end
 
-local function FindApplicationThresholdChild(source)
-  local viewer = _G[source.viewerKey]
+local function GetApplicationThresholdViewerSnapshot(viewerKey)
+  local viewer = _G[viewerKey]
   if not viewer or not viewer.itemFramePool then
     return nil
   end
+
+  local snapshot = applicationThresholdViewerSnapshots[viewerKey]
+  if not snapshot then
+    snapshot = {
+      frames = {},
+      active = {},
+      generation = -1,
+    }
+    applicationThresholdViewerSnapshots[viewerKey] = snapshot
+  end
+
+  if snapshot.generation == applicationThresholdSnapshotGeneration then
+    return snapshot
+  end
+
+  local frames = snapshot.frames
+  local active = snapshot.active
+
+  for index = 1, #frames do
+    local frame = frames[index]
+    frames[index] = nil
+    active[frame] = nil
+  end
+
+  local count = 0
+  for frame in viewer.itemFramePool:EnumerateActive() do
+    count = count + 1
+    frames[count] = frame
+    active[frame] = true
+  end
+
+  snapshot.generation = applicationThresholdSnapshotGeneration
+  return snapshot
+end
+
+local function FindApplicationThresholdChild(source)
+  local snapshot = GetApplicationThresholdViewerSnapshot(source.viewerKey)
+  if not snapshot then
+    return nil
+  end
+
+  local frames = snapshot.frames
 
   -- A clean CDM identity can validate a binding. During the restricted window,
   -- retain the same pooled child only while it still serves the original slot.
@@ -154,18 +198,16 @@ local function FindApplicationThresholdChild(source)
   if child
     and child.cooldownID == source.childCooldownID
     and ApplicationThresholdFrameHasSourceUnit(child, source)
+    and snapshot.active[child] == true
   then
-    for frame in viewer.itemFramePool:EnumerateActive() do
-      if frame == child then
-        return child
-      end
-    end
+    return child
   end
 
   source.child = nil
   source.childCooldownID = nil
 
-  for frame in viewer.itemFramePool:EnumerateActive() do
+  for index = 1, #frames do
+    local frame = frames[index]
     if ApplicationThresholdFrameHasSourceUnit(frame, source)
       and SourceHasSpell(
         source,
@@ -179,7 +221,8 @@ local function FindApplicationThresholdChild(source)
   end
 
   local candidate
-  for frame in viewer.itemFramePool:EnumerateActive() do
+  for index = 1, #frames do
+    local frame = frames[index]
     if ApplicationThresholdFrameMatches(frame, source) then
       if candidate then
         return nil
@@ -242,6 +285,8 @@ end
 local function UpdateApplicationThresholdTracks()
   local tickLive = false
 
+  applicationThresholdSnapshotGeneration = applicationThresholdSnapshotGeneration + 1
+
   for parts, source in pairs(applicationThresholdTracks) do
     if parts.applicationThresholdMirrorIsVisible ~= true then
       applicationThresholdTracks[parts] = nil
@@ -266,9 +311,11 @@ local function UpdateApplicationThresholdTracks()
         FeedApplicationThresholds(parts, 0)
       end
 
-      if applicationsUpdated == true
-        or (not issecretvalue(active) and active == true)
-      then
+      if issecretvalue(active) then
+        if applicationsUpdated == true then
+          tickLive = true
+        end
+      elseif active == true then
         tickLive = true
       end
     end
@@ -1116,9 +1163,21 @@ function AuraWidget.ConfigureSlotGlow(glow, width, height, style, color, options
   height = NormalizeSlotGlowSize(height)
   options = NormalizeSlotGlowOptions(options)
 
-  ConfigureSlotPixelGlow(glow.pixel, width, height, options)
-  ConfigureSlotAutocastGlow(glow.autocast, width, height, options)
-  ConfigureSlotProcGlow(glow.proc, options)
+  for _, edge in ipairs(glow.pixel.edges) do
+    edge.group:Stop()
+  end
+  for _, entry in ipairs(glow.autocast.entries) do
+    entry.group:Stop()
+  end
+  glow.proc.group:Stop()
+
+  if style == "PIXEL" then
+    ConfigureSlotPixelGlow(glow.pixel, width, height, options)
+  elseif style == "AUTOCAST" then
+    ConfigureSlotAutocastGlow(glow.autocast, width, height, options)
+  elseif style == "PROC" then
+    ConfigureSlotProcGlow(glow.proc, options)
+  end
 
   for name, frame in pairs(glow.styles) do
     frame:SetAlpha(name == style and 1 or 0)
