@@ -1523,7 +1523,7 @@ local function _PCM_GetViewerSwipeOptions(viewerKey)
 end
 
 local function _PCM_ApplyForcedCooldownSource(itemFrame, frameData)
-  if not itemFrame or not frameData or frameData.iconSettingsApplyingForcedCooldown == true then
+  if not itemFrame or not frameData then
     return
   end
 
@@ -1540,10 +1540,15 @@ local function _PCM_ApplyForcedCooldownSource(itemFrame, frameData)
     duration = C_Spell.GetSpellCooldownDuration(entry.cooldownSpellID, true)
   end
 
-  frameData.iconSettingsApplyingForcedCooldown = true
   cooldownFrame:SetUseAuraDisplayTime(false)
   cooldownFrame:SetCooldownFromDurationObject(duration, true)
-  frameData.iconSettingsApplyingForcedCooldown = nil
+  local hideNumbers = frameData.iconForcedCooldownHideNumbers
+  if entry.hasCharges and frameData.iconCooldownState == "COOLDOWN"
+    and frameData.iconForcedRechargeHideNumbers ~= nil
+  then
+    hideNumbers = frameData.iconForcedRechargeHideNumbers
+  end
+  cooldownFrame:SetHideCountdownNumbers(hideNumbers)
 end
 
 local function _PCM_ApplyNativeIconSettings(itemFrame, viewerKey, frameData)
@@ -1662,15 +1667,21 @@ local function _PCM_UpdateBoundIconRuntimeFlags(frameData, record, entry, viewer
     )
   )
 
-  local cooldownCountEnabled = viewerKey and Cooldowns:GetCooldownCountEnabled(viewerKey) or true
-  local durationCountEnabled = viewerKey and _PCM_GetDurationCountEnabledCached(viewerKey) or true
+  local cooldownCountEnabled = Cooldowns:GetCooldownCountEnabled(viewerKey)
+  local durationCountEnabled = _PCM_GetDurationCountEnabledCached(viewerKey)
   if cooldown and cooldown.show ~= nil then
     cooldownCountEnabled = cooldown.show == true
     durationCountEnabled = cooldown.show == true
   end
 
+  frameData.iconForcedCooldownHideNumbers = cooldownCountEnabled ~= true
+  frameData.iconForcedRechargeHideNumbers = nil
+  if cooldown and cooldown.rechargeShow ~= nil then
+    frameData.iconForcedRechargeHideNumbers = cooldown.rechargeShow ~= true
+  end
+
   local charge = record and record.charge or nil
-  local chargeCountEnabled = viewerKey and Cooldowns:GetChargeCountEnabled(viewerKey) or true
+  local chargeCountEnabled = Cooldowns:GetChargeCountEnabled(viewerKey)
   if charge and charge.show ~= nil then
     chargeCountEnabled = charge.show == true
   end
@@ -1693,6 +1704,7 @@ local function _PCM_UpdateBoundIconRuntimeFlags(frameData, record, entry, viewer
   frameData.iconSettingsNeedsChargeCountRefresh = needsChargeCountRefresh or nil
   frameData.iconSettingsNeedsCooldownRefreshHook = cooldownFamily and (
     frameData.iconSettingsNeedsCooldownState == true
+    or frameData.iconSettingsForcesCooldownSource == true
     or needsSwipeRefresh == true
     or needsCountModeRefresh == true
   ) or nil
@@ -1712,54 +1724,6 @@ local function _PCM_HookNativeIconRefresh(itemFrame, frameData)
 
   local entry = frameData.iconIdentity
   if entry and entry.settingsFamily == "cooldown" then
-    if frameData.iconSettingsForcesCooldownSource == true
-      and frameData.iconForcedCooldownSourceHooksInstalled ~= true
-    then
-      local cooldownFrame = itemFrame.Cooldown
-      local function ReapplyForcedCooldownSource()
-        local viewerKey = frameData.viewerKey
-        local currentEntry = frameData.iconIdentity
-        if frameData.iconSettingsApplyingForcedCooldown == true
-          or frameData.iconSettingsForcesCooldownSource ~= true
-          or not viewerKey
-          or not currentEntry
-          or currentEntry.settingsFamily ~= "cooldown"
-          or _PCM_IsRefreshBlocked()
-        then
-          return
-        end
-
-        _PCM_ApplyForcedCooldownSource(itemFrame, frameData)
-        _PCM_ApplyActiveCountRule(itemFrame, viewerKey)
-      end
-
-      PCMHooks.HookMethod(
-        cooldownFrame,
-        "SetCooldown",
-        "PCM_ForcedCooldownSource",
-        ReapplyForcedCooldownSource
-      )
-      PCMHooks.HookMethod(
-        cooldownFrame,
-        "SetCooldownFromDurationObject",
-        "PCM_ForcedCooldownSource",
-        ReapplyForcedCooldownSource
-      )
-      PCMHooks.HookMethod(
-        cooldownFrame,
-        "SetUseAuraDisplayTime",
-        "PCM_ForcedCooldownSource",
-        ReapplyForcedCooldownSource
-      )
-      PCMHooks.HookMethod(
-        cooldownFrame,
-        "Clear",
-        "PCM_ForcedCooldownSource",
-        ReapplyForcedCooldownSource
-      )
-      frameData.iconForcedCooldownSourceHooksInstalled = true
-    end
-
     if frameData.iconSettingsNeedsCooldownRefreshHook == true
       and frameData.iconCooldownRefreshHookInstalled ~= true
     then
@@ -1772,17 +1736,23 @@ local function _PCM_HookNativeIconRefresh(itemFrame, frameData)
           local currentEntry = frameData.iconIdentity
           if not viewerKey or not currentEntry or currentEntry.settingsFamily ~= "cooldown"
             or frameData.iconSettingsNeedsCooldownRefreshHook ~= true
+            or _PCM_IsRefreshBlocked()
           then
             return
           end
 
           if frameData.iconSettingsNeedsCooldownState == true then
-            _PCM_UpdateIconCooldownState(frame, viewerKey, "SPELL_UPDATE_COOLDOWN", frameData)
-          elseif frameData.iconSettingsNeedsSwipeRefresh == true then
+            _PCM_UpdateIconCooldownState(frame, viewerKey, "SPELL_UPDATE_COOLDOWN", frameData, true)
+          end
+          if frameData.iconSettingsNeedsSwipeRefresh == true
+            or frameData.iconSettingsForcesCooldownSource == true
+          then
             _PCM_ApplyNativeIconSettings(frame, viewerKey, frameData)
           end
 
-          if frameData.iconSettingsNeedsCountModeRefresh == true then
+          if frameData.iconSettingsNeedsCountModeRefresh == true
+            and frameData.iconSettingsForcesCooldownSource ~= true
+          then
             _PCM_ApplyActiveCountRule(frame, viewerKey)
           end
         end
@@ -1804,6 +1774,7 @@ local function _PCM_HookNativeIconRefresh(itemFrame, frameData)
           if not viewerKey or not currentEntry or currentEntry.settingsFamily ~= "cooldown"
             or currentEntry.hasCharges ~= true
             or frameData.iconSettingsNeedsChargeRefreshHook ~= true
+            or _PCM_IsRefreshBlocked()
           then
             return
           end
@@ -4497,7 +4468,7 @@ function Cooldowns:ClearNativeIndividualIconSettings(itemFrame, viewerKey)
   IconSettings:ClearItemIdentity(itemFrame)
 end
 
-_PCM_UpdateIconCooldownState = function(itemFrame, viewerKey, event, frameData)
+_PCM_UpdateIconCooldownState = function(itemFrame, viewerKey, event, frameData, deferPresentation)
   frameData = frameData or PCMHooks.PeekFrameData(itemFrame)
   local entry = frameData and frameData.iconIdentity or nil
   local record = frameData and frameData.iconSettingsRecord or nil
@@ -4558,14 +4529,19 @@ _PCM_UpdateIconCooldownState = function(itemFrame, viewerKey, event, frameData)
   local stateChanged = frameData.iconCooldownState ~= stateName
   frameData.iconCooldownState = stateName
 
-  if frameData.iconSettingsNeedsSwipeRefresh == true then
-    _PCM_ApplyNativeIconSettings(itemFrame, viewerKey, frameData)
-  end
   if record and stateChanged then
     _PCM_ApplyIconAppearance(itemFrame, viewerKey, frameData)
   end
-  if frameData.iconSettingsNeedsCountModeRefresh == true then
-    _PCM_ApplyActiveCountRule(itemFrame, viewerKey)
+  if not deferPresentation then
+    if frameData.iconSettingsNeedsSwipeRefresh == true then
+      _PCM_ApplyNativeIconSettings(itemFrame, viewerKey, frameData)
+    end
+    if frameData.iconSettingsNeedsCountModeRefresh == true
+      and not (frameData.iconSettingsNeedsSwipeRefresh == true
+        and frameData.iconSettingsForcesCooldownSource == true)
+    then
+      _PCM_ApplyActiveCountRule(itemFrame, viewerKey)
+    end
   end
 end
 
