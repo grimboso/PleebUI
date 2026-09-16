@@ -879,6 +879,71 @@ local function ResolveCooldownText(cooldown)
 end
 
 
+local PUI_ICON_TEXT_ANCHORS = {
+  TOPLEFT = "Top left",
+  TOP = "Top",
+  TOPRIGHT = "Top right",
+  LEFT = "Left",
+  CENTER = "Center",
+  RIGHT = "Right",
+  BOTTOMLEFT = "Bottom left",
+  BOTTOM = "Bottom center",
+  BOTTOMRIGHT = "Bottom right",
+}
+
+local PUI_ICON_TEXT_ANCHOR_ORDER = {
+  "TOPLEFT",
+  "TOP",
+  "TOPRIGHT",
+  "LEFT",
+  "CENTER",
+  "RIGHT",
+  "BOTTOMLEFT",
+  "BOTTOM",
+  "BOTTOMRIGHT",
+}
+
+local PUI_ICON_TEXT_DEFAULT_ANCHORS = {
+  cooldown = "CENTER",
+  charge = "BOTTOMRIGHT",
+  keybind = "TOPLEFT",
+}
+
+local PUI_CHARGE_TEXT_INSETS = {
+  TOPLEFT = { 2, -2 },
+  TOP = { 0, -2 },
+  TOPRIGHT = { -2, -2 },
+  LEFT = { 2, 0 },
+  CENTER = { 0, 0 },
+  RIGHT = { -2, 0 },
+  BOTTOMLEFT = { 2, 2 },
+  BOTTOM = { 0, 2 },
+  BOTTOMRIGHT = { -2, 2 },
+}
+
+IconSkin.TextAnchorValues = PUI_ICON_TEXT_ANCHORS
+IconSkin.TextAnchorOrder = PUI_ICON_TEXT_ANCHOR_ORDER
+
+function IconSkin.GetTextAnchor(role, point)
+  if PUI_ICON_TEXT_ANCHORS[point] then
+    return point
+  end
+  return PUI_ICON_TEXT_DEFAULT_ANCHORS[role] or "CENTER"
+end
+
+function IconSkin.ResolveTextAnchor(role, point, offsetX, offsetY)
+  point = IconSkin.GetTextAnchor(role, point)
+
+  local baseX, baseY = 0, 0
+  if role == "charge" then
+    local inset = PUI_CHARGE_TEXT_INSETS[point]
+    baseX = inset[1]
+    baseY = inset[2]
+  end
+
+  return point, baseX + (tonumber(offsetX) or 0), baseY + (tonumber(offsetY) or 0)
+end
+
 local _puiCooldownTextStyleScratch = {}
 
 local function _PUI_GetCooldownTextStyleScratch()
@@ -906,7 +971,12 @@ function IconSkin.StyleCooldownText(cd, opts)
 
   local offsetX  = opts.offsetX
   local offsetY  = opts.offsetY
-  local point = opts.point or "CENTER"
+  local point, anchorX, anchorY = IconSkin.ResolveTextAnchor(
+    opts.role,
+    opts.point,
+    offsetX,
+    offsetY
+  )
   local relativePoint = opts.relativePoint or point
 
   -- Preferred path: resolve the cooldown text once, then drive both
@@ -956,8 +1026,8 @@ function IconSkin.StyleCooldownText(cd, opts)
     -- Optional anchor and XY offset on the icon.
     if offsetX ~= nil or offsetY ~= nil or opts.point ~= nil or opts.relativePoint ~= nil then
       local parent = cd:GetParent() or cd
-      local x = offsetX or 0
-      local y = offsetY or 0
+      local x = anchorX
+      local y = anchorY
       if fs.__puiIconSkinOffsetAnchorParent ~= parent
         or fs.__puiIconSkinOffsetAnchorPoint ~= point
         or fs.__puiIconSkinOffsetAnchorRelativePoint ~= relativePoint
@@ -985,6 +1055,12 @@ function IconSkin.StyleChargeText(itemFrame, opts)
 
   local offsetX  = opts.offsetX
   local offsetY  = opts.offsetY
+  local point, anchorX, anchorY = IconSkin.ResolveTextAnchor(
+    opts.role,
+    opts.point,
+    offsetX,
+    offsetY
+  )
 
   local fs =
         (itemFrame.ChargeCount and itemFrame.ChargeCount.Current)
@@ -997,15 +1073,22 @@ function IconSkin.StyleChargeText(itemFrame, opts)
   if fs and fs.GetObjectType and fs:GetObjectType() == "FontString" then
     ApplyFontStringStyle(fs, opts)
 
-    -- Optional XY offset around a bottom-right baseline.
-    if offsetX ~= nil or offsetY ~= nil then
-      local baseX, baseY = -2, 2
-      local x = baseX + (offsetX or 0)
-      local y = baseY + (offsetY or 0)
-      fs:ClearAllPoints()
-      fs:SetPoint("BOTTOMRIGHT", itemFrame, "BOTTOMRIGHT", x, y)
+    if offsetX ~= nil or offsetY ~= nil or opts.point ~= nil then
+      if fs.__puiIconSkinOffsetAnchorParent ~= itemFrame
+        or fs.__puiIconSkinOffsetAnchorPoint ~= point
+        or fs.__puiIconSkinOffsetAnchorRelativePoint ~= point
+        or fs.__puiIconSkinOffsetAnchorX ~= anchorX
+        or fs.__puiIconSkinOffsetAnchorY ~= anchorY
+      then
+        fs.__puiIconSkinOffsetAnchorParent = itemFrame
+        fs.__puiIconSkinOffsetAnchorPoint = point
+        fs.__puiIconSkinOffsetAnchorRelativePoint = point
+        fs.__puiIconSkinOffsetAnchorX = anchorX
+        fs.__puiIconSkinOffsetAnchorY = anchorY
+        fs:ClearAllPoints()
+        fs:SetPoint(point, itemFrame, point, anchorX, anchorY)
+      end
     end
-
   end
 end
 
