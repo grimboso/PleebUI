@@ -310,6 +310,8 @@ function ChatLinks:OnInitialize()
   })
 end
 
+local HideChatSideButtons
+
 local HISTORY_VERSION = 2
 local HISTORY_TRIM_BUFFER = 128
 
@@ -1650,7 +1652,13 @@ ChatTweaksBoot:SetScript("OnEvent", function(_, event)
   if event == "PLAYER_REGEN_ENABLED" then
     if ChatLinks._puiRuntimeEnabled == true then
       _PUI_BootHistoryOwner()
-      ChatLinks:RefreshChatFrames()
+      if ChatLinks._puiPendingChatTweaks then
+        ApplyChatTweaks()
+      end
+      if ChatLinks._puiPendingChatSideButtons then
+        HideChatSideButtons()
+        ChatLinks._puiPendingChatSideButtons = nil
+      end
     end
 
     if ChatLinks._puiPendingHistoryReduce then
@@ -3572,7 +3580,7 @@ local function SkinChatFrame(chatFrame)
   end
 end
 
-local function HideChatSideButtons()
+HideChatSideButtons = function()
   local sideButtons = {
     "ChatFrameChannelButton",
     "ChatFrameToggleVoiceDeafenButton",
@@ -3739,6 +3747,9 @@ function ChatLinks:RefreshChatFrames(atPlayerEnteringWorld)
 
   if atPlayerEnteringWorld == true or not InCombatLockdown() then
     HideChatSideButtons()
+    self._puiPendingChatSideButtons = nil
+  else
+    self._puiPendingChatSideButtons = true
   end
 end
 
@@ -3977,6 +3988,8 @@ function ChatLinks:OnDisable()
   end
   self._pendingCopyOpenFrame = nil
   self._pendingCopyOpenHooked = nil
+  self._puiPendingChatTweaks = nil
+  self._puiPendingChatSideButtons = nil
   self:_CancelFadeTimers()
 
   local cf = _G.ChatFrame1
