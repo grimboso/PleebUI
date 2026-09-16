@@ -244,8 +244,9 @@ local function HookItem(entry, itemFrame)
   end
   itemState.rebindHooked = true
 
-  -- Cooldown IDs can be restricted. Treat SetCooldownID only as a rebind signal.
-  Hooks.HookMethod(itemFrame, "SetCooldownID", "PCMRuntime_ItemRebind", function(frame)
+  -- Blizzard emits this only for an actual or forced bind; unchanged setters
+  -- must not invalidate presentation. Do not compare restricted cooldown IDs.
+  Hooks.HookMethod(itemFrame, "OnCooldownIDSet", "PCMRuntime_ItemRebind", function(frame)
     if not state.enabled then
       return
     end
