@@ -8,6 +8,7 @@ local Cooldowns = ns.Modules.CooldownManager
 local OptionsUtil = ns.OptionsUtil
 local PCMPresentation = ns.PCMPresentation
 local AuraWidget = ns.AuraWidget
+local IconSkin = ns.IconSkin
 local IconSettings = ns.PCMIconSettings
 local DB = ns.PCM_DBExports
 local P, TrackThis = ns.Pleebug:DropIn(Addon, { name = "PCM", bucket = "Config" })
@@ -506,9 +507,9 @@ local function _PCM_BuildBuffIconFontArgs(cm, viewerKey, prefix, fontKey, orderB
 
   args[prefix .. "Size"] = {
     type = "range",
-    name = prefix .. " font size",
+    name = "Font size",
     desc = "Set to 0 to use the UI theme.",
-    order = orderBase + 1,
+    order = orderBase + 2,
     min = 0,
     max = 48,
     step = 1,
@@ -535,8 +536,8 @@ local function _PCM_BuildBuffIconFontArgs(cm, viewerKey, prefix, fontKey, orderB
   args[prefix .. "Font"] = {
     type = "select",
     dialogControl = "LSM30_Font",
-    name = prefix .. " font",
-    order = orderBase + 2,
+    name = "Font",
+    order = orderBase + 1,
 
     values = function()
       return OptionsUtil.BuildFontValues(false, "Use theme default", "")
@@ -554,7 +555,7 @@ local function _PCM_BuildBuffIconFontArgs(cm, viewerKey, prefix, fontKey, orderB
 
   args[prefix .. "Outline"] = {
     type = "select",
-    name = prefix .. " font outline",
+    name = "Font outline",
     order = orderBase + 3,
 
     values = function()
@@ -571,10 +572,28 @@ local function _PCM_BuildBuffIconFontArgs(cm, viewerKey, prefix, fontKey, orderB
     end,
   }
 
+  args[prefix .. "Anchor"] = {
+    type = "select",
+    name = "Anchor point",
+    order = orderBase + 5,
+    values = IconSkin.TextAnchorValues,
+    sorting = IconSkin.TextAnchorOrder,
+
+    get = function()
+      local f = GetFontTable()
+      return IconSkin.GetTextAnchor(fontKey, f.point)
+    end,
+    set = function(_, value)
+      local f = GetFontTable()
+      f.point = value
+      _PCM_RefreshBuffIconViewer(viewerKey)
+    end,
+  }
+
   args[prefix .. "OffsetX"] = {
     type = "range",
-    name = prefix .. " X offset",
-    order = orderBase + 4,
+    name = "X offset",
+    order = orderBase + 6,
     min = -64,
     max = 64,
     step = 1,
@@ -595,8 +614,8 @@ local function _PCM_BuildBuffIconFontArgs(cm, viewerKey, prefix, fontKey, orderB
 
   args[prefix .. "OffsetY"] = {
     type = "range",
-    name = prefix .. " Y offset",
-    order = orderBase + 5,
+    name = "Y offset",
+    order = orderBase + 7,
     min = -64,
     max = 64,
     step = 1,
@@ -617,8 +636,8 @@ local function _PCM_BuildBuffIconFontArgs(cm, viewerKey, prefix, fontKey, orderB
 
   args[prefix .. "Color"] = {
     type = "color",
-    name = prefix .. " font color",
-    order = orderBase + 6,
+    name = "Font color",
+    order = orderBase + 4,
     hasAlpha = true,
 
     get = function()
@@ -755,10 +774,34 @@ local function _PCM_BuildBuffIconsTabArgs()
     end,
   }
 
+  args.viewerBorderSize = {
+    type = "range",
+    name = "Border size",
+    order = 20,
+    min = 0,
+    max = 6,
+    step = 1,
+
+    get = function()
+      local _, vb = GetViewerBorderDB(viewerCM, viewerKey)
+      local size = tonumber(vb.thickness) or 2
+      if size < 0 then size = 0 end
+      if size > 6 then size = 6 end
+      return size
+    end,
+    set = function(_, value)
+      local _, vb = GetViewerBorderDB(viewerCM, viewerKey)
+      vb.thickness = tonumber(value) or 0
+      vb.useModule = false
+      Cooldowns.SetViewerBorderThickness(viewerKey, value)
+      Cooldowns._RefreshViewerBordersOnly(viewerKey)
+    end,
+  }
+
   args.viewerBorderColor = {
     type = "color",
     name = "Border color",
-    order = 20,
+    order = 21,
     hasAlpha = true,
 
     get = function()
@@ -775,8 +818,8 @@ local function _PCM_BuildBuffIconsTabArgs()
     end,
   }
 
-  local countArgs = _PCM_BuildBuffIconFontArgs(cm, viewerKey, "Count", "cooldown", 30)
-  for k, v in pairs(countArgs) do
+  local durationArgs = _PCM_BuildBuffIconFontArgs(cm, viewerKey, "Duration", "cooldown", 30)
+  for k, v in pairs(durationArgs) do
     args[k] = v
   end
 
@@ -786,66 +829,88 @@ local function _PCM_BuildBuffIconsTabArgs()
   end
 
   return {
-    general = {
-      type = "group",
-      name = "General",
-      order = 5,
-      args = {
-        showTooltips = args.showTooltips,
-        hideWhenInactive = args.hideWhenInactive,
-      },
-    },
-    iconOverrides = {
-      type = "group",
-      name = "Icon overrides",
-      order = 100,
-      childGroups = "tree",
-      args = _PCM_BuildIconOverrideTreeArgs(viewerKey),
-    },
     layout = {
       type = "group",
       name = "Layout",
       order = 10,
       args = {
-        growth = args.growth,
-        iconSize = args.iconSize,
-        iconSpacing = args.iconSpacing,
-        iconsPerRow = args.iconsPerRow,
+        behavior = {
+          type = "group",
+          name = "Behavior",
+          order = 10,
+          inline = true,
+          args = {
+            showTooltips = args.showTooltips,
+            hideWhenInactive = args.hideWhenInactive,
+          },
+        },
+        icons = {
+          type = "group",
+          name = "Icons",
+          order = 20,
+          inline = true,
+          args = {
+            growth = args.growth,
+            iconSize = args.iconSize,
+            iconSpacing = args.iconSpacing,
+            iconsPerRow = args.iconsPerRow,
+          },
+        },
+        border = {
+          type = "group",
+          name = "Border",
+          order = 30,
+          inline = true,
+          args = {
+            viewerBorderSize = args.viewerBorderSize,
+            viewerBorderColor = args.viewerBorderColor,
+          },
+        },
       },
     },
-    borders = {
+    text = {
       type = "group",
-      name = "Borders",
+      name = "Text",
       order = 20,
       args = {
-        viewerBorderColor = args.viewerBorderColor,
+        durationText = {
+          type = "group",
+          name = "Duration text",
+          order = 10,
+          inline = true,
+          args = {
+            DurationSize = args.DurationSize,
+            DurationFont = args.DurationFont,
+            DurationOutline = args.DurationOutline,
+            DurationColor = args.DurationColor,
+            DurationAnchor = args.DurationAnchor,
+            DurationOffsetX = args.DurationOffsetX,
+            DurationOffsetY = args.DurationOffsetY,
+          },
+        },
+        stackText = {
+          type = "group",
+          name = "Stack text",
+          order = 20,
+          inline = true,
+          args = {
+            StackSize = args.StackSize,
+            StackFont = args.StackFont,
+            StackOutline = args.StackOutline,
+            StackColor = args.StackColor,
+            StackAnchor = args.StackAnchor,
+            StackOffsetX = args.StackOffsetX,
+            StackOffsetY = args.StackOffsetY,
+          },
+        },
       },
     },
-    countText = {
+    iconOverrides = {
       type = "group",
-      name = "Cooldown text",
-      order = 30,
-      args = {
-        CountSize = args.CountSize,
-        CountFont = args.CountFont,
-        CountOutline = args.CountOutline,
-        CountOffsetX = args.CountOffsetX,
-        CountOffsetY = args.CountOffsetY,
-        CountColor = args.CountColor,
-      },
-    },
-    stackText = {
-      type = "group",
-      name = "Stack text",
-      order = 40,
-      args = {
-        StackSize = args.StackSize,
-        StackFont = args.StackFont,
-        StackOutline = args.StackOutline,
-        StackOffsetX = args.StackOffsetX,
-        StackOffsetY = args.StackOffsetY,
-        StackColor = args.StackColor,
-      },
+      name = "Individual icons",
+      order = 100,
+      childGroups = "select",
+      args = _PCM_BuildIconOverrideTreeArgs(viewerKey),
     },
   }
 end
@@ -1317,6 +1382,25 @@ local function _PCM_BuildCooldownViewerArgs(cm, viewerKey, opts)
     end,
   }
 
+  args.cooldownAnchor = {
+    type = "select",
+    name = "Anchor point",
+    order = 62.5,
+    values = IconSkin.TextAnchorValues,
+    sorting = IconSkin.TextAnchorOrder,
+
+    get = function()
+      local f = GetViewerFonts().cooldown or {}
+      return IconSkin.GetTextAnchor("cooldown", f.point)
+    end,
+    set = function(_, value)
+      local vf = GetViewerFonts()
+      vf.cooldown = vf.cooldown or {}
+      vf.cooldown.point = value
+      _PCM_ConfigRefreshViewers(viewerKey, opts)
+    end,
+  }
+
   args.cooldownOffsetX = {
     type = "range",
     name = "Cooldown X offset",
@@ -1451,6 +1535,25 @@ local function _PCM_BuildCooldownViewerArgs(cm, viewerKey, opts)
     end,
   }
 
+  args.keybindAnchor = {
+    type = "select",
+    name = "Anchor point",
+    order = 72.5,
+    values = IconSkin.TextAnchorValues,
+    sorting = IconSkin.TextAnchorOrder,
+
+    get = function()
+      local f = GetViewerFonts().keybind or {}
+      return IconSkin.GetTextAnchor("keybind", f.point)
+    end,
+    set = function(_, value)
+      local vf = GetViewerFonts()
+      vf.keybind = vf.keybind or {}
+      vf.keybind.point = value
+      _PCM_ConfigRefreshViewers(viewerKey, opts)
+    end,
+  }
+
   args.keybindOffsetX = {
     type = "range",
     name = "Keybind X offset",
@@ -1581,6 +1684,25 @@ local function _PCM_BuildCooldownViewerArgs(cm, viewerKey, opts)
       local vf = GetViewerFonts()
       vf.charge = vf.charge or {}
       vf.charge.flags = (key ~= "") and key or nil
+      _PCM_ConfigRefreshViewers(viewerKey, opts)
+    end,
+  }
+
+  args.chargeAnchor = {
+    type = "select",
+    name = "Anchor point",
+    order = 82.5,
+    values = IconSkin.TextAnchorValues,
+    sorting = IconSkin.TextAnchorOrder,
+
+    get = function()
+      local f = GetViewerFonts().charge or {}
+      return IconSkin.GetTextAnchor("charge", f.point)
+    end,
+    set = function(_, value)
+      local vf = GetViewerFonts()
+      vf.charge = vf.charge or {}
+      vf.charge.point = value
       _PCM_ConfigRefreshViewers(viewerKey, opts)
     end,
   }
@@ -1963,23 +2085,47 @@ local function _PCM_BuildIconTextSettingsArgs(args, viewerKey, entry, role, labe
     end,
   }
 
+  local function HasCustomPosition()
+    return IconSettings:GetField(entry, role, "point") ~= nil
+      or IconSettings:GetField(entry, role, "offsetX") ~= nil
+      or IconSettings:GetField(entry, role, "offsetY") ~= nil
+  end
+
   args[prefix .. "PositionOverride"] = {
     type = "toggle",
     name = "Custom position",
     order = orderBase + 6,
-    get = function()
-      return IconSettings:GetField(entry, role, "offsetX") ~= nil
-        or IconSettings:GetField(entry, role, "offsetY") ~= nil
-    end,
+    get = HasCustomPosition,
     set = function(_, enabled)
       if enabled then
         local viewerFont = GetViewerFont()
+        IconSettings:SetField(entry, role, "point", IconSkin.GetTextAnchor(role, viewerFont.point))
         IconSettings:SetField(entry, role, "offsetX", viewerFont.offsetX or 0)
         IconSettings:SetField(entry, role, "offsetY", viewerFont.offsetY or 0)
       else
+        IconSettings:SetField(entry, role, "point", nil)
         IconSettings:SetField(entry, role, "offsetX", nil)
         IconSettings:SetField(entry, role, "offsetY", nil)
       end
+      Refresh()
+    end,
+  }
+
+  args[prefix .. "Anchor"] = {
+    type = "select",
+    name = "Anchor point",
+    order = orderBase + 6.5,
+    values = IconSkin.TextAnchorValues,
+    sorting = IconSkin.TextAnchorOrder,
+    disabled = function()
+      return not HasCustomPosition()
+    end,
+    get = function()
+      local point = IconSettings:GetField(entry, role, "point")
+      return IconSkin.GetTextAnchor(role, point or GetViewerFont().point)
+    end,
+    set = function(_, value)
+      IconSettings:SetField(entry, role, "point", value)
       Refresh()
     end,
   }
@@ -1992,8 +2138,7 @@ local function _PCM_BuildIconTextSettingsArgs(args, viewerKey, entry, role, labe
     max = 64,
     step = 1,
     disabled = function()
-      return IconSettings:GetField(entry, role, "offsetX") == nil
-        and IconSettings:GetField(entry, role, "offsetY") == nil
+      return not HasCustomPosition()
     end,
     get = function()
       return IconSettings:GetField(entry, role, "offsetX") or GetViewerFont().offsetX or 0
@@ -2012,8 +2157,7 @@ local function _PCM_BuildIconTextSettingsArgs(args, viewerKey, entry, role, labe
     max = 64,
     step = 1,
     disabled = function()
-      return IconSettings:GetField(entry, role, "offsetX") == nil
-        and IconSettings:GetField(entry, role, "offsetY") == nil
+      return not HasCustomPosition()
     end,
     get = function()
       return IconSettings:GetField(entry, role, "offsetY") or GetViewerFont().offsetY or 0
@@ -2830,7 +2974,7 @@ local function _PCM_BuildCooldownViewerTreeArgs(cm, viewerKey, viewerLabel, opts
     "borderColor",
   })
 
-  AddGroup("swipe", "Cooldown swipe", {
+  AddGroup("swipe", "Swipe", {
     "swipeGCD",
     "swipeCooldown",
     "swipeDuration",
@@ -2842,7 +2986,7 @@ local function _PCM_BuildCooldownViewerTreeArgs(cm, viewerKey, viewerLabel, opts
   local textArgs = {
     cooldownFont = {
       type = "group",
-      name = "Cooldown text",
+      name = "Timer text",
       order = 10,
       inline = true,
       args = CollectArgs({
@@ -2851,6 +2995,7 @@ local function _PCM_BuildCooldownViewerTreeArgs(cm, viewerKey, viewerLabel, opts
         "cooldownFontSize",
         "cooldownFont",
         "cooldownOutline",
+        "cooldownAnchor",
         "cooldownOffsetX",
         "cooldownOffsetY",
         "cooldownColor",
@@ -2866,6 +3011,7 @@ local function _PCM_BuildCooldownViewerTreeArgs(cm, viewerKey, viewerLabel, opts
         "keybindFontSize",
         "keybindFont",
         "keybindOutline",
+        "keybindAnchor",
         "keybindOffsetX",
         "keybindOffsetY",
         "keybindColor",
@@ -2882,6 +3028,7 @@ local function _PCM_BuildCooldownViewerTreeArgs(cm, viewerKey, viewerLabel, opts
         "chargeFontSize",
         "chargeFont",
         "chargeOutline",
+        "chargeAnchor",
         "chargeOffsetX",
         "chargeOffsetY",
         "chargeColor",
@@ -2891,7 +3038,7 @@ local function _PCM_BuildCooldownViewerTreeArgs(cm, viewerKey, viewerLabel, opts
 
   args.textsFonts = {
     type = "group",
-    name = "Texts and fonts",
+    name = "Text",
     order = order,
     args = textArgs,
   }
@@ -2913,9 +3060,9 @@ local function _PCM_BuildCooldownViewerTreeArgs(cm, viewerKey, viewerLabel, opts
 
   args.iconOverrides = {
     type = "group",
-    name = "Icon overrides",
+    name = "Individual icons",
     order = 1000,
-    childGroups = "tree",
+    childGroups = "select",
     args = _PCM_BuildIconOverrideTreeArgs(viewerKey),
   }
 
