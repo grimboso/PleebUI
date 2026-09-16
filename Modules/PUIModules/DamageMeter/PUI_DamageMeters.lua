@@ -709,8 +709,9 @@ function DamageMeters:PLAYER_REGEN_DISABLED()
     Breakdown.Close()
   end
 
-  self:CancelCombatRefresh()
-  self:RefreshWindows()
+  if self:MarkCurrentWindowsDirty() then
+    self:ScheduleCombatRefresh()
+  end
 end
 
 function DamageMeters:ADDON_RESTRICTION_STATE_CHANGED(_, restrictionType, state)
@@ -779,15 +780,14 @@ function DamageMeters:UNIT_FLAGS(_, unit)
   self.waitingForGroupCombatEnd = true
   Breakdown.InvalidateTargetAnalysisCache()
   self:CancelHistoryCaptureWork()
-  local selectionChanged = self:SelectCurrentSessionsOnCombat()
+  self:SelectCurrentSessionsOnCombat()
   if self.breakdownSelection
     and (self.breakdownSelection.sessionID ~= nil or self.breakdownSelection.isLocalPlayer ~= true)
   then
     Breakdown.Close()
   end
-  if selectionChanged then
-    self:CancelCombatRefresh()
-    self:RefreshWindows()
+  if self:MarkCurrentWindowsDirty() then
+    self:ScheduleCombatRefresh()
   end
 end
 
@@ -805,8 +805,9 @@ function DamageMeters:ENCOUNTER_START(_, encounterID, encounterName, difficultyI
   then
     Breakdown.Close()
   end
-  self:CancelCombatRefresh()
-  self:RefreshWindows()
+  if self:MarkCurrentWindowsDirty() then
+    self:ScheduleCombatRefresh()
+  end
 end
 
 function DamageMeters:ENCOUNTER_END(
