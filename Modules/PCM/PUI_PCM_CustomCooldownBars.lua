@@ -29,6 +29,7 @@ local _SB_UpdateFrame = CreateFrame("Frame")
 _SB_UpdateFrame:Hide()
 local _SB_ClearKnownSpellCache
 local _SB_KnownSpellCache = {}
+local _SB_SpellAvailability = {}
 
 local Cooldowns = ns.Modules.CooldownManager
 local __PUI_PCM_SpellBars = {
@@ -644,6 +645,7 @@ local function _SB_UpdateVisibilityAll()
 end
 
 _SB_RebuildAll = function()
+  wipe(_SB_SpellAvailability)
   if InCombatLockdown() then
     __PUI_PCM_SpellBars.pendingSpecTalentRefresh = true
   end
@@ -690,6 +692,16 @@ _SB_RebuildAll = function()
 
     if enabled then
       enabled = _SB_IsTrackedSpellKnown(cfg)
+    end
+
+    if cfg and cfg.enabled ~= false
+      and (cfg.presentation == "BAR" or cfg.presentation == "BUTTON")
+    then
+      _SB_SpellAvailability[key] = {
+        cfg = cfg,
+        spellID = cfg.trackedSpellID,
+        available = enabled == true,
+      }
     end
 
     if not enabled then
@@ -1202,8 +1214,28 @@ function Cooldowns:SpellBars_RefreshAfterTalentSwap()
   end
 
   __PUI_PCM_SpellBars.pendingSpecTalentRefresh = false
+  __PUI_PCM_SpellBars.pendingSpellAvailabilityRefresh = nil
   _SB_ClearKnownSpellCache()
   self:SpellBars_Rebuild()
+end
+
+local function _SB_RefreshSpellAvailability()
+  if InCombatLockdown() or ns.PCM_IsTransitionPending() then
+    __PUI_PCM_SpellBars.pendingSpellAvailabilityRefresh = true
+    return
+  end
+
+  __PUI_PCM_SpellBars.pendingSpellAvailabilityRefresh = nil
+  for _, entry in pairs(_SB_SpellAvailability) do
+    local spellID = entry.spellID
+    local available = spellID ~= nil and C_Spell.DoesSpellExist(spellID)
+      and (entry.cfg.forceShow == true
+        or C_SpellBook.IsSpellKnown(spellID, Enum.SpellBookSpellBank.Player))
+    if available ~= entry.available then
+      Cooldowns:SpellBars_RefreshAfterTalentSwap()
+      return
+    end
+  end
 end
 
 PCMRuntime:RegisterSubscriber("SpellBars", {
@@ -1220,6 +1252,10 @@ PCMRuntime:RegisterSubscriber("SpellBars", {
         and not ns.PCM_IsTransitionPending()
       then
         Cooldowns:SpellBars_RefreshAfterTalentSwap()
+      elseif event == "PLAYER_REGEN_ENABLED"
+        and __PUI_PCM_SpellBars.pendingSpellAvailabilityRefresh
+      then
+        _SB_RefreshSpellAvailability()
       end
     elseif event == "PLAYER_SPECIALIZATION_CHANGED"
       or event == "ACTIVE_PLAYER_SPECIALIZATION_CHANGED"
@@ -1229,11 +1265,7 @@ PCMRuntime:RegisterSubscriber("SpellBars", {
     then
       Cooldowns:_SpellBars_OnTalentUpdate(event, ...)
     elseif event == "SPELLS_CHANGED" then
-      if ns.PCM_IsTransitionPending() then
-        __PUI_PCM_SpellBars.pendingSpecTalentRefresh = true
-      else
-        Cooldowns:SpellBars_RefreshAfterTalentSwap()
-      end
+      _SB_RefreshSpellAvailability()
     end
   end,
 })
@@ -1252,6 +1284,9 @@ function Cooldowns:SpellBars_Enable()
 end
 
 function Cooldowns:SpellBars_Disable()
+  __PUI_PCM_SpellBars.pendingSpellAvailabilityRefresh = nil
+  __PUI_PCM_SpellBars.pendingSpecTalentRefresh = nil
+  wipe(_SB_SpellAvailability)
   _SB_RuntimeEnabled = false
   _SB_UpdateQueued = false
   _SB_UpdateFrame:Hide()
@@ -1315,6 +1350,7 @@ end
 
 
   Cooldowns._SpellBars_OnTalentUpdate = P:Def('Cooldowns:_SpellBars_OnTalentUpdate', Cooldowns._SpellBars_OnTalentUpdate)
+  _SB_RefreshSpellAvailability = P:Def('_SB_RefreshSpellAvailability', _SB_RefreshSpellAvailability)
   _SB_IsTrackedSpellKnown = P:Def('_SB_IsTrackedSpellKnown', _SB_IsTrackedSpellKnown)
   _SB_ClearTextDuration = P:Def('_SB_ClearTextDuration', _SB_ClearTextDuration)
   _SB_ApplyTextDuration = P:Def('_SB_ApplyTextDuration', _SB_ApplyTextDuration)
