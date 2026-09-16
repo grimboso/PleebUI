@@ -22,6 +22,7 @@ local tostring = _G.tostring
 
 local LSM = ns.LSM
 local Theme = ns.Theme
+local OptionsUtil = ns.OptionsUtil
 
 
 local P = select(1, ns.Pleebug:DropIn(Text, { name = "UnitFrames.Text" }))
@@ -367,30 +368,21 @@ function Text.ApplyUnitTextFont(fontString, unit, kind, baseSize, cfg, useConfig
 
   outline = Theme.NormalizeOutlineFlags(outline or "")
 
-  local gFont, gFlags
-  gFont, gFlags = Theme.GetIconTextGlobal()
-
-  gFlags = Theme.NormalizeOutlineFlags(gFlags or "")
-
-  if (not fontKey or fontKey == "") and type(gFont) == "string" and gFont ~= "" then
-    fontKey = gFont
-  end
+  local _, globalFlags = Theme.GetIconTextGlobal()
+  globalFlags = Theme.NormalizeOutlineFlags(globalFlags or "")
 
   if outline == "" then
-    outline = (gFlags ~= "" and gFlags) or "OUTLINE"
+    outline = (globalFlags ~= "" and globalFlags) or "OUTLINE"
   end
 
-  if fontKey then
-    local fontPath = LSM:Fetch("font", fontKey, true)
-    if fontPath then
-      fontString:SetFont(fontPath, Theme.ResolveFontSize(size, "unitFrames"), outline)
-      if fontString:GetFont() then
-        return
-      end
-    end
-  end
+  local useGlobalFont = fontKey == nil or fontKey == ""
+  fontKey = OptionsUtil.ResolveFontKey(fontKey, useGlobalFont)
 
-  Theme.ApplyFont(fontString, "body", size, outline, "unitFrames")
+  fontString:SetFont(
+    LSM:Fetch("font", fontKey, true),
+    Theme.ResolveFontSize(size, "unitFrames"),
+    outline
+  )
 end
 
 function Text.ApplyUnitTextLayout(frame, unit, cfg, useConfigText)
@@ -633,6 +625,25 @@ function Text.ApplyFrame(frame, unit, cfg, fontRev, opts)
     or frame.__puiTextApplyConfigKey ~= textKey
     or frame.__puiTextApplyClassColoredNames ~= classColoredNames
   then
+    if frame.__puiFontRev ~= curRev or frame.__puiTextConfigKey ~= textKey then
+      local baseNameSize, baseHPSize, basePowerSize = ns.UnitFrames:GetBaseTextSizesForUnit(unit)
+
+      if frame.NameText then
+        Text.ApplyUnitTextFont(frame.NameText, unit, "name", baseNameSize, cfg, useConfigText)
+      end
+
+      if frame.HealthText then
+        Text.ApplyUnitTextFont(frame.HealthText, unit, "health", baseHPSize, cfg, useConfigText)
+      end
+
+      if frame.PowerText then
+        Text.ApplyUnitTextFont(frame.PowerText, unit, "power", basePowerSize, cfg, useConfigText)
+      end
+
+      frame.__puiFontRev = curRev
+      frame.__puiTextConfigKey = textKey
+    end
+
     frame.__puiTextApplyUnit = unit
     frame.__puiTextApplyUseConfigText = useConfigText
     frame.__puiTextApplyFontRev = curRev
@@ -674,25 +685,6 @@ function Text.ApplyFrame(frame, unit, cfg, fontRev, opts)
     elseif frame.PowerText then
       Text.TagOrClearFrame(frame, frame.PowerText, "")
       frame.PowerText:Hide()
-    end
-
-    if frame.__puiFontRev ~= curRev or frame.__puiTextConfigKey ~= textKey then
-      local baseNameSize, baseHPSize, basePowerSize = ns.UnitFrames:GetBaseTextSizesForUnit(unit)
-
-      if frame.NameText then
-        Text.ApplyUnitTextFont(frame.NameText, unit, "name", baseNameSize, cfg, useConfigText)
-      end
-
-      if frame.HealthText then
-        Text.ApplyUnitTextFont(frame.HealthText, unit, "health", baseHPSize, cfg, useConfigText)
-      end
-
-      if frame.PowerText then
-        Text.ApplyUnitTextFont(frame.PowerText, unit, "power", basePowerSize, cfg, useConfigText)
-      end
-
-      frame.__puiFontRev = curRev
-      frame.__puiTextConfigKey = textKey
     end
   end
 
