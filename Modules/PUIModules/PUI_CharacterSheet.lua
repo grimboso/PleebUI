@@ -2111,6 +2111,8 @@ local function CS_SkinEquipmentManagerPane()
     if not _G.GearManagerPopupFrame._puiCharHooked then
       _G.GearManagerPopupFrame:HookScript("OnShow", function(frame)
         frame:SetFrameStrata("FULLSCREEN_DIALOG")
+        frame.IconSelector:SetFrameStrata("FULLSCREEN_DIALOG")
+        frame.IconSelector:SetFrameLevel(frame.BorderBox:GetFrameLevel() + 1)
         StripTextures(frame, true)
         CS_ApplyBackdrop(frame, CS_BG)
       end)
@@ -2119,6 +2121,8 @@ local function CS_SkinEquipmentManagerPane()
 
     if _G.GearManagerPopupFrame:IsShown() then
       _G.GearManagerPopupFrame:SetFrameStrata("FULLSCREEN_DIALOG")
+      _G.GearManagerPopupFrame.IconSelector:SetFrameStrata("FULLSCREEN_DIALOG")
+      _G.GearManagerPopupFrame.IconSelector:SetFrameLevel(_G.GearManagerPopupFrame.BorderBox:GetFrameLevel() + 1)
       CS_ApplyBackdrop(_G.GearManagerPopupFrame, CS_BG)
     end
   end
