@@ -217,6 +217,24 @@ local function PCMPreview_ApplyFont(fontString, config, role, fallbackSize, zoom
   fontString:SetTextColor(r, g, b, a)
 end
 
+local function PCMPreview_ApplyTextAnchor(fontString, frame, role, config, displayScale)
+  local point, x, y = IconSkin.ResolveTextAnchor(
+    role,
+    config and config.point,
+    config and config.offsetX,
+    config and config.offsetY
+  )
+
+  fontString:ClearAllPoints()
+  fontString:SetPoint(
+    point,
+    frame,
+    point,
+    Round(x * displayScale),
+    Round(y * displayScale)
+  )
+end
+
 local function PCMPreview_ApplyBackdrop(frame, background, border, thickness)
   Theme.SetSquareBackdrop(frame, {
     bg = background,
@@ -588,6 +606,7 @@ local function PCMPreview_GetEffectiveIconText(entry, role, viewerConfig)
     size = override.size ~= nil and override.size or viewerConfig.size,
     flags = override.flags ~= nil and override.flags or viewerConfig.flags,
     color = override.color ~= nil and override.color or viewerConfig.color,
+    point = override.point ~= nil and override.point or viewerConfig.point,
     offsetX = override.offsetX ~= nil and override.offsetX or viewerConfig.offsetX,
     offsetY = override.offsetY ~= nil and override.offsetY or viewerConfig.offsetY,
   }, override.show
@@ -839,29 +858,26 @@ local function PCMPreview_ConfigureViewerPanel(box, panel, definition, root)
     PCMPreview_ApplyFont(icon.chargeText, effectiveChargeFont, "tiny", 10, displayScale)
     PCMPreview_ApplyFont(icon.keybindText, effectiveKeybindFont, "tiny", 8, displayScale)
 
-    icon.cooldownText:ClearAllPoints()
-    icon.cooldownText:SetPoint(
-      "CENTER",
+    PCMPreview_ApplyTextAnchor(
+      icon.cooldownText,
       icon.frame,
-      "CENTER",
-      Round((effectiveCooldownFont.offsetX or 0) * displayScale),
-      Round((effectiveCooldownFont.offsetY or 0) * displayScale)
+      "cooldown",
+      effectiveCooldownFont,
+      displayScale
     )
-    icon.chargeText:ClearAllPoints()
-    icon.chargeText:SetPoint(
-      "BOTTOMRIGHT",
+    PCMPreview_ApplyTextAnchor(
+      icon.chargeText,
       icon.frame,
-      "BOTTOMRIGHT",
-      Round((-2 + (effectiveChargeFont.offsetX or 0)) * displayScale),
-      Round((2 + (effectiveChargeFont.offsetY or 0)) * displayScale)
+      "charge",
+      effectiveChargeFont,
+      displayScale
     )
-    icon.keybindText:ClearAllPoints()
-    icon.keybindText:SetPoint(
-      "TOPLEFT",
+    PCMPreview_ApplyTextAnchor(
+      icon.keybindText,
       icon.frame,
-      "TOPLEFT",
-      Round((effectiveKeybindFont.offsetX or 0) * displayScale),
-      Round((effectiveKeybindFont.offsetY or 0) * displayScale)
+      "keybind",
+      effectiveKeybindFont,
+      displayScale
     )
 
     local showCooldownText = cooldownShown == nil and counts.cooldown or cooldownShown
@@ -994,6 +1010,20 @@ local function PCMPreview_ConfigureBuffIconPanel(box, panel, root, pcmRoot)
 
     PCMPreview_ApplyFont(icon.cooldownText, effectiveCountFont, "body", 10, displayScale)
     PCMPreview_ApplyFont(icon.chargeText, effectiveStackFont, "tiny", 10, displayScale)
+    PCMPreview_ApplyTextAnchor(
+      icon.cooldownText,
+      icon.frame,
+      "cooldown",
+      effectiveCountFont,
+      displayScale
+    )
+    PCMPreview_ApplyTextAnchor(
+      icon.chargeText,
+      icon.frame,
+      "charge",
+      effectiveStackFont,
+      displayScale
+    )
     PCMPreview_ApplyBackdrop(
       icon.frame,
       { 0.03, 0.03, 0.04, 1 },
