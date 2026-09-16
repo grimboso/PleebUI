@@ -484,7 +484,6 @@ function M:PLAYER_SPECIALIZATION_CHANGED(event, unit)
 end
 
 function M:UPDATE_SHAPESHIFT_FORM()
-  self:NormalizeStackOrder()
   self:RebuildSecondary()
   self:RefreshPrimaryTexture()
 end
