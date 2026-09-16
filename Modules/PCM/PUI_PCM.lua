@@ -1152,11 +1152,6 @@ function Cooldowns._ApplyFontsToItem(itemFrame, viewerKey)
 
     local cdFS = cd.GetCountdownFontString and cd:GetCountdownFontString() or cd.text
     _PCM_ApplyFontOptsToFontString(cdFS, cooldownOpts)
-
-    if cdFS and cdFS.ClearAllPoints and cdFS.SetPoint then
-      cdFS:ClearAllPoints()
-      cdFS:SetPoint("CENTER", itemFrame, "CENTER", cooldownOpts.offsetX or 0, cooldownOpts.offsetY or 0)
-    end
   end
 
   local chargeOpts = IconSettings:ResolveFontOptions(
@@ -1171,17 +1166,6 @@ function Cooldowns._ApplyFontsToItem(itemFrame, viewerKey)
   if chargeOpts then
     local chargeFS = _GetChargeFontString(itemFrame)
     _PCM_ApplyFontOptsToFontString(chargeFS, chargeOpts)
-
-    if chargeFS and chargeFS.ClearAllPoints and chargeFS.SetPoint then
-      chargeFS:ClearAllPoints()
-      chargeFS:SetPoint(
-        "BOTTOMRIGHT",
-        itemFrame,
-        "BOTTOMRIGHT",
-        -2 + (chargeOpts.offsetX or 0),
-        2 + (chargeOpts.offsetY or 0)
-      )
-    end
   end
 
   Cooldowns._ApplyKeybindFontStyle(itemFrame, viewerKey)
