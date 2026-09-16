@@ -652,6 +652,36 @@ local function ApplySingleUnitFlags(frame, unit)
   end
 end
 
+local function NormalizeTextOverrideOwnership(config)
+  local text = type(config) == "table" and config.text or nil
+  if type(text) ~= "table" or text.useOverrideFont == nil then
+    return
+  end
+
+  if text.useOverrideFont == true then
+    if text.nameUseCustomTypography == nil then
+      text.nameUseCustomTypography = true
+    end
+    if text.healthUseCustomTypography == nil then
+      text.healthUseCustomTypography = true
+    end
+    if text.powerUseCustomTypography == nil then
+      text.powerUseCustomTypography = true
+    end
+    if text.nameUseCustomPosition == nil then
+      text.nameUseCustomPosition = true
+    end
+    if text.healthUseCustomPosition == nil then
+      text.healthUseCustomPosition = true
+    end
+    if text.powerUseCustomPosition == nil then
+      text.powerUseCustomPosition = true
+    end
+  end
+
+  text.useOverrideFont = nil
+end
+
 function UF:EnsureConfigDefaults(db)
   db = db or self.db.profile
 
@@ -686,6 +716,8 @@ function UF:EnsureConfigDefaults(db)
   ns.UFAuraFilters.NormalizeDisplays(db.auras)
 
   for _, config in pairs(db.units) do
+    NormalizeTextOverrideOwnership(config)
+
     if type(config) == "table" and type(config.auras) == "table" then
       ns.UFAuraFilters.NormalizeDisplays(config.auras)
     end
