@@ -137,13 +137,13 @@ function Text.ResolveFontForText(unit, kind, baseSize, cfg, useConfigText)
     global, per = Text.GetUnitTextConfig(unit)
   end
 
-  local useOverride = groupedText ~= nil or per.useOverrideFont == true
-
   local sizeKey
   local fontConfigKey
   local useGlobalFontKey
   local outlineKey
   local anchorKey
+  local customTypographyKey
+  local customPositionKey
   local defaultAnchor
 
   if kind == "name" then
@@ -152,6 +152,8 @@ function Text.ResolveFontForText(unit, kind, baseSize, cfg, useConfigText)
     useGlobalFontKey = "nameUseGlobalFont"
     outlineKey = "nameOutline"
     anchorKey = "anchorName"
+    customTypographyKey = "nameUseCustomTypography"
+    customPositionKey = "nameUseCustomPosition"
     defaultAnchor = "LEFT"
   elseif kind == "health" then
     sizeKey = "sizeHealth"
@@ -159,6 +161,8 @@ function Text.ResolveFontForText(unit, kind, baseSize, cfg, useConfigText)
     useGlobalFontKey = "healthUseGlobalFont"
     outlineKey = "healthOutline"
     anchorKey = "anchorHealth"
+    customTypographyKey = "healthUseCustomTypography"
+    customPositionKey = "healthUseCustomPosition"
     defaultAnchor = "RIGHT"
   else
     sizeKey = "sizePower"
@@ -166,6 +170,8 @@ function Text.ResolveFontForText(unit, kind, baseSize, cfg, useConfigText)
     useGlobalFontKey = "powerUseGlobalFont"
     outlineKey = "powerOutline"
     anchorKey = "anchorPower"
+    customTypographyKey = "powerUseCustomTypography"
+    customPositionKey = "powerUseCustomPosition"
     defaultAnchor = "RIGHT"
   end
 
@@ -196,8 +202,11 @@ function Text.ResolveFontForText(unit, kind, baseSize, cfg, useConfigText)
     return fontKey, size, outline, anchor, dx, dy
   end
 
+  local useCustomTypography = per[customTypographyKey] == true
+  local useCustomPosition = per[customPositionKey] == true
   local fontKey
-  if useOverride then
+
+  if useCustomTypography then
     if not ShouldUseGlobalFont(per[fontConfigKey], per[useGlobalFontKey]) then
       fontKey = per[fontConfigKey]
     end
@@ -205,26 +214,23 @@ function Text.ResolveFontForText(unit, kind, baseSize, cfg, useConfigText)
     fontKey = global.font
   end
 
-  local size = PickTextValue(global, per, useOverride, sizeKey, sizeKey, baseSize or 12)
-  local outline = PickTextValue(global, per, useOverride, "outline", outlineKey, "OUTLINE")
-  local anchor = PickTextValue(global, per, useOverride, anchorKey, anchorKey, defaultAnchor)
+  local size = PickTextValue(global, per, useCustomTypography, sizeKey, sizeKey, baseSize or 12)
+  local outline = PickTextValue(global, per, useCustomTypography, "outline", outlineKey, "OUTLINE")
+  local anchor = PickTextValue(global, per, useCustomPosition, anchorKey, anchorKey, defaultAnchor)
 
-  local offsetXKeyGlobal, offsetYKeyGlobal
-  local offsetXKeyPer, offsetYKeyPer
+  local offsetXKey
+  local offsetYKey
 
   if kind == "name" then
-    offsetXKeyGlobal, offsetYKeyGlobal = "offsetNameX", "offsetNameY"
-    offsetXKeyPer, offsetYKeyPer = "offsetNameX", "offsetNameY"
+    offsetXKey, offsetYKey = "offsetNameX", "offsetNameY"
   elseif kind == "health" then
-    offsetXKeyGlobal, offsetYKeyGlobal = "offsetHealthX", "offsetHealthY"
-    offsetXKeyPer, offsetYKeyPer = "offsetHealthX", "offsetHealthY"
+    offsetXKey, offsetYKey = "offsetHealthX", "offsetHealthY"
   else
-    offsetXKeyGlobal, offsetYKeyGlobal = "offsetPowerX", "offsetPowerY"
-    offsetXKeyPer, offsetYKeyPer = "offsetPowerX", "offsetPowerY"
+    offsetXKey, offsetYKey = "offsetPowerX", "offsetPowerY"
   end
 
-  local dx = PickTextValue(global, per, useOverride, offsetXKeyGlobal, offsetXKeyPer, 0)
-  local dy = PickTextValue(global, per, useOverride, offsetYKeyGlobal, offsetYKeyPer, 0)
+  local dx = PickTextValue(global, per, useCustomPosition, offsetXKey, offsetXKey, 0)
+  local dy = PickTextValue(global, per, useCustomPosition, offsetYKey, offsetYKey, 0)
 
   return fontKey, size, outline, anchor, dx, dy
 end
@@ -235,7 +241,12 @@ function Text.GetConfigTextKey(cfg)
     return ""
   end
 
-  local useOverrideFont = text.useOverrideFont
+  local nameUseCustomTypography = text.nameUseCustomTypography
+  local healthUseCustomTypography = text.healthUseCustomTypography
+  local powerUseCustomTypography = text.powerUseCustomTypography
+  local nameUseCustomPosition = text.nameUseCustomPosition
+  local healthUseCustomPosition = text.healthUseCustomPosition
+  local powerUseCustomPosition = text.powerUseCustomPosition
   local font = text.font or ""
   local useGlobalFont = text.useGlobalFont
   local nameFont = text.nameFont or ""
@@ -267,7 +278,12 @@ function Text.GetConfigTextKey(cfg)
   local cache = TextConfigKeyCache[text]
   if cache
     and cache.shortenValues == shortenValues
-    and cache.useOverrideFont == useOverrideFont
+    and cache.nameUseCustomTypography == nameUseCustomTypography
+    and cache.healthUseCustomTypography == healthUseCustomTypography
+    and cache.powerUseCustomTypography == powerUseCustomTypography
+    and cache.nameUseCustomPosition == nameUseCustomPosition
+    and cache.healthUseCustomPosition == healthUseCustomPosition
+    and cache.powerUseCustomPosition == powerUseCustomPosition
     and cache.font == font
     and cache.useGlobalFont == useGlobalFont
     and cache.nameFont == nameFont
@@ -297,7 +313,12 @@ function Text.GetConfigTextKey(cfg)
   end
 
   local key = tostring(shortenValues)
-    .. "|" .. tostring(useOverrideFont)
+    .. "|" .. tostring(nameUseCustomTypography)
+    .. "|" .. tostring(healthUseCustomTypography)
+    .. "|" .. tostring(powerUseCustomTypography)
+    .. "|" .. tostring(nameUseCustomPosition)
+    .. "|" .. tostring(healthUseCustomPosition)
+    .. "|" .. tostring(powerUseCustomPosition)
     .. "|" .. tostring(font)
     .. "|" .. tostring(useGlobalFont)
     .. "|" .. tostring(nameFont)
@@ -325,7 +346,12 @@ function Text.GetConfigTextKey(cfg)
 
   TextConfigKeyCache[text] = {
     shortenValues = shortenValues,
-    useOverrideFont = useOverrideFont,
+    nameUseCustomTypography = nameUseCustomTypography,
+    healthUseCustomTypography = healthUseCustomTypography,
+    powerUseCustomTypography = powerUseCustomTypography,
+    nameUseCustomPosition = nameUseCustomPosition,
+    healthUseCustomPosition = healthUseCustomPosition,
+    powerUseCustomPosition = powerUseCustomPosition,
     font = font,
     useGlobalFont = useGlobalFont,
     nameFont = nameFont,
@@ -592,9 +618,10 @@ function Text.ApplyFrame(frame, unit, cfg, fontRev, opts)
   local hideHealthText = textCfg.hideHealthText == true
   local showHealth = not hideHealthText
   local hpMode = showHealth and (textCfg.healthMode or "CUR_MAX") or "HIDE"
-  local ppMode = textCfg.powerMode or "CUR"
   local uf = ns.UnitFrames
   local ufDB = uf and uf.db and uf.db.profile or nil
+  local globalText = ufDB and ufDB.text or nil
+  local ppMode = textCfg.powerMode or (not useConfigText and globalText and globalText.powerMode) or "CUR"
   local shortenValues = ShouldShortenValues(textCfg, ufDB)
   local healthTags = shortenValues and SHORT_HEALTH_TAGS or HEALTH_TAGS
   local defaultHealthTag = shortenValues and SHORT_DEFAULT_HEALTH_TAG or DEFAULT_HEALTH_TAG
