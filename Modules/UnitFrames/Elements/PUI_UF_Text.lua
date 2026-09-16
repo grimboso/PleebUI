@@ -207,9 +207,7 @@ function Text.ResolveFontForText(unit, kind, baseSize, cfg, useConfigText)
   local fontKey
 
   if useCustomTypography then
-    if not ShouldUseGlobalFont(per[fontConfigKey], per[useGlobalFontKey]) then
-      fontKey = per[fontConfigKey]
-    end
+    fontKey = per[fontConfigKey]
   elseif not ShouldUseGlobalFont(global.font, global.useGlobalFont) then
     fontKey = global.font
   end
