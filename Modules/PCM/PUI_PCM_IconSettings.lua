@@ -32,6 +32,12 @@ local VIEWER_FAMILIES = {
   BuffBarCooldownViewer = "bar",
 }
 
+local RUNTIME_VIEWERS = {
+  "EssentialCooldownViewer",
+  "UtilityCooldownViewer",
+  "BuffIconCooldownViewer",
+}
+
 local function CreateIdentityState()
   return {
     byCooldownID = {},
@@ -324,6 +330,12 @@ local function ResetCatalogForSpecialization()
 end
 
 function IconSettings:InvalidateCatalog()
+  if InCombatLockdown() then
+    state.catalogInvalidationPending = true
+    return
+  end
+
+  state.catalogInvalidationPending = nil
   local specID = GetCurrentSpecializationID()
   if state.catalogSpecID ~= specID then
     state.settingsGeneration = state.settingsGeneration + 1
@@ -333,10 +345,20 @@ function IconSettings:InvalidateCatalog()
   state.catalogSpecID = specID
   wipe(state.catalogs)
   ClearCatalogIdentity()
+  if self:PrimeRuntimeCache() then
+    ns.PCMRuntime:MarkAllViewersDirty(ns.PCMRuntime.Dirty.SKIN, "icon-cache-ready")
+  end
 end
 
 function IconSettings:InvalidateSettings()
   state.settingsGeneration = state.settingsGeneration + 1
+  for viewerKey, catalog in pairs(state.catalogs) do
+    local store = GetSpecializationStore(GetSettingsFamily(viewerKey), false)
+    for index = 1, #catalog.entries do
+      local entry = catalog.entries[index]
+      entry.settingsRecord = store and store[entry.settingsKey] or nil
+    end
+  end
 end
 
 function IconSettings:GetViewerEntries(viewerKey)
@@ -407,11 +429,13 @@ function IconSettings:GetViewerEntries(viewerKey)
     end
   end
 
+  local store = GetSpecializationStore(settingsFamily, false)
   for index = 1, #entries do
     local entry = entries[index]
     if familyCounts[entry.settingsKey] > 1 then
       entry.settingsKey = "c" .. tostring(entry.cooldownID)
     end
+    entry.settingsRecord = store and store[entry.settingsKey] or nil
     identity.byCooldownID[entry.cooldownID] = entry
     identity.byCooldownInfo[entry.cooldownInfo] = entry
     local canonicalEntry = identity.byCanonicalSpellID[entry.canonicalSpellID]
@@ -444,6 +468,7 @@ function IconSettings:ClearItemBinding(itemFrame)
   frameData.iconIdentity = nil
   frameData.iconIdentityGeneration = nil
   frameData.iconIdentityViewerKey = nil
+  frameData.iconIdentityRetryAfterCombat = nil
   frameData.iconSettingsRecord = nil
   frameData.iconSettingsGeneration = nil
   frameData.iconSettingsViewerKey = nil
@@ -494,7 +519,10 @@ function IconSettings:ResolveItem(itemFrame, viewerKey)
     return nil
   end
 
-  ResetCatalogForSpecialization()
+  local inCombat = InCombatLockdown()
+  if not inCombat then
+    self:GetViewerEntries(viewerKey)
+  end
 
   local frameData = Hooks.GetFrameData(itemFrame)
   if frameData.iconIdentityGeneration == state.catalogGeneration
@@ -503,12 +531,12 @@ function IconSettings:ResolveItem(itemFrame, viewerKey)
     return frameData.iconIdentity
   end
 
+  local cooldownID = GetCooldownID(itemFrame)
+  local entry = cooldownID and identity.byCooldownID[cooldownID] or nil
   local cooldownInfo = itemFrame:GetCooldownInfo()
-
-  local entry
-  if not IsSecret(cooldownInfo) and type(cooldownInfo) == "table" then
+  if not entry and not IsSecret(cooldownInfo) and type(cooldownInfo) == "table" then
     entry = identity.byCooldownInfo[cooldownInfo]
-    if not entry then
+    if not entry and not inCombat then
       local canonicalSpellID = GetCanonicalSpellIDFromInfo(cooldownInfo)
       entry = canonicalSpellID and identity.byCanonicalSpellID[canonicalSpellID] or nil
       if entry == false then
@@ -518,35 +546,18 @@ function IconSettings:ResolveItem(itemFrame, viewerKey)
     end
   end
 
-  local cooldownID
-  if not entry then
-    cooldownID = GetCooldownID(itemFrame)
-    entry = cooldownID and identity.byCooldownID[cooldownID] or nil
+  if entry and not inCombat and not IsSecret(cooldownInfo) and type(cooldownInfo) == "table" then
+    identity.byCooldownInfo[cooldownInfo] = entry
   end
 
-  if not entry and not InCombatLockdown() then
-    self:GetViewerEntries(viewerKey)
-    if not IsSecret(cooldownInfo) and type(cooldownInfo) == "table" then
-      entry = identity.byCooldownInfo[cooldownInfo]
-      if not entry then
-        local canonicalSpellID = GetCanonicalSpellIDFromInfo(cooldownInfo)
-        entry = canonicalSpellID and identity.byCanonicalSpellID[canonicalSpellID] or nil
-        if entry == false then
-          entry = nil
-        end
-        entry = entry or GetEntryFromInfoAliases(settingsFamily, cooldownInfo)
-      end
-    end
-    if not entry and cooldownID then
-      entry = identity.byCooldownID[cooldownID]
-    end
-  end
-
-  if entry then
-    frameData.iconIdentity = entry
+  frameData.iconIdentity = entry
+  -- Remember misses as well as matches. Retry missing identities after combat
+  -- or when Blizzard binds new data, rather than once per text role.
+  if inCombat or state.catalogs[viewerKey] then
     frameData.iconIdentityGeneration = state.catalogGeneration
     frameData.iconIdentityViewerKey = viewerKey
   end
+  frameData.iconIdentityRetryAfterCombat = inCombat and not entry or nil
   return entry
 end
 
@@ -576,7 +587,7 @@ function IconSettings:BindItem(itemFrame, viewerKey)
 
   local frameData = Hooks.GetFrameData(itemFrame)
   local entry = self:ResolveItem(itemFrame, viewerKey)
-  local record = self:GetRecordForEntry(entry, false)
+  local record = entry and entry.settingsRecord or nil
   frameData.iconSettingsRecord = record
   frameData.iconSettingsGeneration = state.settingsGeneration
   frameData.iconSettingsViewerKey = viewerKey
@@ -593,6 +604,40 @@ function IconSettings:GetRecordForItem(itemFrame, viewerKey)
     return frameData.iconSettingsRecord, frameData.iconIdentity, frameData
   end
   return self:BindItem(itemFrame, viewerKey)
+end
+
+
+function IconSettings:PrimeRuntimeCache()
+  if InCombatLockdown() then
+    return false
+  end
+  if state.catalogInvalidationPending then
+    self:InvalidateCatalog()
+    return true
+  end
+
+  local changed = false
+  for index = 1, #RUNTIME_VIEWERS do
+    self:GetViewerEntries(RUNTIME_VIEWERS[index])
+  end
+  for index = 1, #RUNTIME_VIEWERS do
+    local viewerKey = RUNTIME_VIEWERS[index]
+    local items = ns.PCMRuntime:GetViewerItems(viewerKey)
+    for itemIndex = 1, #items do
+      local itemFrame = items[itemIndex]
+      local frameData = Hooks.GetFrameData(itemFrame)
+      local oldEntry = frameData.iconIdentity
+      local oldRecord = frameData.iconSettingsRecord
+      if frameData.iconIdentityRetryAfterCombat then
+        frameData.iconIdentityGeneration = nil
+      end
+      local record, entry = self:GetRecordForItem(itemFrame, viewerKey)
+      if oldEntry ~= entry or oldRecord ~= record then
+        changed = true
+      end
+    end
+  end
+  return changed
 end
 
 
@@ -632,6 +677,7 @@ function IconSettings:ResolveFontOptions(itemFrame, viewerKey, role, viewerOptio
 
   cached = cached or {}
   local options = cached.options or { role = role }
+  options.scope = viewerOptions and viewerOptions.scope
   for index = 1, #FONT_FIELDS do
     local field = FONT_FIELDS[index]
     local value = text[field]
@@ -887,6 +933,7 @@ IconSettings.ResolveItem = P:Def("IconSettings:ResolveItem", IconSettings.Resolv
 IconSettings.GetRecordForEntry = P:Def("IconSettings:GetRecordForEntry", IconSettings.GetRecordForEntry)
 IconSettings.BindItem = P:Def("IconSettings:BindItem", IconSettings.BindItem)
 IconSettings.GetRecordForItem = P:Def("IconSettings:GetRecordForItem", IconSettings.GetRecordForItem)
+IconSettings.PrimeRuntimeCache = P:Def("IconSettings:PrimeRuntimeCache", IconSettings.PrimeRuntimeCache)
 IconSettings.HasShownTextOverride = P:Def("IconSettings:HasShownTextOverride", IconSettings.HasShownTextOverride)
 IconSettings.ResolveFontOptions = P:Def("IconSettings:ResolveFontOptions", IconSettings.ResolveFontOptions)
 IconSettings.ResolveSwipeOptions = P:Def("IconSettings:ResolveSwipeOptions", IconSettings.ResolveSwipeOptions)
