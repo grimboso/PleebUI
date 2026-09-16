@@ -347,16 +347,16 @@ local function GetFontValue(context, role)
   local key = role .. "Font"
   local globalKey = role .. "UseGlobalFont"
 
-  if context.family == "single" and context.text[GetTypographyOverrideKey(role)] ~= true then
-    return ""
+  if context.family == "single" then
+    if context.text[GetTypographyOverrideKey(role)] ~= true then
+      return ""
+    end
+
+    return context.text[key] or ""
   end
 
   if context.text[globalKey] == true then
     return ""
-  end
-
-  if context.family == "single" then
-    return context.text[key] or ""
   end
 
   return context.text[key] or context.text.font or ""
@@ -371,7 +371,6 @@ local function SetFontValue(context, role, value)
   if context.family == "single" then
     context.text[GetTypographyOverrideKey(role)] = true
     context.text[key] = value
-    context.text[globalKey] = value == ""
     Addon:ApplyOptionsChange("UnitFrames", { mode = "text" })
     return
   end

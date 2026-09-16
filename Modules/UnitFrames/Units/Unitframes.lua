@@ -654,7 +654,7 @@ end
 
 local function NormalizeTextOverrideOwnership(config)
   local text = type(config) == "table" and config.text or nil
-  if type(text) ~= "table" or text.useOverrideFont == nil then
+  if type(text) ~= "table" then
     return
   end
 
@@ -680,6 +680,9 @@ local function NormalizeTextOverrideOwnership(config)
   end
 
   text.useOverrideFont = nil
+  text.nameUseGlobalFont = nil
+  text.healthUseGlobalFont = nil
+  text.powerUseGlobalFont = nil
 end
 
 function UF:EnsureConfigDefaults(db)

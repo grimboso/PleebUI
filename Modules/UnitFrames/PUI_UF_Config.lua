@@ -222,7 +222,7 @@ local UFCB_INLINE_SECTION_NAMES = {
   appearance = "Appearance",
   textures = "Textures",
   colors = "Colors",
-  typography = "Typography",
+  typography = "Font",
   position = "Position",
   layout = "Layout",
   sorting = "Sorting",
@@ -1870,11 +1870,10 @@ local function UFCB_BuildUnitTextArgs(unitKey, kind)
   local baseName, baseHP, basePower = UF:GetBaseTextSizesForUnit(unitKey)
   local baseSize = (kind == "name") and baseName or ((kind == "health") and baseHP or basePower)
 
-  local fontKey, useGlobalFontKey, outlineKey, customTypographyKey
+  local fontKey, outlineKey, customTypographyKey
   local anchorKey, offXKey, offYKey, customPositionKey, defaultAnchor
   if kind == "name" then
     fontKey = "nameFont"
-    useGlobalFontKey = "nameUseGlobalFont"
     outlineKey = "nameOutline"
     customTypographyKey = "nameUseCustomTypography"
     anchorKey = "anchorName"
@@ -1884,7 +1883,6 @@ local function UFCB_BuildUnitTextArgs(unitKey, kind)
     defaultAnchor = "LEFT"
   elseif kind == "health" then
     fontKey = "healthFont"
-    useGlobalFontKey = "healthUseGlobalFont"
     outlineKey = "healthOutline"
     customTypographyKey = "healthUseCustomTypography"
     anchorKey = "anchorHealth"
@@ -1894,7 +1892,6 @@ local function UFCB_BuildUnitTextArgs(unitKey, kind)
     defaultAnchor = "RIGHT"
   else
     fontKey = "powerFont"
-    useGlobalFontKey = "powerUseGlobalFont"
     outlineKey = "powerOutline"
     customTypographyKey = "powerUseCustomTypography"
     anchorKey = "anchorPower"
@@ -1932,9 +1929,9 @@ local function UFCB_BuildUnitTextArgs(unitKey, kind)
   end
 
   local prefixArgs = {
-    useCustomTypography = {
+    useCustomFont = {
       type = "toggle",
-      name = "Use custom typography",
+      name = "Use custom font",
       order = 1,
       desc = "Use a custom font, size, and outline for this text.",
       get = function()
@@ -2137,28 +2134,17 @@ local function UFCB_BuildUnitTextArgs(unitKey, kind)
       text[GetSizeKey()] = v
       UFCB_RefreshUFText()
     end,
-    getUseGlobalFont = function()
-      local cur = UsesCustomTypography() and text[fontKey] or globalT.font
-      local flag = UsesCustomTypography() and text[useGlobalFontKey] or globalT.useGlobalFont
-      return UFCB_IsUsingGlobalFont(cur, flag)
-    end,
-    setUseGlobalFont = function(_, v)
-      if UFCB_BlockCombat() then return end
-
-      if not UsesCustomTypography() then return end
-      text[useGlobalFontKey] = v and true or false
-      UFCB_RefreshUFText()
-    end,
     getFont = function()
-      local cur = UsesCustomTypography() and text[fontKey] or globalT.font
-      local flag = UsesCustomTypography() and text[useGlobalFontKey] or globalT.useGlobalFont
-      return OptionsUtil.ResolveFontKey(cur, flag)
+      if UsesCustomTypography() then
+        return OptionsUtil.ResolveFontKey(text[fontKey], false)
+      end
+
+      return OptionsUtil.ResolveFontKey(globalT.font, globalT.useGlobalFont)
     end,
     setFont = function(_, v)
       if UFCB_BlockCombat() then return end
       if not UsesCustomTypography() then return end
       text[fontKey] = v
-      text[useGlobalFontKey] = false
       UFCB_RefreshUFText()
     end,
     getOutline = function()
