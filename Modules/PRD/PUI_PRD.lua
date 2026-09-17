@@ -107,22 +107,13 @@ local defaults = {
         borderSize  = 1,
         bgColor     = { 0, 0, 0, 0.65 },
       },
-      text = {
-        size = 14,
-        flags = "",
-        useGlobalFont = true,
-      },
       detached              = false,
       hideAlternateMana     = false,
       colorMode             = "DEFAULT",
       useCustomColor        = false,
       useBlizzardPowerColor = true,
       customColor           = { 1, 1, 1, 1 },
-      ticks = {
-        enabled  = false,
-        maxValue = 0,
-        entries  = {},
-      },
+      resourceSettings = {},
 
       anchor = {
 
@@ -168,21 +159,6 @@ local defaults = {
       health = {
         leftVisibility = "ALWAYS",
         rightVisibility = "HIDE",
-        centerText = true,
-        left = {
-          size = 14,
-          flags = "",
-          useGlobalFont = true,
-        },
-        right = {
-          size = 14,
-          flags = "",
-          useGlobalFont = true,
-        },
-      },
-      primary = {
-        leftVisibility = "HIDE",
-        rightVisibility = "ALWAYS",
         centerText = true,
         left = {
           size = 14,
@@ -479,6 +455,87 @@ function M:IsNativeTextVisible(mode)
   return mode == "ALWAYS" or mode == "MOUSEOVER"
 end
 
+function M:GetPrimaryResourceKey()
+  local powerType, powerToken = UnitPowerType("player")
+  if type(powerType) ~= "number"
+    or type(powerToken) ~= "string"
+    or powerToken == ""
+  then
+    return nil, nil
+  end
+
+  return powerToken, powerType
+end
+
+function M:GetPrimaryResourceSettings()
+  local resourceKey = self:GetPrimaryResourceKey()
+  if not resourceKey then
+    return nil, nil
+  end
+
+  return self:EnsurePrimaryResourceSettings(resourceKey), resourceKey
+end
+
+function M:RefreshPrimaryResourceMaximum()
+  local resourceKey, powerType = self:GetPrimaryResourceKey()
+  if not resourceKey then
+    return nil
+  end
+
+  self._puiPrimaryMaxByResource = self._puiPrimaryMaxByResource or {}
+  self._puiPrimaryMaxByResource[resourceKey] = nil
+
+  if InCombatLockdown() then
+    self._puiPrimaryMaxRefreshPending = true
+    return nil
+  end
+
+  local maximum = UnitPowerMax("player", powerType)
+  if issecretvalue(maximum)
+    or type(maximum) ~= "number"
+    or maximum <= 0
+  then
+    self._puiPrimaryMaxRefreshPending = true
+    return nil
+  end
+
+  self._puiPrimaryMaxByResource[resourceKey] = maximum
+  self._puiPrimaryMaxRefreshPending = nil
+  return maximum
+end
+
+function M:GetPrimaryResourceMaximum()
+  local resourceKey = self:GetPrimaryResourceKey()
+  if not resourceKey then
+    return nil
+  end
+
+  local cache = self._puiPrimaryMaxByResource
+  local maximum = cache and cache[resourceKey]
+  if maximum then
+    return maximum
+  end
+
+  return self:RefreshPrimaryResourceMaximum()
+end
+
+function M:GetPrimaryTickMaximum(tickConfig)
+  if not tickConfig then
+    return nil
+  end
+
+  if tickConfig.automaticMax ~= false then
+    return self:GetPrimaryResourceMaximum()
+  end
+
+  local maximum = tonumber(tickConfig.maxValue)
+  if maximum and maximum > 0 then
+    return maximum
+  end
+
+  return nil
+end
+
 function M:NeedsBlizzardBarText()
   local profile = self.db and self.db.profile
   local text = profile and profile.text
@@ -496,7 +553,8 @@ function M:NeedsBlizzardBarText()
     return true
   end
 
-  local primary = text.primary
+  local primarySettings = self:GetPrimaryResourceSettings()
+  local primary = primarySettings and primarySettings.text
   return primary ~= nil
     and (
       self:IsNativeTextVisible(primary.leftVisibility)
@@ -1197,6 +1255,62 @@ function M:RequestRefresh(flags, delay)
   end)
 end
 
+function M:RefreshPrimaryResourcePresentation()
+  self:RefreshPrimaryResourceMaximum()
+  self:RefreshPrimaryTexture()
+  self:ApplyTextSettings()
+  self:RefreshPrimaryTicks()
+  self:RequestBlizzardBarTextSync()
+  ns.PRDPreview.MarkDirty()
+end
+
+function M:OnPrimaryResourceChanged(event, unit)
+  if unit ~= nil and unit ~= "player" then
+    return
+  end
+
+  if event == "PLAYER_SPECIALIZATION_CHANGED" then
+    self:SeedHidePrimaryBySpec()
+    self:NormalizeStackOrder()
+  end
+  self:RebuildSecondary()
+  self:RefreshPrimaryResourcePresentation()
+
+  local activeOptionsPath = ns._PUIActiveOptionsPath
+  local targetOptionsPath
+  if type(activeOptionsPath) == "table"
+    and activeOptionsPath[1] == "PRD"
+    and (
+      activeOptionsPath[2] == "primary"
+      or activeOptionsPath[2] == "secondary"
+    )
+  then
+    targetOptionsPath = { "PRD", activeOptionsPath[2] }
+  end
+
+  ns.Addon:NotifyOptionsTreeChanged("PRD", targetOptionsPath)
+end
+
+function M:OnPrimaryMaximumChanged(event, unit)
+  if unit ~= "player" then
+    return
+  end
+
+  self:RefreshPrimaryResourceMaximum()
+  self:RefreshPrimaryTicks()
+  ns.PRDPreview.MarkDirty()
+end
+
+function M:OnPrimaryRestrictionsCleared()
+  if self._puiPrimaryMaxRefreshPending ~= true then
+    return
+  end
+
+  self:RefreshPrimaryResourceMaximum()
+  self:RefreshPrimaryTicks()
+  ns.PRDPreview.MarkDirty()
+end
+
 function M:OnEnable()
   if not self.db or not self.db.profile or self.db.profile.enabled ~= true then
     return
@@ -1216,6 +1330,12 @@ function M:OnEnable()
   self._puiNativeRestorePending = nil
   self:RegisterEvent("PLAYER_ALIVE", "ReassertBlizzardPRDRoot")
   self:RegisterEvent("PLAYER_UNGHOST", "ReassertBlizzardPRDRoot")
+  self:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED", "OnPrimaryResourceChanged")
+  self:RegisterEvent("PLAYER_TALENT_UPDATE", "OnPrimaryResourceChanged")
+  self:RegisterEvent("UPDATE_SHAPESHIFT_FORM", "OnPrimaryResourceChanged")
+  self:RegisterEvent("UNIT_DISPLAYPOWER", "OnPrimaryResourceChanged")
+  self:RegisterEvent("UNIT_MAXPOWER", "OnPrimaryMaximumChanged")
+  self:RegisterEvent("PLAYER_REGEN_ENABLED", "OnPrimaryRestrictionsCleared")
 
   if not self._puiDidPEWRefresh then
     local f = self:EnsurePEWFrame()
@@ -2533,6 +2653,7 @@ function M:RefreshActive()
   self._puiRuntimeStarted = true
 
   self:AcquireBlizzardFrames()
+  self:RefreshPrimaryResourceMaximum()
   self:RequestBlizzardBarTextSync()
   self:RefreshHealthTexture()
   self:RefreshPrimaryTexture()
@@ -2619,6 +2740,11 @@ end
   M.SeedHidePrimaryBySpec = P:Def("SeedHidePrimaryBySpec", M.SeedHidePrimaryBySpec)
   M.OnInitialize = P:Def("OnInitialize", M.OnInitialize)
   M.IsNativeTextVisible = P:Def("IsNativeTextVisible", M.IsNativeTextVisible)
+  M.GetPrimaryResourceKey = P:Def("GetPrimaryResourceKey", M.GetPrimaryResourceKey)
+  M.GetPrimaryResourceSettings = P:Def("GetPrimaryResourceSettings", M.GetPrimaryResourceSettings)
+  M.RefreshPrimaryResourceMaximum = P:Def("RefreshPrimaryResourceMaximum", M.RefreshPrimaryResourceMaximum)
+  M.GetPrimaryResourceMaximum = P:Def("GetPrimaryResourceMaximum", M.GetPrimaryResourceMaximum)
+  M.GetPrimaryTickMaximum = P:Def("GetPrimaryTickMaximum", M.GetPrimaryTickMaximum)
   M.NeedsBlizzardBarText = P:Def("NeedsBlizzardBarText", M.NeedsBlizzardBarText)
   _PUI_PRD_GetBarTextRestoreState = P:Def("_PUI_PRD_GetBarTextRestoreState", _PUI_PRD_GetBarTextRestoreState)
   M.EnsureBlizzardBarTextEnabled = P:Def("EnsureBlizzardBarTextEnabled", M.EnsureBlizzardBarTextEnabled)
@@ -2651,6 +2777,10 @@ end
   M.ApplyRequestedFlags = P:Def("ApplyRequestedFlags", M.ApplyRequestedFlags)
   M.RunPendingRefresh = P:Def("RunPendingRefresh", M.RunPendingRefresh)
   M.RequestRefresh = P:Def("RequestRefresh", M.RequestRefresh)
+  M.RefreshPrimaryResourcePresentation = P:Def("RefreshPrimaryResourcePresentation", M.RefreshPrimaryResourcePresentation)
+  M.OnPrimaryResourceChanged = P:Def("OnPrimaryResourceChanged", M.OnPrimaryResourceChanged)
+  M.OnPrimaryMaximumChanged = P:Def("OnPrimaryMaximumChanged", M.OnPrimaryMaximumChanged)
+  M.OnPrimaryRestrictionsCleared = P:Def("OnPrimaryRestrictionsCleared", M.OnPrimaryRestrictionsCleared)
   M.StopRuntime = P:Def("StopRuntime", M.StopRuntime)
   M.GetBarBorderThickness = P:Def("GetBarBorderThickness", M.GetBarBorderThickness)
   M.GetBarBorderColor = P:Def("GetBarBorderColor", M.GetBarBorderColor)
