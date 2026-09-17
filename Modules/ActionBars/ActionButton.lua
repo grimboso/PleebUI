@@ -36,7 +36,6 @@ local C_ActionBar = C_ActionBar
 local C_Spell = C_Spell
 local EMPTY_COOLDOWN_DURATION = C_DurationUtil.CreateDuration()
 local GetActionCooldownDuration = C_ActionBar.GetActionCooldownDuration
-local GetActionCharges = C_ActionBar.GetActionCharges
 local GetActionChargeDuration = C_ActionBar.GetActionChargeDuration
 local GetActionLossOfControlCooldownInfo = C_ActionBar.GetActionLossOfControlCooldownInfo
 local GetActionLossOfControlCooldownDuration = C_ActionBar.GetActionLossOfControlCooldownDuration
@@ -887,7 +886,6 @@ function Engine:ClearButton(button)
   button.cooldown:SetCooldownFromDurationObject(EMPTY_COOLDOWN_DURATION, true)
   button.chargeCooldown:SetCooldownFromDurationObject(EMPTY_COOLDOWN_DURATION, true)
   button.lossOfControlCooldown:SetCooldownFromDurationObject(EMPTY_COOLDOWN_DURATION, true)
-  button.__puiHasChargeCooldown = nil
   button.__puiLossOfControlReplacesNormal = nil
   button:StopFlash(true)
   button:SetChecked(false)
@@ -905,11 +903,17 @@ function Engine:UpdateCount(button)
   end
 end
 
-local function RefreshButtonChargeCapability(button)
-  local chargeInfo = GetActionCharges(button.action)
-  local hasChargeCooldown = chargeInfo.maxCharges > 0
-  button.__puiHasChargeCooldown = hasChargeCooldown
-  return hasChargeCooldown
+local function RefreshButtonChargeCooldown(button)
+  local action = button.action
+  if not action or not button.__puiHasAction or button.__puiLossOfControlReplacesNormal then
+    button.chargeCooldown:SetCooldownFromDurationObject(EMPTY_COOLDOWN_DURATION, true)
+    return
+  end
+
+  button.chargeCooldown:SetCooldownFromDurationObject(
+    GetActionChargeDuration(action) or EMPTY_COOLDOWN_DURATION,
+    true
+  )
 end
 
 local function RefreshLossOfControlCooldown(button)
@@ -932,7 +936,6 @@ UpdateButtonCooldown = function(button, refreshCharge, refreshLossOfControl)
     button.cooldown:SetCooldownFromDurationObject(EMPTY_COOLDOWN_DURATION, true)
     button.chargeCooldown:SetCooldownFromDurationObject(EMPTY_COOLDOWN_DURATION, true)
     button.lossOfControlCooldown:SetCooldownFromDurationObject(EMPTY_COOLDOWN_DURATION, true)
-    button.__puiHasChargeCooldown = nil
     button.__puiLossOfControlReplacesNormal = nil
     return
   end
@@ -943,12 +946,6 @@ UpdateButtonCooldown = function(button, refreshCharge, refreshLossOfControl)
     replaceNormalCooldown = RefreshLossOfControlCooldown(button)
   end
 
-  local hasChargeCooldown = button.__puiHasChargeCooldown
-  local chargeInitialized = hasChargeCooldown ~= nil
-  if refreshCharge or not chargeInitialized then
-    hasChargeCooldown = RefreshButtonChargeCapability(button)
-  end
-
   if replaceNormalCooldown then
     if refreshLossOfControl or not lossOfControlInitialized then
       button.cooldown:SetCooldownFromDurationObject(EMPTY_COOLDOWN_DURATION, true)
@@ -957,19 +954,8 @@ UpdateButtonCooldown = function(button, refreshCharge, refreshLossOfControl)
     button.cooldown:SetCooldownFromDurationObject(GetActionCooldownDuration(action), true)
   end
 
-  if refreshCharge
-    or refreshLossOfControl
-    or not chargeInitialized
-    or (hasChargeCooldown and not replaceNormalCooldown)
-  then
-    if replaceNormalCooldown or not hasChargeCooldown then
-      button.chargeCooldown:SetCooldownFromDurationObject(EMPTY_COOLDOWN_DURATION, true)
-    else
-      button.chargeCooldown:SetCooldownFromDurationObject(
-        GetActionChargeDuration(action) or EMPTY_COOLDOWN_DURATION,
-        true
-      )
-    end
+  if refreshCharge or refreshLossOfControl then
+    RefreshButtonChargeCooldown(button)
   end
 end
 
@@ -1419,7 +1405,7 @@ local function FlushCooldownAndCountRefresh(self, flushID, cooldownRefresh, char
     if button.__puiRuntimeFlushID ~= flushID and button.__puiHasAction then
       if chargeCountRefresh then
         self:UpdateCount(button)
-        RefreshButtonChargeCapability(button)
+        RefreshButtonChargeCooldown(button)
       end
       if cooldownRefresh then
         UpdateButtonCooldown(button, false, false)
@@ -1516,7 +1502,7 @@ local function FlushBroadRefresh(
 
       if chargeCountRefresh then
         self:UpdateCount(button)
-        RefreshButtonChargeCapability(button)
+        RefreshButtonChargeCooldown(button)
       end
 
       if cooldownRefresh or lossOfControlRefresh then
@@ -1961,13 +1947,13 @@ Engine.QueueActionSlotRefresh = P:Def("Engine:QueueActionSlotRefresh", Engine.Qu
 Engine.QueueSpellIcons = P:Def("Engine:QueueSpellIcons", Engine.QueueSpellIcons)
 Engine.QueueSummonPetIcons = P:Def("Engine:QueueSummonPetIcons", Engine.QueueSummonPetIcons)
 Engine.QueueRuntimeUpdate = P:Def("Engine:QueueRuntimeUpdate", Engine.QueueRuntimeUpdate)
-FlushFullRefresh = P:Def("Engine:FlushFullRefresh", FlushFullRefresh)
-FlushQueuedButtonRefreshes = P:Def("Engine:FlushQueuedButtonRefreshes", FlushQueuedButtonRefreshes)
 FlushQueuedIconRefreshes = P:Def("Engine:FlushQueuedIconRefreshes", FlushQueuedIconRefreshes)
-FlushCooldownAndCountRefresh = P:Def("Engine:FlushCooldownAndCountRefresh", FlushCooldownAndCountRefresh)
 FlushIconRefresh = P:Def("Engine:FlushIconRefresh", FlushIconRefresh)
-FlushBroadRefresh = P:Def("Engine:FlushBroadRefresh", FlushBroadRefresh)
 if ns.Pleebug:GetLoadMode() ~= "full" then
+  FlushFullRefresh = P:Def("Engine:FlushFullRefresh", FlushFullRefresh)
+  FlushQueuedButtonRefreshes = P:Def("Engine:FlushQueuedButtonRefreshes", FlushQueuedButtonRefreshes)
+  FlushCooldownAndCountRefresh = P:Def("Engine:FlushCooldownAndCountRefresh", FlushCooldownAndCountRefresh)
+  FlushBroadRefresh = P:Def("Engine:FlushBroadRefresh", FlushBroadRefresh)
   Engine.FlushRuntimeUpdate = P:Def("Engine:FlushRuntimeUpdate", Engine.FlushRuntimeUpdate)
 end
 Engine.UpdateProcGlow = P:Def("Engine:UpdateProcGlow", Engine.UpdateProcGlow)
