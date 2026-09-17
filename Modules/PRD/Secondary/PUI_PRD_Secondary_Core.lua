@@ -460,40 +460,6 @@ function M:UpdateSecondary()
   adapter.Update(self, bar, text, "player")
 end
 
-function M:PLAYER_SPECIALIZATION_CHANGED(event, unit)
-  if unit ~= "player" then
-    return
-  end
-
-  self:SeedHidePrimaryBySpec()
-  self:NormalizeStackOrder()
-  self:RebuildSecondary()
-  self:RefreshPrimaryTexture()
-
-  local activeOptionsPath = ns._PUIActiveOptionsPath
-  local targetOptionsPath
-
-  if type(activeOptionsPath) == "table"
-    and activeOptionsPath[1] == "PRD"
-    and activeOptionsPath[2] == "secondary"
-  then
-    targetOptionsPath = { "PRD", "secondary" }
-  end
-
-  ns.Addon:NotifyOptionsTreeChanged("PRD", targetOptionsPath)
-end
-
-function M:UPDATE_SHAPESHIFT_FORM()
-  self:RebuildSecondary()
-  self:RefreshPrimaryTexture()
-end
-
-function M:UNIT_DISPLAYPOWER(event, unit)
-  if unit == "player" then
-    self:RebuildSecondary()
-  end
-end
-
 local function EnsureEventFrame(owner)
   local frame = owner._puiSecondaryEventFrame
   if frame then
@@ -578,10 +544,6 @@ function M:RegisterSecondaryEvents()
   local frame = EnsureEventFrame(self)
   frame:UnregisterAllEvents()
   frame._puiAdapterEvents = nil
-
-  frame:RegisterUnitEvent("UNIT_DISPLAYPOWER", "player")
-  frame:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED")
-  frame:RegisterEvent("UPDATE_SHAPESHIFT_FORM")
 
   if definition and not isAlternatePower and secondaryConfig.enabled ~= false then
     RegisterVisibilityEvents(frame, secondaryConfig.visibilityMode or "ALWAYS")
@@ -688,9 +650,6 @@ M.RefreshSecondaryText = P:Def(
   M.RefreshSecondaryText
 )
 M.UpdateSecondary = P:Def("UpdateSecondary", M.UpdateSecondary)
-M.PLAYER_SPECIALIZATION_CHANGED = P:Def("PLAYER_SPECIALIZATION_CHANGED", M.PLAYER_SPECIALIZATION_CHANGED)
-M.UPDATE_SHAPESHIFT_FORM = P:Def("UPDATE_SHAPESHIFT_FORM", M.UPDATE_SHAPESHIFT_FORM)
-M.UNIT_DISPLAYPOWER = P:Def("UNIT_DISPLAYPOWER", M.UNIT_DISPLAYPOWER)
 EnsureEventFrame = P:Def("EnsureEventFrame", EnsureEventFrame)
 M.RegisterSecondaryEvents = P:Def("RegisterSecondaryEvents", M.RegisterSecondaryEvents)
 M.UnregisterSecondaryEvents = P:Def("UnregisterSecondaryEvents", M.UnregisterSecondaryEvents)
