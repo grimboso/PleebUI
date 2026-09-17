@@ -68,8 +68,13 @@ end
 function UFHealth.PostUpdateHealthColor(element, unit, color)
   local frame = element.__owner
   local isGroupFrame = frame.__puiGroupKind == "party" or frame.__puiGroupKind == "raid"
-  if isGroupFrame then
-    ns.UFIndicators.UpdateOfflinePresentation(frame, color == frame.colors.disconnected)
+  if not isGroupFrame then
+    return
+  end
+
+  local isOffline = color == frame.colors.disconnected
+  if frame.__puiOfflineState ~= isOffline then
+    ns.UFIndicators.UpdateOfflinePresentation(frame, isOffline)
   end
 end
 
