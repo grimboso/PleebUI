@@ -1303,10 +1303,6 @@ _PUI_PRD_GetNativeBarText = function(bar)
   return bar.TextString, bar.LeftText, bar.RightText
 end
 
-local function _PUI_PRD_TextModeEnabled(mode)
-  return mode == "ALWAYS" or mode == "MOUSEOVER"
-end
-
 local function _PUI_PRD_TextModeAlpha(bar, mode)
   if mode == "ALWAYS" then
     return 1
@@ -1393,8 +1389,8 @@ end
 
 local function _PUI_PRD_ApplyNativeTextAnchors(bar, cfg)
   local text, leftText, rightText = _PUI_PRD_GetNativeBarText(bar)
-  local showLeft = cfg and _PUI_PRD_TextModeEnabled(cfg.leftVisibility)
-  local showRight = cfg and _PUI_PRD_TextModeEnabled(cfg.rightVisibility)
+  local showLeft = cfg and M:IsNativeTextVisible(cfg.leftVisibility)
+  local showRight = cfg and M:IsNativeTextVisible(cfg.rightVisibility)
   local centered = cfg and cfg.centerText == true
 
   _PUI_PRD_PointNativeText(bar, text, "CENTER", "CENTER", 0, 0, "CENTER")
@@ -1456,7 +1452,7 @@ _PUI_PRD_ApplyNativeTextConfig = function(self, bar, key)
 
   if bar.__puiNativeTextSig == sig then
     _PUI_PRD_UpdateNativeTextAlpha(bar)
-    return _PUI_PRD_TextModeEnabled(leftMode) or _PUI_PRD_TextModeEnabled(rightMode)
+    return M:IsNativeTextVisible(leftMode) or M:IsNativeTextVisible(rightMode)
   end
 
   bar.__puiNativeTextSig = sig
@@ -1466,7 +1462,7 @@ _PUI_PRD_ApplyNativeTextConfig = function(self, bar, key)
   _PUI_PRD_ConfigureNativeTextRegion(rightText, appearanceText, _PUI_PRD_TextModeAlpha(bar, rightMode))
   _PUI_PRD_ApplyNativeTextAnchors(bar, cfg)
 
-  return _PUI_PRD_TextModeEnabled(leftMode) or _PUI_PRD_TextModeEnabled(rightMode)
+  return M:IsNativeTextVisible(leftMode) or M:IsNativeTextVisible(rightMode)
 end
 
 function M:EnsurePrimaryTextFrames()

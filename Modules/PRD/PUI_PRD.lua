@@ -462,13 +462,67 @@ function M:OnInitialize()
   end
 
   EventRegistry:RegisterCallback("EditMode.Exit", function()
+    if self._puiRuntimeStarted == true then
+      self:RequestBlizzardBarTextSync()
+    end
     self:ReassertBlizzardPRDRoot()
   end, self)
 
+  if self.db.profile.enabled ~= true
+    and type(Addon.db.char.prdBarTextRestore) == "table"
+  then
+    self:RequestBlizzardBarTextRestore()
+  end
 end
 
-function M:GetBlizzardShowBarText()
-  if not _G.EditModeManagerFrame or not EditModeOverride:IsReady() then
+function M:IsNativeTextVisible(mode)
+  return mode == "ALWAYS" or mode == "MOUSEOVER"
+end
+
+function M:NeedsBlizzardBarText()
+  local profile = self.db and self.db.profile
+  local text = profile and profile.text
+  if not text then
+    return false
+  end
+
+  local health = text.health
+  if health
+    and (
+      self:IsNativeTextVisible(health.leftVisibility)
+      or self:IsNativeTextVisible(health.rightVisibility)
+    )
+  then
+    return true
+  end
+
+  local primary = text.primary
+  return primary ~= nil
+    and (
+      self:IsNativeTextVisible(primary.leftVisibility)
+      or self:IsNativeTextVisible(primary.rightVisibility)
+    )
+end
+
+local function _PUI_PRD_GetBarTextRestoreState()
+  local characterDB = Addon.db.char
+  if not characterDB then
+    return nil
+  end
+
+  local state = characterDB.prdBarTextRestore
+  if type(state) ~= "table" then
+    state = { values = {} }
+    characterDB.prdBarTextRestore = state
+  elseif type(state.values) ~= "table" then
+    state.values = {}
+  end
+
+  return state
+end
+
+function M:EnsureBlizzardBarTextEnabled()
+  if InCombatLockdown() or not _G.EditModeManagerFrame or not EditModeOverride:IsReady() then
     return false
   end
 
@@ -483,20 +537,20 @@ function M:GetBlizzardShowBarText()
     return false
   end
 
-  return EditModeOverride:GetFrameSetting(frame, SHOW_BAR_TEXT_SETTING) == 1
-end
+  if EditModeOverride:GetFrameSetting(frame, SHOW_BAR_TEXT_SETTING) == 1 then
+    return true
+  end
 
-function M:SetBlizzardShowBarText(enabled)
-  if InCombatLockdown() or not _G.EditModeManagerFrame or not EditModeOverride:IsReady() then
+  local restore = _PUI_PRD_GetBarTextRestoreState()
+  if not restore then
     return false
   end
 
-  local frame = _G.PersonalResourceDisplayFrame
-  if not frame then
-    return false
+  if restore.originalActiveLayout == nil then
+    restore.originalActiveLayout = EditModeOverride:GetActiveLayout()
   end
 
-  EditModeOverride:LoadLayouts()
+  local layoutChanged = false
 
   if not EditModeOverride:CanEditActiveLayout() then
     local characterDB = Addon.db.char
@@ -519,19 +573,179 @@ function M:SetBlizzardShowBarText(enabled)
       EditModeOverride:AddLayout(Enum.EditModeLayoutType.Character, layoutName)
       characterDB.prdEditModeLayoutName = layoutName
     end
+
+    restore.forcedLayout = layoutName
+    layoutChanged = true
   end
 
   if not EditModeOverride:HasEditModeSettings(frame) then
     return false
   end
 
-  local value = enabled == true and 1 or 0
-  if EditModeOverride:GetFrameSetting(frame, SHOW_BAR_TEXT_SETTING) ~= value then
-    EditModeOverride:SetFrameSetting(frame, SHOW_BAR_TEXT_SETTING, value)
+  local layoutName = EditModeOverride:GetActiveLayout()
+  local currentValue = EditModeOverride:GetFrameSetting(frame, SHOW_BAR_TEXT_SETTING)
+  if currentValue == nil then
+    return false
+  end
+
+  local settingChanged = currentValue ~= 1
+  if settingChanged then
+    if restore.values[layoutName] == nil then
+      restore.values[layoutName] = currentValue
+    end
+    EditModeOverride:SetFrameSetting(frame, SHOW_BAR_TEXT_SETTING, 1)
+  end
+
+  if layoutChanged or settingChanged then
     EditModeOverride:ApplyChanges()
   end
 
   return true
+end
+
+function M:RestoreBlizzardBarTextSetting()
+  local characterDB = Addon.db.char
+  local restore = characterDB and characterDB.prdBarTextRestore
+  if type(restore) ~= "table" then
+    return true
+  end
+
+  if InCombatLockdown() or not _G.EditModeManagerFrame or not EditModeOverride:IsReady() then
+    return false
+  end
+
+  local frame = _G.PersonalResourceDisplayFrame
+  if not frame then
+    return false
+  end
+
+  EditModeOverride:LoadLayouts()
+
+  local currentLayout = EditModeOverride:GetActiveLayout()
+  local changed = false
+  local values = restore.values
+
+  if type(values) == "table" then
+    for layoutName, originalValue in pairs(values) do
+      if type(layoutName) == "string"
+        and type(originalValue) == "number"
+        and EditModeOverride:DoesLayoutExist(layoutName)
+      then
+        if EditModeOverride:GetActiveLayout() ~= layoutName then
+          EditModeOverride:SetActiveLayout(layoutName)
+          changed = true
+        end
+
+        if EditModeOverride:CanEditActiveLayout()
+          and EditModeOverride:HasEditModeSettings(frame)
+          and EditModeOverride:GetFrameSetting(frame, SHOW_BAR_TEXT_SETTING) ~= originalValue
+        then
+          EditModeOverride:SetFrameSetting(frame, SHOW_BAR_TEXT_SETTING, originalValue)
+          changed = true
+        end
+      end
+    end
+  end
+
+  local finalLayout = currentLayout
+  if currentLayout == restore.forcedLayout
+    and type(restore.originalActiveLayout) == "string"
+    and EditModeOverride:DoesLayoutExist(restore.originalActiveLayout)
+  then
+    finalLayout = restore.originalActiveLayout
+  end
+
+  if EditModeOverride:GetActiveLayout() ~= finalLayout
+    and EditModeOverride:DoesLayoutExist(finalLayout)
+  then
+    EditModeOverride:SetActiveLayout(finalLayout)
+    changed = true
+  end
+
+  if changed then
+    EditModeOverride:ApplyChanges()
+  end
+
+  characterDB.prdBarTextRestore = nil
+  return true
+end
+
+function M:SyncBlizzardBarTextSetting()
+  if self._puiRuntimeStarted ~= true then
+    return false
+  end
+
+  if self:NeedsBlizzardBarText() then
+    return self:EnsureBlizzardBarTextEnabled()
+  end
+
+  return self:RestoreBlizzardBarTextSetting()
+end
+
+function M:EnsureBarTextSyncFrame()
+  local frame = self._puiBarTextSyncFrame
+  if frame then
+    frame._puiOwner = self
+    return frame
+  end
+
+  frame = CreateFrame("Frame")
+  frame._puiOwner = self
+  frame:SetScript("OnEvent", function(syncFrame)
+    local owner = syncFrame._puiOwner
+    if owner._puiRuntimeStarted == true then
+      owner:RequestBlizzardBarTextSync()
+    else
+      owner:RequestBlizzardBarTextRestore()
+    end
+  end)
+
+  self._puiBarTextSyncFrame = frame
+  return frame
+end
+
+function M:QueueBlizzardBarTextRetry()
+  local frame
+
+  if InCombatLockdown() then
+    frame = self:EnsureBarTextSyncFrame()
+    frame:RegisterEvent("PLAYER_REGEN_ENABLED")
+  elseif not _G.EditModeManagerFrame or not EditModeOverride:IsReady() then
+    frame = self:EnsureBarTextSyncFrame()
+    frame:RegisterEvent("EDIT_MODE_LAYOUTS_UPDATED")
+  elseif not _G.PersonalResourceDisplayFrame then
+    frame = self:EnsureBarTextSyncFrame()
+    frame:RegisterEvent("PLAYER_ENTERING_WORLD")
+  end
+
+  self._puiBarTextSyncPending = frame ~= nil
+  return frame ~= nil
+end
+
+function M:RequestBlizzardBarTextSync()
+  if self:SyncBlizzardBarTextSetting() then
+    self._puiBarTextSyncPending = nil
+    if self._puiBarTextSyncFrame then
+      self._puiBarTextSyncFrame:UnregisterAllEvents()
+    end
+    return true
+  end
+
+  self:QueueBlizzardBarTextRetry()
+  return false
+end
+
+function M:RequestBlizzardBarTextRestore()
+  if self:RestoreBlizzardBarTextSetting() then
+    self._puiBarTextSyncPending = nil
+    if self._puiBarTextSyncFrame then
+      self._puiBarTextSyncFrame:UnregisterAllEvents()
+    end
+    return true
+  end
+
+  self:QueueBlizzardBarTextRetry()
+  return false
 end
 
 function M:IsModuleEnabled()
@@ -656,8 +870,9 @@ function M:RunDeferredShutdownCleanup()
   local secondaryStopped = self:CompleteSecondaryShutdown()
   local displayRestored = self:RestoreBlizzardDisplayState()
   local nativeRestored = self:RestoreBlizzardBars()
+  local barTextRestored = self:RestoreBlizzardBarTextSetting()
 
-  if secondaryStopped and displayRestored and nativeRestored then
+  if secondaryStopped and displayRestored and nativeRestored and barTextRestored then
     self._puiShutdownCleanupPending = nil
     if self._puiShutdownFrame then
       self._puiShutdownFrame:UnregisterAllEvents()
@@ -692,6 +907,7 @@ function M:RequestDeferredShutdownCleanup()
     local frame = self:EnsureShutdownFrame()
     frame:RegisterEvent("PLAYER_REGEN_ENABLED")
     frame:RegisterEvent("PLAYER_ENTERING_WORLD")
+    frame:RegisterEvent("EDIT_MODE_LAYOUTS_UPDATED")
   end
 end
 
@@ -899,6 +1115,7 @@ function M:ApplyRequestedFlags(flags)
   end
 
   if flags.text or flags.healthText or flags.primaryText then
+    self:RequestBlizzardBarTextSync()
     self:ApplyTextSettings()
   end
 
@@ -1042,6 +1259,11 @@ function M:StopRuntime()
     self._puiMoverRefreshFrame:UnregisterAllEvents()
   end
   self._puiMoverRefreshPending = nil
+
+  if self._puiBarTextSyncFrame then
+    self._puiBarTextSyncFrame:UnregisterAllEvents()
+  end
+  self._puiBarTextSyncPending = nil
 
   if self.frame then
     self.frame:Hide()
@@ -1868,16 +2090,6 @@ function M:AttachMover()
         })
       end,
     }
-    controls[#controls + 1] = {
-      type = "toggle",
-      label = "Show bar text",
-      get = function()
-        return self:GetBlizzardShowBarText()
-      end,
-      set = function(value)
-        self:SetBlizzardShowBarText(value)
-      end,
-    }
 
     local attachedKeys = {}
     local attachedValues = {}
@@ -2321,6 +2533,7 @@ function M:RefreshActive()
   self._puiRuntimeStarted = true
 
   self:AcquireBlizzardFrames()
+  self:RequestBlizzardBarTextSync()
   self:RefreshHealthTexture()
   self:RefreshPrimaryTexture()
   self:ApplyTextSettings()
@@ -2405,8 +2618,16 @@ end
   M.InvalidateRuntimeConfig = P:Def("InvalidateRuntimeConfig", M.InvalidateRuntimeConfig)
   M.SeedHidePrimaryBySpec = P:Def("SeedHidePrimaryBySpec", M.SeedHidePrimaryBySpec)
   M.OnInitialize = P:Def("OnInitialize", M.OnInitialize)
-  M.GetBlizzardShowBarText = P:Def("GetBlizzardShowBarText", M.GetBlizzardShowBarText)
-  M.SetBlizzardShowBarText = P:Def("SetBlizzardShowBarText", M.SetBlizzardShowBarText)
+  M.IsNativeTextVisible = P:Def("IsNativeTextVisible", M.IsNativeTextVisible)
+  M.NeedsBlizzardBarText = P:Def("NeedsBlizzardBarText", M.NeedsBlizzardBarText)
+  _PUI_PRD_GetBarTextRestoreState = P:Def("_PUI_PRD_GetBarTextRestoreState", _PUI_PRD_GetBarTextRestoreState)
+  M.EnsureBlizzardBarTextEnabled = P:Def("EnsureBlizzardBarTextEnabled", M.EnsureBlizzardBarTextEnabled)
+  M.RestoreBlizzardBarTextSetting = P:Def("RestoreBlizzardBarTextSetting", M.RestoreBlizzardBarTextSetting)
+  M.SyncBlizzardBarTextSetting = P:Def("SyncBlizzardBarTextSetting", M.SyncBlizzardBarTextSetting)
+  M.EnsureBarTextSyncFrame = P:Def("EnsureBarTextSyncFrame", M.EnsureBarTextSyncFrame)
+  M.QueueBlizzardBarTextRetry = P:Def("QueueBlizzardBarTextRetry", M.QueueBlizzardBarTextRetry)
+  M.RequestBlizzardBarTextSync = P:Def("RequestBlizzardBarTextSync", M.RequestBlizzardBarTextSync)
+  M.RequestBlizzardBarTextRestore = P:Def("RequestBlizzardBarTextRestore", M.RequestBlizzardBarTextRestore)
   M.IsModuleEnabled = P:Def("IsModuleEnabled", M.IsModuleEnabled)
   M.SetModuleEnabled = P:Def("SetModuleEnabled", M.SetModuleEnabled)
   _PUI_PRD_CopyFlags = P:Def("_PUI_PRD_CopyFlags", _PUI_PRD_CopyFlags)

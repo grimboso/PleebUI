@@ -2820,18 +2820,6 @@ do
               Addon:ApplyOptionsChange("PRD", { secondaryRebuild = true, secondaryText = true, layout = true })
             end,
           },
-          showBarText = {
-            type = "toggle",
-            name = "Show bar text",
-            desc = "Shows Blizzard's resource values on the Personal Resource Display.",
-            order = 5,
-            get = function()
-              return PRD:GetBlizzardShowBarText()
-            end,
-            set = function(_, val)
-              PRD:SetBlizzardShowBarText(val)
-            end,
-          },
         },
       },
       layoutGroup = {
