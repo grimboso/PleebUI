@@ -603,7 +603,7 @@ local function PRDPreview_HidePrimaryTicks(bar, keepCount)
   end
 end
 
-local function PRDPreview_LayoutPrimaryTicks(bar, config)
+local function PRDPreview_LayoutPrimaryTicks(bar, config, maximum)
   if not bar
     or not config
     or config.enabled ~= true
@@ -615,7 +615,6 @@ local function PRDPreview_LayoutPrimaryTicks(bar, config)
     return
   end
 
-  local maximum = tonumber(config.maxValue)
   if not maximum or maximum <= 0 or #config.entries == 0 then
     PRDPreview_HidePrimaryTicks(bar, 0)
     return
@@ -1494,6 +1493,12 @@ local function PRDPreview_GetNativeText(
   role,
   appearance
 )
+  if role == "primary" then
+    local settings = ns.Modules.PRD:GetPrimaryResourceSettings()
+    local text = settings and settings.text or {}
+    return text, text
+  end
+
   local text = profile.text
     and profile.text[role]
     or {}
@@ -1612,7 +1617,13 @@ local function PRDPreview_RefreshLayout(box)
     )
     primaryBar.__puiPreviewTextConfig = primaryText
     PRDPreview_ConfigureBarInteractions(box, primaryBar, "primary", profile)
-    PRDPreview_LayoutPrimaryTicks(primaryBar, profile.primary.ticks)
+    local primarySettings = PRD:GetPrimaryResourceSettings()
+    local primaryTicks = primarySettings and primarySettings.ticks
+    PRDPreview_LayoutPrimaryTicks(
+      primaryBar,
+      primaryTicks,
+      PRD:GetPrimaryTickMaximum(primaryTicks)
+    )
   end
 
   for index = 1, #resources do
@@ -2009,12 +2020,14 @@ local function PRDPreview_EnsureContents(box)
 
   driver:SetScript("OnEvent", function(_, event, unit)
     if unit == nil or unit == "player" then
+      ns.Modules.PRD:RefreshPrimaryResourceMaximum()
       box.__puiPRDPreviewDirty = true
     end
   end)
 
   local function RegisterPreviewEvents()
     driver:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED")
+    driver:RegisterEvent("PLAYER_TALENT_UPDATE")
     driver:RegisterEvent("UPDATE_SHAPESHIFT_FORM")
     driver:RegisterUnitEvent("UNIT_DISPLAYPOWER", "player")
     driver:RegisterUnitEvent("UNIT_MAXPOWER", "player")
@@ -2312,6 +2325,67 @@ do
     if text.right.useGlobalFont == nil then text.right.useGlobalFont = PRD_UseGlobalFont(text) end
   end
 
+  local PRIMARY_RESOURCE_KEYS = {
+    "MANA",
+    "RAGE",
+    "FOCUS",
+    "ENERGY",
+    "RUNIC_POWER",
+    "LUNAR_POWER",
+    "MAELSTROM",
+    "INSANITY",
+    "FURY",
+    "PAIN",
+  }
+
+  local function PRD_CopyResourceSetting(value)
+    if type(value) ~= "table" then
+      return value
+    end
+
+    local copy = {}
+    for key, child in pairs(value) do
+      copy[key] = PRD_CopyResourceSetting(child)
+    end
+    return copy
+  end
+
+  local function PRD_NormalizePrimaryResourceSettings(
+    settings,
+    legacyText,
+    legacyAppearanceText,
+    legacyTicks
+  )
+    settings.text = settings.text or PRD_CopyResourceSetting(legacyText) or {}
+
+    if type(legacyAppearanceText) == "table" then
+      if settings.text.size == nil then settings.text.size = legacyAppearanceText.size end
+      if settings.text.font == nil then settings.text.font = legacyAppearanceText.font end
+      if settings.text.flags == nil then settings.text.flags = legacyAppearanceText.flags end
+      if settings.text.useGlobalFont == nil then
+        settings.text.useGlobalFont = legacyAppearanceText.useGlobalFont
+      end
+    end
+
+    if settings.text.size == nil then settings.text.size = 14 end
+    if settings.text.flags == nil then settings.text.flags = "" end
+    if settings.text.useGlobalFont == nil then settings.text.useGlobalFont = true end
+    PRD_NormalizeNativeTextConfig(settings.text, "CUR")
+
+    settings.ticks = settings.ticks or PRD_CopyResourceSetting(legacyTicks) or {}
+    if settings.ticks.enabled == nil then settings.ticks.enabled = false end
+    if settings.ticks.maxValue == nil then settings.ticks.maxValue = 0 end
+    if settings.ticks.automaticMax == nil then
+      settings.ticks.automaticMax = not (
+        type(legacyTicks) == "table"
+        and (tonumber(legacyTicks.maxValue) or 0) > 0
+      )
+    end
+    if type(settings.ticks.entries) ~= "table" then settings.ticks.entries = {} end
+
+    return settings
+  end
+
   local function PRD_BuildNativeTextGroup(text, role, appearanceText)
     PRD_NormalizeNativeTextConfig(text, role == "health" and "PCT" or "CUR")
 
@@ -2462,7 +2536,7 @@ do
     db.health.style      = db.health.style or {}
     db.health.text       = db.health.text or {}
     db.primary.style     = db.primary.style or {}
-    db.primary.text      = db.primary.text or {}
+    db.primary.resourceSettings = db.primary.resourceSettings or {}
     db.secondary.style   = db.secondary.style or {}
     db.outerBorder       = db.outerBorder or {}
     db.anchor            = db.anchor or {}
@@ -2470,11 +2544,42 @@ do
     db.primary.anchor    = db.primary.anchor or { point = "CENTER", x = 0, y = -250 }
     db.text              = db.text      or {}
     db.text.health       = db.text.health       or {}
-    db.text.primary      = db.text.primary      or {}
     db.text.secondary    = db.text.secondary    or {}
 
     PRD_NormalizeNativeTextConfig(db.text.health, "PCT")
-    PRD_NormalizeNativeTextConfig(db.text.primary, "CUR")
+
+    if db.primary.__puiResourceSettingsMigrated ~= true then
+      local legacyText = db.text.primary
+      local legacyAppearanceText = db.primary.text
+      local legacyTicks = db.primary.ticks
+
+      for index = 1, #PRIMARY_RESOURCE_KEYS do
+        local resourceKey = PRIMARY_RESOURCE_KEYS[index]
+        local settings = db.primary.resourceSettings[resourceKey]
+        if type(settings) ~= "table" then
+          settings = {}
+          db.primary.resourceSettings[resourceKey] = settings
+        end
+
+        PRD_NormalizePrimaryResourceSettings(
+          settings,
+          legacyText,
+          legacyAppearanceText,
+          legacyTicks
+        )
+      end
+
+      db.primary.__puiResourceSettingsMigrated = true
+      db.text.primary = nil
+      db.primary.text = nil
+      db.primary.ticks = nil
+    end
+
+    for _, settings in pairs(db.primary.resourceSettings) do
+      if type(settings) == "table" then
+        PRD_NormalizePrimaryResourceSettings(settings)
+      end
+    end
 
     db.class             = db.class or {}
     db.class.DRUID       = db.class.DRUID or {}
@@ -2485,10 +2590,6 @@ do
     db.class.DRUID.forms.CASTER  = db.class.DRUID.forms.CASTER  or { primary = {} }
 
     if db.primary.hideAlternateMana == nil then db.primary.hideAlternateMana = false end
-    db.primary.ticks = db.primary.ticks or {}
-    if db.primary.ticks.enabled == nil then db.primary.ticks.enabled = false end
-    if db.primary.ticks.maxValue == nil then db.primary.ticks.maxValue = 0 end
-    if type(db.primary.ticks.entries) ~= "table" then db.primary.ticks.entries = {} end
     db.secondary.resourceEnabled = db.secondary.resourceEnabled or {}
     db.secondary.resourceSettings = db.secondary.resourceSettings or {}
 
@@ -2530,7 +2631,6 @@ do
     end
 
     EnsureElementAppearance(db.health, db.health.text)
-    EnsureElementAppearance(db.primary, db.primary.text)
     EnsureElementAppearance(db.secondary, db.text.secondary)
 
     if db.outerBorder.enabled == nil then db.outerBorder.enabled = false end
@@ -2564,6 +2664,8 @@ do
       return nil
     end
 
+    local primaryResourceCfg = M:GetPrimaryResourceSettings()
+
     return {
       M = M,
       db = db,
@@ -2572,9 +2674,9 @@ do
       outerBorder = db.outerBorder,
       healthCfg = db.health,
       primaryCfg = db.primary,
+      primaryResourceCfg = primaryResourceCfg,
       secondaryCfg = db.secondary,
       healthTextCfg = db.text.health,
-      primaryTextCfg = db.text.primary,
       secondaryTextCfg = db.text.secondary,
     }
   end
@@ -2605,6 +2707,17 @@ do
 
 
   local PRD = ns.Modules.PRD
+
+  function PRD:EnsurePrimaryResourceSettings(resourceKey)
+    local db = self.db.profile
+    local settings = db.primary.resourceSettings[resourceKey]
+    if type(settings) ~= "table" then
+      settings = {}
+      db.primary.resourceSettings[resourceKey] = settings
+    end
+
+    return PRD_NormalizePrimaryResourceSettings(settings)
+  end
 
   function PRD:NormalizeProfile()
     local db = self.db and self.db.profile
@@ -2909,8 +3022,9 @@ do
             set = function(_, value)
               local unified = value and true or false
               if appearance.unified ~= false and not unified then
+                local primaryResourceSettings = s.M:GetPrimaryResourceSettings()
                 PRD_CopyAppearance(appearance, db.health, db.health.text)
-                PRD_CopyAppearance(appearance, db.primary, db.primary.text)
+                PRD_CopyAppearance(appearance, db.primary, primaryResourceSettings.text)
                 PRD_CopyAppearance(appearance, db.secondary, db.text.secondary)
               end
               appearance.unified = unified
@@ -3426,9 +3540,12 @@ do
     }
   end
 
-  local function PRD_BuildPrimaryTicksGroup(cfg)
-    local tickConfig = cfg.ticks
+  local function PRD_BuildPrimaryTicksGroup(owner, tickConfig)
     local entries = tickConfig.entries
+
+    local function GetMaximum()
+      return owner:GetPrimaryTickMaximum(tickConfig)
+    end
 
     local function RefreshTickOptions()
       Addon:NotifyOptionsTreeChanged("PRD", { "PRD", "primary" })
@@ -3448,13 +3565,47 @@ do
           RefreshTickOptions()
         end,
       },
-      maxValue = {
-        type = "input",
-        name = "Max possible resource",
-        desc = "Sets the scale used for tick positions.",
+      automaticMax = {
+        type = "toggle",
+        name = "Use detected maximum",
+        desc = "Uses the current maximum reported by the game. If it is restricted, ticks wait for a non-secret value outside combat.",
         order = 2,
         hidden = function()
           return tickConfig.enabled ~= true
+        end,
+        get = function()
+          return tickConfig.automaticMax ~= false
+        end,
+        set = function(_, value)
+          tickConfig.automaticMax = value and true or false
+          if tickConfig.automaticMax then
+            owner:RefreshPrimaryResourceMaximum()
+          end
+          Addon:ApplyOptionsChange("PRD", { primaryTicks = true })
+          RefreshTickOptions()
+        end,
+      },
+      detectedMax = {
+        type = "description",
+        name = function()
+          local maximum = owner:GetPrimaryResourceMaximum()
+          if maximum then
+            return "Detected maximum: " .. tostring(maximum)
+          end
+          return "Detected maximum is unavailable until the game exposes a non-secret value outside combat."
+        end,
+        order = 3,
+        hidden = function()
+          return tickConfig.enabled ~= true or tickConfig.automaticMax == false
+        end,
+      },
+      maxValue = {
+        type = "input",
+        name = "Manual maximum",
+        desc = "Sets the scale used for tick positions.",
+        order = 4,
+        hidden = function()
+          return tickConfig.enabled ~= true or tickConfig.automaticMax ~= false
         end,
         validate = function(_, value)
           local maximum = tonumber(value)
@@ -3475,12 +3626,12 @@ do
       add = {
         type = "execute",
         name = "Add tick",
-        order = 3,
+        order = 5,
         hidden = function()
           return tickConfig.enabled ~= true
         end,
         disabled = function()
-          return (tonumber(tickConfig.maxValue) or 0) <= 0
+          return GetMaximum() == nil
         end,
         func = function()
           entries[#entries + 1] = {
@@ -3514,7 +3665,7 @@ do
             order = 1,
             validate = function(_, value)
               local number = tonumber(value)
-              local maximum = tonumber(tickConfig.maxValue) or 0
+              local maximum = GetMaximum() or 0
               if number and number >= 0 and number <= maximum then
                 return true
               end
@@ -3611,14 +3762,24 @@ do
 
     local size = s.size
     local cfg = s.primaryCfg
-    local text = s.primaryTextCfg
+    local resourceSettings = s.primaryResourceCfg
+    local text = resourceSettings.text
     local appearance = s.appearance.unified ~= false and s.appearance or cfg
     local style = appearance.style
 
     return {
       header = {
         type = "header",
-        name = "Primary bar",
+        name = function()
+          local resourceKey = s.M:GetPrimaryResourceKey()
+          if not resourceKey then
+            return "Primary bar"
+          end
+
+          local resourceName = resourceKey:gsub("_", " "):lower()
+          resourceName = resourceName:gsub("^%l", string.upper)
+          return "Primary bar - " .. resourceName
+        end,
         order = 1,
       },
       visibilityGroup = {
@@ -3711,8 +3872,8 @@ do
           },
         },
       },
-      ticksGroup = PRD_BuildPrimaryTicksGroup(cfg),
-      textGroup = PRD_BuildNativeTextGroup(text, "primary", appearance.text),
+      ticksGroup = PRD_BuildPrimaryTicksGroup(s.M, resourceSettings.ticks),
+      textGroup = PRD_BuildNativeTextGroup(text, "primary", text),
       colorGroup = PRD_BuildNativeBarColorGroup(cfg, "primary"),
       styleGroup = {
         type = "group",
@@ -5294,6 +5455,10 @@ do
 end
 
   Clamp = P:Def("Clamp", Clamp)
+  ns.Modules.PRD.EnsurePrimaryResourceSettings = P:Def(
+    "EnsurePrimaryResourceSettings",
+    ns.Modules.PRD.EnsurePrimaryResourceSettings
+  )
   ns.Modules.PRD.NormalizeProfile = P:Def(
     "NormalizeProfile",
     ns.Modules.PRD.NormalizeProfile
