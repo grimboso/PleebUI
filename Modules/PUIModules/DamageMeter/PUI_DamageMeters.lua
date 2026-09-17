@@ -829,6 +829,8 @@ function DamageMeters:ENCOUNTER_END(
 end
 
 function DamageMeters:CHALLENGE_MODE_START(_, mapID)
+  C_DamageMeter.ResetAllCombatSessions()
+
   if History:StartDungeon(mapID, true) then
     Breakdown.InvalidateTargetAnalysisCache()
     Breakdown.InvalidateDeathRecapCache()
