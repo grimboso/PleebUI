@@ -220,7 +220,8 @@ end
 function M:RefreshPrimaryTicks()
   local profile = self.db and self.db.profile
   local owner = self.primary
-  local tickConfig = profile and profile.primary and profile.primary.ticks
+  local resourceSettings = profile and self:GetPrimaryResourceSettings()
+  local tickConfig = resourceSettings and resourceSettings.ticks
 
   if not profile
     or not owner
@@ -233,7 +234,7 @@ function M:RefreshPrimaryTicks()
     return
   end
 
-  local maximum = tonumber(tickConfig.maxValue)
+  local maximum = self:GetPrimaryTickMaximum(tickConfig)
   if not maximum or maximum <= 0 or #tickConfig.entries == 0 then
     _PUI_PRD_HidePrimaryTicks(self)
     return
@@ -1420,13 +1421,14 @@ _PUI_PRD_ApplyNativeTextConfig = function(self, bar, key)
     return false
   end
 
-  local cfg = self.db.profile.text[key]
+  local resourceSettings = key == "primary" and self:GetPrimaryResourceSettings() or nil
+  local cfg = resourceSettings and resourceSettings.text or self.db.profile.text[key]
   local text, leftText, rightText = _PUI_PRD_GetNativeBarText(bar)
   local leftMode = cfg and cfg.leftVisibility or "HIDE"
   local rightMode = cfg and cfg.rightVisibility or "HIDE"
   local left = cfg and cfg.left or nil
   local right = cfg and cfg.right or nil
-  local appearanceText = self:GetBarAppearance(key).text
+  local appearanceText = resourceSettings and resourceSettings.text or self:GetBarAppearance(key).text
 
   bar.__puiNativeTextConfig = cfg
   _PUI_PRD_InstallNativeTextMouseover(bar)
