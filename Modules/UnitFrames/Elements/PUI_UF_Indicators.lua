@@ -482,15 +482,6 @@ end
 
 
 function UFIndicators.UpdateOfflinePresentation(frame, isOffline)
-  if not frame then
-    return
-  end
-
-  isOffline = isOffline == true
-  if frame.__puiOfflineState == isOffline then
-    return
-  end
-
   frame.__puiOfflineState = isOffline
 
   frame.NameText:SetAlpha(1)
