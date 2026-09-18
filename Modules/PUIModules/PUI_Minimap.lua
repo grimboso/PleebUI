@@ -23,8 +23,7 @@ local MinimapModule = Addon:NewModule("Minimap", "NumyAceEvent-3.0")
 ns.Registry.Minimap = MinimapModule
 
 
-local LibStub = _G.LibStub
-local P, TrackThis = ns.Pleebug:DropIn(MinimapModule, { name = "Modules.Minimap" })
+local P = select(1, ns.Pleebug:DropIn(MinimapModule, { name = "Modules.Minimap" }))
 
 
 
