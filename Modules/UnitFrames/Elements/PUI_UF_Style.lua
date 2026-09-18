@@ -501,7 +501,6 @@ end
 
 
   CopyFlatTable = P:Def("CopyFlatTable", CopyFlatTable)
-  GetUF = P:Def("GetUF", GetUF)
   GetConfigMediaOverride = P:Def("GetConfigMediaOverride", GetConfigMediaOverride)
   GetUnitMediaOverride = P:Def("GetUnitMediaOverride", GetUnitMediaOverride)
   UFStyle.ResolveStatusbarTexture = P:Def("UFStyle.ResolveStatusbarTexture", UFStyle.ResolveStatusbarTexture)
