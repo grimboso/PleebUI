@@ -336,29 +336,12 @@ function Hooks.HookIconFrame(icon, key)
   fd.posHooked = true
   fd.viewerKey = key
 
-  if icon.SetPoint then
-    hooksecurefunc(icon, "SetPoint", OnIconSetPoint)
-  end
-
-  if icon.SetScale then
-    hooksecurefunc(icon, "SetScale", OnIconSetScale)
-  end
-
-  if icon.SetSize then
-    hooksecurefunc(icon, "SetSize", OnIconSetSize)
-  end
-
-  if icon.SetWidth then
-    hooksecurefunc(icon, "SetWidth", OnIconSetSize)
-  end
-
-  if icon.SetHeight then
-    hooksecurefunc(icon, "SetHeight", OnIconSetSize)
-  end
-
-  if icon.SetAlpha then
-    hooksecurefunc(icon, "SetAlpha", OnIconSetAlpha)
-  end
+  hooksecurefunc(icon, "SetPoint", OnIconSetPoint)
+  hooksecurefunc(icon, "SetScale", OnIconSetScale)
+  hooksecurefunc(icon, "SetSize", OnIconSetSize)
+  hooksecurefunc(icon, "SetWidth", OnIconSetSize)
+  hooksecurefunc(icon, "SetHeight", OnIconSetSize)
+  hooksecurefunc(icon, "SetAlpha", OnIconSetAlpha)
 end
 
 
