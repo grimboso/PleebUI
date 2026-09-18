@@ -166,10 +166,17 @@ local function CB_Test_BeginPhase(bar, state, isChannel)
   state.t = 0
   state.phaseStarted = true
   element.__puiOwnerBar = bar
-  element.__puiTestCasting = isChannel and nil or true
-  element.__puiTestChanneling = isChannel and true or nil
-  element.casting = isChannel and nil or true
-  element.channeling = isChannel and true or nil
+  if isChannel then
+    element.__puiTestCasting = nil
+    element.__puiTestChanneling = true
+    element.casting = nil
+    element.channeling = true
+  else
+    element.__puiTestCasting = true
+    element.__puiTestChanneling = nil
+    element.casting = true
+    element.channeling = nil
+  end
 
   local spellName = isChannel and "Test Channel" or "Test Cast"
   local iconIndex = ((state.sampleIndex - 1) % #TEST_CAST_ICONS) + 1
@@ -310,10 +317,6 @@ testDriver:SetScript("OnUpdate", function(_, elapsed)
   end
 end)
 
-function CastBar:IsTestMode()
-  return self.__puiTestMode == "castchannel"
-end
-
 function CastBar:SuspendTestMode()
   testDriver:Hide()
   self.__puiTestMode = nil
@@ -392,7 +395,6 @@ local P = select(1, ns.Pleebug:DropIn(CastBar, { name = "UnitFrames.CastBar.Test
   CB_Test_StartUnit = P:Def("CB_Test_StartUnit", CB_Test_StartUnit)
   CB_Test_UpdateProgress = P:Def("CB_Test_UpdateProgress", CB_Test_UpdateProgress)
   CB_Test_UpdateUnit = P:Def("CB_Test_UpdateUnit", CB_Test_UpdateUnit)
-  CastBar.IsTestMode = P:Def("CastBar.IsTestMode", CastBar.IsTestMode)
   CastBar.SuspendTestMode = P:Def("CastBar.SuspendTestMode", CastBar.SuspendTestMode)
   CastBar.SetTestMode = P:Def("CastBar.SetTestMode", CastBar.SetTestMode)
 
