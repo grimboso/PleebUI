@@ -11,8 +11,6 @@ local Tags = ns.UFTags
 
 local _G = _G
 local pairs = _G.pairs
-local tostring = _G.tostring
-local tonumber = _G.tonumber
 local type = _G.type
 local UnitExists = _G.UnitExists
 local UnitName = _G.UnitName
@@ -21,8 +19,6 @@ local UnitPower = _G.UnitPower
 local UnitPowerMax = _G.UnitPowerMax
 local issecretvalue = _G.issecretvalue
 local AbbreviateLargeNumbers = _G.AbbreviateLargeNumbers
-local math_floor = _G.math.floor
-local string_format = _G.string.format
 local UseNSRTNicknames = false
 local NSRT_NICKNAME_EVENT = "NSRT_NICKNAME_UPDATED"
 local P = select(1, ns.Pleebug:DropIn(Tags, { name = "UnitFrames.Tags" }))
@@ -35,33 +31,6 @@ local function RefreshNicknameSetting()
 
   UseNSRTNicknames = textDB and textDB.useNSRTNicknames == true or false
   return UseNSRTNicknames
-end
-
-local function ClampColorByte(value, fallback)
-  value = tonumber(value) or fallback or 1
-
-  if value < 0 then
-    value = 0
-  elseif value > 1 then
-    value = 1
-  end
-
-  return math_floor(value * 255 + 0.5)
-end
-
-function Tags.GetDeadStatusText(text)
-  local unitFrames = ns.UnitFrames
-  local db = unitFrames and unitFrames.db and unitFrames.db.profile
-  local colors = db and db.colors or nil
-  local c = colors and colors.deadText or { 0.7, 0.7, 0.7, 1 }
-
-  return string_format(
-    "|cff%02x%02x%02x%s|r",
-    ClampColorByte(c[1], 0.7),
-    ClampColorByte(c[2], 0.7),
-    ClampColorByte(c[3], 0.7),
-    tostring(text or "")
-  )
 end
 
 function Tags.GetDisplayName(unit)
@@ -211,8 +180,6 @@ end
 
 
   RefreshNicknameSetting = P:Def("RefreshNicknameSetting", RefreshNicknameSetting)
-  ClampColorByte = P:Def("ClampColorByte", ClampColorByte)
-  Tags.GetDeadStatusText = P:Def("Tags.GetDeadStatusText", Tags.GetDeadStatusText)
   Tags.RegisterOUFTags = P:Def("Tags.RegisterOUFTags", Tags.RegisterOUFTags)
   RefreshFrameTags = P:Def("RefreshFrameTags", RefreshFrameTags)
   Tags.RefreshNameTags = P:Def("Tags.RefreshNameTags", Tags.RefreshNameTags)
