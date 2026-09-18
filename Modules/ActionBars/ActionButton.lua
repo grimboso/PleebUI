@@ -101,7 +101,7 @@ local PUI_UPDATE_STATE_SNIPPET = [[
   end
 
   local pressAndHold = false
-  if action and IsPressHoldReleaseSpell then
+  if action then
     local actionType, id, subType = GetActionInfo(action)
     if actionType == "spell" then
       pressAndHold = IsPressHoldReleaseSpell(id)
