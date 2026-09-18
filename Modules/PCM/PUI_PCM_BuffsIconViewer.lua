@@ -4,7 +4,7 @@ local Addon = ns.Addon
 local Buffs = Addon:NewModule("PCM_Buffs")
 ns.Modules.PCM_Buffs = Buffs
 
-local P, TrackThis = ns.Pleebug:DropIn(Buffs, { name = "PCM", bucket = "BuffsIconViewer" })
+local P = select(1, ns.Pleebug:DropIn(Buffs, { name = "PCM", bucket = "BuffsIconViewer" }))
 
 local _G = _G
 local IsSecret = issecretvalue
@@ -15,10 +15,8 @@ local Cooldowns = ns.Modules.CooldownManager
 local Pixel = ns.Pixel
 local Round = Pixel.Round
 
-local Theme = ns.Theme
 local IconSkin = ns.IconSkin
 local FrameUtil = ns.FrameUtil
-local LSM = ns.LSM
 local VIEWER_KEY = "BuffIconCooldownViewer"
 
 local function _PCM_BuffsEnabled()
@@ -33,32 +31,26 @@ local _cache = {
   viewer      = nil,
 
   cm          = nil,
-  cmAt        = 0,
 
   fontDB      = nil,
-  fontAt      = 0,
 
   spacing     = nil,
   iconSize    = nil,
   columns     = nil,
   growth      = nil,
-  sizingAt    = 0,
 
   buffContainer = nil,
 }
 
 local function _InvalidateBuffsCache()
   _cache.cm = nil
-  _cache.cmAt = 0
 
   _cache.fontDB = nil
-  _cache.fontAt = 0
 
   _cache.spacing = nil
   _cache.iconSize = nil
   _cache.columns = nil
   _cache.growth = nil
-  _cache.sizingAt = 0
 
   _cache.buffContainer = nil
 
@@ -74,7 +66,6 @@ local function _GetBuffsDB()
 
   local cm = ns.PCM_DBExports.GetProfileBuffsDB()
   _cache.cm = cm
-  _cache.cmAt = 0
   return cm
 end
 
@@ -86,7 +77,6 @@ local function _GetViewerFontDB()
 
   local v = ns.PCM_DBExports.GetProfileBuffsViewerFontDB(VIEWER_KEY)
   _cache.fontDB = v
-  _cache.fontAt = 0
   return v
 end
 
@@ -139,7 +129,7 @@ end
 
 local buffHolder = nil
 
-local function _EnsureBuffHolder(viewer)
+local function _EnsureBuffHolder()
   if buffHolder then
     buffHolder:Show()
     return buffHolder
@@ -222,10 +212,7 @@ local function _IsIconFrame(f)
 end
 
 
-local _rows = {}
-local _rowKeys = {}
 local _prepNeeded = true
-local _rt_lastChildCount = -1
 local _rt_lastMoverTotal = 0
 local _buffItemListDirty = true
 local _buffItemList = {}
@@ -259,7 +246,7 @@ _MarkBuffItemListDirty = function(viewer)
   end
 end
 
-local function _GetViewerItemList(viewer, container)
+local function _GetViewerItemList(viewer)
   if not viewer then
     wipe(_buffItemList)
     wipe(_buffItemSet)
@@ -430,7 +417,6 @@ local function _GetViewerStyleSizing()
   _cache.iconSize = iconSize
   _cache.columns = columns
   _cache.growth = growth
-  _cache.sizingAt = 0
   return spacingValue, iconSize, columns, growth
 end
 
@@ -504,7 +490,7 @@ end
 -- Forward declare so calls above the definition don't become global lookups.
 
 
-local function _PrepareBuffIconsForViewer(viewer, container, desiredSize)
+local function _PrepareBuffIconsForViewer(viewer, desiredSize)
   if not _prepNeeded or not viewer then
     return
   end
@@ -515,7 +501,7 @@ local function _PrepareBuffIconsForViewer(viewer, container, desiredSize)
     _rt_fontDB = fontDB
   end
 
-  local iconList = _GetViewerItemList(viewer, container)
+  local iconList = _GetViewerItemList(viewer)
   _PrepareBuffIcons(iconList, desiredSize, fontDB, IconSkin)
   _prepNeeded = false
 end
@@ -529,7 +515,7 @@ local function _SkinAndParkBuffIcon(viewer, itemFrame)
     return
   end
 
-  local holder = _EnsureBuffHolder(viewer)
+  local holder = _EnsureBuffHolder()
   if not holder then
     return
   end
@@ -594,7 +580,7 @@ local function _RefreshReboundBuffIcon(itemFrame)
 end
 
 local function _ResolveViewerAndContainer(viewer)
-  local holder = _EnsureBuffHolder(viewer)
+  local holder = _EnsureBuffHolder()
 
   local container = viewer:GetItemContainerFrame()
 
@@ -610,7 +596,7 @@ local function _ResolveViewerAndContainer(viewer)
   local padX = scale(spacingValue or 1)
   local desiredSize = scale(_rt_iconSize or 36)
 
-  return holder, container, padX, desiredSize
+  return holder, padX, desiredSize
 end
 
 local function _BuffIconIsCenterVisible(icon)
@@ -939,13 +925,13 @@ CenterVisibleBuffs = function(force)
     return
   end
 
-  local holder, container, padX, desiredSize = _ResolveViewerAndContainer(viewer)
+  local holder, padX, desiredSize = _ResolveViewerAndContainer(viewer)
   if not holder then
     return
   end
 
   if _prepNeeded then
-    _PrepareBuffIconsForViewer(viewer, container, desiredSize)
+    _PrepareBuffIconsForViewer(viewer, desiredSize)
   end
 
   if (not force)
@@ -958,7 +944,7 @@ CenterVisibleBuffs = function(force)
     return
   end
 
-  local iconList = _GetViewerItemList(viewer, container)
+  local iconList = _GetViewerItemList(viewer)
   if _centerVisibilityNeedsRebuild then
     _RebuildVisibleBuffIcons(iconList)
   end
@@ -1078,7 +1064,7 @@ local function _Buffs_NormalizeSavedAnchor(frame, key, db, pos)
   return pos
 end
 
-local function _Buffs_EnsureDefaultAnchor(key, db, personal)
+local function _Buffs_EnsureDefaultAnchor(key, db)
   if key ~= VIEWER_KEY then
     return nil
   end
@@ -1108,11 +1094,7 @@ local function _ApplyViewerAnchorFromDB(viewer)
     return
   end
 
-  local holder = _EnsureBuffHolder(viewer)
-  local target = _EnsureBuffHolder(viewer)
-  if not (target and target.ClearAllPoints and target.SetPoint) then
-    return
-  end
+  local target = _EnsureBuffHolder()
 
   local anchorDB = ns.PCM_DBExports.GetProfileBuffsAnchorDB()
   local pos = anchorDB and anchorDB[VIEWER_KEY] or nil
@@ -1157,7 +1139,7 @@ local function _RegisterBuffIconMover()
 
   _InvalidateBuffsCache()
 
-  local holder = _EnsureBuffHolder(viewer)
+  local holder = _EnsureBuffHolder()
 
   _ApplyViewerAnchorFromDB(viewer)
 
@@ -1375,7 +1357,6 @@ function Buffs:_RebuildRuntimeFromDB(viewer)
     return
   end
 
-  _customBarsDefaultsGen = (_customBarsDefaultsGen or 0) + 1
   self:_PrimeRuntimeFromDB()
 
   _cache.buffContainer = nil
