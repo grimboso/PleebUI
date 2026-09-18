@@ -4,7 +4,10 @@ local AuraSlotDriver = {}
 ns.AuraSlotDriver = AuraSlotDriver
 
 local CreateFrame = CreateFrame
+local GetBuildInfo = GetBuildInfo
 local UIParent = UIParent
+
+local SUPPORTS_NATIVE_AURA_TRACKING_ENABLE = select(4, GetBuildInfo()) >= 120105
 
 local RETIRED_CANDIDATES = {
   includeSpellIDs = {
@@ -67,6 +70,10 @@ function AuraSlotDriver:CreateSlot(unit, filter, options)
   local key = "pui_shared_aura_slot_" .. tostring(sequence)
   local slot = runtime.container:AddAuraSlot(key, filter, options)
 
+  if SUPPORTS_NATIVE_AURA_TRACKING_ENABLE then
+    runtime.container:SetAuraSlotEnabled(key, false)
+  end
+
   return {
     runtime = runtime,
     container = runtime.container,
@@ -102,6 +109,11 @@ function AuraSlotDriver:SetSlotActive(handle, active)
     runtime.activeSlots = runtime.activeSlots + 1
   else
     runtime.activeSlots = math.max(0, runtime.activeSlots - 1)
+  end
+
+  if SUPPORTS_NATIVE_AURA_TRACKING_ENABLE then
+    handle.container:SetAuraSlotEnabled(handle.key, active)
+  elseif not active then
     handle.container:SetAuraSlotCandidateFilters(handle.key, RETIRED_CANDIDATES)
   end
 
