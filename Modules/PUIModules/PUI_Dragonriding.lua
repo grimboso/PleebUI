@@ -3,10 +3,8 @@
 local ADDON_NAME, ns = ...
 local Addon  = ns.Addon
 local LSM = ns.LSM
-local Theme     = ns.Theme
 local BarWidget = ns.BarWidget
 local FrameUtil = ns.FrameUtil
-local FrameScale = ns.FrameScale
 local Round = ns.Pixel.Round
 local Dragonriding = Addon:NewModule("Dragonriding", "NumyAceEvent-3.0")
 ns.Modules.Dragonriding = Dragonriding
