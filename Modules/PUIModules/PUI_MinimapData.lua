@@ -10,7 +10,7 @@ local MinimapData = {}
 ns.MinimapData = MinimapData
 
 local LibStub = _G.LibStub
-local P, TrackThis = ns.Pleebug:DropIn(MinimapData, { name = "Modules.MinimapData" })
+local P = select(1, ns.Pleebug:DropIn(MinimapData, { name = "Modules.MinimapData" }))
 local _G = _G
 local UIParent = UIParent
 local Minimap = _G.Minimap
@@ -267,7 +267,6 @@ local MARGIN = 6
 local MAX_COLS = 6 -- 6 icons per row when expanded
 
 local HANDLE_SIZE = 20
-local HANDLE_MARGIN = 2
 local COLLAPSE_SECONDS = 20
 
 local _bucketExpanded = false
