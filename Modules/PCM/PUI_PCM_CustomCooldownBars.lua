@@ -9,9 +9,7 @@ local InCombatLockdown = _G.InCombatLockdown
 local CreateFrame = _G.CreateFrame
 local C_Spell = _G.C_Spell
 local C_SpellBook = _G.C_SpellBook
-local Hooks = ns.PCMHooks
 local PCMRuntime = ns.PCMRuntime
-local Addon = ns.Addon
 local FrameUtil = ns.FrameUtil
 local BarWidget = ns.BarWidget
 local Presentation = ns.Presentation
@@ -38,7 +36,7 @@ local __PUI_PCM_SpellBars = {
 
 
 
-local P, TrackThis = ns.Pleebug:DropIn(Cooldowns, { name = "PCM", bucket = "CustomCooldownBars" })
+local P = select(1, ns.Pleebug:DropIn(Cooldowns, { name = "PCM", bucket = "CustomCooldownBars" }))
 
 
 function Cooldowns:_SpellBars_OnTalentUpdate(event, unit)
