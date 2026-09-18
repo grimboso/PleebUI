@@ -9,7 +9,7 @@ local BuffBars = Addon:NewModule("PCM_BuffBars")
 ns.Modules.PCM_BuffBars = BuffBars
 
 
-local P, TrackThis = ns.Pleebug:DropIn(BuffBars, { name = "PCM", bucket = "BuffBarViewer" })
+local P = select(1, ns.Pleebug:DropIn(BuffBars, { name = "PCM", bucket = "BuffBarViewer" }))
 
 local function _PCM_BuffBarsEnabled()
   if ns.PCM_IsTransitionPending() then
