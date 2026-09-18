@@ -324,10 +324,6 @@ function PreviewBox.CreateZoomControl(parent, options)
     valueText:SetText(tostring(percent) .. "%")
   end
 
-  function control:GetZoom()
-    return (tonumber(slider:GetValue()) or 100) / 100
-  end
-
   slider:SetScript("OnValueChanged", function(self, value)
     local percent = math_floor(value + 0.5)
     valueText:SetText(tostring(percent) .. "%")
