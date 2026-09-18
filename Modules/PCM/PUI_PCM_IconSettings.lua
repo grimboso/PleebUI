@@ -473,7 +473,6 @@ function IconSettings:ClearItemBinding(itemFrame)
   frameData.iconSettingsGeneration = nil
   frameData.iconSettingsViewerKey = nil
   frameData.iconFontOptions = nil
-  frameData.iconSwipeOptions = nil
   frameData.iconRuntimeFlagsGeneration = nil
   frameData.iconRuntimeFlagsViewerKey = nil
   frameData.iconRuntimeFlagsRecord = nil
@@ -695,48 +694,6 @@ function IconSettings:ResolveFontOptions(itemFrame, viewerKey, role, viewerOptio
   return options
 end
 
-function IconSettings:ResolveSwipeOptions(itemFrame, viewerKey, viewerOptions)
-  local record = self:GetRecordForItem(itemFrame, viewerKey)
-  local swipe = record and record.swipe
-  if not swipe then
-    return viewerOptions
-  end
-
-  local frameData = Hooks.GetFrameData(itemFrame)
-  local cached = frameData.iconSwipeOptions
-  if cached
-    and cached.generation == state.settingsGeneration
-    and cached.source == swipe
-    and cached.viewerSource == viewerOptions
-  then
-    return cached.options
-  end
-
-  cached = cached or {}
-  local options = cached.options or {}
-  options.show = swipe.show
-  options.showGCD = swipe.showGCD
-  options.source = swipe.source
-  options.color = swipe.color
-  options.drawEdge = swipe.drawEdge
-  options.rechargeEdge = swipe.rechargeEdge
-  options.reverse = swipe.reverse
-
-  if viewerOptions then
-    if options.source == nil then options.source = viewerOptions.source end
-    if options.color == nil then options.color = viewerOptions.color end
-    if options.drawEdge == nil then options.drawEdge = viewerOptions.drawEdge end
-    if options.reverse == nil then options.reverse = viewerOptions.reverse end
-  end
-
-  cached.generation = state.settingsGeneration
-  cached.source = swipe
-  cached.viewerSource = viewerOptions
-  cached.options = options
-  frameData.iconSwipeOptions = cached
-  return options
-end
-
 function IconSettings:GetAppearance(itemFrame, viewerKey)
   local record = self:GetRecordForItem(itemFrame, viewerKey)
   return record and record.appearance or nil
@@ -937,7 +894,6 @@ IconSettings.GetRecordForItem = P:Def("IconSettings:GetRecordForItem", IconSetti
 IconSettings.PrimeRuntimeCache = P:Def("IconSettings:PrimeRuntimeCache", IconSettings.PrimeRuntimeCache)
 IconSettings.HasShownTextOverride = P:Def("IconSettings:HasShownTextOverride", IconSettings.HasShownTextOverride)
 IconSettings.ResolveFontOptions = P:Def("IconSettings:ResolveFontOptions", IconSettings.ResolveFontOptions)
-IconSettings.ResolveSwipeOptions = P:Def("IconSettings:ResolveSwipeOptions", IconSettings.ResolveSwipeOptions)
 IconSettings.GetAppearance = P:Def("IconSettings:GetAppearance", IconSettings.GetAppearance)
 IconSettings.GetSettingsGeneration = P:Def("IconSettings:GetSettingsGeneration", IconSettings.GetSettingsGeneration)
 IconSettings.SetPreviewState = P:Def("IconSettings:SetPreviewState", IconSettings.SetPreviewState)
