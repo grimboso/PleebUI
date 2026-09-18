@@ -650,21 +650,6 @@ function Runtime:RefreshAllViewers(reason)
   end
 end
 
-function Runtime:QueueViewerScan(viewerOrKey, reason)
-  if not state.enabled then
-    return
-  end
-
-  local entry = GetEntry(viewerOrKey)
-  if not entry then
-    return
-  end
-
-  entry.scanQueued = true
-  entry.scanReason = reason or entry.scanReason or "queued-scan"
-  QueueEntry(entry)
-end
-
 function Runtime:QueueAllViewerScans(reason)
   if not state.enabled then
     return
@@ -787,7 +772,6 @@ Runtime.ClearDirty = P:Def("Runtime:ClearDirty", Runtime.ClearDirty)
 Runtime.BindViewer = P:Def("Runtime:BindViewer", Runtime.BindViewer)
 Runtime.RefreshViewer = P:Def("Runtime:RefreshViewer", Runtime.RefreshViewer)
 Runtime.RefreshAllViewers = P:Def("Runtime:RefreshAllViewers", Runtime.RefreshAllViewers)
-Runtime.QueueViewerScan = P:Def("Runtime:QueueViewerScan", Runtime.QueueViewerScan)
 Runtime.QueueAllViewerScans = P:Def("Runtime:QueueAllViewerScans", Runtime.QueueAllViewerScans)
 Runtime.Enable = P:Def("Runtime:Enable", Runtime.Enable)
 Runtime.Disable = P:Def("Runtime:Disable", Runtime.Disable)
