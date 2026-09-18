@@ -390,11 +390,6 @@ function QuickSettings:Open(anchor, spec)
   return true
 end
 
-function QuickSettings:IsOpenFor(anchor)
-  local panel = self.panel
-  return panel and panel:IsShown() and panel.anchor == anchor
-end
-
 function QuickSettings:Refresh(ownerKey, anchor, provider)
   local panel = self.panel
   if not panel or not panel:IsShown() or panel.ownerKey ~= ownerKey then
@@ -429,7 +424,6 @@ end
 local P = select(1, ns.Pleebug:DropIn(QuickSettings, { name = "Core.EditModeQuickSettings" }))
 QuickSettings.EnsurePanel = P:Def("QuickSettings:EnsurePanel", QuickSettings.EnsurePanel)
 QuickSettings.Open = P:Def("QuickSettings:Open", QuickSettings.Open)
-QuickSettings.IsOpenFor = P:Def("QuickSettings:IsOpenFor", QuickSettings.IsOpenFor)
 QuickSettings.Refresh = P:Def("QuickSettings:Refresh", QuickSettings.Refresh)
 QuickSettings.Hide = P:Def("QuickSettings:Hide", QuickSettings.Hide)
 QuickSettings.RefreshTheme = P:Def("QuickSettings:RefreshTheme", QuickSettings.RefreshTheme)
