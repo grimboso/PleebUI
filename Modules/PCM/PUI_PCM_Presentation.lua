@@ -1388,31 +1388,6 @@ function PCMPresentation.BindCustomBar(frame)
   return parts
 end
 
-function PCMPresentation.BindDurationFrame(frame, state)
-  state = BarWidget.BindDurationBarFrame(frame, state or {})
-  state.kind = state.kind or "duration"
-  state.status = state.cooldownBar
-  state.background = state.bg
-  state.valueTextFrame = state.textFrame
-  state.valueText = state.text
-  state.stackSegments = state.stackSegments or {}
-  state.chargeSlots = state.chargeSlots or {}
-  state.label = state.label or frame:CreateFontString(nil, "OVERLAY")
-  return state
-end
-
-function PCMPresentation.BindChargeFrame(frame, state)
-  state = BarWidget.BindChargeBarFrame(frame, state or {})
-  state.kind = "charge"
-  state.chargeRoot = state.slotsContainer
-  state.valueTextFrame = state.timerTextContainer
-  state.valueText = state.timerText
-  state.chargeSlots = state.chargeSlots or {}
-  state.chargeSlotPool = state.chargeSlotPool or {}
-  state.stackSegments = state.stackSegments or {}
-  return state
-end
-
 Presentation.Register("PCMBar", PCMBarAdapter)
 Presentation.Register("PCMIcon", PCMIconAdapter)
 
@@ -1425,8 +1400,6 @@ PCMPresentation.LayoutChargeSlots = P:Def("PCMPresentation.LayoutChargeSlots", L
 PCMPresentation.ApplyChargeCount = P:Def("PCMPresentation.ApplyChargeCount", PCMPresentation.ApplyChargeCount)
 PCMPresentation.AnchorChargeTimerText = P:Def("PCMPresentation.AnchorChargeTimerText", PCMPresentation.AnchorChargeTimerText)
 PCMPresentation.BindCustomBar = P:Def("PCMPresentation.BindCustomBar", PCMPresentation.BindCustomBar)
-PCMPresentation.BindDurationFrame = P:Def("PCMPresentation.BindDurationFrame", PCMPresentation.BindDurationFrame)
-PCMPresentation.BindChargeFrame = P:Def("PCMPresentation.BindChargeFrame", PCMPresentation.BindChargeFrame)
 PCMPresentation.ConfigureCustomBarBuffGlow = P:Def("PCMPresentation.ConfigureCustomBarBuffGlow", PCMPresentation.ConfigureCustomBarBuffGlow)
 PCMPresentation.RefreshCustomBarBuffGlowStyle = P:Def("PCMPresentation.RefreshCustomBarBuffGlowStyle", PCMPresentation.RefreshCustomBarBuffGlowStyle)
 PCMPresentation.DisableCustomBarBuffGlow = P:Def("PCMPresentation.DisableCustomBarBuffGlow", PCMPresentation.DisableCustomBarBuffGlow)
