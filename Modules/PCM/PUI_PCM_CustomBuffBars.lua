@@ -572,6 +572,7 @@ local _CustomBars_ApplyVisibility
 local _CustomBars_IsTrackedSpellAvailable
 local _CustomBars_BindBarsToIcon
 local _CustomBars_CompleteFrameRetirement
+local _CustomBars_GetAuraTrackUnitAndFilter
 local _customBarsAuraDriver
 
 local function _CustomBars_CreateChrome(frame)
@@ -1378,7 +1379,7 @@ local function _CustomBars_NormalizeAuraTrackMode(mode)
   return "player_buff"
 end
 
-local function _CustomBars_GetAuraTrackUnitAndFilter(cfg)
+_CustomBars_GetAuraTrackUnitAndFilter = function(cfg)
   local mode = _CustomBars_NormalizeAuraTrackMode(type(cfg) == "table" and cfg.auraTrackMode or cfg)
 
   if mode == "target_debuff" then

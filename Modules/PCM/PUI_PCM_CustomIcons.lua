@@ -1109,7 +1109,9 @@ local function ConfigureAuraParts(record, button, parts, initializing)
   parts.durationCooldown:SetAllPoints(button)
   parts.durationTextHolder:SetAllPoints(button)
   parts.applicationHolder:SetAllPoints(button)
-  SetTooltip(button, record)
+  button:SetTooltipAnchorPoint("ANCHOR_RIGHT", 0, 0)
+  button:SetMouseMotionEnabled(icon.showTooltip == true)
+  button:SetMouseClickEnabled(false)
   button:SetAlpha(icon.activeAuraAlpha / 100)
 end
 

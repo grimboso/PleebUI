@@ -1,5 +1,5 @@
 <Ui xmlns="http://www.blizzard.com/wow/ui/">
-  <Button name="PUI_AuraApplicationDurationTemplate" virtual="true">
+  <Frame name="PUI_AuraApplicationDurationTemplate" virtual="true">
     <Layers>
       <Layer level="ARTWORK">
         <Texture parentKey="PUIIcon" hidden="true"/>
@@ -31,9 +31,9 @@
 
       <Cooldown parentKey="PUIDurationCooldown" inherits="CooldownFrameTemplate, DisableUntrustedLayoutScriptsTemplate" hidden="true"/>
     </Frames>
-  </Button>
+  </Frame>
 
-  <Button name="PUI_PlayerAuraButtonTemplate" virtual="true">
+  <Frame name="PUI_PlayerAuraButtonTemplate" virtual="true">
     <Size x="30" y="44"/>
     <Layers>
       <Layer level="ARTWORK">
@@ -67,5 +67,5 @@
       </Frame>
       <Cooldown parentKey="PUIDurationCooldown" inherits="CooldownFrameTemplate, DisableUntrustedLayoutScriptsTemplate" hidden="true"/>
     </Frames>
-  </Button>
+  </Frame>
 </Ui>
