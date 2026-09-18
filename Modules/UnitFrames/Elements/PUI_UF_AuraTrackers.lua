@@ -30,12 +30,6 @@ local function BuildSlotOptions(
   return options
 end
 
-function AuraTrackers.DisableRuntime(runtime)
-  runtime.configuredEnabled = false
-  AuraContainers.SetRuntimeEnabled(runtime, false)
-  AuraContainers.SetRuntimeShown(runtime, false)
-end
-
 function AuraTrackers.CreateRuntime(frame, auraDB, display, sharedHost)
   local layout = AuraContainers.BuildDisplayLayout(frame, display)
   local appearance = AuraFilters.BuildEffectiveAppearance(auraDB, display)
@@ -106,6 +100,5 @@ end
 
 local P = select(1, ns.Pleebug:DropIn(AuraTrackers, { name = "UnitFrames.AuraTrackers" }))
 BuildSlotOptions = P:Def("BuildSlotOptions", BuildSlotOptions)
-AuraTrackers.DisableRuntime = P:Def("AuraTrackers.DisableRuntime", AuraTrackers.DisableRuntime)
 AuraTrackers.CreateRuntime = P:Def("AuraTrackers.CreateRuntime", AuraTrackers.CreateRuntime)
 AuraTrackers.ConfigureRuntime = P:Def("AuraTrackers.ConfigureRuntime", AuraTrackers.ConfigureRuntime)
