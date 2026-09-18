@@ -21,7 +21,6 @@ local Theme = ns.Theme
 local Pixel = ns.Pixel
 local Round = Pixel.Round
 local FrameScale = ns.FrameScale
-local IconSkin = ns.IconSkin
 local AuraWidget = ns.AuraWidget
 local AuraSlotDriver = ns.AuraSlotDriver
 local BarWidget = ns.BarWidget
@@ -35,13 +34,8 @@ local CustomIcons = ns.PCMCustomIcons
 local IsSecret = issecretvalue
 
 local UnitClass           = _G.UnitClass
-local UnitExists          = _G.UnitExists
-local UnitIsUnit          = _G.UnitIsUnit
 local C_CooldownViewer    = _G.C_CooldownViewer
-local C_ClassTalents      = _G.C_ClassTalents
 local wipe                = _G.wipe
-local GetSpecialization   = _G.GetSpecialization
-local GetSpecializationInfo = _G.GetSpecializationInfo
 local InCombatLockdown    = _G.InCombatLockdown
 local UnitAffectingCombat = _G.UnitAffectingCombat
 local C_Spell             = _G.C_Spell
@@ -88,8 +82,6 @@ local function _GetViewer()
   _cache.viewer = viewer
   return viewer
 end
-
-local AceGUI = LibStub("AceGUI-3.0")
 
 -- Custom stack bars DB (per-profile, under the same CooldownManager root)
 local function _GetStackBarsDB()
