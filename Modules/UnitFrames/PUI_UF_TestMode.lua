@@ -108,7 +108,6 @@ local TEST_THREAT_COLORS = {
   { 1.00, 0.08, 0.08, 0.95 },
 }
 
-local WHITE8 = "Interface\\Buttons\\WHITE8x8"
 
 local SINGLE_FAMILIES = {
   {
