@@ -282,6 +282,6 @@ CastBar.DefaultColors = COLORS
 CastBar.defaults = defaults
 
 
-local P = select(1, ns.Pleebug:DropIn(CastBar, { name = "UnitFrames.CastBar.Defaults" }))
+ns.Pleebug:DropIn(CastBar, { name = "UnitFrames.CastBar.Defaults" })
 
 
