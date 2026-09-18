@@ -10,7 +10,6 @@ local P = select(1, ns.Pleebug:DropIn(IconSettings, { name = "PCM", bucket = "Ic
 local IsSecret = issecretvalue
 local InCombatLockdown = InCombatLockdown
 local wipe = wipe
-local sort = table.sort
 
 local FONT_FIELDS = {
   "font",
