@@ -191,7 +191,12 @@ function CastBar:UpdateUnitLayout(unit, resolvedConfig, overrideBar, presentatio
   end
 
   if bar.spellName and cfg.text then
-    CastBar.SetFont(bar.spellName, cfg.text.useGlobalFont == true and nil or cfg.text.fontKey, cfg.text.size, cfg.text.flags)
+    local fontKey = cfg.text.fontKey
+    if cfg.text.useGlobalFont == true then
+      fontKey = nil
+    end
+
+    CastBar.SetFont(bar.spellName, fontKey, cfg.text.size, cfg.text.flags)
 
     local r, g, b, a = CastBar.UnpackColor(cfg.text.color, { 1, 1, 1, 1 })
     bar.spellName:SetTextColor(r, g, b, a)
@@ -208,7 +213,7 @@ function CastBar:UpdateUnitLayout(unit, resolvedConfig, overrideBar, presentatio
     )
 
     if unit == "player" then
-      CastBar.SetFont(bar.instantSpellName, cfg.text.useGlobalFont == true and nil or cfg.text.fontKey, cfg.text.size, cfg.text.flags)
+      CastBar.SetFont(bar.instantSpellName, fontKey, cfg.text.size, cfg.text.flags)
       bar.instantSpellName:SetTextColor(r, g, b, a)
       bar.instantSpellName:ClearAllPoints()
       bar.instantSpellName:SetPoint(
@@ -240,7 +245,12 @@ function CastBar:UpdateUnitLayout(unit, resolvedConfig, overrideBar, presentatio
   end
 
   if bar.timeText and cfg.timeText then
-    CastBar.SetFont(bar.timeText, cfg.timeText.useGlobalFont == true and nil or cfg.timeText.fontKey, cfg.timeText.size, cfg.timeText.flags)
+    local fontKey = cfg.timeText.fontKey
+    if cfg.timeText.useGlobalFont == true then
+      fontKey = nil
+    end
+
+    CastBar.SetFont(bar.timeText, fontKey, cfg.timeText.size, cfg.timeText.flags)
 
     local r, g, b, a = CastBar.UnpackColor(cfg.timeText.color, { 1, 1, 1, 1 })
     bar.timeText:SetTextColor(r, g, b, a)
