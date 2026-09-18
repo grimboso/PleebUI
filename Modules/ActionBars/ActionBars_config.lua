@@ -4,7 +4,6 @@ local ADDON_NAME, ns = ...
 
 local Addon  = ns.Addon
 local Core = ns.ActionBarsCore
-local STANDARD_FONT_KEY = ns.FontDropdown.STANDARD_FONT_KEY
 local OptionsUtil = ns.OptionsUtil
 local InCombatLockdown = InCombatLockdown
 local UnitHasVehicleUI = UnitHasVehicleUI
