@@ -60,12 +60,20 @@ local function _PUI_IsTemporaryChatFrame(chatFrame)
     return false
   end
 
-  local isTemporary = chatFrame.isTemporary
-  if issecretvalue(isTemporary) then
-    return true
+  return chatFrame.isTemporary == true
+end
+
+local function _PUI_IsChatFrameOpen(chatFrame)
+  if not chatFrame then
+    return false
   end
 
-  return isTemporary == true
+  if chatFrame.isTemporary == true then
+    return chatFrame.inUse == true
+  end
+
+  local id = chatFrame:GetID()
+  return id > 0 and FCF_IsChatWindowIndexActive(id)
 end
 
 local function _PUI_IsChattynatorLoaded()
@@ -311,6 +319,37 @@ function ChatLinks:OnInitialize()
 end
 
 local HideChatSideButtons
+
+local ChatFrameState = setmetatable({}, { __mode = "k" })
+local ChatTabState = setmetatable({}, { __mode = "k" })
+local ChatEditBoxState = setmetatable({}, { __mode = "k" })
+
+local function GetChatFrameState(chatFrame)
+  local state = ChatFrameState[chatFrame]
+  if not state then
+    state = {}
+    ChatFrameState[chatFrame] = state
+  end
+  return state
+end
+
+local function GetChatTabState(tab)
+  local state = ChatTabState[tab]
+  if not state then
+    state = {}
+    ChatTabState[tab] = state
+  end
+  return state
+end
+
+local function GetChatEditBoxState(editBox)
+  local state = ChatEditBoxState[editBox]
+  if not state then
+    state = {}
+    ChatEditBoxState[editBox] = state
+  end
+  return state
+end
 
 local HISTORY_VERSION = 2
 local HISTORY_TRIM_BUFFER = 128
@@ -659,7 +698,7 @@ _PUI_InstallPersistentHistoryHook = function()
   ChatLinks.__puiPersistentHistoryHooked = true
 
   hooksecurefunc(cf, "AddMessage", function(_, text, r, g, b)
-    if ChatLinks._puiRuntimeEnabled ~= true then
+    if ChatLinks._puiRuntimeEnabled ~= true or _PUI_IsChatMessagingRestricted() then
       return
     end
 
@@ -3427,8 +3466,95 @@ local function CreateJumpToBottomButton(chatFrame)
   return button
 end
 
+local function SkinTemporaryChatFrame(chatFrame)
+  if not chatFrame or not _PUI_IsChatFrameOpen(chatFrame) then
+    return
+  end
+
+  local name = chatFrame.GetName and chatFrame:GetName()
+  if not name then
+    return
+  end
+
+  local state = GetChatFrameState(chatFrame)
+
+  if state.temporarySkinned then
+    if state.shell then
+      local style = _GetChatWindowStyle and _GetChatWindowStyle()
+      _ApplyDirectChatShellBackdrop(state.shell, style)
+    end
+
+    SkinChatEditBox(chatFrame)
+    SkinChatTab(chatFrame)
+    return
+  end
+
+  local background = _G[name .. "Background"]
+  if background then
+    if background.SetAlpha then
+      background:SetAlpha(0)
+    end
+    if background.Hide then
+      background:Hide()
+    end
+    if background.EnableMouse then
+      background:EnableMouse(false)
+    end
+  end
+
+  _DisableChatButtonFrame(chatFrame)
+
+  local shell = state.shell
+  if not shell then
+    shell = CreateFrame("Frame", nil, chatFrame)
+    shell:EnableMouse(false)
+    state.shell = shell
+  end
+
+  shell:ClearAllPoints()
+  shell:SetPoint("TOPLEFT", chatFrame, "TOPLEFT", -4, 4)
+  shell:SetPoint("TOPRIGHT", chatFrame, "TOPRIGHT", 4, 4)
+  shell:SetPoint("BOTTOMLEFT", chatFrame, "BOTTOMLEFT", -4, -4)
+  shell:SetPoint("BOTTOMRIGHT", chatFrame, "BOTTOMRIGHT", 4, -4)
+
+  shell:SetFrameStrata(chatFrame:GetFrameStrata())
+
+  local level = chatFrame:GetFrameLevel() - 1
+  if level < 0 then
+    level = 0
+  end
+  shell:SetFrameLevel(level)
+
+  if shell.SetIgnoreParentAlpha then
+    shell:SetIgnoreParentAlpha(true)
+  end
+
+  local style = _GetChatWindowStyle and _GetChatWindowStyle()
+  _ApplyDirectChatShellBackdrop(shell, style)
+
+  local scrollBar = chatFrame.ScrollBar or _G[name .. "ScrollBar"]
+  if scrollBar then
+    scrollBar:SetAlpha(0)
+  end
+
+  local scrollToBottom = chatFrame.ScrollToBottomButton or _G[name .. "ScrollToBottomButton"]
+  if scrollToBottom then
+    scrollToBottom:SetAlpha(0)
+  end
+
+  SkinChatEditBox(chatFrame)
+  SkinChatTab(chatFrame)
+
+  state.temporarySkinned = true
+end
+
 local function SkinChatFrame(chatFrame)
   if not chatFrame then
+    return
+  end
+
+  if _PUI_IsTemporaryChatFrame(chatFrame) then
+    SkinTemporaryChatFrame(chatFrame)
     return
   end
 
@@ -3708,13 +3834,55 @@ local function CreateCopyButton(chatFrame)
   chatFrame.PleebUICopyButton = btn
 end
 
+function ChatLinks:RefreshFloatingChatFrames()
+  if not self.db
+    or not self.db.profile
+    or self._puiRuntimeEnabled ~= true
+  then
+    return
+  end
+
+  ForEachBlizzardChatFrame(function(chatFrame)
+    if _PUI_IsChatFrameOpen(chatFrame) then
+      SkinChatFrame(chatFrame)
+    end
+  end)
+end
+
+local function SkinSettledTemporaryChatFrames()
+  if ChatLinks._puiRuntimeEnabled ~= true then
+    return
+  end
+
+  ForEachBlizzardChatFrame(function(chatFrame)
+    if chatFrame.isTemporary == true and chatFrame.inUse == true then
+      SkinTemporaryChatFrame(chatFrame)
+    end
+  end)
+end
+
+local function QueueTemporaryChatFrameSkin()
+  if ChatLinks._puiTemporarySkinQueued then
+    return
+  end
+
+  ChatLinks._puiTemporarySkinQueued = true
+
+  C_Timer.After(0, function()
+    ChatLinks._puiTemporarySkinQueued = nil
+    SkinSettledTemporaryChatFrames()
+  end)
+end
+
 function ChatLinks:RefreshChatFrames(atPlayerEnteringWorld)
   if not self.db or not self.db.profile or self._puiRuntimeEnabled ~= true then
     return
   end
 
   ForEachBlizzardChatFrame(function(chatFrame)
-    SkinChatFrame(chatFrame)
+    if _PUI_IsChatFrameOpen(chatFrame) then
+      SkinChatFrame(chatFrame)
+    end
   end)
 
   ApplyChatTweaks(atPlayerEnteringWorld == true)
@@ -3722,7 +3890,12 @@ function ChatLinks:RefreshChatFrames(atPlayerEnteringWorld)
 
   local enableCopyFrame = self.db.profile.enableCopyFrame == true
   ForEachBlizzardChatFrame(function(chatFrame)
-    local copyButton = chatFrame.PleebUICopyButton
+    if not _PUI_IsChatFrameOpen(chatFrame) then
+      return
+    end
+
+    local state = GetChatFrameState(chatFrame)
+    local copyButton = state.copyButton
     if enableCopyFrame and not _PUI_IsTemporaryChatFrame(chatFrame) then
       copyButton = copyButton or CreateCopyButton(chatFrame)
     end
@@ -3930,37 +4103,17 @@ function ChatLinks:OnEnable()
 
   self:SetUrlFiltersEnabled(self.db.profile.enableUrlCopy == true)
 
-  -- Blizzard creates both permanent and temporary chat frames.
-  -- Refresh visual skinning for the current set and for later frame lifecycle updates.
-  self:RefreshChatFrames()
-  self:RegisterEvent("UPDATE_CHAT_WINDOWS", "RefreshChatFrames")
-  self:RegisterEvent("UPDATE_FLOATING_CHAT_WINDOWS", "RefreshChatFrames")
+  if not self.__puiTemporaryWindowHooked then
+    self.__puiTemporaryWindowHooked = true
 
-  -- Temporary whisper creation must not be hooked synchronously; Blizzard
-  -- continues through secret-capable chat/tab state after this function returns.
-  if not self._puiTemporaryChatRefreshFrame then
-    local tempFrame = CreateFrame("Frame")
-    tempFrame:SetScript("OnEvent", function()
-      if ChatLinks._puiRuntimeEnabled ~= true or ChatLinks._puiTemporaryChatRefreshTimer then
-        return
-      end
-
-      ChatLinks._puiTemporaryChatRefreshTimer = C_Timer.NewTimer(0, function()
-        ChatLinks._puiTemporaryChatRefreshTimer = nil
-
-        if ChatLinks._puiRuntimeEnabled == true then
-          ChatLinks:RefreshChatFrames()
-        end
-      end)
+    hooksecurefunc("FCF_OpenTemporaryWindow", function()
+      QueueTemporaryChatFrameSkin()
     end)
-    self._puiTemporaryChatRefreshFrame = tempFrame
   end
 
-  local tempFrame = self._puiTemporaryChatRefreshFrame
-  tempFrame:RegisterEvent("CHAT_MSG_WHISPER")
-  tempFrame:RegisterEvent("CHAT_MSG_WHISPER_INFORM")
-  tempFrame:RegisterEvent("CHAT_MSG_BN_WHISPER")
-  tempFrame:RegisterEvent("CHAT_MSG_BN_WHISPER_INFORM")
+  self:RefreshChatFrames()
+  self:RegisterEvent("UPDATE_CHAT_WINDOWS", "RefreshChatFrames")
+  self:RegisterEvent("UPDATE_FLOATING_CHAT_WINDOWS", "RefreshFloatingChatFrames")
 
   FrameScale:RegisterScaleListener(InitializePrimaryChatLayout)
 
@@ -3979,13 +4132,6 @@ function ChatLinks:OnDisable()
   self:UnregisterEvent("UPDATE_CHAT_WINDOWS")
   self:UnregisterEvent("UPDATE_FLOATING_CHAT_WINDOWS")
   self:UnregisterEvent("PLAYER_REGEN_ENABLED")
-  if self._puiTemporaryChatRefreshFrame then
-    self._puiTemporaryChatRefreshFrame:UnregisterAllEvents()
-  end
-  if self._puiTemporaryChatRefreshTimer then
-    self._puiTemporaryChatRefreshTimer:Cancel()
-    self._puiTemporaryChatRefreshTimer = nil
-  end
   self._pendingCopyOpenFrame = nil
   self._pendingCopyOpenHooked = nil
   self._puiPendingChatTweaks = nil
