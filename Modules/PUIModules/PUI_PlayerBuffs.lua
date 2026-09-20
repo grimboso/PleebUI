@@ -211,12 +211,13 @@ local function GetDisplayMetrics(db, kind)
   local frameDB = GetAuraFrameDB(db, kind)
   local iconSize = Round(Clamp(frameDB.iconSize, 24, 64))
   local textHeight = Round(math_max(10, Clamp(db.textSize, 8, 32) + 2))
+  local spacing = Round(ICON_SPACING)
   local elementHeight = iconSize + textHeight
-  local width = (iconSize * ICONS_PER_ROW) + (ICON_SPACING * (ICONS_PER_ROW - 1))
+  local width = (iconSize * ICONS_PER_ROW) + (spacing * (ICONS_PER_ROW - 1))
   local rows = math_ceil(GetMaximumFrameCount(kind) / ICONS_PER_ROW)
-  local height = (elementHeight * rows) + (ICON_SPACING * math_max(0, rows - 1))
+  local height = (elementHeight * rows) + (spacing * math_max(0, rows - 1))
 
-  return iconSize, textHeight, elementHeight, width, height
+  return iconSize, textHeight, elementHeight, spacing, width, height
 end
 
 local puiStyleSerial = 0
@@ -393,11 +394,12 @@ local function ApplyBorder(parts, style)
 end
 
 local function BuildRuntimeVariantKey(db, kind)
-  local iconSize, textHeight = GetDisplayMetrics(db, kind)
+  local iconSize, textHeight, _, spacing = GetDisplayMetrics(db, kind)
   local style = puiStyleCache
 
   return tostring(iconSize)
     .. ":" .. tostring(textHeight)
+    .. ":" .. tostring(spacing)
     .. ":" .. tostring(style.borderThickness)
     .. ":" .. tostring(style.borderR)
     .. ":" .. tostring(style.borderG)
@@ -407,10 +409,10 @@ end
 
 local function BuildGroupLayout(runtime, layoutIndex)
   return {
-    elementSpacing = ICON_SPACING,
-    lineSpacing = ICON_SPACING,
-    groupSpacing = ICON_SPACING,
-    groupLineSpacing = ICON_SPACING,
+    elementSpacing = runtime.spacing,
+    lineSpacing = runtime.spacing,
+    groupSpacing = 0,
+    groupLineSpacing = runtime.spacing,
     forceNewLine = false,
     elementWidth = runtime.iconSize,
     elementHeight = runtime.elementHeight,
@@ -509,7 +511,7 @@ local function CreateAuraRoot(frameName)
 end
 
 local function CreateAuraRuntime(kind, variantKey)
-  local iconSize, textHeight, elementHeight, width, height = GetDisplayMetrics(PlayerBuffs.db, kind)
+  local iconSize, textHeight, elementHeight, spacing, width, height = GetDisplayMetrics(PlayerBuffs.db, kind)
   local root = GetRoot(kind)
   local runtime = {
     kind = kind,
@@ -517,6 +519,7 @@ local function CreateAuraRuntime(kind, variantKey)
     iconSize = iconSize,
     textHeight = textHeight,
     elementHeight = elementHeight,
+    spacing = spacing,
     width = width,
     height = height,
   }
