@@ -850,39 +850,57 @@ function RaidFrames:ApplyAnchor()
   })
 end
 
-function RaidFrames:EnsureHeaders()
+function RaidFrames:CreateHeaders()
+  if self.headers then
+    return
+  end
+
   self:RegisterStyle()
   self:EnsureAnchor()
 
   local db = RaidFrames.db.profile
-  local count
+  local maxHeaders = UFLayout.GetRaidMaxAllowedGroups()
+  local previousStyle = oUF:GetActiveStyle()
 
   EnsureRaidDesignDefaults(db)
 
-  count = GetActiveHeaderCount(db)
+  self.headers = {}
 
-  self.headers = self.headers or {}
-
-  local previousStyle = oUF:GetActiveStyle()
   oUF:SetActiveStyle("PleebUI_RaidFrames")
 
-  for index = 1, count do
-    local header = self.headers[index]
-
-    if not header then
-      header = oUF:SpawnHeader("PleebUI_RaidHeader" .. index, nil)
-      header:SetParent(self.anchor)
-      self.headers[index] = header
-    end
-
+  for index = 1, maxHeaders do
+    local header = oUF:SpawnHeader("PleebUI_RaidHeader" .. index, nil)
+    header:SetParent(self.anchor)
+    self.headers[index] = header
     ApplyHeaderAttributes(header, db, index)
   end
 
   oUF:SetActiveStyle(previousStyle)
 
+  self:ConfigureHeaders()
+end
+
+function RaidFrames:ConfigureHeaders()
+  if not self.headers then
+    return
+  end
+
+  local db = RaidFrames.db.profile
+  local count = GetActiveHeaderCount(db)
+
+  EnsureRaidDesignDefaults(db)
+
+  for index = 1, count do
+    local header = self.headers[index]
+    if header then
+      ApplyHeaderAttributes(header, db, index)
+    end
+  end
+
   for index = count + 1, #self.headers do
-    if self.headers[index] then
-      RF_ResetHeader(self.headers[index])
+    local header = self.headers[index]
+    if header then
+      RF_ResetHeader(header)
     end
   end
 end
@@ -1036,8 +1054,11 @@ function RaidFrames:RefreshVisibility()
     return false
   end
 
-  self:EnsureAnchor()
-  self:EnsureHeaders()
+  if not self.headers then
+    return false
+  end
+
+  self:ConfigureHeaders()
   self:ApplyAnchor()
   self:LayoutHeaders()
   self.anchor:Show()
@@ -1248,8 +1269,11 @@ function RaidFrames:RefreshLayout()
     return
   end
 
-  self:EnsureAnchor()
-  self:EnsureHeaders()
+  if not self.headers then
+    return
+  end
+
+  self:ConfigureHeaders()
   self:ApplyAnchor()
   self:LayoutHeaders()
   self:UpdateGroupLabels()
@@ -1381,6 +1405,20 @@ function RaidFrames:PLAYER_REGEN_ENABLED()
     self:DisableBlizzardRaidFrames()
   end
 
+  if self.__puiTopologyCreationPending then
+    self.__puiTopologyCreationPending = nil
+
+    if not self:IsEnabled() then
+      return
+    end
+
+    self:CreateHeaders()
+    self:Refresh()
+    self.__puiDeferredRefresh = nil
+    self.pendingGroupLabelRefresh = nil
+    return
+  end
+
   local flushed = UF.FlushDeferredRefreshes(self, function(mode)
     self:SafeRefresh(mode)
   end)
@@ -1419,6 +1457,13 @@ function RaidFrames:OnEnable()
   end
 
   oUF:Factory(function()
+    if InCombatLockdown() then
+      self.__puiTopologyCreationPending = true
+      self:RegisterEvent("PLAYER_REGEN_ENABLED")
+      return
+    end
+
+    self:CreateHeaders()
     self:Refresh()
   end)
 end
@@ -1441,6 +1486,7 @@ end
 function RaidFrames:OnDisable()
   self:UnregisterAllEvents()
   self.__puiDeferredRefresh = nil
+  self.__puiTopologyCreationPending = nil
   self.pendingGroupLabelRefresh = nil
   self.pendingBlizzardRaidSuppression = nil
   self._pendingAuraRefresh = nil
@@ -1474,7 +1520,8 @@ local P = select(1, ns.Pleebug:DropIn(RaidFrames, { name = "UnitFrames.Raid" }))
   RaidFrames.RegisterStyle = P:Def("RaidFrames.RegisterStyle", RaidFrames.RegisterStyle)
   RaidFrames.EnsureAnchor = P:Def("RaidFrames.EnsureAnchor", RaidFrames.EnsureAnchor)
   RaidFrames.ApplyAnchor = P:Def("RaidFrames.ApplyAnchor", RaidFrames.ApplyAnchor)
-  RaidFrames.EnsureHeaders = P:Def("RaidFrames.EnsureHeaders", RaidFrames.EnsureHeaders)
+  RaidFrames.CreateHeaders = P:Def("RaidFrames.CreateHeaders", RaidFrames.CreateHeaders)
+  RaidFrames.ConfigureHeaders = P:Def("RaidFrames.ConfigureHeaders", RaidFrames.ConfigureHeaders)
   RaidFrames.LayoutHeaders = P:Def("RaidFrames.LayoutHeaders", RaidFrames.LayoutHeaders)
   RaidFrames.GetTestFrameConfig = P:Def("RaidFrames.GetTestFrameConfig", RaidFrames.GetTestFrameConfig)
   RaidFrames.LayoutTestFrames = P:Def("RaidFrames.LayoutTestFrames", RaidFrames.LayoutTestFrames)

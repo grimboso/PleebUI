@@ -532,35 +532,49 @@ function PartyFrames:EnsureAnchor()
   return self.anchor
 end
 
-function PartyFrames:EnsurePartyFrames()
-  if self.partyFrames then
-    return self.partyFrames
+function PartyFrames:CreateRuntimeFrames()
+  if self.partyFrames and self.partyPlayerFrame and self.petFrames then
+    return
   end
 
   self:RegisterStyle()
   self:EnsureAnchor()
 
-  local db = PartyFrames.db.profile
   local previousStyle = oUF:GetActiveStyle()
 
-  self.partyFrames = {}
+  self.partyFrames = self.partyFrames or {}
+
   oUF:SetActiveStyle("PleebUI_PartyFrames")
 
   for index = 1, 4 do
-    local frame = oUF:Spawn("party" .. index, "PleebUI_PartyFrame" .. index)
-    frame.partyIndex = index + 1
-    frame:SetParent(self.anchor)
-    self.partyFrames[index] = frame
+    if not self.partyFrames[index] then
+      local frame = oUF:Spawn("party" .. index, "PleebUI_PartyFrame" .. index)
+      frame.partyIndex = index + 1
+      frame:SetParent(self.anchor)
+      self.partyFrames[index] = frame
+    end
   end
 
-  if db.showPlayer == true then
+  if not self.partyPlayerFrame then
     self.partyPlayerFrame = oUF:Spawn("player", "PleebUI_PartyPlayer")
     self.partyPlayerFrame.partyIndex = 1
     self.partyPlayerFrame:SetParent(self.anchor)
   end
 
+  self.petFrames = self.petFrames or {}
+
+  oUF:SetActiveStyle("PleebUI_PartyPetFrames")
+
+  for index = 1, 4 do
+    if not self.petFrames[index] then
+      local frame = oUF:Spawn("partypet" .. index, "PleebUI_PartyPet" .. index)
+      frame:SetParent(self.anchor)
+      frame.__puiForceNoPower = true
+      self.petFrames[index] = frame
+    end
+  end
+
   oUF:SetActiveStyle(previousStyle)
-  return self.partyFrames
 end
 
 function PartyFrames:LayoutPartyFrames()
@@ -607,41 +621,7 @@ function PartyFrames:LayoutPartyFrames()
   end
 end
 
-function PartyFrames:EnsurePetFrames()
-  local db = PartyFrames.db.profile
-  local petDB = db.partyPets
 
-  self.petFrames = self.petFrames or {}
-
-  self:RegisterStyle()
-  self:EnsureAnchor()
-
-  local previousStyle = oUF:GetActiveStyle()
-  oUF:SetActiveStyle("PleebUI_PartyPetFrames")
-
-  for index = 1, 4 do
-    local unit = "partypet" .. index
-    local frame = self.petFrames[index]
-
-    if not frame then
-      frame = oUF:Spawn(unit, "PleebUI_PartyPet" .. index)
-      frame:SetParent(self.anchor)
-      frame.__puiForceNoPower = true
-      self.petFrames[index] = frame
-    end
-
-    if not petDB or petDB.enabled == false then
-      if frame:IsEnabled() then
-        frame:Disable()
-      end
-      UF:DisableFrameRuntime(frame)
-    elseif not frame:IsEnabled() then
-      frame:Enable()
-    end
-  end
-
-  oUF:SetActiveStyle(previousStyle)
-end
 
 function PartyFrames:LayoutPetFrames()
   local petDB = PartyFrames.db.profile.partyPets
@@ -672,19 +652,27 @@ function PartyFrames:ConfigureChildren()
     self:Update_PartyFrames(self.partyPlayerFrame)
   end
 
-  self:EnsurePetFrames()
-  self:LayoutPartyFrames()
-  self:LayoutPetFrames()
-
   local petDB = PartyFrames.db.profile.partyPets
-  if petDB and petDB.enabled ~= false then
-    for index = 1, 4 do
-      local pet = self.petFrames and self.petFrames[index]
-      if pet then
+
+  for index = 1, 4 do
+    local pet = self.petFrames and self.petFrames[index]
+    if pet then
+      if not petDB or petDB.enabled == false then
+        if pet:IsEnabled() then
+          pet:Disable()
+        end
+        UF:DisableFrameRuntime(pet)
+      else
+        if not pet:IsEnabled() then
+          pet:Enable()
+        end
         self:Update_PartyPetFrames(pet, index)
       end
     end
   end
+
+  self:LayoutPartyFrames()
+  self:LayoutPetFrames()
 end
 
 local function RefreshPartyFrameConfiguration(owner, frame, mode)
@@ -754,9 +742,6 @@ function PartyFrames:RefreshVisibility()
 
     return false
   end
-
-  self:EnsureAnchor()
-  self:EnsurePartyFrames()
 
   ApplyAnchor(self)
 
@@ -984,9 +969,6 @@ function PartyFrames:RefreshLayout()
     return
   end
 
-  self:EnsureAnchor()
-  self:EnsurePartyFrames()
-  self:EnsurePetFrames()
   ApplyAnchor(self)
   self:LayoutPartyFrames()
   self:LayoutPetFrames()
@@ -1115,6 +1097,20 @@ end
 function PartyFrames:PLAYER_REGEN_ENABLED()
   self:UnregisterEvent("PLAYER_REGEN_ENABLED")
 
+  if self.__puiTopologyCreationPending then
+    self.__puiTopologyCreationPending = nil
+
+    if not self:IsEnabled() then
+      return
+    end
+
+    self:CreateRuntimeFrames()
+    self:Refresh()
+    self.__puiDeferredRefresh = nil
+    self.pendingGroupUpdate = nil
+    return
+  end
+
   local flushed = UF.FlushDeferredRefreshes(self, function(mode)
     self:SafeRefresh(mode)
   end)
@@ -1141,6 +1137,13 @@ function PartyFrames:OnEnable()
   self:RegisterEvent("PARTY_MEMBER_DISABLE", "RefreshAuraAvailability")
 
   oUF:Factory(function()
+    if InCombatLockdown() then
+      self.__puiTopologyCreationPending = true
+      self:RegisterEvent("PLAYER_REGEN_ENABLED")
+      return
+    end
+
+    self:CreateRuntimeFrames()
     self:Refresh()
   end)
 end
@@ -1161,6 +1164,7 @@ end
 function PartyFrames:OnDisable()
   self:UnregisterAllEvents()
   self.__puiDeferredRefresh = nil
+  self.__puiTopologyCreationPending = nil
   self.pendingGroupUpdate = nil
   self._pendingAuraRefresh = nil
   self._auraRefreshScheduled = nil
@@ -1190,9 +1194,8 @@ local P = select(1, ns.Pleebug:DropIn(PartyFrames, { name = "UnitFrames.Party" }
   PartyFrames.Update_PartyPetFrames = P:Def("PartyFrames.Update_PartyPetFrames", PartyFrames.Update_PartyPetFrames)
   PartyFrames.RegisterStyle = P:Def("PartyFrames.RegisterStyle", PartyFrames.RegisterStyle)
   PartyFrames.EnsureAnchor = P:Def("PartyFrames.EnsureAnchor", PartyFrames.EnsureAnchor)
-  PartyFrames.EnsurePartyFrames = P:Def("PartyFrames.EnsurePartyFrames", PartyFrames.EnsurePartyFrames)
+  PartyFrames.CreateRuntimeFrames = P:Def("PartyFrames.CreateRuntimeFrames", PartyFrames.CreateRuntimeFrames)
   PartyFrames.LayoutPartyFrames = P:Def("PartyFrames.LayoutPartyFrames", PartyFrames.LayoutPartyFrames)
-  PartyFrames.EnsurePetFrames = P:Def("PartyFrames.EnsurePetFrames", PartyFrames.EnsurePetFrames)
   PartyFrames.LayoutPetFrames = P:Def("PartyFrames.LayoutPetFrames", PartyFrames.LayoutPetFrames)
   PartyFrames.GetTestFrameConfig = P:Def("PartyFrames.GetTestFrameConfig", PartyFrames.GetTestFrameConfig)
   PartyFrames.LayoutTestFrames = P:Def("PartyFrames.LayoutTestFrames", PartyFrames.LayoutTestFrames)
