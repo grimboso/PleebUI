@@ -2373,6 +2373,8 @@ function M:RefreshActive()
   self:ApplyTextSettings()
   self:RefreshVisibility()
   self:RebuildSecondary(true)
+  self:ApplyLayout()
+  self:AttachMover()
 
   if not self._puiSecondaryEventsRegistered then
     self:RegisterSecondaryEvents()

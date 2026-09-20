@@ -13,6 +13,31 @@ local _PUI_GlobalFontSig, _PUI_GlobalFontPath, _PUI_GlobalFontFlags
 local _PUI_PRD_GetNativeBarText
 local _PUI_PRD_ApplyNativeTextConfig
 
+-- Keep PleebUI bookkeeping off Blizzard-owned PRD objects; their native power/text paths can receive secret values.
+local _PUI_PRD_NativeBarState = setmetatable({}, { __mode = "k" })
+local _PUI_PRD_NativeRegionState = setmetatable({}, { __mode = "k" })
+local _PUI_PRD_NativeFontState = setmetatable({}, { __mode = "k" })
+local _PUI_PRD_NativePresentation = setmetatable({}, { __mode = "k" })
+local _PUI_PRD_NativeMouseoverOwner = setmetatable({}, { __mode = "k" })
+
+local function _PUI_PRD_GetBarState(bar)
+  local state = _PUI_PRD_NativeBarState[bar]
+  if not state then
+    state = {}
+    _PUI_PRD_NativeBarState[bar] = state
+  end
+  return state
+end
+
+local function _PUI_PRD_GetRegionState(region)
+  local state = _PUI_PRD_NativeRegionState[region]
+  if not state then
+    state = {}
+    _PUI_PRD_NativeRegionState[region] = state
+  end
+  return state
+end
+
 
 local P = ns.Pleebug:DropIn({}, { name = "PRD_Primary" })
 local _, PLAYER_CLASS = UnitClass("player")
@@ -455,28 +480,29 @@ local function _PUI_PRD_ApplyNativeBarColor(bar, cfg)
 
   cfg = cfg or {}
   local mode = cfg.colorMode or "DEFAULT"
+  local state = _PUI_PRD_GetBarState(bar)
 
-  if not bar.__puiDefaultStatusBarColor then
+  if not state.defaultStatusBarColor then
     local r, g, b, a = bar:GetStatusBarColor()
-    bar.__puiDefaultStatusBarColor = { r or 1, g or 1, b or 1, a or 1 }
+    state.defaultStatusBarColor = { r or 1, g or 1, b or 1, a or 1 }
   end
 
   if mode == "CUSTOM" then
     local c = cfg.customColor or { 1, 1, 1, 1 }
-    bar.__puiForcedStatusBarColor = true
+    state.forcedStatusBarColor = true
     bar:SetStatusBarColor(c[1] or 1, c[2] or 1, c[3] or 1, c[4] or 1)
   elseif mode == "CLASS" then
-    bar.__puiForcedStatusBarColor = true
+    state.forcedStatusBarColor = true
     bar:SetStatusBarColor(_PUI_PRD_GetClassColor())
   elseif mode == "TEXTURE" then
-    bar.__puiForcedStatusBarColor = true
+    state.forcedStatusBarColor = true
     bar:SetStatusBarColor(1, 1, 1, 1)
-  elseif bar.__puiForcedStatusBarColor and bar.__puiDefaultStatusBarColor then
-    local c = bar.__puiDefaultStatusBarColor
-    bar.__puiForcedStatusBarColor = nil
+  elseif state.forcedStatusBarColor and state.defaultStatusBarColor then
+    local c = state.defaultStatusBarColor
+    state.forcedStatusBarColor = nil
     bar:SetStatusBarColor(c[1] or 1, c[2] or 1, c[3] or 1, c[4] or 1)
   else
-    bar.__puiForcedStatusBarColor = nil
+    state.forcedStatusBarColor = nil
   end
 end
 
@@ -502,33 +528,35 @@ local function _PUI_PRD_SetRegionColor(region, r, g, b, a)
     return
   end
 
-  if not region.__puiDefaultRegionColor then
+  local state = _PUI_PRD_GetRegionState(region)
+
+  if not state.defaultColor then
     if region.GetStatusBarColor then
       local cr, cg, cb, ca = region:GetStatusBarColor()
-      region.__puiDefaultRegionColor = { cr or 1, cg or 1, cb or 1, ca or 1 }
+      state.defaultColor = { cr or 1, cg or 1, cb or 1, ca or 1 }
     elseif region.GetVertexColor then
       local cr, cg, cb, ca = region:GetVertexColor()
-      region.__puiDefaultRegionColor = { cr or 1, cg or 1, cb or 1, ca or 1 }
+      state.defaultColor = { cr or 1, cg or 1, cb or 1, ca or 1 }
     end
   end
 
   if r then
-    region.__puiForcedRegionColor = true
+    state.forcedColor = true
     if region.SetStatusBarColor then
       region:SetStatusBarColor(r, g, b, a)
     elseif region.SetVertexColor then
       region:SetVertexColor(r, g, b, a)
     end
-  elseif region.__puiForcedRegionColor and region.__puiDefaultRegionColor then
-    local c = region.__puiDefaultRegionColor
-    region.__puiForcedRegionColor = nil
+  elseif state.forcedColor and state.defaultColor then
+    local c = state.defaultColor
+    state.forcedColor = nil
     if region.SetStatusBarColor then
       region:SetStatusBarColor(c[1] or 1, c[2] or 1, c[3] or 1, c[4] or 1)
     elseif region.SetVertexColor then
       region:SetVertexColor(c[1] or 1, c[2] or 1, c[3] or 1, c[4] or 1)
     end
   else
-    region.__puiForcedRegionColor = nil
+    state.forcedColor = nil
   end
 end
 
@@ -662,8 +690,9 @@ local function _PUI_PRD_CreatePreviewBar(parent)
 end
 
 local function _PUI_PRD_GetNativePresentation(bar, role)
-  local instance = bar.__puiPRDPresentation
+  local instance = _PUI_PRD_NativePresentation[bar]
   if instance then
+    instance.role = role or instance.role
     return instance
   end
 
@@ -673,7 +702,7 @@ local function _PUI_PRD_GetNativePresentation(bar, role)
     role = role,
     preview = false,
   }
-  bar.__puiPRDPresentation = instance
+  _PUI_PRD_NativePresentation[bar] = instance
   return instance
 end
 
@@ -699,8 +728,6 @@ function PRDBarPresentation.ApplyStyle(instance, state)
     local owner = state.owner or _PUI_GetNativeBarOwner(M, role)
 
     _StripPRDOverlayArt(bar)
-    Theme.SkinStatusBar(bar, { role = role })
-    Theme.ApplyStatusBarBorder(bar, { enabled = false })
 
     local boxKey = role == "health" and "healthBox" or "primaryBox"
     _EnsurePUIBackdrop(M, owner or bar, boxKey)
@@ -855,43 +882,12 @@ function M:ApplyNativeBarSkin(bar, role)
     end
   end
 
-  bar.__puiSkinnedOnce = true
-  bar.__puiSkinnedRole = role
+  local state = _PUI_PRD_GetBarState(bar)
+  state.skinnedOnce = true
+  state.skinnedRole = role
 end
 
-function M:SkinBlizzardBar(bar, role)
-  if not _IsPUI_SecureFrame(bar) then return end
 
-  if role == "health" or role == "primary" then
-    self:ApplyNativeBarSkin(bar, role)
-    return
-  end
-
-  if bar.__puiSkinnedOnce == true and bar.__puiSkinnedRole == role then
-    _StripPRDOverlayArt(bar)
-    return
-  end
-
-  _StripPRDOverlayArt(bar)
-
-  Theme.SkinStatusBar(bar, { role = role })
-  _StripPRDOverlayArt(bar)
-
-  if bar.GetFrameLevel and bar.SetFrameLevel then
-    local lvl = bar:GetFrameLevel() or 0
-    if lvl < 2 then
-      bar:SetFrameLevel(2)
-    end
-  end
-
-  local tex = bar.GetStatusBarTexture and bar:GetStatusBarTexture()
-  if tex and tex.SetDrawLayer then
-    tex:SetDrawLayer("ARTWORK", 1)
-  end
-
-  bar.__puiSkinnedOnce = true
-  bar.__puiSkinnedRole = role
-end
 
 
 local function _OnSetupHealthBar(frame)
@@ -917,7 +913,13 @@ local function _OnSetupHealthBar(frame)
       M._puiOriginalHealthColor = { r or 1, g or 1, b or 1, a or 1 }
     end
 
-    if (not changed) and bar.__puiSkinnedOnce == true and bar.__puiSkinnedRole == "health" and not M.__puiHealthTextureDirty then
+    local state = _PUI_PRD_NativeBarState[bar]
+    if (not changed)
+      and state
+      and state.skinnedOnce == true
+      and state.skinnedRole == "health"
+      and not M.__puiHealthTextureDirty
+    then
       return
     end
 
@@ -950,9 +952,11 @@ local function _OnSetupPowerBar(frame)
     local changed = (M.primaryBar ~= bar)
     M.primaryBar = bar
 
+    local state = _PUI_PRD_NativeBarState[bar]
     if (not changed)
-      and bar.__puiSkinnedOnce == true
-      and bar.__puiSkinnedRole == "primary"
+      and state
+      and state.skinnedOnce == true
+      and state.skinnedRole == "primary"
       and not M.__puiPrimaryTextureDirty
     then
       return
@@ -1129,12 +1133,39 @@ local function _RestoreOriginalBarLayout(self, key, bar)
       texture:Hide()
     end
 
-    texture.__puiDefaultRegionColor = nil
-    texture.__puiForcedRegionColor = nil
+    _PUI_PRD_NativeRegionState[texture] = nil
   end
 
-  bar.__puiDefaultStatusBarColor = nil
-  bar.__puiForcedStatusBarColor = nil
+  local nativeState = _PUI_PRD_NativeBarState[bar]
+  if nativeState
+    and nativeState.originalPropagateMouseMotion ~= nil
+    and bar:CanPropagateMouseMotion() ~= nativeState.originalPropagateMouseMotion
+  then
+    bar:SetPropagateMouseMotion(nativeState.originalPropagateMouseMotion)
+  end
+
+  _PUI_PRD_NativeBarState[bar] = nil
+  _PUI_PRD_NativePresentation[bar] = nil
+
+  local centerText, leftText, rightText = _PUI_PRD_GetNativeBarText(bar)
+  if centerText then
+    _PUI_PRD_NativeFontState[centerText] = nil
+  end
+  if leftText then
+    _PUI_PRD_NativeFontState[leftText] = nil
+  end
+  if rightText then
+    _PUI_PRD_NativeFontState[rightText] = nil
+  end
+
+  local owner = key == "health" and self.health or key == "primary" and self.primary or nil
+  if owner then
+    owner:EnableMouseMotion(false)
+    owner:SetScript("OnEnter", nil)
+    owner:SetScript("OnLeave", nil)
+    _PUI_PRD_NativeMouseoverOwner[owner] = nil
+  end
+
   bar:Show()
 end
 
@@ -1290,8 +1321,8 @@ local function _EnsureFontSet(fs, cfg)
 
   fontSize = Theme.ResolveFontSize(fontSize, "resourceDisplay")
   local sig = tostring(fontPath) .. "|" .. tostring(fontSize) .. "|" .. tostring(fontFlags)
-  if fs.__puiFontSig ~= sig then
-    fs.__puiFontSig = sig
+  if _PUI_PRD_NativeFontState[fs] ~= sig then
+    _PUI_PRD_NativeFontState[fs] = sig
     fs:SetFont(fontPath, fontSize, fontFlags)
   end
 end
@@ -1310,7 +1341,8 @@ local function _PUI_PRD_TextModeAlpha(bar, mode)
   end
 
   if mode == "MOUSEOVER" then
-    return bar and bar.__puiPRDTextMouseover and 1 or 0
+    local state = bar and _PUI_PRD_NativeBarState[bar]
+    return state and state.textMouseover and 1 or 0
   end
 
   return 0
@@ -1321,7 +1353,8 @@ local function _PUI_PRD_UpdateNativeTextAlpha(bar)
     return
   end
 
-  local cfg = bar.__puiNativeTextConfig
+  local state = _PUI_PRD_NativeBarState[bar]
+  local cfg = state and state.nativeTextConfig
   if not cfg then
     return
   end
@@ -1337,22 +1370,82 @@ local function _PUI_PRD_UpdateNativeTextAlpha(bar)
   end
 end
 
-local function _PUI_PRD_InstallNativeTextMouseover(bar)
-  if not bar or bar.__puiPRDTextMouseoverHooked or not bar.HookScript then
+local function _PUI_PRD_InstallNativeTextMouseover(self, bar, role, enabled)
+  if not self or not bar then
     return
   end
 
-  bar.__puiPRDTextMouseoverHooked = true
+  local owner = _PUI_GetNativeBarOwner(self, role)
+  if not owner then
+    return
+  end
 
-  bar:HookScript("OnEnter", function(owner)
-    owner.__puiPRDTextMouseover = true
-    _PUI_PRD_UpdateNativeTextAlpha(owner)
-  end)
+  local state = _PUI_PRD_GetBarState(bar)
+  if state.originalPropagateMouseMotion == nil then
+    state.originalPropagateMouseMotion = bar:CanPropagateMouseMotion()
+  end
 
-  bar:HookScript("OnLeave", function(owner)
-    owner.__puiPRDTextMouseover = false
-    _PUI_PRD_UpdateNativeTextAlpha(owner)
-  end)
+  local propagateMouseMotion = enabled == true or state.originalPropagateMouseMotion == true
+  if not InCombatLockdown() and bar:CanPropagateMouseMotion() ~= propagateMouseMotion then
+    bar:SetPropagateMouseMotion(propagateMouseMotion)
+  end
+
+  local binding = _PUI_PRD_NativeMouseoverOwner[owner]
+
+  if enabled ~= true then
+    state.textMouseover = false
+
+    if binding then
+      if binding.bar and binding.bar ~= bar then
+        local previousState = _PUI_PRD_NativeBarState[binding.bar]
+        if previousState then
+          previousState.textMouseover = false
+        end
+      end
+
+      owner:EnableMouseMotion(false)
+      owner:SetScript("OnEnter", nil)
+      owner:SetScript("OnLeave", nil)
+      _PUI_PRD_NativeMouseoverOwner[owner] = nil
+    end
+
+    _PUI_PRD_UpdateNativeTextAlpha(bar)
+    return
+  end
+
+  if not binding then
+    binding = {}
+    _PUI_PRD_NativeMouseoverOwner[owner] = binding
+
+    owner:SetScript("OnEnter", function(container)
+      local active = _PUI_PRD_NativeMouseoverOwner[container]
+      local nativeBar = active and active.bar
+      if nativeBar then
+        local mouseoverState = _PUI_PRD_GetBarState(nativeBar)
+        mouseoverState.textMouseover = true
+        _PUI_PRD_UpdateNativeTextAlpha(nativeBar)
+      end
+    end)
+
+    owner:SetScript("OnLeave", function(container)
+      local active = _PUI_PRD_NativeMouseoverOwner[container]
+      local nativeBar = active and active.bar
+      if nativeBar then
+        local mouseoverState = _PUI_PRD_GetBarState(nativeBar)
+        mouseoverState.textMouseover = false
+        _PUI_PRD_UpdateNativeTextAlpha(nativeBar)
+      end
+    end)
+  elseif binding.bar and binding.bar ~= bar then
+    local previousState = _PUI_PRD_NativeBarState[binding.bar]
+    if previousState then
+      previousState.textMouseover = false
+    end
+  end
+
+  binding.bar = bar
+  state.textMouseover = owner:IsMouseOver()
+  owner:EnableMouseMotion(true)
 end
 
 local function _PUI_PRD_ConfigureNativeTextRegion(fs, cfg, alpha)
@@ -1429,9 +1522,11 @@ _PUI_PRD_ApplyNativeTextConfig = function(self, bar, key)
   local left = cfg and cfg.left or nil
   local right = cfg and cfg.right or nil
   local appearanceText = resourceSettings and resourceSettings.text or self:GetBarAppearance(key).text
+  local usesMouseover = leftMode == "MOUSEOVER" or rightMode == "MOUSEOVER"
 
-  bar.__puiNativeTextConfig = cfg
-  _PUI_PRD_InstallNativeTextMouseover(bar)
+  local state = _PUI_PRD_GetBarState(bar)
+  state.nativeTextConfig = cfg
+  _PUI_PRD_InstallNativeTextMouseover(self, bar, key, usesMouseover)
 
   local sig = table.concat({
     key or "",
@@ -1452,12 +1547,12 @@ _PUI_PRD_ApplyNativeTextConfig = function(self, bar, key)
     appearanceText.useGlobalFont and "1" or "0",
   }, "|")
 
-  if bar.__puiNativeTextSig == sig then
+  if state.nativeTextSig == sig then
     _PUI_PRD_UpdateNativeTextAlpha(bar)
     return M:IsNativeTextVisible(leftMode) or M:IsNativeTextVisible(rightMode)
   end
 
-  bar.__puiNativeTextSig = sig
+  state.nativeTextSig = sig
 
   _PUI_PRD_ConfigureNativeTextRegion(text, appearanceText, 0)
   _PUI_PRD_ConfigureNativeTextRegion(leftText, appearanceText, _PUI_PRD_TextModeAlpha(bar, leftMode))
@@ -1498,10 +1593,10 @@ end
 
 function M:InvalidateTextCache()
   if self.healthBar then
-    self.healthBar.__puiNativeTextSig = nil
+    _PUI_PRD_GetBarState(self.healthBar).nativeTextSig = nil
   end
   if self.primaryBar then
-    self.primaryBar.__puiNativeTextSig = nil
+    _PUI_PRD_GetBarState(self.primaryBar).nativeTextSig = nil
   end
   self:ApplyTextSettings()
 end
@@ -1531,7 +1626,6 @@ end
   _PUI_PRD_GetEffectTint = P:Def("_PUI_PRD_GetEffectTint", _PUI_PRD_GetEffectTint)
   _PUI_PRD_ApplyNativeBarEffects = P:Def("_PUI_PRD_ApplyNativeBarEffects", _PUI_PRD_ApplyNativeBarEffects)
   M.ApplyNativeBarSkin = P:Def("ApplyNativeBarSkin", M.ApplyNativeBarSkin)
-  M.SkinBlizzardBar = P:Def("SkinBlizzardBar", M.SkinBlizzardBar)
   _OnSetupHealthBar = P:Def("_OnSetupHealthBar", _OnSetupHealthBar)
   _OnSetupPowerBar = P:Def("_OnSetupPowerBar", _OnSetupPowerBar)
   _OnSetupClassBar = P:Def("_OnSetupClassBar", _OnSetupClassBar)
