@@ -219,6 +219,8 @@ end
 function Addon:EnsureAndApplyCharacterProfile()
   local db = self.db
   local profileName = db.char.characterProfileName
+  local dualSpecDB = db:GetNamespace("LibDualSpec-1.0")
+  local dualSpecConfigured = dualSpecDB.char.enabled == true
 
   if type(profileName) ~= "string" or profileName == "" or profileName == "Default" then
     profileName = PUI_GetCharKey()
@@ -229,7 +231,7 @@ function Addon:EnsureAndApplyCharacterProfile()
 
   PUI_EnsureProfileExists(db, profileName)
 
-  if not db:IsDualSpecEnabled() and db:GetCurrentProfile() ~= profileName then
+  if not dualSpecConfigured and db:GetCurrentProfile() ~= profileName then
     db:SetProfile(profileName)
   end
 end
