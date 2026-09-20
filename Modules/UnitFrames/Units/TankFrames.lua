@@ -11,6 +11,8 @@ local TankFrames = ns.UFTankFrames
 
 local _G = _G
 local UIParent = _G.UIParent
+local RegisterAttributeDriver = _G.RegisterAttributeDriver
+local UnregisterAttributeDriver = _G.UnregisterAttributeDriver
 local type = _G.type
 
 local FrameUtil = ns.FrameUtil
@@ -32,16 +34,12 @@ local function SetHeaderAttribute(header, name, value)
 end
 
 local function SetSecureHeaderShown(header, shown)
-  if header.__puiTankHeaderEnabled == shown then
-    return
-  end
-
-  header.__puiTankHeaderEnabled = shown
-
   if shown then
-    header:SetVisibility("custom [@raid1,exists] show;hide")
+    header:Hide()
+    RegisterAttributeDriver(header, "state-visibility", "[@raid1,exists] show;hide")
   else
-    header:SetVisibility("custom hide")
+    UnregisterAttributeDriver(header, "state-visibility")
+    header:Hide()
   end
 end
 
@@ -204,6 +202,7 @@ function TankFrames.EnsureHeader(owner)
   header:SetParent(UIParent)
 
   TankFrames.ApplyHeaderAnchor(owner)
+  header:Show()
   TankFrames.EnsureMover(owner)
 
   return header
