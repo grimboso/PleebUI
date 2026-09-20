@@ -28,7 +28,9 @@ local AuraFilters = ns.UFAuraFilters
 local AuraHighlight = ns.UFAuraHighlight
 local AuraLayout = ns.UFAuraLayout
 
-local SUPPORTS_NATIVE_AURA_TRACKING_ENABLE = select(4, _G.GetBuildInfo()) >= 120105
+local INTERFACE_VERSION = select(4, _G.GetBuildInfo())
+local SUPPORTS_NATIVE_AURA_TRACKING_ENABLE = INTERFACE_VERSION >= 120105
+local SUPPORTS_NATIVE_AURA_STATE_REFRESH = INTERFACE_VERSION >= 120105
 
 local SORT_METHODS = {
   BIG_DEFENSIVE = AuraContainerSortMethod.BigDefensive,
@@ -130,6 +132,25 @@ local function BuildAuraButtonAppearanceSignature(appearance, layout)
   }, "\31")
 end
 
+local function RefreshNativeAuraContainers(frame)
+  local unit = frame.__unit or frame.__puiConfigUnit
+  local containers = frame.__puiAuraContainers
+  if unit == nil or containers == nil then
+    return
+  end
+
+  for index = 1, #containers do
+    local container = containers[index]
+    if container:IsEnabled() then
+      if container:GetUnit() ~= unit then
+        container:SetUnit(unit)
+      else
+        container:UpdateAllAuras()
+      end
+    end
+  end
+end
+
 local function CreateAuraElement(frame, layout, appearance)
   local parent = frame.RaisedElementParent or frame
   local container = frame:CreateAuras({
@@ -141,6 +162,17 @@ local function CreateAuraElement(frame, layout, appearance)
   })
 
   P:SecDef("BlizzardAuraContainer.UpdateAllAuras", container, "UpdateAllAuras")
+
+  frame.__puiAuraContainers = frame.__puiAuraContainers or {}
+  frame.__puiAuraContainers[#frame.__puiAuraContainers + 1] = container
+
+  if not SUPPORTS_NATIVE_AURA_STATE_REFRESH
+    and frame.__puiAuraStateRefreshEventsRegistered ~= true
+  then
+    frame.__puiAuraStateRefreshEventsRegistered = true
+    frame:RegisterEvent("UNIT_FLAGS", RefreshNativeAuraContainers)
+    frame:RegisterEvent("UNIT_FACTION", RefreshNativeAuraContainers)
+  end
 
   container:SetParent(parent)
   container.__puiAuraAppearance = appearance
@@ -952,13 +984,16 @@ function AuraContainers.RefreshHighlight(frame)
   })
 end
 
-function AuraContainers.RefreshAvailability(frame)
+function AuraContainers.RefreshAvailability(frame, event)
   if not frame then
     return
   end
 
   local unitAvailable = IsGroupAuraUnitAvailable(frame)
   if frame.__puiAuraUnitAvailable == unitAvailable then
+    if event ~= nil and unitAvailable then
+      RefreshNativeAuraContainers(frame)
+    end
     return
   end
 
@@ -997,6 +1032,7 @@ BuildAuraButtonAppearanceSignature = P:Def(
   "BuildAuraButtonAppearanceSignature",
   BuildAuraButtonAppearanceSignature
 )
+RefreshNativeAuraContainers = P:Def("RefreshNativeAuraContainers", RefreshNativeAuraContainers)
 CreateAuraElement = P:Def("CreateAuraElement", CreateAuraElement)
 ApplyDisplayLayout = P:Def("ApplyDisplayLayout", ApplyDisplayLayout)
 InitializeAuraButton = P:Def("InitializeAuraButton", InitializeAuraButton)
