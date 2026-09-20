@@ -498,6 +498,8 @@ local function _PCM_EnsureEditableEditModeLayout()
     return false, false
   end
 
+  LibEditModeOverride:LoadLayouts()
+
   if LibEditModeOverride:CanEditActiveLayout() then
     return true, false
   end
