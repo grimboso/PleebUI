@@ -137,6 +137,7 @@ local _PCM_ItemHasLayoutIndex
 local _PCM_FlushBlockedViewerRefresh
 local _PCM_RunHardViewerTransition
 local _PCM_QueueTransitionFlush
+local _PCM_RunInitialViewerPass
 local _PCM_ParkViewerItem
 local _PCM_EnsureDataProviderHook
 
@@ -3113,6 +3114,10 @@ local function _ProtectViewerAnchors_Icons(frame, key)
 end
 
 function Cooldowns:_OnRegenEnabled()
+  if self.__puiPCMStartupPending then
+    _PCM_RunInitialViewerPass(self)
+  end
+
   if IconSettings:PrimeRuntimeCache() then
     PCMRuntime:MarkAllViewersDirty(PCMRuntime.Dirty.SKIN, "icon-cache-ready")
   end
@@ -4744,6 +4749,7 @@ local function _RunPCMStartupRefresh(self)
   end
 
   if InCombatLockdown() then
+    self.__puiPCMStartupPending = true
     return false
   end
 
@@ -4755,10 +4761,11 @@ local function _RunPCMStartupRefresh(self)
     C_AddOns.LoadAddOn("Blizzard_CooldownViewer")
   end
 
+  self.__puiPCMStartupPending = nil
   return true
 end
 
-local function _PCM_RunInitialViewerPass(owner)
+_PCM_RunInitialViewerPass = function(owner)
   if not _RunPCMStartupRefresh(owner) then
     return
   end
