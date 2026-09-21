@@ -2,9 +2,64 @@ local ADDON_NAME, ns = ...
 
 local Secondary = ns.PRDSecondary
 local P = ns.Pleebug:DropIn({}, { name = "PRD_Secondary_Stagger" })
+local STAGGER_POLL_INTERVAL = 0.3
 
 local function IsRestricted(value)
   return issecretvalue(value) == true
+end
+
+local function ResetRuntime(owner)
+  local group = owner._puiStaggerPollGroup
+  if group then
+    group:Stop()
+  end
+
+  local statusBar = owner.secondaryStatusBar
+  if statusBar then
+    statusBar._puiStaggerLastMax = nil
+    statusBar._puiStaggerLastValue = nil
+    statusBar._puiStaggerColorMode = nil
+    statusBar._puiStaggerColorKey = nil
+  end
+
+  owner._puiStaggerTextBucket = nil
+  owner._puiStaggerTextBaseValue = nil
+  owner._puiStaggerTextValue = nil
+end
+
+local function Poll(owner, group)
+  if owner._puiRuntimeStarted ~= true
+    or owner.secondaryUsesCustom ~= true
+    or owner.secondaryAdapter ~= Secondary.Adapters.STAGGER
+  then
+    group:Stop()
+    return
+  end
+
+  owner:UpdateSecondary()
+end
+
+local function StartPolling(owner)
+  local group = owner._puiStaggerPollGroup
+  if not group then
+    local driver = CreateFrame("Frame")
+    group = driver:CreateAnimationGroup()
+    group:SetLooping("REPEAT")
+
+    local animation = group:CreateAnimation("Animation")
+    animation:SetDuration(STAGGER_POLL_INTERVAL)
+
+    group:SetScript("OnLoop", function()
+      Poll(owner, group)
+    end)
+
+    owner._puiStaggerPollDriver = driver
+    owner._puiStaggerPollGroup = group
+  end
+
+  if not group:IsPlaying() then
+    group:Play()
+  end
 end
 
 local function OnEvent(owner, event, unit)
@@ -14,10 +69,13 @@ local function OnEvent(owner, event, unit)
 end
 
 local function Build(owner)
+  ResetRuntime(owner)
   Secondary.BuildContinuous(owner, 1, nil)
 end
 
 local function Update(owner, bar, text, unit)
+  StartPolling(owner)
+
   local statusBar = owner.secondaryStatusBar
   local stagger = UnitStagger(unit)
   local maxHealth = UnitHealthMax(unit)
@@ -126,12 +184,21 @@ local function Update(owner, bar, text, unit)
 end
 
 
+P:Def("Stagger.ResetRuntime", ResetRuntime)
+P:Def("Stagger.Poll", Poll)
+P:Def("Stagger.StartPolling", StartPolling)
+P:Def("Stagger.Build", Build)
+P:Def("Stagger.OnEvent", OnEvent)
+P:Def("Stagger.Update", Update)
+
 Secondary:RegisterAdapter("STAGGER", {
   events = {
     UNIT_HEALTH = "player",
     UNIT_MAXHEALTH = "player",
   },
-  Build = P:Def("Stagger.Build", Build),
-  OnEvent = P:Def("Stagger.OnEvent", OnEvent),
-  Update = P:Def("Stagger.Update", Update),
+  Deactivate = ResetRuntime,
+  Suspend = ResetRuntime,
+  Build = Build,
+  OnEvent = OnEvent,
+  Update = Update,
 })
