@@ -2309,6 +2309,38 @@ local function ApplySmartSnapRuntimePosition(entry)
   end
 end
 
+local function BuildSmartSnapLayoutSteps(layoutRoot)
+  local visited = { [layoutRoot.key] = true }
+  local queue = { layoutRoot }
+  local index = 1
+  local layoutSteps = {}
+
+  while queue[index] do
+    local current = queue[index]
+    index = index + 1
+
+    for _, relation in ipairs(SMART_SNAP_RELATION_ORDER) do
+      for _, link in ipairs(GetNextActiveSmartSnapPeers(current.key, relation)) do
+        local peer = link.entry
+        if peer and not visited[peer.key] then
+          visited[peer.key] = true
+          layoutSteps[#layoutSteps + 1] = {
+            entry = peer,
+            target = current,
+            relation = link.relation,
+            alignment = link.alignment,
+            gap = link.gap,
+            sideOffset = link.sideOffset,
+          }
+          queue[#queue + 1] = peer
+        end
+      end
+    end
+  end
+
+  return layoutSteps
+end
+
 local function RelayoutSmartSnapCluster(startEntry, finalize, syncSize)
   if FrameUtil._profileTransitionActive == true or not startEntry or not startEntry.key then
     return
@@ -2345,36 +2377,10 @@ local function RelayoutSmartSnapCluster(startEntry, finalize, syncSize)
     moved[layoutRoot] = true
   end
 
-  local visited = { [layoutRoot.key] = true }
-  local queue = { layoutRoot }
-  local index = 1
-  local layoutSteps = {}
-
-  while queue[index] do
-    local current = queue[index]
-    index = index + 1
-
-    for _, relation in ipairs(SMART_SNAP_RELATION_ORDER) do
-      for _, link in ipairs(GetNextActiveSmartSnapPeers(current.key, relation)) do
-        local peer = link.entry
-        if peer and not visited[peer.key] then
-          visited[peer.key] = true
-          layoutSteps[#layoutSteps + 1] = {
-            entry = peer,
-            target = current,
-            relation = link.relation,
-            alignment = link.alignment,
-            gap = link.gap,
-            sideOffset = link.sideOffset,
-          }
-          moved[peer] = true
-          queue[#queue + 1] = peer
-        end
-      end
-    end
-  end
+  local layoutSteps = BuildSmartSnapLayoutSteps(layoutRoot)
 
   for _, step in ipairs(layoutSteps) do
+    moved[step.entry] = true
     PositionSmartSnapEntry(
       step.entry,
       step.target,
@@ -2463,7 +2469,62 @@ local function FlushPendingSmartSnapRelayouts()
   end
 end
 
+local function FlushCombatSafeSmartSnapRuntimeRelayouts()
+  if FrameUtil._profileTransitionActive == true
+    or not FrameUtil._smartSnapWorldReady
+    or not next(PendingSmartSnapRuntimeRelayouts)
+  then
+    return
+  end
+
+  EnsureSmartSnapLoaded()
+
+  local roots = {}
+  local queuedKeys = {}
+  for key in pairs(PendingSmartSnapRuntimeRelayouts) do
+    local entry = MoversByKey[key]
+    local smartSnap = GetSmartSnapOptions(entry)
+    if smartSnap and smartSnap.allowCombatRuntimeLayout == true then
+      local root = GetStableSmartSnapRoot(key)
+      if root then
+        roots[root.key] = root
+        queuedKeys[key] = true
+      end
+    end
+  end
+
+  FrameUtil._smartSnapApplying = true
+
+  for _, layoutRoot in pairs(roots) do
+    for _, step in ipairs(BuildSmartSnapLayoutSteps(layoutRoot)) do
+      local smartSnap = GetSmartSnapOptions(step.entry)
+      if smartSnap and smartSnap.allowCombatRuntimeLayout == true then
+        PositionSmartSnapEntry(
+          step.entry,
+          step.target,
+          step.relation,
+          step.alignment,
+          step.gap,
+          step.sideOffset
+        )
+        step.entry._smartSnapState = CaptureSmartSnapState(step.entry)
+      end
+    end
+  end
+
+  FrameUtil._smartSnapApplying = false
+
+  for key in pairs(queuedKeys) do
+    PendingSmartSnapRuntimeRelayouts[key] = nil
+  end
+end
+
 function FrameUtil.FinalizePendingSmartSnapRuntimeLayout()
+  if InCombatLockdown() then
+    FlushCombatSafeSmartSnapRuntimeRelayouts()
+    return
+  end
+
   FlushPendingSmartSnapRelayouts()
 end
 
