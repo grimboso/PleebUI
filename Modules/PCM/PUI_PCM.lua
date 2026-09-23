@@ -690,6 +690,10 @@ local function _PCM_IsRefreshBlocked()
     return true
   end
 
+  if PCMRuntime:IsPresentationRestricted() then
+    return true
+  end
+
   return PCMHooks.InBlizzardEditMode()
 end
 
@@ -1802,7 +1806,10 @@ local function _PCM_HookNativeIconRefresh(itemFrame, frameData)
       "RefreshSpellTexture",
       "PCM_IconOverrideTexture",
       function(frame)
-        if frameData.iconSettingsNeedsTextureRefresh ~= true or not frameData.iconSettingsRecord then
+        if _PCM_IsRefreshBlocked()
+          or frameData.iconSettingsNeedsTextureRefresh ~= true
+          or not frameData.iconSettingsRecord
+        then
           return
         end
         _PCM_ApplyIconAppearance(frame, frameData.viewerKey, frameData)
@@ -2759,6 +2766,10 @@ _PCM_ParkViewerItem = function(viewerFrame, itemFrame)
     return
   end
 
+  if PCMRuntime:IsPresentationRestricted() then
+    return
+  end
+
   local key = _PCM_GetViewerKeyFromFrame(viewerFrame)
   local anchor = key and _GetOrCreateViewerAnchorFrame(viewerFrame, key) or nil
   local viewerData = PCMHooks.GetFrameData(viewerFrame)
@@ -2804,6 +2815,11 @@ end
 
 _PCM_RunHardViewerTransition = function(owner, invalidateClassSpellCache)
   if not owner or not _PCM_IsModuleEnabledFast() then
+    return
+  end
+
+  if PCMRuntime:IsPresentationRestricted() then
+    _PCM_BeginTransition(owner, invalidateClassSpellCache)
     return
   end
 
@@ -2930,7 +2946,7 @@ local function _PCM_FlushTransition(token)
     return
   end
 
-  if InCombatLockdown() then
+  if PCMRuntime:IsPresentationRestricted() then
     return
   end
 
@@ -2965,12 +2981,12 @@ end)
 
 
 _GetOrCreateViewerAnchorFrame = function(viewer, key)
-  if not viewer or not key then
+  if not key then
     return nil
   end
 
-  local vfd = PCMHooks.GetFrameData(viewer)
-  if vfd.anchorFrame then
+  local vfd = viewer and PCMHooks.GetFrameData(viewer) or nil
+  if vfd and vfd.anchorFrame then
     return vfd.anchorFrame
   end
 
@@ -2983,7 +2999,9 @@ _GetOrCreateViewerAnchorFrame = function(viewer, key)
     af:SetFrameLevel(1)
   end
 
-  vfd.anchorFrame = af
+  if vfd then
+    vfd.anchorFrame = af
+  end
 
   local afd = PCMHooks.GetFrameData(af)
   afd.viewerKey = key
@@ -2999,7 +3017,9 @@ _GetOrCreateViewerAnchorFrame = function(viewer, key)
   pf:ClearAllPoints()
   pf:SetPoint("CENTER", af, "CENTER", 0, 0)
 
-  vfd.proxyFrame = pf
+  if vfd then
+    vfd.proxyFrame = pf
+  end
 
   afd.proxyFrame = pf
 
@@ -3058,8 +3078,8 @@ function Cooldowns:GetViewerAnchorFrame(viewerKey)
 end
 
 _ForceAnchor = function(frame, key)
-  if not frame or not key then return end
-  if frame.IsForbidden and frame:IsForbidden() then return end
+  if not key then return end
+  if frame and frame.IsForbidden and frame:IsForbidden() then return end
 
   -- Never mutate anchors while Blizzard Edit Mode is active.
   -- Do not fight the user while the Edit Mode UI is open.
@@ -3114,6 +3134,10 @@ local function _ProtectViewerAnchors_Icons(frame, key)
 end
 
 function Cooldowns:_OnRegenEnabled()
+  if PCMRuntime:IsPresentationRestricted() then
+    return
+  end
+
   if self.__puiPCMStartupPending then
     _PCM_RunInitialViewerPass(self)
   end
@@ -3187,22 +3211,21 @@ local function _EnsureDefaultViewerAnchor(key)
   }
 end
 
-local function _RegisterViewerMover(info)
+local function _RegisterViewerMover(info, structuralOnly)
   if not _PCM_IsModuleEnabledFast() then
     return
   end
 
-  local viewer = PCMRuntime:GetViewer(info.key)
-  if not viewer then return end
-  if viewer.IsForbidden and viewer:IsForbidden() then return end
+  local viewer = structuralOnly and info.ref() or PCMRuntime:GetViewer(info.key)
+  if viewer and viewer.IsForbidden and viewer:IsForbidden() then return end
 
   local anchor = _GetOrCreateViewerAnchorFrame(viewer, info.key)
   if not anchor then
     return
   end
 
-  local vfd = PCMHooks.GetFrameData(viewer)
-  local proxy = vfd.proxyFrame
+  local vfd = viewer and PCMHooks.GetFrameData(viewer) or nil
+  local proxy = (vfd and vfd.proxyFrame) or _G["PUI_PCM_Proxy_" .. tostring(info.key)]
 
   local inCombat = InCombatLockdown()
 
@@ -3220,15 +3243,17 @@ local function _RegisterViewerMover(info)
     proxy:EnableMouse(true)
   end
 
+  _EnsureDefaultViewerAnchor(info.key)
+
+  _ForceAnchor(viewer, info.key)
+  if viewer then
+    _ProtectViewerAnchors_Icons(viewer, info.key)
+  end
+
   if PCMAnchorState.moverRegistered[anchor] then
     return
   end
   PCMAnchorState.moverRegistered[anchor] = true
-
-  _EnsureDefaultViewerAnchor(info.key)
-
-  _ForceAnchor(viewer, info.key)
-  _ProtectViewerAnchors_Icons(viewer, info.key)
 
   local isSmartCombatViewer = info.key == "EssentialCooldownViewer"
     or info.key == "UtilityCooldownViewer"
@@ -3457,21 +3482,26 @@ local function _RegisterViewerMover(info)
 
     savePosition = SavePosition,
     onDragStop = function()
-      _ForceAnchor(viewer, info.key)
+      _ForceAnchor(info.ref(), info.key)
     end,
   })
 
 
 end
 
-local function _InitAllViewerMovers()
+local function _InitAllViewerMovers(structuralOnly)
   if not _PCM_IsModuleEnabledFast() then
     return
   end
 
   for _, info in Cooldowns:IterateViewers() do
-    _RegisterViewerMover(info)
+    _RegisterViewerMover(info, structuralOnly)
   end
+end
+
+local function _PCM_PrepareViewerMoverGeometry()
+  _InitAllViewerMovers(true)
+  FrameUtil.FinalizePendingSmartSnapRuntimeLayout()
 end
 
 local function _ForEachRefreshViewer(viewerKey, fn)
@@ -3493,7 +3523,7 @@ local function _ForEachRefreshViewer(viewerKey, fn)
 end
 
 local function _RefreshViewerBordersOnly(viewerKey)
-  if not _PCM_IsModuleEnabledFast() then
+  if _PCM_IsRefreshBlocked() then
     return
   end
 
@@ -4316,7 +4346,7 @@ _PCM_ClearNativeIconPresentation = function(itemFrame, viewerKey)
 end
 
 function Cooldowns:RefreshIndividualIconSettings(viewerKey)
-  if not viewerKey or not _PCM_IsModuleEnabledFast() then
+  if not viewerKey or _PCM_IsRefreshBlocked() then
     return
   end
 
@@ -4748,7 +4778,7 @@ local function _RunPCMStartupRefresh(self)
     return false
   end
 
-  if InCombatLockdown() then
+  if PCMRuntime:IsPresentationRestricted() then
     self.__puiPCMStartupPending = true
     return false
   end
@@ -4817,6 +4847,7 @@ function Cooldowns:OnEnable()
   self.__puiFrameScale = Pixel.GetOnePixel()
   FrameScale:RegisterScaleListener(_PCM_OnFrameScaleChanged)
 
+  _PCM_PrepareViewerMoverGeometry()
   _PCM_RunInitialViewerPass(self)
 end
 
@@ -4831,7 +4862,7 @@ function Cooldowns:_ReconcileCustomTrackerStartupAvailability()
     return
   end
 
-  if InCombatLockdown() then
+  if PCMRuntime:IsPresentationRestricted() then
     self.__puiPCMCustomTrackerStartupPending = true
     return
   end
@@ -4878,6 +4909,7 @@ function Cooldowns:_OnPlayerEnteringWorld()
     return
   end
 
+  _PCM_PrepareViewerMoverGeometry()
   _PCM_RunInitialViewerPass(self)
   self:_ReconcileCustomTrackerStartupAvailability()
 end
@@ -4958,7 +4990,7 @@ function Cooldowns:_OnSpellsChanged()
     return
   end
 
-  if not InCombatLockdown() then
+  if not PCMRuntime:IsPresentationRestricted() then
     IconSettings:InvalidateCatalog()
   end
 end
@@ -4968,7 +5000,7 @@ local function _PCM_RuntimeLifecycleEvent(event, ...)
     return
   end
 
-  local arg1 = ...
+  local arg1, arg2 = ...
 
   if event == "PLAYER_ENTERING_WORLD" then
     Cooldowns:_OnPlayerEnteringWorld()
@@ -4976,6 +5008,14 @@ local function _PCM_RuntimeLifecycleEvent(event, ...)
     Cooldowns:_OnLoadingScreenDisabled()
   elseif event == "PLAYER_REGEN_ENABLED" then
     Cooldowns:_OnRegenEnabled()
+  elseif event == "ADDON_RESTRICTION_STATE_CHANGED" then
+    if arg2 == Enum.AddOnRestrictionState.Activating then
+      _PCM_PrepareViewerMoverGeometry()
+    elseif arg2 == Enum.AddOnRestrictionState.Inactive
+      and not PCMRuntime:IsPresentationRestricted()
+    then
+      Cooldowns:_OnRegenEnabled()
+    end
   elseif event == "PLAYER_SPECIALIZATION_CHANGED" then
     Cooldowns:_OnPlayerSpecializationChanged(event, arg1)
   elseif event == "ACTIVE_PLAYER_SPECIALIZATION_CHANGED"
@@ -5371,6 +5411,7 @@ end
   _EnsureDefaultViewerAnchor = P:Def('_EnsureDefaultViewerAnchor', _EnsureDefaultViewerAnchor)
   _RegisterViewerMover = P:Def('_RegisterViewerMover', _RegisterViewerMover)
   _InitAllViewerMovers = P:Def('_InitAllViewerMovers', _InitAllViewerMovers)
+  _PCM_PrepareViewerMoverGeometry = P:Def('_PCM_PrepareViewerMoverGeometry', _PCM_PrepareViewerMoverGeometry)
   _ForEachRefreshViewer = P:Def('_ForEachRefreshViewer', _ForEachRefreshViewer)
   _RefreshViewerBordersOnly = P:Def('_RefreshViewerBordersOnly', _RefreshViewerBordersOnly)
   _RefreshSingleViewerIcons = P:Def('_RefreshSingleViewerIcons', _RefreshSingleViewerIcons)
