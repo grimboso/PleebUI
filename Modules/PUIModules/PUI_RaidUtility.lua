@@ -219,8 +219,8 @@ local function EnsureBresLustWidget()
 
   local f = CreateFrame("Frame", "PleebUI_BresLustWidget", UIParent)
   BRLWidgetFrame = f
-  f:SetFrameStrata("MEDIUM")
-  f:SetFrameLevel(20)
+  f:SetFrameStrata("LOW")
+  f:SetFrameLevel(1)
   f:SetMovable(false)
   f:EnableMouse(false)
 
@@ -2049,8 +2049,8 @@ local function EnsureRaidUtility()
     local frame = CreateFrame("Frame", spec.frameName, UIParent, "SecureHandlerStateTemplate,BackdropTemplate")
     RaidUtilityFrames[kind] = frame
     frame.kind = windowKind
-    frame:SetFrameStrata("MEDIUM")
-    frame:SetFrameLevel(25)
+    frame:SetFrameStrata("LOW")
+    frame:SetFrameLevel(1)
     frame:SetClampedToScreen(true)
     frame:EnableMouse(true)
 

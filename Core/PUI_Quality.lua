@@ -489,8 +489,8 @@ local function EnsureCombatMsgFrame()
   local f = CreateFrame("Frame", "PleebUI_QualityCombatMsg", UIParent)
   CombatMsgFrame = f
   f:SetSize(360, 44)
-  f:SetFrameStrata("HIGH")
-  f:SetFrameLevel(80)
+  f:SetFrameStrata("LOW")
+  f:SetFrameLevel(1)
   f:EnableMouse(false)
   f:SetAlpha(0)
   f:Show()
@@ -644,8 +644,8 @@ local function EnsureCombatTimer()
   local f = CreateFrame("Frame", "PleebUI_CombatTimer", UIParent, "BackdropTemplate")
   CombatTimerFrame = f
   f:SetSize(120, 22)
-  f:SetFrameStrata("HIGH")
-  f:SetFrameLevel(30)
+  f:SetFrameStrata("LOW")
+  f:SetFrameLevel(1)
   f:EnableMouse(false)
   f:SetAlpha(0)
   f:Show()
@@ -862,8 +862,8 @@ local function EnsureCombatWarningFrame()
   local f = CreateFrame("Frame", "PleebUI_CombatWarning", UIParent)
   CombatWarningFrame = f
   f:SetSize(600, 80)
-  f:SetFrameStrata("HIGH")
-  f:SetFrameLevel(100)
+  f:SetFrameStrata("LOW")
+  f:SetFrameLevel(1)
   f:EnableMouse(false)
   f:Show()
 
@@ -1592,8 +1592,8 @@ local function EnsureCursorRing()
   if CursorRing then return CursorRing end
 
   local f = CreateFrame("Frame", "PleebUI_CursorRing", UIParent)
-  f:SetFrameStrata("HIGH")
-  f:SetFrameLevel(100)
+  f:SetFrameStrata("LOW")
+  f:SetFrameLevel(1)
   f:SetSize(1, 1)
   f:SetPoint("CENTER", UIParent, "BOTTOMLEFT", 0, 0)
 
@@ -1703,8 +1703,8 @@ local function EnsureCrosshair()
   if Crosshair then return Crosshair end
 
   local f = CreateFrame("Frame", "PleebUI_Crosshair", UIParent)
-  f:SetFrameStrata("HIGH")
-  f:SetFrameLevel(9999)
+  f:SetFrameStrata("LOW")
+  f:SetFrameLevel(1)
   f:SetAllPoints(UIParent)
 
   -- Fullscreen visual only, never capture mouse.
@@ -1872,8 +1872,8 @@ local function EnsurePetWarnFrame()
   local f = CreateFrame("Frame", "PleebUI_PetWarning", UIParent)
   PetWarnFrame = f
   f:SetSize(350, 50)
-  f:SetFrameStrata("HIGH")
-  f:SetFrameLevel(100)
+  f:SetFrameStrata("LOW")
+  f:SetFrameLevel(1)
   f:EnableMouse(false)
   f:Hide()
 

@@ -138,8 +138,8 @@ local function EnsureSalveAnchor()
   SalveAnchor = frame
 
   frame:SetSize(360, 72)
-  frame:SetFrameStrata("HIGH")
-  frame:SetFrameLevel(90)
+  frame:SetFrameStrata("LOW")
+  frame:SetFrameLevel(1)
   frame:EnableMouse(false)
 
   ApplySalveAnchor()

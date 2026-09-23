@@ -623,7 +623,8 @@ local function _CustomBars_EnsureFrame(id)
   f = CreateFrame("Frame", name, UIParent)
   f:SetSize(180, 10)
   f:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
-  f:SetFrameStrata("MEDIUM")
+  f:SetFrameStrata("LOW")
+  f:SetFrameLevel(1)
   f:SetClampedToScreen(true)
   f.__puiBorderThickness = 2
 

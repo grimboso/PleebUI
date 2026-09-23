@@ -1272,6 +1272,8 @@ function M:CreateFrames()
 
   -- Root container (addon-owned, safe to move/skin)
   local f = CreateFrame("Frame", "PUI_PRD_Frame", UIParent, "BackdropTemplate")
+  f:SetFrameStrata("LOW")
+  f:SetFrameLevel(1)
   self.frame = f
 
   -- Health bar container (own box)

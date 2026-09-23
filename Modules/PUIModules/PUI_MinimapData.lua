@@ -916,8 +916,8 @@ LayoutButtons = function()
       MARGIN + col * (BTN_SIZE + BTN_PAD),
       -(MARGIN + row * (BTN_SIZE + BTN_PAD))
     )
-    btn:SetFrameStrata("MEDIUM")
-    btn:SetFrameLevel(200)
+    btn:SetFrameStrata(PUIBucket:GetFrameStrata())
+    btn:SetFrameLevel(PUIBucket:GetFrameLevel() + 2)
 
     if btn ~= expansionButton then
       btn:Show()
@@ -966,8 +966,8 @@ function MinimapData.InitializePUIBucket()
   if not Minimap then return end
 
   PUIBucket = CreateFrame("Frame", "PleebUI_MinimapPUIBucket", UIParent)
-  PUIBucket:SetFrameStrata("MEDIUM")
-  PUIBucket:SetFrameLevel(190)
+  PUIBucket:SetFrameStrata("LOW")
+  PUIBucket:SetFrameLevel(1)
   PUIBucket:SetPoint("BOTTOMRIGHT", Minimap, "BOTTOMRIGHT", -2, 2)
 
   -- Handle (always visible)

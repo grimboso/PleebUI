@@ -723,7 +723,8 @@ local function EnsureContainer()
 
   local container = CreateFrame("Frame", "PleebUI_PCMConsumableTracker", UIParent)
   container:SetSize(1, 1)
-  container:SetFrameStrata("MEDIUM")
+  container:SetFrameStrata("LOW")
+  container:SetFrameLevel(1)
   container:SetClampedToScreen(true)
   container:Hide()
 

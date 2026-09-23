@@ -571,7 +571,8 @@ local function _EnsureFrame()
   if frame then return end
 
   frame = CreateFrame("Frame", "PUI_DragonridingFrame", UIParent)
-  frame:SetFrameStrata("MEDIUM")
+  frame:SetFrameStrata("LOW")
+  frame:SetFrameLevel(1)
   frame:SetClampedToScreen(true)
 
   bgTex = frame:CreateTexture(nil, "BACKGROUND")
@@ -612,7 +613,8 @@ local function _EnsureFrame()
 
   -- Second Wind bar
   swBar = CreateFrame("StatusBar", nil, UIParent)
-  swBar:SetFrameStrata("MEDIUM")
+  swBar:SetFrameStrata("LOW")
+  swBar:SetFrameLevel(1)
   swBar:SetMinMaxValues(0, 1)
   swBar:SetValue(0)
 
@@ -643,7 +645,8 @@ local function _EnsureFrame()
 
   -- Whirling Surge cooldown bar
   wsBar = CreateFrame("StatusBar", nil, UIParent)
-  wsBar:SetFrameStrata("MEDIUM")
+  wsBar:SetFrameStrata("LOW")
+  wsBar:SetFrameLevel(1)
   wsBar:SetMinMaxValues(0, 1)
   wsBar:SetValue(1)
 

@@ -28,6 +28,13 @@ local WHITE_TEXTURE = "Interface\\Buttons\\WHITE8x8"
 local FALLBACK_BAR_TEXTURE = Theme.GetBarTexture()
 local InstanceIndex = 0
 
+local function ApplyRuntimeRootLayer(frame, parent)
+  if parent == UIParent then
+    frame:SetFrameStrata("LOW")
+    frame:SetFrameLevel(1)
+  end
+end
+
 local CHARGE_SLOT_DEFAULT_COLORS = {
   [1] = { 0.8, 0.2, 0.2, 1 },
   [2] = { 0.8, 0.8, 0.2, 1 },
@@ -178,7 +185,9 @@ local function CreateDurationParts(parent, context)
     name = "PleebUI_PCMPresentationBar" .. InstanceIndex
   end
 
-  local frame = CreateFrame("Frame", name, parent or UIParent, "PUI_DurationBarTemplate")
+  local owner = parent or UIParent
+  local frame = CreateFrame("Frame", name, owner, "PUI_DurationBarTemplate")
+  ApplyRuntimeRootLayer(frame, owner)
   local parts = BarWidget.BindDurationBarFrame(frame, {})
 
   parts.kind = context.kind or "duration"
@@ -225,7 +234,9 @@ local function CreateChargeParts(parent, context)
     name = "PleebUI_PCMChargePresentation" .. InstanceIndex
   end
 
-  local frame = CreateFrame("Frame", name, parent or UIParent, "PUI_ChargeBarTemplate")
+  local owner = parent or UIParent
+  local frame = CreateFrame("Frame", name, owner, "PUI_ChargeBarTemplate")
+  ApplyRuntimeRootLayer(frame, owner)
   local parts = BarWidget.BindChargeBarFrame(frame, {})
 
   parts.kind = "charge"
@@ -734,6 +745,7 @@ local PCMIconAdapter = {}
 
 function PCMIconAdapter.Create(parent)
   local frame = CreateFrame("Frame", nil, parent)
+  ApplyRuntimeRootLayer(frame, parent)
   local background = frame:CreateTexture(nil, "BACKGROUND")
   local icon = frame:CreateTexture(nil, "ARTWORK")
   local cooldown = CreateFrame("Cooldown", nil, frame, "CooldownFrameTemplate")

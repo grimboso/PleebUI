@@ -781,7 +781,8 @@ function Core:CreateBar(key, frameName, moverKey, label, defaultPoint, dbKey)
   end
 
   local frame = CreateFrame("Frame", frameName, UIParent, "SecureHandlerStateTemplate")
-  frame:SetFrameStrata("MEDIUM")
+  frame:SetFrameStrata("LOW")
+  frame:SetFrameLevel(1)
   frame:SetClampedToScreen(true)
   frame.actionButtons = {}
   frame:SetAttributeNoHandler("_onstate-pui-empower", [[

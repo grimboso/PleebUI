@@ -937,6 +937,7 @@ function UF:ConstructUnitFrame(frame, unit, cfg, opts)
   end
 
   frame:SetFrameStrata("LOW")
+  frame:SetFrameLevel(1)
   frame:RegisterForClicks("AnyUp")
 
   UFStyle.BuildUnitFrameVisuals(frame, unit, cfg)
