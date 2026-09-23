@@ -8,6 +8,9 @@ local LSM   = ns.LSM
 local Pixel = ns.Pixel
 local Theme = ns.Theme
 
+local CooldownViewerRegions = setmetatable({}, { __mode = "k" })
+local CooldownManagerOverlayStripped = setmetatable({}, { __mode = "k" })
+
 local function ResolveIconTarget(target)
 
   -- Direct texture
@@ -32,10 +35,10 @@ end
 
 
 function IconSkin.ResolveCooldownViewerRegions(itemFrame)
-  local regions = itemFrame.__pui_cv_regions
+  local regions = CooldownViewerRegions[itemFrame]
   if not regions then
     regions = {}
-    itemFrame.__pui_cv_regions = regions
+    CooldownViewerRegions[itemFrame] = regions
   end
 
   local icon = itemFrame:GetIconTexture()
@@ -285,7 +288,7 @@ local function FindCooldownManagerIconOverlay(frame)
 end
 
 local function StripCooldownManagerDirectRegions(frame)
-  if not frame or frame.__puiCooldownManagerOverlayStripped == true then
+  if not frame or CooldownManagerOverlayStripped[frame] == true then
     return
   end
 
@@ -304,7 +307,7 @@ local function StripCooldownManagerDirectRegions(frame)
     end
   end
 
-  frame.__puiCooldownManagerOverlayStripped = true
+  CooldownManagerOverlayStripped[frame] = true
 end
 
 function IconSkin.StripCooldownManagerOverlay(itemFrame)

@@ -201,6 +201,17 @@ local function FlushRuntime(frame)
       Runtime:RefreshViewer(entry.key, scanReason)
     end
 
+    if entry.rebindQueued == true then
+      entry.rebindQueued = false
+
+      for index = 1, #entry.items do
+        local itemFrame = entry.items[index]
+        if itemFrame and entry.itemSet[itemFrame] == true then
+          Dispatch("OnItemRebound", entry.key, entry.frame, itemFrame)
+        end
+      end
+    end
+
     local mask = entry.dirtyMask or 0
     if mask ~= 0 then
       local reason = entry.dirtyReason
@@ -252,7 +263,7 @@ local function RemoveItemFromList(entry, itemFrame)
   end
 end
 
-local function HookItem(entry, itemFrame)
+local function BindItemState(entry, itemFrame)
   local itemState = state.itemEntry[itemFrame]
   if not itemState then
     itemState = {}
@@ -260,33 +271,9 @@ local function HookItem(entry, itemFrame)
   end
 
   itemState.entry = entry
-
-  if itemState.rebindHooked then
-    return
-  end
-  itemState.rebindHooked = true
-
-  -- Blizzard emits this only for an actual or forced bind; unchanged setters
-  -- must not invalidate presentation. Do not compare restricted cooldown IDs.
-  Hooks.HookMethod(itemFrame, "OnCooldownIDSet", "PCMRuntime_ItemRebind", function(frame)
-    if not state.enabled then
-      return
-    end
-
-    local current = state.itemEntry[frame]
-    local currentEntry = current and current.entry or nil
-    if not currentEntry or currentEntry.itemSet[frame] ~= true then
-      return
-    end
-
-    local initialBind = current.expectInitialRebind == true
-    current.expectInitialRebind = nil
-    Dispatch("OnItemRebound", currentEntry.key, currentEntry.frame, frame, initialBind)
-    MarkViewerDirty(currentEntry, Runtime.Dirty.CONTENT, "rebind")
-  end)
 end
 
-local function AcquireItem(entry, itemFrame, reason, suppressGeneration, expectInitialRebind)
+local function AcquireItem(entry, itemFrame, reason, suppressGeneration)
   if not itemFrame or itemFrame:IsForbidden() then
     return false
   end
@@ -300,7 +287,7 @@ local function AcquireItem(entry, itemFrame, reason, suppressGeneration, expectI
   end
 
   if entry.itemSet[itemFrame] == true then
-    HookItem(entry, itemFrame)
+    BindItemState(entry, itemFrame)
     return false
   end
 
@@ -308,12 +295,7 @@ local function AcquireItem(entry, itemFrame, reason, suppressGeneration, expectI
   local itemIndex = #entry.items + 1
   entry.items[itemIndex] = itemFrame
   entry.itemIndex[itemFrame] = itemIndex
-  HookItem(entry, itemFrame)
-
-  local itemState = state.itemEntry[itemFrame]
-  if itemState then
-    itemState.expectInitialRebind = expectInitialRebind == true
-  end
+  BindItemState(entry, itemFrame)
 
   Dispatch("OnItemAcquired", entry.key, entry.frame, itemFrame, reason or "acquire")
   if suppressGeneration ~= true then
@@ -333,7 +315,6 @@ local function ReleaseItem(entry, itemFrame, reason, suppressGeneration)
   local itemState = state.itemEntry[itemFrame]
   if itemState and itemState.entry == entry then
     itemState.entry = nil
-    itemState.expectInitialRebind = nil
   end
 
   Dispatch("OnItemReleased", entry.key, entry.frame, itemFrame, reason or "release")
@@ -400,11 +381,11 @@ local function ScanViewer(entry, reason)
   for index = 1, #activeItems do
     local itemFrame = activeItems[index]
     if entry.itemSet[itemFrame] ~= true then
-      if AcquireItem(entry, itemFrame, reason or "scan-acquire", true, false) then
+      if AcquireItem(entry, itemFrame, reason or "scan-acquire", true) then
         changed = true
       end
     else
-      HookItem(entry, itemFrame)
+      BindItemState(entry, itemFrame)
     end
   end
 
@@ -450,6 +431,15 @@ local function HookViewer(entry)
     entry.scanQueued = true
     entry.scanReason = "viewer-layout"
     MarkViewerDirty(entry, Runtime.Dirty.LAYOUT, "viewer-layout")
+  end)
+
+  Hooks.HookMethod(viewer, "RefreshData", "PCMRuntime_ViewerRefreshData", function(owner)
+    if not state.enabled or entry.frame ~= owner then
+      return
+    end
+
+    entry.rebindQueued = true
+    MarkViewerDirty(entry, Runtime.Dirty.CONTENT, "viewer-refresh-data")
   end)
 
   Hooks.HookScript(viewer, "OnShow", "PCMRuntime_ViewerShow", function(owner)
@@ -499,6 +489,7 @@ function Runtime:RegisterViewer(key, resolver)
       dirtyReason = nil,
       scanQueued = false,
       scanReason = nil,
+      rebindQueued = false,
       workQueued = false,
       processing = false,
       nextWork = nil,
@@ -607,6 +598,7 @@ function Runtime:ClearDirty()
       entry.dirtyReason = nil
       entry.scanQueued = false
       entry.scanReason = nil
+      entry.rebindQueued = false
     end
   end
 end
@@ -755,6 +747,7 @@ function Runtime:Disable()
       entry.dirtyReason = nil
       entry.scanQueued = false
       entry.scanReason = nil
+      entry.rebindQueued = false
       entry.frame = nil
     end
   end

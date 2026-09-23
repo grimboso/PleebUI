@@ -670,7 +670,7 @@ local function _CustomBars_EnsureFrame(id)
   f.spellIconTex:SetTexCoord(0.07, 0.93, 0.07, 0.93)
 
   f.__puiBarId = id
-  f.__puiPCMBarPresentation = PCMPresentation.BindCustomBar(f)
+  PCMPresentation.BindCustomBar(f)
   _CustomBars.frames[id] = f
   return f
 end

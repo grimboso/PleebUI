@@ -28,6 +28,9 @@ local WHITE_TEXTURE = "Interface\\Buttons\\WHITE8x8"
 local FALLBACK_BAR_TEXTURE = Theme.GetBarTexture()
 local InstanceIndex = 0
 
+local ViewerIconPresentation = setmetatable({}, { __mode = "k" })
+local CustomBarPresentation = setmetatable({}, { __mode = "k" })
+
 local function ApplyRuntimeRootLayer(frame, parent)
   if parent == UIParent then
     frame:SetFrameStrata("LOW")
@@ -1300,7 +1303,7 @@ function PCMPresentation.ReleaseCustomBarBuffGlow(trackKey)
 end
 
 function PCMPresentation.BindViewerIcon(itemFrame, regions, borderFrame)
-  local parts = itemFrame.__puiPCMIconPresentation
+  local parts = ViewerIconPresentation[itemFrame]
   if not parts then
     parts = {
       owner = itemFrame,
@@ -1309,7 +1312,7 @@ function PCMPresentation.BindViewerIcon(itemFrame, regions, borderFrame)
       icon = regions and regions.icon,
       cooldown = regions and regions.cd,
     }
-    itemFrame.__puiPCMIconPresentation = parts
+    ViewerIconPresentation[itemFrame] = parts
   else
     parts.owner = itemFrame
     parts.frame = regions and regions.iconContainer or itemFrame
@@ -1370,7 +1373,7 @@ function PCMPresentation.LayoutStackSegments(parts, state)
 end
 
 function PCMPresentation.BindCustomBar(frame)
-  local parts = frame.__puiPCMBarPresentation
+  local parts = CustomBarPresentation[frame]
   if parts then
     parts.background = frame.bg
     parts.status = frame.bar
@@ -1396,7 +1399,7 @@ function PCMPresentation.BindCustomBar(frame)
     kind = frame.__puiIsDurationOnly and "duration" or "stack",
   }
   parts.__puiPresentationKey = "PCMBar"
-  frame.__puiPCMBarPresentation = parts
+  CustomBarPresentation[frame] = parts
   return parts
 end
 
