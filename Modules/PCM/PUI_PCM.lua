@@ -4849,6 +4849,7 @@ function Cooldowns:OnEnable()
 
   _PCM_PrepareViewerMoverGeometry()
   _PCM_RunInitialViewerPass(self)
+  PCMRuntime:Flush()
 end
 
 function Cooldowns:OnDisable()
