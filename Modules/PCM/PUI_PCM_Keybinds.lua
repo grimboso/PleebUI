@@ -1078,6 +1078,7 @@ local _kbMappingEventsRegistered = false
 local _KB_BOOTSTRAP_EVENTS = {
   "PLAYER_ENTERING_WORLD",
   "COOLDOWN_VIEWER_DATA_LOADED",
+  "ADDON_RESTRICTION_STATE_CHANGED",
 }
 
 local _KB_MAPPING_EVENTS = {
@@ -1133,6 +1134,11 @@ end
 
 local function _KB_OnRefreshFrameUpdate(self)
   self:Hide()
+
+  if PCMRuntime:IsPresentationRestricted() then
+    return
+  end
+
   _kbDirty = false
 
   local full = _kbFullRebuild
@@ -1225,11 +1231,21 @@ _KB_UpdateConsumerState = function()
   end
 end
 
-local function _KB_OnEvent(_, event, arg1)
+local function _KB_OnEvent(_, event, arg1, arg2)
   if event == "PLAYER_ENTERING_WORLD" or event == "COOLDOWN_VIEWER_DATA_LOADED" then
     _KB_UpdateConsumerState()
     if _kbActive then
       _KB_ScheduleRebuild(true)
+    end
+    return
+  end
+
+  if event == "ADDON_RESTRICTION_STATE_CHANGED" then
+    if arg2 == Enum.AddOnRestrictionState.Inactive
+      and not PCMRuntime:IsPresentationRestricted()
+      and _kbDirty
+    then
+      _kbEventFrame:Show()
     end
     return
   end
