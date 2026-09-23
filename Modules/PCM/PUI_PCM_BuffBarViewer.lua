@@ -860,7 +860,7 @@ _RequestBuffBarRefresh = function(mode)
 end
 
 _Init = function()
-  if not _PCM_BuffBarsEnabled() then
+  if not _PCM_BuffBarsEnabled() or PCMRuntime:IsPresentationRestricted() then
     return
   end
 
