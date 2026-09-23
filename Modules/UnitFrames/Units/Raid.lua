@@ -1377,6 +1377,14 @@ function RaidFrames:GROUP_ROSTER_UPDATE()
     self:DisableBlizzardRaidFrames()
   end
 
+  if self.db.profile.enabled ~= false and self.db.profile.enableMainTankFrames == true then
+    if InCombatLockdown() then
+      UF.QueueDeferredRefresh(self, "layout")
+    else
+      ns.UFTankFrames.Refresh(self)
+    end
+  end
+
   self:RefreshRosterPresentation()
 end
 
