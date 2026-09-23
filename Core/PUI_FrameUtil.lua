@@ -2463,6 +2463,10 @@ local function FlushPendingSmartSnapRelayouts()
   end
 end
 
+function FrameUtil.FinalizePendingSmartSnapRuntimeLayout()
+  FlushPendingSmartSnapRelayouts()
+end
+
 local function SchedulePendingSmartSnapRelayouts()
   if FrameUtil._smartSnapRuntimeRelayoutScheduled
     or not FrameUtil._smartSnapWorldReady
