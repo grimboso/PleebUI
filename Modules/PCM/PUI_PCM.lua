@@ -3456,6 +3456,7 @@ local function _RegisterViewerMover(info, structuralOnly)
     quickSettings = BuildQuickSettings,
     smartSnap = isSmartCombatViewer and {
       family = "combatBars",
+      allowCombatRuntimeLayout = true,
       isRuntimeActive = function()
         return _PCM_IsModuleEnabledFast()
       end,
