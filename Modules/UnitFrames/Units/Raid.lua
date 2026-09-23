@@ -1372,19 +1372,37 @@ function RaidFrames:RefreshAuraAvailability()
   end)
 end
 
-function RaidFrames:GROUP_ROSTER_UPDATE()
-  if self.db.profile.hideBlizzard == true then
-    self:DisableBlizzardRaidFrames()
+function RaidFrames:QueueMainTankRosterRefresh()
+  if self._mainTankRosterRefreshTimer then
+    return
   end
 
-  if self.db.profile.enabled ~= false and self.db.profile.enableMainTankFrames == true then
+  self._mainTankRosterRefreshTimer = C_Timer.NewTimer(0, function()
+    self._mainTankRosterRefreshTimer = nil
+
+    if not self:IsEnabled() then
+      return
+    end
+
+    local db = self.db.profile
+    if db.enabled == false or db.enableMainTankFrames ~= true then
+      return
+    end
+
     if InCombatLockdown() then
       UF.QueueDeferredRefresh(self, "layout")
     else
       ns.UFTankFrames.Refresh(self)
     end
+  end)
+end
+
+function RaidFrames:GROUP_ROSTER_UPDATE()
+  if self.db.profile.hideBlizzard == true then
+    self:DisableBlizzardRaidFrames()
   end
 
+  self:QueueMainTankRosterRefresh()
   self:RefreshRosterPresentation()
 end
 
@@ -1500,6 +1518,11 @@ function RaidFrames:OnDisable()
   self._pendingAuraRefresh = nil
   self._auraRefreshScheduled = nil
 
+  if self._mainTankRosterRefreshTimer then
+    self._mainTankRosterRefreshTimer:Cancel()
+    self._mainTankRosterRefreshTimer = nil
+  end
+
   IterateRaidFrames(self, function(frame)
     UF:DisableFrameRuntime(frame)
   end)
@@ -1552,6 +1575,7 @@ local P = select(1, ns.Pleebug:DropIn(RaidFrames, { name = "UnitFrames.Raid" }))
   RaidFrames.SafeRefresh = P:Def("RaidFrames.SafeRefresh", RaidFrames.SafeRefresh)
   RaidFrames.Refresh = P:Def("RaidFrames.Refresh", RaidFrames.Refresh)
   RaidFrames.RefreshAuraAvailability = P:Def("RaidFrames.RefreshAuraAvailability", RaidFrames.RefreshAuraAvailability)
+  RaidFrames.QueueMainTankRosterRefresh = P:Def("RaidFrames.QueueMainTankRosterRefresh", RaidFrames.QueueMainTankRosterRefresh)
   RaidFrames.GROUP_ROSTER_UPDATE = P:Def("RaidFrames.GROUP_ROSTER_UPDATE", RaidFrames.GROUP_ROSTER_UPDATE)
   RaidFrames.PLAYER_ENTERING_WORLD = P:Def("RaidFrames.PLAYER_ENTERING_WORLD", RaidFrames.PLAYER_ENTERING_WORLD)
   RaidFrames.PLAYER_REGEN_ENABLED = P:Def("RaidFrames.PLAYER_REGEN_ENABLED", RaidFrames.PLAYER_REGEN_ENABLED)
