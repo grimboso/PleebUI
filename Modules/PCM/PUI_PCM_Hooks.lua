@@ -188,6 +188,7 @@ _PCM_HooksShouldRun = function()
   end
 
   return _pcmHooksRuntimeActive == true
+    and not ns.PCMRuntime:IsPresentationRestricted()
 end
 
 local _bbIconState = Hooks._bbIconState
@@ -423,6 +424,23 @@ function Hooks.HookGlowManager(isEnabled, startProcGlow, stopProcGlow)
   local function FlushPendingGlows(frame)
     frame:Hide()
 
+    if not _PCM_HooksShouldRun() then
+      for i = 1, pendingCount do
+        local btn = pendingIcons[i]
+        pendingIcons[i] = nil
+        desiredState[btn] = nil
+        queuedIcons[btn] = nil
+
+        local st = btn and FrameData[btn] or nil
+        if st then
+          st.procGlowPending = nil
+        end
+      end
+
+      pendingCount = 0
+      return
+    end
+
     local enabled = isEnabled() == true
 
     for i = 1, pendingCount do
@@ -458,7 +476,7 @@ function Hooks.HookGlowManager(isEnabled, startProcGlow, stopProcGlow)
 
   local function QueueGlowState(btn, wanted)
     local st = btn and FrameData[btn]
-    if not st or st.isViewerIconButton ~= true then
+    if not st or st.isViewerIconButton ~= true or not _PCM_HooksShouldRun() then
       return
     end
 
