@@ -648,7 +648,10 @@ local function _InsertVisibleBuffIcon(icon)
 end
 
 _RefreshBuffIconVisibility = function(icon)
-  if not icon or _buffItemSet[icon] ~= true then
+  if PCMRuntime:IsPresentationRestricted()
+    or not icon
+    or _buffItemSet[icon] ~= true
+  then
     return false
   end
 
@@ -1246,7 +1249,7 @@ _Buffs_ApplyCentered = function(viewer)
 end
 
 local function _Buffs_InitOnce()
-  if not _PCM_BuffsEnabled() then
+  if not _PCM_BuffsEnabled() or PCMRuntime:IsPresentationRestricted() then
     return false
   end
 
