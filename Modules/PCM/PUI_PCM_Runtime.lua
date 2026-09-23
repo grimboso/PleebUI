@@ -38,6 +38,7 @@ local state = {
   workHead = nil,
   workTail = nil,
   presentationRestrictions = {},
+  bootstrapComplete = false,
 }
 state.flushFrame:Hide()
 
@@ -50,6 +51,10 @@ local PRESENTATION_RESTRICTION_TYPES = {
 }
 
 local function IsPresentationRestricted()
+  if state.bootstrapComplete ~= true then
+    return false
+  end
+
   return next(state.presentationRestrictions) ~= nil
     or InCombatLockdown()
     or C_Secrets.ShouldAurasBeSecret()
@@ -705,6 +710,27 @@ local function OnRuntimeEvent(_, event, ...)
 
   Dispatch("OnLifecycleEvent", event, ...)
 
+  if state.bootstrapComplete ~= true
+    and (event == "ADDON_LOADED" or event == "COOLDOWN_VIEWER_DATA_LOADED")
+  then
+    Runtime:Flush()
+  end
+
+  if event == "PLAYER_ENTERING_WORLD" and state.bootstrapComplete ~= true then
+    Runtime:Flush()
+    state.bootstrapComplete = true
+    return
+  end
+
+  if event == "ADDON_RESTRICTION_STATE_CHANGED"
+    and arg2 == Enum.AddOnRestrictionState.Activating
+    and state.bootstrapComplete ~= true
+  then
+    Runtime:Flush()
+    state.bootstrapComplete = true
+    return
+  end
+
   if (event == "PLAYER_ENTERING_WORLD"
       or event == "PLAYER_REGEN_ENABLED"
       or (event == "ADDON_RESTRICTION_STATE_CHANGED"
@@ -722,6 +748,7 @@ function Runtime:Enable()
   end
 
   state.enabled = true
+  state.bootstrapComplete = ns.FrameUtil._smartSnapWorldReady == true
 
   for index = 1, #LIFECYCLE_EVENTS do
     state.eventFrame:RegisterEvent(LIFECYCLE_EVENTS[index])
