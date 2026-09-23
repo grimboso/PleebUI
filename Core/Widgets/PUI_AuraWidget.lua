@@ -689,10 +689,6 @@ end
 function AuraWidget.DisableApplicationThresholdSource(parts)
   applicationThresholdTracks[parts] = nil
   parts.applicationThresholdSource = nil
-  if parts.applicationThresholdMirror then
-    parts.applicationThresholdMirror:SetValue(0)
-  end
-  FeedApplicationThresholds(parts, 0)
 
   if not next(applicationThresholdTracks) then
     if applicationThresholdTickFrame then

@@ -421,6 +421,8 @@ local function ConfigureNativeButton(owner, track, button, initializing)
       )
       if useStackColorThresholds then
         AuraWidget.ConfigureApplicationThresholdBarSource(parts)
+      else
+        AuraWidget.DisableApplicationThresholdBarSource(parts)
       end
       track.applicationThresholdTopFrameLevel =
         engineBar:GetFrameLevel() + (parts.applicationThresholdLayerCount or 0)
@@ -431,6 +433,7 @@ local function ConfigureNativeButton(owner, track, button, initializing)
         Enum.StatusBarInterpolation.ExponentialEaseOut
       )
     else
+      AuraWidget.DisableApplicationThresholdBarSource(parts)
       local applicationBar = AuraWidget.SetApplicationThresholdBar(
         parts,
         view.secondaryStatusBar
@@ -549,18 +552,16 @@ local function EnsureNativeTrack(owner, resource, view)
 end
 
 local function DisableNativeTrack(track)
-  if not track then
+  if not track or not track.auraSlot or track.auraSlot.active ~= true then
     return
   end
 
   if track.parts then
+    AuraWidget.DisableApplicationThresholdBarSource(track.parts)
     AuraWidget.DisableApplicationThresholdSource(track.parts)
   end
   HideNativeDividers(track)
-
-  if track.auraSlot then
-    AuraSlotDriver:SetSlotActive(track.auraSlot, false)
-  end
+  AuraSlotDriver:SetSlotActive(track.auraSlot, false)
 end
 
 local function BuildNative(owner)
