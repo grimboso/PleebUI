@@ -6,6 +6,8 @@ ns.PCMRuntime = Runtime
 local Hooks = ns.PCMHooks
 local P = select(1, ns.Pleebug:DropIn(Runtime, { name = "PCM", bucket = "Runtime" }))
 local CreateFrame = CreateFrame
+local InCombatLockdown = InCombatLockdown
+local C_Secrets = C_Secrets
 local bit_bor = bit.bor
 local bit_band = bit.band
 local wipe = wipe
@@ -35,8 +37,24 @@ local state = {
   callbackRoutes = {},
   workHead = nil,
   workTail = nil,
+  presentationRestrictions = {},
 }
 state.flushFrame:Hide()
+
+local PRESENTATION_RESTRICTION_TYPES = {
+  [Enum.AddOnRestrictionType.Combat] = true,
+  [Enum.AddOnRestrictionType.Encounter] = true,
+  [Enum.AddOnRestrictionType.ChallengeMode] = true,
+  [Enum.AddOnRestrictionType.PvPMatch] = true,
+  [Enum.AddOnRestrictionType.Map] = true,
+}
+
+local function IsPresentationRestricted()
+  return next(state.presentationRestrictions) ~= nil
+    or InCombatLockdown()
+    or C_Secrets.ShouldAurasBeSecret()
+    or C_Secrets.ShouldCooldownsBeSecret()
+end
 
 local LIFECYCLE_EVENTS = {
   "ADDON_LOADED",
@@ -155,6 +173,10 @@ local function FlushRuntime(frame)
   frame:Hide()
 
   if not state.enabled then
+    return
+  end
+
+  if IsPresentationRestricted() then
     return
   end
 
@@ -327,6 +349,13 @@ local function ScanViewer(entry, reason)
     return false
   end
 
+  if IsPresentationRestricted() then
+    entry.scanQueued = true
+    entry.scanReason = reason or entry.scanReason or "restricted-scan"
+    QueueEntry(entry)
+    return false
+  end
+
   local pool = viewer.itemFramePool
   local active = entry.activeSet
   local activeItems = entry.activeItems
@@ -412,31 +441,14 @@ local function HookViewer(entry)
   end
   entry.hookedViewers[viewer] = true
 
-  Hooks.HookMethod(viewer, "OnAcquireItemFrame", "PCMRuntime_ItemAcquire", function(owner, itemFrame)
-    if not state.enabled or entry.frame ~= owner then
-      return
-    end
-
-    AcquireItem(entry, itemFrame, "acquire", false, true)
-  end)
-
-  local pool = viewer.itemFramePool
-  if pool then
-    Hooks.HookMethod(pool, "Release", "PCMRuntime_ItemRelease", function(_, itemFrame)
-      if not state.enabled or entry.frame ~= viewer then
-        return
-      end
-
-      ReleaseItem(entry, itemFrame, "release")
-    end)
-  end
-
   Hooks.HookViewerLayout(viewer, function(owner)
     if not state.enabled or entry.frame ~= owner then
       return
     end
 
     entry.layoutGeneration = (entry.layoutGeneration or 0) + 1
+    entry.scanQueued = true
+    entry.scanReason = "viewer-layout"
     MarkViewerDirty(entry, Runtime.Dirty.LAYOUT, "viewer-layout")
   end)
 
@@ -605,6 +617,10 @@ function Runtime:BindViewer(key, reason)
     return nil, false
   end
 
+  if IsPresentationRestricted() then
+    return entry.frame, false
+  end
+
   local viewer = entry.resolver()
   if viewer and viewer:IsForbidden() then
     viewer = nil
@@ -668,7 +684,7 @@ local function OnRuntimeEvent(_, event, ...)
     return
   end
 
-  local arg1 = ...
+  local arg1, arg2 = ...
 
   if event == "ADDON_LOADED" and arg1 ~= "Blizzard_CooldownViewer" then
     return
@@ -685,12 +701,26 @@ local function OnRuntimeEvent(_, event, ...)
     end
   end
 
+  if event == "ADDON_RESTRICTION_STATE_CHANGED"
+    and PRESENTATION_RESTRICTION_TYPES[arg1] == true
+  then
+    if arg2 == Enum.AddOnRestrictionState.Inactive then
+      state.presentationRestrictions[arg1] = nil
+    else
+      state.presentationRestrictions[arg1] = true
+    end
+  end
+
   Dispatch("OnLifecycleEvent", event, ...)
 
-  if event == "PLAYER_ENTERING_WORLD" then
-    -- Core owns startup reconciliation. Flush the work it queued immediately
-    -- because a reload can enter PLAYER_ENTERING_WORLD before combat lockdown.
-    Runtime:Flush()
+  if (event == "PLAYER_ENTERING_WORLD"
+      or event == "PLAYER_REGEN_ENABLED"
+      or (event == "ADDON_RESTRICTION_STATE_CHANGED"
+        and arg2 == Enum.AddOnRestrictionState.Inactive))
+    and not IsPresentationRestricted()
+    and state.workHead
+  then
+    state.flushFrame:Show()
   end
 end
 
@@ -715,6 +745,7 @@ function Runtime:Disable()
   state.eventFrame:UnregisterAllEvents()
   state.flushFrame:Hide()
   ClearWorkQueue()
+  wipe(state.presentationRestrictions)
 
   for index = 1, #state.viewerOrder do
     local entry = state.viewers[state.viewerOrder[index]]
@@ -748,6 +779,10 @@ Runtime:RegisterViewer("BuffBarCooldownViewer", function()
   return _G.BuffBarCooldownViewer
 end)
 
+function Runtime:IsPresentationRestricted()
+  return IsPresentationRestricted()
+end
+
 Dispatch = P:Def("Runtime.Dispatch", Dispatch)
 MarkViewerDirty = P:Def("Runtime.MarkViewerDirty", MarkViewerDirty)
 MarkItemMembershipChanged = P:Def("Runtime.MarkItemMembershipChanged", MarkItemMembershipChanged)
@@ -773,6 +808,7 @@ Runtime.BindViewer = P:Def("Runtime:BindViewer", Runtime.BindViewer)
 Runtime.RefreshViewer = P:Def("Runtime:RefreshViewer", Runtime.RefreshViewer)
 Runtime.RefreshAllViewers = P:Def("Runtime:RefreshAllViewers", Runtime.RefreshAllViewers)
 Runtime.QueueAllViewerScans = P:Def("Runtime:QueueAllViewerScans", Runtime.QueueAllViewerScans)
+Runtime.IsPresentationRestricted = P:Def("Runtime:IsPresentationRestricted", Runtime.IsPresentationRestricted)
 Runtime.Enable = P:Def("Runtime:Enable", Runtime.Enable)
 Runtime.Disable = P:Def("Runtime:Disable", Runtime.Disable)
 
