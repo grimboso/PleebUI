@@ -708,27 +708,17 @@ local function OnRuntimeEvent(_, event, ...)
     end
   end
 
+  -- Close startup before subscribers run so PLAYER_ENTERING_WORLD is normal restricted runtime.
+  if event == "PLAYER_ENTERING_WORLD" and state.bootstrapComplete ~= true then
+    state.bootstrapComplete = true
+  end
+
   Dispatch("OnLifecycleEvent", event, ...)
 
   if state.bootstrapComplete ~= true
     and (event == "ADDON_LOADED" or event == "COOLDOWN_VIEWER_DATA_LOADED")
   then
     Runtime:Flush()
-  end
-
-  if event == "PLAYER_ENTERING_WORLD" and state.bootstrapComplete ~= true then
-    Runtime:Flush()
-    state.bootstrapComplete = true
-    return
-  end
-
-  if event == "ADDON_RESTRICTION_STATE_CHANGED"
-    and arg2 == Enum.AddOnRestrictionState.Activating
-    and state.bootstrapComplete ~= true
-  then
-    Runtime:Flush()
-    state.bootstrapComplete = true
-    return
   end
 
   if (event == "PLAYER_ENTERING_WORLD"
