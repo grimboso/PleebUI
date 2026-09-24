@@ -12,14 +12,10 @@ local P = select(1, ns.Pleebug:DropIn(Hooks))
 
 local hooksecurefunc = hooksecurefunc
 local CreateFrame = CreateFrame
-local IsSecret = issecretvalue
 
 local rawFrame = CreateFrame("Frame")
 local RawClearAllPoints = rawFrame.ClearAllPoints
 local RawSetPoint = rawFrame.SetPoint
-local RawSetSize = rawFrame.SetSize
-local RawSetScale = rawFrame.SetScale
-local RawSetAlpha = rawFrame.SetAlpha
 
 local FrameData = setmetatable({}, { __mode = "k" })
 
@@ -240,8 +236,6 @@ function Hooks.GetBBIconHidden(icon)
   return st.hidden, st.wasShown
 end
 
-local abs = math.abs
-
 local function OnIconSetPoint(self)
   local fd = FrameData[self]
   if not fd or fd.locking or fd.hidden or not fd.anchor then
@@ -256,67 +250,6 @@ local function OnIconSetPoint(self)
   RawClearAllPoints(self)
   RawSetPoint(self, "CENTER", fd.anchor, "CENTER", fd.posX or 0, fd.posY or 0)
   fd.locking = false
-end
-
-local function OnIconSetSize(self)
-  local fd = FrameData[self]
-  if not fd or fd.locking or fd.hidden then
-    return
-  end
-
-  local tw = fd.sizeW
-  local th = fd.sizeH
-  if not tw or not th then
-    return
-  end
-
-  if not _PCM_GeometryHooksShouldRun() then
-    return
-  end
-
-  fd.locking = true
-  RawSetSize(self, tw, th)
-  fd.locking = false
-end
-
-local function OnIconSetScale(self, scale)
-  local fd = FrameData[self]
-  if not fd or fd.locking or fd.hidden then
-    return
-  end
-
-  if IsSecret(scale) or abs((scale or 1) - 1) <= 0.01 then
-    return
-  end
-
-  if not _PCM_GeometryHooksShouldRun() then
-    return
-  end
-
-  fd.locking = true
-  RawSetScale(self, 1)
-  fd.locking = false
-end
-
-local function OnIconSetAlpha(self, alpha)
-  local fd = FrameData[self]
-  if not fd or fd.locking then
-    return
-  end
-
-  if not _PCM_GeometryHooksShouldRun() then
-    return
-  end
-
-  if IsSecret(alpha) then
-    return
-  end
-
-  if (fd.parked or fd.hidden) and alpha and alpha > 0 then
-    fd.locking = true
-    RawSetAlpha(self, 0)
-    fd.locking = false
-  end
 end
 
 
@@ -336,11 +269,6 @@ function Hooks.HookIconFrame(icon, key)
   fd.viewerKey = key
 
   hooksecurefunc(icon, "SetPoint", OnIconSetPoint)
-  hooksecurefunc(icon, "SetScale", OnIconSetScale)
-  hooksecurefunc(icon, "SetSize", OnIconSetSize)
-  hooksecurefunc(icon, "SetWidth", OnIconSetSize)
-  hooksecurefunc(icon, "SetHeight", OnIconSetSize)
-  hooksecurefunc(icon, "SetAlpha", OnIconSetAlpha)
 end
 
 
@@ -557,9 +485,6 @@ _PCM_DataHooksShouldRun = P:Def("_PCM_DataHooksShouldRun", _PCM_DataHooksShouldR
   Hooks.SetBBIconHidden = P:Def("Hooks:SetBBIconHidden", Hooks.SetBBIconHidden)
 Hooks.GetBBIconHidden = P:Def("Hooks:GetBBIconHidden", Hooks.GetBBIconHidden)
 OnIconSetPoint = P:Def("OnIconSetPoint", OnIconSetPoint)
-OnIconSetSize = P:Def("OnIconSetSize", OnIconSetSize)
-OnIconSetScale = P:Def("OnIconSetScale", OnIconSetScale)
-OnIconSetAlpha = P:Def("OnIconSetAlpha", OnIconSetAlpha)
 Hooks.HookIconFrame = P:Def("Hooks:HookIconFrame", Hooks.HookIconFrame)
 Hooks.HookEditMode = P:Def("Hooks:HookEditMode", Hooks.HookEditMode)
 Hooks.HookGlowManager = P:Def("Hooks:HookGlowManager", Hooks.HookGlowManager)
