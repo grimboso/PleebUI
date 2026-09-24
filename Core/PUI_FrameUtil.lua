@@ -344,32 +344,56 @@ function FrameUtil.GetPointOffsetsForFrame(frame, point)
 
   local parentRight = parentLeft + parentWidth
   local parentTop = parentBottom + parentHeight
+  local parentCenterX = parentLeft + (parentWidth * 0.5)
+  local parentCenterY = parentBottom + (parentHeight * 0.5)
+  local left = frame:GetLeft()
+  local right = frame:GetRight()
+  local top = frame:GetTop()
+  local bottom = frame:GetBottom()
+  local centerX, centerY = frame:GetCenter()
 
-  if point == "TOPRIGHT" then
-    local right = frame:GetRight()
-    local top = frame:GetTop()
+  if point == "TOP" then
+    if not centerX or not top then
+      return 0, 0
+    end
+    return MoverRound(centerX - parentCenterX), MoverRound(top - parentTop)
+  elseif point == "TOPRIGHT" then
     if not right or not top then
       return 0, 0
     end
     return MoverRound(right - parentRight), MoverRound(top - parentTop)
-  elseif point == "BOTTOMLEFT" then
-    local left = frame:GetLeft()
-    local bottom = frame:GetBottom()
-    if not left or not bottom then
+  elseif point == "RIGHT" then
+    if not right or not centerY then
       return 0, 0
     end
-    return MoverRound(left - parentLeft), MoverRound(bottom - parentBottom)
+    return MoverRound(right - parentRight), MoverRound(centerY - parentCenterY)
   elseif point == "BOTTOMRIGHT" then
-    local right = frame:GetRight()
-    local bottom = frame:GetBottom()
     if not right or not bottom then
       return 0, 0
     end
     return MoverRound(right - parentRight), MoverRound(bottom - parentBottom)
+  elseif point == "BOTTOM" then
+    if not centerX or not bottom then
+      return 0, 0
+    end
+    return MoverRound(centerX - parentCenterX), MoverRound(bottom - parentBottom)
+  elseif point == "BOTTOMLEFT" then
+    if not left or not bottom then
+      return 0, 0
+    end
+    return MoverRound(left - parentLeft), MoverRound(bottom - parentBottom)
+  elseif point == "LEFT" then
+    if not left or not centerY then
+      return 0, 0
+    end
+    return MoverRound(left - parentLeft), MoverRound(centerY - parentCenterY)
+  elseif point == "CENTER" then
+    if not centerX or not centerY then
+      return 0, 0
+    end
+    return MoverRound(centerX - parentCenterX), MoverRound(centerY - parentCenterY)
   end
 
-  local left = frame:GetLeft()
-  local top = frame:GetTop()
   if not left or not top then
     return 0, 0
   end
@@ -395,6 +419,14 @@ function FrameUtil.EnsureHeaderMover(owner, key, frameName, anchor, db, opts)
     return db
   end
 
+  local function GetMoverAnchorPoint(current)
+    if type(opts.getMoverAnchorPoint) == "function" then
+      return opts.getMoverAnchorPoint(owner, current)
+    end
+
+    return nil
+  end
+
   local mover = owner.mover
   if not mover then
     mover = CreateFrame("Frame", frameName, UIParent, "BackdropTemplate")
@@ -404,8 +436,9 @@ function FrameUtil.EnsureHeaderMover(owner, key, frameName, anchor, db, opts)
   local point = db.point or opts.defaultPoint or "CENTER"
   local relativeTo = _G[db.relativeTo or "UIParent"] or UIParent
   local relativePoint = db.relativePoint or opts.defaultRelativePoint or point
-  local anchorPoint = opts.anchorPoint or point
-  local anchorRelativePoint = opts.anchorRelativePoint or anchorPoint
+  local moverAnchorPoint = GetMoverAnchorPoint(db)
+  local anchorPoint = moverAnchorPoint or opts.anchorPoint or point
+  local anchorRelativePoint = moverAnchorPoint or opts.anchorRelativePoint or anchorPoint
 
   local width, height
   if type(opts.getSize) == "function" then
@@ -437,6 +470,25 @@ function FrameUtil.EnsureHeaderMover(owner, key, frameName, anchor, db, opts)
   Pixel.Size(mover, width or 0, height or 0)
   mover.__puiUseOverlayDrag = opts.useOverlayDrag ~= false
 
+  if moverAnchorPoint
+    and (
+      point ~= moverAnchorPoint
+      or relativeTo ~= UIParent
+      or relativePoint ~= moverAnchorPoint
+    )
+  then
+    local x, y = FrameUtil.GetPointOffsetsForFrame(mover, moverAnchorPoint)
+
+    db.point = moverAnchorPoint
+    db.relativeTo = "UIParent"
+    db.relativePoint = moverAnchorPoint
+    db.x = MoverRound(x or 0)
+    db.y = MoverRound(y or 0)
+
+    mover:ClearAllPoints()
+    Pixel.Point(mover, moverAnchorPoint, UIParent, moverAnchorPoint, db.x, db.y)
+  end
+
   local editing = ns.Flags.IsEditing == true
   FrameUtil.SetMoverFrameVisible(mover, editing)
 
@@ -445,21 +497,39 @@ function FrameUtil.EnsureHeaderMover(owner, key, frameName, anchor, db, opts)
 
   local function SavePosition(frame)
     local current = GetDB()
-    local x, y = FrameUtil.GetMoverOffsets(frame)
+    local currentMoverAnchorPoint = GetMoverAnchorPoint(current)
 
-    current.point = "CENTER"
-    current.relativeTo = "UIParent"
-    current.relativePoint = "CENTER"
-    current.x = MoverRound(x or 0)
-    current.y = MoverRound(y or 0)
+    if currentMoverAnchorPoint then
+      local x, y = FrameUtil.GetPointOffsetsForFrame(frame, currentMoverAnchorPoint)
+
+      current.point = currentMoverAnchorPoint
+      current.relativeTo = "UIParent"
+      current.relativePoint = currentMoverAnchorPoint
+      current.x = MoverRound(x or 0)
+      current.y = MoverRound(y or 0)
+
+      frame:ClearAllPoints()
+      Pixel.Point(frame, currentMoverAnchorPoint, UIParent, currentMoverAnchorPoint, current.x, current.y)
+    else
+      local x, y = FrameUtil.GetMoverOffsets(frame)
+
+      current.point = "CENTER"
+      current.relativeTo = "UIParent"
+      current.relativePoint = "CENTER"
+      current.x = MoverRound(x or 0)
+      current.y = MoverRound(y or 0)
+    end
 
     if InCombatLockdown() then
       return
     end
 
     if owner.anchor and owner.mover then
+      local currentAnchorPoint = currentMoverAnchorPoint or anchorPoint
+      local currentAnchorRelativePoint = currentMoverAnchorPoint or anchorRelativePoint
+
       owner.anchor:ClearAllPoints()
-      Pixel.Point(owner.anchor, anchorPoint, owner.mover, anchorRelativePoint, 0, 0)
+      Pixel.Point(owner.anchor, currentAnchorPoint, owner.mover, currentAnchorRelativePoint, 0, 0)
     end
   end
 
@@ -485,7 +555,8 @@ function FrameUtil.EnsureHeaderMover(owner, key, frameName, anchor, db, opts)
 end
 
 function FrameUtil.EnsureGhostMovers(owner, opts)
-  if InCombatLockdown() then
+  -- Ghosts are addon-owned; initial load must register them before SmartSnap restores its topology.
+  if InCombatLockdown() and FrameUtil._smartSnapWorldReady then
     return
   end
 
@@ -1067,13 +1138,32 @@ FrameUtil._smartSnapLoaded = FrameUtil._smartSnapLoaded or false
 FrameUtil._smartSnapApplying = FrameUtil._smartSnapApplying or false
 FrameUtil._pendingSmartSnapRelayouts = FrameUtil._pendingSmartSnapRelayouts or {}
 FrameUtil._pendingSmartSnapRuntimeRelayouts = FrameUtil._pendingSmartSnapRuntimeRelayouts or {}
+FrameUtil._startupLayoutParticipants = FrameUtil._startupLayoutParticipants or {}
+FrameUtil._startupLayoutParticipantOrder = FrameUtil._startupLayoutParticipantOrder or {}
 
 local SmartSnapLinks = FrameUtil._SmartSnapLinks
 local SmartSnapMasters = FrameUtil._SmartSnapMasters
 local PendingSmartSnapRelayouts = FrameUtil._pendingSmartSnapRelayouts
 local PendingSmartSnapRuntimeRelayouts = FrameUtil._pendingSmartSnapRuntimeRelayouts
+local StartupLayoutParticipants = FrameUtil._startupLayoutParticipants
+local StartupLayoutParticipantOrder = FrameUtil._startupLayoutParticipantOrder
 FrameUtil._smartSnapRuntimeRelayoutScheduled = false
 FrameUtil._smartSnapWorldReady = false
+
+function FrameUtil:RegisterStartupLayoutParticipant(key, prepare, complete)
+  if self._smartSnapWorldReady then
+    return
+  end
+
+  if not StartupLayoutParticipants[key] then
+    StartupLayoutParticipantOrder[#StartupLayoutParticipantOrder + 1] = key
+  end
+
+  StartupLayoutParticipants[key] = {
+    prepare = prepare,
+    complete = complete,
+  }
+end
 
 function FrameUtil.BeginProfileTransition()
   FrameUtil._profileTransitionActive = true
@@ -2348,8 +2438,7 @@ local function RelayoutSmartSnapCluster(startEntry, finalize, syncSize)
 
   EnsureSmartSnapLoaded()
 
-  -- The first world entry closes startup; before it, restore addon-owned mover geometry even on a combat reload.
-  if InCombatLockdown() and FrameUtil._smartSnapWorldReady then
+  if InCombatLockdown() then
     local shouldFinalize = finalize ~= false
     if shouldFinalize or PendingSmartSnapRelayouts[startEntry.key] == nil then
       PendingSmartSnapRelayouts[startEntry.key] = shouldFinalize
@@ -2429,8 +2518,12 @@ end
 local function FlushPendingSmartSnapRelayouts(allowStartup)
   FrameUtil._smartSnapRuntimeRelayoutScheduled = false
 
+  if InCombatLockdown() then
+    return
+  end
+
   local startup = allowStartup == true and not FrameUtil._smartSnapWorldReady
-  if (not startup and (InCombatLockdown() or not FrameUtil._smartSnapWorldReady))
+  if (not startup and not FrameUtil._smartSnapWorldReady)
     or (not next(PendingSmartSnapRelayouts) and not next(PendingSmartSnapRuntimeRelayouts))
   then
     return
@@ -2456,7 +2549,7 @@ local function FlushPendingSmartSnapRelayouts(allowStartup)
     if root and not roots[root.key] then
       roots[root.key] = {
         finalize = false,
-        syncSize = false,
+        syncSize = startup,
       }
     end
   end
@@ -2468,15 +2561,6 @@ local function FlushPendingSmartSnapRelayouts(allowStartup)
       RelayoutSmartSnapCluster(root, options.finalize, options.syncSize)
     end
   end
-end
-
-function FrameUtil.FinalizePendingSmartSnapRuntimeLayout()
-  local startup = not FrameUtil._smartSnapWorldReady
-  if InCombatLockdown() and not startup then
-    return
-  end
-
-  FlushPendingSmartSnapRelayouts(startup)
 end
 
 local function SchedulePendingSmartSnapRelayouts()
@@ -2491,6 +2575,41 @@ local function SchedulePendingSmartSnapRelayouts()
   _G.C_Timer.After(0, FlushPendingSmartSnapRelayouts)
 end
 
+function FrameUtil:CompleteStartupLayout()
+  if self._smartSnapWorldReady then
+    return true
+  end
+
+  if InCombatLockdown() then
+    return false
+  end
+
+  FlushPendingSmartSnapRelayouts(true)
+
+  for index = 1, #StartupLayoutParticipantOrder do
+    local participant = StartupLayoutParticipants[StartupLayoutParticipantOrder[index]]
+    if participant.prepare then
+      participant.prepare()
+    end
+  end
+
+  FlushPendingSmartSnapRelayouts(true)
+
+  for index = 1, #StartupLayoutParticipantOrder do
+    local participant = StartupLayoutParticipants[StartupLayoutParticipantOrder[index]]
+    if participant.complete then
+      participant.complete()
+    end
+  end
+
+  wipe(StartupLayoutParticipants)
+  wipe(StartupLayoutParticipantOrder)
+
+  self._smartSnapWorldReady = true
+  SchedulePendingSmartSnapRelayouts()
+  return true
+end
+
 local function QueueSmartSnapRuntimeRelayout(key)
   if FrameUtil._profileTransitionActive == true or not key then
     return
@@ -2499,8 +2618,6 @@ local function QueueSmartSnapRuntimeRelayout(key)
   PendingSmartSnapRuntimeRelayouts[key] = true
   if FrameUtil._smartSnapWorldReady then
     SchedulePendingSmartSnapRelayouts()
-  else
-    FrameUtil.FinalizePendingSmartSnapRuntimeLayout()
   end
 end
 
@@ -6281,16 +6398,9 @@ end
 
 do
   local f = CreateFrame("Frame")
-  f:RegisterEvent("PLAYER_ENTERING_WORLD")
   f:RegisterEvent("PLAYER_REGEN_DISABLED")
   f:RegisterEvent("PLAYER_REGEN_ENABLED")
   f:SetScript("OnEvent", function(_, event)
-    if event == "PLAYER_ENTERING_WORLD" then
-      FrameUtil._smartSnapWorldReady = true
-      SchedulePendingSmartSnapRelayouts()
-      return
-    end
-
     if event == "PLAYER_REGEN_DISABLED" then
       if ns.Flags.IsEditing then
         Addon:SetEditMode(false)
