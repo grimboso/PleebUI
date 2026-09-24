@@ -59,9 +59,12 @@ local CS_GetPlayerEquippedItemLevel
 local CS_CalculateUnitAverageItemLevel
 local UpdateItemSlotOverlay
 local CS_RefreshPlayerItemStatPresence
+local CS_EventDriver
 local CS_SLOT_INFO_CACHE = {}
-local CS_INSPECT_SLOT_QUEUE = {}
-local CS_InspectSlotQueuePending = false
+local CS_INSPECT_ITEM_REQUEST_GUIDS = {}
+local CS_INSPECT_PENDING_ITEM_IDS = {}
+local CS_InspectRefreshInProgress = false
+local CS_InspectItemDataRefreshGUID = nil
 local CS_SLOT_CACHE_VERSION = 0
 local CS_COLOR_CACHE_SOURCE = nil
 local CS_COLOR_CACHE = {}
@@ -80,6 +83,31 @@ local function CS_ClearSlotInfoCache()
   end
 
   CS_SLOT_CACHE_VERSION = CS_SLOT_CACHE_VERSION + 1
+end
+
+local function CS_ClearSlotInfoCacheForGUID(guid)
+  if not guid then
+    return
+  end
+
+  CS_SLOT_INFO_CACHE[guid] = nil
+  CS_SLOT_CACHE_VERSION = CS_SLOT_CACHE_VERSION + 1
+end
+
+local function CS_ResetInspectItemDataRequests()
+  for itemID in pairs(CS_INSPECT_ITEM_REQUEST_GUIDS) do
+    CS_INSPECT_ITEM_REQUEST_GUIDS[itemID] = nil
+  end
+
+  for itemID in pairs(CS_INSPECT_PENDING_ITEM_IDS) do
+    CS_INSPECT_PENDING_ITEM_IDS[itemID] = nil
+  end
+
+  CS_InspectItemDataRefreshGUID = nil
+
+  if CS_EventDriver then
+    CS_EventDriver:UnregisterEvent("ITEM_DATA_LOAD_RESULT")
+  end
 end
 
 local function CS_GetCachedSlotInfo(unit, slotId)
@@ -1228,19 +1256,23 @@ local function CS_HideInspectSlotOverlay(button)
   end
 end
 
-local function CS_ClearInspectSlotOverlays()
-  for i = 1, 19 do
-    local button = _G["Inspect" .. i .. "Slot"]
-    if button then
-      CS_HideInspectSlotOverlay(button)
+local function CS_ForEachInspectSlotButton(callback)
+  if not (InspectPaperDollItemsFrame and InspectPaperDollItemsFrame.GetChildren and callback) then
+    return
+  end
+
+  for _, button in ipairs({ InspectPaperDollItemsFrame:GetChildren() }) do
+    if button and button.GetID then
+      local slotId = button:GetID()
+      if slotId and slotId > 0 then
+        callback(button, slotId)
+      end
     end
   end
 end
 
-local function CS_SetInspectPending()
-  CharacterSheet._inspectReadyGUID = nil
-  CS_ClearInspectAverageItemLevelText()
-  CS_ClearInspectSlotOverlays()
+local function CS_ClearInspectSlotOverlays()
+  CS_ForEachInspectSlotButton(CS_HideInspectSlotOverlay)
 end
 
 local function CS_IsInspectReady(unit)
@@ -1248,7 +1280,29 @@ local function CS_IsInspectReady(unit)
   return guid and CharacterSheet._inspectReadyGUID and guid == CharacterSheet._inspectReadyGUID
 end
 
+local function CS_RefreshInspectSlotButtons(unit)
+  if not unit or not UnitExists(unit) then
+    CS_ClearInspectSlotOverlays()
+    return
+  end
+
+  local ready = CS_IsInspectReady(unit)
+  CS_ForEachInspectSlotButton(function(button)
+    SkinItemSlotButton(button)
+
+    if ready then
+      UpdateItemSlotOverlay(button, unit, false)
+    else
+      CS_HideInspectSlotOverlay(button)
+    end
+  end)
+end
+
 local function CS_RefreshInspectData(expectedGUID)
+  if CS_InspectRefreshInProgress then
+    return
+  end
+
   if not (InspectFrame and InspectFrame.IsShown and InspectFrame:IsShown()) then
     return
   end
@@ -1267,15 +1321,20 @@ local function CS_RefreshInspectData(expectedGUID)
     return
   end
 
-  for i = 1, 19 do
-    local button = _G["Inspect" .. i .. "Slot"]
-    if button then
-      SkinItemSlotButton(button)
-      UpdateItemSlotOverlay(button, unit, false)
-    end
-  end
-
+  CS_InspectRefreshInProgress = true
+  CS_RefreshInspectSlotButtons(unit)
   UpdateInspectAverageItemLevelText(guid)
+  CS_InspectRefreshInProgress = false
+
+  if CS_InspectItemDataRefreshGUID == guid and not next(CS_INSPECT_PENDING_ITEM_IDS) then
+    CS_InspectItemDataRefreshGUID = nil
+    CS_ClearSlotInfoCacheForGUID(guid)
+
+    CS_InspectRefreshInProgress = true
+    CS_RefreshInspectSlotButtons(unit)
+    UpdateInspectAverageItemLevelText(guid)
+    CS_InspectRefreshInProgress = false
+  end
 end
 
 -- Reputation frame entries
@@ -2093,19 +2152,7 @@ local function CS_SkinEquipmentManagerPane()
   CS_SkinButton(_G.PaperDollFrameEquipSet)
   CS_SkinButton(_G.PaperDollFrameSaveSet)
 
-  if not CharacterSheet._equipmentSetDialogHooked then
-    hooksecurefunc("StaticPopup_Show", function(which, _, _, data)
-      if which ~= "CONFIRM_SAVE_EQUIPMENT_SET" and which ~= "CONFIRM_OVERWRITE_EQUIPMENT_SET" then
-        return
-      end
 
-      local dialog = StaticPopup_FindVisible(which, data)
-      if dialog then
-        dialog:SetFrameStrata("FULLSCREEN_DIALOG")
-      end
-    end)
-    CharacterSheet._equipmentSetDialogHooked = true
-  end
 
   if _G.GearManagerPopupFrame then
     if not _G.GearManagerPopupFrame._puiCharHooked then
@@ -2384,7 +2431,23 @@ local function GetSlotItemLevel(unit, slotId)
 
   local itemID = tonumber(itemLink:match("item:(%d+)"))
   if itemID and not C_Item.IsItemDataCachedByID(itemID) then
-    C_Item.RequestLoadItemDataByID(itemID)
+    local inspectGUID
+    if InspectFrame and unit == InspectFrame.unit then
+      inspectGUID = UnitGUID(unit)
+    end
+
+    if inspectGUID then
+      if CS_INSPECT_ITEM_REQUEST_GUIDS[itemID] ~= inspectGUID then
+        CS_INSPECT_ITEM_REQUEST_GUIDS[itemID] = inspectGUID
+        CS_INSPECT_PENDING_ITEM_IDS[itemID] = inspectGUID
+        if CS_EventDriver then
+          CS_EventDriver:RegisterEvent("ITEM_DATA_LOAD_RESULT")
+        end
+        C_Item.RequestLoadItemDataByID(itemID)
+      end
+    else
+      C_Item.RequestLoadItemDataByID(itemID)
+    end
   end
 
   local detailed = GetDetailedItemLevelInfo(itemLink)
@@ -3069,50 +3132,6 @@ local function RefreshItemSlotOverlayTheme(button)
 end
 
 
-local function CS_QueueInspectSlotButton(button)
-  if not button or not button.GetID then
-    return
-  end
-
-  local slotId = button:GetID()
-  if not slotId then
-    return
-  end
-
-  if button._puiCharInspectSlotQueued == true then
-    CS_INSPECT_SLOT_QUEUE[slotId] = button
-    return
-  end
-
-  button._puiCharInspectSlotQueued = true
-  CS_INSPECT_SLOT_QUEUE[slotId] = button
-
-  if CS_InspectSlotQueuePending then
-    return
-  end
-
-  CS_InspectSlotQueuePending = true
-  C_Timer.After(0, function()
-    CS_InspectSlotQueuePending = false
-
-    local unit = InspectFrame and InspectFrame.unit
-    local ready = CS_IsInspectReady(unit)
-
-    for id, queuedButton in pairs(CS_INSPECT_SLOT_QUEUE) do
-      CS_INSPECT_SLOT_QUEUE[id] = nil
-      if queuedButton then
-        queuedButton._puiCharInspectSlotQueued = nil
-        SkinItemSlotButton(queuedButton)
-
-        if ready then
-          UpdateItemSlotOverlay(queuedButton, unit, false)
-        else
-          CS_HideInspectSlotOverlay(queuedButton)
-        end
-      end
-    end
-  end)
-end
 
 local function CS_RefreshPlayerSlots(force)
   if not force and not (CharacterFrame and CharacterFrame.IsShown and CharacterFrame:IsShown()) then
@@ -4101,53 +4120,38 @@ local function SetupInspectFrameSkinning()
   if not InspectFrame._puiPaperDollVisibilityHooked then
     if InspectPaperDollFrame then
       InspectPaperDollFrame:HookScript("OnShow", UpdateInspectPaperDollVisibility)
-    end
-    if InspectPVPFrame then
-      InspectPVPFrame:HookScript("OnShow", UpdateInspectPaperDollVisibility)
-    end
-    if InspectGuildFrame then
-      InspectGuildFrame:HookScript("OnShow", UpdateInspectPaperDollVisibility)
-    end
-
-    for i = 1, 3 do
-      local tab = _G["InspectFrameTab" .. i]
-      if tab then
-        tab:HookScript("OnClick", function()
-          C_Timer.After(0, UpdateInspectPaperDollVisibility)
-        end)
-      end
+      InspectPaperDollFrame:HookScript("OnHide", UpdateInspectPaperDollVisibility)
     end
 
     InspectFrame._puiPaperDollVisibilityHooked = true
   end
 
-  -- Hook inspect item slots
   if not CharacterSheet._inspectSlotHook then
-    hooksecurefunc("InspectPaperDollItemSlotButton_Update", function(button)
-      CS_QueueInspectSlotButton(button)
+    hooksecurefunc("InspectPaperDollFrame_UpdateButtons", function()
+      local unit = InspectFrame and InspectFrame.unit
+      if not unit then
+        return
+      end
+
+      local guid = UnitGUID(unit)
+      if guid and CS_IsInspectReady(unit) then
+        CS_RefreshInspectData(guid)
+      else
+        CS_RefreshInspectSlotButtons(unit)
+      end
     end)
     CharacterSheet._inspectSlotHook = true
   end
 
-  InspectFrame:HookScript("OnShow", function()
-    C_Timer.After(0.01, function()
-
-      EnsureInspectShellHost()
-      CS_SetInspectPending()
-
-      if InspectFrame and InspectFrame.unit and CanInspect(InspectFrame.unit) then
-        NotifyInspect(InspectFrame.unit)
-      end
-
-      for i = 1, 19 do
-        local b = _G["Inspect" .. i .. "Slot"]
-        if b then
-          SkinItemSlotButton(b)
-          CS_HideInspectSlotOverlay(b)
-        end
-      end
+  if not InspectFrame._puiCharacterSheetLifecycleHooked then
+    InspectFrame:HookScript("OnHide", function()
+      CharacterSheet._inspectReadyGUID = nil
+      CS_ResetInspectItemDataRequests()
+      CS_ClearInspectSlotOverlays()
+      CS_ClearInspectAverageItemLevelText()
     end)
-  end)
+    InspectFrame._puiCharacterSheetLifecycleHooked = true
+  end
 end
 
 function CharacterSheet:RefreshTheme()
@@ -4263,9 +4267,7 @@ function CharacterSheet:RefreshTheme()
       InspectFrame._puiAvgItemLevelText:SetTextColor(tr, tg, tb, ta)
     end
 
-    for i = 1, 19 do
-      RefreshItemSlotOverlayTheme(_G["Inspect" .. i .. "Slot"])
-    end
+    CS_ForEachInspectSlotButton(RefreshItemSlotOverlayTheme)
   end
 end
 
@@ -4274,6 +4276,7 @@ end
 do
   -- Standalone event driver; independent of Ace module state.
   local driver = CreateFrame("Frame")
+  CS_EventDriver = driver
   driver:RegisterEvent("PLAYER_LOGIN")
   driver:RegisterEvent("ADDON_LOADED")
   driver:RegisterEvent("PLAYER_EQUIPMENT_CHANGED")
@@ -4283,7 +4286,6 @@ do
   driver:RegisterEvent("PLAYER_REGEN_ENABLED")
   driver:RegisterUnitEvent("UNIT_MAXHEALTH", "player")
   driver:RegisterEvent("INSPECT_READY")
-  driver:RegisterEvent("UNIT_MODEL_CHANGED")
 
   driver:SetScript("OnEvent", function(self, event, arg1)
 
@@ -4342,25 +4344,35 @@ do
     end
 
     if event == "INSPECT_READY" then
-      CS_ClearSlotInfoCache()
+      CS_ResetInspectItemDataRequests()
+      CS_ClearSlotInfoCacheForGUID(arg1)
       CharacterSheet._inspectReadyGUID = arg1
-
-      C_Timer.After(0.05, function()
-        CS_RefreshInspectData(arg1)
-      end)
+      CS_RefreshInspectData(arg1)
       return
     end
 
-    if event == "UNIT_MODEL_CHANGED" and arg1 == "target" then
-      if InspectFrame and InspectFrame.IsShown and InspectFrame:IsShown() and InspectFrame.unit == "target" then
-        local guid = UnitGUID("target")
-        if guid and guid ~= CharacterSheet._inspectReadyGUID then
-          CS_SetInspectPending()
-          if CanInspect("target") then
-            NotifyInspect("target")
-          end
-        end
+    if event == "ITEM_DATA_LOAD_RESULT" then
+      local inspectGUID = CS_INSPECT_PENDING_ITEM_IDS[arg1]
+      if not inspectGUID then
+        return
       end
+
+      CS_INSPECT_PENDING_ITEM_IDS[arg1] = nil
+
+      if next(CS_INSPECT_PENDING_ITEM_IDS) then
+        return
+      end
+
+      self:UnregisterEvent("ITEM_DATA_LOAD_RESULT")
+
+      if CS_InspectRefreshInProgress then
+        CS_InspectItemDataRefreshGUID = inspectGUID
+        return
+      end
+
+      CS_InspectItemDataRefreshGUID = nil
+      CS_ClearSlotInfoCacheForGUID(inspectGUID)
+      CS_RefreshInspectData(inspectGUID)
       return
     end
   end)
@@ -4369,6 +4381,8 @@ end
 
 
   CS_ClearSlotInfoCache = P:Def("CS_ClearSlotInfoCache", CS_ClearSlotInfoCache)
+  CS_ClearSlotInfoCacheForGUID = P:Def("CS_ClearSlotInfoCacheForGUID", CS_ClearSlotInfoCacheForGUID)
+  CS_ResetInspectItemDataRequests = P:Def("CS_ResetInspectItemDataRequests", CS_ResetInspectItemDataRequests)
   CS_GetCachedSlotInfo = P:Def("CS_GetCachedSlotInfo", CS_GetCachedSlotInfo)
   CS_GetCachedInventoryTooltipData = P:Def("CS_GetCachedInventoryTooltipData", CS_GetCachedInventoryTooltipData)
   _CS_GetDB = P:Def("_CS_GetDB", _CS_GetDB)
@@ -4418,9 +4432,10 @@ end
   UpdateInspectAverageItemLevelText = P:Def("UpdateInspectAverageItemLevelText", UpdateInspectAverageItemLevelText)
   CS_ClearInspectAverageItemLevelText = P:Def("CS_ClearInspectAverageItemLevelText", CS_ClearInspectAverageItemLevelText)
   CS_HideInspectSlotOverlay = P:Def("CS_HideInspectSlotOverlay", CS_HideInspectSlotOverlay)
+  CS_ForEachInspectSlotButton = P:Def("CS_ForEachInspectSlotButton", CS_ForEachInspectSlotButton)
   CS_ClearInspectSlotOverlays = P:Def("CS_ClearInspectSlotOverlays", CS_ClearInspectSlotOverlays)
-  CS_SetInspectPending = P:Def("CS_SetInspectPending", CS_SetInspectPending)
   CS_IsInspectReady = P:Def("CS_IsInspectReady", CS_IsInspectReady)
+  CS_RefreshInspectSlotButtons = P:Def("CS_RefreshInspectSlotButtons", CS_RefreshInspectSlotButtons)
   CS_RefreshInspectData = P:Def("CS_RefreshInspectData", CS_RefreshInspectData)
   CS_SkinReputationBar = P:Def("CS_SkinReputationBar", CS_SkinReputationBar)
   SkinReputationEntry = P:Def("SkinReputationEntry", SkinReputationEntry)
@@ -4451,7 +4466,6 @@ end
   GetGemInfo = P:Def("GetGemInfo", GetGemInfo)
   CS_AddPermanentEnchantStatPresence = P:Def("CS_AddPermanentEnchantStatPresence", CS_AddPermanentEnchantStatPresence)
   UpdateItemSlotOverlay = P:Def("UpdateItemSlotOverlay", UpdateItemSlotOverlay)
-  CS_QueueInspectSlotButton = P:Def("CS_QueueInspectSlotButton", CS_QueueInspectSlotButton)
   CS_RefreshPlayerSlots = P:Def("CS_RefreshPlayerSlots", CS_RefreshPlayerSlots)
   CS_RefreshSlotDisplaySettings = P:Def("CS_RefreshSlotDisplaySettings", CS_RefreshSlotDisplaySettings)
   CS_SettingsButtonHandlesGlobalMouseEvent = P:Def("CS_SettingsButtonHandlesGlobalMouseEvent", CS_SettingsButtonHandlesGlobalMouseEvent)
