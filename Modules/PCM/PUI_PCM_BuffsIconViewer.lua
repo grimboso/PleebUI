@@ -561,7 +561,7 @@ local function _SkinAndParkBuffIcon(viewer, itemFrame)
   end
 
   _PrepareBuffIcon(itemFrame, desiredSize, fontDB, IconSkin)
-  Hooks.HookIconFrame(itemFrame, VIEWER_KEY)
+  Hooks.SetItemViewerKey(itemFrame, VIEWER_KEY)
 
   local fd = Hooks.GetFrameData(itemFrame)
   _ApplyManualHiddenState(itemFrame, fd)
