@@ -48,7 +48,7 @@ local function IsDataRestricted()
 end
 
 local function IsPresentationSuspended()
-  return state.worldTransitionActive == true or IsDataRestricted()
+  return state.worldTransitionActive == true
 end
 
 local LIFECYCLE_EVENTS = {
@@ -58,6 +58,7 @@ local LIFECYCLE_EVENTS = {
   "LOADING_SCREEN_DISABLED",
   "PLAYER_REGEN_DISABLED",
   "PLAYER_REGEN_ENABLED",
+  "PLAYER_TARGET_CHANGED",
   "ADDON_RESTRICTION_STATE_CHANGED",
   "PLAYER_SPECIALIZATION_CHANGED",
   "ACTIVE_PLAYER_SPECIALIZATION_CHANGED",
@@ -205,8 +206,8 @@ local function FlushRuntime(frame)
       Runtime:RefreshViewer(entry.key, scanReason)
     end
 
-    if entry.rebindQueued == true then
-      entry.rebindQueued = false
+    if entry.acquireQueued == true and not IsDataRestricted() then
+      entry.acquireQueued = false
 
       for index = 1, #entry.items do
         local itemFrame = entry.items[index]
@@ -215,9 +216,20 @@ local function FlushRuntime(frame)
           and entry.itemSet[itemFrame] == true
           and itemState
           and itemState.entry == entry
-          and itemState.rebindPending == true
+          and itemState.acquirePending == true
         then
-          itemState.rebindPending = nil
+          itemState.acquirePending = nil
+          Dispatch("OnItemAcquired", entry.key, entry.frame, itemFrame, "deferred-acquire")
+        end
+      end
+    end
+
+    if entry.rebindQueued == true and not IsDataRestricted() then
+      entry.rebindQueued = false
+
+      for index = 1, #entry.items do
+        local itemFrame = entry.items[index]
+        if itemFrame and entry.itemSet[itemFrame] == true then
           Dispatch("OnItemRebound", entry.key, entry.frame, itemFrame)
         end
       end
@@ -241,10 +253,13 @@ local function FlushRuntime(frame)
 
     entry.processing = false
     if entry.scanQueued == true
-      or entry.rebindQueued == true
       or (entry.dirtyMask or 0) ~= 0
     then
       QueueEntry(entry, IsPresentationSuspended())
+    elseif not IsDataRestricted()
+      and (entry.acquireQueued == true or entry.rebindQueued == true)
+    then
+      QueueEntry(entry)
     end
 
     if entry == stopEntry then
@@ -285,39 +300,6 @@ local function BindItemState(entry, itemFrame)
   end
 
   itemState.entry = entry
-  if itemState.rebindHooked then
-    return
-  end
-
-  itemState.rebindHooked = true
-  -- Blizzard calls OnCooldownIDSet only when an item is actually rebound
-  -- or explicitly force-set. Never inspect or compare the cooldown ID here.
-  Hooks.HookMethod(itemFrame, "OnCooldownIDSet", "PCMRuntime_ItemRebind", function(frame)
-    if not state.enabled then
-      return
-    end
-
-    local current = state.itemEntry[frame]
-    local currentEntry = current and current.entry or nil
-    if not currentEntry or currentEntry.itemSet[frame] ~= true then
-      return
-    end
-
-    local deferred = IsPresentationSuspended()
-    if deferred then
-      current.rebindPending = true
-      currentEntry.rebindQueued = true
-    else
-      current.rebindPending = nil
-      Dispatch("OnItemRebound", currentEntry.key, currentEntry.frame, frame)
-    end
-
-    if currentEntry.dynamicMembership == true then
-      MarkViewerDirty(currentEntry, Runtime.Dirty.CONTENT, "rebind")
-    elseif deferred then
-      QueueEntry(currentEntry, true)
-    end
-  end)
 end
 
 local function AcquireItem(entry, itemFrame, reason, suppressGeneration)
@@ -345,12 +327,12 @@ local function AcquireItem(entry, itemFrame, reason, suppressGeneration)
   BindItemState(entry, itemFrame)
 
   Dispatch("OnItemTracked", entry.key, entry.frame, itemFrame, reason or "acquire")
-  if IsPresentationSuspended() then
+  if IsDataRestricted() then
     local itemState = state.itemEntry[itemFrame]
     if itemState then
-      itemState.rebindPending = true
+      itemState.acquirePending = true
     end
-    entry.rebindQueued = true
+    entry.acquireQueued = true
   else
     Dispatch("OnItemAcquired", entry.key, entry.frame, itemFrame, reason or "acquire")
   end
@@ -371,7 +353,7 @@ local function ReleaseItem(entry, itemFrame, reason, suppressGeneration)
   local itemState = state.itemEntry[itemFrame]
   if itemState and itemState.entry == entry then
     itemState.entry = nil
-    itemState.rebindPending = nil
+    itemState.acquirePending = nil
   end
 
   Dispatch("OnItemReleased", entry.key, entry.frame, itemFrame, reason or "release")
@@ -484,30 +466,21 @@ local function HookViewer(entry)
       return
     end
 
+    entry.layoutGeneration = (entry.layoutGeneration or 0) + 1
+    entry.scanQueued = true
+    entry.scanReason = "viewer-acquire"
+    entry.rebindQueued = true
+    if entry.dynamicMembership == true then
+      MarkViewerDirty(entry, bit_bor(Runtime.Dirty.ITEMS, Runtime.Dirty.LAYOUT), "viewer-acquire")
+    else
+      MarkViewerDirty(entry, Runtime.Dirty.LAYOUT, "viewer-acquire")
+    end
+
     if IsPresentationSuspended() then
-      entry.scanQueued = true
-      entry.scanReason = "viewer-acquire"
-      QueueEntry(entry, true)
       return
     end
 
     AcquireItem(entry, itemFrame, "viewer-acquire")
-  end)
-
-  Hooks.HookViewerLayout(viewer, function(owner)
-    if not state.enabled or entry.frame ~= owner then
-      return
-    end
-
-    entry.layoutGeneration = (entry.layoutGeneration or 0) + 1
-    entry.scanQueued = true
-    entry.scanReason = "viewer-layout"
-    if entry.dynamicMembership == true then
-      MarkViewerDirty(entry, bit_bor(Runtime.Dirty.ITEMS, Runtime.Dirty.LAYOUT), "viewer-layout")
-    else
-      QueueEntry(entry)
-    end
-
   end)
 
   Hooks.HookScript(viewer, "OnShow", "PCMRuntime_ViewerShow", function(owner)
@@ -526,11 +499,6 @@ local function HookViewer(entry)
     MarkViewerDirty(entry, Runtime.Dirty.VISIBILITY, "viewer-hide")
   end)
 
-  Hooks.HookMethod(viewer, "OnPlayerTargetChanged", "PCMRuntime_ViewerTargetChanged", function(owner)
-    if state.enabled and entry.frame == owner then
-      Dispatch("OnViewerTargetChanged", entry.key, owner)
-    end
-  end)
 end
 
 function Runtime:RegisterViewer(key, resolver, dynamicMembership)
@@ -558,6 +526,7 @@ function Runtime:RegisterViewer(key, resolver, dynamicMembership)
       dirtyReason = nil,
       scanQueued = false,
       scanReason = nil,
+      acquireQueued = false,
       rebindQueued = false,
       workQueued = false,
       processing = false,
@@ -668,6 +637,7 @@ function Runtime:ClearDirty()
       entry.dirtyReason = nil
       entry.scanQueued = false
       entry.scanReason = nil
+      entry.acquireQueued = false
       entry.rebindQueued = false
     end
   end
@@ -771,12 +741,30 @@ local function OnRuntimeEvent(_, event, ...)
   if event == "LOADING_SCREEN_ENABLED" then
     state.worldTransitionActive = true
   elseif event == "LOADING_SCREEN_DISABLED" then
-    state.worldTransitionActive = IsDataRestricted()
+    state.worldTransitionActive = false
   elseif dataRestrictionsCleared and not IsDataRestricted() then
     state.worldTransitionActive = false
   end
 
   Dispatch("OnLifecycleEvent", event, ...)
+
+  if event == "PLAYER_TARGET_CHANGED" then
+    for index = 1, #state.viewerOrder do
+      local entry = state.viewers[state.viewerOrder[index]]
+      if entry and entry.frame then
+        Dispatch("OnViewerTargetChanged", entry.key, entry.frame)
+      end
+    end
+  end
+
+  if dataRestrictionsCleared and not IsDataRestricted() then
+    for index = 1, #state.viewerOrder do
+      local entry = state.viewers[state.viewerOrder[index]]
+      if entry and (entry.acquireQueued == true or entry.rebindQueued == true) then
+        QueueEntry(entry)
+      end
+    end
+  end
 
   if (event == "LOADING_SCREEN_DISABLED"
       or (dataRestrictionsCleared and not IsDataRestricted()))
@@ -819,6 +807,7 @@ function Runtime:Disable()
       entry.dirtyReason = nil
       entry.scanQueued = false
       entry.scanReason = nil
+      entry.acquireQueued = false
       entry.rebindQueued = false
       entry.frame = nil
     end
