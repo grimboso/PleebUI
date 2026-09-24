@@ -37,33 +37,24 @@ local state = {
   callbackRoutes = {},
   workHead = nil,
   workTail = nil,
-  presentationRestrictions = {},
-  bootstrapComplete = false,
+  worldTransitionActive = false,
 }
 state.flushFrame:Hide()
 
-local PRESENTATION_RESTRICTION_TYPES = {
-  [Enum.AddOnRestrictionType.Combat] = true,
-  [Enum.AddOnRestrictionType.Encounter] = true,
-  [Enum.AddOnRestrictionType.ChallengeMode] = true,
-  [Enum.AddOnRestrictionType.PvPMatch] = true,
-  [Enum.AddOnRestrictionType.Map] = true,
-}
-
-local function IsPresentationRestricted()
-  if state.bootstrapComplete ~= true then
-    return false
-  end
-
-  return next(state.presentationRestrictions) ~= nil
-    or InCombatLockdown()
+local function IsDataRestricted()
+  return InCombatLockdown()
     or C_Secrets.ShouldAurasBeSecret()
     or C_Secrets.ShouldCooldownsBeSecret()
+end
+
+local function IsPresentationSuspended()
+  return state.worldTransitionActive == true or IsDataRestricted()
 end
 
 local LIFECYCLE_EVENTS = {
   "ADDON_LOADED",
   "PLAYER_ENTERING_WORLD",
+  "LOADING_SCREEN_ENABLED",
   "LOADING_SCREEN_DISABLED",
   "PLAYER_REGEN_DISABLED",
   "PLAYER_REGEN_ENABLED",
@@ -128,8 +119,15 @@ local function GetEntry(viewerOrKey)
   end
 end
 
-local function QueueEntry(entry)
-  if not state.enabled or not entry or entry.workQueued == true or entry.processing == true then
+local function QueueEntry(entry, deferFlush)
+  if not state.enabled or not entry or entry.processing == true then
+    return
+  end
+
+  if entry.workQueued == true then
+    if deferFlush ~= true and not IsPresentationSuspended() then
+      state.flushFrame:Show()
+    end
     return
   end
 
@@ -143,7 +141,9 @@ local function QueueEntry(entry)
     state.workHead = entry
   end
   state.workTail = entry
-  state.flushFrame:Show()
+  if deferFlush ~= true and not IsPresentationSuspended() then
+    state.flushFrame:Show()
+  end
 end
 
 local function ClearWorkQueue()
@@ -181,7 +181,7 @@ local function FlushRuntime(frame)
     return
   end
 
-  if IsPresentationRestricted() then
+  if IsPresentationSuspended() then
     return
   end
 
@@ -198,7 +198,6 @@ local function FlushRuntime(frame)
     entry.nextWork = nil
     entry.workQueued = false
     entry.processing = true
-
     if entry.scanQueued == true then
       local scanReason = entry.scanReason or "queued-scan"
       entry.scanQueued = false
@@ -211,7 +210,14 @@ local function FlushRuntime(frame)
 
       for index = 1, #entry.items do
         local itemFrame = entry.items[index]
-        if itemFrame and entry.itemSet[itemFrame] == true then
+        local itemState = itemFrame and state.itemEntry[itemFrame] or nil
+        if itemFrame
+          and entry.itemSet[itemFrame] == true
+          and itemState
+          and itemState.entry == entry
+          and itemState.rebindPending == true
+        then
+          itemState.rebindPending = nil
           Dispatch("OnItemRebound", entry.key, entry.frame, itemFrame)
         end
       end
@@ -234,8 +240,11 @@ local function FlushRuntime(frame)
     end
 
     entry.processing = false
-    if entry.scanQueued == true or (entry.dirtyMask or 0) ~= 0 then
-      QueueEntry(entry)
+    if entry.scanQueued == true
+      or entry.rebindQueued == true
+      or (entry.dirtyMask or 0) ~= 0
+    then
+      QueueEntry(entry, IsPresentationSuspended())
     end
 
     if entry == stopEntry then
@@ -244,7 +253,7 @@ local function FlushRuntime(frame)
     entry = nextEntry
   end
 
-  if state.workHead then
+  if state.workHead and not IsPresentationSuspended() then
     frame:Show()
   end
 end
@@ -276,6 +285,39 @@ local function BindItemState(entry, itemFrame)
   end
 
   itemState.entry = entry
+  if itemState.rebindHooked then
+    return
+  end
+
+  itemState.rebindHooked = true
+  -- Blizzard calls OnCooldownIDSet only when an item is actually rebound
+  -- or explicitly force-set. Never inspect or compare the cooldown ID here.
+  Hooks.HookMethod(itemFrame, "OnCooldownIDSet", "PCMRuntime_ItemRebind", function(frame)
+    if not state.enabled then
+      return
+    end
+
+    local current = state.itemEntry[frame]
+    local currentEntry = current and current.entry or nil
+    if not currentEntry or currentEntry.itemSet[frame] ~= true then
+      return
+    end
+
+    local deferred = IsPresentationSuspended()
+    if deferred then
+      current.rebindPending = true
+      currentEntry.rebindQueued = true
+    else
+      current.rebindPending = nil
+      Dispatch("OnItemRebound", currentEntry.key, currentEntry.frame, frame)
+    end
+
+    if currentEntry.dynamicMembership == true then
+      MarkViewerDirty(currentEntry, Runtime.Dirty.CONTENT, "rebind")
+    elseif deferred then
+      QueueEntry(currentEntry, true)
+    end
+  end)
 end
 
 local function AcquireItem(entry, itemFrame, reason, suppressGeneration)
@@ -302,7 +344,16 @@ local function AcquireItem(entry, itemFrame, reason, suppressGeneration)
   entry.itemIndex[itemFrame] = itemIndex
   BindItemState(entry, itemFrame)
 
-  Dispatch("OnItemAcquired", entry.key, entry.frame, itemFrame, reason or "acquire")
+  Dispatch("OnItemTracked", entry.key, entry.frame, itemFrame, reason or "acquire")
+  if IsPresentationSuspended() then
+    local itemState = state.itemEntry[itemFrame]
+    if itemState then
+      itemState.rebindPending = true
+    end
+    entry.rebindQueued = true
+  else
+    Dispatch("OnItemAcquired", entry.key, entry.frame, itemFrame, reason or "acquire")
+  end
   if suppressGeneration ~= true then
     MarkItemMembershipChanged(entry, reason or "acquire")
   end
@@ -320,6 +371,7 @@ local function ReleaseItem(entry, itemFrame, reason, suppressGeneration)
   local itemState = state.itemEntry[itemFrame]
   if itemState and itemState.entry == entry then
     itemState.entry = nil
+    itemState.rebindPending = nil
   end
 
   Dispatch("OnItemReleased", entry.key, entry.frame, itemFrame, reason or "release")
@@ -335,10 +387,10 @@ local function ScanViewer(entry, reason)
     return false
   end
 
-  if IsPresentationRestricted() then
+  if IsPresentationSuspended() then
     entry.scanQueued = true
-    entry.scanReason = reason or entry.scanReason or "restricted-scan"
-    QueueEntry(entry)
+    entry.scanReason = reason or entry.scanReason or "transition-scan"
+    QueueEntry(entry, true)
     return false
   end
 
@@ -427,6 +479,21 @@ local function HookViewer(entry)
   end
   entry.hookedViewers[viewer] = true
 
+  Hooks.HookMethod(viewer, "OnAcquireItemFrame", "PCMRuntime_ViewerAcquireItem", function(owner, itemFrame)
+    if not state.enabled or entry.frame ~= owner then
+      return
+    end
+
+    if IsPresentationSuspended() then
+      entry.scanQueued = true
+      entry.scanReason = "viewer-acquire"
+      QueueEntry(entry, true)
+      return
+    end
+
+    AcquireItem(entry, itemFrame, "viewer-acquire")
+  end)
+
   Hooks.HookViewerLayout(viewer, function(owner)
     if not state.enabled or entry.frame ~= owner then
       return
@@ -435,16 +502,12 @@ local function HookViewer(entry)
     entry.layoutGeneration = (entry.layoutGeneration or 0) + 1
     entry.scanQueued = true
     entry.scanReason = "viewer-layout"
-    MarkViewerDirty(entry, Runtime.Dirty.LAYOUT, "viewer-layout")
-  end)
-
-  Hooks.HookMethod(viewer, "RefreshData", "PCMRuntime_ViewerRefreshData", function(owner)
-    if not state.enabled or entry.frame ~= owner then
-      return
+    if entry.dynamicMembership == true then
+      MarkViewerDirty(entry, bit_bor(Runtime.Dirty.ITEMS, Runtime.Dirty.LAYOUT), "viewer-layout")
+    else
+      QueueEntry(entry)
     end
 
-    entry.rebindQueued = true
-    MarkViewerDirty(entry, Runtime.Dirty.CONTENT, "viewer-refresh-data")
   end)
 
   Hooks.HookScript(viewer, "OnShow", "PCMRuntime_ViewerShow", function(owner)
@@ -470,7 +533,7 @@ local function HookViewer(entry)
   end)
 end
 
-function Runtime:RegisterViewer(key, resolver)
+function Runtime:RegisterViewer(key, resolver, dynamicMembership)
   if type(key) ~= "string" or key == "" or type(resolver) ~= "function" then
     return
   end
@@ -480,6 +543,7 @@ function Runtime:RegisterViewer(key, resolver)
     entry = {
       key = key,
       resolver = resolver,
+      dynamicMembership = dynamicMembership == true,
       frame = nil,
       hookedViewers = setmetatable({}, { __mode = "k" }),
       items = {},
@@ -503,6 +567,7 @@ function Runtime:RegisterViewer(key, resolver)
     state.viewerOrder[#state.viewerOrder + 1] = key
   else
     entry.resolver = resolver
+    entry.dynamicMembership = dynamicMembership == true
   end
 
   if state.enabled then
@@ -614,7 +679,7 @@ function Runtime:BindViewer(key, reason)
     return nil, false
   end
 
-  if IsPresentationRestricted() then
+  if IsPresentationSuspended() then
     return entry.frame, false
   end
 
@@ -698,34 +763,24 @@ local function OnRuntimeEvent(_, event, ...)
     end
   end
 
-  if event == "ADDON_RESTRICTION_STATE_CHANGED"
-    and PRESENTATION_RESTRICTION_TYPES[arg1] == true
-  then
-    if arg2 == Enum.AddOnRestrictionState.Inactive then
-      state.presentationRestrictions[arg1] = nil
-    else
-      state.presentationRestrictions[arg1] = true
-    end
-  end
+  local dataRestrictionsCleared = event == "PLAYER_ENTERING_WORLD"
+    or event == "PLAYER_REGEN_ENABLED"
+    or (event == "ADDON_RESTRICTION_STATE_CHANGED"
+      and arg2 == Enum.AddOnRestrictionState.Inactive)
 
-  -- Close startup before subscribers run so PLAYER_ENTERING_WORLD is normal restricted runtime.
-  if event == "PLAYER_ENTERING_WORLD" and state.bootstrapComplete ~= true then
-    state.bootstrapComplete = true
+  if event == "LOADING_SCREEN_ENABLED" then
+    state.worldTransitionActive = true
+  elseif event == "LOADING_SCREEN_DISABLED" then
+    state.worldTransitionActive = IsDataRestricted()
+  elseif dataRestrictionsCleared and not IsDataRestricted() then
+    state.worldTransitionActive = false
   end
 
   Dispatch("OnLifecycleEvent", event, ...)
 
-  if state.bootstrapComplete ~= true
-    and (event == "ADDON_LOADED" or event == "COOLDOWN_VIEWER_DATA_LOADED")
-  then
-    Runtime:Flush()
-  end
-
-  if (event == "PLAYER_ENTERING_WORLD"
-      or event == "PLAYER_REGEN_ENABLED"
-      or (event == "ADDON_RESTRICTION_STATE_CHANGED"
-        and arg2 == Enum.AddOnRestrictionState.Inactive))
-    and not IsPresentationRestricted()
+  if (event == "LOADING_SCREEN_DISABLED"
+      or (dataRestrictionsCleared and not IsDataRestricted()))
+    and not IsPresentationSuspended()
     and state.workHead
   then
     state.flushFrame:Show()
@@ -738,7 +793,7 @@ function Runtime:Enable()
   end
 
   state.enabled = true
-  state.bootstrapComplete = ns.FrameUtil._smartSnapWorldReady == true
+  state.worldTransitionActive = false
 
   for index = 1, #LIFECYCLE_EVENTS do
     state.eventFrame:RegisterEvent(LIFECYCLE_EVENTS[index])
@@ -751,10 +806,10 @@ function Runtime:Disable()
   end
 
   state.enabled = false
+  state.worldTransitionActive = false
   state.eventFrame:UnregisterAllEvents()
   state.flushFrame:Hide()
   ClearWorkQueue()
-  wipe(state.presentationRestrictions)
 
   for index = 1, #state.viewerOrder do
     local entry = state.viewers[state.viewerOrder[index]]
@@ -783,14 +838,18 @@ end)
 
 Runtime:RegisterViewer("BuffIconCooldownViewer", function()
   return _G.BuffIconCooldownViewer
-end)
+end, true)
 
 Runtime:RegisterViewer("BuffBarCooldownViewer", function()
   return _G.BuffBarCooldownViewer
-end)
+end, true)
 
-function Runtime:IsPresentationRestricted()
-  return IsPresentationRestricted()
+function Runtime:IsDataRestricted()
+  return IsDataRestricted()
+end
+
+function Runtime:IsPresentationSuspended()
+  return IsPresentationSuspended()
 end
 
 Dispatch = P:Def("Runtime.Dispatch", Dispatch)
@@ -818,7 +877,8 @@ Runtime.BindViewer = P:Def("Runtime:BindViewer", Runtime.BindViewer)
 Runtime.RefreshViewer = P:Def("Runtime:RefreshViewer", Runtime.RefreshViewer)
 Runtime.RefreshAllViewers = P:Def("Runtime:RefreshAllViewers", Runtime.RefreshAllViewers)
 Runtime.QueueAllViewerScans = P:Def("Runtime:QueueAllViewerScans", Runtime.QueueAllViewerScans)
-Runtime.IsPresentationRestricted = P:Def("Runtime:IsPresentationRestricted", Runtime.IsPresentationRestricted)
+Runtime.IsDataRestricted = P:Def("Runtime:IsDataRestricted", Runtime.IsDataRestricted)
+Runtime.IsPresentationSuspended = P:Def("Runtime:IsPresentationSuspended", Runtime.IsPresentationSuspended)
 Runtime.Enable = P:Def("Runtime:Enable", Runtime.Enable)
 Runtime.Disable = P:Def("Runtime:Disable", Runtime.Disable)
 
