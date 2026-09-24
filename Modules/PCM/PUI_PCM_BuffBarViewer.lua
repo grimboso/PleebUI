@@ -28,6 +28,7 @@ local PCMRuntime = ns.PCMRuntime
 local Round     = ns.Pixel.Round
 local math_abs          = math.abs
 local math_max          = math.max
+local IsSecret          = issecretvalue
 local UnitClass         = UnitClass
 local RAID_CLASS_COLORS = RAID_CLASS_COLORS
 
@@ -94,6 +95,16 @@ local function _GetBuffBarGrowthPoints(bb, vertical)
   return growthDirection, growUp and "BOTTOM" or "TOP", growUp and "TOP" or "BOTTOM"
 end
 
+local function _GetBuffBarHolderAnchorPoint(bb, vertical)
+  local growthDirection = bb and bb.growthDirection or (vertical and "RIGHT" or "DOWN")
+
+  if vertical then
+    return growthDirection == "LEFT" and "TOPRIGHT" or "TOPLEFT"
+  end
+
+  return growthDirection == "UP" and "BOTTOMLEFT" or "TOPLEFT"
+end
+
 
 local function _BuffBarUsesReverseFill(bb)
   if bb and bb.orientation == "VERTICAL" then
@@ -145,6 +156,8 @@ end
 
 local __PUI_PCM_BuffBarRows = {}
 local __PUI_PCM_BuffBarRowState = setmetatable({}, { __mode = "k" })
+local __PUI_PCM_BuffBarRowID = setmetatable({}, { __mode = "k" })
+local __PUI_PCM_BuffBarRowIDSeed = 0
 local _buffBarRowsDirty = true
 local _buffBarRowsViewer = nil
 local _RequestBuffBarRefresh
@@ -156,8 +169,48 @@ local function _MarkBuffBarRowsDirty(viewer)
   end
 end
 
+local function _GetBuffBarRowID(row)
+  local id = __PUI_PCM_BuffBarRowID[row]
+  if id then
+    return id
+  end
+
+  __PUI_PCM_BuffBarRowIDSeed = __PUI_PCM_BuffBarRowIDSeed + 1
+  id = __PUI_PCM_BuffBarRowIDSeed
+  __PUI_PCM_BuffBarRowID[row] = id
+  return id
+end
+
+local function _GetBuffBarLayoutIndex(row)
+  local layoutIndex = row and row.layoutIndex
+  if IsSecret(layoutIndex) then
+    return nil
+  end
+
+  if type(layoutIndex) == "string" then
+    layoutIndex = tonumber(layoutIndex)
+  end
+
+  if type(layoutIndex) == "number" and layoutIndex > 0 then
+    return layoutIndex
+  end
+
+  return nil
+end
+
 local function _SortBuffBarRows(a, b)
-  return a.layoutIndex < b.layoutIndex
+  local aIndex = _GetBuffBarLayoutIndex(a)
+  local bIndex = _GetBuffBarLayoutIndex(b)
+
+  if aIndex and bIndex and aIndex ~= bIndex then
+    return aIndex < bIndex
+  elseif aIndex then
+    return true
+  elseif bIndex then
+    return false
+  end
+
+  return _GetBuffBarRowID(a) < _GetBuffBarRowID(b)
 end
 
 local function _GetBuffBarRows(viewer)
@@ -204,8 +257,14 @@ local function _GetRowState(rowFrame)
 end
 
 local function _DimensionsDiffer(frame, width, height)
-  return math_abs(frame:GetWidth() - width) > 0.01
-    or math_abs(frame:GetHeight() - height) > 0.01
+  local currentWidth = frame:GetWidth()
+  local currentHeight = frame:GetHeight()
+  if IsSecret(currentWidth) or IsSecret(currentHeight) then
+    return true
+  end
+
+  return math_abs(currentWidth - width) > 0.01
+    or math_abs(currentHeight - height) > 0.01
 end
 
 
@@ -416,6 +475,14 @@ local function _Refresh()
   if not _PCM_BuffBarsEnabled() then
     return
   end
+  if PCMRuntime:IsPresentationSuspended() then
+    PCMRuntime:MarkViewerDirty(
+      "BuffBarCooldownViewer",
+      PCMRuntime.Dirty.ALL,
+      "buff-bars-deferred"
+    )
+    return
+  end
 
   local viewer = PCMRuntime:GetViewer("BuffBarCooldownViewer")
   if not viewer or viewer:IsForbidden() then
@@ -424,8 +491,14 @@ local function _Refresh()
   end
 
   local holder = _GetBuffBarHolder()
-  holder:SetFrameStrata(viewer:GetFrameStrata())
-  holder:SetFrameLevel(viewer:GetFrameLevel() + 1)
+  local viewerStrata = viewer:GetFrameStrata()
+  if not IsSecret(viewerStrata) then
+    holder:SetFrameStrata(viewerStrata)
+  end
+  local viewerLevel = viewer:GetFrameLevel()
+  if not IsSecret(viewerLevel) then
+    holder:SetFrameLevel(viewerLevel + 1)
+  end
 
   if PCMHooks.InBlizzardEditMode() then
     return
@@ -477,7 +550,14 @@ local function _Refresh()
         local expectedX = prev and stepX or 0
         local expectedY = prev and stepY or 0
         local point, relativeTo, relativePoint, x, y = row:GetPoint(1)
-        local anchorChanged = row:GetNumPoints() ~= 1
+        local numPoints = row:GetNumPoints()
+        local anchorChanged = IsSecret(point)
+          or IsSecret(relativeTo)
+          or IsSecret(relativePoint)
+          or IsSecret(x)
+          or IsSecret(y)
+          or IsSecret(numPoints)
+          or numPoints ~= 1
           or point ~= rowPoint
           or relativeTo ~= expectedRelative
           or relativePoint ~= expectedRelativePoint
@@ -520,6 +600,9 @@ local function _Refresh()
   end
 
   local totalSlots = viewer.itemFramePool:GetNumActive()
+  if IsSecret(totalSlots) then
+    totalSlots = #rows
+  end
   local holderWidth = totalSlots > 0 and rowWidth or 1
   local holderHeight = totalSlots > 0 and rowHeight or 1
 
@@ -538,7 +621,7 @@ local function _Refresh()
     FrameUtil.RefreshSmartSnapRuntimeLayout("BuffBarCooldownViewer")
   end
 
-  _ApplySavedViewerPos()
+  _ApplySavedViewerPos(true)
 end
 
 function BuffBars:RefreshSettings()
@@ -548,7 +631,7 @@ function BuffBars:RefreshSettings()
   _Refresh()
 end
 
-function _ApplySavedViewerPos()
+function _ApplySavedViewerPos(normalizeGrowthAnchor)
   local holder = _GetBuffBarHolder()
   local _, bb = _GetBuffBarStyle()
   local pos = bb and bb.pos
@@ -561,8 +644,31 @@ function _ApplySavedViewerPos()
   local relPoint = pos.relPoint or point
   local x = Round(tonumber(pos.x or 0) or 0)
   local y = Round(tonumber(pos.y or 0) or 0)
-
   local rel = _G[relName] or UIParent
+
+  if normalizeGrowthAnchor == true then
+    local vertical = bb and bb.orientation == "VERTICAL"
+    local growthAnchorPoint = _GetBuffBarHolderAnchorPoint(bb, vertical)
+
+    if point ~= growthAnchorPoint then
+      holder:ClearAllPoints()
+      holder:SetPoint(point, rel, relPoint, x, y)
+
+      x, y = FrameUtil.GetPointOffsetsForFrame(holder, growthAnchorPoint)
+      x = Round(x or 0)
+      y = Round(y or 0)
+      point = growthAnchorPoint
+      relName = "UIParent"
+      rel = UIParent
+      relPoint = growthAnchorPoint
+
+      pos.point = point
+      pos.rel = relName
+      pos.relPoint = relPoint
+      pos.x = x
+      pos.y = y
+    end
+  end
 
   if holder.__puiBuffBarPoint == point
     and holder.__puiBuffBarRelFrame == rel
@@ -612,30 +718,24 @@ end
 
 local function _SaveViewerPos()
   local holder = _GetBuffBarHolder()
-  local point, relTo, relPoint, x, y = holder:GetPoint(1)
-  if not point then
-    return
-  end
-
-  local relName = "UIParent"
-  if relTo and relTo.GetName then
-    local n = relTo:GetName()
-    if n and n ~= "" then
-      relName = n
-    end
-  end
-
   local _, bb = _GetBuffBarStyle()
   if not bb then
     return
   end
 
+  local vertical = bb.orientation == "VERTICAL"
+  local point = _GetBuffBarHolderAnchorPoint(bb, vertical)
+  local x, y = FrameUtil.GetPointOffsetsForFrame(holder, point)
+
   bb.pos = bb.pos or {}
   bb.pos.point = point
-  bb.pos.rel = relName
-  bb.pos.relPoint = relPoint or point
-  bb.pos.x = tonumber(x or 0) or 0
-  bb.pos.y = tonumber(y or 0) or 0
+  bb.pos.rel = "UIParent"
+  bb.pos.relPoint = point
+  bb.pos.x = Round(x or 0)
+  bb.pos.y = Round(y or 0)
+
+  holder.__puiBuffBarPoint = nil
+  _ApplySavedViewerPos()
 end
 
 local function _RegisterMover()
@@ -860,7 +960,7 @@ _RequestBuffBarRefresh = function(mode)
 end
 
 _Init = function()
-  if not _PCM_BuffBarsEnabled() or PCMRuntime:IsPresentationRestricted() then
+  if not _PCM_BuffBarsEnabled() then
     return
   end
 
@@ -970,19 +1070,24 @@ function BuffBars:OnDisable()
   end
 end
 
+local function _RefreshReboundBuffBar(viewer, rowFrame)
+  _MarkBuffBarRowsDirty(viewer)
+
+  local state = _GetRowState(rowFrame)
+  state.styledRev = nil
+  state.sizingRev = nil
+  state.layoutRev = nil
+
+  _StyleRow(rowFrame)
+end
+
 PCMRuntime:RegisterSubscriber("BuffBars", {
-  OnItemAcquired = function(key, viewer, rowFrame)
+  OnItemTracked = function(key, viewer, rowFrame)
     if key ~= "BuffBarCooldownViewer" then
       return
     end
 
-    _MarkBuffBarRowsDirty(viewer)
-    local state = _GetRowState(rowFrame)
-    state.styledRev = nil
-    state.sizingRev = nil
-    state.layoutRev = nil
-
-    _StyleRow(rowFrame)
+    _RefreshReboundBuffBar(viewer, rowFrame)
   end,
 
   OnItemReleased = function(key, viewer, rowFrame)
@@ -991,6 +1096,12 @@ PCMRuntime:RegisterSubscriber("BuffBars", {
     end
 
     _MarkBuffBarRowsDirty(viewer)
+  end,
+
+  OnItemRebound = function(key, viewer, rowFrame)
+    if key == "BuffBarCooldownViewer" and _PCM_BuffBarsEnabled() then
+      _RefreshReboundBuffBar(viewer, rowFrame)
+    end
   end,
 
   OnViewerChanged = function(key, viewer)
@@ -1027,14 +1138,18 @@ PCMRuntime:RegisterSubscriber("BuffBars", {
   _GetBuffBarStyle = P:Def('_GetBuffBarStyle', _GetBuffBarStyle)
   BuffBars.GetLayoutGeometry = P:Def('BuffBars.GetLayoutGeometry', BuffBars.GetLayoutGeometry)
   _GetBuffBarGrowthPoints = P:Def('_GetBuffBarGrowthPoints', _GetBuffBarGrowthPoints)
+  _GetBuffBarHolderAnchorPoint = P:Def('_GetBuffBarHolderAnchorPoint', _GetBuffBarHolderAnchorPoint)
   _BuffBarUsesReverseFill = P:Def('_BuffBarUsesReverseFill', _BuffBarUsesReverseFill)
   _GetBuffBarHolder = P:Def('_GetBuffBarHolder', _GetBuffBarHolder)
   _GetBuffBarColor = P:Def('_GetBuffBarColor', _GetBuffBarColor)
   _GetBuffBarBackgroundColor = P:Def('_GetBuffBarBackgroundColor', _GetBuffBarBackgroundColor)
   _MarkBuffBarRowsDirty = P:Def('_MarkBuffBarRowsDirty', _MarkBuffBarRowsDirty)
+  _GetBuffBarRowID = P:Def('_GetBuffBarRowID', _GetBuffBarRowID)
+  _GetBuffBarLayoutIndex = P:Def('_GetBuffBarLayoutIndex', _GetBuffBarLayoutIndex)
   _SortBuffBarRows = P:Def('_SortBuffBarRows', _SortBuffBarRows)
   _GetBuffBarRows = P:Def('_GetBuffBarRows', _GetBuffBarRows)
   _GetRowState = P:Def('_GetRowState', _GetRowState)
+  _RefreshReboundBuffBar = P:Def('_RefreshReboundBuffBar', _RefreshReboundBuffBar)
   _DimensionsDiffer = P:Def('_DimensionsDiffer', _DimensionsDiffer)
   _ApplyBorder = P:Def('_ApplyBorder', _ApplyBorder)
   _StyleRow_StripChrome = P:Def('_StyleRow_StripChrome', _StyleRow_StripChrome)
