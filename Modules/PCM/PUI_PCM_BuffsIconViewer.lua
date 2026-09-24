@@ -581,9 +581,6 @@ local function _SkinAndParkBuffIcon(viewer, itemFrame)
     itemFrame:ClearAllPoints()
     itemFrame:SetPoint("CENTER", holder, "CENTER", 0, 0)
   end
-  if itemFrame.SetScale then
-    itemFrame:SetScale(1)
-  end
   if itemFrame.SetSize then
     itemFrame:SetSize(desiredSize, desiredSize)
   end
@@ -826,9 +823,6 @@ local function _PositionCenteredBuffIcon(icon, holder, desiredSize, x, y)
 
   if needsSize or needsPoint or needsAlpha then
     fd.locking = true
-    if icon.SetScale then
-      icon:SetScale(1)
-    end
     if needsSize and icon.SetSize then
       icon:SetSize(desiredSize, desiredSize)
     end
