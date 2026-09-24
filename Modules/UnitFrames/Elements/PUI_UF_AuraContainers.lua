@@ -14,6 +14,7 @@ local InCombatLockdown = _G.InCombatLockdown
 local UnitExists = _G.UnitExists
 local UnitIsConnected = _G.UnitIsConnected
 local UnitIsVisible = _G.UnitIsVisible
+local UnitPhaseReason = _G.UnitPhaseReason
 local issecretvalue = _G.issecretvalue
 local ipairs = _G.ipairs
 local pairs = _G.pairs
@@ -719,6 +720,11 @@ local function IsGroupAuraUnitAvailable(frame)
 
   local connected = UnitIsConnected(unit)
   if issecretvalue(connected) or connected ~= true then
+    return false
+  end
+
+  local phaseReason = UnitPhaseReason(unit)
+  if issecretvalue(phaseReason) or phaseReason ~= nil then
     return false
   end
 
