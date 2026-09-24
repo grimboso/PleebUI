@@ -970,9 +970,11 @@ function MinimapData.InitializePUIBucket()
   PUIBucket:SetFrameLevel(1)
   PUIBucket:SetPoint("BOTTOMRIGHT", Minimap, "BOTTOMRIGHT", -2, 2)
 
-  -- Handle (always visible)
+  -- Handle overlaps the minimap and must render directly above it.
   local handle = CreateFrame("Frame", nil, PUIBucket, "BackdropTemplate")
   PUIBucket.__puiHandle = handle
+  handle:SetFrameStrata(Minimap:GetFrameStrata())
+  handle:SetFrameLevel(Minimap:GetFrameLevel() + 1)
   handle:SetPoint("TOPRIGHT", PUIBucket, "TOPRIGHT", 0, 0)
   handle:SetSize(HANDLE_SIZE, HANDLE_SIZE)
   handle:SetBackdrop({
