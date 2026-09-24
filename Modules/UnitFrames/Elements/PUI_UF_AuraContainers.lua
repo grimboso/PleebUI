@@ -739,10 +739,11 @@ local function ReconcileDisplayState(frame)
   for _, record in pairs(frame.__puiCustomAuraDisplays or {}) do
     for _, runtime in pairs(record.runtimes) do
       local highlightActive = runtime.auraHighlight and AuraHighlight.IsEnabled(frame)
-      local active = runtime == record.activeRuntime
+      local active = unitAvailable
+        and runtime == record.activeRuntime
         and (runtime.configuredEnabled == true or highlightActive)
       SetRuntimeEnabled(runtime, elementActive and active)
-      SetRuntimeShown(runtime, elementActive and active and unitAvailable)
+      SetRuntimeShown(runtime, elementActive and active)
     end
   end
 end
@@ -989,20 +990,9 @@ function AuraContainers.RefreshAvailability(frame, event)
     return
   end
 
-  local unitAvailable = IsGroupAuraUnitAvailable(frame)
-  if frame.__puiAuraUnitAvailable == unitAvailable then
-    if event ~= nil and unitAvailable then
-      RefreshNativeAuraContainers(frame)
-    end
-    return
-  end
-
-  frame.__puiAuraUnitAvailable = unitAvailable
-
-  for _, record in pairs(frame.__puiCustomAuraDisplays or {}) do
-    for _, runtime in pairs(record.runtimes) do
-      SetRuntimeShown(runtime, runtime.enabled == true and unitAvailable)
-    end
+  ReconcileDisplayState(frame)
+  if event ~= nil and frame.__puiAuraUnitAvailable then
+    RefreshNativeAuraContainers(frame)
   end
 end
 
