@@ -25,4 +25,7 @@ Modules\PRD\PRD.xml
 Modules\UnitFrames\UnitFrames.xml
 Modules\ActionBars\ActionBars.xml
 
+# Startup barrier
+Core\PUI_Startup.lua
+
 
