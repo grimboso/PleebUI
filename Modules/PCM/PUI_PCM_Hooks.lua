@@ -61,7 +61,8 @@ function Hooks.SetItemViewerKey(itemFrame, viewerKey)
 end
 
 local _PCM_HooksEnabled
-local _PCM_HooksShouldRun
+local _PCM_GeometryHooksShouldRun
+local _PCM_DataHooksShouldRun
 
 local _pcmHooksEnabledCache = nil
 local _pcmHooksEnabledDirty = true
@@ -182,13 +183,18 @@ _PCM_HooksEnabled = function()
   return _pcmHooksEnabledCache == true
 end
 
-_PCM_HooksShouldRun = function()
+_PCM_GeometryHooksShouldRun = function()
   if _pcmHooksEnabledDirty or _pcmHooksEnabledCache == nil then
     _PCM_RefreshHooksRuntimeState()
   end
 
   return _pcmHooksRuntimeActive == true
-    and not ns.PCMRuntime:IsPresentationRestricted()
+    and not ns.PCMRuntime:IsPresentationSuspended()
+end
+
+_PCM_DataHooksShouldRun = function()
+  return _PCM_GeometryHooksShouldRun()
+    and not ns.PCMRuntime:IsDataRestricted()
 end
 
 local _bbIconState = Hooks._bbIconState
@@ -242,7 +248,7 @@ local function OnIconSetPoint(self)
     return
   end
 
-  if not _PCM_HooksShouldRun() then
+  if not _PCM_GeometryHooksShouldRun() then
     return
   end
 
@@ -264,15 +270,7 @@ local function OnIconSetSize(self)
     return
   end
 
-  local cw, ch = self:GetSize()
-  if IsSecret(cw) or IsSecret(ch) then
-    return
-  end
-  if cw and ch and abs(cw - tw) <= 1 and abs(ch - th) <= 1 then
-    return
-  end
-
-  if not _PCM_HooksShouldRun() then
+  if not _PCM_GeometryHooksShouldRun() then
     return
   end
 
@@ -291,7 +289,7 @@ local function OnIconSetScale(self, scale)
     return
   end
 
-  if not _PCM_HooksShouldRun() then
+  if not _PCM_GeometryHooksShouldRun() then
     return
   end
 
@@ -306,7 +304,7 @@ local function OnIconSetAlpha(self, alpha)
     return
   end
 
-  if not _PCM_HooksShouldRun() then
+  if not _PCM_GeometryHooksShouldRun() then
     return
   end
 
@@ -424,7 +422,7 @@ function Hooks.HookGlowManager(isEnabled, startProcGlow, stopProcGlow)
   local function FlushPendingGlows(frame)
     frame:Hide()
 
-    if not _PCM_HooksShouldRun() then
+    if not _PCM_DataHooksShouldRun() then
       for i = 1, pendingCount do
         local btn = pendingIcons[i]
         pendingIcons[i] = nil
@@ -476,7 +474,7 @@ function Hooks.HookGlowManager(isEnabled, startProcGlow, stopProcGlow)
 
   local function QueueGlowState(btn, wanted)
     local st = btn and FrameData[btn]
-    if not st or st.isViewerIconButton ~= true or not _PCM_HooksShouldRun() then
+    if not st or st.isViewerIconButton ~= true or not _PCM_DataHooksShouldRun() then
       return
     end
 
@@ -554,7 +552,8 @@ Hooks.RefreshRuntimeState = P:Def("Hooks:RefreshRuntimeState", Hooks.RefreshRunt
 Hooks.SetRuntimeEnabled = P:Def("Hooks:SetRuntimeEnabled", Hooks.SetRuntimeEnabled)
 Hooks.SetBlizzardEditModeActive = P:Def("Hooks:SetBlizzardEditModeActive", Hooks.SetBlizzardEditModeActive)
 _PCM_HooksEnabled = P:Def("_PCM_HooksEnabled", _PCM_HooksEnabled)
-_PCM_HooksShouldRun = P:Def("_PCM_HooksShouldRun", _PCM_HooksShouldRun)
+_PCM_GeometryHooksShouldRun = P:Def("_PCM_GeometryHooksShouldRun", _PCM_GeometryHooksShouldRun)
+_PCM_DataHooksShouldRun = P:Def("_PCM_DataHooksShouldRun", _PCM_DataHooksShouldRun)
   Hooks.SetBBIconHidden = P:Def("Hooks:SetBBIconHidden", Hooks.SetBBIconHidden)
 Hooks.GetBBIconHidden = P:Def("Hooks:GetBBIconHidden", Hooks.GetBBIconHidden)
 OnIconSetPoint = P:Def("OnIconSetPoint", OnIconSetPoint)
