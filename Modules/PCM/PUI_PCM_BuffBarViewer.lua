@@ -539,10 +539,6 @@ local function _Refresh()
       local bar = row.Bar
       local iconContainer = row.Icon
 
-      if row:GetParent() ~= holder then
-        row:SetParent(holder)
-      end
-
       _ApplyRowSizing(row, bar, iconContainer, bb, state)
 
       if row:IsShown() then
