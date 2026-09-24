@@ -76,13 +76,16 @@ local _PCM_IsSecret = issecretvalue
 
 local function _PCM_GetEquipSlot(itemFrame)
   local info = itemFrame and itemFrame.cooldownInfo
-  local equipSlot = info and info.equipSlot or nil
-
-  if equipSlot == nil then
+  if _PCM_IsSecret(info) or type(info) ~= "table" then
     return nil
   end
 
+  local equipSlot = info.equipSlot
   if _PCM_IsSecret(equipSlot) then
+    return nil
+  end
+
+  if equipSlot == nil then
     return nil
   end
 
@@ -115,8 +118,6 @@ local PCMCoreState = {
   DurationCountCache = {},
   SwipeFlagCache = {},
   Empty = {},
-  ConfiguredEntryCountCache = {},
-  ConfiguredEntryCountGen = -1,
 }
 
 local PCMEnabled
@@ -133,7 +134,6 @@ local _PCM_GetDurationCountEnabledCached
 local _ShouldUseAuraCooldownOverride
 local _ApplySimpleViewerLayout
 local _ApplyIconSizeToItemFrame
-local _PCM_ItemHasLayoutIndex
 local _PCM_FlushBlockedViewerRefresh
 local _PCM_RunHardViewerTransition
 local _PCM_QueueTransitionFlush
@@ -240,70 +240,6 @@ local function _PCM_GetViewerKeyFromFrame(viewer)
   end
 
   return nil
-end
-
-local function _PCM_GetConfiguredViewerEntryCount(viewerKey)
-  local category = _PCM_GetViewerCategoryEnum(viewerKey)
-  if category == nil then
-    return nil
-  end
-
-  if PCMCoreState.ConfiguredEntryCountGen ~= PCMViewerState.ItemGen then
-    PCMCoreState.ConfiguredEntryCountGen = PCMViewerState.ItemGen
-    wipe(PCMCoreState.ConfiguredEntryCountCache)
-  end
-
-  local cached = PCMCoreState.ConfiguredEntryCountCache[viewerKey]
-  if cached ~= nil then
-    return cached
-  end
-
-  local categories = _PCM_GetViewerCategoryList(viewerKey)
-  if #categories == 0 then
-    return nil
-  end
-
-  cached = 0
-  for i = 1, #categories do
-    cached = cached + #C_CooldownViewer.GetCooldownViewerCategorySet(categories[i], false)
-  end
-
-  PCMCoreState.ConfiguredEntryCountCache[viewerKey] = cached
-  return cached
-end
-
-
-
-local function _PCM_ItemHasRenderableContent(itemFrame)
-  if not itemFrame then
-    return false
-  end
-
-  if _PCM_IsEquipSlotCooldownItem(itemFrame) then
-    return true
-  end
-
-  if itemFrame.GetCooldownID then
-    local cooldownID = itemFrame:GetCooldownID()
-    if cooldownID ~= nil and not _PCM_IsSecret(cooldownID) then
-      return true
-    end
-  end
-
-  local cooldownID = itemFrame.cooldownID
-  if cooldownID ~= nil and not _PCM_IsSecret(cooldownID) then
-    return true
-  end
-
-  if itemFrame.HasEditModeData and itemFrame:HasEditModeData() then
-    return true
-  end
-
-  if itemFrame.editModeIndex ~= nil then
-    return true
-  end
-
-  return false
 end
 
 local Cooldowns = Addon:NewModule("CooldownManager", "NumyAceEvent-3.0")
@@ -690,7 +626,19 @@ local function _PCM_IsRefreshBlocked()
     return true
   end
 
-  if PCMRuntime:IsPresentationRestricted() then
+  if PCMRuntime:IsPresentationSuspended() then
+    return true
+  end
+
+  if PCMRuntime:IsDataRestricted() then
+    return true
+  end
+
+  return PCMHooks.InBlizzardEditMode()
+end
+
+local function _PCM_IsLayoutBlocked()
+  if not _PCM_IsModuleEnabledFast() or PCMRuntime:IsPresentationSuspended() then
     return true
   end
 
@@ -702,21 +650,7 @@ local function _GetViewerItemFrames(viewer)
     return PCMCoreState.Empty
   end
 
-  local viewerKey = PCMRuntime:GetViewerKey(viewer) or _PCM_GetViewerKeyFromFrame(viewer)
-  local configuredCount = viewerKey and _PCM_GetConfiguredViewerEntryCount(viewerKey) or nil
-  local items = PCMRuntime:GetViewerItems(viewer)
-
-  if viewerKey and configuredCount ~= nil and configuredCount <= 0 then
-    for index = 1, #items do
-      local itemFrame = items[index]
-      if itemFrame and itemFrame.Hide then
-        itemFrame:Hide()
-      end
-    end
-    return PCMCoreState.Empty
-  end
-
-  return items
+  return PCMRuntime:GetViewerItems(viewer)
 end
 
 
@@ -1107,22 +1041,24 @@ function Cooldowns._ApplyFontsToItem(itemFrame, viewerKey)
   end
 
   local cd = itemFrame.Cooldown
+  local cooldownDefault = Cooldowns._ResolveFontOpts("cooldown", viewerKey)
   local cooldownOpts = IconSettings:ResolveFontOptions(
     itemFrame,
     viewerKey,
     "cooldown",
-    Cooldowns._ResolveFontOpts("cooldown", viewerKey)
+    cooldownDefault
   )
 
   if cd and cooldownOpts then
     IconSkin.StyleCooldownText(cd, cooldownOpts)
   end
 
+  local chargeDefault = Cooldowns._ResolveFontOpts("charge", viewerKey)
   local chargeOpts = IconSettings:ResolveFontOptions(
     itemFrame,
     viewerKey,
     "charge",
-    Cooldowns._ResolveFontOpts("charge", viewerKey)
+    chargeDefault
   )
 
   IconSkin.StyleChargeText(itemFrame, chargeOpts or { role = "charge" })
@@ -1843,13 +1779,8 @@ local function _PCM_BindNativeIconSettings(itemFrame, viewerKey)
 end
 
 local function _PCM_GetItemIconSize(itemFrame, viewerKey)
-  local iconSize
-  if Cooldowns._GetWidthModeForViewer(viewerKey) == "fixed" then
-    iconSize = itemFrame:GetWidth()
-    if (tonumber(iconSize) or 0) <= 0 then
-      iconSize = itemFrame:GetHeight()
-    end
-  end
+  local frameData = PCMHooks.PeekFrameData(itemFrame)
+  local iconSize = frameData and frameData.sizeW or nil
 
   if (tonumber(iconSize) or 0) <= 0 then
     iconSize = Cooldowns._GetIconSizeForViewer(viewerKey)
@@ -1929,31 +1860,24 @@ local function _PCM_ApplyStaticItemPresentation(itemFrame, viewerKey, frameData,
   frameData.iconStaticPresentationViewerKey = viewerKey
 end
 
+local function _PCM_ApplyStaticViewerPresentation(viewer, viewerKey)
+  local items = PCMRuntime:GetViewerItems(viewer)
+  for index = 1, #items do
+    local itemFrame = items[index]
+    if itemFrame and not (itemFrame.IsForbidden and itemFrame:IsForbidden()) then
+      local frameData = PCMHooks.GetFrameData(itemFrame)
+      local regions = IconSkin.ResolveCooldownViewerRegions(itemFrame)
+      _PCM_ApplyStaticItemPresentation(itemFrame, viewerKey, frameData, regions)
+    end
+  end
+end
+
 local function _PCM_RefreshItemBinding(itemFrame, viewerKey, regions)
   local icon = regions.icon
   local iconContainer = regions.iconContainer
   local borderFrame = iconContainer or itemFrame
   local cooldownFrame = regions.cd
   local parent = iconContainer or itemFrame
-  local hasLayoutIndex = _PCM_ItemHasLayoutIndex(itemFrame)
-  local hasRenderableContent = _PCM_ItemHasRenderableContent(itemFrame)
-
-  if not hasLayoutIndex or not hasRenderableContent then
-    if cooldownFrame and cooldownFrame.Hide then
-      cooldownFrame:Hide()
-    end
-
-    if icon and icon.Hide then
-      icon:Hide()
-    end
-
-    if itemFrame and itemFrame.SetShown then
-      itemFrame:SetShown(false)
-    elseif itemFrame and itemFrame.Hide then
-      itemFrame:Hide()
-    end
-    return
-  end
 
   if borderFrame and borderFrame ~= itemFrame then
     if borderFrame.Show and not (borderFrame.IsShown and borderFrame:IsShown()) then
@@ -2116,10 +2040,6 @@ local function _PUI_SetIconInProxy(icon, layoutFrame, key, x, y, storeOnly)
     return
   end
 
-  if icon.Show and not (icon.IsShown and icon:IsShown()) then
-    icon:Show()
-  end
-
   local fd = PCMHooks.GetFrameData(icon)
   local wasParked = fd.parked == true
   if icon.SetAlpha and wasParked then
@@ -2261,12 +2181,12 @@ local function _LayoutTwoRowWrap(frame, icons, key, count, firstRowLimit, iconSi
   if not storeOnly_ then
     local fd = PCMHooks.GetFrameData(frame)
     local proxyFrame = fd.proxyFrame
-    if proxyFrame and proxyFrame.SetSize and not InCombatLockdown() then
+    if proxyFrame and proxyFrame.SetSize then
       proxyFrame:SetSize(containerW, containerH)
     end
 
     local anchorFrame = fd.anchorFrame or frame
-    if anchorFrame and anchorFrame.SetSize and not InCombatLockdown() then
+    if anchorFrame and anchorFrame.SetSize then
       anchorFrame:SetSize(containerW, containerH)
     end
   end
@@ -2297,7 +2217,7 @@ local function _PCM_GetLayoutIndex(btn)
   end
 
   local idx = btn.layoutIndex
-  if idx ~= nil and not _PCM_IsSecret(idx) then
+  if not _PCM_IsSecret(idx) and idx ~= nil then
     if type(idx) == "number" and idx > 0 then
       return idx
     end
@@ -2310,8 +2230,11 @@ local function _PCM_GetLayoutIndex(btn)
     end
   end
 
-  local frameID = btn.GetID and btn:GetID() or nil
-  if frameID ~= nil and not _PCM_IsSecret(frameID) then
+  local frameID
+  if btn.GetID then
+    frameID = btn:GetID()
+  end
+  if not _PCM_IsSecret(frameID) and frameID ~= nil then
     if type(frameID) == "number" and frameID > 0 then
       return frameID
     end
@@ -2386,32 +2309,6 @@ local function _PCM_HasViewerLayoutChanged(frame, count, cols, iconSize, spacing
   return true
 end
 
-_PCM_ItemHasLayoutIndex = function(itemFrame)
-  if not itemFrame then
-    return false
-  end
-
-  local idx = itemFrame.layoutIndex
-  if idx == nil then
-    return false
-  end
-
-  if _PCM_IsSecret(idx) then
-    return true
-  end
-
-  if type(idx) == "number" then
-    return idx > 0
-  end
-
-  if type(idx) == "string" then
-    idx = tonumber(idx)
-    return idx ~= nil and idx > 0
-  end
-
-  return true
-end
-
 local function _PCM_CollectVisibleIcons(viewer, items)
   local itemGeneration, layoutGeneration = PCMRuntime:GetViewerGenerations(viewer)
   local cache = __PUI_PCM_ViewerIconCache[viewer]
@@ -2433,10 +2330,11 @@ local function _PCM_CollectVisibleIcons(viewer, items)
 
   for i = 1, #items do
     local child = items[i]
-    if child and not (child.IsForbidden and child:IsForbidden()) then
-      if _PCM_ItemHasLayoutIndex(child) and _PCM_ItemHasRenderableContent(child) then
-        icons[#icons + 1] = child
-      end
+    if child
+      and not (child.IsForbidden and child:IsForbidden())
+      and child:IsShown()
+    then
+      icons[#icons + 1] = child
     end
   end
 
@@ -2545,7 +2443,7 @@ _ApplySimpleViewerLayout = function(frame, key, storeOnly)
   if frame.IsForbidden and frame:IsForbidden() then
     return
   end
-  if _PCM_IsRefreshBlocked() then
+  if _PCM_IsLayoutBlocked() then
     return
   end
 
@@ -2642,9 +2540,10 @@ _ApplySimpleViewerLayout = function(frame, key, storeOnly)
 end
 
 local function _PCM_ResetAcquiredItemState(itemFrame)
+  local fd = PCMHooks.GetFrameData(itemFrame)
+  _PCM_ClearNativeIconPresentation(itemFrame, fd.viewerKey)
   IconSettings:ClearItemIdentity(itemFrame)
 
-  local fd = PCMHooks.GetFrameData(itemFrame)
   fd.anchor = nil
   fd.posX = nil
   fd.posY = nil
@@ -2655,7 +2554,21 @@ local function _PCM_ResetAcquiredItemState(itemFrame)
   fd.apRelPoint = nil
   fd.apX = nil
   fd.apY = nil
+  fd.apAllPointsParent = nil
   fd.parked = nil
+  fd.iconStaticPresentationGeneration = nil
+  fd.iconStaticPresentationViewerKey = nil
+  fd.iconStaticSizeW = nil
+  fd.iconStaticSizeH = nil
+  fd.iconFontPresentationGeneration = nil
+  fd.iconFontStaticGeneration = nil
+  fd.iconFontSettingsGeneration = nil
+  fd.iconFontViewerKey = nil
+  fd.iconFontEntry = nil
+  fd.iconFontRecord = nil
+  fd.iconFontCooldownFrame = nil
+  fd.iconFontChargeText = nil
+  fd.iconFontKeybindText = nil
 
   __PUI_PCM_ItemRulePassStamp[itemFrame] = nil
 end
@@ -2680,8 +2593,16 @@ local function _PCM_HandleViewerAcquire(frame, key, itemFrame, isRebind)
     _PCM_ParkViewerItem(frame, itemFrame)
   end
 
+  local regions = IconSkin.ResolveCooldownViewerRegions(itemFrame)
+  _PCM_ApplyStaticItemPresentation(itemFrame, key, fd, regions)
+
   if _PCM_IsRefreshBlocked() then
     return
+  end
+
+  if fd.iconTextureRestorePending == true then
+    itemFrame:RefreshSpellTexture()
+    fd.iconTextureRestorePending = nil
   end
 
   _ReskinItemFrame(itemFrame, key)
@@ -2713,6 +2634,7 @@ local function _PCM_HandleViewerRelease(frame, itemFrame)
   fd.apRelPoint = nil
   fd.apX = nil
   fd.apY = nil
+  fd.apAllPointsParent = nil
   fd.parked = nil
 end
 
@@ -2736,9 +2658,6 @@ end
 local function _PCM_InvalidateClassSpellCache()
   IconSettings:InvalidateCatalog()
   PCMViewerState.ItemGen = (PCMViewerState.ItemGen or 0) + 1
-  PCMCoreState.ConfiguredEntryCountGen = -1
-  wipe(PCMCoreState.ConfiguredEntryCountCache)
-
 end
 
 local function _PCM_BeginTransition(owner, invalidateClassSpellCache)
@@ -2763,10 +2682,6 @@ end
 
 _PCM_ParkViewerItem = function(viewerFrame, itemFrame)
   if not viewerFrame or not itemFrame or (itemFrame.IsForbidden and itemFrame:IsForbidden()) then
-    return
-  end
-
-  if PCMRuntime:IsPresentationRestricted() then
     return
   end
 
@@ -2818,7 +2733,7 @@ _PCM_RunHardViewerTransition = function(owner, invalidateClassSpellCache)
     return
   end
 
-  if PCMRuntime:IsPresentationRestricted() then
+  if PCMRuntime:IsDataRestricted() then
     _PCM_BeginTransition(owner, invalidateClassSpellCache)
     return
   end
@@ -2946,7 +2861,7 @@ local function _PCM_FlushTransition(token)
     return
   end
 
-  if PCMRuntime:IsPresentationRestricted() then
+  if PCMRuntime:IsDataRestricted() then
     return
   end
 
@@ -3133,8 +3048,8 @@ local function _ProtectViewerAnchors_Icons(frame, key)
   _GetOrCreateViewerAnchorFrame(frame, key)
 end
 
-function Cooldowns:_OnRegenEnabled()
-  if PCMRuntime:IsPresentationRestricted() then
+function Cooldowns:_OnDataRestrictionsCleared()
+  if PCMRuntime:IsDataRestricted() then
     return
   end
 
@@ -3233,14 +3148,14 @@ local function _RegisterViewerMover(info, structuralOnly)
     anchor:Show()
   end
   if not inCombat and anchor.EnableMouse then
-    anchor:EnableMouse(true)
+    anchor:EnableMouse(false)
   end
 
   if proxy and not inCombat and proxy.Show then
     proxy:Show()
   end
   if proxy and not inCombat and proxy.EnableMouse then
-    proxy:EnableMouse(true)
+    proxy:EnableMouse(false)
   end
 
   _EnsureDefaultViewerAnchor(info.key)
@@ -3501,7 +3416,6 @@ end
 
 local function _PCM_PrepareViewerMoverGeometry()
   _InitAllViewerMovers(true)
-  FrameUtil.FinalizePendingSmartSnapRuntimeLayout()
 end
 
 local function _ForEachRefreshViewer(viewerKey, fn)
@@ -3523,7 +3437,7 @@ local function _ForEachRefreshViewer(viewerKey, fn)
 end
 
 local function _RefreshViewerBordersOnly(viewerKey)
-  if _PCM_IsRefreshBlocked() then
+  if _PCM_IsLayoutBlocked() then
     return
   end
 
@@ -3535,31 +3449,7 @@ local function _RefreshViewerBordersOnly(viewerKey)
   _PCM_InvalidateStaticPresentation()
 
   _ForEachRefreshViewer(viewerKey, function(frame, key)
-    local items = _GetViewerItemFrames(frame) or PCMCoreState.Empty
-    for _, itemFrame in ipairs(items) do
-      if _PCM_ItemHasRenderableContent(itemFrame) then
-        local regions = IconSkin.ResolveCooldownViewerRegions(itemFrame)
-        local iconContainer = regions.iconContainer or itemFrame
-        local icon          = regions.icon or ((itemFrame.Icon and itemFrame.Icon.SetTexture) and itemFrame.Icon or nil)
-        local cooldownFrame = regions.cd or itemFrame.Cooldown
-
-        IconSkin.StripCooldownManagerOverlay(itemFrame)
-
-        local borderFrame = iconContainer or itemFrame
-        _ApplyBorderToFrame(borderFrame, true, key, itemFrame)
-        _ApplyBorderInsets(itemFrame, key, iconContainer, icon, cooldownFrame)
-
-        local frameData = PCMHooks.GetFrameData(itemFrame)
-        frameData.iconStaticPresentationGeneration = PCMCoreState.StaticPresentationGeneration
-        frameData.iconStaticPresentationViewerKey = key
-      else
-        if itemFrame and itemFrame.SetShown then
-          itemFrame:SetShown(false)
-        elseif itemFrame and itemFrame.Hide then
-          itemFrame:Hide()
-        end
-      end
-    end
+    _PCM_ApplyStaticViewerPresentation(frame, key)
   end)
 end
 
@@ -4323,7 +4213,7 @@ _PCM_ClearNativeIconPresentation = function(itemFrame, viewerKey)
   local frameData = PCMHooks.GetFrameData(itemFrame)
   _PCM_StopIconSettingsGlow(itemFrame, frameData)
 
-  if frameData.iconStateHidden == true then
+  if frameData.iconStateHidden == true and not PCMRuntime:IsDataRestricted() then
     itemFrame:SetTooltipsShown(Cooldowns:GetViewerTooltipsEnabled(viewerKey))
   end
 
@@ -4334,7 +4224,12 @@ _PCM_ClearNativeIconPresentation = function(itemFrame, viewerKey)
   end
 
   if frameData.iconCustomTextureApplied ~= nil then
-    itemFrame:RefreshSpellTexture()
+    if PCMRuntime:IsDataRestricted() then
+      frameData.iconTextureRestorePending = true
+    else
+      itemFrame:RefreshSpellTexture()
+      frameData.iconTextureRestorePending = nil
+    end
   end
 
   itemFrame:SetAlpha(1)
@@ -4778,20 +4673,23 @@ local function _RunPCMStartupRefresh(self)
     return false
   end
 
-  if PCMRuntime:IsPresentationRestricted() then
-    self.__puiPCMStartupPending = true
-    return false
-  end
-
   if Addon:IsBlizzardEditModeActive() then
     return false
   end
 
   if not C_AddOns.IsAddOnLoaded("Blizzard_CooldownViewer") then
+    if InCombatLockdown() and FrameUtil._smartSnapWorldReady then
+      self.__puiPCMStartupPending = true
+      return false
+    end
     C_AddOns.LoadAddOn("Blizzard_CooldownViewer")
   end
 
-  self.__puiPCMStartupPending = nil
+  if PCMRuntime:IsDataRestricted() then
+    self.__puiPCMStartupPending = true
+  else
+    self.__puiPCMStartupPending = nil
+  end
   return true
 end
 
@@ -4800,19 +4698,35 @@ _PCM_RunInitialViewerPass = function(owner)
     return
   end
 
-  IconSettings:PrimeRuntimeCache()
+  if not PCMRuntime:IsDataRestricted() then
+    IconSettings:PrimeRuntimeCache()
+  end
+
+  local settings = _G.CooldownViewerSettings
+  local provider = settings and settings:GetDataProvider() or nil
+  if provider then
+    _PCM_EnsureDataProviderHook(provider)
+  end
 
   for _, info in owner:IterateViewers() do
     local key = info and info.key
     local frame = key and PCMRuntime:GetViewer(key) or nil
     if frame then
       _RegisterViewerMover(info)
-
     end
   end
 
   PCMRuntime:QueueAllViewerScans("initial-viewer-pass")
   PCMRuntime:MarkAllViewersDirty(PCM_REFRESH_FULL, "initial-viewer-pass")
+end
+
+local function _PCM_PrepareStartupLayout()
+  if not _PCM_IsModuleEnabledFast() then
+    return
+  end
+
+  _PCM_RunInitialViewerPass(Cooldowns)
+  PCMRuntime:Flush()
 end
 
 local function _PCM_OnFrameScaleChanged(_, scale)
@@ -4847,6 +4761,10 @@ function Cooldowns:OnEnable()
   self.__puiFrameScale = Pixel.GetOnePixel()
   FrameScale:RegisterScaleListener(_PCM_OnFrameScaleChanged)
 
+  FrameUtil:RegisterStartupLayoutParticipant(
+    "PCM",
+    _PCM_PrepareStartupLayout
+  )
   _PCM_PrepareViewerMoverGeometry()
   _PCM_RunInitialViewerPass(self)
   PCMRuntime:Flush()
@@ -4863,7 +4781,7 @@ function Cooldowns:_ReconcileCustomTrackerStartupAvailability()
     return
   end
 
-  if PCMRuntime:IsPresentationRestricted() then
+  if PCMRuntime:IsDataRestricted() then
     self.__puiPCMCustomTrackerStartupPending = true
     return
   end
@@ -4912,14 +4830,6 @@ function Cooldowns:_OnPlayerEnteringWorld()
 
   _PCM_RunInitialViewerPass(self)
   self:_ReconcileCustomTrackerStartupAvailability()
-end
-
-function Cooldowns:_OnLoadingScreenDisabled()
-  if not _PCM_IsModuleEnabledFast() then
-    return
-  end
-
-  _PCM_RunInitialViewerPass(self)
 end
 
 function Cooldowns:_OnPlayerSpecializationChanged(_, unit)
@@ -4990,7 +4900,7 @@ function Cooldowns:_OnSpellsChanged()
     return
   end
 
-  if not PCMRuntime:IsPresentationRestricted() then
+  if not PCMRuntime:IsDataRestricted() then
     IconSettings:InvalidateCatalog()
   end
 end
@@ -5004,15 +4914,13 @@ local function _PCM_RuntimeLifecycleEvent(event, ...)
 
   if event == "PLAYER_ENTERING_WORLD" then
     Cooldowns:_OnPlayerEnteringWorld()
-  elseif event == "LOADING_SCREEN_DISABLED" then
-    Cooldowns:_OnLoadingScreenDisabled()
   elseif event == "PLAYER_REGEN_ENABLED" then
-    Cooldowns:_OnRegenEnabled()
+    Cooldowns:_OnDataRestrictionsCleared()
   elseif event == "ADDON_RESTRICTION_STATE_CHANGED" then
     if arg2 == Enum.AddOnRestrictionState.Inactive
-      and not PCMRuntime:IsPresentationRestricted()
+      and not PCMRuntime:IsDataRestricted()
     then
-      Cooldowns:_OnRegenEnabled()
+      Cooldowns:_OnDataRestrictionsCleared()
     end
   elseif event == "PLAYER_SPECIALIZATION_CHANGED" then
     Cooldowns:_OnPlayerSpecializationChanged(event, arg1)
@@ -5050,7 +4958,7 @@ PCMRuntime:RegisterSubscriber("Core", {
     end
   end,
 
-  OnItemAcquired = function(key, viewer, itemFrame)
+  OnItemTracked = function(key, viewer, itemFrame)
     if _PCM_IsCoreViewerKey(key) then
       _PCM_HandleViewerAcquire(viewer, key, itemFrame, false)
     end
@@ -5068,8 +4976,6 @@ PCMRuntime:RegisterSubscriber("Core", {
       _PCM_HandleViewerAcquire(viewer, key, itemFrame, true)
     end
   end,
-
-
 
   OnViewerDirty = function(key, viewer, mask)
     if not _PCM_IsCoreViewerKey(key) then
@@ -5159,9 +5065,17 @@ function Cooldowns:ApplySettings(flags)
 
   if needsIconRefresh then
     _PCM_InvalidateStaticPresentation()
-    _RefreshIconViewers(nil)
+    if PCMRuntime:IsDataRestricted() then
+      PCMRuntime:MarkAllViewersDirty(PCM_REFRESH_SKIN, "settings-static-presentation")
+    else
+      _RefreshIconViewers(nil)
+    end
   elseif needsFontRefresh then
-    _RefreshViewerFontsOnly(nil)
+    if PCMRuntime:IsDataRestricted() then
+      PCMRuntime:MarkAllViewersDirty(PCM_REFRESH_FONT, "settings-static-fonts")
+    else
+      _RefreshViewerFontsOnly(nil)
+    end
   end
 
   if flags.profile == true then
@@ -5303,8 +5217,6 @@ end
   _PUI_SetAllPointsStamped = P:Def('_PUI_SetAllPointsStamped', _PUI_SetAllPointsStamped)
   _PCM_GetViewerCategoryEnum = P:Def('_PCM_GetViewerCategoryEnum', _PCM_GetViewerCategoryEnum)
   _PCM_GetViewerKeyFromFrame = P:Def('_PCM_GetViewerKeyFromFrame', _PCM_GetViewerKeyFromFrame)
-  _PCM_GetConfiguredViewerEntryCount = P:Def('_PCM_GetConfiguredViewerEntryCount', _PCM_GetConfiguredViewerEntryCount)
-  _PCM_ItemHasRenderableContent = P:Def('_PCM_ItemHasRenderableContent', _PCM_ItemHasRenderableContent)
   _PCM_IsModuleEnabledFast = P:Def('_PCM_IsModuleEnabledFast', _PCM_IsModuleEnabledFast)
   ns.PCM_IsModuleEnabledFast = _PCM_IsModuleEnabledFast
   Cooldowns.RegisterExtraViewer = P:Def('Cooldowns:RegisterExtraViewer', Cooldowns.RegisterExtraViewer)
@@ -5326,6 +5238,7 @@ end
   Cooldowns.SetViewerHideWhenInactive = P:Def('Cooldowns:SetViewerHideWhenInactive', Cooldowns.SetViewerHideWhenInactive)
   _DeactivatePCMOwnedFrames = P:Def('_DeactivatePCMOwnedFrames', _DeactivatePCMOwnedFrames)
   _PCM_IsRefreshBlocked = P:Def('_PCM_IsRefreshBlocked', _PCM_IsRefreshBlocked)
+  _PCM_IsLayoutBlocked = P:Def('_PCM_IsLayoutBlocked', _PCM_IsLayoutBlocked)
   _GetViewerItemFrames = P:Def('_GetViewerItemFrames', _GetViewerItemFrames)
   Cooldowns.GetCustomBarSpellDropdown = P:Def('Cooldowns:GetCustomBarSpellDropdown', Cooldowns.GetCustomBarSpellDropdown)
 
@@ -5368,6 +5281,7 @@ end
   _PCM_BindNativeIconSettings = P:Def('_PCM_BindNativeIconSettings', _PCM_BindNativeIconSettings)
   _PCM_GetItemIconSize = P:Def('_PCM_GetItemIconSize', _PCM_GetItemIconSize)
   _PCM_ApplyStaticItemPresentation = P:Def('_PCM_ApplyStaticItemPresentation', _PCM_ApplyStaticItemPresentation)
+  _PCM_ApplyStaticViewerPresentation = P:Def('_PCM_ApplyStaticViewerPresentation', _PCM_ApplyStaticViewerPresentation)
   _PCM_RefreshItemBinding = P:Def('_PCM_RefreshItemBinding', _PCM_RefreshItemBinding)
   _ReskinItemFrame = P:Def('_ReskinItemFrame', _ReskinItemFrame)
   _PUI_SetIconDesired = P:Def('_PUI_SetIconDesired', _PUI_SetIconDesired)
@@ -5405,7 +5319,7 @@ end
   Cooldowns.GetViewerAnchorFrame = P:Def('Cooldowns:GetViewerAnchorFrame', Cooldowns.GetViewerAnchorFrame)
   _ForceAnchor = P:Def('_ForceAnchor', _ForceAnchor)
   _ProtectViewerAnchors_Icons = P:Def('_ProtectViewerAnchors_Icons', _ProtectViewerAnchors_Icons)
-  Cooldowns._OnRegenEnabled = P:Def('Cooldowns:_OnRegenEnabled', Cooldowns._OnRegenEnabled)
+  Cooldowns._OnDataRestrictionsCleared = P:Def('Cooldowns:_OnDataRestrictionsCleared', Cooldowns._OnDataRestrictionsCleared)
   _EnsureDefaultViewerAnchor = P:Def('_EnsureDefaultViewerAnchor', _EnsureDefaultViewerAnchor)
   _RegisterViewerMover = P:Def('_RegisterViewerMover', _RegisterViewerMover)
   _InitAllViewerMovers = P:Def('_InitAllViewerMovers', _InitAllViewerMovers)
@@ -5448,7 +5362,6 @@ end
   Cooldowns.OnDisable = P:Def('Cooldowns:OnDisable', Cooldowns.OnDisable)
   Cooldowns._ReconcileCustomTrackerStartupAvailability = P:Def('Cooldowns:_ReconcileCustomTrackerStartupAvailability', Cooldowns._ReconcileCustomTrackerStartupAvailability)
   Cooldowns._OnPlayerEnteringWorld = P:Def('Cooldowns:_OnPlayerEnteringWorld', Cooldowns._OnPlayerEnteringWorld)
-  Cooldowns._OnLoadingScreenDisabled = P:Def('Cooldowns:_OnLoadingScreenDisabled', Cooldowns._OnLoadingScreenDisabled)
   Cooldowns._OnPlayerSpecializationChanged = P:Def('Cooldowns:_OnPlayerSpecializationChanged', Cooldowns._OnPlayerSpecializationChanged)
   Cooldowns._OnTraitConfigUpdated = P:Def('Cooldowns:_OnTraitConfigUpdated', Cooldowns._OnTraitConfigUpdated)
   Cooldowns._OnCooldownViewerDataLoaded = P:Def('Cooldowns:_OnCooldownViewerDataLoaded', Cooldowns._OnCooldownViewerDataLoaded)
@@ -5481,7 +5394,6 @@ end
   _EnsureViewerDurationCount = P:Def('_EnsureViewerDurationCount', _EnsureViewerDurationCount)
   _ApplyIconSizeToItemFrame = P:Def('_ApplyIconSizeToItemFrame', _ApplyIconSizeToItemFrame)
   Cooldowns._ApplyIconSizeToItemFrame = _ApplyIconSizeToItemFrame
-  _PCM_ItemHasLayoutIndex = P:Def('_PCM_ItemHasLayoutIndex', _PCM_ItemHasLayoutIndex)
   _ApplySimpleViewerLayout = P:Def('_ApplySimpleViewerLayout', _ApplySimpleViewerLayout)
   Cooldowns._RefreshViewerBordersOnly = P:Def('Cooldowns._RefreshViewerBordersOnly', Cooldowns._RefreshViewerBordersOnly)
   Cooldowns._RefreshViewerFontsOnly = P:Def('Cooldowns._RefreshViewerFontsOnly', Cooldowns._RefreshViewerFontsOnly)
