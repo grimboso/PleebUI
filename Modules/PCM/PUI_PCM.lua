@@ -4714,9 +4714,10 @@ local function _RunPCMStartupRefresh(self)
 
   if PCMRuntime:IsDataRestricted() then
     self.__puiPCMStartupPending = true
-  else
-    self.__puiPCMStartupPending = nil
+    return false
   end
+
+  self.__puiPCMStartupPending = nil
   return true
 end
 

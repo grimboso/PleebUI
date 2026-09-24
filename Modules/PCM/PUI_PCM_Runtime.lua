@@ -475,12 +475,6 @@ local function HookViewer(entry)
     else
       MarkViewerDirty(entry, Runtime.Dirty.LAYOUT, "viewer-acquire")
     end
-
-    if IsPresentationSuspended() then
-      return
-    end
-
-    AcquireItem(entry, itemFrame, "viewer-acquire")
   end)
 
 end
@@ -725,7 +719,7 @@ local function OnRuntimeEvent(_, event, ...)
   if event == "LOADING_SCREEN_ENABLED" then
     state.worldTransitionActive = true
   elseif event == "LOADING_SCREEN_DISABLED" then
-    state.worldTransitionActive = false
+    state.worldTransitionActive = IsDataRestricted()
   elseif dataRestrictionsCleared and not IsDataRestricted() then
     state.worldTransitionActive = false
   end

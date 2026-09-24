@@ -1759,7 +1759,8 @@ function M:EnsureMoverRefreshFrame()
 end
 
 function M:AttachMover()
-  if InCombatLockdown() then
+  -- PRD movers are addon-owned and must join startup SmartSnap before world entry.
+  if InCombatLockdown() and FrameUtil._smartSnapWorldReady then
     self._puiMoverRefreshPending = true
     self:EnsureMoverRefreshFrame():RegisterEvent("PLAYER_REGEN_ENABLED")
     return
