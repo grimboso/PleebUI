@@ -9,6 +9,7 @@ local P = select(1, ns.Pleebug:DropIn(AuraContainers, { name = "UnitFrames.AuraC
 local AnchorUtil = _G.AnchorUtil
 local AuraContainerSortDirection = _G.AuraContainerSortDirection
 local AuraContainerSortMethod = _G.AuraContainerSortMethod
+local C_Timer = _G.C_Timer
 local CreateFrame = _G.CreateFrame
 local InCombatLockdown = _G.InCombatLockdown
 local UnitExists = _G.UnitExists
@@ -17,6 +18,7 @@ local UnitIsVisible = _G.UnitIsVisible
 local UnitPhaseReason = _G.UnitPhaseReason
 local issecretvalue = _G.issecretvalue
 local ipairs = _G.ipairs
+local next = _G.next
 local pairs = _G.pairs
 local setmetatable = _G.setmetatable
 local table_concat = _G.table.concat
@@ -47,6 +49,8 @@ local SORT_DIRECTIONS = {
 }
 
 local PendingFrameRequests = setmetatable({}, { __mode = "k" })
+local AvailabilityFrames = setmetatable({}, { __mode = "k" })
+local AvailabilityTicker
 local RefreshDriver = CreateFrame("Frame")
 RefreshDriver:RegisterEvent("PLAYER_ENTERING_WORLD")
 
@@ -133,7 +137,7 @@ local function BuildAuraButtonAppearanceSignature(appearance, layout)
   }, "\31")
 end
 
-local function RefreshNativeAuraContainers(frame)
+local function RefreshNativeAuraContainers(frame, refreshBoundContainers)
   local unit = frame.__unit or frame.__puiConfigUnit
   local containers = frame.__puiAuraContainers
   if unit == nil or containers == nil then
@@ -145,7 +149,7 @@ local function RefreshNativeAuraContainers(frame)
     if container:IsEnabled() then
       if container:GetUnit() ~= unit then
         container:SetUnit(unit)
-      else
+      elseif refreshBoundContainers ~= false then
         container:UpdateAllAuras()
       end
     end
@@ -736,10 +740,12 @@ local function IsGroupAuraUnitAvailable(frame)
   return true
 end
 
-local function ReconcileDisplayState(frame)
+local function ReconcileDisplayState(frame, unitAvailable)
   local elementActive = frame:IsElementEnabled("Auras") == true
     and not frame:IsElementPaused("Auras")
-  local unitAvailable = IsGroupAuraUnitAvailable(frame)
+  if unitAvailable == nil then
+    unitAvailable = IsGroupAuraUnitAvailable(frame)
+  end
   frame.__puiAuraUnitAvailable = unitAvailable
 
   for _, record in pairs(frame.__puiCustomAuraDisplays or {}) do
@@ -751,6 +757,78 @@ local function ReconcileDisplayState(frame)
       SetRuntimeEnabled(runtime, elementActive and active)
       SetRuntimeShown(runtime, elementActive and active)
     end
+  end
+end
+
+local function AuditAvailabilityFrame(frame, refreshAvailable)
+  -- Render visibility can change without a unit event, so active group frames
+  -- need a bounded audit that also repairs a stale native container binding.
+  local unitAvailable = IsGroupAuraUnitAvailable(frame)
+  local availabilityChanged = frame.__puiAuraUnitAvailable ~= unitAvailable
+
+  if availabilityChanged then
+    ReconcileDisplayState(frame, unitAvailable)
+  end
+
+  if unitAvailable then
+    RefreshNativeAuraContainers(frame, availabilityChanged or refreshAvailable == true)
+  end
+end
+
+local function StopAvailabilityTicker()
+  if AvailabilityTicker then
+    AvailabilityTicker:Cancel()
+    AvailabilityTicker = nil
+  end
+end
+
+local function AuditAvailabilityFrames()
+  for frame in pairs(AvailabilityFrames) do
+    if frame:IsVisible() then
+      AuditAvailabilityFrame(frame)
+    else
+      AvailabilityFrames[frame] = nil
+    end
+  end
+
+  if not next(AvailabilityFrames) then
+    StopAvailabilityTicker()
+  end
+end
+
+local function StartAvailabilityTicker()
+  if not AvailabilityTicker then
+    AvailabilityTicker = C_Timer.NewTicker(1, AuditAvailabilityFrames)
+  end
+end
+
+local function AvailabilityFrame_OnShow(frame)
+  AvailabilityFrames[frame] = true
+  AuditAvailabilityFrame(frame)
+  StartAvailabilityTicker()
+end
+
+local function AvailabilityFrame_OnHide(frame)
+  AvailabilityFrames[frame] = nil
+
+  if not next(AvailabilityFrames) then
+    StopAvailabilityTicker()
+  end
+end
+
+local function RegisterAvailabilityFrame(frame)
+  if frame.__puiAuraAvailabilityRegistered == true
+    or (frame.__puiGroupKind ~= "party" and frame.__puiGroupKind ~= "raid")
+  then
+    return
+  end
+
+  frame.__puiAuraAvailabilityRegistered = true
+  frame:HookScript("OnShow", AvailabilityFrame_OnShow)
+  frame:HookScript("OnHide", AvailabilityFrame_OnHide)
+
+  if frame:IsVisible() then
+    AvailabilityFrame_OnShow(frame)
   end
 end
 
@@ -919,6 +997,7 @@ function AuraContainers.Configure(frame)
   ConfigureDisplays(frame, aDB)
   RefreshAurasElementLifecycle(frame, aDB.enabled ~= false or highlightEnabled)
   ReconcileDisplayState(frame)
+  RegisterAvailabilityFrame(frame)
 end
 
 local function RefreshFrameDisplay(frame, request)
@@ -996,10 +1075,7 @@ function AuraContainers.RefreshAvailability(frame, event)
     return
   end
 
-  ReconcileDisplayState(frame)
-  if event ~= nil and frame.__puiAuraUnitAvailable then
-    RefreshNativeAuraContainers(frame)
-  end
+  AuditAvailabilityFrame(frame, event ~= nil)
 end
 
 function AuraContainers.RestoreConfiguredState(frame)
@@ -1052,6 +1128,13 @@ SetAllRuntimeElementState = P:Def("SetAllRuntimeElementState", SetAllRuntimeElem
 SyncUnknownRuntimeElementState = P:Def("SyncUnknownRuntimeElementState", SyncUnknownRuntimeElementState)
 IsGroupAuraUnitAvailable = P:Def("IsGroupAuraUnitAvailable", IsGroupAuraUnitAvailable)
 ReconcileDisplayState = P:Def("ReconcileDisplayState", ReconcileDisplayState)
+AuditAvailabilityFrame = P:Def("AuditAvailabilityFrame", AuditAvailabilityFrame)
+StopAvailabilityTicker = P:Def("StopAvailabilityTicker", StopAvailabilityTicker)
+AuditAvailabilityFrames = P:Def("AuditAvailabilityFrames", AuditAvailabilityFrames)
+StartAvailabilityTicker = P:Def("StartAvailabilityTicker", StartAvailabilityTicker)
+AvailabilityFrame_OnShow = P:Def("AvailabilityFrame_OnShow", AvailabilityFrame_OnShow)
+AvailabilityFrame_OnHide = P:Def("AvailabilityFrame_OnHide", AvailabilityFrame_OnHide)
+RegisterAvailabilityFrame = P:Def("RegisterAvailabilityFrame", RegisterAvailabilityFrame)
 RefreshAurasElementLifecycle = P:Def("RefreshAurasElementLifecycle", RefreshAurasElementLifecycle)
 ConfigureDisplays = P:Def("ConfigureDisplays", ConfigureDisplays)
 Round = P:Def("Round", Round)
