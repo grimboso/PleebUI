@@ -195,6 +195,14 @@ local function ShouldProcessPartyGroupEvents(db)
     and not (db.hideInRaid ~= false and IsInRaid())
 end
 
+local function GetPartyMoverAnchorPoint(db)
+  if db.orientation == "HORIZONTAL" then
+    return "LEFT"
+  end
+
+  return (db.growthY or "DOWN") == "UP" and "BOTTOM" or "TOP"
+end
+
 local function ApplyAnchor(self)
   local db = PartyFrames.db.profile
   local anchor = self.anchor
@@ -215,8 +223,9 @@ local function ApplyAnchor(self)
   FrameUtil.EnsureHeaderMover(self, "PartyFrames", "PleebUI_PartyFramesMover", anchor, db, {
     defaultPoint = point,
     defaultRelativePoint = db.relativePoint or point,
-    anchorPoint = point,
-    anchorRelativePoint = point,
+    getMoverAnchorPoint = function(_, current)
+      return GetPartyMoverAnchorPoint(current)
+    end,
     label = "Party Frames",
     optionsString = "unitframes,party",
     overlayBelowFrame = false,
@@ -1240,6 +1249,7 @@ local P = select(1, ns.Pleebug:DropIn(PartyFrames, { name = "UnitFrames.Party" }
   ComparePartyFrames = P:Def("ComparePartyFrames", ComparePartyFrames)
   GetPartyVisibilityDriver = P:Def("GetPartyVisibilityDriver", GetPartyVisibilityDriver)
   ShouldProcessPartyGroupEvents = P:Def("ShouldProcessPartyGroupEvents", ShouldProcessPartyGroupEvents)
+  GetPartyMoverAnchorPoint = P:Def("GetPartyMoverAnchorPoint", GetPartyMoverAnchorPoint)
   ApplyAnchor = P:Def("ApplyAnchor", ApplyAnchor)
   BuildPartyFrameConfig = P:Def("BuildPartyFrameConfig", BuildPartyFrameConfig)
   BuildPartyPetFrameConfig = P:Def("BuildPartyPetFrameConfig", BuildPartyPetFrameConfig)

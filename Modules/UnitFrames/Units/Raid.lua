@@ -819,8 +819,9 @@ function RaidFrames:ApplyAnchor()
   FrameUtil.EnsureHeaderMover(self, "RaidFrames", "PleebUI_RaidFramesMover", self.anchor, db, {
     defaultPoint = db.point or "BOTTOMLEFT",
     defaultRelativePoint = db.relativePoint or db.point or "BOTTOMLEFT",
-    anchorPoint = db.point or "BOTTOMLEFT",
-    anchorRelativePoint = db.point or "BOTTOMLEFT",
+    getMoverAnchorPoint = function(_, current)
+      return FrameUtil.GetGroupedMoverAnchorPoint(current)
+    end,
     label = "Raid Frames",
     optionsString = "unitframes,raid",
     overlayBelowFrame = true,

@@ -1493,6 +1493,7 @@ function UF:EnsureMovers()
             end
 
             cfg.width = Round(width)
+            FrameUtil:RefreshGhostMover("UF_player")
             owner:RefreshSingleUnit("player", "resize")
 
             if ns.TestMode:IsActive() then
@@ -1867,6 +1868,7 @@ end
 
 function UF:OnEnable()
   self.__puiRuntimeAvailable = true
+  self:EnsureMovers()
 
   if self._initialRefreshComplete ~= true then
     self:RegisterEvent("PLAYER_ENTERING_WORLD")
