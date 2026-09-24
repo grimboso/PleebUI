@@ -11,11 +11,6 @@ ns.PCMHooks = Hooks
 local P = select(1, ns.Pleebug:DropIn(Hooks))
 
 local hooksecurefunc = hooksecurefunc
-local CreateFrame = CreateFrame
-
-local rawFrame = CreateFrame("Frame")
-local RawClearAllPoints = rawFrame.ClearAllPoints
-local RawSetPoint = rawFrame.SetPoint
 
 local FrameData = setmetatable({}, { __mode = "k" })
 
@@ -236,43 +231,6 @@ function Hooks.GetBBIconHidden(icon)
   return st.hidden, st.wasShown
 end
 
-local function OnIconSetPoint(self)
-  local fd = FrameData[self]
-  if not fd or fd.locking or fd.hidden or not fd.anchor then
-    return
-  end
-
-  if not _PCM_GeometryHooksShouldRun() then
-    return
-  end
-
-  fd.locking = true
-  RawClearAllPoints(self)
-  RawSetPoint(self, "CENTER", fd.anchor, "CENTER", fd.posX or 0, fd.posY or 0)
-  fd.locking = false
-end
-
-
-
-function Hooks.HookIconFrame(icon, key)
-  if not icon then
-    return
-  end
-
-
-  local fd = Hooks.GetFrameData(icon)
-  if fd.posHooked then
-    return
-  end
-
-  fd.posHooked = true
-  fd.viewerKey = key
-
-  hooksecurefunc(icon, "SetPoint", OnIconSetPoint)
-end
-
-
-
 function Hooks.HookEditMode(module)
   if not module then
     return
@@ -484,8 +442,6 @@ _PCM_GeometryHooksShouldRun = P:Def("_PCM_GeometryHooksShouldRun", _PCM_Geometry
 _PCM_DataHooksShouldRun = P:Def("_PCM_DataHooksShouldRun", _PCM_DataHooksShouldRun)
   Hooks.SetBBIconHidden = P:Def("Hooks:SetBBIconHidden", Hooks.SetBBIconHidden)
 Hooks.GetBBIconHidden = P:Def("Hooks:GetBBIconHidden", Hooks.GetBBIconHidden)
-OnIconSetPoint = P:Def("OnIconSetPoint", OnIconSetPoint)
-Hooks.HookIconFrame = P:Def("Hooks:HookIconFrame", Hooks.HookIconFrame)
 Hooks.HookEditMode = P:Def("Hooks:HookEditMode", Hooks.HookEditMode)
 Hooks.HookGlowManager = P:Def("Hooks:HookGlowManager", Hooks.HookGlowManager)
 Hooks.HookViewerLayout = P:Def("Hooks:HookViewerLayout", Hooks.HookViewerLayout)
