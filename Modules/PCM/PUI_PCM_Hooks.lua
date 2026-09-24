@@ -95,40 +95,6 @@ function Hooks.HookMethod(obj, method, key, fn)
   return false
 end
 
-local _scriptHooks = setmetatable({}, { __mode = "k" })
-
-function Hooks.HookScript(obj, script, key, fn)
-  if not (obj and script and key and fn) then
-    return false
-  end
-  if type(fn) ~= "function" then
-    return false
-  end
-  if type(obj.HookScript) ~= "function" then
-    return false
-  end
-
-  local mt = _scriptHooks[obj]
-  if not mt then
-    mt = {}
-    _scriptHooks[obj] = mt
-  end
-
-  local mm = mt[script]
-  if not mm then
-    mm = {}
-    mt[script] = mm
-  end
-
-  if mm[key] then
-    return false
-  end
-  mm[key] = true
-
-  obj:HookScript(script, fn)
-  return true
-end
-
 local function _InBlizzardEditMode()
   local active = ns.Addon:IsBlizzardEditModeActive()
   _pcmHooksEditModeActive = active
@@ -398,7 +364,6 @@ Hooks.PeekFrameData = P:Def("Hooks:PeekFrameData", Hooks.PeekFrameData)
 Hooks.GetItemViewerKey = P:Def("Hooks:GetItemViewerKey", Hooks.GetItemViewerKey)
 Hooks.SetItemViewerKey = P:Def("Hooks:SetItemViewerKey", Hooks.SetItemViewerKey)
 Hooks.HookMethod = P:Def("Hooks:HookMethod", Hooks.HookMethod)
-Hooks.HookScript = P:Def("Hooks:HookScript", Hooks.HookScript)
 _InBlizzardEditMode = P:Def("_InBlizzardEditMode", _InBlizzardEditMode)
 _PCM_RefreshHooksRuntimeState = P:Def("_PCM_RefreshHooksRuntimeState", _PCM_RefreshHooksRuntimeState)
 Hooks.RefreshRuntimeState = P:Def("Hooks:RefreshRuntimeState", Hooks.RefreshRuntimeState)
