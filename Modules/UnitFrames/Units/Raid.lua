@@ -730,6 +730,10 @@ local function ConstructRaidStyledFrame(frame, unit, cfg)
 
   frame:RegisterEvent("UNIT_AREA_CHANGED", UFAuraContainers.RefreshAvailability)
   frame:RegisterEvent("UNIT_CONNECTION", UFAuraContainers.RefreshAvailability)
+  frame:RegisterEvent("UNIT_DISTANCE_CHECK_UPDATE", UFAuraContainers.RefreshAvailability)
+  frame:RegisterEvent("UNIT_FLAGS", UFAuraContainers.RefreshAvailability)
+  frame:RegisterEvent("UNIT_IN_RANGE_UPDATE", UFAuraContainers.RefreshAvailability)
+  frame:RegisterEvent("UNIT_OTHER_PARTY_CHANGED", UFAuraContainers.RefreshAvailability)
   frame:RegisterEvent("UNIT_PHASE", UFAuraContainers.RefreshAvailability)
 end
 
