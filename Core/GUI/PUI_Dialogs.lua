@@ -134,6 +134,9 @@ function Addon:Theme_SkinStaticPopup(popup)
   local moneyInputFrame = popup.MoneyInputFrame
   local alertIcon = popup.AlertIcon
 
+  popup:SetFrameStrata("FULLSCREEN_DIALOG")
+  popup:Raise()
+
   _PUI_HideStaticPopupTextures(popup)
   Theme:ApplyDialogShell(popup)
 
