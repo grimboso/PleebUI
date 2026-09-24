@@ -3456,7 +3456,6 @@ local function _RegisterViewerMover(info, structuralOnly)
     quickSettings = BuildQuickSettings,
     smartSnap = isSmartCombatViewer and {
       family = "combatBars",
-      allowCombatRuntimeLayout = true,
       isRuntimeActive = function()
         return _PCM_IsModuleEnabledFast()
       end,
@@ -4911,7 +4910,6 @@ function Cooldowns:_OnPlayerEnteringWorld()
     return
   end
 
-  _PCM_PrepareViewerMoverGeometry()
   _PCM_RunInitialViewerPass(self)
   self:_ReconcileCustomTrackerStartupAvailability()
 end
@@ -5011,9 +5009,7 @@ local function _PCM_RuntimeLifecycleEvent(event, ...)
   elseif event == "PLAYER_REGEN_ENABLED" then
     Cooldowns:_OnRegenEnabled()
   elseif event == "ADDON_RESTRICTION_STATE_CHANGED" then
-    if arg2 == Enum.AddOnRestrictionState.Activating then
-      _PCM_PrepareViewerMoverGeometry()
-    elseif arg2 == Enum.AddOnRestrictionState.Inactive
+    if arg2 == Enum.AddOnRestrictionState.Inactive
       and not PCMRuntime:IsPresentationRestricted()
     then
       Cooldowns:_OnRegenEnabled()
