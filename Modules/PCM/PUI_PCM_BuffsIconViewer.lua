@@ -151,6 +151,20 @@ local sort = table.sort
 local insert = table.insert
 local remove = table.remove
 local GetTime = GetTime
+local _buffIconObjectID = setmetatable({}, { __mode = "k" })
+local _buffIconObjectIDSeed = 0
+
+local function _GetStableBuffIconID(icon)
+  local id = _buffIconObjectID[icon]
+  if id then
+    return id
+  end
+
+  _buffIconObjectIDSeed = _buffIconObjectIDSeed + 1
+  id = _buffIconObjectIDSeed
+  _buffIconObjectID[icon] = id
+  return id
+end
 
 local function _GetLayoutSortKey(icon)
   if not icon then
@@ -163,13 +177,20 @@ local function _GetLayoutSortKey(icon)
     return key
   end
 
-  key = icon.layoutIndex or icon:GetID() or 0
+  key = icon.layoutIndex
   if IsSecret(key) then
-    key = 0
-  elseif type(key) == "string" then
+    key = nil
+  elseif key == nil and icon.GetID then
+    key = icon:GetID()
+    if IsSecret(key) then
+      key = nil
+    end
+  end
+
+  if type(key) == "string" then
     key = tonumber(key) or 0
   elseif type(key) ~= "number" then
-    key = 0
+    key = _GetStableBuffIconID(icon)
   end
 
   fd.__puiLayoutSortKey = key
@@ -273,16 +294,7 @@ local function _GetViewerItemList(viewer)
       return
     end
 
-    local key = icon.layoutIndex or (icon.GetID and icon:GetID()) or 0
-    if IsSecret(key) then
-      key = #_buffItemList + 1
-    elseif type(key) == "string" then
-      key = tonumber(key) or (#_buffItemList + 1)
-    elseif type(key) ~= "number" then
-      key = #_buffItemList + 1
-    end
-
-    Hooks.GetFrameData(icon).__puiLayoutSortKey = key
+    local key = _GetLayoutSortKey(icon)
 
     if key < lastKey then
       needsSort = true
@@ -315,6 +327,9 @@ local function _PrepareBuffIcon(icon, desiredSize, fontDB, IS)
   if not _IsIconFrame(icon) then
     return
   end
+  if PCMRuntime:IsPresentationSuspended() then
+    return
+  end
 
   local iconFd = Hooks.GetFrameData(icon)
 
@@ -335,16 +350,23 @@ local function _PrepareBuffIcon(icon, desiredSize, fontDB, IS)
     IS.SkinCooldownViewerItem(icon)
   end
 
-  if fontDB and iconFd.__puiBuffFontRev ~= _fontRev then
-    iconFd.__puiBuffFontRev = _fontRev
-    _ApplyLiveIconFonts(icon, fontDB)
-    iconFd.__puiBuffPrepared = true
+  if fontDB then
+    if iconFd.__puiBuffFontRev ~= _fontRev then
+      iconFd.__puiBuffFontRev = _fontRev
+      iconFd.__puiBuffViewerFontRev = _fontRev
+      _ApplyLiveIconFonts(icon, fontDB)
+      iconFd.__puiBuffPrepared = true
+    end
   end
 
   if not iconFd.__puiBuffAuraHooked then
     iconFd.__puiBuffAuraHooked = true
 
     local function QueueBuffIconVisibilityRefresh(self)
+      if PCMRuntime:IsPresentationSuspended() then
+        return
+      end
+
       _RefreshBuffIconVisibility(self)
       _RequestUnifiedBuffRefresh("layout", self:GetViewerFrame())
     end
@@ -353,7 +375,13 @@ local function _PrepareBuffIcon(icon, desiredSize, fontDB, IS)
     Hooks.HookScript(icon, "OnHide", "BUFFS_Icon_OnHide", QueueBuffIconVisibilityRefresh)
   end
 
-  Cooldowns:ApplyNativeIndividualIconSettings(icon, VIEWER_KEY, "AURA")
+  if not PCMRuntime:IsDataRestricted() then
+    if iconFd.iconTextureRestorePending == true then
+      icon:RefreshSpellTexture()
+      iconFd.iconTextureRestorePending = nil
+    end
+    Cooldowns:ApplyNativeIndividualIconSettings(icon, VIEWER_KEY, "AURA")
+  end
 end
 
 local function _PrepareBuffIcons(iconList, desiredSize, fontDB, IS)
@@ -510,6 +538,9 @@ local function _SkinAndParkBuffIcon(viewer, itemFrame)
   if not _PCM_BuffsEnabled() then
     return
   end
+  if PCMRuntime:IsPresentationSuspended() then
+    return
+  end
 
   if not (viewer and itemFrame and _IsIconFrame(itemFrame)) then
     return
@@ -559,23 +590,20 @@ local function _SkinAndParkBuffIcon(viewer, itemFrame)
   fd.locking = false
 end
 
-local function _RefreshReboundBuffIcon(itemFrame)
-  if not _PCM_BuffsEnabled() or not (itemFrame and _IsIconFrame(itemFrame)) then
+local function _RefreshReboundBuffIcon(viewer, itemFrame)
+  if not _PCM_BuffsEnabled() or not (viewer and itemFrame and _IsIconFrame(itemFrame)) then
     return
   end
 
-  local scale = _rt_scaleFn or Round
-  local desiredSize = scale(_rt_iconSize or 36)
-
-  local fontDB = _rt_fontDB
-  if not fontDB then
-    fontDB = _GetViewerFontDB()
-    _rt_fontDB = fontDB
-  end
+  local fd = Hooks.GetFrameData(itemFrame)
+  fd.__puiBuffPreparedSize = nil
+  fd.__puiBuffStyleRev = nil
+  fd.__puiBuffFontRev = nil
+  fd.__puiBuffViewerFontRev = nil
 
   Cooldowns:ClearNativeIndividualIconSettings(itemFrame, VIEWER_KEY)
-  _PrepareBuffIcon(itemFrame, desiredSize, fontDB, IconSkin)
-
+  _SkinAndParkBuffIcon(viewer, itemFrame)
+  _AddBuffItem(viewer, itemFrame)
   _RefreshBuffIconVisibility(itemFrame)
 end
 
@@ -648,8 +676,7 @@ local function _InsertVisibleBuffIcon(icon)
 end
 
 _RefreshBuffIconVisibility = function(icon)
-  if PCMRuntime:IsPresentationRestricted()
-    or not icon
+  if not icon
     or _buffItemSet[icon] ~= true
   then
     return false
@@ -777,7 +804,11 @@ local function _PositionCenteredBuffIcon(icon, holder, desiredSize, x, y)
   local prevW = fd.sizeW
   local prevH = fd.sizeH
   local wasParked = fd.parked == true
-  local alpha = (icon.GetAlpha and icon:GetAlpha()) or 1
+  local alpha = 1
+  if icon.GetAlpha then
+    alpha = icon:GetAlpha()
+  end
+  local alphaIsSecret = IsSecret(alpha)
   local targetAlpha = fd.iconAppliedAlpha
   if targetAlpha == nil then
     targetAlpha = 1
@@ -785,7 +816,7 @@ local function _PositionCenteredBuffIcon(icon, holder, desiredSize, x, y)
 
   local needsSize = prevW ~= desiredSize or prevH ~= desiredSize
   local needsPoint = prevAnchor ~= holder or prevX ~= x or prevY ~= y or wasParked
-  local needsAlpha = wasParked or alpha ~= targetAlpha
+  local needsAlpha = wasParked or (not alphaIsSecret and alpha ~= targetAlpha)
 
   fd.anchor = holder
   fd.posX = x
@@ -834,8 +865,20 @@ local function _ApplyBuffIconLayout(viewer, holder, icons, padX, desiredSize, to
 
   if visibleCount > 0 then
     local first = icons[1]
-    local actualW = first and first.GetWidth and first:GetWidth() or nil
-    local actualH = first and first.GetHeight and first:GetHeight() or nil
+    local actualW
+    local actualH
+    if first and first.GetWidth then
+      actualW = first:GetWidth()
+    end
+    if first and first.GetHeight then
+      actualH = first:GetHeight()
+    end
+    if IsSecret(actualW) then
+      actualW = nil
+    end
+    if IsSecret(actualH) then
+      actualH = nil
+    end
     slotW = tonumber(actualW) or desiredSize
     slotH = tonumber(actualH) or desiredSize
   end
@@ -915,6 +958,11 @@ local function _ApplyBuffIconLayout(viewer, holder, icons, padX, desiredSize, to
 end
 
 CenterVisibleBuffs = function(force)
+  if PCMRuntime:IsPresentationSuspended() then
+    pendingRecenter = true
+    return
+  end
+
   if Hooks.InBlizzardEditMode() then
     pendingRecenter = true
     return
@@ -1249,7 +1297,7 @@ _Buffs_ApplyCentered = function(viewer)
 end
 
 local function _Buffs_InitOnce()
-  if not _PCM_BuffsEnabled() or PCMRuntime:IsPresentationRestricted() then
+  if not _PCM_BuffsEnabled() then
     return false
   end
 
@@ -1494,6 +1542,10 @@ function Buffs:RefreshAfterTalentSwap()
   if not _PCM_BuffsEnabled() then
     return
   end
+  if PCMRuntime:IsPresentationSuspended() then
+    _RequestUnifiedBuffRefresh("all")
+    return
+  end
 
   local viewer = _cache.viewer or _GetViewer()
   if not viewer or not _ViewerIsReady(viewer) then
@@ -1521,6 +1573,13 @@ function Buffs:RefreshIndividualIconSettings()
   if not _PCM_BuffsEnabled() then
     return
   end
+  if PCMRuntime:IsPresentationSuspended() then
+    _fontRev = _fontRev + 1
+    _prepNeeded = true
+    _MarkBuffCenterDirty()
+    _RequestUnifiedBuffRefresh("icons")
+    return
+  end
 
   local viewer = _cache.viewer or _GetViewer()
   if not viewer or not _ViewerIsReady(viewer) then
@@ -1543,6 +1602,34 @@ function Buffs:RefreshIndividualIconSettings()
   _RequestUnifiedBuffRefresh("layout", viewer)
 end
 
+local function _ApplyBuffIconViewerDirty(key, viewer, mask, reason)
+  if key ~= VIEWER_KEY or not _PCM_BuffsEnabled() then
+    return
+  end
+
+  local dirtyMask = mask or 0
+  if PCMRuntime:MaskHas(dirtyMask, PCMRuntime.Dirty.SKIN)
+    or PCMRuntime:MaskHas(dirtyMask, PCMRuntime.Dirty.FONT)
+  then
+    _prepNeeded = true
+    _centerForceLayout = true
+  end
+
+  if PCMRuntime:MaskHas(dirtyMask, PCMRuntime.Dirty.ITEMS) then
+    _centerForceLayout = true
+  end
+
+  if reason == "viewer-layout" then
+    _MarkBuffItemListDirty(viewer)
+  end
+
+  if PCMRuntime:MaskHas(dirtyMask, PCMRuntime.Dirty.VISIBILITY) then
+    _MarkBuffCenterDirty()
+  end
+
+  CenterVisibleBuffs(false)
+end
+
 PCMRuntime:RegisterSubscriber("BuffIcons", {
   OnViewerChanged = function(key, viewer)
     if key ~= VIEWER_KEY then
@@ -1561,7 +1648,7 @@ PCMRuntime:RegisterSubscriber("BuffIcons", {
     end
   end,
 
-  OnItemAcquired = function(key, viewer, itemFrame)
+  OnItemTracked = function(key, viewer, itemFrame)
     if key == VIEWER_KEY and _PCM_BuffsEnabled() then
       Cooldowns:ClearNativeIndividualIconSettings(itemFrame, VIEWER_KEY)
       _SkinAndParkBuffIcon(viewer, itemFrame)
@@ -1576,39 +1663,13 @@ PCMRuntime:RegisterSubscriber("BuffIcons", {
     end
   end,
 
-  OnItemRebound = function(key, _, itemFrame)
+  OnItemRebound = function(key, viewer, itemFrame)
     if key == VIEWER_KEY and _PCM_BuffsEnabled() then
-      _RefreshReboundBuffIcon(itemFrame)
+      _RefreshReboundBuffIcon(viewer, itemFrame)
     end
   end,
 
-  OnViewerDirty = function(key, viewer, mask, reason)
-    if key ~= VIEWER_KEY or not _PCM_BuffsEnabled() then
-      return
-    end
-
-    local dirtyMask = mask or 0
-    if PCMRuntime:MaskHas(dirtyMask, PCMRuntime.Dirty.SKIN)
-      or PCMRuntime:MaskHas(dirtyMask, PCMRuntime.Dirty.FONT)
-    then
-      _prepNeeded = true
-      _centerForceLayout = true
-    end
-
-    if PCMRuntime:MaskHas(dirtyMask, PCMRuntime.Dirty.ITEMS) then
-      _centerForceLayout = true
-    end
-
-    if reason == "viewer-layout" then
-      _MarkBuffItemListDirty(viewer)
-    end
-
-    if PCMRuntime:MaskHas(dirtyMask, PCMRuntime.Dirty.VISIBILITY) then
-      _MarkBuffCenterDirty()
-    end
-
-    CenterVisibleBuffs(false)
-  end,
+  OnViewerDirty = _ApplyBuffIconViewerDirty,
 
   OnViewerTargetChanged = function(key, viewer)
     if key == VIEWER_KEY then
@@ -1632,6 +1693,7 @@ PCMRuntime:RegisterSubscriber("BuffIcons", {
   _GetViewer = P:Def('_GetViewer', _GetViewer)
   _ViewerIsReady = P:Def('_ViewerIsReady', _ViewerIsReady)
   _EnsureBuffHolder = P:Def('_EnsureBuffHolder', _EnsureBuffHolder)
+  _GetStableBuffIconID = P:Def('_GetStableBuffIconID', _GetStableBuffIconID)
   _SortByLayoutIndex = P:Def('_SortByLayoutIndex', _SortByLayoutIndex)
   _IsIconFrame = P:Def('_IsIconFrame', _IsIconFrame)
   _GetViewerItemList = P:Def('_GetViewerItemList', _GetViewerItemList)
@@ -1678,4 +1740,5 @@ PCMRuntime:RegisterSubscriber("BuffIcons", {
   CenterVisibleBuffs = P:Def('CenterVisibleBuffs', CenterVisibleBuffs)
   _RequestUnifiedBuffRefresh = P:Def('_RequestUnifiedBuffRefresh', _RequestUnifiedBuffRefresh)
   _GetLayoutSortKey = P:Def('_GetLayoutSortKey', _GetLayoutSortKey)
+  _ApplyBuffIconViewerDirty = P:Def('_ApplyBuffIconViewerDirty', _ApplyBuffIconViewerDirty)
 
