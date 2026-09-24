@@ -3048,6 +3048,8 @@ function Cooldowns:_OnDataRestrictionsCleared()
     _PCM_RunInitialViewerPass(self)
   end
 
+  _PCM_FlushBlockedViewerRefresh(self)
+
   if IconSettings:PrimeRuntimeCache() then
     PCMRuntime:MarkAllViewersDirty(PCMRuntime.Dirty.SKIN, "icon-cache-ready")
   end
@@ -4982,6 +4984,14 @@ PCMRuntime:RegisterSubscriber("Core", {
     end
 
     if _PCM_IsRefreshBlocked() then
+      if PCMRuntime:IsDataRestricted()
+        and not _PCM_IsTransitionPending()
+        and not _PCM_IsLayoutBlocked()
+        and PCMRuntime:MaskHas(coreMask, PCM_REFRESH_LAYOUT)
+      then
+        _PCM_ExecuteViewerRefresh(Cooldowns, PCM_REFRESH_LAYOUT, key)
+      end
+
       _PCM_QueueBlockedViewerRefresh(coreMask, key)
       return
     end
