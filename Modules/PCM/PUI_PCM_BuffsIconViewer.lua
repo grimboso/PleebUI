@@ -376,10 +376,6 @@ local function _PrepareBuffIcon(icon, desiredSize, fontDB, IS)
   end
 
   if not PCMRuntime:IsDataRestricted() then
-    if iconFd.iconTextureRestorePending == true then
-      icon:RefreshSpellTexture()
-      iconFd.iconTextureRestorePending = nil
-    end
     Cooldowns:ApplyNativeIndividualIconSettings(icon, VIEWER_KEY, "AURA")
   end
 end
