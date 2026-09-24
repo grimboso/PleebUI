@@ -10,6 +10,17 @@ local Theme = ns.Theme
 
 local CooldownViewerRegions = setmetatable({}, { __mode = "k" })
 local CooldownManagerOverlayStripped = setmetatable({}, { __mode = "k" })
+local IconObjectState = setmetatable({}, { __mode = "k" })
+
+local function GetIconObjectState(object)
+  local state = IconObjectState[object]
+  if not state then
+    state = {}
+    IconObjectState[object] = state
+  end
+
+  return state
+end
 
 local function ResolveIconTarget(target)
 
@@ -148,10 +159,11 @@ function IconSkin.StripNineSliceAndBackdrop(frame, opts)
       HideFrameRegion(nsFrame)
     end
 
-    -- Vanilla SetBackdrop / backdropInfo based outlines
-    local bg = Theme.EnsureBackdropFrame(frame)
-    if bg and bg.SetBackdrop then
-      bg:SetBackdrop(nil)
+    if opts.skipBackdropFrame ~= true then
+      local bg = Theme.EnsureBackdropFrame(frame)
+      if bg and bg.SetBackdrop then
+        bg:SetBackdrop(nil)
+      end
     end
   end
 end
@@ -203,13 +215,14 @@ local function StripButtonTextures_Internal(frame, opts)
     HideTextureRegion(frame.IconBorderGlow)
   end
 
-  if frame.DebuffBorder and not opts.keepDebuffBorder then
+  if frame.DebuffBorder and not opts.keepDebuffBorder and opts.cooldownViewer ~= true then
     local border = frame.DebuffBorder
     border:Hide()
     border:SetAlpha(0)
 
-    if not border.__pui_hidehook_show then
-      border.__pui_hidehook_show = true
+    local borderState = GetIconObjectState(border)
+    if not borderState.hideHookShow then
+      borderState.hideHookShow = true
       hooksecurefunc(border, "Show", function(self)
         self:Hide()
         self:SetAlpha(0)
@@ -221,8 +234,9 @@ local function StripButtonTextures_Internal(frame, opts)
       texture:Hide()
       texture:SetAlpha(0)
 
-      if not texture.__pui_hidehook_show then
-        texture.__pui_hidehook_show = true
+      local textureState = GetIconObjectState(texture)
+      if not textureState.hideHookShow then
+        textureState.hideHookShow = true
         hooksecurefunc(texture, "Show", function(self)
           self:Hide()
           self:SetAlpha(0)
@@ -231,7 +245,7 @@ local function StripButtonTextures_Internal(frame, opts)
     end
   end
 
-  if frame.PandemicIcon and not opts.keepPandemicIcon then
+  if frame.PandemicIcon and not opts.keepPandemicIcon and opts.cooldownViewer ~= true then
     HideRegionToHider(frame.PandemicIcon)
     if frame.PandemicIcon.Texture then
       HideRegionToHider(frame.PandemicIcon.Texture)
@@ -293,17 +307,20 @@ local function StripCooldownManagerDirectRegions(frame)
   end
 
   if frame.OutOfRange then
-    HideRegionToHider(frame.OutOfRange)
+    frame.OutOfRange:SetAlpha(0)
+    frame.OutOfRange:Hide()
   end
 
   local overlay = FindCooldownManagerIconOverlay(frame)
   if overlay then
-    HideRegionToHider(overlay)
+    overlay:SetAlpha(0)
+    overlay:Hide()
   end
 
   for _, region in ipairs({ frame:GetRegions() }) do
     if region:IsObjectType("MaskTexture") then
-      HideRegionToHider(region)
+      region:SetAlpha(0)
+      region:Hide()
     end
   end
 
@@ -561,10 +578,6 @@ function IconSkin.HideCooldownViewerDebuffAndPandemic(frame, opts)
     return
   end
 
-  -- IMPORTANT:
-  -- Never override Blizzard methods (Show/SetShown/UpdateFromAuraData). That can taint CDM.
-  -- Only hide via Core hider + optionally re-hide via hooksecurefunc.
-
   if frame.DebuffBorder and opts.keepDebuffBorder ~= true then
     local db = frame.DebuffBorder
 
@@ -573,55 +586,9 @@ function IconSkin.HideCooldownViewerDebuffAndPandemic(frame, opts)
       if tex.SetAtlas then tex:SetAtlas(nil) end
       if tex.SetTexture then tex:SetTexture(nil) end
       if tex.SetAlpha then tex:SetAlpha(0) end
-      if tex.Hide then tex:Hide() end
-      ns.HideToHider(tex)
-
-      if tex.Show and not tex.__pui_hidehook_show then
-        tex.__pui_hidehook_show = true
-        hooksecurefunc(tex, "Show", function(self)
-          if self.SetAlpha then self:SetAlpha(0) end
-          if self.Hide then self:Hide() end
-          ns.HideToHider(self)
-        end)
-      end
-      if tex.SetShown and not tex.__pui_hidehook_setshown then
-        tex.__pui_hidehook_setshown = true
-        hooksecurefunc(tex, "SetShown", function(self)
-          if self.SetAlpha then self:SetAlpha(0) end
-          if self.Hide then self:Hide() end
-          ns.HideToHider(self)
-        end)
-      end
     end
 
     if db.SetAlpha then db:SetAlpha(0) end
-    if db.Hide then db:Hide() end
-    ns.HideToHider(db)
-
-    if db.Show and not db.__pui_hidehook_show then
-      db.__pui_hidehook_show = true
-      hooksecurefunc(db, "Show", function(self)
-        if self.SetAlpha then self:SetAlpha(0) end
-        if self.Hide then self:Hide() end
-        ns.HideToHider(self)
-      end)
-    end
-    if db.SetShown and not db.__pui_hidehook_setshown then
-      db.__pui_hidehook_setshown = true
-      hooksecurefunc(db, "SetShown", function(self)
-        if self.SetAlpha then self:SetAlpha(0) end
-        if self.Hide then self:Hide() end
-        ns.HideToHider(self)
-      end)
-    end
-    if db.UpdateFromAuraData and not db.__pui_hidehook_update then
-      db.__pui_hidehook_update = true
-      hooksecurefunc(db, "UpdateFromAuraData", function(self)
-        if self.SetAlpha then self:SetAlpha(0) end
-        if self.Hide then self:Hide() end
-        ns.HideToHider(self)
-      end)
-    end
   end
 
   if frame.PandemicIcon and opts.keepPandemicIcon ~= true then
@@ -632,47 +599,9 @@ function IconSkin.HideCooldownViewerDebuffAndPandemic(frame, opts)
       if tex.SetAtlas then tex:SetAtlas(nil) end
       if tex.SetTexture then tex:SetTexture(nil) end
       if tex.SetAlpha then tex:SetAlpha(0) end
-      if tex.Hide then tex:Hide() end
-      ns.HideToHider(tex)
-
-      if tex.Show and not tex.__pui_hidehook_show then
-        tex.__pui_hidehook_show = true
-        hooksecurefunc(tex, "Show", function(self)
-          if self.SetAlpha then self:SetAlpha(0) end
-          if self.Hide then self:Hide() end
-          ns.HideToHider(self)
-        end)
-      end
-      if tex.SetShown and not tex.__pui_hidehook_setshown then
-        tex.__pui_hidehook_setshown = true
-        hooksecurefunc(tex, "SetShown", function(self)
-          if self.SetAlpha then self:SetAlpha(0) end
-          if self.Hide then self:Hide() end
-          ns.HideToHider(self)
-        end)
-      end
     end
 
     if pi.SetAlpha then pi:SetAlpha(0) end
-    if pi.Hide then pi:Hide() end
-    ns.HideToHider(pi)
-
-    if pi.Show and not pi.__pui_hidehook_show then
-      pi.__pui_hidehook_show = true
-      hooksecurefunc(pi, "Show", function(self)
-        if self.SetAlpha then self:SetAlpha(0) end
-        if self.Hide then self:Hide() end
-        ns.HideToHider(self)
-      end)
-    end
-    if pi.SetShown and not pi.__pui_hidehook_setshown then
-      pi.__pui_hidehook_setshown = true
-      hooksecurefunc(pi, "SetShown", function(self)
-        if self.SetAlpha then self:SetAlpha(0) end
-        if self.Hide then self:Hide() end
-        ns.HideToHider(self)
-      end)
-    end
   end
 end
 
@@ -772,6 +701,7 @@ end
 local function ApplyFontStringStyle(fs, opts)
   if not fs or (fs.IsForbidden and fs:IsForbidden()) then return end
   opts = opts or {}
+  local state = GetIconObjectState(fs)
 
   local roleDefaults = opts.role and Theme.ResolveIconTextRole(opts.role) or nil
   local use = roleDefaults or {}
@@ -784,24 +714,24 @@ local function ApplyFontStringStyle(fs, opts)
   local fontSize = Theme.ResolveFontSize(size or 12, opts.scope or "general")
 
   if fontPath then
-    if fs.__puiIconSkinFontPath ~= fontPath
-      or fs.__puiIconSkinFontSize ~= fontSize
-      or fs.__puiIconSkinFontFlags ~= flags
+    if state.fontPath ~= fontPath
+      or state.fontSize ~= fontSize
+      or state.fontFlags ~= flags
     then
-      fs.__puiIconSkinFontPath = fontPath
-      fs.__puiIconSkinFontSize = fontSize
-      fs.__puiIconSkinFontFlags = flags
+      state.fontPath = fontPath
+      state.fontSize = fontSize
+      state.fontFlags = flags
       fs:SetFont(fontPath, fontSize, flags)
     end
   elseif size then
     local fallbackFont = STANDARD_TEXT_FONT or "Fonts\\FRIZQT__.TTF"
-    if fs.__puiIconSkinFontPath ~= fallbackFont
-      or fs.__puiIconSkinFontSize ~= fontSize
-      or fs.__puiIconSkinFontFlags ~= flags
+    if state.fontPath ~= fallbackFont
+      or state.fontSize ~= fontSize
+      or state.fontFlags ~= flags
     then
-      fs.__puiIconSkinFontPath = fallbackFont
-      fs.__puiIconSkinFontSize = fontSize
-      fs.__puiIconSkinFontFlags = flags
+      state.fontPath = fallbackFont
+      state.fontSize = fontSize
+      state.fontFlags = flags
       fs:SetFont(fallbackFont, fontSize, flags)
     end
   end
@@ -813,15 +743,15 @@ local function ApplyFontStringStyle(fs, opts)
     local b = color[3] or 1
     local a = color[4] or 1
 
-    if fs.__puiIconSkinTextColorR ~= r
-      or fs.__puiIconSkinTextColorG ~= g
-      or fs.__puiIconSkinTextColorB ~= b
-      or fs.__puiIconSkinTextColorA ~= a
+    if state.textColorR ~= r
+      or state.textColorG ~= g
+      or state.textColorB ~= b
+      or state.textColorA ~= a
     then
-      fs.__puiIconSkinTextColorR = r
-      fs.__puiIconSkinTextColorG = g
-      fs.__puiIconSkinTextColorB = b
-      fs.__puiIconSkinTextColorA = a
+      state.textColorR = r
+      state.textColorG = g
+      state.textColorB = b
+      state.textColorA = a
       fs:SetTextColor(r, g, b, a)
     end
   end
@@ -835,33 +765,33 @@ local function ApplyFontStringStyle(fs, opts)
     local sox = shadow[5] or 1
     local soy = shadow[6] or -1
 
-    if fs.__puiIconSkinShadowR ~= sr
-      or fs.__puiIconSkinShadowG ~= sg
-      or fs.__puiIconSkinShadowB ~= sb
-      or fs.__puiIconSkinShadowA ~= sa
-      or fs.__puiIconSkinShadowX ~= sox
-      or fs.__puiIconSkinShadowY ~= soy
+    if state.shadowR ~= sr
+      or state.shadowG ~= sg
+      or state.shadowB ~= sb
+      or state.shadowA ~= sa
+      or state.shadowX ~= sox
+      or state.shadowY ~= soy
     then
-      fs.__puiIconSkinShadowR = sr
-      fs.__puiIconSkinShadowG = sg
-      fs.__puiIconSkinShadowB = sb
-      fs.__puiIconSkinShadowA = sa
-      fs.__puiIconSkinShadowX = sox
-      fs.__puiIconSkinShadowY = soy
+      state.shadowR = sr
+      state.shadowG = sg
+      state.shadowB = sb
+      state.shadowA = sa
+      state.shadowX = sox
+      state.shadowY = soy
       fs:SetShadowColor(sr, sg, sb, sa)
       fs:SetShadowOffset(sox, soy)
     end
   end
 
   local justifyH = opts.justifyH or use.justifyH
-  if justifyH and fs.SetJustifyH and fs.__puiIconSkinJustifyH ~= justifyH then
-    fs.__puiIconSkinJustifyH = justifyH
+  if justifyH and fs.SetJustifyH and state.justifyH ~= justifyH then
+    state.justifyH = justifyH
     fs:SetJustifyH(justifyH)
   end
 
   local justifyV = opts.justifyV or use.justifyV
-  if justifyV and fs.SetJustifyV and fs.__puiIconSkinJustifyV ~= justifyV then
-    fs.__puiIconSkinJustifyV = justifyV
+  if justifyV and fs.SetJustifyV and state.justifyV ~= justifyV then
+    state.justifyV = justifyV
     fs:SetJustifyV(justifyV)
   end
 end
@@ -871,13 +801,14 @@ local function ResolveCooldownText(cooldown)
     return cooldown
   end
 
-  local cached = cooldown.__puiIconSkinResolvedCooldownText
+  local state = GetIconObjectState(cooldown)
+  local cached = state.resolvedCooldownText
   if cached and not cached:IsForbidden() then
     return cached
   end
 
   local fontString = cooldown:GetCountdownFontString()
-  cooldown.__puiIconSkinResolvedCooldownText = fontString
+  state.resolvedCooldownText = fontString
   return fontString
 end
 
@@ -960,6 +891,7 @@ function IconSkin.StyleCooldownText(cd, opts)
   if not cd or (cd.IsForbidden and cd:IsForbidden()) then return end
   opts = opts or {}
   opts.role = opts.role or "cooldown"
+  local cooldownState = GetIconObjectState(cd)
 
   local roleDefaults = Theme.ResolveIconTextRole(opts.role) or {}
   local fontKey  = opts.font or roleDefaults.font
@@ -996,14 +928,14 @@ function IconSkin.StyleCooldownText(cd, opts)
 
   if cd.SetCountdownFont
     and (
-      cd.__puiIconSkinCountdownFontPath ~= fontPath
-      or cd.__puiIconSkinCountdownFontSize ~= size
-      or cd.__puiIconSkinCountdownFontFlags ~= flags
+      cooldownState.countdownFontPath ~= fontPath
+      or cooldownState.countdownFontSize ~= size
+      or cooldownState.countdownFontFlags ~= flags
     )
   then
-    cd.__puiIconSkinCountdownFontPath = fontPath
-    cd.__puiIconSkinCountdownFontSize = size
-    cd.__puiIconSkinCountdownFontFlags = flags
+    cooldownState.countdownFontPath = fontPath
+    cooldownState.countdownFontSize = size
+    cooldownState.countdownFontFlags = flags
     cd:SetCountdownFont(fontPath, size, flags)
   end
 
@@ -1031,17 +963,18 @@ function IconSkin.StyleCooldownText(cd, opts)
       local parent = cd:GetParent() or cd
       local x = anchorX
       local y = anchorY
-      if fs.__puiIconSkinOffsetAnchorParent ~= parent
-        or fs.__puiIconSkinOffsetAnchorPoint ~= point
-        or fs.__puiIconSkinOffsetAnchorRelativePoint ~= relativePoint
-        or fs.__puiIconSkinOffsetAnchorX ~= x
-        or fs.__puiIconSkinOffsetAnchorY ~= y
+      local fontState = GetIconObjectState(fs)
+      if fontState.offsetAnchorParent ~= parent
+        or fontState.offsetAnchorPoint ~= point
+        or fontState.offsetAnchorRelativePoint ~= relativePoint
+        or fontState.offsetAnchorX ~= x
+        or fontState.offsetAnchorY ~= y
       then
-        fs.__puiIconSkinOffsetAnchorParent = parent
-        fs.__puiIconSkinOffsetAnchorPoint = point
-        fs.__puiIconSkinOffsetAnchorRelativePoint = relativePoint
-        fs.__puiIconSkinOffsetAnchorX = x
-        fs.__puiIconSkinOffsetAnchorY = y
+        fontState.offsetAnchorParent = parent
+        fontState.offsetAnchorPoint = point
+        fontState.offsetAnchorRelativePoint = relativePoint
+        fontState.offsetAnchorX = x
+        fontState.offsetAnchorY = y
         fs:ClearAllPoints()
         fs:SetPoint(point, parent, relativePoint, x, y)
       end
@@ -1077,17 +1010,18 @@ function IconSkin.StyleChargeText(itemFrame, opts)
     ApplyFontStringStyle(fs, opts)
 
     if offsetX ~= nil or offsetY ~= nil or opts.point ~= nil then
-      if fs.__puiIconSkinOffsetAnchorParent ~= itemFrame
-        or fs.__puiIconSkinOffsetAnchorPoint ~= point
-        or fs.__puiIconSkinOffsetAnchorRelativePoint ~= point
-        or fs.__puiIconSkinOffsetAnchorX ~= anchorX
-        or fs.__puiIconSkinOffsetAnchorY ~= anchorY
+      local fontState = GetIconObjectState(fs)
+      if fontState.offsetAnchorParent ~= itemFrame
+        or fontState.offsetAnchorPoint ~= point
+        or fontState.offsetAnchorRelativePoint ~= point
+        or fontState.offsetAnchorX ~= anchorX
+        or fontState.offsetAnchorY ~= anchorY
       then
-        fs.__puiIconSkinOffsetAnchorParent = itemFrame
-        fs.__puiIconSkinOffsetAnchorPoint = point
-        fs.__puiIconSkinOffsetAnchorRelativePoint = point
-        fs.__puiIconSkinOffsetAnchorX = anchorX
-        fs.__puiIconSkinOffsetAnchorY = anchorY
+        fontState.offsetAnchorParent = itemFrame
+        fontState.offsetAnchorPoint = point
+        fontState.offsetAnchorRelativePoint = point
+        fontState.offsetAnchorX = anchorX
+        fontState.offsetAnchorY = anchorY
         fs:ClearAllPoints()
         fs:SetPoint(point, itemFrame, point, anchorX, anchorY)
       end
@@ -1174,7 +1108,8 @@ end
 function IconSkin.SkinCooldownViewerItem(itemFrame)
   if not itemFrame then return end
   if itemFrame.IsForbidden and itemFrame:IsForbidden() then return end
-  if itemFrame.__pui_cv_skinned then return end
+  local itemState = GetIconObjectState(itemFrame)
+  if itemState.cooldownViewerSkinned then return end
 
   local em = _G.EditModeManagerFrame
   if em and em.IsEditModeActive and em:IsEditModeActive() then
@@ -1186,7 +1121,7 @@ function IconSkin.SkinCooldownViewerItem(itemFrame)
   local cooldownFrame = r and r.cd or nil
   if not iconTex then return end
 
-  local size = tonumber(itemFrame.__puiIconSize) or tonumber(IconSkin:GetGlobalIconSize()) or 32
+  local size = tonumber(IconSkin:GetGlobalIconSize()) or 32
   if size < 8 then size = 8 end
   if size > 128 then size = 128 end
   size = Pixel.Round(size)
@@ -1195,7 +1130,10 @@ function IconSkin.SkinCooldownViewerItem(itemFrame)
     itemFrame:SetSize(size, size)
   end
 
-  IconSkin.StripAllVisualLayers(itemFrame)
+  IconSkin.StripAllVisualLayers(itemFrame, {
+    cooldownViewer = true,
+    skipBackdropFrame = true,
+  })
   IconSkin.StripCooldownManagerOverlay(itemFrame)
 
   if iconTex.SetParent then
@@ -1229,6 +1167,6 @@ function IconSkin.SkinCooldownViewerItem(itemFrame)
 
   IconSkin.HideCooldownViewerDebuffAndPandemic(itemFrame)
   IconSkin.ApplyBorder(itemFrame)
-  itemFrame.__pui_cv_skinned = true
+  itemState.cooldownViewerSkinned = true
 end
 
