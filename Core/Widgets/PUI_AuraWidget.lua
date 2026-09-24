@@ -4,6 +4,8 @@ local AuraWidget = {}
 ns.AuraWidget = AuraWidget
 
 local CreateFrame = CreateFrame
+local InCombatLockdown = InCombatLockdown
+local C_Secrets = C_Secrets
 local table_sort = table.sort
 
 local MAX_STACK_COLOR_THRESHOLD = 30
@@ -16,6 +18,12 @@ local applicationThresholdSnapshotGeneration = 0
 local applicationThresholdTickFrame
 local applicationThresholdWakeFrame
 local applicationThresholdIdleTicks = 0
+
+local function IsApplicationThresholdDataRestricted()
+  return InCombatLockdown()
+    or C_Secrets.ShouldAurasBeSecret()
+    or C_Secrets.ShouldCooldownsBeSecret()
+end
 
 local function IsUsableSpellID(spellID)
   if type(spellID) ~= "number" then
@@ -125,12 +133,11 @@ local function ApplicationThresholdFrameMatches(frame, source)
     return false
   end
   local cooldownID = frame.cooldownID
+  if not IsUsableSpellID(cooldownID) then
+    return false
+  end
   if source.childCooldownID and cooldownID == source.childCooldownID then
     return true
-  end
-
-  if not cooldownID then
-    return false
   end
 
   local info = C_CooldownViewer.GetCooldownViewerCooldownInfo(cooldownID)
@@ -192,11 +199,18 @@ local function FindApplicationThresholdChild(source)
 
   local frames = snapshot.frames
 
-  -- A clean CDM identity can validate a binding. During the restricted window,
-  -- retain the same pooled child only while it still serves the original slot.
   local child = source.child
+  if IsApplicationThresholdDataRestricted() then
+    if child and snapshot.active[child] == true then
+      return child
+    end
+    return nil
+  end
+
+  local childCooldownID = child and child.cooldownID or nil
   if child
-    and child.cooldownID == source.childCooldownID
+    and IsUsableSpellID(childCooldownID)
+    and childCooldownID == source.childCooldownID
     and ApplicationThresholdFrameHasSourceUnit(child, source)
     and snapshot.active[child] == true
   then
@@ -215,7 +229,8 @@ local function FindApplicationThresholdChild(source)
       )
     then
       source.child = frame
-      source.childCooldownID = frame.cooldownID
+      local cooldownID = frame.cooldownID
+      source.childCooldownID = IsUsableSpellID(cooldownID) and cooldownID or nil
       return frame
     end
   end
@@ -233,7 +248,8 @@ local function FindApplicationThresholdChild(source)
 
   if candidate then
     source.child = candidate
-    source.childCooldownID = candidate.cooldownID
+    local cooldownID = candidate.cooldownID
+    source.childCooldownID = IsUsableSpellID(cooldownID) and cooldownID or nil
   end
 
   return candidate
@@ -284,6 +300,7 @@ end
 
 local function UpdateApplicationThresholdTracks()
   local tickLive = false
+  local dataRestricted = IsApplicationThresholdDataRestricted()
 
   applicationThresholdSnapshotGeneration = applicationThresholdSnapshotGeneration + 1
 
@@ -293,14 +310,15 @@ local function UpdateApplicationThresholdTracks()
     else
       local child = FindApplicationThresholdChild(source)
       local active
-      if child then
+      if child and not dataRestricted then
         active = child:IsActive()
       end
 
       local applicationsUpdated = child
         and FeedCDMStackApplications(parts, child)
         or false
-      if applicationsUpdated ~= true
+      if not dataRestricted
+        and applicationsUpdated ~= true
         and child
         and not issecretvalue(active)
         and active ~= true
@@ -311,7 +329,11 @@ local function UpdateApplicationThresholdTracks()
         FeedApplicationThresholds(parts, 0)
       end
 
-      if issecretvalue(active) then
+      if dataRestricted then
+        if applicationsUpdated == true then
+          tickLive = true
+        end
+      elseif issecretvalue(active) then
         if applicationsUpdated == true then
           tickLive = true
         end
