@@ -1136,14 +1136,12 @@ function IconSkin.SkinCooldownViewerItem(itemFrame)
   })
   IconSkin.StripCooldownManagerOverlay(itemFrame)
 
-  if iconTex.SetParent then
-    iconTex:SetParent(itemFrame)
-  end
+  local iconParent = r.iconContainer or itemFrame
   if iconTex.ClearAllPoints then
     iconTex:ClearAllPoints()
   end
   if iconTex.SetAllPoints then
-    iconTex:SetAllPoints(itemFrame)
+    iconTex:SetAllPoints(iconParent)
   end
   if iconTex.SetTexCoord then
     iconTex:SetTexCoord(0.08, 0.92, 0.08, 0.92)
