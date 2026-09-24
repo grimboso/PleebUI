@@ -1778,6 +1778,30 @@ local function _PCM_BindNativeIconSettings(itemFrame, viewerKey)
   return frameData, record, entry
 end
 
+local function _PCM_RestoreNativeIconTexture(itemFrame, frameData)
+  local entry = frameData and frameData.iconIdentity or nil
+  local spellID = entry and (entry.baseSpellID or entry.spellID) or nil
+  if not itemFrame or not spellID or _PCM_IsSecret(spellID) then
+    return false
+  end
+
+  local texture = C_Spell.GetSpellTexture(spellID)
+  if _PCM_IsSecret(texture)
+    or (type(texture) ~= "number" and type(texture) ~= "string")
+  then
+    return false
+  end
+
+  local regions = IconSkin.ResolveCooldownViewerRegions(itemFrame)
+  local icon = regions and regions.icon or nil
+  if not icon then
+    return false
+  end
+
+  icon:SetTexture(texture)
+  return true
+end
+
 local function _PCM_GetItemIconSize(itemFrame, viewerKey)
   local frameData = PCMHooks.PeekFrameData(itemFrame)
   local iconSize = frameData and frameData.sizeW or nil
@@ -2591,8 +2615,9 @@ local function _PCM_HandleViewerAcquire(frame, key, itemFrame, isRebind)
     return
   end
 
-  if fd.iconTextureRestorePending == true then
-    itemFrame:RefreshSpellTexture()
+  if fd.iconTextureRestorePending == true
+    and _PCM_RestoreNativeIconTexture(itemFrame, fd)
+  then
     fd.iconTextureRestorePending = nil
   end
 
@@ -4219,8 +4244,7 @@ _PCM_ClearNativeIconPresentation = function(itemFrame, viewerKey)
   if frameData.iconCustomTextureApplied ~= nil then
     if PCMRuntime:IsDataRestricted() then
       frameData.iconTextureRestorePending = true
-    else
-      itemFrame:RefreshSpellTexture()
+    elseif _PCM_RestoreNativeIconTexture(itemFrame, frameData) then
       frameData.iconTextureRestorePending = nil
     end
   end
@@ -4303,7 +4327,11 @@ _PCM_ApplyIconAppearance = function(itemFrame, viewerKey, frameData)
   elseif frameData.iconCustomTextureApplied ~= nil then
     frameData.iconCustomTextureApplied = nil
     frameData.iconCustomTextureNeedsReconcile = nil
-    itemFrame:RefreshSpellTexture()
+    if _PCM_RestoreNativeIconTexture(itemFrame, frameData) then
+      frameData.iconTextureRestorePending = nil
+    else
+      frameData.iconTextureRestorePending = true
+    end
   else
     frameData.iconCustomTextureNeedsReconcile = nil
   end
@@ -4371,6 +4399,12 @@ function Cooldowns:ApplyNativeIndividualIconSettings(itemFrame, viewerKey, state
   end
 
   local frameData, record = _PCM_BindNativeIconSettings(itemFrame, viewerKey)
+  if frameData.iconTextureRestorePending == true
+    and not PCMRuntime:IsDataRestricted()
+    and _PCM_RestoreNativeIconTexture(itemFrame, frameData)
+  then
+    frameData.iconTextureRestorePending = nil
+  end
   if stateName then
     frameData.iconCooldownState = stateName
     if stateName == "AURA" then
