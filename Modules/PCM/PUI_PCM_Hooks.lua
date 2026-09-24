@@ -393,34 +393,6 @@ function Hooks.HookGlowManager(isEnabled, startProcGlow, stopProcGlow)
   end
 end
 
-local viewerLayoutHooked = setmetatable({}, { __mode = "k" })
-local viewerLayoutCallbacks = setmetatable({}, { __mode = "k" })
-
-function Hooks.HookViewerLayout(viewer, cb)
-  local callbacks = viewerLayoutCallbacks[viewer]
-  if not callbacks then
-    callbacks = {}
-    viewerLayoutCallbacks[viewer] = callbacks
-  end
-  callbacks[#callbacks + 1] = cb
-
-  if viewerLayoutHooked[viewer] then
-    return
-  end
-  viewerLayoutHooked[viewer] = true
-
-  hooksecurefunc(viewer, "RefreshLayout", function()
-    if _InBlizzardEditMode() then
-      return
-    end
-
-    local list = viewerLayoutCallbacks[viewer]
-    for i = 1, #list do
-      list[i](viewer, "RefreshLayout")
-    end
-  end)
-end
-
 GetFrameData = P:Def("GetFrameData", GetFrameData)
 Hooks.PeekFrameData = P:Def("Hooks:PeekFrameData", Hooks.PeekFrameData)
 Hooks.GetItemViewerKey = P:Def("Hooks:GetItemViewerKey", Hooks.GetItemViewerKey)
@@ -434,11 +406,10 @@ Hooks.SetRuntimeEnabled = P:Def("Hooks:SetRuntimeEnabled", Hooks.SetRuntimeEnabl
 Hooks.SetBlizzardEditModeActive = P:Def("Hooks:SetBlizzardEditModeActive", Hooks.SetBlizzardEditModeActive)
 _PCM_HooksEnabled = P:Def("_PCM_HooksEnabled", _PCM_HooksEnabled)
 _PCM_DataHooksShouldRun = P:Def("_PCM_DataHooksShouldRun", _PCM_DataHooksShouldRun)
-  Hooks.SetBBIconHidden = P:Def("Hooks:SetBBIconHidden", Hooks.SetBBIconHidden)
+Hooks.SetBBIconHidden = P:Def("Hooks:SetBBIconHidden", Hooks.SetBBIconHidden)
 Hooks.GetBBIconHidden = P:Def("Hooks:GetBBIconHidden", Hooks.GetBBIconHidden)
 Hooks.HookEditMode = P:Def("Hooks:HookEditMode", Hooks.HookEditMode)
 Hooks.HookGlowManager = P:Def("Hooks:HookGlowManager", Hooks.HookGlowManager)
-Hooks.HookViewerLayout = P:Def("Hooks:HookViewerLayout", Hooks.HookViewerLayout)
 
 Hooks.GetFrameData = GetFrameData
 Hooks.InBlizzardEditMode = _InBlizzardEditMode
