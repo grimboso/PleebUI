@@ -241,16 +241,16 @@ local function _GetRowState(rowFrame)
     __PUI_PCM_BuffBarRowState[rowFrame] = state
   end
 
-  if not state.layoutHooks then
-    state.layoutHooks = true
-
-    rowFrame:HookScript("OnShow", function()
-      _RequestBuffBarRefresh("row-show")
-    end)
-
-    rowFrame:HookScript("OnHide", function()
-      _RequestBuffBarRefresh("row-hide")
-    end)
+  if not state.activeStateHooked then
+    state.activeStateHooked = true
+    PCMHooks.HookMethod(
+      rowFrame,
+      "OnActiveStateChanged",
+      "BUFFBAR_RowActiveStateChanged",
+      function()
+        _RequestBuffBarRefresh("row-active-state")
+      end
+    )
   end
 
   return state
