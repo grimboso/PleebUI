@@ -1959,10 +1959,6 @@ _ApplyIconSizeToItemFrame = function(itemFrame, viewerKey, iconSize)
     return
   end
 
-  if itemFrame.SetScale then
-    itemFrame:SetScale(1)
-  end
-
   if itemFrame.SetSize then
     itemFrame:SetSize(iconSize, iconSize)
   end
@@ -1978,9 +1974,6 @@ _ApplyIconSizeToItemFrame = function(itemFrame, viewerKey, iconSize)
   local icon          = (itemFrame.Icon and itemFrame.Icon.SetTexture) and itemFrame.Icon or nil
 
   if iconContainer and iconContainer.SetSize then
-    if iconContainer.SetScale then
-      iconContainer:SetScale(1)
-    end
     iconContainer:SetSize(iconSize, iconSize)
   elseif icon and icon.SetSize then
     icon:SetSize(iconSize, iconSize)
