@@ -284,7 +284,7 @@ local function _StyleRow_StripChrome(rowFrame)
   rowFrame.Bar.Pip:Hide()
 end
 
-local function _StyleRow_ApplyBar(rowFrame, bar, bb)
+local function _StyleRow_ApplyBar(rowFrame, bar, bb, state)
   local tex
   local texName = bb and bb.texture or "Pleebar"
   if texName then
@@ -310,10 +310,10 @@ local function _StyleRow_ApplyBar(rowFrame, bar, bb)
   end
 
   local bgR, bgG, bgB, bgA = _GetBuffBarBackgroundColor()
-  local bg = bar.__PUIBuffBarBG
+  local bg = state.background
   if not bg then
     bg = bar:CreateTexture(nil, "BACKGROUND")
-    bar.__PUIBuffBarBG = bg
+    state.background = bg
   end
   bg:ClearAllPoints()
   bg:SetPoint("TOPLEFT", bar, "TOPLEFT", 0, 0)
@@ -328,7 +328,10 @@ local function _StyleRow_ApplyIcon(rowFrame)
 
   IconSkin.StripIconMasks(icon)
   icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
-  IconSkin.StripAllVisualLayers(container, { keepBackdrop = false })
+  IconSkin.StripAllVisualLayers(container, {
+    cooldownViewer = true,
+    skipBackdropFrame = true,
+  })
   IconSkin.MakeIconSquare(container, { crop = 0.08 })
   IconSkin.MakeIconSquare(icon, { crop = 0.08 })
 
@@ -459,7 +462,7 @@ local function _StyleRow(rowFrame)
   local bar = rowFrame.Bar
 
   _StyleRow_StripChrome(rowFrame)
-  _StyleRow_ApplyBar(rowFrame, bar, bb)
+  _StyleRow_ApplyBar(rowFrame, bar, bb, state)
   local iconContainer = _StyleRow_ApplyIcon(rowFrame)
   _StyleRow_ApplyFonts(rowFrame)
   _StyleRow_ApplyBorders(bar, iconContainer, bb)
