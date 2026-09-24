@@ -483,22 +483,6 @@ local function HookViewer(entry)
     AcquireItem(entry, itemFrame, "viewer-acquire")
   end)
 
-  Hooks.HookScript(viewer, "OnShow", "PCMRuntime_ViewerShow", function(owner)
-    if not state.enabled or entry.frame ~= owner then
-      return
-    end
-
-    MarkViewerDirty(entry, Runtime.Dirty.VISIBILITY, "viewer-show")
-  end)
-
-  Hooks.HookScript(viewer, "OnHide", "PCMRuntime_ViewerHide", function(owner)
-    if not state.enabled or entry.frame ~= owner then
-      return
-    end
-
-    MarkViewerDirty(entry, Runtime.Dirty.VISIBILITY, "viewer-hide")
-  end)
-
 end
 
 function Runtime:RegisterViewer(key, resolver, dynamicMembership)
