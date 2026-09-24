@@ -359,8 +359,8 @@ local function _PrepareBuffIcon(icon, desiredSize, fontDB, IS)
     end
   end
 
-  if not iconFd.__puiBuffAuraHooked then
-    iconFd.__puiBuffAuraHooked = true
+  if not iconFd.__puiBuffActiveStateHooked then
+    iconFd.__puiBuffActiveStateHooked = true
 
     local function QueueBuffIconVisibilityRefresh(self)
       if PCMRuntime:IsPresentationSuspended() then
@@ -368,11 +368,15 @@ local function _PrepareBuffIcon(icon, desiredSize, fontDB, IS)
       end
 
       _RefreshBuffIconVisibility(self)
-      _RequestUnifiedBuffRefresh("layout", self:GetViewerFrame())
+      _RequestUnifiedBuffRefresh("layout", PCMRuntime:GetViewer(VIEWER_KEY))
     end
 
-    Hooks.HookScript(icon, "OnShow", "BUFFS_Icon_OnShow", QueueBuffIconVisibilityRefresh)
-    Hooks.HookScript(icon, "OnHide", "BUFFS_Icon_OnHide", QueueBuffIconVisibilityRefresh)
+    Hooks.HookMethod(
+      icon,
+      "OnActiveStateChanged",
+      "BUFFS_Icon_ActiveStateChanged",
+      QueueBuffIconVisibilityRefresh
+    )
   end
 
   if not PCMRuntime:IsDataRestricted() then
