@@ -52,7 +52,6 @@ function Hooks.SetItemViewerKey(itemFrame, viewerKey)
 end
 
 local _PCM_HooksEnabled
-local _PCM_GeometryHooksShouldRun
 local _PCM_DataHooksShouldRun
 
 local _pcmHooksEnabledCache = nil
@@ -174,17 +173,13 @@ _PCM_HooksEnabled = function()
   return _pcmHooksEnabledCache == true
 end
 
-_PCM_GeometryHooksShouldRun = function()
+_PCM_DataHooksShouldRun = function()
   if _pcmHooksEnabledDirty or _pcmHooksEnabledCache == nil then
     _PCM_RefreshHooksRuntimeState()
   end
 
   return _pcmHooksRuntimeActive == true
     and not ns.PCMRuntime:IsPresentationSuspended()
-end
-
-_PCM_DataHooksShouldRun = function()
-  return _PCM_GeometryHooksShouldRun()
     and not ns.PCMRuntime:IsDataRestricted()
 end
 
@@ -438,7 +433,6 @@ Hooks.RefreshRuntimeState = P:Def("Hooks:RefreshRuntimeState", Hooks.RefreshRunt
 Hooks.SetRuntimeEnabled = P:Def("Hooks:SetRuntimeEnabled", Hooks.SetRuntimeEnabled)
 Hooks.SetBlizzardEditModeActive = P:Def("Hooks:SetBlizzardEditModeActive", Hooks.SetBlizzardEditModeActive)
 _PCM_HooksEnabled = P:Def("_PCM_HooksEnabled", _PCM_HooksEnabled)
-_PCM_GeometryHooksShouldRun = P:Def("_PCM_GeometryHooksShouldRun", _PCM_GeometryHooksShouldRun)
 _PCM_DataHooksShouldRun = P:Def("_PCM_DataHooksShouldRun", _PCM_DataHooksShouldRun)
   Hooks.SetBBIconHidden = P:Def("Hooks:SetBBIconHidden", Hooks.SetBBIconHidden)
 Hooks.GetBBIconHidden = P:Def("Hooks:GetBBIconHidden", Hooks.GetBBIconHidden)
