@@ -824,7 +824,7 @@ local function _KB_EnsureHotKeyFontString(item)
 
   local overlay = CreateFrame("Frame", nil, item)
   overlay:SetAllPoints()
-  overlay:SetFrameLevel(item:GetFrameLevel() + 20)
+  overlay:SetFrameLevel(item:GetFrameLevel() + 2)
   st.keybindOverlay = overlay
 
   fs = overlay:CreateFontString(nil, "OVERLAY", "NumberFontNormalSmallGray")
@@ -923,11 +923,12 @@ local function _KB_GetItemKeybind(item, baseSpellID, overrideSpellID)
 end
 
 local function _KB_ApplyFontStyle(item, fs, viewerKey)
+  local viewerDefault = Cooldowns._ResolveFontOpts("keybind", viewerKey)
   local opts = IconSettings:ResolveFontOptions(
     item,
     viewerKey,
     "keybind",
-    Cooldowns._ResolveFontOpts("keybind", viewerKey)
+    viewerDefault
   )
   if not (opts and fs and fs.SetFont) then
     return
@@ -1135,7 +1136,7 @@ end
 local function _KB_OnRefreshFrameUpdate(self)
   self:Hide()
 
-  if PCMRuntime:IsPresentationRestricted() then
+  if PCMRuntime:IsDataRestricted() then
     return
   end
 
@@ -1242,7 +1243,7 @@ local function _KB_OnEvent(_, event, arg1, arg2)
 
   if event == "ADDON_RESTRICTION_STATE_CHANGED" then
     if arg2 == Enum.AddOnRestrictionState.Inactive
-      and not PCMRuntime:IsPresentationRestricted()
+      and not PCMRuntime:IsDataRestricted()
       and _kbDirty
     then
       _kbEventFrame:Show()
