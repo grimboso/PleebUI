@@ -2348,7 +2348,8 @@ local function RelayoutSmartSnapCluster(startEntry, finalize, syncSize)
 
   EnsureSmartSnapLoaded()
 
-  if InCombatLockdown() then
+  -- The first world entry closes startup; before it, restore addon-owned mover geometry even on a combat reload.
+  if InCombatLockdown() and FrameUtil._smartSnapWorldReady then
     local shouldFinalize = finalize ~= false
     if shouldFinalize or PendingSmartSnapRelayouts[startEntry.key] == nil then
       PendingSmartSnapRelayouts[startEntry.key] = shouldFinalize
@@ -2425,11 +2426,11 @@ function FrameUtil.RelayoutSmartSnapCluster(key, finalize)
   end
 end
 
-local function FlushPendingSmartSnapRelayouts()
+local function FlushPendingSmartSnapRelayouts(allowStartup)
   FrameUtil._smartSnapRuntimeRelayoutScheduled = false
 
-  if InCombatLockdown()
-    or not FrameUtil._smartSnapWorldReady
+  local startup = allowStartup == true and not FrameUtil._smartSnapWorldReady
+  if (not startup and (InCombatLockdown() or not FrameUtil._smartSnapWorldReady))
     or (not next(PendingSmartSnapRelayouts) and not next(PendingSmartSnapRuntimeRelayouts))
   then
     return
@@ -2469,63 +2470,13 @@ local function FlushPendingSmartSnapRelayouts()
   end
 end
 
-local function FlushCombatSafeSmartSnapRuntimeRelayouts()
-  if FrameUtil._profileTransitionActive == true
-    or not FrameUtil._smartSnapWorldReady
-    or not next(PendingSmartSnapRuntimeRelayouts)
-  then
-    return
-  end
-
-  EnsureSmartSnapLoaded()
-
-  local roots = {}
-  local queuedKeys = {}
-  for key in pairs(PendingSmartSnapRuntimeRelayouts) do
-    local entry = MoversByKey[key]
-    local smartSnap = GetSmartSnapOptions(entry)
-    if smartSnap and smartSnap.allowCombatRuntimeLayout == true then
-      local root = GetStableSmartSnapRoot(key)
-      if root then
-        roots[root.key] = root
-        queuedKeys[key] = true
-      end
-    end
-  end
-
-  FrameUtil._smartSnapApplying = true
-
-  for _, layoutRoot in pairs(roots) do
-    for _, step in ipairs(BuildSmartSnapLayoutSteps(layoutRoot)) do
-      local smartSnap = GetSmartSnapOptions(step.entry)
-      if smartSnap and smartSnap.allowCombatRuntimeLayout == true then
-        PositionSmartSnapEntry(
-          step.entry,
-          step.target,
-          step.relation,
-          step.alignment,
-          step.gap,
-          step.sideOffset
-        )
-        step.entry._smartSnapState = CaptureSmartSnapState(step.entry)
-      end
-    end
-  end
-
-  FrameUtil._smartSnapApplying = false
-
-  for key in pairs(queuedKeys) do
-    PendingSmartSnapRuntimeRelayouts[key] = nil
-  end
-end
-
 function FrameUtil.FinalizePendingSmartSnapRuntimeLayout()
-  if InCombatLockdown() then
-    FlushCombatSafeSmartSnapRuntimeRelayouts()
+  local startup = not FrameUtil._smartSnapWorldReady
+  if InCombatLockdown() and not startup then
     return
   end
 
-  FlushPendingSmartSnapRelayouts()
+  FlushPendingSmartSnapRelayouts(startup)
 end
 
 local function SchedulePendingSmartSnapRelayouts()
@@ -2546,7 +2497,11 @@ local function QueueSmartSnapRuntimeRelayout(key)
   end
 
   PendingSmartSnapRuntimeRelayouts[key] = true
-  SchedulePendingSmartSnapRelayouts()
+  if FrameUtil._smartSnapWorldReady then
+    SchedulePendingSmartSnapRelayouts()
+  else
+    FrameUtil.FinalizePendingSmartSnapRuntimeLayout()
+  end
 end
 
 function FrameUtil.RefreshSmartSnapRuntimeLayout(key)
