@@ -1927,7 +1927,6 @@ local function _ReskinItemFrame(itemFrame, viewerKey)
   end
 
   PCMHooks.SetItemViewerKey(itemFrame, viewerKey)
-  PCMHooks.HookIconFrame(itemFrame, viewerKey)
 
   local frameData, record = _PCM_BindNativeIconSettings(itemFrame, viewerKey)
   if not record and (
@@ -2580,7 +2579,6 @@ local function _PCM_HandleViewerAcquire(frame, key, itemFrame, isRebind)
   local fd = PCMHooks.GetFrameData(itemFrame)
   fd.viewerFrame = frame
   fd.viewerKey = key
-  PCMHooks.HookIconFrame(itemFrame, key)
 
   if isRebind ~= true then
     _PCM_ParkViewerItem(frame, itemFrame)
