@@ -3774,6 +3774,14 @@ function FrameUtil.RefreshTheme()
     SetEditModeVisualColors(FrameUtil._selectionBox, 0.18, 0.95)
   end
 
+  local editDialog = FrameUtil._editDialog
+  if editDialog and editDialog.minimizeBtn then
+    ns.Theme.ApplyExpandCollapseButton(
+      editDialog.minimizeBtn,
+      not FrameUtil._instructionsCollapsed
+    )
+  end
+
   FrameUtil._RefreshSelectionVisuals()
 end
 
@@ -4327,13 +4335,14 @@ local function EnsureEditDialog()
   minimizeBtn:SetPoint("RIGHT", keybindsBtn, "LEFT", -8, 0)
 
   ns.Theme.WidgetSkins.UIButton(minimizeBtn)
+  minimizeBtn:SetText("")
 
   local function UpdateInstructionsVisibility()
     local collapsed = FrameUtil._instructionsCollapsed and true or false
     hint:SetShown(not collapsed)
     buttonRow:SetShown(not collapsed)
     f:SetHeight(Round(collapsed and 44 or 300))
-    minimizeBtn:SetText(collapsed and "+" or "-")
+    ns.Theme.ApplyExpandCollapseButton(minimizeBtn, not collapsed)
   end
 
   minimizeBtn:SetScript("OnClick", function()
