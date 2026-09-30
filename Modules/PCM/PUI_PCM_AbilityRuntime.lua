@@ -807,12 +807,6 @@ local function RefreshSpellCooldown(record)
     return
   end
 
-  local cooldownInfo = C_Spell.GetSpellCooldown(spellID)
-  if not cooldownInfo or cooldownInfo.isActive ~= true then
-    PCMPresentation.SetSpellCooldownDuration(record.parts, nil)
-    return
-  end
-
   local style = GetRecordStyle(record)
   local swipe = style.swipe or {}
   local viewerSwipe = style.viewerSwipe or {}
@@ -841,13 +835,8 @@ local function RefreshChargeState(record)
     return
   end
 
-  local chargeInfo = C_Spell.GetSpellCharges(chargeSpellID)
-  if chargeInfo and chargeInfo.isActive == true then
-    local duration = C_Spell.GetSpellChargeDuration(chargeSpellID)
-    PCMPresentation.SetChargeDuration(record.parts, duration)
-  else
-    PCMPresentation.SetChargeDuration(record.parts, nil)
-  end
+  local duration = C_Spell.GetSpellChargeDuration(chargeSpellID)
+  PCMPresentation.SetChargeDuration(record.parts, duration)
 
   local displayCount = C_Spell.GetSpellDisplayCount(chargeSpellID)
   PCMPresentation.SetDisplayCount(record.parts, displayCount)
@@ -951,7 +940,14 @@ local function RefreshItemCooldown(record, itemID)
     return
   end
 
+  if C_Secrets.ShouldCooldownsBeSecret() == true then
+    return
+  end
+
   local startTime, duration = C_Item.GetItemCooldown(itemID)
+  if IsSecret(startTime) or IsSecret(duration) then
+    return
+  end
   PCMPresentation.SetItemCooldown(record.parts, startTime, duration)
   ApplyStateAppearance(record, startTime ~= 0 and "COOLDOWN" or "READY", false)
 end
@@ -964,7 +960,14 @@ local function RefreshEquipmentCooldown(record)
     return
   end
 
+  if C_Secrets.ShouldCooldownsBeSecret() == true then
+    return
+  end
+
   local startTime, duration = GetInventoryItemCooldown("player", equipSlot)
+  if IsSecret(startTime) or IsSecret(duration) then
+    return
+  end
   PCMPresentation.SetItemCooldown(record.parts, startTime, duration)
   ApplyStateAppearance(record, startTime ~= 0 and "COOLDOWN" or "READY", false)
 end
@@ -985,15 +988,17 @@ local function RefreshVerifiedSpellCategorySource(record)
   if itemID then
     RefreshItemCooldown(record, itemID)
   elseif spellID then
-    local cooldownInfo = C_Spell.GetSpellCooldown(spellID)
-    if not cooldownInfo then
+    local duration = C_Spell.GetSpellCooldownDuration(spellID, true)
+    PCMPresentation.SetSpellCooldownDuration(record.parts, duration)
+    if C_Secrets.ShouldCooldownsBeSecret() == true then
       return
     end
-    if cooldownInfo.isActive == true then
-      local duration = C_Spell.GetSpellCooldownDuration(spellID, true)
-      PCMPresentation.SetSpellCooldownDuration(record.parts, duration)
-    else
-      PCMPresentation.SetSpellCooldownDuration(record.parts, nil)
+    local cooldownInfo = C_Spell.GetSpellCooldown(spellID)
+    if not cooldownInfo
+      or IsSecret(cooldownInfo.isActive)
+      or IsSecret(cooldownInfo.isOnGCD)
+    then
+      return
     end
     ApplyStateAppearance(
       record,
@@ -1040,18 +1045,24 @@ local function RefreshStateAppearance(record)
     ApplyStateAppearance(record, "AURA", false)
     return
   end
+  if C_Secrets.ShouldCooldownsBeSecret() == true then
+    return
+  end
 
   local stateName
   local atMaxCharges = false
   if entry.charges == true and record.runtimeChargeSpellID then
     local chargeInfo = C_Spell.GetSpellCharges(record.runtimeChargeSpellID)
-    if chargeInfo then
+    if chargeInfo and not IsSecret(chargeInfo.isActive) then
       atMaxCharges = chargeInfo.isActive ~= true
     end
   end
 
   local cooldownInfo = C_Spell.GetSpellCooldown(record.runtimeSpellID)
-  if not cooldownInfo then
+  if not cooldownInfo
+    or IsSecret(cooldownInfo.isActive)
+    or IsSecret(cooldownInfo.isOnGCD)
+  then
     return
   end
   stateName = cooldownInfo.isActive == true and cooldownInfo.isOnGCD ~= true

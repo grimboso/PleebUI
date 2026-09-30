@@ -1367,9 +1367,9 @@ function Cooldowns:ConsumableTracker_Rebuild()
     return
   end
 
-  EnsureIcons()
   local cfg = GetDB()
   RefreshCooldownFont(cfg)
+  EnsureIcons()
   ApplyAnchor(Tracker.container, cfg)
 
   local ordered = Tracker.orderedIcons
