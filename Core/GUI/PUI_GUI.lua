@@ -512,7 +512,7 @@ local function _PUI_CreateProviderOption(node, activePath)
   end
 
   if type(cachedOptions) == "table" then
-    local opts = _PUI_SanitizeOptionsNode(cachedOptions)
+    local opts = cachedOptions
     opts.type = opts.type or "group"
     opts.name = opts.name or node.name or node.key or "PleebUI"
     opts.order = node.order or opts.order or 50
@@ -3083,7 +3083,7 @@ function Addon:HandleOptionsGroupSelection(widget, uniquevalue)
     return false
   end
 
-  return true
+  return true, optionsModelChanged
 end
 
 local function _PUI_OptionsPathStartsWith(path, prefix)
