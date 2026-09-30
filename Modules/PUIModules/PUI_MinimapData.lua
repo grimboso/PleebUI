@@ -5,6 +5,7 @@
 
 local ADDON_NAME, ns = ...
 local Addon = ns.Addon
+local Theme = ns.Theme
 
 local MinimapData = {}
 ns.MinimapData = MinimapData
@@ -184,7 +185,7 @@ function MinimapData.SetBucketEnabled(enabled)
 
     if PUIBucket then
       if PUIBucket.__puiPanel then PUIBucket.__puiPanel:Hide() end
-      if PUIBucket.__puiToggleText then PUIBucket.__puiToggleText:SetText("+") end
+      Theme.ApplyExpandCollapseButton(PUIBucket.__puiToggle, false)
       PUIBucket:Hide()
     end
     return
@@ -297,7 +298,7 @@ local function _BucketScheduleAutoCollapse()
     _bucketExpanded = false
     if PUIBucket then
       if PUIBucket.__puiPanel then PUIBucket.__puiPanel:Hide() end
-      if PUIBucket.__puiToggleText then PUIBucket.__puiToggleText:SetText("+") end
+      Theme.ApplyExpandCollapseButton(PUIBucket.__puiToggle, false)
     end
   end)
 end
@@ -316,11 +317,11 @@ local function _BucketSetExpanded(expanded)
   if PUIBucket.__puiPanel then
     if _bucketExpanded then
       PUIBucket.__puiPanel:Show()
-      if PUIBucket.__puiToggleText then PUIBucket.__puiToggleText:SetText("-") end
+      Theme.ApplyExpandCollapseButton(PUIBucket.__puiToggle, true)
       _BucketScheduleAutoCollapse()
     else
       PUIBucket.__puiPanel:Hide()
-      if PUIBucket.__puiToggleText then PUIBucket.__puiToggleText:SetText("+") end
+      Theme.ApplyExpandCollapseButton(PUIBucket.__puiToggle, false)
       _BucketCancelAutoCollapse()
     end
   end
@@ -996,16 +997,12 @@ function MinimapData.InitializePUIBucket()
 
   -- Toggle button
   local toggle = CreateFrame("Button", nil, handle)
+  PUIBucket.__puiToggle = toggle
   toggle:SetAllPoints(handle)
+  toggle:SetFrameLevel(handle:GetFrameLevel() + 1)
   toggle:EnableMouse(true)
 
-  local t = toggle:CreateFontString(nil, "OVERLAY")
-  PUIBucket.__puiToggleText = t
-  t:SetPoint("CENTER", toggle, "CENTER", 0, 0)
-  t:SetFont(STANDARD_TEXT_FONT, 16, "OUTLINE")
-  t:SetText("+")
-  t:SetJustifyH("CENTER")
-  t:SetJustifyV("MIDDLE")
+  Theme.ApplyExpandCollapseButton(toggle, false)
 
   toggle:SetScript("OnClick", function()
     _BucketSetExpanded(not _bucketExpanded)
