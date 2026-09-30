@@ -117,6 +117,7 @@ end
 local PCM_TREE_ROW_HEIGHT = 54
 local PCM_TREE_ROW_GAP = 4
 local PCM_TREE_TOP_INSET = 10
+local PCM_TREE_SCROLLBAR_LANE = 22
 
 local function _PUI_GetPCMTreeVisibleRows(widget)
   local availableHeight = math.max(
@@ -275,7 +276,7 @@ local function _PUI_SkinPCMTrackerTreeButton(button, isSelected, data)
   button:SetPushedTexture("")
   button:SetHighlightTexture("")
   button:SetDisabledTexture("")
-  button:SetHeight(38)
+  button:SetHeight(button.__puiCompactPCMTree == true and PCM_TREE_ROW_HEIGHT or 38)
   button:SetHitRectInsets(0, 0, 0, 0)
 
   Theme.SetSquareBackdrop(button, {
@@ -463,6 +464,12 @@ local function _PUI_SkinPCMTrackerTreeButton(button, isSelected, data)
 end
 
 function WidgetSkins.TreeButton(button, isSelected)
+  local trackerData = _PUI_GetPCMTrackerTreeData(button)
+  if button.__puiUseTreeCards == true and trackerData then
+    button.__puiTreeCardLayoutKey = nil
+    return _PUI_SkinPCMTrackerTreeButton(button, isSelected, trackerData)
+  end
+
   if button.__puiCompactPCMTree == true then
     button.__puiTreeCardLayoutKey = nil
     _PUI_HidePCMTrackerTreeCard(button)
@@ -480,42 +487,14 @@ function WidgetSkins.TreeButton(button, isSelected)
     toggle:ClearAllPoints()
     toggle:SetPoint("RIGHT", button, "RIGHT", -8, 0)
     toggle:SetSize(26, 26)
-    toggle:SetNormalTexture("")
-    toggle:SetPushedTexture("")
     toggle:SetHighlightTexture("")
 
     Theme.SetSquareBackdrop(toggle, {
       bg = { 0, 0, 0, 0 },
-      border = Theme.GetColors().border,
-    }, math.max(Theme.GetEdgeSize(), 2))
+      border = { 0, 0, 0, 0 },
+    }, 0)
 
-    local glyph = toggle.__puiTreeToggleGlyph
-    if not glyph then
-      glyph = toggle:CreateFontString(nil, "OVERLAY")
-      Theme.MarkCreatedWidgetChrome(glyph)
-      toggle.__puiTreeToggleGlyph = glyph
-    end
-
-    Theme.ApplyFont(glyph, "body")
-    glyph:ClearAllPoints()
-    glyph:SetPoint("CENTER", toggle, "CENTER", 0, 0)
-    glyph:SetTextColor(
-      Theme.GetColors().accent[1],
-      Theme.GetColors().accent[2],
-      Theme.GetColors().accent[3],
-      Theme.GetColors().accent[4]
-    )
-
-    local groups = (button.obj.status or button.obj.localstatus).groups
-    glyph:SetText(groups[button.uniquevalue] and "-" or "+")
-    glyph:SetShown(toggle:IsShown())
     return
-  end
-
-  local trackerData = _PUI_GetPCMTrackerTreeData(button)
-  if button.__puiUseTreeCards == true and trackerData then
-    button.__puiTreeCardLayoutKey = nil
-    return _PUI_SkinPCMTrackerTreeButton(button, isSelected, trackerData)
   end
 
   _PUI_HidePCMTrackerTreeCard(button)
@@ -644,18 +623,6 @@ function WidgetSkins.TreeButton(button, isSelected)
     button.toggle:SetSize(12, 12)
   end
 
-  local normal = button.toggle:GetNormalTexture()
-  if normal then
-    local accent = colors.accent
-    normal:SetVertexColor(accent[1], accent[2], accent[3], accent[4])
-  end
-
-  local pushed = button.toggle:GetPushedTexture()
-  if pushed then
-    local accent = colors.accent
-    pushed:SetVertexColor(accent[1], accent[2], accent[3], accent[4])
-  end
-
   local text = button.text
   text.__puiOptionsFontOwned = true
 
@@ -775,8 +742,6 @@ function WidgetSkins.InlineGroup(widget)
 end
 
 local function _PUI_StyleTreeButtons(widget)
-  local colors = Theme.GetColors()
-  local accent = colors.accent
   local metrics = Theme.GetControlMetrics()
   local pcmManagerTree = _PUI_IsPCMManagerTree(widget)
   local buttonGap = pcmManagerTree and PCM_TREE_ROW_GAP or metrics.treeButtonGap
@@ -785,10 +750,12 @@ local function _PUI_StyleTreeButtons(widget)
   local buttons = widget.buttons
   local prev
   local treeWidth = math.floor((tonumber(widget.treeframe:GetWidth()) or 0) + 0.5)
+  local rightInset = (pcmManagerTree or widget.showscroll == true) and PCM_TREE_SCROLLBAR_LANE or 0
   local treeLayoutKey = table.concat({
     tostring(useCustomCards == true),
     tostring(pcmManagerTree == true),
     tostring(widget.showscroll == true),
+    tostring(rightInset),
     tostring(buttonGap),
     tostring(topInset),
     tostring(treeWidth),
@@ -814,12 +781,9 @@ local function _PUI_StyleTreeButtons(widget)
         if prev then
           button:SetPoint("TOPLEFT", prev, "BOTTOMLEFT", 0, -buttonGap)
           button:SetPoint("TOPRIGHT", prev, "BOTTOMRIGHT", 0, -buttonGap)
-        elseif widget.showscroll then
-          button:SetPoint("TOPLEFT", widget.treeframe, "TOPLEFT", 0, -topInset)
-          button:SetPoint("TOPRIGHT", widget.treeframe, "TOPRIGHT", -22, -topInset)
         else
           button:SetPoint("TOPLEFT", widget.treeframe, "TOPLEFT", 0, -topInset)
-          button:SetPoint("TOPRIGHT", widget.treeframe, "TOPRIGHT", 0, -topInset)
+          button:SetPoint("TOPRIGHT", widget.treeframe, "TOPRIGHT", -rightInset, -topInset)
         end
       end
 
@@ -832,15 +796,8 @@ local function _PUI_StyleTreeButtons(widget)
     button.__puiCompactPCMTree = pcmManagerTree
     WidgetSkins.TreeButton(button, button.selected == true)
 
-    local normal = button.toggle:GetNormalTexture()
-    if normal then
-      normal:SetVertexColor(accent[1], accent[2], accent[3], accent[4])
-    end
-
-    local pushed = button.toggle:GetPushedTexture()
-    if pushed then
-      pushed:SetVertexColor(accent[1], accent[2], accent[3], accent[4])
-    end
+    local groups = (button.obj.status or button.obj.localstatus).groups
+    Theme.ApplyExpandCollapseButton(button.toggle, groups[button.uniquevalue] == true)
   end
 end
 
@@ -896,6 +853,33 @@ function WidgetSkins.TreeGroup(widget)
     widget.__puiPCMTreeRefreshPrimed = nil
     local status = widget.status or widget.localstatus
     status.__puiPCMScrollValue = nil
+  end
+
+  if not widget.__puiTreeShowScrollHooked then
+    widget.__puiTreeShowScrollHooked = true
+    local originalShowScroll = widget.ShowScroll
+    widget.ShowScroll = function(self, show)
+      originalShowScroll(self, show)
+
+      if self.__puiPCMManagerTree ~= true then
+        return
+      end
+
+      local firstButton = self.buttons and self.buttons[1]
+      if not firstButton then
+        return
+      end
+
+      firstButton:ClearAllPoints()
+      firstButton:SetPoint("TOPLEFT", self.treeframe, "TOPLEFT", 0, -PCM_TREE_TOP_INSET)
+      firstButton:SetPoint(
+        "TOPRIGHT",
+        self.treeframe,
+        "TOPRIGHT",
+        -PCM_TREE_SCROLLBAR_LANE,
+        -PCM_TREE_TOP_INSET
+      )
+    end
   end
 
   if not widget.__puiTreeRefreshHooked then
