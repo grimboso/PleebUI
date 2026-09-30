@@ -726,12 +726,13 @@ function TestMode:EnsureToolbar()
   StyleButton(exit, false)
   panel.exitButton = exit
 
-  local minimize = CreateToolbarButton(panel, "-", 28, function()
+  local minimize = CreateToolbarButton(panel, "", 28, function()
     TestMode.toolbarCollapsed = not TestMode.toolbarCollapsed
     TestMode:RebuildToolbar()
   end)
   minimize:SetPoint("RIGHT", exit, "LEFT", -6, 0)
   StyleButton(minimize, false)
+  ns.Theme.ApplyExpandCollapseButton(minimize, not TestMode.toolbarCollapsed)
   panel.minimizeButton = minimize
 
   panel.content = CreateFrame("Frame", nil, panel)
@@ -903,7 +904,7 @@ function TestMode:RebuildToolbar()
       and TOOLBAR_COLLAPSED_HEIGHT
       or TOOLBAR_TITLE_HEIGHT + contentHeight + TOOLBAR_PADDING
   )
-  panel.minimizeButton:SetText(self.toolbarCollapsed and "+" or "-")
+  ns.Theme.ApplyExpandCollapseButton(panel.minimizeButton, not self.toolbarCollapsed)
   StylePanel(panel)
 end
 
@@ -917,6 +918,7 @@ local function RefreshToolbarTheme()
   StyleText(panel.title, "header", 14)
   StyleButton(panel.exitButton, false)
   StyleButton(panel.minimizeButton, false)
+  ns.Theme.ApplyExpandCollapseButton(panel.minimizeButton, not TestMode.toolbarCollapsed)
 
   for _, section in ipairs(panel.__puiSections or {}) do
     if section:IsShown() then
