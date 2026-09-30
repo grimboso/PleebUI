@@ -3,11 +3,8 @@
 --   - Resolve live action-bar keybinds and render them on PCM cooldown viewers.
 local ADDON_NAME, ns = ...
 local Cooldowns = ns.Modules.CooldownManager
-local Hooks = ns.PCMHooks
-local IconSkin = ns.IconSkin
 local IconSettings = ns.PCMIconSettings
 local PCMRuntime = ns.PCMRuntime
-local LSM = ns.LSM
 local DB = ns.PCM_DBExports
 local P = select(1, ns.Pleebug:DropIn(Cooldowns, { name = "PCM", bucket = "Keybinds" }))
 
@@ -125,14 +122,9 @@ local function _KB_FormatKeybind(key)
   return result
 end
 
-local function _KB_IsEssentialViewerKey(viewerKey)
-  if type(viewerKey) ~= "string" or viewerKey == "" then
-    return false
-  end
-  if viewerKey == "UtilityCooldownViewer" then
-    return true
-  end
-  return string.find(viewerKey, "EssentialCooldownViewer", 1, true) == 1
+local function _KB_IsAbilityViewerKey(viewerKey)
+  return viewerKey == "EssentialCooldownViewer"
+    or viewerKey == "UtilityCooldownViewer"
 end
 
 local _KB_SLOTS_PER_PAGE = 12
@@ -815,232 +807,11 @@ function Cooldowns:GetEquipmentSlotKeybind(equipSlot)
   return nil, false
 end
 
-local function _KB_EnsureHotKeyFontString(item)
-  local st = Hooks.GetFrameData(item)
-  local fs = st.keybindText
-  if fs then
-    return fs, false
-  end
-
-  local overlay = CreateFrame("Frame", nil, item)
-  overlay:SetAllPoints()
-  overlay:SetFrameLevel(item:GetFrameLevel() + 2)
-  st.keybindOverlay = overlay
-
-  fs = overlay:CreateFontString(nil, "OVERLAY", "NumberFontNormalSmallGray")
-  fs:SetDrawLayer("OVERLAY", 7)
-  fs:SetPoint("TOPLEFT", overlay, "TOPLEFT", 2, -2)
-  fs:SetJustifyH("LEFT")
-  fs:SetText("")
-  fs:Hide()
-
-  st.keybindText = fs
-  return fs, true
-end
-
-local function _KB_ClearItem(item)
-  local st = Hooks.PeekFrameData(item)
-  local fs = st and st.keybindText
-  if fs then
-    fs:SetText("")
-    fs:Hide()
-  end
-end
-
-local function _KB_GetSpellIDsFromItem(item)
-  local cooldownInfo = item:GetCooldownInfo()
-  if _KB_IsSecret(cooldownInfo) then
-    return nil, nil, true
-  end
-
-  if type(cooldownInfo) ~= "table" then
-    return nil, nil, false
-  end
-
-  local overrideSpellID = cooldownInfo.overrideSpellID
-  if _KB_IsSecret(overrideSpellID) then
-    return nil, nil, true
-  end
-  overrideSpellID = _KB_PositiveNumber(overrideSpellID)
-
-  local baseSpellID = cooldownInfo.spellID
-  if _KB_IsSecret(baseSpellID) then
-    return nil, nil, true
-  end
-  baseSpellID = _KB_PositiveNumber(baseSpellID)
-
-  return baseSpellID, overrideSpellID, false
-end
-
-local function _KB_GetItemKeybind(item, baseSpellID, overrideSpellID)
-  if overrideSpellID then
-    local key, blocked = Cooldowns:GetSpellKeybind(overrideSpellID)
-    if blocked then return nil, true end
-    if key then return key, false end
-  end
-
-  if baseSpellID then
-    local key, blocked = Cooldowns:GetSpellKeybind(baseSpellID)
-    if blocked then return nil, true end
-    if key then return key, false end
-  end
-
-  local equipSlot = item:GetEquipSlot()
-  if _KB_IsSecret(equipSlot) then return nil, true end
-  equipSlot = _KB_PositiveNumber(equipSlot)
-  if equipSlot then
-    local key, blocked = Cooldowns:GetEquipmentSlotKeybind(equipSlot)
-    if blocked then return nil, true end
-    if key then return key, false end
-  end
-
-  local categoryID = item:GetSpellCategory()
-  if _KB_IsSecret(categoryID) then return nil, true end
-  categoryID = _KB_PositiveNumber(categoryID)
-  if not categoryID then return nil, false end
-
-  local itemIDs = Cooldowns:GetConsumableCategoryItemIDs(categoryID)
-  if not itemIDs then return nil, false end
-
-  local displayedItemID = item:GetSpellCategoryTooltipItemID()
-  if _KB_IsSecret(displayedItemID) then return nil, true end
-  local key, blocked = Cooldowns:GetItemKeybind(displayedItemID)
-  if blocked then return nil, true end
-  if key then return key, false end
-
-  for index = 1, #itemIDs do
-    local itemID = itemIDs[index]
-    if _KB_IsSecret(itemID) then
-      return nil, true
-    end
-
-    local key, blocked = Cooldowns:GetItemKeybind(itemID)
-    if blocked then return nil, true end
-    if key then return key, false end
-  end
-
-  return nil, false
-end
-
-local function _KB_ApplyFontStyle(item, fs, viewerKey)
-  local viewerDefault = Cooldowns._ResolveFontOpts("keybind", viewerKey)
-  local opts = IconSettings:ResolveFontOptions(
-    item,
-    viewerKey,
+local function _KB_RefreshOwnedKeybinds()
+  ns.PCMAbilityRuntime:MarkBucketDirty(
     "keybind",
-    viewerDefault
+    ns.PCMAbilityRuntime.DIRTY_STATE
   )
-  if not (opts and fs and fs.SetFont) then
-    return
-  end
-
-  local curFont, curSize, curFlags = fs:GetFont()
-  local face = curFont
-
-  if opts.font then
-    local path = LSM:Fetch("font", opts.font)
-    face = (path and path ~= "") and path or opts.font
-  end
-
-  fs:SetFont(face, opts.size or curSize or 12, opts.flags or curFlags)
-
-  if opts.color and fs.SetTextColor then
-    fs:SetTextColor(
-      opts.color[1] or 1,
-      opts.color[2] or 1,
-      opts.color[3] or 1,
-      opts.color[4] or 1
-    )
-  end
-
-  if fs.ClearAllPoints and fs.SetPoint then
-    local point, x, y = IconSkin.ResolveTextAnchor(
-      "keybind",
-      opts.point,
-      opts.offsetX,
-      opts.offsetY
-    )
-    fs:ClearAllPoints()
-    fs:SetPoint(point, item, point, x, y)
-  end
-end
-
-function Cooldowns._ApplyKeybindFontStyle(item, viewerKey)
-  local st = Hooks.GetFrameData(item)
-  local fs = st.keybindText
-  if fs then
-    _KB_ApplyFontStyle(item, fs, viewerKey)
-  end
-end
-
-local function _KB_ApplyToItem(item, viewerKey, enabled)
-  if not (item and item.CreateFontString) then
-    return
-  end
-
-  local frameData = Hooks.PeekFrameData(item)
-  local record = frameData and frameData.iconSettingsRecord or nil
-  local keybindText = record and record.keybind or nil
-  if keybindText and keybindText.show ~= nil then
-    enabled = keybindText.show == true
-  end
-
-  if not enabled then
-    _KB_ClearItem(item)
-    return
-  end
-
-  local baseSpellID, overrideSpellID, blocked = _KB_GetSpellIDsFromItem(item)
-  if blocked then
-    return
-  end
-
-  local key
-  key, blocked = _KB_GetItemKeybind(item, baseSpellID, overrideSpellID)
-  if blocked then
-    return
-  end
-
-  if not key or key == "" then
-    _KB_ClearItem(item)
-    return
-  end
-
-  local fs, created = _KB_EnsureHotKeyFontString(item)
-  if created then
-    _KB_ApplyFontStyle(item, fs, viewerKey)
-  end
-
-  fs:SetText(key)
-  fs:Show()
-end
-
-local function _KB_ForEachActiveViewerItem(viewerKey, callback)
-  local items = PCMRuntime:GetViewerItems(viewerKey)
-  for index = 1, #items do
-    local item = items[index]
-    if item and not (item.IsForbidden and item:IsForbidden()) then
-      callback(item)
-    end
-  end
-
-  return true
-end
-
-local function _KB_ApplyToViewer(viewerKey)
-  local enabled = ns.PCM_IsModuleEnabledFast() == true and Cooldowns:GetKeybindTextEnabled(viewerKey)
-  _KB_ForEachActiveViewerItem(viewerKey, function(item)
-    _KB_ApplyToItem(item, viewerKey, enabled)
-  end)
-end
-
-local function _KB_ApplyAll()
-  if not (ns.PCM_IsModuleEnabledFast() == true) then
-    return
-  end
-
-  _KB_ApplyToViewer("EssentialCooldownViewer")
-  _KB_ApplyToViewer("UtilityCooldownViewer")
 end
 
 function Cooldowns:GetKeybindTextEnabled(viewerKey)
@@ -1050,11 +821,6 @@ function Cooldowns:GetKeybindTextEnabled(viewerKey)
 
   local flags = self._GetViewerCountFlagsCached(viewerKey)
   return not flags or flags.keybind == true
-end
-
-local function _KB_ClearAll()
-  _KB_ForEachActiveViewerItem("EssentialCooldownViewer", _KB_ClearItem)
-  _KB_ForEachActiveViewerItem("UtilityCooldownViewer", _KB_ClearItem)
 end
 
 local function _KB_HasActiveConsumer()
@@ -1129,7 +895,7 @@ local function _KB_DoRefresh(full, content, bindings)
   end
 
   _KB_BuildFallbackMaps()
-  _KB_ApplyAll()
+  _KB_RefreshOwnedKeybinds()
   Cooldowns:ConsumableTracker_RefreshKeybinds()
 end
 
@@ -1284,12 +1050,72 @@ function Cooldowns:SetKeybindTextEnabled(viewerKey, enabled)
   cfg.keybind = enabled == true
   self._SetViewerCountFlagCached(viewerKey, "keybind", cfg.keybind)
   _KB_UpdateConsumerState()
+  _KB_RefreshOwnedKeybinds()
 
   if _kbActive then
     _KB_ScheduleRebuild()
-  else
-    _KB_ApplyToViewer(viewerKey)
   end
+end
+
+local PCMKeybinds = {}
+ns.PCMKeybinds = PCMKeybinds
+
+function PCMKeybinds:GetForEntry(entry, runtimeRecord)
+  if not entry then
+    return nil
+  end
+
+  local record = ns.PCMIconSettings:GetRecordForEntry(entry, false)
+  local show = record and record.keybind and record.keybind.show
+  if show == nil then
+    show = Cooldowns:GetKeybindTextEnabled(entry.viewerKey)
+  end
+  if show ~= true then
+    return nil
+  end
+
+  if entry.entryKind == "equipmentSlot" then
+    return Cooldowns:GetEquipmentSlotKeybind(entry.equipSlot)
+  end
+
+  if entry.entryKind == "spellCategory" then
+    local itemID = runtimeRecord
+      and runtimeRecord.safeContent
+      and runtimeRecord.safeContent.categoryItemID
+    if itemID then
+      local keybind = Cooldowns:GetItemKeybind(itemID)
+      if keybind then
+        return keybind
+      end
+    end
+
+    local itemIDs = Cooldowns:GetConsumableCategoryItemIDs(entry.spellCategoryID)
+    for index = 1, #(itemIDs or {}) do
+      local keybind = Cooldowns:GetItemKeybind(itemIDs[index])
+      if keybind then
+        return keybind
+      end
+    end
+    return nil
+  end
+
+  local runtimeSpellID = runtimeRecord and runtimeRecord.runtimeSpellID
+  if runtimeSpellID then
+    local keybind = Cooldowns:GetSpellKeybind(runtimeSpellID)
+    if keybind then
+      return keybind
+    end
+  end
+
+  for index = 1, #entry.identitySpellIDs do
+    local spellID = entry.identitySpellIDs[index]
+    local keybind = spellID ~= runtimeSpellID and Cooldowns:GetSpellKeybind(spellID)
+    if keybind then
+      return keybind
+    end
+  end
+
+  return nil
 end
 
 function Cooldowns:ApplyKeybindTextRulesNow(viewerKey)
@@ -1298,39 +1124,28 @@ function Cooldowns:ApplyKeybindTextRulesNow(viewerKey)
   end
 
   _KB_UpdateConsumerState()
+  _KB_RefreshOwnedKeybinds()
 
-  if viewerKey then
-    _KB_ApplyToViewer(viewerKey)
-  elseif _kbActive then
+  if _kbActive then
     _kbEventFrame:Hide()
     _kbDirty = false
     _kbFullRebuild = false
     _kbContentRebuild = false
     _kbBindingRebuild = false
     _KB_DoRefresh(true, false, false)
-  else
-    _KB_ClearAll()
   end
 end
 
 function Cooldowns:GetKeybindsEnabled(viewerKey)
-  return _KB_IsEssentialViewerKey(viewerKey) and self:GetKeybindTextEnabled(viewerKey) == true
+  return _KB_IsAbilityViewerKey(viewerKey) and self:GetKeybindTextEnabled(viewerKey) == true
 end
 
 function Cooldowns:SetKeybindsEnabled(viewerKey, enabled)
-  if not _KB_IsEssentialViewerKey(viewerKey) then
+  if not _KB_IsAbilityViewerKey(viewerKey) then
     return
   end
 
   self:SetKeybindTextEnabled(viewerKey, enabled == true)
-end
-
-function Cooldowns:_ApplyKeybindTextRule(itemFrame, viewerKey)
-  if not (_KB_IsEssentialViewerKey(viewerKey) and itemFrame) then
-    return
-  end
-
-  _KB_ApplyToItem(itemFrame, viewerKey, self:GetKeybindTextEnabled(viewerKey))
 end
 
 function Cooldowns.RefreshKeybinds()
@@ -1339,6 +1154,7 @@ function Cooldowns.RefreshKeybinds()
   end
 
   _KB_UpdateConsumerState()
+  _KB_RefreshOwnedKeybinds()
   if _kbActive then
     _KB_ScheduleRebuild(true)
   end
@@ -1365,7 +1181,6 @@ function Cooldowns:_Keybinds_Disable()
   _kbEventFrame:Hide()
   _KB_UnregisterMappingEvents()
   _KB_UnregisterBootstrapEvents()
-  _KB_ClearAll()
   _KB_InvalidateAll()
   wipe(_kbActionSlotKnown)
   wipe(_kbActionSlotType)
@@ -1374,27 +1189,16 @@ end
 
 function Cooldowns:_Keybinds_RefreshIconSettings(viewerKey)
   _KB_UpdateConsumerState()
-
-  if viewerKey then
-    _KB_ForEachActiveViewerItem(viewerKey, function(item)
-      local frameData = Hooks.PeekFrameData(item)
-      local fs = frameData and frameData.keybindText
-      if fs then
-        _KB_ApplyFontStyle(item, fs, viewerKey)
-      end
-    end)
-  end
+  _KB_RefreshOwnedKeybinds()
 
   if _kbActive then
     _KB_ScheduleRebuild()
-  elseif viewerKey then
-    _KB_ApplyToViewer(viewerKey)
   end
 end
 
 
 _KB_FormatKeybind = P:Def("_KB_FormatKeybind", _KB_FormatKeybind)
-_KB_IsEssentialViewerKey = P:Def("_KB_IsEssentialViewerKey", _KB_IsEssentialViewerKey)
+_KB_IsAbilityViewerKey = P:Def("_KB_IsAbilityViewerKey", _KB_IsAbilityViewerKey)
 _KB_IsMappedActionSlot = P:Def("_KB_IsMappedActionSlot", _KB_IsMappedActionSlot)
 _KB_InvalidateBindings = P:Def("_KB_InvalidateBindings", _KB_InvalidateBindings)
 _KB_InvalidateAll = P:Def("_KB_InvalidateAll", _KB_InvalidateAll)
@@ -1410,21 +1214,9 @@ _KB_BuildFallbackMaps = P:Def("_KB_BuildFallbackMaps", _KB_BuildFallbackMaps)
 Cooldowns.GetSpellKeybind = P:Def("Cooldowns:GetSpellKeybind", Cooldowns.GetSpellKeybind)
 Cooldowns.GetItemKeybind = P:Def("Cooldowns:GetItemKeybind", Cooldowns.GetItemKeybind)
 Cooldowns.GetEquipmentSlotKeybind = P:Def("Cooldowns:GetEquipmentSlotKeybind", Cooldowns.GetEquipmentSlotKeybind)
-_KB_EnsureHotKeyFontString = P:Def("_KB_EnsureHotKeyFontString", _KB_EnsureHotKeyFontString)
-_KB_ClearItem = P:Def("_KB_ClearItem", _KB_ClearItem)
-_KB_GetSpellIDsFromItem = P:Def("_KB_GetSpellIDsFromItem", _KB_GetSpellIDsFromItem)
-_KB_GetItemKeybind = P:Def("_KB_GetItemKeybind", _KB_GetItemKeybind)
-_KB_ApplyFontStyle = P:Def("_KB_ApplyFontStyle", _KB_ApplyFontStyle)
-Cooldowns._ApplyKeybindFontStyle = P:Def("Cooldowns._ApplyKeybindFontStyle", Cooldowns._ApplyKeybindFontStyle)
-_KB_ApplyToItem = P:Def("_KB_ApplyToItem", _KB_ApplyToItem)
-_KB_ForEachActiveViewerItem = P:Def("_KB_ForEachActiveViewerItem", _KB_ForEachActiveViewerItem)
-_KB_ApplyToViewer = P:Def("_KB_ApplyToViewer", _KB_ApplyToViewer)
-_KB_ApplyAll = P:Def("_KB_ApplyAll", _KB_ApplyAll)
-_KB_ClearAll = P:Def("_KB_ClearAll", _KB_ClearAll)
 Cooldowns.GetKeybindTextEnabled = P:Def("Cooldowns:GetKeybindTextEnabled", Cooldowns.GetKeybindTextEnabled)
 Cooldowns.SetKeybindTextEnabled = P:Def("Cooldowns:SetKeybindTextEnabled", Cooldowns.SetKeybindTextEnabled)
 Cooldowns.ApplyKeybindTextRulesNow = P:Def("Cooldowns:ApplyKeybindTextRulesNow", Cooldowns.ApplyKeybindTextRulesNow)
-Cooldowns._ApplyKeybindTextRule = P:Def("Cooldowns:_ApplyKeybindTextRule", Cooldowns._ApplyKeybindTextRule)
 Cooldowns.GetKeybindsEnabled = P:Def("Cooldowns:GetKeybindsEnabled", Cooldowns.GetKeybindsEnabled)
 Cooldowns.SetKeybindsEnabled = P:Def("Cooldowns:SetKeybindsEnabled", Cooldowns.SetKeybindsEnabled)
 _KB_HasActiveConsumer = P:Def("_KB_HasActiveConsumer", _KB_HasActiveConsumer)

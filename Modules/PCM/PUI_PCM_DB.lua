@@ -2,7 +2,6 @@
 local ADDON_NAME, ns = ...
 
 local Addon = ns.Addon
-local Hooks = ns.PCMHooks
 local P = select(1, ns.Pleebug:DropIn(ns, { name = "PCM", bucket = "DB" }))
 
 
@@ -540,162 +539,6 @@ local function _PCM_DB_Attach(Cooldowns)
     bd.viewer.viewers[viewerKey].color = c
   end
 
-  local function _GetEffectsDB()
-    local db = Addon.db and Addon.db.profile and Addon.db.profile.cooldownManager
-    if not db then
-      return nil
-    end
-
-    db.effects = db.effects or {}
-    return db.effects
-  end
-
-  local function _GetGlowDB()
-    local db = Addon.db and Addon.db.profile and Addon.db.profile.cooldownManager
-    if not db then
-      return nil
-    end
-
-    db.glow = db.glow or {
-      enabled   = true,
-      type      = "pixel",
-      color     = { 0.95, 0.95, 0.32, 1 },
-      speed     = 100,
-      scale     = 1.0,
-      lines     = 8,
-      thickness = 2,
-    }
-
-    local g = db.glow
-
-    if g.color == nil then
-      g.color = { 0.95, 0.95, 0.32, 1 }
-    end
-    if g.speed == nil then
-      g.speed = 100
-    end
-    if g.scale == nil then
-      g.scale = 1.0
-    end
-    if g.lines == nil then
-      g.lines = 8
-    end
-    if g.thickness == nil then
-      g.thickness = 2
-    end
-    if g.type == nil then
-      g.type = "pixel"
-    end
-    if g.enabled == nil then
-      g.enabled = true
-    end
-
-    return g
-  end
-
-  local function _GetViewerEffects(viewerKey)
-    local db = _GetEffectsDB()
-    if not db or not viewerKey then
-      return nil
-    end
-
-    db.viewer = db.viewer or {}
-    db.viewer[viewerKey] = db.viewer[viewerKey] or {}
-
-    return db.viewer[viewerKey]
-  end
-
-  local function _ResolveEffectFlag(v, default)
-    if v == nil then
-      return default == true
-    end
-    return v == true
-  end
-
-  local function _HideSpecialEffectFrame(button, viewerKey, effectName, defaultEnabled)
-    if not button or not viewerKey then
-      return
-    end
-
-    local cfg = _GetViewerEffects(viewerKey)
-    if not cfg then
-      return
-    end
-
-    local function flag(name)
-      return _ResolveEffectFlag(cfg[name], defaultEnabled)
-    end
-
-    local shouldHide = flag(effectName)
-
-    local fx = button[effectName]
-    if fx and fx.Hide then
-      if shouldHide then
-        fx:Hide()
-      end
-    end
-  end
-
-  local function _GetViewerKeyFromButton(button)
-    if not button then
-      return nil
-    end
-
-    local viewer = button.viewer or button.Viewer or button:GetParent()
-    if not viewer then
-      return nil
-    end
-
-    if viewer.GetName then
-      return viewer:GetName()
-    end
-
-    return nil
-  end
-
-  local function _HideBlizzardEffects(button)
-    if not button then
-      return
-    end
-
-    local viewerKey = _GetViewerKeyFromButton(button)
-    if not viewerKey then
-      return
-    end
-
-    _HideSpecialEffectFrame(button, viewerKey, "PandemicIcon", true)
-    _HideSpecialEffectFrame(button, viewerKey, "ProcStartFlipbook", true)
-    _HideSpecialEffectFrame(button, viewerKey, "ProcFinish", true)
-  end
-
-  local function _InstallEffectsHooks(itemFrame)
-    if not itemFrame then
-      return
-    end
-
-    local fd = Hooks.GetFrameData(itemFrame)
-    if fd.effectsHooked then
-      return
-    end
-    fd.effectsHooked = true
-
-    if itemFrame.PandemicIcon then
-      Hooks.HookMethod(itemFrame.PandemicIcon, "Show", "DB_Effects_PandemicIcon_Show", function()
-        _HideBlizzardEffects(itemFrame)
-      end)
-    end
-    if itemFrame.ProcStartFlipbook then
-      Hooks.HookMethod(itemFrame.ProcStartFlipbook, "Show", "DB_Effects_ProcStartFlipbook_Show", function()
-        _HideBlizzardEffects(itemFrame)
-      end)
-    end
-    if itemFrame.ProcFinish then
-      Hooks.HookMethod(itemFrame.ProcFinish, "Show", "DB_Effects_ProcFinish_Show", function()
-        _HideBlizzardEffects(itemFrame)
-      end)
-    end
-  end
-
   local function _SetViewerSwipeFlag(viewerKey, field, value)
     local db = ns.PCM_DBExports.GetViewerSwipeDB(viewerKey)
     if not db then return end
@@ -713,8 +556,6 @@ local function _PCM_DB_Attach(Cooldowns)
 
     return root.profile.cooldownManager.viewers
   end
-
-  local _PUI_PCM_DEFAULT_VIEWER_POS = {}
 
   local function _SavePosition(frame, key)
     if not frame or not key then return end
@@ -738,71 +579,6 @@ local function _PCM_DB_Attach(Cooldowns)
     }
   end
 
-  local function _CaptureDefaultPosition(frame, key)
-    if not frame or not key then return end
-    if _PUI_PCM_DEFAULT_VIEWER_POS[key] then
-      return
-    end
-
-    local point, relTo, relPoint, x, y = frame:GetPoint(1)
-    if not point then
-      return
-    end
-
-    local relName = (relTo and relTo.GetName and relTo:GetName()) or "UIParent"
-    if not relName or relName == "" then
-      relName = "UIParent"
-    end
-
-    _PUI_PCM_DEFAULT_VIEWER_POS[key] = {
-      point    = point,
-      rel      = relName,
-      relPoint = relPoint or point,
-      x        = Round(x or 0),
-      y        = Round(y or 0),
-    }
-  end
-
-  local function _ClearSavedPosition(key)
-    if not key then return end
-    local db = _GetViewerDB()
-    if not db then return end
-    db[key] = nil
-  end
-
-  -- Applies saved position when present, otherwise restores the session-captured default.
-  -- NOTE: Call _CaptureDefaultPosition(frame, key) once right after you create/anchor the viewer initially.
-  local function _ApplySavedOrDefaultPosition(frame, key)
-    if not frame or not key then return false end
-    if frame.IsForbidden and frame:IsForbidden() then return false end
-
-    _CaptureDefaultPosition(frame, key)
-
-    local db = _GetViewerDB()
-    local pos = db and db[key] or nil
-    local use = pos or _PUI_PCM_DEFAULT_VIEWER_POS[key]
-    if not use then
-      return false
-    end
-
-    local rel = UIParent
-    if use.rel and use.rel ~= "" and use.rel ~= "UIParent" then
-      local r = _G[use.rel]
-      if r then
-        rel = r
-      end
-    end
-
-    if frame.ClearAllPoints and frame.SetPoint then
-      frame:ClearAllPoints()
-      frame:SetPoint(use.point or "CENTER", rel, use.relPoint or use.point or "CENTER", use.x or 0, use.y or 0)
-      return true
-    end
-
-    return false
-  end
-
-  
   -- Spell Cooldown Bars DB (supports Shared + per-character Enable)
   
 
@@ -1592,15 +1368,12 @@ local function _PCM_DB_Attach(Cooldowns)
   Cooldowns.SetViewerBorderColor     = SetViewerBorderColor
   Cooldowns._ClampBorderThickness = _ClampBorderThickness
   Cooldowns._EnsureFontOffsets = _EnsureFontOffsets
-  Cooldowns._GetEffectsDB = _GetEffectsDB
-  Cooldowns._GetGlowDB = _GetGlowDB
   Cooldowns._GetFixedWidthForViewer = _GetFixedWidthForViewer
   Cooldowns._GetFontDB = _GetFontDB
   Cooldowns._GetIconSizeForViewer = _GetIconSizeForViewer
   Cooldowns._GetIconSpacingForViewer = _GetIconSpacingForViewer
   Cooldowns._GetModuleDB = _GetModuleDB
   Cooldowns._GetViewerDB = _GetViewerDB
-  Cooldowns._GetViewerEffects = _GetViewerEffects
 
   -- Spell Bars DB
   Cooldowns.GetSpellBarsDB = _SpellBars_GetProfileBars
@@ -1623,17 +1396,9 @@ local function _PCM_DB_Attach(Cooldowns)
   Cooldowns.GetCooldownStackBarsDB = _CooldownStackBars_GetProfileBars
   Cooldowns.NormalizeCooldownStackBarEntry = NormalizeCooldownStackBarEntry
   Cooldowns.CooldownStackBars_DeleteEntry = CooldownStackBars_DeleteEntry
-  Cooldowns._GetViewerKeyFromButton = _GetViewerKeyFromButton
   Cooldowns._GetWidthModeForViewer = _GetWidthModeForViewer
   Cooldowns._HasAnyFontField = _HasAnyFontField
-  Cooldowns._HideBlizzardEffects = _HideBlizzardEffects
-  Cooldowns._HideSpecialEffectFrame = _HideSpecialEffectFrame
-  Cooldowns._InstallEffectsHooks = _InstallEffectsHooks
-  Cooldowns._ResolveEffectFlag = _ResolveEffectFlag
   Cooldowns._SavePosition = _SavePosition
-  Cooldowns._CaptureDefaultPosition = _CaptureDefaultPosition
-  Cooldowns._ClearSavedPosition = _ClearSavedPosition
-  Cooldowns._ApplySavedOrDefaultPosition = _ApplySavedOrDefaultPosition
   Cooldowns._SetViewerSwipeFlag = _SetViewerSwipeFlag
 
 
@@ -1662,6 +1427,44 @@ local VIEWER_COUNT_DEFAULTS = {
   charge = true,
   keybind = true,
 }
+local PCM_RENDERER_MIGRATION_VERSION = 2
+local PCM_OWNED_TOOLTIP_VIEWERS = {
+  EssentialCooldownViewer = true,
+  UtilityCooldownViewer = true,
+  BuffIconCooldownViewer = true,
+  BuffBarCooldownViewer = true,
+}
+local PCM_OWNED_HIDE_WHEN_INACTIVE_VIEWERS = {
+  BuffIconCooldownViewer = true,
+  BuffBarCooldownViewer = true,
+}
+local PCM_GROUP_SCHEMA_VERSION = 1
+local PCM_DEFAULT_GROUPS = {
+  {
+    id = "essential",
+    name = "Essential",
+    kind = "ICON",
+    viewerKey = "EssentialCooldownViewer",
+  },
+  {
+    id = "utility",
+    name = "Utility",
+    kind = "ICON",
+    viewerKey = "UtilityCooldownViewer",
+  },
+  {
+    id = "buff-icons",
+    name = "Buff Icons",
+    kind = "ICON",
+    viewerKey = "BuffIconCooldownViewer",
+  },
+  {
+    id = "buff-bars",
+    name = "Buff Bars",
+    kind = "BAR",
+    viewerKey = "BuffBarCooldownViewer",
+  },
+}
 do
 
   function E.GetDB()
@@ -1673,6 +1476,120 @@ do
     return db and db.profile or nil
   end
 
+  local function GetCharacterDB()
+    local db = Addon.db
+    return db and db.char or nil
+  end
+
+  function E.IsRendererMigrationComplete()
+    local characterDB = GetCharacterDB()
+    if not characterDB
+      or (tonumber(characterDB.pcmRendererMigrationVersion) or 0) < PCM_RENDERER_MIGRATION_VERSION
+    then
+      return false
+    end
+
+    local tooltips = characterDB.pcmViewerTooltips
+    local hideWhenInactive = characterDB.pcmViewerHideWhenInactive
+    return type(tooltips) == "table"
+      and type(tooltips.EssentialCooldownViewer) == "boolean"
+      and type(tooltips.UtilityCooldownViewer) == "boolean"
+      and type(tooltips.BuffIconCooldownViewer) == "boolean"
+      and type(tooltips.BuffBarCooldownViewer) == "boolean"
+      and type(hideWhenInactive) == "table"
+      and type(hideWhenInactive.BuffIconCooldownViewer) == "boolean"
+      and type(hideWhenInactive.BuffBarCooldownViewer) == "boolean"
+  end
+
+  function E.CommitRendererSettingsMigration(settings)
+    if E.IsRendererMigrationComplete() then
+      return true
+    end
+    if type(settings) ~= "table" then
+      return false
+    end
+
+    for viewerKey in pairs(PCM_OWNED_TOOLTIP_VIEWERS) do
+      local value = settings.tooltips and settings.tooltips[viewerKey]
+      if value ~= 0 and value ~= 1 then
+        return false
+      end
+    end
+    for viewerKey in pairs(PCM_OWNED_HIDE_WHEN_INACTIVE_VIEWERS) do
+      local value = settings.hideWhenInactive and settings.hideWhenInactive[viewerKey]
+      if value ~= 0 and value ~= 1 then
+        return false
+      end
+    end
+
+    local characterDB = GetCharacterDB()
+    if not characterDB then
+      return false
+    end
+
+    local tooltips = characterDB.pcmViewerTooltips
+    if type(tooltips) ~= "table" then
+      tooltips = {}
+      characterDB.pcmViewerTooltips = tooltips
+    end
+
+    local hideWhenInactive = characterDB.pcmViewerHideWhenInactive
+    if type(hideWhenInactive) ~= "table" then
+      hideWhenInactive = {}
+      characterDB.pcmViewerHideWhenInactive = hideWhenInactive
+    end
+
+    for viewerKey in pairs(PCM_OWNED_TOOLTIP_VIEWERS) do
+      tooltips[viewerKey] = settings.tooltips[viewerKey] == 1
+    end
+    for viewerKey in pairs(PCM_OWNED_HIDE_WHEN_INACTIVE_VIEWERS) do
+      hideWhenInactive[viewerKey] = settings.hideWhenInactive[viewerKey] == 1
+    end
+    characterDB.pcmRendererMigrationVersion = PCM_RENDERER_MIGRATION_VERSION
+    return true
+  end
+
+  function E.GetOwnedViewerTooltipEnabled(viewerKey)
+    if not PCM_OWNED_TOOLTIP_VIEWERS[viewerKey]
+      or not E.IsRendererMigrationComplete()
+    then
+      return nil
+    end
+    return GetCharacterDB().pcmViewerTooltips[viewerKey]
+  end
+
+  function E.SetOwnedViewerTooltipEnabled(viewerKey, enabled)
+    if not PCM_OWNED_TOOLTIP_VIEWERS[viewerKey]
+      or type(enabled) ~= "boolean"
+      or not E.IsRendererMigrationComplete()
+    then
+      return false
+    end
+
+    GetCharacterDB().pcmViewerTooltips[viewerKey] = enabled
+    return true
+  end
+
+  function E.GetOwnedViewerHideWhenInactive(viewerKey)
+    if not PCM_OWNED_HIDE_WHEN_INACTIVE_VIEWERS[viewerKey]
+      or not E.IsRendererMigrationComplete()
+    then
+      return nil
+    end
+    return GetCharacterDB().pcmViewerHideWhenInactive[viewerKey]
+  end
+
+  function E.SetOwnedViewerHideWhenInactive(viewerKey, enabled)
+    if not PCM_OWNED_HIDE_WHEN_INACTIVE_VIEWERS[viewerKey]
+      or type(enabled) ~= "boolean"
+      or not E.IsRendererMigrationComplete()
+    then
+      return false
+    end
+    GetCharacterDB().pcmViewerHideWhenInactive[viewerKey] = enabled
+    return true
+  end
+
   function E.GetPCMRoot()
     local root = E.GetProfile()
     if not root then
@@ -1681,6 +1598,56 @@ do
 
     root.cooldownManager = root.cooldownManager or {}
     return root.cooldownManager
+  end
+
+  function E.GetCooldownGroupsDB()
+    local root = E.GetPCMRoot()
+    if not root then
+      return nil
+    end
+
+    local groups = root.groups
+    if type(groups) ~= "table" then
+      groups = {}
+      root.groups = groups
+    end
+
+    groups.order = type(groups.order) == "table" and groups.order or {}
+    groups.byID = type(groups.byID) == "table" and groups.byID or {}
+    groups.assignments = type(groups.assignments) == "table" and groups.assignments or {}
+    groups.nextID = math.max(1, math.floor(tonumber(groups.nextID) or 1))
+
+    local present = {}
+    for index = 1, #groups.order do
+      local groupID = groups.order[index]
+      if type(groupID) == "string" and type(groups.byID[groupID]) == "table" then
+        present[groupID] = true
+      end
+    end
+
+    for index = 1, #PCM_DEFAULT_GROUPS do
+      local defaults = PCM_DEFAULT_GROUPS[index]
+      local group = groups.byID[defaults.id]
+      if type(group) ~= "table" then
+        group = {}
+        groups.byID[defaults.id] = group
+      end
+
+      group.id = defaults.id
+      group.name = type(group.name) == "string" and group.name ~= "" and group.name or defaults.name
+      group.kind = defaults.kind
+      group.defaultViewerKey = defaults.viewerKey
+      group.members = type(group.members) == "table" and group.members or {}
+      group.isDefault = true
+
+      if not present[defaults.id] then
+        groups.order[#groups.order + 1] = defaults.id
+        present[defaults.id] = true
+      end
+    end
+
+    groups.schemaVersion = PCM_GROUP_SCHEMA_VERSION
+    return groups
   end
 
   function E.GetViewerSwipeDB(viewerKey)
@@ -2070,7 +2037,14 @@ end
   E.Attach = P:Def('E.Attach', E.Attach)
   E.GetDB = P:Def('E.GetDB', E.GetDB)
   E.GetProfile = P:Def('E.GetProfile', E.GetProfile)
+  E.IsRendererMigrationComplete = P:Def('E.IsRendererMigrationComplete', E.IsRendererMigrationComplete)
+  E.CommitRendererSettingsMigration = P:Def('E.CommitRendererSettingsMigration', E.CommitRendererSettingsMigration)
+  E.GetOwnedViewerTooltipEnabled = P:Def('E.GetOwnedViewerTooltipEnabled', E.GetOwnedViewerTooltipEnabled)
+  E.SetOwnedViewerTooltipEnabled = P:Def('E.SetOwnedViewerTooltipEnabled', E.SetOwnedViewerTooltipEnabled)
+  E.GetOwnedViewerHideWhenInactive = P:Def('E.GetOwnedViewerHideWhenInactive', E.GetOwnedViewerHideWhenInactive)
+  E.SetOwnedViewerHideWhenInactive = P:Def('E.SetOwnedViewerHideWhenInactive', E.SetOwnedViewerHideWhenInactive)
   E.GetPCMRoot = P:Def('E.GetPCMRoot', E.GetPCMRoot)
+  E.GetCooldownGroupsDB = P:Def('E.GetCooldownGroupsDB', E.GetCooldownGroupsDB)
   E.GetViewerSwipeDB = P:Def('E.GetViewerSwipeDB', E.GetViewerSwipeDB)
   E.GetProfileBuffsDB = P:Def('E.GetProfileBuffsDB', E.GetProfileBuffsDB)
   E.GetProfileBuffsAnchorDB = P:Def('E.GetProfileBuffsAnchorDB', E.GetProfileBuffsAnchorDB)

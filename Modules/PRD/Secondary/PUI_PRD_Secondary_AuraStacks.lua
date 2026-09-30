@@ -130,22 +130,6 @@ local function GetNativeTickValues(config, maximum)
   return #values > 0 and values or nil
 end
 
-local function HasEnabledStackColorThreshold(config)
-  local thresholds = config.stackColorThresholds or {}
-  for index = 1, #thresholds do
-    if thresholds[index].enabled == true then
-      return true
-    end
-  end
-  return false
-end
-
-local function ShouldUseCDMStackColorSource(track)
-  return track.definition.applicationSource ~= "AURA_SLOT"
-    and track.definition.cdmViewerKey ~= nil
-    and HasEnabledStackColorThreshold(track.config)
-end
-
 local function LayoutNativeDividers(track)
   local config = track.config
   local maximum = tonumber(track.maximum) or 0
@@ -395,67 +379,34 @@ local function ConfigureNativeButton(owner, track, button, initializing)
     engineBar:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT", -inset, inset)
     engineBar:SetFrameLevel(button:GetFrameLevel() + 1)
 
-    local useCDMStackColorSource = ShouldUseCDMStackColorSource(track)
-    if not useCDMStackColorSource then
-      local textureKey = track.config.texture or track.definition.texture
-      local texturePath = Secondary.FetchStatusbarTexture(textureKey)
-      local r, g, b, a = Secondary.ResolveResourceColor(track.config, track.definition)
+    local textureKey = track.config.texture or track.definition.texture
+    local texturePath = Secondary.FetchStatusbarTexture(textureKey)
+    local r, g, b, a = Secondary.ResolveResourceColor(track.config, track.definition)
 
-      AuraWidget.DisableApplicationThresholdSource(parts)
-      AuraWidget.ClearApplicationThresholdBar(parts)
-      view.secondaryStatusBar:Hide()
-      engineBar:SetStatusBarTexture(texturePath or "Interface\\Buttons\\WHITE8X8")
-      engineBar:SetOrientation("HORIZONTAL")
-      engineBar:SetReverseFill(false)
-      engineBar:SetStatusBarColor(r, g, b, a)
-      engineBar:SetAlpha(1)
-      local useStackColorThresholds = HasEnabledStackColorThreshold(track.config)
-      AuraWidget.ConfigureApplicationThresholds(
-        parts,
-        useStackColorThresholds and track.config.stackColorThresholds or nil,
-        texturePath,
-        "HORIZONTAL",
-        false,
-        PLAYER_CLASS_COLOR,
-        track.maximum
-      )
-      if useStackColorThresholds then
-        AuraWidget.ConfigureApplicationThresholdBarSource(parts)
-      else
-        AuraWidget.DisableApplicationThresholdBarSource(parts)
-      end
-      track.applicationThresholdTopFrameLevel =
-        engineBar:GetFrameLevel() + (parts.applicationThresholdLayerCount or 0)
-      AttachNativeDividers(owner, track)
-      AuraWidget.ConfigureApplicationBar(
-        parts,
-        track.maximum,
-        Enum.StatusBarInterpolation.ExponentialEaseOut
-      )
-    else
-      AuraWidget.DisableApplicationThresholdBarSource(parts)
-      local applicationBar = AuraWidget.SetApplicationThresholdBar(
-        parts,
-        view.secondaryStatusBar
-      )
-      parts.applicationThresholdInterpolation =
-        Enum.StatusBarInterpolation.ExponentialEaseOut
-      applicationBar:SetFrameLevel(button:GetFrameLevel() + 2)
-
-      ConfigureNativeApplicationVisuals(owner, track, parts, true)
-      AuraWidget.ConfigureApplicationBar(
-        parts,
-        track.maximum,
-        Enum.StatusBarInterpolation.Immediate
-      )
-      AuraWidget.ConfigureApplicationThresholdSource(
-        parts,
-        track.definition.auraSpellIDs,
-        nil,
-        track.definition.cdmViewerKey,
-        track.unit
-      )
-    end
+    AuraWidget.ClearApplicationThresholdBar(parts)
+    view.secondaryStatusBar:Hide()
+    engineBar:SetStatusBarTexture(texturePath or "Interface\\Buttons\\WHITE8X8")
+    engineBar:SetOrientation("HORIZONTAL")
+    engineBar:SetReverseFill(false)
+    engineBar:SetStatusBarColor(r, g, b, a)
+    engineBar:SetAlpha(1)
+    AuraWidget.ConfigureApplicationThresholds(
+      parts,
+      nil,
+      texturePath,
+      "HORIZONTAL",
+      false,
+      PLAYER_CLASS_COLOR,
+      track.maximum
+    )
+    track.applicationThresholdTopFrameLevel =
+      engineBar:GetFrameLevel() + (parts.applicationThresholdLayerCount or 0)
+    AttachNativeDividers(owner, track)
+    AuraWidget.ConfigureApplicationBar(
+      parts,
+      track.maximum,
+      Enum.StatusBarInterpolation.ExponentialEaseOut
+    )
   else
     ConfigureNativeApplicationVisuals(owner, track, parts, false)
   end
@@ -557,8 +508,7 @@ local function DisableNativeTrack(track)
   end
 
   if track.parts then
-    AuraWidget.DisableApplicationThresholdBarSource(track.parts)
-    AuraWidget.DisableApplicationThresholdSource(track.parts)
+    AuraWidget.ClearApplicationThresholdBar(track.parts)
   end
   HideNativeDividers(track)
   AuraSlotDriver:SetSlotActive(track.auraSlot, false)
@@ -706,10 +656,6 @@ NativeButtonRestricted = P:Def("AuraStacks.NativeButtonRestricted", NativeButton
 GetNativeFormatter = P:Def("AuraStacks.GetNativeFormatter", GetNativeFormatter)
 GetNativeSpellSet = P:Def("AuraStacks.GetNativeSpellSet", GetNativeSpellSet)
 CopyNativeTextStyle = P:Def("AuraStacks.CopyNativeTextStyle", CopyNativeTextStyle)
-ShouldUseCDMStackColorSource = P:Def(
-  "AuraStacks.ShouldUseCDMStackColorSource",
-  ShouldUseCDMStackColorSource
-)
 HideNativeDividers = P:Def("AuraStacks.HideNativeDividers", HideNativeDividers)
 LayoutNativeDividers = P:Def("AuraStacks.LayoutNativeDividers", LayoutNativeDividers)
 AttachNativeDividers = P:Def("AuraStacks.AttachNativeDividers", AttachNativeDividers)

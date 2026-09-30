@@ -629,7 +629,7 @@ local function BuildFrame()
       window:Hide()
 
       C_Timer.After(0, function()
-        local path = { "CooldownManager", "custom_bars" }
+        local path = { "CooldownManager", "customTrackers" }
         if not returnToCustomTrackerPage then
           path[3] = key
         end
@@ -686,7 +686,7 @@ function Installer:RefreshTheme()
 end
 
 function Addon:HandleOptionsPathOpened(path)
-  if type(path) ~= "table" or path[1] ~= "CooldownManager" or path[2] ~= "custom_bars" then
+  if type(path) ~= "table" or path[1] ~= "CooldownManager" or path[2] ~= "customTrackers" then
     return
   end
 

@@ -235,6 +235,7 @@ local DEFINITIONS = {
             auraSpellIDs = {
               1242974,
             },
+            applicationSource = "AURA_SLOT",
             cdmViewerKey = "BuffIconCooldownViewer",
             forceContinuous = true,
           },
@@ -396,6 +397,39 @@ local function GetPlayerSpecID()
   return C_SpecializationInfo.GetSpecializationInfo(specIndex)
 end
 
+local IsDefinitionEnabled
+
+local function GetResolvedDefinitionCandidates()
+  local entry = DEFINITIONS[PLAYER_CLASS]
+  if not entry then
+    return nil, nil
+  end
+
+  local specID = GetPlayerSpecID()
+  local formID = GetShapeshiftFormID() or nil
+  local resolvedEntry = entry
+
+  if PLAYER_CLASS == "DRUID" and type(entry.byForm) == "table" then
+    resolvedEntry = entry.byForm[formID or 0]
+  elseif type(entry.bySpec) == "table" then
+    resolvedEntry = entry.bySpec[specID]
+  end
+
+  if type(resolvedEntry) == "table" and type(resolvedEntry.bySpec) == "table" then
+    resolvedEntry = resolvedEntry.bySpec[specID]
+  end
+
+  if type(resolvedEntry) ~= "table" then
+    return nil, specID
+  end
+
+  if type(resolvedEntry.resources) == "table" then
+    return resolvedEntry.resources, specID
+  end
+
+  return { resolvedEntry }, specID
+end
+
 local function DefinitionContainsResourceForSpec(entry, specID)
   if type(entry) ~= "table" then
     return false
@@ -490,7 +524,7 @@ function Secondary:GetResourceOptionsForClass(classToken, includeAllSpecs)
   return filtered
 end
 
-local function IsDefinitionEnabled(definition, profile)
+IsDefinitionEnabled = function(definition, profile)
   if type(definition) ~= "table" then
     return false
   end
@@ -926,34 +960,9 @@ local function ResolveResourceConfig(profile, definition)
 end
 
 local function ResolveDefinitions()
-  local entry = DEFINITIONS[PLAYER_CLASS]
-  if not entry then
-    return nil, nil
-  end
-
-  local specID = GetPlayerSpecID()
-  local formID = GetShapeshiftFormID() or nil
-  local resolvedEntry = entry
-
-  if PLAYER_CLASS == "DRUID" and type(entry.byForm) == "table" then
-    resolvedEntry = entry.byForm[formID or 0]
-  elseif type(entry.bySpec) == "table" then
-    resolvedEntry = entry.bySpec[specID]
-  end
-
-  if type(resolvedEntry) == "table" and type(resolvedEntry.bySpec) == "table" then
-    resolvedEntry = resolvedEntry.bySpec[specID]
-  end
-
-  if type(resolvedEntry) ~= "table" then
+  local candidates, specID = GetResolvedDefinitionCandidates()
+  if not candidates then
     return nil, specID
-  end
-
-  local candidates
-  if type(resolvedEntry.resources) == "table" then
-    candidates = resolvedEntry.resources
-  else
-    candidates = { resolvedEntry }
   end
 
   local profile = M.db.profile
@@ -1065,6 +1074,10 @@ Secondary.ResourceSupportsStackColorShifts = P:Def(
 )
 Secondary.GetApplicationCountdownMax = P:Def("GetApplicationCountdownMax", Secondary.GetApplicationCountdownMax)
 GetPlayerSpecID = P:Def("GetPlayerSpecID", GetPlayerSpecID)
+GetResolvedDefinitionCandidates = P:Def(
+  "GetResolvedDefinitionCandidates",
+  GetResolvedDefinitionCandidates
+)
 DefinitionContainsResourceForSpec = P:Def("DefinitionContainsResourceForSpec", DefinitionContainsResourceForSpec)
 IsDefinitionEnabled = P:Def("IsDefinitionEnabled", IsDefinitionEnabled)
 ResolveMaximum = P:Def("ResolveMaximum", ResolveMaximum)

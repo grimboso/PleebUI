@@ -992,13 +992,6 @@ end
 local function ConfigureAuraParts(record, button, parts, initializing)
   local icon = record.icon
   AuraWidget.BindApplicationDurationButton(button, parts)
-  AuraWidget.ConfigureApplicationThresholdSource(
-    parts,
-    record.auraCandidateSpellIDs,
-    record.cfg.__puiCooldownID,
-    "BuffIconCooldownViewer",
-    record.auraUnit
-  )
   parts.durationCooldown:SetHideCountdownNumbers(true)
   parts.durationCooldown:SetReverse(true)
   parts.durationCooldown:SetSwipeColor(0, 0, 0, 0.72)
@@ -1047,8 +1040,8 @@ local function ConfigureAuraParts(record, button, parts, initializing)
     AuraWidget.DisableDurationCooldown(parts)
   end
   if icon.showDuration == true then
-    AuraWidget.ConfigureDurationText(parts, BarWidget.GetDurationFormatter())
     ApplyFont(parts.durationText, button, icon, false)
+    AuraWidget.ConfigureDurationText(parts, BarWidget.GetDurationFormatter())
   else
     AuraWidget.DisableDurationText(parts)
   end
@@ -1059,8 +1052,8 @@ local function ConfigureAuraParts(record, button, parts, initializing)
       parts.applicationFormatter:AddBreakpoint({ threshold = 0, format = "%.0f" })
       parts.applicationFormatterReady = true
     end
-    AuraWidget.ConfigureApplicationCount(parts, parts.applicationFormatter)
     ApplyFont(parts.applicationText, button, icon, true)
+    AuraWidget.ConfigureApplicationCount(parts, parts.applicationFormatter)
   else
     AuraWidget.DisableApplicationCount(parts)
   end
@@ -1071,11 +1064,6 @@ local function ConfigureAuraParts(record, button, parts, initializing)
     parts.applicationBar:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT", -1, 1)
     parts.applicationBar:SetHeight(3)
     parts.applicationBar:SetStatusBarTexture("Interface\\Buttons\\WHITE8x8")
-    local thresholdMirror = AuraWidget.SetApplicationThresholdHost(parts, record.parts.frame)
-    thresholdMirror:ClearAllPoints()
-    thresholdMirror:SetPoint("BOTTOMLEFT", record.parts.frame, "BOTTOMLEFT", 1, 1)
-    thresholdMirror:SetPoint("BOTTOMRIGHT", record.parts.frame, "BOTTOMRIGHT", -1, 1)
-    thresholdMirror:SetHeight(3)
     local class = select(2, UnitClass("player"))
     local classColor = class and RAID_CLASS_COLORS[class]
     local color = record.cfg.useClassColor ~= false and classColor or record.cfg.barColor
@@ -1088,7 +1076,7 @@ local function ConfigureAuraParts(record, button, parts, initializing)
     )
     AuraWidget.ConfigureApplicationThresholds(
       parts,
-      record.cfg.stackColorThresholds,
+      nil,
       "Interface\\Buttons\\WHITE8x8",
       "HORIZONTAL",
       false,
@@ -1132,9 +1120,6 @@ function CustomIcons:ConfigureAura(key, cfg, options)
   StopStateGlow(record)
   if not record.runtimeEnabled then
     if record.auraSlot then AuraSlotDriver:SetSlotActive(record.auraSlot, false) end
-    if record.auraParts then
-      AuraWidget.DisableApplicationThresholdSource(record.auraParts)
-    end
     return
   end
 
@@ -1152,9 +1137,6 @@ function CustomIcons:ConfigureAura(key, cfg, options)
 
   if not record.auraSlot or record.auraUnit ~= options.unit then
     if record.auraSlot then AuraSlotDriver:SetSlotActive(record.auraSlot, false) end
-    if record.auraParts then
-      AuraWidget.DisableApplicationThresholdSource(record.auraParts)
-    end
     record.auraUnit = options.unit
     record.auraParts = nil
     record.auraSlot = AuraSlotDriver:CreateSlot(options.unit, options.filter, {
@@ -1247,9 +1229,6 @@ function CustomIcons:Release(key)
   if record.auraSlot then
     AuraSlotDriver:SetSlotCandidates(record.auraSlot, retiredCandidates)
     AuraSlotDriver:SetSlotActive(record.auraSlot, false)
-  end
-  if record.auraParts then
-    AuraWidget.DisableApplicationThresholdSource(record.auraParts)
   end
   if record.activeAuraSlot then
     AuraSlotDriver:SetSlotCandidates(record.activeAuraSlot, retiredCandidates)

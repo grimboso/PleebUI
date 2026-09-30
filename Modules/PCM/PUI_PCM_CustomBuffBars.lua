@@ -26,7 +26,6 @@ local AuraSlotDriver = ns.AuraSlotDriver
 local BarWidget = ns.BarWidget
 local FrameUtil = ns.FrameUtil
 local LSM = ns.LSM
-local Hooks = ns.PCMHooks
 local PCMRuntime = ns.PCMRuntime
 local Presentation = ns.Presentation
 local PCMPresentation = ns.PCMPresentation
@@ -49,7 +48,6 @@ local VIEWER_KEY = "BuffIconCooldownViewer"
 
 local _cache = {
   cm = nil,
-  viewer = nil,
 }
 
 -- BB must not write custom fields onto Blizzard frames (Midnight "secret" taint risk).
@@ -77,12 +75,6 @@ local function _GetBuffsDB()
   return _cache.cm
 end
 
-local function _GetViewer()
-  local viewer = PCMRuntime:GetViewer(VIEWER_KEY)
-  _cache.viewer = viewer
-  return viewer
-end
-
 -- Custom stack bars DB (per-profile, under the same CooldownManager root)
 local function _GetStackBarsDB()
   local cm = _GetBuffsDB()
@@ -95,7 +87,6 @@ local _CustomBars = {
   retiredFrames = {},
   barsByCooldownID = {},
   barsBySpellID = {},
-  barsByIcon = setmetatable({}, { __mode = "k" }),
 }
 
 _CustomBars._lastCombatState = nil
@@ -570,7 +561,6 @@ end
 
 local _CustomBars_ApplyVisibility
 local _CustomBars_IsTrackedSpellAvailable
-local _CustomBars_BindBarsToIcon
 local _CustomBars_CompleteFrameRetirement
 local _CustomBars_GetAuraTrackUnitAndFilter
 local _customBarsAuraDriver
@@ -627,12 +617,6 @@ local function _CustomBars_EnsureFrame(id)
   f:SetFrameLevel(1)
   f:SetClampedToScreen(true)
   f.__puiBorderThickness = 2
-
-  f.cdmStackBar = CreateFrame("StatusBar", nil, f)
-  f.cdmStackBar:SetStatusBarTexture("Interface\\Buttons\\WHITE8X8")
-  f.cdmStackBar:SetMinMaxValues(0, 1)
-  f.cdmStackBar:SetValue(0)
-  f.cdmStackBar:Hide()
 
   f.bg,
     f.__puiBorderTop,
@@ -811,7 +795,7 @@ local function _CustomBars_RegisterMover(id, f, cfg)
 
   local moverOpts = {
     label = ns.Modules.CooldownManager:GetCustomBarDisplayName(cfg),
-    optionsString = "CooldownManager,custom_bars,bb:" .. tostring(id),
+    optionsString = "CooldownManager,customTrackers,bb:" .. tostring(id),
     liveFrame = function()
       return f
     end,
@@ -1075,7 +1059,7 @@ local function _CustomBars_ApplyConfig(id, cfg)
     CustomIcons:ConfigureAura("aura:" .. tostring(id), cfg, {
       auraKind = cfg.kind,
       label = ns.Modules.CooldownManager:GetCustomBarDisplayName(cfg) .. " icon",
-      optionsString = "CooldownManager,custom_bars,bb:" .. tostring(id),
+      optionsString = "CooldownManager,customTrackers,bb:" .. tostring(id),
       moverKey = "PCM_CustomAuraIcon_" .. tostring(id),
       defaultY = -60 - ((id - 1) * 50),
       spellID = tonumber(cfg.trackedSpellID),
@@ -1115,7 +1099,6 @@ local function _CustomBars_RebuildAll()
 
   wipe(_CustomBars.barsByCooldownID)
   wipe(_CustomBars.barsBySpellID)
-  wipe(_CustomBars.barsByIcon)
 
   for id, cfg in pairs(db) do
     if type(id) == "number" and type(cfg) == "table" then
@@ -1152,118 +1135,9 @@ local function _CustomBars_RebuildAll()
   end
 end
 
-local _BB_EnsureViewerAuraHooks
-local _CustomBars_SetViewerIconHidden
-local _CustomBars_GetIconCooldownID
-local _CustomBars_GetIconSpellID
-local _GetViewerIcons
-
 local _manualHiddenByCooldownID = {}
 local _manualHiddenBySpellID = {}
 local _glowAuraHiddenBySpellID = {}
-
-local _BB_EnsureViewerAuraIconHook
-
-local function _BB_ShouldHideViewerIcon(icon, bucket)
-  local state = _BB_State(icon)
-  local cooldownID = state and state.cooldownID
-  local spellID = state and state.spellID
-
-  if type(cooldownID) == "number" and _manualHiddenByCooldownID[cooldownID] then
-    return true
-  end
-
-  if type(spellID) == "number"
-    and (_manualHiddenBySpellID[spellID] or _glowAuraHiddenBySpellID[spellID])
-  then
-    return true
-  end
-
-  if bucket then
-    local db = _GetStackBarsDB()
-    for id in pairs(bucket) do
-      local cfg = db[id]
-      if cfg and cfg.enabled ~= false and cfg.hideViewerIcon == true then
-        return true
-      end
-    end
-  end
-
-  return false
-end
-
-local function ApplyConfiguredViewerHiddenState(icon, bucket)
-  _CustomBars_SetViewerIconHidden(icon, _BB_ShouldHideViewerIcon(icon, bucket))
-end
-
-_BB_EnsureViewerAuraIconHook = function(icon)
-  if not icon or (icon.IsForbidden and icon:IsForbidden()) then
-    return nil
-  end
-
-  local bucket = _CustomBars_BindBarsToIcon(icon)
-  ApplyConfiguredViewerHiddenState(icon, bucket)
-  return bucket
-end
-
-local function _BB_ResetViewerIconIdentity(icon)
-  if not icon then
-    return
-  end
-
-  local state = _BB_State(icon)
-  state.cooldownID = nil
-  state.spellID = nil
-  state.identityDirty = nil
-  state.refreshPending = nil
-  _CustomBars.barsByIcon[icon] = nil
-
-  _BB_EnsureViewerAuraIconHook(icon)
-end
-
-
-_BB_EnsureViewerAuraHooks = function(viewer)
-  local v = viewer or _cache.viewer or _GetViewer()
-  if not v then
-    return
-  end
-
-  local children = _GetViewerIcons(v)
-  if type(children) ~= "table" then
-    return
-  end
-
-  for i = 1, #children do
-    _BB_EnsureViewerAuraIconHook(children[i])
-  end
-end
-
-local __PUI_PCM_BB_ActiveFrameBuffer = {}
-
-local function _BB_ClearActiveFrameBuffer()
-  wipe(__PUI_PCM_BB_ActiveFrameBuffer)
-end
-
-_GetViewerIcons = function(viewer)
-  if not viewer or (viewer.IsForbidden and viewer:IsForbidden()) then
-    return nil
-  end
-
-  _BB_ClearActiveFrameBuffer()
-
-  local items = PCMRuntime:GetViewerItems(viewer)
-  for index = 1, #items do
-    local itemFrame = items[index]
-    if itemFrame and not (itemFrame.IsForbidden and itemFrame:IsForbidden()) then
-      __PUI_PCM_BB_ActiveFrameBuffer[#__PUI_PCM_BB_ActiveFrameBuffer + 1] = itemFrame
-    end
-  end
-
-  return __PUI_PCM_BB_ActiveFrameBuffer
-end
-
-
-
 
 _CustomBars_IsTrackedSpellAvailable = function(cfg)
   if not ns.Modules.CooldownManager:AllowsCurrentSpecialization(cfg) then
@@ -1303,73 +1177,6 @@ _CustomBars_IsTrackedSpellAvailable = function(cfg)
   cfg.__puiCooldownID = cooldownID
   cfg.__puiTrackedAvailable = available
   return available
-end
-
-_CustomBars_GetIconCooldownID = function(icon)
-  local cooldownID = icon:GetCooldownID()
-  if IsSecret(cooldownID) or type(cooldownID) ~= "number" then
-    return nil
-  end
-
-  _BB_State(icon).cooldownID = cooldownID
-  return cooldownID
-end
-
-_CustomBars_GetIconSpellID = function(icon)
-  local spellID = icon:GetSpellID()
-  if IsSecret(spellID) or type(spellID) ~= "number" then
-    return nil
-  end
-
-  _BB_State(icon).spellID = spellID
-  return spellID
-end
-
-_CustomBars_BindBarsToIcon = function(icon)
-  if not icon then
-    return nil
-  end
-
-  local cooldownID = _CustomBars_GetIconCooldownID(icon)
-  local spellID = _CustomBars_GetIconSpellID(icon)
-  local current = _CustomBars.barsByIcon[icon]
-
-  if type(cooldownID) ~= "number" and type(spellID) ~= "number" then
-    return current
-  end
-
-  local bucket = current
-  if not bucket then
-    bucket = {}
-    _CustomBars.barsByIcon[icon] = bucket
-  else
-    wipe(bucket)
-  end
-
-  if type(cooldownID) == "number" then
-    local cooldownBucket = _CustomBars.barsByCooldownID[cooldownID]
-    if cooldownBucket then
-      for id in pairs(cooldownBucket) do
-        bucket[id] = true
-      end
-    end
-  end
-
-  if type(spellID) == "number" then
-    local spellBucket = _CustomBars.barsBySpellID[spellID]
-    if spellBucket then
-      for id in pairs(spellBucket) do
-        bucket[id] = true
-      end
-    end
-  end
-
-  if next(bucket) == nil then
-    _CustomBars.barsByIcon[icon] = nil
-    return nil
-  end
-
-  return bucket
 end
 
 local function _CustomBars_NormalizeAuraTrackMode(mode)
@@ -1444,21 +1251,6 @@ function _customBarsAuraDriver:ResolveCandidate(cfg)
   }
   self.candidateCache[cfg] = candidate
   return candidate
-end
-
-local function _CustomBars_HasEnabledStackColorThreshold(cfg)
-  local thresholds = cfg and cfg.stackColorThresholds
-  if type(thresholds) ~= "table" then
-    return false
-  end
-
-  for index = 1, #thresholds do
-    if thresholds[index].enabled == true then
-      return true
-    end
-  end
-
-  return false
 end
 
 function _customBarsAuraDriver:SetSlotAttached(sub, attached)
@@ -1760,26 +1552,22 @@ function _customBarsAuraDriver:ApplyCombinedStyle(sub, f, cfg)
 
   if applicationsEnabled then
     local engineBar = sub.applicationBar
-    local cdmStackBar = f.cdmStackBar
     sub.applicationBase:Hide()
 
     local texturePath, orientation, reverseFill, r, g, b, a = self:GetBarAppearance(cfg, false)
     if sub.applicationTexture ~= texturePath then
       sub.applicationTexture = texturePath
       engineBar:SetStatusBarTexture(texturePath)
-      cdmStackBar:SetStatusBarTexture(texturePath)
     end
 
     if sub.applicationOrientation ~= orientation then
       sub.applicationOrientation = orientation
       engineBar:SetOrientation(orientation)
-      cdmStackBar:SetOrientation(orientation)
     end
 
     if sub.applicationReverseFill ~= reverseFill then
       sub.applicationReverseFill = reverseFill
       engineBar:SetReverseFill(reverseFill)
-      cdmStackBar:SetReverseFill(reverseFill)
     end
 
     if sub.applicationR ~= r
@@ -1792,7 +1580,6 @@ function _customBarsAuraDriver:ApplyCombinedStyle(sub, f, cfg)
       sub.applicationB = b
       sub.applicationA = a
       engineBar:SetStatusBarColor(r, g, b, a)
-      cdmStackBar:SetStatusBarColor(r, g, b, a)
     end
 
     local inset = Round(f.__puiBorderThickness or 2)
@@ -1801,9 +1588,6 @@ function _customBarsAuraDriver:ApplyCombinedStyle(sub, f, cfg)
       engineBar:ClearAllPoints()
       engineBar:SetPoint("TOPLEFT", button, "TOPLEFT", inset, -inset)
       engineBar:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT", -inset, inset)
-      cdmStackBar:ClearAllPoints()
-      cdmStackBar:SetPoint("TOPLEFT", f, "TOPLEFT", inset, -inset)
-      cdmStackBar:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -inset, inset)
     end
 
     local applicationFrameLevel = button:GetFrameLevel() + 1
@@ -1811,30 +1595,15 @@ function _customBarsAuraDriver:ApplyCombinedStyle(sub, f, cfg)
       sub.applicationFrameLevel = applicationFrameLevel
       engineBar:SetFrameLevel(applicationFrameLevel)
     end
-    cdmStackBar:SetFrameStrata(f:GetFrameStrata())
-    cdmStackBar:SetFrameLevel(button:GetFrameLevel() + 2)
 
     local maxStacks = tonumber(cfg.maxStacks) or 1
     if maxStacks < 1 then
       maxStacks = 1
     end
 
-    local useCDMStackColorSource = _CustomBars_HasEnabledStackColorThreshold(cfg)
-    local displayBar
-
-    if useCDMStackColorSource then
-      AuraWidget.SetApplicationThresholdBar(sub, cdmStackBar)
-      sub.applicationThresholdInterpolation = Enum.StatusBarInterpolation.Immediate
-      engineBar:SetAlpha(0)
-      cdmStackBar:SetAlpha(1)
-      displayBar = cdmStackBar
-    else
-      AuraWidget.DisableApplicationThresholdSource(sub)
-      AuraWidget.ClearApplicationThresholdBar(sub)
-      cdmStackBar:Hide()
-      engineBar:SetAlpha(1)
-      displayBar = engineBar
-    end
+    AuraWidget.ClearApplicationThresholdBar(sub)
+    engineBar:SetAlpha(1)
+    local displayBar = engineBar
 
     local engineTexture = engineBar:GetStatusBarTexture()
     if engineTexture then
@@ -1843,7 +1612,7 @@ function _customBarsAuraDriver:ApplyCombinedStyle(sub, f, cfg)
 
     AuraWidget.ConfigureApplicationThresholds(
       sub,
-      useCDMStackColorSource and cfg.stackColorThresholds or nil,
+      nil,
       texturePath,
       orientation,
       reverseFill,
@@ -1856,16 +1625,6 @@ function _customBarsAuraDriver:ApplyCombinedStyle(sub, f, cfg)
       maxStacks,
       Enum.StatusBarInterpolation.Immediate
     )
-
-    if useCDMStackColorSource then
-      AuraWidget.ConfigureApplicationThresholdSource(
-        sub,
-        sub.candidate.spellIDs,
-        sub.candidate.cooldownID,
-        VIEWER_KEY,
-        sub.unit
-      )
-    end
 
     local dividerFrame = sub.applicationDividerFrame
     dividerFrame:ClearAllPoints()
@@ -1930,9 +1689,8 @@ function _customBarsAuraDriver:ApplyCombinedStyle(sub, f, cfg)
         sub.applicationFormatter = formatter
       end
 
-      AuraWidget.ConfigureApplicationCount(sub, sub.applicationFormatter)
-
       self:ApplyFont(sub.applicationText, cfg.font, cfg.fontSize, cfg.outline)
+      AuraWidget.ConfigureApplicationCount(sub, sub.applicationFormatter)
       local x = tonumber(cfg.fontOffsetX) or 0
       local y = 2 + (tonumber(cfg.fontOffsetY) or 0)
       if sub.applicationTextPoint ~= "BOTTOM"
@@ -1963,9 +1721,7 @@ function _customBarsAuraDriver:ApplyCombinedStyle(sub, f, cfg)
       AuraWidget.DisableApplicationCount(sub)
     end
   else
-    AuraWidget.DisableApplicationThresholdSource(sub)
     AuraWidget.ClearApplicationThresholdBar(sub)
-    f.cdmStackBar:Hide()
     AuraWidget.DisableApplicationBar(sub)
     AuraWidget.DisableApplicationCount(sub)
     sub.applicationDividerFrame:Hide()
@@ -2036,14 +1792,13 @@ function _customBarsAuraDriver:ApplyCombinedStyle(sub, f, cfg)
     )
 
     if durationTextEnabled then
-      AuraWidget.ConfigureDurationText(sub, BarWidget.GetDurationFormatter())
-
       self:ApplyFont(
         sub.durationText,
         cfg.durationFont,
         cfg.durationCountFontSize,
         cfg.durationOutline
       )
+      AuraWidget.ConfigureDurationText(sub, BarWidget.GetDurationFormatter())
       if sub.durationTextTarget ~= target then
         sub.durationTextTarget = target
         sub.durationTextHolder:ClearAllPoints()
@@ -2127,13 +1882,9 @@ function _customBarsAuraDriver:ApplyCombinedStyle(sub, f, cfg)
   local activeDesaturated = activeAppearanceEnabled and cfg.desaturateActive == true
   local activeAlpha = activeAppearanceEnabled and (tonumber(cfg.activeAlpha) or 100) / 100 or 1
   button:SetAlpha(activeAlpha)
-  f.cdmStackBar:SetAlpha(activeAlpha)
   sub.icon:SetDesaturated(activeDesaturated)
   if sub.applicationBar and sub.applicationBar:GetStatusBarTexture() then
     sub.applicationBar:GetStatusBarTexture():SetDesaturated(activeDesaturated)
-  end
-  if f.cdmStackBar:GetStatusBarTexture() then
-    f.cdmStackBar:GetStatusBarTexture():SetDesaturated(activeDesaturated)
   end
   if sub.durationBar and sub.durationBar:GetStatusBarTexture() then
     sub.durationBar:GetStatusBarTexture():SetDesaturated(activeDesaturated)
@@ -2300,7 +2051,6 @@ function _customBarsAuraDriver:Detach(f)
   end
 
   local sub = attachment.slot
-  AuraWidget.DisableApplicationThresholdSource(sub)
   AuraWidget.ClearApplicationThresholdBar(sub)
   self:SetSlotAttached(sub, false)
   sub.applicationsEnabled = false
@@ -2320,7 +2070,6 @@ function _customBarsAuraDriver:Release(f)
     self.attachments[f] = nil
 
     for _, sub in pairs(frameCache) do
-      AuraWidget.DisableApplicationThresholdSource(sub)
       AuraWidget.ClearApplicationThresholdBar(sub)
       self:SetSlotAttached(sub, false)
       sub.applicationsEnabled = false
@@ -2364,7 +2113,6 @@ function _customBarsAuraDriver:Attach(f, cfg)
 
   if previous and previous.slot.unit ~= unit then
     local oldSub = previous.slot
-    AuraWidget.DisableApplicationThresholdSource(oldSub)
     AuraWidget.ClearApplicationThresholdBar(oldSub)
     self:SetSlotAttached(oldSub, false)
     oldSub.applicationsEnabled = false
@@ -2419,45 +2167,8 @@ function _customBarsAuraDriver:DetachAll()
   end
 end
 
-_CustomBars_SetViewerIconHidden = function(icon, hidden)
-  if not icon then
-    return
-  end
-
-  local state = _BB_State(icon)
-  local changed = false
-
-  if hidden then
-    if not state.hidden then
-      state.hidden = true
-      state.mouseClickEnabled = icon:IsMouseClickEnabled()
-      state.mouseMotionEnabled = icon:IsMouseMotionEnabled()
-      changed = true
-    end
-    Hooks.SetBBIconHidden(icon, true, icon:IsShown())
-    icon:EnableMouse(false)
-  else
-    local wasHidden = state.hidden == true
-    state.hidden = nil
-    Hooks.SetBBIconHidden(icon, false)
-
-    if wasHidden then
-      icon:SetMouseClickEnabled(state.mouseClickEnabled == true)
-      icon:SetMouseMotionEnabled(state.mouseMotionEnabled == true)
-      state.mouseClickEnabled = nil
-      state.mouseMotionEnabled = nil
-    end
-
-    changed = wasHidden
-  end
-
-  if changed then
-    ns.Modules.PCM_Buffs:ScheduleRecenter(nil, icon)
-  end
-end
-
-local function _BB_ApplyViewerIconHiddenState(viewer)
-  _BB_EnsureViewerAuraHooks(viewer or _GetViewer())
+local function _BB_ApplyViewerIconHiddenState()
+  ns.PCMAuraRuntime:RefreshBuffIconVisibility()
 end
 
 local function _BB_CustomTrackerUsesAuraGlow(cfg)
@@ -2552,7 +2263,7 @@ local function _BB_RefreshViewerHiddenState()
   end
 
   BB.__puiNeedsViewerIdentity = needsViewerIdentity
-  _BB_ApplyViewerIconHiddenState(_GetViewer())
+  _BB_ApplyViewerIconHiddenState()
 end
 
 function API.SetViewerIconHiddenByCooldownID(cooldownID, hidden)
@@ -2567,6 +2278,7 @@ function API.SetViewerIconHiddenByCooldownID(cooldownID, hidden)
   end
 
   _BB_RefreshViewerHiddenState()
+  ns.PCM_ReconcileNativeCDM()
 end
 
 function API.SetViewerIconHiddenBySpellID(spellID, hidden)
@@ -2585,6 +2297,46 @@ end
 
 function API.RefreshViewerHiddenState()
   _BB_RefreshViewerHiddenState()
+end
+
+function API.ShouldHideViewerEntry(entry)
+  if type(entry) ~= "table" then
+    return false
+  end
+  if _manualHiddenByCooldownID[entry.cooldownID] then
+    return true
+  end
+
+  local spellIDs = entry.identitySpellIDs or {}
+  for index = 1, #spellIDs do
+    local spellID = spellIDs[index]
+    if _manualHiddenBySpellID[spellID] or _glowAuraHiddenBySpellID[spellID] then
+      return true
+    end
+  end
+
+  local db = _GetStackBarsDB()
+  local bucket = _CustomBars.barsByCooldownID[entry.cooldownID]
+  if bucket then
+    for id in pairs(bucket) do
+      local cfg = db[id]
+      if cfg and cfg.enabled ~= false and cfg.hideViewerIcon == true then
+        return true
+      end
+    end
+  end
+  for index = 1, #spellIDs do
+    bucket = _CustomBars.barsBySpellID[spellIDs[index]]
+    if bucket then
+      for id in pairs(bucket) do
+        local cfg = db[id]
+        if cfg and cfg.enabled ~= false and cfg.hideViewerIcon == true then
+          return true
+        end
+      end
+    end
+  end
+  return false
 end
 
 
@@ -2706,7 +2458,6 @@ function BB:ApplySettings(flags)
 
   if flags.profile == true then
     _cache.cm = nil
-    _cache.viewer = nil
   end
 
   if flags.theme == true then
@@ -2865,43 +2616,6 @@ function BB:_OnCooldownViewerTableHotfixed()
 end
 
 PCMRuntime:RegisterSubscriber("CustomBuffBars", {
-  OnViewerChanged = function(key, viewer)
-    if key ~= VIEWER_KEY then
-      return
-    end
-
-    _cache.viewer = viewer
-
-    if viewer and _PCM_BB_Enabled() then
-      API.RebuildCustomBars()
-    end
-  end,
-
-  OnItemAcquired = function(key, viewer, itemFrame)
-    if key ~= VIEWER_KEY or not _PCM_BB_Enabled() then
-      return
-    end
-
-    if BB.__puiNeedsViewerIdentity then
-      _BB_EnsureViewerAuraIconHook(itemFrame)
-    end
-  end,
-
-  OnItemReleased = function(key, _, itemFrame)
-    if key ~= VIEWER_KEY then
-      return
-    end
-
-    _CustomBars.barsByIcon[itemFrame] = nil
-    _CustomBars_SetViewerIconHidden(itemFrame, false)
-  end,
-
-  OnItemRebound = function(key, _, itemFrame)
-    if key == VIEWER_KEY and _PCM_BB_Enabled() then
-      _BB_ResetViewerIconIdentity(itemFrame)
-    end
-  end,
-
   OnLifecycleEvent = function(event, ...)
     if event == "PLAYER_ENTERING_WORLD" then
       _BB_StartupRebuild()
@@ -2942,11 +2656,15 @@ function BB:OnEnable()
   end
 
   PCMRuntime:SetSubscriberEnabled("CustomBuffBars", true)
+  ns.PCMAuraRuntime:SetBuffIconHiddenResolver(function(entry)
+    return API.ShouldHideViewerEntry(entry)
+  end)
   _BB_StartupRebuild()
 end
 
 function BB:OnDisable()
   PCMRuntime:SetSubscriberEnabled("CustomBuffBars", false)
+  ns.PCMAuraRuntime:SetBuffIconHiddenResolver(nil)
 
   _bbWorkFrame:Hide()
   _bbRebuildQueued = false
@@ -2954,17 +2672,8 @@ function BB:OnDisable()
   _bbDeferredFlushQueued = false
   _bbStartupDid = false
 
-  local viewer = _cache.viewer or PCMRuntime:GetViewer(VIEWER_KEY)
-  local icons = viewer and _GetViewerIcons(viewer) or nil
-  if type(icons) == "table" then
-    for i = 1, #icons do
-      _CustomBars_SetViewerIconHidden(icons[i], false)
-    end
-  end
   wipe(_glowAuraHiddenBySpellID)
   self.__puiNeedsViewerIdentity = nil
-  _cache.viewer = nil
-
   if self.__puiCustomBarsScaleListener then
     FrameScale:UnregisterScaleListener(self.__puiCustomBarsScaleListener)
     self.__puiCustomBarsScaleListener = nil
@@ -3192,7 +2901,6 @@ end
 _PCM_BB_Enabled = P:Def("_PCM_BB_Enabled", _PCM_BB_Enabled)
 _BB_State = P:Def("_BB_State", _BB_State)
 _GetBuffsDB = P:Def("_GetBuffsDB", _GetBuffsDB)
-_GetViewer = P:Def("_GetViewer", _GetViewer)
 _GetStackBarsDB = P:Def("_GetStackBarsDB", _GetStackBarsDB)
 PUI_GetCooldownNumbersFontString = P:Def("PUI_GetCooldownNumbersFontString", PUI_GetCooldownNumbersFontString)
 _CustomBars_EnsureDefaults = P:Def("_CustomBars_EnsureDefaults", _CustomBars_EnsureDefaults)
@@ -3214,18 +2922,9 @@ _CustomBars_ApplyVisibility = P:Def("_CustomBars_ApplyVisibility", _CustomBars_A
 _CustomBars_ApplyConfig = P:Def("_CustomBars_ApplyConfig", _CustomBars_ApplyConfig)
 _CustomBars_AddSourceIndex = P:Def("_CustomBars_AddSourceIndex", _CustomBars_AddSourceIndex)
 _CustomBars_RebuildAll = P:Def("_CustomBars_RebuildAll", _CustomBars_RebuildAll)
-_BB_EnsureViewerAuraIconHook = P:Def("_BB_EnsureViewerAuraIconHook", _BB_EnsureViewerAuraIconHook)
-_BB_ResetViewerIconIdentity = P:Def("_BB_ResetViewerIconIdentity", _BB_ResetViewerIconIdentity)
-_BB_EnsureViewerAuraHooks = P:Def("_BB_EnsureViewerAuraHooks", _BB_EnsureViewerAuraHooks)
-_GetViewerIcons = P:Def("_GetViewerIcons", _GetViewerIcons)
-_BB_ClearActiveFrameBuffer = P:Def("_BB_ClearActiveFrameBuffer", _BB_ClearActiveFrameBuffer)
 _CustomBars_IsTrackedSpellAvailable = P:Def("_CustomBars_IsTrackedSpellAvailable", _CustomBars_IsTrackedSpellAvailable)
-_CustomBars_GetIconCooldownID = P:Def("_CustomBars_GetIconCooldownID", _CustomBars_GetIconCooldownID)
-_CustomBars_GetIconSpellID = P:Def("_CustomBars_GetIconSpellID", _CustomBars_GetIconSpellID)
-_CustomBars_BindBarsToIcon = P:Def("_CustomBars_BindBarsToIcon", _CustomBars_BindBarsToIcon)
 _CustomBars_NormalizeAuraTrackMode = P:Def("_CustomBars_NormalizeAuraTrackMode", _CustomBars_NormalizeAuraTrackMode)
 _CustomBars_GetAuraTrackUnitAndFilter = P:Def("_CustomBars_GetAuraTrackUnitAndFilter", _CustomBars_GetAuraTrackUnitAndFilter)
-_CustomBars_SetViewerIconHidden = P:Def("_CustomBars_SetViewerIconHidden", _CustomBars_SetViewerIconHidden)
 _BB_ApplyViewerIconHiddenState = P:Def("_BB_ApplyViewerIconHiddenState", _BB_ApplyViewerIconHiddenState)
 _CustomBars_DeleteRuntimeBar = P:Def("_CustomBars_DeleteRuntimeBar", _CustomBars_DeleteRuntimeBar)
 _BB_RebuildCustomBars = P:Def("_BB_RebuildCustomBars", _BB_RebuildCustomBars)
@@ -3252,7 +2951,6 @@ BB.OnDisable = P:Def("BB:OnDisable", BB.OnDisable)
 _customBarsAuraDriver.IsButtonRestyleLocked = P:Def("_customBarsAuraDriver:IsButtonRestyleLocked", _customBarsAuraDriver.IsButtonRestyleLocked)
 _customBarsAuraDriver.InvalidateCandidateCache = P:Def("_customBarsAuraDriver:InvalidateCandidateCache", _customBarsAuraDriver.InvalidateCandidateCache)
 _customBarsAuraDriver.ResolveCandidate = P:Def("_customBarsAuraDriver:ResolveCandidate", _customBarsAuraDriver.ResolveCandidate)
-_CustomBars_HasEnabledStackColorThreshold = P:Def("_CustomBars_HasEnabledStackColorThreshold", _CustomBars_HasEnabledStackColorThreshold)
 _customBarsAuraDriver.ApplyFont = P:Def("_customBarsAuraDriver:ApplyFont", _customBarsAuraDriver.ApplyFont)
 _customBarsAuraDriver.GetBarAppearance = P:Def("_customBarsAuraDriver:GetBarAppearance", _customBarsAuraDriver.GetBarAppearance)
 _customBarsAuraDriver.CreateChrome = P:Def("_customBarsAuraDriver:CreateChrome", _customBarsAuraDriver.CreateChrome)
@@ -3282,4 +2980,5 @@ API.DeleteCustomBar = P:Def("API.DeleteCustomBar", API.DeleteCustomBar)
 API.SetViewerIconHiddenByCooldownID = P:Def("API.SetViewerIconHiddenByCooldownID", API.SetViewerIconHiddenByCooldownID)
 API.SetViewerIconHiddenBySpellID = P:Def("API.SetViewerIconHiddenBySpellID", API.SetViewerIconHiddenBySpellID)
 API.RefreshViewerHiddenState = P:Def("API.RefreshViewerHiddenState", API.RefreshViewerHiddenState)
+API.ShouldHideViewerEntry = P:Def("API.ShouldHideViewerEntry", API.ShouldHideViewerEntry)
 API.RefreshAfterTalentSwap = P:Def("API.RefreshAfterTalentSwap", API.RefreshAfterTalentSwap)

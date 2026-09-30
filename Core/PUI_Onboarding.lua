@@ -8,7 +8,6 @@ local AceGUI = LibStub("AceGUI-3.0")
 local InCombatLockdown = _G.InCombatLockdown
 local ReloadUI = _G.ReloadUI
 local UIParent = _G.UIParent
-local C_CVar = _G.C_CVar
 local UnitClass = _G.UnitClass
 local UnitLevel = _G.UnitLevel
 local UnitName = _G.UnitName
@@ -30,7 +29,6 @@ local PROGRESS_WIDTH = 300
 local PROGRESS_INNER_WIDTH = PROGRESS_WIDTH - 4
 local PREVIEW_UPDATE_INTERVAL = 1 / 30
 local ACTION_BUTTON_SPACING = 8
-local COOLDOWN_MANAGER_CVAR = "cooldownViewerEnabled"
 
 local activeFlow
 local currentPage = 1
@@ -385,21 +383,21 @@ RefreshProfileChoiceControls = function(host)
   LayoutProfileChoiceControls(host)
 end
 
-local function RefreshCooldownManagerButton(button)
-  local enabled = C_CVar.GetCVar(COOLDOWN_MANAGER_CVAR) == "1"
-  button:SetText(enabled and "Disable Cooldown Manager" or "Enable Cooldown Manager")
-  button:SetEnabled(true)
+local function RefreshCooldownManagerStatus(button)
+  local cooldowns = ns.Modules.CooldownManager
+  local enabled = cooldowns:IsModuleEnabledByUser()
+  button:SetText(enabled and "Enabled" or "Disabled")
+  button:SetEnabled(not InCombatLockdown())
 end
 
 local function ToggleCooldownManager(button)
-  local enabled = C_CVar.GetCVar(COOLDOWN_MANAGER_CVAR) == "1"
-  C_CVar.SetCVar(COOLDOWN_MANAGER_CVAR, enabled and "0" or "1")
-  RefreshCooldownManagerButton(button)
-
-  if enabled then
-    SetStatus("Cooldown Manager disabled. It will unload after the next UI reload.")
+  local cooldowns = ns.Modules.CooldownManager
+  local enabled = cooldowns:IsModuleEnabledByUser()
+  if cooldowns:SetModuleEnabled(not enabled) then
+    RefreshCooldownManagerStatus(button)
+    SetStatus(enabled and "Cooldown Manager disabled." or "Cooldown Manager enabled.")
   else
-    SetStatus("Cooldown Manager enabled. It will load after the next UI reload.")
+    SetStatus("Cooldown Manager cannot be changed during combat.")
   end
 end
 
@@ -508,7 +506,7 @@ local INSTALL_FLOW = {
     },
     {
       title = "Cooldowns and trackers",
-      body = "Choose whether Blizzard's Cooldown Manager is enabled, turn on PleebUI's Consumable Tracker, and preview the custom tracker types. Use /cd to choose Blizzard Cooldown Manager spells.",
+      body = "PleebUI uses your Cooldown Manager selection and owns all four viewer displays. Blizzard's background manager stays active only when its sounds or application colors are needed. Disabling Cooldown Manager also disables PleebUI's viewers. Turn on the Consumable Tracker and preview custom tracker types here. Use /cd to choose tracked spells and auras.",
       note = "The Consumable Tracker covers potions, Healthstones, combat resurrection items, and equipped on-use trinkets. Custom trackers can be created here or later under Cooldown Manager > Custom Trackers.",
       preview = "customBars",
       actions = {
@@ -909,8 +907,8 @@ RefreshWizardTheme = function()
   if frame.PreviewHost.ConsumableTrackerWidget then
     Theme.ApplyAce3Skin(frame.PreviewHost.ConsumableTrackerWidget)
   end
-  if frame.PreviewHost.CooldownManagerButton then
-    SkinWizardButton(frame.PreviewHost.CooldownManagerButton)
+  if frame.PreviewHost.CooldownManagerStatus then
+    SkinWizardButton(frame.PreviewHost.CooldownManagerStatus)
   end
 
   for i = 1, #frame.AccessibilityHost.ScaleButtons do
@@ -1187,16 +1185,15 @@ local function BuildCustomBarsPreview(frame, colors)
   local cooldownManagerLabel = host:CreateFontString(nil, "OVERLAY")
   cooldownManagerLabel:SetPoint("TOPLEFT", host, "TOPLEFT", 12, -14)
   ApplyWizardFont(cooldownManagerLabel, "body", 12)
-  cooldownManagerLabel:SetText("Blizzard Cooldown Manager")
+  cooldownManagerLabel:SetText("PleebUI Cooldown Manager")
 
-  local cooldownManagerButton = CreateFrame("Button", nil, host, "UIPanelButtonTemplate")
-  cooldownManagerButton:SetSize(220, 28)
-  cooldownManagerButton:SetPoint("TOPRIGHT", host, "TOPRIGHT", -12, -8)
-  cooldownManagerButton:SetScript("OnClick", function(self)
-    ToggleCooldownManager(self)
-  end)
-  SkinWizardButton(cooldownManagerButton)
-  host.CooldownManagerButton = cooldownManagerButton
+  local cooldownManagerStatus = CreateFrame("Button", nil, host, "UIPanelButtonTemplate")
+  cooldownManagerStatus:SetSize(220, 28)
+  cooldownManagerStatus:SetPoint("TOPRIGHT", host, "TOPRIGHT", -12, -8)
+  SkinWizardButton(cooldownManagerStatus)
+  cooldownManagerStatus:SetScript("OnClick", ToggleCooldownManager)
+  RefreshCooldownManagerStatus(cooldownManagerStatus)
+  host.CooldownManagerStatus = cooldownManagerStatus
 
   local consumableLabel = host:CreateFontString(nil, "OVERLAY")
   consumableLabel:SetPoint("TOPLEFT", host, "TOPLEFT", 12, -52)
@@ -1248,7 +1245,7 @@ local function BuildCustomBarsPreview(frame, colors)
   host.DurationBar:SetMinMaxValues(0, 8)
 
   host:SetScript("OnShow", function(self)
-    RefreshCooldownManagerButton(self.CooldownManagerButton)
+    RefreshCooldownManagerStatus(self.CooldownManagerStatus)
     self.ConsumableTrackerWidget:SetValue(
       ns.Modules.CooldownManager:GetConsumableTrackerEnabled()
     )
@@ -2716,7 +2713,7 @@ RefreshWizardPage = function()
   frame.PreviewHost:SetShown(showPreview)
 
   if showPreview then
-    RefreshCooldownManagerButton(frame.PreviewHost.CooldownManagerButton)
+    RefreshCooldownManagerStatus(frame.PreviewHost.CooldownManagerStatus)
     frame.PreviewHost.ConsumableTrackerWidget:SetValue(
       ns.Modules.CooldownManager:GetConsumableTrackerEnabled()
     )

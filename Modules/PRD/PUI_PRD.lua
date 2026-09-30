@@ -1067,6 +1067,8 @@ function M:OnEnable()
     self:RequestInitialSettleRefresh()
   end
 
+  ns.PCM_ReconcileNativeCDM()
+
 end
 
 function M:StopRuntime()
@@ -2408,6 +2410,7 @@ function M:ApplySettings(flags)
   end
 
   local wantEnabled = self:SyncEnabledState()
+  ns.PCM_ReconcileNativeCDM()
   if not wantEnabled then
     return
   end
@@ -2450,6 +2453,7 @@ end
 
 function M:OnDisable()
   self:StopRuntime()
+  ns.PCM_ReconcileNativeCDM()
 end
 
   M.NormalizeDruidFormPrimary = P:Def("NormalizeDruidFormPrimary", M.NormalizeDruidFormPrimary)

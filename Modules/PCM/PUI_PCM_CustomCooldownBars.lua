@@ -191,7 +191,7 @@ local function _SB_RegisterMover(id, f, cfg)
 
   local moverOpts = {
     label = Cooldowns:GetCustomBarDisplayName(cfg),
-    optionsString = "CooldownManager,custom_bars,spell:" .. tostring(id),
+    optionsString = "CooldownManager,customTrackers,spell:" .. tostring(id),
     useOverlayDrag = true,
     liveFrame = function()
       return f
@@ -743,7 +743,7 @@ _SB_RebuildAll = function()
         CustomIcons:Configure("cooldown:" .. tostring(bd.id), cfg, {
           kind = "cooldown",
           label = Cooldowns:GetCustomBarDisplayName(cfg) .. " icon",
-          optionsString = "CooldownManager,custom_bars,spell:" .. tostring(bd.id),
+          optionsString = "CooldownManager,customTrackers,spell:" .. tostring(bd.id),
           moverKey = "PCM_CustomCooldownIcon_" .. tostring(bd.id),
           defaultY = 120 - ((i - 1) * 50),
           spellID = tonumber(cfg.trackedSpellID),

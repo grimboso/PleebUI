@@ -35,7 +35,6 @@ local function _PCM_ConfigRefreshViewers(viewerKey, opts, refreshMode)
 
   Cooldowns._InvalidateViewerRuleSettingCache(viewerKey)
   Cooldowns._PrimeViewerCountCache()
-  Cooldowns:InvalidateNativeIconViewerCache(viewerKey)
 
   if refreshMode == "layout" and viewerKey then
     Cooldowns:_RequestViewerRefresh("layout", viewerKey)
@@ -47,13 +46,6 @@ local function _PCM_ConfigRefreshViewers(viewerKey, opts, refreshMode)
     Cooldowns:_RequestViewerRefresh("all", viewerKey)
   else
     Cooldowns:_RequestViewerRefresh("all")
-  end
-
-  if viewerKey == "BuffIconCooldownViewer" then
-    ns.Modules.PCM_Buffs:ApplySettings(
-      opts.fontOnly and { fonts = true } or { layout = true }
-    )
-    ns.Modules.PCM_Buffs:ScheduleRecenter()
   end
 
   if opts.previewRefresh then
@@ -675,11 +667,8 @@ local function _PCM_BuildBuffIconsTabArgs()
   args.showTooltips = {
     type = "toggle",
     name = "Show tooltips",
-    desc = "Saved in Blizzard Edit Mode for this character.",
+    desc = "Show tooltips when hovering tracked buff icons.",
     order = 7,
-    disabled = function()
-      return not Cooldowns:CanChangeViewerEditModeSettings()
-    end,
     get = function()
       return Cooldowns:GetViewerTooltipsEnabled(viewerKey)
     end,
@@ -691,11 +680,8 @@ local function _PCM_BuildBuffIconsTabArgs()
   args.hideWhenInactive = {
     type = "toggle",
     name = "Hide when inactive",
-    desc = "Saved in Blizzard Edit Mode for this character.",
+    desc = "Only show tracked buff icons while their aura is active.",
     order = 8,
-    disabled = function()
-      return not Cooldowns:CanChangeViewerEditModeSettings()
-    end,
     get = function()
       return Cooldowns:GetViewerHideWhenInactive(viewerKey)
     end,
@@ -947,7 +933,7 @@ local function _PCM_BuildCooldownViewerArgs(cm, viewerKey, opts)
 
   local function GetViewerBorderPad()
     local border = GetViewerBorder()
-    local thickness = tonumber(border and border.thickness) or 0
+    local thickness = border and border.enabled ~= false and tonumber(border.thickness) or 0
     return ns.Pixel.Round(math.max(0, thickness) * 2)
   end
 
@@ -966,7 +952,7 @@ local function _PCM_BuildCooldownViewerArgs(cm, viewerKey, opts)
   end
 
   local function SetViewerTotalWidth(value)
-    local totalWidth = math.max(120, math.min(1000, tonumber(value) or 120))
+    local totalWidth = math.max(1, math.min(1000, tonumber(value) or 1))
     SetViewerWidthMode(cm, viewerKey, "fixed")
     SetViewerFixedWidth(
       cm,
@@ -1000,8 +986,8 @@ local function _PCM_BuildCooldownViewerArgs(cm, viewerKey, opts)
     type = "range",
     name = "Icon size",
     order = 11,
-    min = 12,
-    max = 86,
+    min = 8,
+    max = 96,
     step = 1,
 
     hidden = function()
@@ -1021,7 +1007,7 @@ local function _PCM_BuildCooldownViewerArgs(cm, viewerKey, opts)
     type = "range",
     name = "Width",
     order = 12,
-    min = 120,
+    min = 1,
     max = 1000,
     step = 1,
 
@@ -1037,8 +1023,8 @@ local function _PCM_BuildCooldownViewerArgs(cm, viewerKey, opts)
     type = "range",
     name = "Icon spacing",
     order = 13,
-    min = 0,
-    max = 8,
+    min = -20,
+    max = 40,
     step = 1,
 
     get = function()
@@ -1088,10 +1074,10 @@ local function _PCM_BuildCooldownViewerArgs(cm, viewerKey, opts)
   args.showTooltips = {
     type = "toggle",
     name = "Show tooltips",
-    desc = "Saved in Blizzard Edit Mode for this character.",
+    desc = "Show tooltips when hovering cooldown icons.",
     order = 16,
     disabled = function()
-      return not Cooldowns:CanChangeViewerEditModeSettings()
+      return not DB.IsRendererMigrationComplete()
     end,
     get = function()
       return Cooldowns:GetViewerTooltipsEnabled(viewerKey)
@@ -1106,14 +1092,14 @@ local function _PCM_BuildCooldownViewerArgs(cm, viewerKey, opts)
     name = "Border thickness",
     order = 30,
     min = 0,
-    max = 6,
+    max = 8,
     step = 1,
 
     get = function()
       local t = GetViewerBorder().thickness or 2
       t = tonumber(t) or 2
       if t < 0 then t = 0 end
-      if t > 6 then t = 6 end
+      if t > 8 then t = 8 end
       return t
     end,
     set = function(_, v)
@@ -3104,7 +3090,7 @@ local function _PCM_BuildEssentialTabArgs()
       return _G.InCombatLockdown()
     end,
     get = function()
-      return cm.enabled ~= false
+      return Cooldowns:IsModuleEnabledByUser()
     end,
     set = function(_, v)
       if Cooldowns:SetModuleEnabled(v == true) then
@@ -3137,11 +3123,8 @@ local function _PCM_BuildBuffBarsTabArgs()
   args.showTooltips = {
     type = "toggle",
     name = "Show tooltips",
-    desc = "Saved in Blizzard Edit Mode for this character.",
+    desc = "Show tooltips when hovering tracked buff bars.",
     order = 8,
-    disabled = function()
-      return not Cooldowns:CanChangeViewerEditModeSettings()
-    end,
     get = function()
       return Cooldowns:GetViewerTooltipsEnabled(viewerKey)
     end,
@@ -3153,11 +3136,8 @@ local function _PCM_BuildBuffBarsTabArgs()
   args.hideWhenInactive = {
     type = "toggle",
     name = "Hide when inactive",
-    desc = "Saved in Blizzard Edit Mode for this character.",
+    desc = "Only show tracked buff bars while their aura is active.",
     order = 9,
-    disabled = function()
-      return not Cooldowns:CanChangeViewerEditModeSettings()
-    end,
     get = function()
       return Cooldowns:GetViewerHideWhenInactive(viewerKey)
     end,
@@ -3779,18 +3759,18 @@ local function _PCM_GetCustomBarsTargetPath(targetKey)
     local nodes = _PCM_BuildCustomBarsTreeNodes()
     if type(nodes) == "table" then
       if type(nodes[targetKey]) == "table" then
-        return { "CooldownManager", "custom_bars", targetKey }
+        return { "CooldownManager", "customTrackers", targetKey }
       end
 
       local unavailable = nodes.__disabledNotLoaded
       local unavailableArgs = unavailable and unavailable.args
       if type(unavailableArgs) == "table" and type(unavailableArgs[targetKey]) == "table" then
-        return { "CooldownManager", "custom_bars", "__disabledNotLoaded", targetKey }
+        return { "CooldownManager", "customTrackers", "__disabledNotLoaded", targetKey }
       end
     end
   end
 
-  return { "CooldownManager", "custom_bars" }
+  return { "CooldownManager", "customTrackers" }
 end
 
 local _PCMValueCache = {}
@@ -7015,6 +6995,7 @@ local function _PCM_BuildBuffBarLeafArgs(id)
       ns.PCMCustomIcons:FlushAuraStyles()
     end
     _PCM_RefreshPreview()
+    ns.PCM_ReconcileNativeCDM()
 
     if rebuildOptions then
       _PCM_ACD_NotifyPCM("bb:" .. tostring(id))
@@ -8379,7 +8360,7 @@ function ns.PCM_RefreshCustomBarsOptionsAfterSpecializationChange()
   local activePath = ns._PUIActiveOptionsPath
   if type(activePath) ~= "table"
     or activePath[1] ~= "CooldownManager"
-    or activePath[2] ~= "custom_bars"
+    or activePath[2] ~= "customTrackers"
   then
     _PCM_RefreshCustomBarsOptionsTree()
     _PCM_RefreshPreview()
@@ -8387,7 +8368,7 @@ function ns.PCM_RefreshCustomBarsOptionsAfterSpecializationChange()
   end
 
   local targetKey = activePath[#activePath]
-  if targetKey == "custom_bars" or targetKey == "__disabledNotLoaded" then
+  if targetKey == "customTrackers" or targetKey == "__disabledNotLoaded" then
     targetKey = nil
   end
 
@@ -8436,36 +8417,380 @@ local function _PCM_BuildCustomBarsManagerArgs()
 end
 
 
-local function _PCM_GetTabDefinitions()
+local _PCM_BuildConsumablesTabArgs
+local _PCM_BuildDeveloperTabArgs
+
+local PCM_CREATE_GROUP_VALUE = "__PUI_SEPARATOR_BEFORE__PCM_CREATE_GROUP"
+
+local function _PCM_GetGroupValues(kind, record)
+  local values = {}
+  local groups = ns.PCMGroupManager:GetGroups()
+  for index = 1, #groups.order do
+    local groupID = groups.order[index]
+    local group = groups.byID[groupID]
+    if group
+      and group.kind == kind
+      and (group.isDefault ~= true or group.defaultViewerKey == record.viewerKey)
+    then
+      values[groupID] = group.name
+    end
+  end
+  values[PCM_CREATE_GROUP_VALUE] = "Create new group"
+  return values
+end
+
+local function _PCM_GetGroupSorting(kind, record)
+  local sorting = {}
+  local groups = ns.PCMGroupManager:GetGroups()
+  for index = 1, #groups.order do
+    local groupID = groups.order[index]
+    local group = groups.byID[groupID]
+    if group
+      and group.kind == kind
+      and (group.isDefault ~= true or group.defaultViewerKey == record.viewerKey)
+    then
+      sorting[#sorting + 1] = groupID
+    end
+  end
+  sorting[#sorting + 1] = PCM_CREATE_GROUP_VALUE
+  return sorting
+end
+
+local function _PCM_IsGroupStructureLocked()
+  return ns.PCMGroupManager:IsStructureLocked()
+end
+
+local function _PCM_BuildGroupEntryArgs(groupID, record, order)
+  local entry = record.entry
+  local recordKey = entry.catalogKey
+  local kind = record.viewerKey == "BuffBarCooldownViewer" and "BAR" or "ICON"
+  local groupData = ns.PCMGroupManager:GetGroups().byID[groupID]
+  local isDefaultGroup = groupData and groupData.isDefault == true
+  local placementArgs = {
+    group = {
+      type = "select",
+      name = "Group",
+      order = 1,
+      values = function()
+        return _PCM_GetGroupValues(kind, record)
+      end,
+      sorting = function()
+        return _PCM_GetGroupSorting(kind, record)
+      end,
+      get = function()
+        return record.__puiPCMGroupID
+      end,
+      disabled = _PCM_IsGroupStructureLocked,
+      set = function(_, value)
+        if value == PCM_CREATE_GROUP_VALUE then
+          ns.PCMGroupManager:CreateGroupForRecord(recordKey)
+          return
+        end
+        ns.PCMGroupManager:MoveRecord(recordKey, value)
+      end,
+    },
+  }
+
+  if isDefaultGroup then
+    placementArgs.orderSource = {
+      type = "description",
+      name = "Order follows Blizzard Cooldown Manager. Reorder this entry in /cdm.",
+      order = 2,
+    }
+  else
+    placementArgs.moveUp = {
+      type = "execute",
+      name = "Move up",
+      order = 2,
+      disabled = function()
+        return order <= 1 or _PCM_IsGroupStructureLocked()
+      end,
+      func = function()
+        ns.PCMGroupManager:MoveRecord(recordKey, groupID, order - 1)
+      end,
+    }
+    placementArgs.moveDown = {
+      type = "execute",
+      name = "Move down",
+      order = 3,
+      disabled = function()
+        local group = ns.PCMGroupManager:GetActiveGroup(groupID)
+        return _PCM_IsGroupStructureLocked() or not group or order >= #group.records
+      end,
+      func = function()
+        ns.PCMGroupManager:MoveRecord(recordKey, groupID, order + 1)
+      end,
+    }
+  end
+
+  local args = {
+    placement = {
+      type = "group",
+      name = "Placement",
+      order = 1,
+      inline = true,
+      args = placementArgs,
+    },
+  }
+
+  if kind == "ICON" then
+    local appearanceArgs = _PCM_BuildIconOverrideArgs(record.viewerKey, entry)
+    for key, option in pairs(appearanceArgs) do
+      option.order = (tonumber(option.order) or 0) + 10
+      args[key] = option
+    end
+  else
+    args.description = {
+      type = "description",
+      name = "This entry uses the appearance settings of its Buff Bar group.",
+      order = 10,
+    }
+  end
+  return args
+end
+
+local function _PCM_BuildCustomGroupSettings(groupID, group)
+  group.layout = type(group.layout) == "table" and group.layout or {}
+  local layout = group.layout
+  local args = {
+    name = {
+      type = "input",
+      name = "Group name",
+      order = 1,
+      disabled = _PCM_IsGroupStructureLocked,
+      get = function() return group.name end,
+      set = function(_, value) ns.PCMGroupManager:RenameGroup(groupID, value) end,
+    },
+  }
+
+  if group.kind == "ICON" then
+    args.iconSize = {
+      type = "range",
+      name = "Icon size",
+      order = 10,
+      min = 8,
+      max = 96,
+      step = 1,
+      disabled = _PCM_IsGroupStructureLocked,
+      get = function() return layout.iconSize or 36 end,
+      set = function(_, value) layout.iconSize = Round(value) ns.PCMGroupManager:RequestLayout() end,
+    }
+    args.spacing = {
+      type = "range",
+      name = "Spacing",
+      order = 11,
+      min = -20,
+      max = 40,
+      step = 1,
+      disabled = _PCM_IsGroupStructureLocked,
+      get = function() return layout.spacing or 2 end,
+      set = function(_, value) layout.spacing = Round(value) ns.PCMGroupManager:RequestLayout() end,
+    }
+    args.columns = {
+      type = "range",
+      name = "Icons per row",
+      order = 12,
+      min = 0,
+      max = 40,
+      step = 1,
+      disabled = _PCM_IsGroupStructureLocked,
+      get = function() return layout.columns or 0 end,
+      set = function(_, value) layout.columns = Round(value) ns.PCMGroupManager:RequestLayout() end,
+    }
+    args.growth = {
+      type = "select",
+      name = "Horizontal growth",
+      order = 13,
+      values = { LEFT = "Left", CENTER = "Centered", RIGHT = "Right" },
+      sorting = { "LEFT", "CENTER", "RIGHT" },
+      disabled = _PCM_IsGroupStructureLocked,
+      get = function() return layout.growth or "CENTER" end,
+      set = function(_, value) layout.growth = value ns.PCMGroupManager:RequestLayout() end,
+    }
+    args.rowGrowth = {
+      type = "select",
+      name = "Row growth",
+      order = 14,
+      values = { UP = "Up", DOWN = "Down" },
+      sorting = { "UP", "DOWN" },
+      disabled = _PCM_IsGroupStructureLocked,
+      get = function() return layout.rowGrowth or "DOWN" end,
+      set = function(_, value) layout.rowGrowth = value ns.PCMGroupManager:RequestLayout() end,
+    }
+  else
+    args.width = {
+      type = "range",
+      name = "Bar width",
+      order = 10,
+      min = 120,
+      max = 500,
+      step = 1,
+      disabled = _PCM_IsGroupStructureLocked,
+      get = function() return layout.width or 250 end,
+      set = function(_, value) layout.width = Round(value) ns.PCMGroupManager:RequestLayout() end,
+    }
+    args.height = {
+      type = "range",
+      name = "Bar height",
+      order = 11,
+      min = 8,
+      max = 40,
+      step = 1,
+      disabled = _PCM_IsGroupStructureLocked,
+      get = function() return layout.height or 20 end,
+      set = function(_, value) layout.height = Round(value) ns.PCMGroupManager:RequestLayout() end,
+    }
+    args.spacing = {
+      type = "range",
+      name = "Bar spacing",
+      order = 12,
+      min = -20,
+      max = 40,
+      step = 1,
+      disabled = _PCM_IsGroupStructureLocked,
+      get = function() return layout.rowSpacing or 1 end,
+      set = function(_, value) layout.rowSpacing = Round(value) ns.PCMGroupManager:RequestLayout() end,
+    }
+  end
+
+  args.delete = {
+    type = "execute",
+    name = "Delete group",
+    order = 100,
+    confirm = true,
+    disabled = _PCM_IsGroupStructureLocked,
+    func = function() ns.PCMGroupManager:DeleteGroup(groupID) end,
+  }
+  return args
+end
+
+local function _PCM_BuildDefaultGroupSettings(group)
+  local viewerKey = group.defaultViewerKey
+  local args
+  if viewerKey == "EssentialCooldownViewer" then
+    args = _PCM_BuildEssentialTabArgs()
+  elseif viewerKey == "UtilityCooldownViewer" then
+    args = _PCM_BuildCooldownViewerTreeArgs(GetPCMRoot(), viewerKey, "Utility", {
+      effectsKey = "utility",
+      fontLabelPrefix = "Utility",
+      splitFonts = true,
+      showIconBorder = true,
+    })
+  elseif viewerKey == "BuffIconCooldownViewer" then
+    args = _PCM_BuildBuffIconsTabArgs()
+  else
+    args = _PCM_BuildBuffBarsTabArgs()
+  end
+  args.iconOverrides = nil
+  return args
+end
+
+local function _PCM_BuildGroupNode(groupID, group, order)
+  local args = {
+    settings = {
+      type = "group",
+      name = "Group settings",
+      order = 1,
+      childGroups = "tree",
+      args = group.isDefault
+        and _PCM_BuildDefaultGroupSettings(group)
+        or _PCM_BuildCustomGroupSettings(groupID, group),
+    },
+  }
+
+  local activeGroup = ns.PCMGroupManager:GetActiveGroup(groupID)
+  local records = activeGroup and activeGroup.records or {}
+  for index = 1, #records do
+    local record = records[index]
+    local entry = record.entry
+    args[entry.catalogKey] = {
+      type = "group",
+      name = "|T" .. tostring(entry.texture or 134400) .. ":16:16:0:0|t " .. tostring(entry.name),
+      order = index + 10,
+      args = _PCM_BuildGroupEntryArgs(groupID, record, index),
+    }
+  end
+
   return {
-    {
-      key = "cooldowns_essential",
-      label = "Essential cooldowns",
-    },
-    {
-      key = "cooldowns_utility",
-      label = "Utility cooldowns",
-    },
-    {
-      key = "consumables",
-      label = "Consumables",
-    },
-    {
-      key = "buff_icons",
-      label = "Buff icons",
-    },
-    {
-      key = "buff_bars",
-      label = "Buff bars",
-    },
-    {
-      key = "custom_bars",
-      label = "Custom trackers",
-    },
+    type = "group",
+    name = group.name,
+    order = order,
+    childGroups = "tree",
+    args = args,
   }
 end
 
-local function _PCM_BuildConsumablesTabArgs()
+local function _PCM_BuildUnifiedManagerArgs()
+  local args = {
+    overview = {
+      type = "group",
+      name = "Overview",
+      order = 1,
+      args = {
+        information = {
+          type = "description",
+          name = "Default groups follow Blizzard's category and order from /cdm. Use /pe or Group to move entries into PleebUI custom groups. Custom groups use PleebUI order. Blizzard reminder sounds stay configured in /cdm.",
+          order = 1,
+        },
+        createIconGroup = {
+          type = "execute",
+          name = "Create icon group",
+          order = 2,
+          disabled = _PCM_IsGroupStructureLocked,
+          func = function() ns.PCMGroupManager:CreateGroup("ICON") end,
+        },
+        createBarGroup = {
+          type = "execute",
+          name = "Create bar group",
+          order = 3,
+          disabled = _PCM_IsGroupStructureLocked,
+          func = function() ns.PCMGroupManager:CreateGroup("BAR") end,
+        },
+        resetGroups = {
+          type = "execute",
+          name = "Reset groups",
+          order = 4,
+          confirm = true,
+          disabled = _PCM_IsGroupStructureLocked,
+          func = function() ns.PCMGroupManager:ResetGroups() end,
+        },
+      },
+    },
+  }
+
+  local groups = ns.PCMGroupManager:GetGroups()
+  for index = 1, #groups.order do
+    local groupID = groups.order[index]
+    local group = groups.byID[groupID]
+    if group then
+      args[groupID] = _PCM_BuildGroupNode(groupID, group, index + 10)
+    end
+  end
+
+  args.customTrackers = {
+    type = "group",
+    name = "Custom trackers",
+    order = 1000,
+    childGroups = "tree",
+    args = _PCM_BuildCustomBarsManagerArgs(),
+  }
+  args.consumables = {
+    type = "group",
+    name = "Consumables",
+    order = 1010,
+    args = _PCM_BuildConsumablesTabArgs(),
+  }
+  args.developer = {
+    type = "group",
+    name = "Developer",
+    order = 1020,
+    args = _PCM_BuildDeveloperTabArgs(),
+  }
+  return args
+end
+
+
+_PCM_BuildConsumablesTabArgs = function()
   local function GetCfg()
     return DB.GetConsumableTrackerDB()
   end
@@ -8795,25 +9120,69 @@ local function _PCM_BuildConsumablesTabArgs()
   return args
 end
 
-local function _PCM_GetTopTabArgs(tabKey)
-  if tabKey == "cooldowns_essential" then
-    return _PCM_BuildEssentialTabArgs()
-  elseif tabKey == "cooldowns_utility" then
-    return _PCM_BuildCooldownViewerTreeArgs(GetPCMRoot(), "UtilityCooldownViewer", "Utility", {
-      effectsKey = "utility",
-      fontLabelPrefix = "Utility",
-      splitFonts = true,
-      showIconBorder = true,
-    })
-  elseif tabKey == "consumables" then
-    return _PCM_BuildConsumablesTabArgs()
-  elseif tabKey == "buff_icons" then
-    return _PCM_BuildBuffIconsTabArgs()
-  elseif tabKey == "buff_bars" then
-    return _PCM_BuildBuffBarsTabArgs()
-  end
-
-  return {}
+_PCM_BuildDeveloperTabArgs = function()
+  return {
+    help = {
+      type = "description",
+      name = "PleebUI automatically enables Blizzard's Cooldown Viewer backend when native reminder sounds or native application-color sources require it, and disables it when they do not. Native viewers stay hidden unless you raise the comparison opacity below.",
+      order = 1,
+    },
+    nativeState = {
+      type = "group",
+      name = "Native Blizzard Cooldown Manager",
+      order = 10,
+      inline = true,
+      args = {
+        status = {
+          type = "description",
+          name = function()
+            local value = C_CVar.GetCVar("cooldownViewerEnabled")
+            local enabled = value == "1"
+            return "Native CDM CVar: "
+              .. tostring(value)
+              .. " — "
+              .. (enabled and "Enabled" or "Disabled")
+          end,
+          order = 1,
+        },
+        settings = {
+          type = "execute",
+          name = "Open Blizzard settings",
+          desc = "Open Blizzard's Cooldown Viewer settings to configure native tracking and reminder sounds.",
+          order = 2,
+          disabled = function()
+            return InCombatLockdown()
+          end,
+          func = function()
+            Settings.OpenToCategory(
+              Settings.ADVANCED_OPTIONS_CATEGORY_ID,
+              ENABLE_COOLDOWN_VIEWER
+            )
+          end,
+        },
+        alpha = {
+          type = "range",
+          name = "Native viewer opacity",
+          desc = "Set above zero to compare Blizzard's native viewers with the PleebUI-owned viewers. This does not enable or disable Blizzard's Cooldown Manager.",
+          order = 3,
+          min = 0,
+          max = 1,
+          step = 0.05,
+          isPercent = true,
+          disabled = function()
+            return InCombatLockdown()
+              or C_CVar.GetCVar("cooldownViewerEnabled") ~= "1"
+          end,
+          get = function()
+            return ns.PCMNativeBridge:GetDevNativeViewerAlpha()
+          end,
+          set = function(_, alpha)
+            ns.PCMNativeBridge:SetDevNativeViewerAlpha(alpha)
+          end,
+        },
+      },
+    },
+  }
 end
 
 local function _PCM_WrapPreviewRefresh(option)
@@ -8852,50 +9221,12 @@ local function PCMOptionsProvider(Addon)
 
     ns.Flags.__puiPCM_OptionsOpen = true
 
-    local activePath = ns._PUIActiveOptionsPath
-    local activeTab = type(activePath) == "table" and activePath[1] == "CooldownManager" and activePath[2] or nil
-    local lazyBuild = activeTab ~= nil
-
     local options = {
       type = "group",
-      name = "Cooldown Manager",
-      childGroups = "tab",
-      args = {},
+      name = "Pleeb Cooldown Manager",
+      childGroups = "tree",
+      args = _PCM_BuildUnifiedManagerArgs(),
     }
-
-    local order = 1
-    for _, info in ipairs(_PCM_GetTabDefinitions()) do
-      local buildTab = not lazyBuild or info.key == activeTab
-      if info.key == "custom_bars" then
-        options.args[info.key] = {
-          type = "group",
-          name = info.label,
-          order = order,
-          childGroups = "tree",
-          args = buildTab and _PCM_BuildCustomBarsManagerArgs() or {},
-        }
-      elseif info.key == "cooldowns_essential"
-        or info.key == "cooldowns_utility"
-        or info.key == "buff_icons"
-      then
-        options.args[info.key] = {
-          type = "group",
-          name = info.label,
-          order = order,
-          childGroups = "tree",
-          args = buildTab and _PCM_GetTopTabArgs(info.key) or {},
-        }
-      else
-        options.args[info.key] = {
-          type = "group",
-          name = info.label,
-          order = order,
-          args = buildTab and _PCM_GetTopTabArgs(info.key) or {},
-        }
-      end
-
-      order = order + 1
-    end
 
     _PCM_WrapPreviewRefresh(options)
     return options
@@ -8904,10 +9235,10 @@ local function PCMOptionsProvider(Addon)
   return provider
 end
 
-Addon:RegisterOptionsSection("CooldownManager", PCMOptionsProvider, 50, "Cooldown Manager", nil, {
+Addon:RegisterOptionsSection("CooldownManager", PCMOptionsProvider, 50, "Pleeb Cooldown Manager", nil, {
   navDescription = "Cooldown viewers, consumables, buff displays, and custom trackers.",
-  pageTitle = "Cooldown Manager",
-  pageDescription = "Configure cooldowns, consumables, buff displays, and custom trackers.",
+  pageTitle = "Pleeb Cooldown Manager",
+  pageDescription = "Arrange cooldowns, buffs, bars, consumables, and custom trackers in one place.",
   pageHelp = "100% preview zoom matches the in-game widget size. Click an icon to open its settings.",
   page = {
     previewWidth = 380,
@@ -8993,8 +9324,6 @@ ns.Registry.Options.CooldownManager.dynamicOptions = true
   Cooldowns.IsBuffBarLoaded = _PCM_IsBuffBarLoaded
   _PCM_SortedCustomBarIds = P:Def('_PCM_SortedCustomBarIds', _PCM_SortedCustomBarIds)
   _PCM_BuildCustomBarsManagerArgs = P:Def('_PCM_BuildCustomBarsManagerArgs', _PCM_BuildCustomBarsManagerArgs)
-  _PCM_GetTabDefinitions = P:Def('_PCM_GetTabDefinitions', _PCM_GetTabDefinitions)
-  _PCM_GetTopTabArgs = P:Def('_PCM_GetTopTabArgs', _PCM_GetTopTabArgs)
   _PCM_WrapPreviewRefresh = P:Def('_PCM_WrapPreviewRefresh', _PCM_WrapPreviewRefresh)
   PCMOptionsProvider = P:Def('PCMOptionsProvider', PCMOptionsProvider)
   _PCM_BuildCustomBarsTreeNodes = P:Def('_PCM_BuildCustomBarsTreeNodes', _PCM_BuildCustomBarsTreeNodes)

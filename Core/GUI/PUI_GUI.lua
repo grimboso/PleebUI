@@ -397,7 +397,7 @@ end
 local PUI_DEFAULT_OPTIONS_CHILD = {
   unitframes = "general",
   ACTIONBARS = "general",
-  CooldownManager = "cooldowns_essential",
+  CooldownManager = "overview",
   PRD = "general",
   Quality = "qualityTab",
 }
@@ -932,11 +932,14 @@ local function _PUI_DoesOptionsPathExist(path)
       special = true,
     },
     CooldownManager = {
-      cooldowns_essential = true,
-      cooldowns_utility = true,
-      buff_icons = true,
-      buff_bars = true,
-      custom_bars = true,
+      overview = true,
+      essential = true,
+      utility = true,
+      ["buff-icons"] = true,
+      ["buff-bars"] = true,
+      customTrackers = true,
+      consumables = true,
+      developer = true,
     },
   }
 
@@ -3236,7 +3239,6 @@ local function _PUI_EnsureCustomOptionsFrame()
       self.__puiLastRenderedOptionsPathKey = nil
       ns.Theme.ResetWidgetRowBackgrounds()
       ns.Flags.__puiPCM_OptionsOpen = nil
-      ns.Modules.CooldownManager:FlushPendingEditModeChanges()
       _PUI_ApplyAuraSpellIDTooltipCVarForOptions(false)
     end)
 
@@ -3466,11 +3468,14 @@ local PUI_SHELL_TOP_TAB_UX = {
     secondary = { name = "Secondary Power", desc = "Additional resource bars, class-specific secondary resources, and related text." },
   },
   CooldownManager = {
-    cooldowns_essential = { name = "Cooldown icons", desc = "Tracked cooldown layout, text, charges, and glow." },
-    cooldowns_utility = { name = "Utility icons", desc = "Utility cooldown layout, text, charges, and appearance." },
-    buff_icons = { name = "Buff icons", desc = "Tracked buff icon layout, text, and appearance." },
-    buff_bars = { name = "Buff bars", desc = "Tracked buff bar layout, text, and appearance." },
-    custom_bars = { name = "Custom bars", desc = "Create and edit duration, cooldown, charge, and stack bars." },
+    overview = { name = "Overview", desc = "Create groups and learn how PleebUI and Blizzard reminder sounds work together." },
+    essential = { name = "Essential", desc = "Essential cooldown group layout, text, charges, and glow." },
+    utility = { name = "Utility", desc = "Utility cooldown group layout, text, charges, and appearance." },
+    ["buff-icons"] = { name = "Buff Icons", desc = "Tracked buff icon group layout, text, and appearance." },
+    ["buff-bars"] = { name = "Buff Bars", desc = "Tracked buff bar group layout, text, and appearance." },
+    customTrackers = { name = "Custom trackers", desc = "Create and edit duration, cooldown, charge, and stack trackers." },
+    consumables = { name = "Consumables", desc = "Configure the consumable tracker." },
+    developer = { name = "Developer", desc = "Compare PleebUI-owned and native Blizzard cooldown viewers." },
   },
   Chat = {
     status = { name = "Status", desc = "Shows which addon currently controls chat." },

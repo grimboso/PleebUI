@@ -1,13 +1,11 @@
 local ADDON_NAME, ns = ...
 
 local Addon = ns.Addon
-local Hooks = ns.PCMHooks
 
 local IconSettings = {}
 ns.PCMIconSettings = IconSettings
 
 local P = select(1, ns.Pleebug:DropIn(IconSettings, { name = "PCM", bucket = "IconSettings" }))
-local IsSecret = issecretvalue
 local InCombatLockdown = InCombatLockdown
 local wipe = wipe
 
@@ -31,55 +29,26 @@ local VIEWER_FAMILIES = {
   BuffBarCooldownViewer = "bar",
 }
 
-local RUNTIME_VIEWERS = {
+local CATALOG_VIEWERS = {
   "EssentialCooldownViewer",
   "UtilityCooldownViewer",
   "BuffIconCooldownViewer",
+  "BuffBarCooldownViewer",
 }
-
-local function CreateIdentityState()
-  return {
-    byCooldownID = {},
-    byCooldownInfo = setmetatable({}, { __mode = "k" }),
-    byCanonicalSpellID = {},
-    bySpellID = {},
-  }
-end
 
 local state = {
   catalogGeneration = 1,
   settingsGeneration = 1,
   catalogSpecID = nil,
   catalogs = {},
-  identities = {
-    [SETTINGS_FAMILY_COOLDOWN] = CreateIdentityState(),
-    [SETTINGS_FAMILY_BUFF] = CreateIdentityState(),
-    bar = CreateIdentityState(),
-  },
   selected = {},
   previewState = {},
 }
 
+local ownedStyleCache = setmetatable({}, { __mode = "k" })
+
 local function GetSettingsFamily(viewerKey)
   return VIEWER_FAMILIES[viewerKey]
-end
-
-local function GetIdentityState(settingsFamily)
-  return settingsFamily and state.identities[settingsFamily] or nil
-end
-
-local function ClearIdentityState(identity)
-  wipe(identity.byCooldownID)
-  wipe(identity.byCooldownInfo)
-  wipe(identity.byCanonicalSpellID)
-  wipe(identity.bySpellID)
-end
-
-local function ReadPositiveNumber(value)
-  if IsSecret(value) or type(value) ~= "number" or value <= 0 then
-    return nil
-  end
-  return value
 end
 
 local function GetCurrentSpecializationID()
@@ -149,170 +118,6 @@ local function GetSpecializationStore(settingsFamily, create)
   return familyStore
 end
 
-local function GetCooldownID(itemFrame)
-  return ReadPositiveNumber(itemFrame:GetCooldownID())
-end
-
-local function CopyLinkedSpellIDs(source)
-  local linked = {}
-  if IsSecret(source) or type(source) ~= "table" then
-    return linked
-  end
-
-  for index = 1, #source do
-    local spellID = ReadPositiveNumber(source[index])
-    if spellID then
-      linked[#linked + 1] = spellID
-    end
-  end
-  return linked
-end
-
-local function AddIdentityID(entry, seen, spellID)
-  spellID = ReadPositiveNumber(spellID)
-  if not spellID or seen[spellID] then
-    return
-  end
-
-  seen[spellID] = true
-  entry.identitySpellIDs[#entry.identitySpellIDs + 1] = spellID
-
-  local baseSpellID = C_Spell.GetBaseSpell(spellID)
-  baseSpellID = ReadPositiveNumber(baseSpellID)
-  if baseSpellID and not seen[baseSpellID] then
-    seen[baseSpellID] = true
-    entry.identitySpellIDs[#entry.identitySpellIDs + 1] = baseSpellID
-  end
-end
-
-local function BuildEntry(cooldownID, info, settingsFamily)
-  local baseSpellID = ReadPositiveNumber(info.spellID)
-  local overrideSpellID = ReadPositiveNumber(info.overrideSpellID)
-  local overrideTooltipSpellID = ReadPositiveNumber(info.overrideTooltipSpellID)
-  local displaySpellID = overrideSpellID or baseSpellID
-  local familySpellID = overrideTooltipSpellID or overrideSpellID or baseSpellID
-  local chargeSpellID = overrideSpellID or baseSpellID
-
-  if not displaySpellID or not familySpellID then
-    return nil
-  end
-
-  local canonicalSpellID = ReadPositiveNumber(C_Spell.GetBaseSpell(familySpellID)) or familySpellID
-  local texture = C_Spell.GetSpellTexture(displaySpellID)
-  if IsSecret(texture) or (type(texture) ~= "number" and type(texture) ~= "string") then
-    return nil
-  end
-
-  local name = C_Spell.GetSpellName(displaySpellID)
-  if IsSecret(name) or type(name) ~= "string" or name == "" then
-    name = tostring(displaySpellID)
-  end
-
-  local chargeInfo = C_Spell.GetSpellCharges(chargeSpellID)
-  local maxCharges = not IsSecret(chargeInfo) and chargeInfo and chargeInfo.maxCharges or nil
-  local hasCharges = not IsSecret(maxCharges)
-    and type(maxCharges) == "number"
-    and maxCharges > 1
-
-  local entry = {
-    cooldownID = cooldownID,
-    settingsFamily = settingsFamily,
-    cooldownInfo = info,
-    spellID = displaySpellID,
-    baseSpellID = baseSpellID,
-    overrideSpellID = overrideSpellID,
-    overrideTooltipSpellID = overrideTooltipSpellID,
-    canonicalSpellID = canonicalSpellID,
-    cooldownSpellID = baseSpellID or canonicalSpellID,
-    chargeSpellID = chargeSpellID,
-    settingsKey = tostring(canonicalSpellID),
-    texture = texture,
-    name = name,
-    hasCharges = hasCharges,
-    identitySpellIDs = {},
-  }
-
-  local seen = {}
-  AddIdentityID(entry, seen, baseSpellID)
-  AddIdentityID(entry, seen, overrideSpellID)
-  AddIdentityID(entry, seen, overrideTooltipSpellID)
-
-  local linkedSpellIDs = CopyLinkedSpellIDs(info.linkedSpellIDs)
-  for index = 1, #linkedSpellIDs do
-    AddIdentityID(entry, seen, linkedSpellIDs[index])
-  end
-
-  return entry
-end
-
-local function GetCanonicalSpellIDFromInfo(info)
-  if IsSecret(info) or type(info) ~= "table" then
-    return nil
-  end
-
-  local familySpellID = ReadPositiveNumber(info.overrideTooltipSpellID)
-    or ReadPositiveNumber(info.overrideSpellID)
-    or ReadPositiveNumber(info.spellID)
-  if not familySpellID then
-    return nil
-  end
-
-  return ReadPositiveNumber(C_Spell.GetBaseSpell(familySpellID)) or familySpellID
-end
-
-local function GetEntryForSpellID(settingsFamily, spellID)
-  local identity = GetIdentityState(settingsFamily)
-  spellID = ReadPositiveNumber(spellID)
-  if not identity or not spellID then
-    return nil
-  end
-
-  local entry = identity.bySpellID[spellID]
-  if entry == false then
-    return nil
-  end
-  if entry then
-    return entry
-  end
-
-  local baseSpellID = ReadPositiveNumber(C_Spell.GetBaseSpell(spellID))
-  entry = baseSpellID and identity.bySpellID[baseSpellID] or nil
-  return entry ~= false and entry or nil
-end
-
-local function GetEntryFromInfoAliases(settingsFamily, info)
-  if IsSecret(info) or type(info) ~= "table" then
-    return nil
-  end
-
-  local entry = GetEntryForSpellID(settingsFamily, info.overrideTooltipSpellID)
-    or GetEntryForSpellID(settingsFamily, info.overrideSpellID)
-    or GetEntryForSpellID(settingsFamily, info.spellID)
-    or GetEntryForSpellID(settingsFamily, info.linkedSpellID)
-  if entry then
-    return entry
-  end
-
-  local linkedSpellIDs = info.linkedSpellIDs
-  if IsSecret(linkedSpellIDs) or type(linkedSpellIDs) ~= "table" then
-    return nil
-  end
-
-  for index = 1, #linkedSpellIDs do
-    entry = GetEntryForSpellID(settingsFamily, linkedSpellIDs[index])
-    if entry then
-      return entry
-    end
-  end
-  return nil
-end
-
-local function ClearCatalogIdentity()
-  for _, identity in pairs(state.identities) do
-    ClearIdentityState(identity)
-  end
-end
-
 local function ResetCatalogForSpecialization()
   local specID = GetCurrentSpecializationID()
   if state.catalogSpecID == specID then
@@ -323,7 +128,6 @@ local function ResetCatalogForSpecialization()
   state.catalogGeneration = state.catalogGeneration + 1
   state.settingsGeneration = state.settingsGeneration + 1
   wipe(state.catalogs)
-  ClearCatalogIdentity()
   wipe(state.selected)
   wipe(state.previewState)
 end
@@ -343,10 +147,7 @@ function IconSettings:InvalidateCatalog()
   state.catalogGeneration = state.catalogGeneration + 1
   state.catalogSpecID = specID
   wipe(state.catalogs)
-  ClearCatalogIdentity()
-  if self:PrimeRuntimeCache() then
-    ns.PCMRuntime:MarkAllViewersDirty(ns.PCMRuntime.Dirty.SKIN, "icon-cache-ready")
-  end
+  ns.PCMCatalog:Invalidate("icon-settings")
 end
 
 function IconSettings:InvalidateSettings()
@@ -364,200 +165,32 @@ function IconSettings:GetViewerEntries(viewerKey)
   ResetCatalogForSpecialization()
 
   local cached = state.catalogs[viewerKey]
-  if cached and cached.generation == state.catalogGeneration then
+  local catalogEntries, catalogGeneration = ns.PCMCatalog:GetViewerEntries(viewerKey)
+  if cached
+    and cached.generation == state.catalogGeneration
+    and cached.sourceGeneration == catalogGeneration
+  then
     return cached.entries
   end
 
-  local entries = {}
+  local entries = catalogEntries
   local settingsFamily = GetSettingsFamily(viewerKey)
-  local identity = GetIdentityState(settingsFamily)
-  if not settingsFamily or not identity or InCombatLockdown() then
+  if not settingsFamily then
     return entries
-  end
-
-  local viewer = _G[viewerKey]
-  local settings = _G.CooldownViewerSettings
-  local provider = settings and settings:GetDataProvider() or nil
-  if not viewer or not provider then
-    return entries
-  end
-
-  local category = viewer:GetCategory()
-  if category == nil or IsSecret(category) then
-    return entries
-  end
-
-  local familyCategories = {}
-  for familyViewerKey, family in pairs(VIEWER_FAMILIES) do
-    if family == settingsFamily then
-      local familyViewer = _G[familyViewerKey]
-      local familyCategory = familyViewer and familyViewer:GetCategory() or nil
-      if familyCategory ~= nil and not IsSecret(familyCategory) then
-        familyCategories[familyCategory] = true
-      end
-    end
-  end
-
-  local cooldownIDs = provider:GetOrderedCooldownIDs()
-  if IsSecret(cooldownIDs) or type(cooldownIDs) ~= "table" then
-    return entries
-  end
-
-  local familyCounts = {}
-  for index = 1, #cooldownIDs do
-    local cooldownID = ReadPositiveNumber(cooldownIDs[index])
-    if cooldownID then
-      local info = provider:GetCooldownInfoForID(cooldownID)
-      if not IsSecret(info) and type(info) == "table" then
-        local infoCategory = info.category
-        local isKnown = info.isKnown
-        if not IsSecret(infoCategory)
-          and familyCategories[infoCategory] == true
-          and not IsSecret(isKnown)
-          and isKnown == true
-        then
-          local entry = BuildEntry(cooldownID, info, settingsFamily)
-          if entry then
-            familyCounts[entry.settingsKey] = (familyCounts[entry.settingsKey] or 0) + 1
-            if infoCategory == category then
-              entries[#entries + 1] = entry
-            end
-          end
-        end
-      end
-    end
   end
 
   local store = GetSpecializationStore(settingsFamily, false)
   for index = 1, #entries do
     local entry = entries[index]
-    if familyCounts[entry.settingsKey] > 1 then
-      entry.settingsKey = "c" .. tostring(entry.cooldownID)
-    end
     entry.settingsRecord = store and store[entry.settingsKey] or nil
-    identity.byCooldownID[entry.cooldownID] = entry
-    identity.byCooldownInfo[entry.cooldownInfo] = entry
-    local canonicalEntry = identity.byCanonicalSpellID[entry.canonicalSpellID]
-    if canonicalEntry and canonicalEntry ~= entry then
-      identity.byCanonicalSpellID[entry.canonicalSpellID] = false
-    elseif canonicalEntry == nil then
-      identity.byCanonicalSpellID[entry.canonicalSpellID] = entry
-    end
-
-    for spellIndex = 1, #entry.identitySpellIDs do
-      local spellID = entry.identitySpellIDs[spellIndex]
-      local spellEntry = identity.bySpellID[spellID]
-      if spellEntry and spellEntry ~= entry then
-        identity.bySpellID[spellID] = false
-      elseif spellEntry == nil then
-        identity.bySpellID[spellID] = entry
-      end
-    end
   end
 
   state.catalogs[viewerKey] = {
     generation = state.catalogGeneration,
+    sourceGeneration = catalogGeneration,
     entries = entries,
   }
   return entries
-end
-
-function IconSettings:ClearItemBinding(itemFrame)
-  local frameData = Hooks.GetFrameData(itemFrame)
-  frameData.iconIdentity = nil
-  frameData.iconIdentityGeneration = nil
-  frameData.iconIdentityViewerKey = nil
-  frameData.iconIdentityRetryAfterCombat = nil
-  frameData.iconSettingsRecord = nil
-  frameData.iconSettingsGeneration = nil
-  frameData.iconSettingsViewerKey = nil
-  frameData.iconFontOptions = nil
-  frameData.iconRuntimeFlagsGeneration = nil
-  frameData.iconRuntimeFlagsViewerKey = nil
-  frameData.iconRuntimeFlagsRecord = nil
-  frameData.iconRuntimeFlagsEntry = nil
-  frameData.iconRuntimeFlagsViewerOptions = nil
-  frameData.iconCooldownState = "UNKNOWN"
-  frameData.iconIsOnGCD = nil
-  frameData.iconSettingsNeedsCooldownState = nil
-  frameData.iconSettingsNeedsChargeState = nil
-  frameData.iconSettingsNeedsTextureRefresh = nil
-  frameData.iconSettingsNeedsSwipeRefresh = nil
-  frameData.iconSettingsNeedsCountModeRefresh = nil
-  frameData.iconSettingsNeedsChargeCountRefresh = nil
-  frameData.iconSettingsNeedsCooldownRefreshHook = nil
-  frameData.iconSettingsNeedsChargeRefreshHook = nil
-  frameData.iconSettingsForcesCooldownSource = nil
-  frameData.iconForcedCooldownHideNumbers = nil
-  frameData.iconForcedRechargeHideNumbers = nil
-  if frameData.iconCustomTextureApplied ~= nil then
-    frameData.iconCustomTextureNeedsReconcile = true
-  end
-end
-
-function IconSettings:ClearItemIdentity(itemFrame)
-  local frameData = Hooks.GetFrameData(itemFrame)
-  self:ClearItemBinding(itemFrame)
-  frameData.iconStateHidden = nil
-  frameData.iconAppliedAlpha = nil
-  frameData.iconAppliedSaturation = nil
-  frameData.iconSettingsGlowStyle = nil
-  frameData.iconSettingsGlowState = nil
-  frameData.iconSettingsGlowGeneration = nil
-  frameData.iconCustomTextureApplied = nil
-  frameData.iconCustomTextureNeedsReconcile = nil
-end
-
-function IconSettings:ResolveItem(itemFrame, viewerKey)
-  local settingsFamily = GetSettingsFamily(viewerKey)
-  local identity = GetIdentityState(settingsFamily)
-  if not itemFrame
-    or (settingsFamily ~= SETTINGS_FAMILY_COOLDOWN and settingsFamily ~= SETTINGS_FAMILY_BUFF)
-    or not identity
-  then
-    return nil
-  end
-
-  local inCombat = InCombatLockdown()
-  if not inCombat then
-    self:GetViewerEntries(viewerKey)
-  end
-
-  local frameData = Hooks.GetFrameData(itemFrame)
-  if frameData.iconIdentityGeneration == state.catalogGeneration
-    and frameData.iconIdentityViewerKey == viewerKey
-  then
-    return frameData.iconIdentity
-  end
-
-  local cooldownID = GetCooldownID(itemFrame)
-  local entry = cooldownID and identity.byCooldownID[cooldownID] or nil
-  local cooldownInfo = itemFrame:GetCooldownInfo()
-  if not entry and not IsSecret(cooldownInfo) and type(cooldownInfo) == "table" then
-    entry = identity.byCooldownInfo[cooldownInfo]
-    if not entry and not inCombat then
-      local canonicalSpellID = GetCanonicalSpellIDFromInfo(cooldownInfo)
-      entry = canonicalSpellID and identity.byCanonicalSpellID[canonicalSpellID] or nil
-      if entry == false then
-        entry = nil
-      end
-      entry = entry or GetEntryFromInfoAliases(settingsFamily, cooldownInfo)
-    end
-  end
-
-  if entry and not inCombat and not IsSecret(cooldownInfo) and type(cooldownInfo) == "table" then
-    identity.byCooldownInfo[cooldownInfo] = entry
-  end
-
-  frameData.iconIdentity = entry
-  -- Remember misses as well as matches. Retry missing identities after combat
-  -- or when Blizzard binds new data, rather than once per text role.
-  if inCombat or state.catalogs[viewerKey] then
-    frameData.iconIdentityGeneration = state.catalogGeneration
-    frameData.iconIdentityViewerKey = viewerKey
-  end
-  frameData.iconIdentityRetryAfterCombat = inCombat and not entry or nil
-  return entry
 end
 
 
@@ -579,32 +212,83 @@ function IconSettings:GetRecordForEntry(entry, create)
   return record
 end
 
-function IconSettings:BindItem(itemFrame, viewerKey)
-  if not itemFrame or not viewerKey then
-    return nil, nil
+local function ResolveOwnedFont(record, role, viewerOptions, destination)
+  local override = record and record[role]
+  if not override then
+    return viewerOptions
   end
 
-  local frameData = Hooks.GetFrameData(itemFrame)
-  local entry = self:ResolveItem(itemFrame, viewerKey)
-  local record = entry and entry.settingsRecord or nil
-  frameData.iconSettingsRecord = record
-  frameData.iconSettingsGeneration = state.settingsGeneration
-  frameData.iconSettingsViewerKey = viewerKey
-  return record, entry, frameData
+  destination = destination or { role = role }
+  destination.role = role
+  destination.scope = viewerOptions and viewerOptions.scope
+  for index = 1, #FONT_FIELDS do
+    local field = FONT_FIELDS[index]
+    local value = override[field]
+    if value == nil and viewerOptions then
+      value = viewerOptions[field]
+    end
+    destination[field] = value
+  end
+  return destination
 end
 
-function IconSettings:GetRecordForItem(itemFrame, viewerKey)
-  local frameData = Hooks.GetFrameData(itemFrame)
-  if frameData.iconSettingsGeneration == state.settingsGeneration
-    and frameData.iconSettingsViewerKey == viewerKey
-    and frameData.iconIdentityGeneration == state.catalogGeneration
-    and frameData.iconIdentityViewerKey == viewerKey
+function IconSettings:ResolveOwnedStyle(entry, viewerKey, viewerStyle)
+  local record = self:GetRecordForEntry(entry, false)
+  local cached = ownedStyleCache[entry]
+  if cached
+    and cached.generation == state.settingsGeneration
+    and cached.record == record
+    and cached.viewerStyle == viewerStyle
   then
-    return frameData.iconSettingsRecord, frameData.iconIdentity, frameData
+    return cached.style
   end
-  return self:BindItem(itemFrame, viewerKey)
-end
 
+  cached = cached or {}
+  local style = cached.style or {}
+  style.size = viewerStyle.iconSize
+  style.manageFrameSize = false
+  style.inset = 0
+  style.backgroundColor = viewerStyle.backgroundColor
+  style.borderColor = viewerStyle.borderColor
+  style.borderSize = viewerStyle.borderThickness
+  style.cooldownFont = ResolveOwnedFont(
+    record,
+    "cooldown",
+    viewerStyle.cooldownFont,
+    style.cooldownFont
+  )
+  style.chargeFont = ResolveOwnedFont(
+    record,
+    "charge",
+    viewerStyle.chargeFont,
+    style.chargeFont
+  )
+  style.keybindFont = ResolveOwnedFont(
+    record,
+    "keybind",
+    viewerStyle.keybindFont,
+    style.keybindFont
+  )
+  style.appearance = record and record.appearance or nil
+  style.swipe = record and record.swipe or nil
+  style.cooldown = record and record.cooldown or nil
+  style.charge = record and record.charge or nil
+  style.viewerSwipe = viewerStyle.swipe
+  style.viewerCounts = viewerStyle.counts
+  style.viewerDurationCount = viewerStyle.durationCount
+  style.tooltips = viewerStyle.tooltips
+  style.hideWhenInactive = viewerStyle.hideWhenInactive == true
+  style.procGlow = viewerStyle.procGlow
+  style.hasCharges = entry.charges == true
+  style.visible = true
+
+  cached.generation = state.settingsGeneration
+  cached.record = record
+  cached.viewerStyle = viewerStyle
+  cached.style = style
+  ownedStyleCache[entry] = cached
+  return style
+end
 
 function IconSettings:PrimeRuntimeCache()
   if InCombatLockdown() then
@@ -615,28 +299,10 @@ function IconSettings:PrimeRuntimeCache()
     return true
   end
 
-  local changed = false
-  for index = 1, #RUNTIME_VIEWERS do
-    self:GetViewerEntries(RUNTIME_VIEWERS[index])
+  for index = 1, #CATALOG_VIEWERS do
+    self:GetViewerEntries(CATALOG_VIEWERS[index])
   end
-  for index = 1, #RUNTIME_VIEWERS do
-    local viewerKey = RUNTIME_VIEWERS[index]
-    local items = ns.PCMRuntime:GetViewerItems(viewerKey)
-    for itemIndex = 1, #items do
-      local itemFrame = items[itemIndex]
-      local frameData = Hooks.GetFrameData(itemFrame)
-      local oldEntry = frameData.iconIdentity
-      local oldRecord = frameData.iconSettingsRecord
-      if frameData.iconIdentityRetryAfterCombat then
-        frameData.iconIdentityGeneration = nil
-      end
-      local record, entry = self:GetRecordForItem(itemFrame, viewerKey)
-      if oldEntry ~= entry or oldRecord ~= record then
-        changed = true
-      end
-    end
-  end
-  return changed
+  return true
 end
 
 
@@ -653,53 +319,6 @@ function IconSettings:HasShownTextOverride(role)
     end
   end
   return false
-end
-
-function IconSettings:ResolveFontOptions(itemFrame, viewerKey, role, viewerOptions)
-  local record = self:GetRecordForItem(itemFrame, viewerKey)
-  local text = record and record[role]
-  if not text then
-    return viewerOptions
-  end
-
-  local frameData = Hooks.GetFrameData(itemFrame)
-  local cache = frameData.iconFontOptions
-  if not cache or cache.generation ~= state.settingsGeneration then
-    cache = { generation = state.settingsGeneration }
-    frameData.iconFontOptions = cache
-  end
-
-  local cached = cache[role]
-  if cached and cached.source == text and cached.viewerSource == viewerOptions then
-    return cached.options
-  end
-
-  cached = cached or {}
-  local options = cached.options or { role = role }
-  options.scope = viewerOptions and viewerOptions.scope
-  for index = 1, #FONT_FIELDS do
-    local field = FONT_FIELDS[index]
-    local value = text[field]
-    if value == nil and viewerOptions then
-      value = viewerOptions[field]
-    end
-    options[field] = value
-  end
-
-  cached.source = text
-  cached.viewerSource = viewerOptions
-  cached.options = options
-  cache[role] = cached
-  return options
-end
-
-function IconSettings:GetAppearance(itemFrame, viewerKey)
-  local record = self:GetRecordForItem(itemFrame, viewerKey)
-  return record and record.appearance or nil
-end
-
-function IconSettings:GetSettingsGeneration()
-  return state.settingsGeneration
 end
 
 function IconSettings:SetPreviewState(viewerKey, previewState, duration)
@@ -875,26 +494,13 @@ end
 
 IconSettings.GetCurrentSpecializationID = P:Def("GetCurrentSpecializationID", GetCurrentSpecializationID)
 GetSettingsFamily = P:Def("GetSettingsFamily", GetSettingsFamily)
-GetIdentityState = P:Def("GetIdentityState", GetIdentityState)
-ClearIdentityState = P:Def("ClearIdentityState", ClearIdentityState)
-GetCanonicalSpellIDFromInfo = P:Def("GetCanonicalSpellIDFromInfo", GetCanonicalSpellIDFromInfo)
-GetEntryForSpellID = P:Def("GetEntryForSpellID", GetEntryForSpellID)
-GetEntryFromInfoAliases = P:Def("GetEntryFromInfoAliases", GetEntryFromInfoAliases)
-ClearCatalogIdentity = P:Def("ClearCatalogIdentity", ClearCatalogIdentity)
 IconSettings.InvalidateCatalog = P:Def("IconSettings:InvalidateCatalog", IconSettings.InvalidateCatalog)
 IconSettings.InvalidateSettings = P:Def("IconSettings:InvalidateSettings", IconSettings.InvalidateSettings)
 IconSettings.GetViewerEntries = P:Def("IconSettings:GetViewerEntries", IconSettings.GetViewerEntries)
-IconSettings.ClearItemBinding = P:Def("IconSettings:ClearItemBinding", IconSettings.ClearItemBinding)
-IconSettings.ClearItemIdentity = P:Def("IconSettings:ClearItemIdentity", IconSettings.ClearItemIdentity)
-IconSettings.ResolveItem = P:Def("IconSettings:ResolveItem", IconSettings.ResolveItem)
 IconSettings.GetRecordForEntry = P:Def("IconSettings:GetRecordForEntry", IconSettings.GetRecordForEntry)
-IconSettings.BindItem = P:Def("IconSettings:BindItem", IconSettings.BindItem)
-IconSettings.GetRecordForItem = P:Def("IconSettings:GetRecordForItem", IconSettings.GetRecordForItem)
+IconSettings.ResolveOwnedStyle = P:Def("IconSettings:ResolveOwnedStyle", IconSettings.ResolveOwnedStyle)
 IconSettings.PrimeRuntimeCache = P:Def("IconSettings:PrimeRuntimeCache", IconSettings.PrimeRuntimeCache)
 IconSettings.HasShownTextOverride = P:Def("IconSettings:HasShownTextOverride", IconSettings.HasShownTextOverride)
-IconSettings.ResolveFontOptions = P:Def("IconSettings:ResolveFontOptions", IconSettings.ResolveFontOptions)
-IconSettings.GetAppearance = P:Def("IconSettings:GetAppearance", IconSettings.GetAppearance)
-IconSettings.GetSettingsGeneration = P:Def("IconSettings:GetSettingsGeneration", IconSettings.GetSettingsGeneration)
 IconSettings.SetPreviewState = P:Def("IconSettings:SetPreviewState", IconSettings.SetPreviewState)
 IconSettings.GetPreviewState = P:Def("IconSettings:GetPreviewState", IconSettings.GetPreviewState)
 IconSettings.Select = P:Def("IconSettings:Select", IconSettings.Select)

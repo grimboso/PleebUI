@@ -15,7 +15,10 @@ ns.PCMPresentation = PCMPresentation
 
 local CreateFrame = CreateFrame
 local UIParent = UIParent
+local C_DurationUtil = C_DurationUtil
 local C_Secrets = C_Secrets
+local C_StringUtil = C_StringUtil
+local issecretvalue = issecretvalue
 local math_max = math.max
 local math_floor = math.floor
 local next = next
@@ -27,8 +30,8 @@ local tostring = tostring
 local WHITE_TEXTURE = "Interface\\Buttons\\WHITE8x8"
 local FALLBACK_BAR_TEXTURE = Theme.GetBarTexture()
 local InstanceIndex = 0
+local OWNED_PROC_GLOW_KEY = "PUI_PCM_OwnedProcGlow"
 
-local ViewerIconPresentation = setmetatable({}, { __mode = "k" })
 local CustomBarPresentation = setmetatable({}, { __mode = "k" })
 
 local function ApplyRuntimeRootLayer(frame, parent)
@@ -752,8 +755,10 @@ function PCMIconAdapter.Create(parent)
   local background = frame:CreateTexture(nil, "BACKGROUND")
   local icon = frame:CreateTexture(nil, "ARTWORK")
   local cooldown = CreateFrame("Cooldown", nil, frame, "CooldownFrameTemplate")
+  local chargeCooldown = CreateFrame("Cooldown", nil, frame, "CooldownFrameTemplate")
   local cooldownText = cooldown:CreateFontString(nil, "OVERLAY")
-  local chargeText = frame:CreateFontString(nil, "OVERLAY")
+  local chargeHolder = CreateFrame("Frame", nil, frame)
+  local chargeText = chargeHolder:CreateFontString(nil, "OVERLAY")
   local keybindHolder = CreateFrame("Frame", nil, frame)
   local keybindText = keybindHolder:CreateFontString(nil, "OVERLAY")
   local glow = frame:CreateTexture(nil, "OVERLAY", nil, 5)
@@ -770,9 +775,19 @@ function PCMIconAdapter.Create(parent)
   cooldown:SetSwipeTexture(WHITE_TEXTURE)
   IconSkin.SquareCooldown(cooldown)
 
+  chargeCooldown:SetAllPoints(icon)
+  chargeCooldown:SetDrawBling(false)
+  chargeCooldown:SetDrawEdge(false)
+  chargeCooldown:SetHideCountdownNumbers(true)
+  chargeCooldown:SetSwipeColor(0, 0, 0, 0.72)
+  chargeCooldown:SetSwipeTexture(WHITE_TEXTURE)
+  IconSkin.SquareCooldown(chargeCooldown)
+
   cooldownText:SetPoint("CENTER", frame, "CENTER", 0, 0)
   chargeText:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -3, 3)
   keybindText:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -3, -3)
+  chargeHolder:SetAllPoints(frame)
+  chargeHolder:EnableMouse(false)
   keybindHolder:SetAllPoints(frame)
   keybindHolder:EnableMouse(false)
   glow:SetPoint("TOPLEFT", frame, "TOPLEFT", -2, 2)
@@ -789,7 +804,9 @@ function PCMIconAdapter.Create(parent)
     background = background,
     icon = icon,
     cooldown = cooldown,
+    chargeCooldown = chargeCooldown,
     cooldownText = cooldownText,
+    chargeHolder = chargeHolder,
     chargeText = chargeText,
     keybindHolder = keybindHolder,
     keybindText = keybindText,
@@ -827,6 +844,11 @@ function PCMIconAdapter.ApplyStyle(parts, state)
     parts.cooldown:SetAllPoints(parts.icon)
     IconSkin.SquareCooldown(parts.cooldown)
   end
+  if parts.chargeCooldown then
+    parts.chargeCooldown:ClearAllPoints()
+    parts.chargeCooldown:SetAllPoints(parts.icon)
+    IconSkin.SquareCooldown(parts.chargeCooldown)
+  end
 
   ApplyFont(parts.cooldownText, state.cooldownFont, "cooldown", 11)
   ApplyFont(parts.chargeText, state.chargeFont, "tiny", 10)
@@ -834,6 +856,9 @@ function PCMIconAdapter.ApplyStyle(parts, state)
 
   if parts.keybindHolder then
     parts.keybindHolder:SetFrameLevel(parts.frame:GetFrameLevel() + 12)
+  end
+  if parts.chargeHolder then
+    parts.chargeHolder:SetFrameLevel(parts.frame:GetFrameLevel() + 5)
   end
 
   if parts.qualityHolder then
@@ -890,6 +915,501 @@ function PCMIconAdapter.Release(parts)
   parts.provider = nil
   parts.frame:Hide()
   parts.frame:ClearAllPoints()
+end
+
+function PCMPresentation.CreateOwnedIcon(parent)
+  local parts = Presentation.Create("PCMIcon", parent, {})
+  parts.itemDuration = C_DurationUtil.CreateDuration()
+  local unavailable = parts.frame:CreateTexture(nil, "OVERLAY", nil, 3)
+  unavailable:SetAllPoints(parts.icon)
+  unavailable:SetTexture(WHITE_TEXTURE)
+  unavailable:SetVertexColor(0, 0, 0, 1)
+  unavailable:SetAlpha(0)
+
+  local outOfRange = parts.frame:CreateTexture(nil, "OVERLAY", nil, 4)
+  outOfRange:SetAllPoints(parts.icon)
+  outOfRange:SetTexture(WHITE_TEXTURE)
+  outOfRange:SetVertexColor(0.65, 0.05, 0.05, 1)
+  outOfRange:SetBlendMode("MOD")
+  outOfRange:SetAlpha(0)
+
+  parts.unavailable = unavailable
+  parts.outOfRange = outOfRange
+  parts.glow:Show()
+  parts.glow:SetAlpha(0)
+  return parts
+end
+
+local function ApplyOwnedTextStyle(fontString, parent, config, role, fallbackSize)
+  ApplyFont(fontString, config, role, fallbackSize)
+  local point, x, y = IconSkin.ResolveTextAnchor(
+    role,
+    config and config.point,
+    config and config.offsetX,
+    config and config.offsetY
+  )
+  fontString:ClearAllPoints()
+  fontString:SetPoint(point, parent, point, x, y)
+end
+
+function PCMPresentation.ApplyOwnedIconStyle(parts, style)
+  Presentation.Apply("PCMIcon", parts, style)
+  parts.tooltipsEnabled = style.tooltips == true
+  parts.frame:SetMouseMotionEnabled(parts.tooltipsEnabled)
+  parts.cooldownText:Hide()
+  IconSkin.StyleCooldownText(parts.cooldown, style.cooldownFont)
+  IconSkin.StyleCooldownText(parts.chargeCooldown, style.cooldownFont)
+  parts.chargeCooldown:SetFrameLevel(parts.frame:GetFrameLevel() + 3)
+  parts.cooldown:SetFrameLevel(parts.frame:GetFrameLevel() + 4)
+  ApplyOwnedTextStyle(parts.chargeText, parts.frame, style.chargeFont, "charge", 10)
+  ApplyOwnedTextStyle(parts.keybindText, parts.frame, style.keybindFont, "keybind", 8)
+
+  local swipe = style.swipe or {}
+  local viewerSwipe = style.viewerSwipe or {}
+  local show = swipe.show
+  if show == nil then
+    show = viewerSwipe.cooldown ~= false
+  end
+  parts.cooldown:SetDrawSwipe(show == true)
+  parts.chargeCooldown:SetDrawSwipe(show == true)
+
+  local drawEdge = swipe.drawEdge
+  if drawEdge == nil then
+    drawEdge = viewerSwipe.drawEdge ~= false
+  end
+  parts.cooldown:SetDrawEdge(drawEdge == true)
+  local rechargeEdge = drawEdge
+  if style.hasCharges and swipe.rechargeEdge ~= nil then
+    rechargeEdge = swipe.rechargeEdge == true
+  end
+  parts.chargeCooldown:SetDrawEdge(rechargeEdge == true)
+  parts.cooldown:SetReverse(swipe.reverse == true)
+  parts.chargeCooldown:SetReverse(swipe.reverse == true)
+
+  local color = CopyColor(swipe.color or viewerSwipe.swipeColor, { 0, 0, 0, 0.8 })
+  parts.cooldown:SetSwipeColor(color[1], color[2], color[3], color[4])
+  parts.chargeCooldown:SetSwipeColor(color[1], color[2], color[3], color[4])
+
+  local counts = style.viewerCounts or {}
+  local cooldownCount = style.cooldown and style.cooldown.show
+  if cooldownCount == nil then
+    cooldownCount = counts.cooldown ~= false
+  end
+  parts.cooldown:SetHideCountdownNumbers(cooldownCount ~= true)
+  local rechargeCount = cooldownCount
+  if style.hasCharges
+    and style.cooldown
+    and style.cooldown.rechargeShow ~= nil
+  then
+    rechargeCount = style.cooldown.rechargeShow == true
+  end
+  parts.chargeCooldown:SetHideCountdownNumbers(rechargeCount ~= true)
+
+  local chargeCount = style.charge and style.charge.show
+  if chargeCount == nil then
+    chargeCount = counts.charge ~= false
+  end
+  parts.chargeText:SetShown(chargeCount == true)
+
+  parts.customTexture = style.appearance and style.appearance.texture or nil
+end
+
+function PCMPresentation.ApplyOwnedIconVisibility(parts, style)
+  parts.frame:SetShown(style.visible ~= false)
+end
+
+function PCMPresentation.ConfigureOwnedAuraLayer(parts, button, unit, style)
+  local auraParts = AuraWidget.BindApplicationDurationButton(button)
+  button:ClearAllPoints()
+  button:SetAllPoints(parts.frame)
+  button:SetFrameStrata(parts.frame:GetFrameStrata())
+  button:SetFrameLevel(parts.frame:GetFrameLevel() + (unit == "player" and 7 or 6))
+
+  AuraWidget.ConfigureIcon(auraParts)
+  auraParts.icon:SetAllPoints(button)
+  if not auraParts.ownedCustomTexture then
+    auraParts.ownedCustomTexture = button:CreateTexture(nil, "ARTWORK", nil, 2)
+    auraParts.ownedCustomTexture:SetAllPoints(auraParts.icon)
+  end
+  auraParts.ownedCustomTexture:SetTexture(parts.customTexture)
+  auraParts.ownedCustomTexture:SetShown(parts.customTexture ~= nil)
+  AuraWidget.ConfigureDurationCooldown(auraParts)
+  auraParts.durationCooldown:SetAllPoints(button)
+  auraParts.durationCooldown:SetReverse(true)
+  local swipe = style.swipe or {}
+  local viewerSwipe = style.viewerSwipe or {}
+  local showDurationSwipe = swipe.show
+  if showDurationSwipe == nil then
+    showDurationSwipe = viewerSwipe.duration ~= false
+  end
+  local drawEdge = swipe.drawEdge
+  if drawEdge == nil then
+    drawEdge = viewerSwipe.drawEdge ~= false
+  end
+  auraParts.durationCooldown:SetDrawEdge(showDurationSwipe == true and drawEdge == true)
+  auraParts.durationCooldown:SetDrawSwipe(showDurationSwipe == true)
+
+  local showDurationCount = style.cooldown and style.cooldown.show
+  if showDurationCount == nil then
+    showDurationCount = style.viewerDurationCount ~= false
+  end
+  auraParts.durationCooldown:SetHideCountdownNumbers(showDurationCount ~= true)
+  IconSkin.StyleCooldownText(auraParts.durationCooldown, style.cooldownFont)
+
+  local swipeColor = CopyColor(swipe.color or viewerSwipe.swipeColor, { 0, 0, 0, 0.72 })
+  auraParts.durationCooldown:SetSwipeColor(
+    swipeColor[1],
+    swipeColor[2],
+    swipeColor[3],
+    swipeColor[4]
+  )
+
+  auraParts.applicationFormatter = auraParts.applicationFormatter
+    or C_StringUtil.CreateNumericRuleFormatter()
+  if not auraParts.applicationFormatterReady then
+    auraParts.applicationFormatter:AddBreakpoint({ threshold = 0, format = "%.0f" })
+    auraParts.applicationFormatterReady = true
+  end
+  local charge = style.charge or {}
+  local counts = style.viewerCounts or {}
+  local showApplications = charge.show
+  if showApplications == nil then
+    showApplications = counts.charge ~= false
+  end
+  ApplyFont(auraParts.applicationText, style.chargeFont, "tiny", 10)
+  if showApplications then
+    AuraWidget.ConfigureApplicationCount(auraParts, auraParts.applicationFormatter)
+  else
+    AuraWidget.DisableApplicationCount(auraParts)
+  end
+
+  local appearance = style.appearance or {}
+  local auraAlpha = tonumber(appearance.auraAlpha) or 1
+  button:SetAlpha(auraAlpha)
+  button:SetMouseMotionEnabled(style.tooltips == true and auraAlpha > 0)
+  local saturation = tonumber(appearance.auraSaturation)
+  local desaturation = saturation and (1 - math.max(0, math.min(1, saturation))) or 0
+  auraParts.icon:SetDesaturation(desaturation)
+  auraParts.ownedCustomTexture:SetDesaturation(desaturation)
+
+  local glowStyle = appearance.auraGlowStyle or "NONE"
+  local glowColor = CopyColor(appearance.auraGlowColor, { 1, 1, 1, 1 })
+  local auraSize = math_max(1, tonumber(style.size) or 1)
+  if auraParts.ownedAuraGlow then
+    AuraWidget.ConfigureSlotGlow(
+      auraParts.ownedAuraGlow,
+      auraSize,
+      auraSize,
+      glowStyle,
+      glowColor
+    )
+  elseif glowStyle ~= "NONE" then
+    auraParts.ownedAuraGlow = AuraWidget.CreateSlotGlow(
+      button,
+      auraSize,
+      auraSize,
+      glowStyle,
+      glowColor
+    )
+  end
+end
+
+function PCMPresentation.CreateOwnedAuraBar(parent)
+  local frame = CreateFrame("Frame", nil, parent)
+  ApplyRuntimeRootLayer(frame, parent)
+  frame:SetSize(250, 20)
+  frame:EnableMouse(false)
+  return {
+    frame = frame,
+  }
+end
+
+function PCMPresentation.ConfigureOwnedAuraBar(parts, button, style)
+  local auraParts = AuraWidget.BindApplicationDurationButton(button)
+  local vertical = style.orientation == "VERTICAL"
+  local length = math_max(1, tonumber(style.width) or 250)
+  local thickness = math_max(1, tonumber(style.height) or 20)
+  local iconPlacement = style.iconPlacement or (vertical and "TOP" or "LEFT")
+  local showIcon = iconPlacement ~= "HIDE"
+  local iconSize = showIcon and thickness or 0
+  local barLength = showIcon and math_max(1, length - iconSize) or length
+  local barWidth = vertical and thickness or barLength
+  local barHeight = vertical and barLength or thickness
+
+  button:ClearAllPoints()
+  button:SetAllPoints(parts.frame)
+  button:SetFrameStrata(parts.frame:GetFrameStrata())
+  button:SetFrameLevel(parts.frame:GetFrameLevel() + 1)
+  button:EnableMouse(style.tooltips == true)
+
+  ApplyFont(auraParts.durationText, style.durationFont, "body", 12)
+  ApplyFont(auraParts.applicationText, style.applicationFont, "tiny", 10)
+
+  AuraWidget.ConfigureDurationBar(
+    auraParts,
+    nil,
+    Enum.StatusBarTimerDirection.RemainingTime
+  )
+  AuraWidget.ConfigureDurationText(auraParts, BarWidget.GetDurationFormatter())
+  AuraWidget.ConfigureIcon(auraParts)
+
+  auraParts.durationBar:ClearAllPoints()
+  auraParts.durationBar:SetSize(barWidth, barHeight)
+  auraParts.durationBar:SetOrientation(vertical and "VERTICAL" or "HORIZONTAL")
+  auraParts.durationBar:SetReverseFill(
+    vertical and style.drainDirection == "TOP_TO_BOTTOM"
+      or not vertical and style.drainDirection == "LEFT_TO_RIGHT"
+  )
+  auraParts.durationBar:SetStatusBarTexture(
+    BarWidget.ResolveStatusBarTexture(style.texture or "Pleebar", FALLBACK_BAR_TEXTURE)
+  )
+  local color = CopyColor(style.color, { 1, 0.6, 0, 1 })
+  auraParts.durationBar:SetStatusBarColor(color[1], color[2], color[3], color[4])
+
+  if not auraParts.ownedBackground then
+    auraParts.ownedBackground = auraParts.durationBar:CreateTexture(nil, "BACKGROUND")
+    auraParts.ownedBackground:SetAllPoints(auraParts.durationBar)
+  end
+  SetBackground(auraParts.ownedBackground, style.backgroundColor)
+  auraParts.ownedBackground:Show()
+
+  if not auraParts.ownedBarBorder then
+    auraParts.ownedBarBorder = CreateFrame("Frame", nil, button)
+  end
+  auraParts.ownedBarBorder:ClearAllPoints()
+  auraParts.ownedBarBorder:SetAllPoints(auraParts.durationBar)
+  auraParts.ownedBarBorder:SetFrameLevel(auraParts.durationBar:GetFrameLevel() + 2)
+  BarWidget.ApplyBorder(
+    auraParts.ownedBarBorder,
+    tonumber(style.borderThickness) or 2,
+    CopyColor(style.borderColor, { 0.20, 0.20, 0.24, 1 })
+  )
+
+  auraParts.icon:ClearAllPoints()
+  if showIcon then
+    auraParts.icon:SetSize(iconSize, iconSize)
+    if vertical then
+      if iconPlacement == "BOTTOM" then
+        auraParts.icon:SetPoint("BOTTOM", button, "BOTTOM", 0, 0)
+        auraParts.durationBar:SetPoint("BOTTOM", auraParts.icon, "TOP", 0, 0)
+      else
+        auraParts.icon:SetPoint("TOP", button, "TOP", 0, 0)
+        auraParts.durationBar:SetPoint("TOP", auraParts.icon, "BOTTOM", 0, 0)
+      end
+    elseif iconPlacement == "RIGHT" then
+      auraParts.icon:SetPoint("RIGHT", button, "RIGHT", 0, 0)
+      auraParts.durationBar:SetPoint("RIGHT", auraParts.icon, "LEFT", 0, 0)
+    else
+      auraParts.icon:SetPoint("LEFT", button, "LEFT", 0, 0)
+      auraParts.durationBar:SetPoint("LEFT", auraParts.icon, "RIGHT", 0, 0)
+    end
+    IconSkin.StripIconMasks(auraParts.icon)
+    IconSkin.MakeIconSquare(auraParts.icon, { crop = 0.08 })
+    auraParts.icon:Show()
+  else
+    auraParts.durationBar:SetPoint("CENTER", button, "CENTER", 0, 0)
+    AuraWidget.DisableIcon(auraParts)
+  end
+
+  if not auraParts.ownedIconBorder then
+    auraParts.ownedIconBorder = CreateFrame("Frame", nil, button)
+  end
+  auraParts.ownedIconBorder:ClearAllPoints()
+  auraParts.ownedIconBorder:SetAllPoints(auraParts.icon)
+  auraParts.ownedIconBorder:SetFrameLevel(button:GetFrameLevel() + 3)
+  BarWidget.ApplyBorder(
+    auraParts.ownedIconBorder,
+    showIcon and (tonumber(style.borderThickness) or 2) or 0,
+    CopyColor(style.borderColor, { 0.20, 0.20, 0.24, 1 })
+  )
+  auraParts.ownedIconBorder:SetShown(showIcon)
+
+  if not auraParts.ownedName then
+    auraParts.ownedName = button:CreateFontString(nil, "OVERLAY")
+    auraParts.ownedName:SetWordWrap(false)
+    ApplyFont(auraParts.ownedName, style.nameFont, "body", 12)
+    button:SetSpellName(auraParts.ownedName)
+  else
+    ApplyFont(auraParts.ownedName, style.nameFont, "body", 12)
+  end
+  auraParts.ownedName:ClearAllPoints()
+  auraParts.durationTextHolder:ClearAllPoints()
+  auraParts.durationTextHolder:SetAllPoints(auraParts.durationBar)
+  auraParts.durationText:ClearAllPoints()
+  if vertical then
+    auraParts.ownedName:Hide()
+    auraParts.durationText:SetPoint("CENTER", auraParts.durationBar, "CENTER", 0, 0)
+  else
+    auraParts.ownedName:SetPoint("LEFT", auraParts.durationBar, "LEFT", 5, 0)
+    auraParts.ownedName:SetPoint("RIGHT", auraParts.durationBar, "RIGHT", -32, 0)
+    auraParts.ownedName:SetJustifyH("LEFT")
+    auraParts.ownedName:Show()
+    auraParts.durationText:SetPoint("RIGHT", auraParts.durationBar, "RIGHT", -8, 0)
+  end
+
+  auraParts.applicationHolder:ClearAllPoints()
+  auraParts.applicationHolder:SetAllPoints(showIcon and auraParts.icon or button)
+  local counts = style.counts or {}
+  if counts.buff ~= false then
+    auraParts.applicationFormatter = auraParts.applicationFormatter
+      or C_StringUtil.CreateNumericRuleFormatter()
+    if not auraParts.applicationFormatterReady then
+      auraParts.applicationFormatter:AddBreakpoint({ threshold = 0, format = "%.0f" })
+      auraParts.applicationFormatterReady = true
+    end
+    AuraWidget.ConfigureApplicationCount(auraParts, auraParts.applicationFormatter)
+  else
+    AuraWidget.DisableApplicationCount(auraParts)
+  end
+
+  auraParts.durationTextHolder:SetFrameLevel(button:GetFrameLevel() + 4)
+  auraParts.applicationHolder:SetFrameLevel(button:GetFrameLevel() + 5)
+  return auraParts
+end
+
+function PCMPresentation.SetStaticIcon(parts, texture)
+  parts.icon:SetTexture(parts.customTexture or texture)
+end
+
+function PCMPresentation.SetSpellCooldownDuration(parts, duration)
+  if duration == nil then
+    parts.cooldown:Clear()
+    return
+  end
+  parts.cooldown:SetCooldownFromDurationObject(duration, true)
+end
+
+function PCMPresentation.SetChargeDuration(parts, duration)
+  if duration == nil then
+    parts.chargeCooldown:Clear()
+    return
+  end
+  parts.chargeCooldown:SetCooldownFromDurationObject(duration, true)
+end
+
+function PCMPresentation.SetDisplayCount(parts, displayCount)
+  parts.chargeText:SetText(displayCount)
+end
+
+function PCMPresentation.SetUsableState(parts, usable)
+  if not issecretvalue(usable) and type(usable) ~= "boolean" then
+    parts.unavailable:SetAlpha(0)
+  else
+    parts.unavailable:SetAlphaFromBoolean(usable, 0, 0.45)
+  end
+end
+
+function PCMPresentation.SetRangeState(parts, inRange)
+  if not issecretvalue(inRange) and type(inRange) ~= "boolean" then
+    parts.outOfRange:SetAlpha(0)
+    return
+  end
+  parts.outOfRange:SetAlphaFromBoolean(inRange, 0, 0.35)
+end
+
+local function StopOwnedProcGlow(parts)
+  local glowType = parts.ownedProcGlowType
+  if glowType == "pixel" then
+    LCG.PixelGlow_Stop(parts.frame, OWNED_PROC_GLOW_KEY)
+  elseif glowType == "autocast" then
+    LCG.AutoCastGlow_Stop(parts.frame, OWNED_PROC_GLOW_KEY)
+  elseif glowType == "actionbutton" then
+    LCG.ButtonGlow_Stop(parts.frame)
+  elseif glowType == "proc" then
+    LCG.ProcGlow_Stop(parts.frame, OWNED_PROC_GLOW_KEY)
+  end
+  parts.ownedProcGlowType = nil
+  parts.ownedProcGlowSignature = nil
+end
+
+function PCMPresentation.SetProcState(parts, active, config)
+  if active ~= true or not config or config.enabled == false then
+    StopOwnedProcGlow(parts)
+    return
+  end
+
+  local glowType = tostring(config.type or "pixel")
+  local color = CopyColor(config.color, { 0.95, 0.95, 0.32, 1 })
+  local speed = math.max(20, math.min(200, tonumber(config.speed) or 100))
+  local scale = math.max(0.5, math.min(2, tonumber(config.scale) or 1))
+  local lines = math.max(2, math.min(16, tonumber(config.lines) or 8))
+  local thickness = math.max(1, math.min(6, tonumber(config.thickness) or 2))
+  local speedMultiplier = speed / 100
+  local frequency = (glowType == "autocast" and 0.6 or glowType == "pixel" and 0.25 or 1)
+    * speedMultiplier
+  local duration = math.max(0.05, 1 / speedMultiplier)
+  local signature = table.concat({
+    glowType,
+    color[1], color[2], color[3], color[4],
+    frequency, scale, lines, thickness, duration,
+  }, ":")
+
+  if parts.ownedProcGlowSignature == signature then
+    return
+  end
+
+  StopOwnedProcGlow(parts)
+  if glowType == "pixel" then
+    LCG.PixelGlow_Start(parts.frame, color, lines, frequency, nil, thickness, 0, 0, true, OWNED_PROC_GLOW_KEY, 8)
+  elseif glowType == "autocast" then
+    LCG.AutoCastGlow_Start(parts.frame, color, lines, frequency, scale, 0, 0, OWNED_PROC_GLOW_KEY, 8)
+  elseif glowType == "actionbutton" then
+    LCG.ButtonGlow_Start(parts.frame, color, frequency, 8)
+  elseif glowType == "proc" then
+    LCG.ProcGlow_Start(parts.frame, {
+      key = OWNED_PROC_GLOW_KEY,
+      color = color,
+      startAnim = true,
+      xOffset = 0,
+      yOffset = 0,
+      duration = duration,
+      frameLevel = 8,
+    })
+  else
+    return
+  end
+
+  parts.ownedProcGlowType = glowType
+  parts.ownedProcGlowSignature = signature
+end
+
+function PCMPresentation.DeactivateOwnedIcon(parts)
+  StopOwnedProcGlow(parts)
+  if parts.ownedStateGlowKey then
+    PCMPresentation.ApplyCustomTrackerStateGlow(parts.ownedStateGlowKey, nil)
+  end
+  parts.cooldown:Clear()
+  parts.chargeCooldown:Clear()
+  parts.cooldownText:SetText(nil)
+  parts.chargeText:SetText(nil)
+  parts.keybindText:SetText(nil)
+  parts.frame:SetAlpha(1)
+  parts.frame:SetMouseMotionEnabled(false)
+  parts.icon:SetDesaturation(0)
+  parts.unavailable:SetAlpha(0)
+  parts.outOfRange:SetAlpha(0)
+  parts.glow:SetAlpha(0)
+end
+
+function PCMPresentation.SetTotemDuration(parts, duration)
+  if duration == nil then
+    parts.cooldown:Clear()
+    return
+  end
+  parts.cooldown:SetCooldownFromDurationObject(duration, true)
+end
+
+function PCMPresentation.SetItemCooldown(parts, startTime, duration)
+  if startTime == 0 then
+    parts.cooldown:Clear()
+    return
+  end
+  parts.itemDuration:SetTimeFromStart(startTime, duration)
+  parts.cooldown:SetCooldownFromDurationObject(parts.itemDuration, true)
+end
+
+function PCMPresentation.SetKeybindText(parts, text)
+  parts.keybindText:SetText(text)
 end
 
 local CustomBarBuffGlowTracks = {}
@@ -960,6 +1480,52 @@ function PCMPresentation.ApplyCustomTrackerStateGlow(trackKey, targetFrame, styl
     b = b,
     a = a,
   }
+end
+
+function PCMPresentation.ApplyOwnedStateAppearance(parts, cooldownID, appearance, stateName, atMaxCharges)
+  appearance = appearance or {}
+  local alpha = 1
+  local saturation
+  local glowStyle
+  local glowColor
+
+  if stateName == "AURA" then
+    alpha = tonumber(appearance.auraAlpha) or 1
+    saturation = tonumber(appearance.auraSaturation)
+    glowStyle = appearance.auraGlowStyle
+    glowColor = appearance.auraGlowColor
+  elseif stateName == "COOLDOWN" then
+    alpha = tonumber(appearance.cooldownAlpha) or 1
+    saturation = tonumber(appearance.cooldownSaturation)
+    glowStyle = appearance.cooldownGlowStyle
+    glowColor = appearance.cooldownGlowColor
+  elseif stateName == "READY" then
+    alpha = tonumber(appearance.readyAlpha) or 1
+    saturation = tonumber(appearance.readySaturation)
+    if atMaxCharges == true and appearance.maxChargeGlowStyle ~= nil then
+      glowStyle = appearance.maxChargeGlowStyle
+      glowColor = appearance.maxChargeGlowColor
+    else
+      glowStyle = appearance.readyGlowStyle
+      glowColor = appearance.readyGlowColor
+    end
+  else
+    return
+  end
+
+  parts.frame:SetAlpha(alpha)
+  parts.frame:SetMouseMotionEnabled(parts.tooltipsEnabled == true and alpha > 0)
+  parts.icon:SetDesaturation(
+    saturation and (1 - math.max(0, math.min(1, saturation))) or 0
+  )
+
+  parts.ownedStateGlowKey = parts.ownedStateGlowKey or ("pcm-owned:" .. tostring(cooldownID))
+  PCMPresentation.ApplyCustomTrackerStateGlow(
+    parts.ownedStateGlowKey,
+    parts.frame,
+    glowStyle,
+    glowColor
+  )
 end
 
 local function CustomBarBuffGlowRestyleLocked()
@@ -1302,29 +1868,6 @@ function PCMPresentation.ReleaseCustomBarBuffGlow(trackKey)
   StopCustomBarBuffGlowPendingEvents()
 end
 
-function PCMPresentation.BindViewerIcon(itemFrame, regions, borderFrame)
-  local parts = ViewerIconPresentation[itemFrame]
-  if not parts then
-    parts = {
-      owner = itemFrame,
-      frame = regions and regions.iconContainer or itemFrame,
-      borderFrame = borderFrame or itemFrame,
-      icon = regions and regions.icon,
-      cooldown = regions and regions.cd,
-    }
-    ViewerIconPresentation[itemFrame] = parts
-  else
-    parts.owner = itemFrame
-    parts.frame = regions and regions.iconContainer or itemFrame
-    parts.borderFrame = borderFrame or parts.borderFrame or itemFrame
-    parts.icon = regions and regions.icon or parts.icon
-    parts.cooldown = regions and regions.cd or parts.cooldown
-  end
-
-  parts.__puiPresentationKey = "PCMIcon"
-  return parts
-end
-
 function PCMPresentation.LayoutStackSegments(parts, state)
   local cfg = state.config or {}
   local count = math_max(1, math_floor(tonumber(state.maxStacks or cfg.maxStacks) or 3))
@@ -1407,7 +1950,24 @@ Presentation.Register("PCMBar", PCMBarAdapter)
 Presentation.Register("PCMIcon", PCMIconAdapter)
 
 local P = select(1, ns.Pleebug:DropIn(PCMPresentation, { name = "PCM.Presentation" }))
-PCMPresentation.BindViewerIcon = P:Def("PCMPresentation.BindViewerIcon", PCMPresentation.BindViewerIcon)
+PCMPresentation.CreateOwnedIcon = P:Def("PCMPresentation.CreateOwnedIcon", PCMPresentation.CreateOwnedIcon)
+PCMPresentation.ApplyOwnedIconStyle = P:Def("PCMPresentation.ApplyOwnedIconStyle", PCMPresentation.ApplyOwnedIconStyle)
+PCMPresentation.ApplyOwnedIconVisibility = P:Def("PCMPresentation.ApplyOwnedIconVisibility", PCMPresentation.ApplyOwnedIconVisibility)
+PCMPresentation.ConfigureOwnedAuraLayer = P:Def("PCMPresentation.ConfigureOwnedAuraLayer", PCMPresentation.ConfigureOwnedAuraLayer)
+PCMPresentation.CreateOwnedAuraBar = P:Def("PCMPresentation.CreateOwnedAuraBar", PCMPresentation.CreateOwnedAuraBar)
+PCMPresentation.ConfigureOwnedAuraBar = P:Def("PCMPresentation.ConfigureOwnedAuraBar", PCMPresentation.ConfigureOwnedAuraBar)
+PCMPresentation.SetStaticIcon = P:Def("PCMPresentation.SetStaticIcon", PCMPresentation.SetStaticIcon)
+PCMPresentation.SetSpellCooldownDuration = P:Def("PCMPresentation.SetSpellCooldownDuration", PCMPresentation.SetSpellCooldownDuration)
+PCMPresentation.SetChargeDuration = P:Def("PCMPresentation.SetChargeDuration", PCMPresentation.SetChargeDuration)
+PCMPresentation.SetDisplayCount = P:Def("PCMPresentation.SetDisplayCount", PCMPresentation.SetDisplayCount)
+PCMPresentation.SetUsableState = P:Def("PCMPresentation.SetUsableState", PCMPresentation.SetUsableState)
+PCMPresentation.SetRangeState = P:Def("PCMPresentation.SetRangeState", PCMPresentation.SetRangeState)
+PCMPresentation.SetProcState = P:Def("PCMPresentation.SetProcState", PCMPresentation.SetProcState)
+PCMPresentation.DeactivateOwnedIcon = P:Def("PCMPresentation.DeactivateOwnedIcon", PCMPresentation.DeactivateOwnedIcon)
+PCMPresentation.SetTotemDuration = P:Def("PCMPresentation.SetTotemDuration", PCMPresentation.SetTotemDuration)
+PCMPresentation.SetItemCooldown = P:Def("PCMPresentation.SetItemCooldown", PCMPresentation.SetItemCooldown)
+PCMPresentation.SetKeybindText = P:Def("PCMPresentation.SetKeybindText", PCMPresentation.SetKeybindText)
+PCMPresentation.ApplyOwnedStateAppearance = P:Def("PCMPresentation.ApplyOwnedStateAppearance", PCMPresentation.ApplyOwnedStateAppearance)
 PCMPresentation.EnsureStackSegments = P:Def("PCMPresentation.EnsureStackSegments", EnsureStackSegments)
 PCMPresentation.LayoutStackSegments = P:Def("PCMPresentation.LayoutStackSegments", PCMPresentation.LayoutStackSegments)
 PCMPresentation.EnsureChargeSlots = P:Def("PCMPresentation.EnsureChargeSlots", EnsureChargeSlots)

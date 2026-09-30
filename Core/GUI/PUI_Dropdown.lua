@@ -21,6 +21,7 @@ local WidgetSkins = Theme.WidgetSkins
 
 local WHITE8 = "Interface\\Buttons\\WHITE8x8"
 local ARROW_TEXTURE = "Interface\\ChatFrame\\UI-ChatIcon-ScrollDown-Up"
+local SEPARATOR_VALUE_PREFIX = "__PUI_SEPARATOR_BEFORE__"
 
 
 local function IsLSMDropdown(widgetType)
@@ -917,6 +918,33 @@ function WidgetSkins.DropdownItem(widget)
   text:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -18, 1)
   text:SetJustifyH("LEFT")
   text:SetJustifyV("MIDDLE")
+
+  local value = widget.userdata and widget.userdata.value
+  local separatorBefore = type(value) == "string"
+    and value:sub(1, #SEPARATOR_VALUE_PREFIX) == SEPARATOR_VALUE_PREFIX
+
+  local separator = frame.__puiDropdownSeparator
+  if separatorBefore then
+    if not separator then
+      separator = frame:CreateTexture(nil, "OVERLAY")
+      Theme.MarkCreatedWidgetChrome(separator)
+      frame.__puiDropdownSeparator = separator
+    end
+    separator:SetTexture(WHITE8)
+    separator:SetVertexColor(
+      colors.border[1],
+      colors.border[2],
+      colors.border[3],
+      colors.border[4] or 1
+    )
+    separator:ClearAllPoints()
+    separator:SetPoint("TOPLEFT", frame, "TOPLEFT", 3, 1)
+    separator:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -3, 1)
+    separator:SetHeight(1)
+    separator:Show()
+  elseif separator then
+    separator:Hide()
+  end
 end
 local PUI_DROPDOWN_TYPE = "PUI_Dropdown"
 local PUI_DROPDOWN_VERSION = 1

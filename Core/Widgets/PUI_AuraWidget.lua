@@ -4,423 +4,25 @@ local AuraWidget = {}
 ns.AuraWidget = AuraWidget
 
 local CreateFrame = CreateFrame
-local InCombatLockdown = InCombatLockdown
-local C_Secrets = C_Secrets
 local table_sort = table.sort
 
 local MAX_STACK_COLOR_THRESHOLD = 30
 local STACK_COLOR_THRESHOLD_DEFAULT_COLOR = { 1, 0.82, 0, 1 }
 
-local applicationThresholdTracks = setmetatable({}, { __mode = "k" })
-local applicationThresholdViewerHooks = setmetatable({}, { __mode = "k" })
-local applicationThresholdViewerSnapshots = {}
-local applicationThresholdSnapshotGeneration = 0
-local applicationThresholdTickFrame
-local applicationThresholdWakeFrame
-local applicationThresholdIdleTicks = 0
-
-local function IsApplicationThresholdDataRestricted()
-  return InCombatLockdown()
-    or C_Secrets.ShouldAurasBeSecret()
-    or C_Secrets.ShouldCooldownsBeSecret()
-end
-
-local function IsUsableSpellID(spellID)
-  if type(spellID) ~= "number" then
-    return false
-  end
-  if issecretvalue(spellID) then
-    return false
-  end
-  return spellID > 0 and spellID == math.floor(spellID)
-end
-
-local function BuildApplicationThresholdSpellSet(spellIDs)
-  local spellSet = {}
-  local orderedSpellIDs = {}
-
-  local function AddSpellID(spellID)
-    if not IsUsableSpellID(spellID) or spellSet[spellID] then
-      return
-    end
-
-    spellSet[spellID] = true
-    orderedSpellIDs[#orderedSpellIDs + 1] = spellID
-
-    local baseSpellID = C_Spell.GetBaseSpell(spellID)
-    if IsUsableSpellID(baseSpellID) and not spellSet[baseSpellID] then
-      spellSet[baseSpellID] = true
-      orderedSpellIDs[#orderedSpellIDs + 1] = baseSpellID
-    end
-  end
-
-  if type(spellIDs) == "table" then
-    for key, value in pairs(spellIDs) do
-      local spellID = type(key) == "number" and value == true and key or value
-      AddSpellID(spellID)
-    end
-  elseif IsUsableSpellID(spellIDs) then
-    AddSpellID(spellIDs)
-  end
-
-  return spellSet, orderedSpellIDs
-end
-
-local function SourceHasSpell(source, spellID)
-  return IsUsableSpellID(spellID) and source.spellSet[spellID] == true
-end
-
-local function ApplicationThresholdInfoMatches(info, source)
-  if not info then
-    return false
-  end
-
-  if SourceHasSpell(source, info.overrideSpellID)
-    or SourceHasSpell(source, info.overrideTooltipSpellID)
-    or SourceHasSpell(source, info.spellID)
-  then
-    return true
-  end
-
-  for _, spellID in ipairs(info.linkedSpellIDs) do
-    if SourceHasSpell(source, spellID) then
-      return true
-    end
-  end
-  return false
-end
-
-local function GetApplicationThresholdFrameSpellID(frame)
-  local auraData = frame.auraDataCached
-  if not issecretvalue(auraData) and type(auraData) == "table" then
-    local spellID = auraData.spellId
-    if IsUsableSpellID(spellID) then
-      return spellID
-    end
-  end
-
-  local spellID = frame:GetAuraSpellID()
-  if IsUsableSpellID(spellID) then
-    return spellID
-  end
-
-  spellID = frame:GetSpellID()
-  if IsUsableSpellID(spellID) then
-    return spellID
-  end
-
-  return nil
-end
-
-local function ApplicationThresholdFrameHasSourceUnit(frame, source)
-  local unit = frame:GetAuraDataUnit()
-  if issecretvalue(unit) then
-    return false
-  end
-  return unit ~= nil and unit == source.unit
-end
-
-local function ApplicationThresholdFrameCanServeSource(frame, source)
-  local unit = frame:GetAuraDataUnit()
-  if issecretvalue(unit) then
-    return false
-  end
-  return unit == nil or unit == source.unit
-end
-
-local function ApplicationThresholdFrameMatches(frame, source)
-  if not ApplicationThresholdFrameCanServeSource(frame, source) then
-    return false
-  end
-  local cooldownID = frame.cooldownID
-  if not IsUsableSpellID(cooldownID) then
-    return false
-  end
-  if source.childCooldownID and cooldownID == source.childCooldownID then
-    return true
-  end
-
-  local info = C_CooldownViewer.GetCooldownViewerCooldownInfo(cooldownID)
-  if ApplicationThresholdInfoMatches(info, source) then
-    return true
-  end
-
-  return SourceHasSpell(
-    source,
-    GetApplicationThresholdFrameSpellID(frame)
-  )
-end
-
-local function GetApplicationThresholdViewerSnapshot(viewerKey)
-  local viewer = _G[viewerKey]
-  if not viewer or not viewer.itemFramePool then
-    return nil
-  end
-
-  local snapshot = applicationThresholdViewerSnapshots[viewerKey]
-  if not snapshot then
-    snapshot = {
-      frames = {},
-      active = {},
-      generation = -1,
-    }
-    applicationThresholdViewerSnapshots[viewerKey] = snapshot
-  end
-
-  if snapshot.generation == applicationThresholdSnapshotGeneration then
-    return snapshot
-  end
-
-  local frames = snapshot.frames
-  local active = snapshot.active
-
-  for index = 1, #frames do
-    local frame = frames[index]
-    frames[index] = nil
-    active[frame] = nil
-  end
-
-  local count = 0
-  for frame in viewer.itemFramePool:EnumerateActive() do
-    count = count + 1
-    frames[count] = frame
-    active[frame] = true
-  end
-
-  snapshot.generation = applicationThresholdSnapshotGeneration
-  return snapshot
-end
-
-local function FindApplicationThresholdChild(source)
-  local snapshot = GetApplicationThresholdViewerSnapshot(source.viewerKey)
-  if not snapshot then
-    return nil
-  end
-
-  local frames = snapshot.frames
-
-  local child = source.child
-  if IsApplicationThresholdDataRestricted() then
-    if child and snapshot.active[child] == true then
-      return child
-    end
-    return nil
-  end
-
-  local childCooldownID = child and child.cooldownID or nil
-  if child
-    and IsUsableSpellID(childCooldownID)
-    and childCooldownID == source.childCooldownID
-    and ApplicationThresholdFrameHasSourceUnit(child, source)
-    and snapshot.active[child] == true
-  then
-    return child
-  end
-
-  source.child = nil
-  source.childCooldownID = nil
-
-  for index = 1, #frames do
-    local frame = frames[index]
-    if ApplicationThresholdFrameHasSourceUnit(frame, source)
-      and SourceHasSpell(
-        source,
-        GetApplicationThresholdFrameSpellID(frame)
-      )
-    then
-      source.child = frame
-      local cooldownID = frame.cooldownID
-      source.childCooldownID = IsUsableSpellID(cooldownID) and cooldownID or nil
-      return frame
-    end
-  end
-
-  local candidate
-  for index = 1, #frames do
-    local frame = frames[index]
-    if ApplicationThresholdFrameMatches(frame, source) then
-      if candidate then
-        return nil
-      end
-      candidate = frame
-    end
-  end
-
-  if candidate then
-    source.child = candidate
-    local cooldownID = candidate.cooldownID
-    source.childCooldownID = IsUsableSpellID(cooldownID) and cooldownID or nil
-  end
-
-  return candidate
-end
-
 local function FeedApplicationThresholds(parts, value)
+  if parts.applicationThresholdMirrorIsVisible == true then
+    local mirror = parts.applicationThresholdMirror
+    if mirror then
+      mirror:SetValue(value, parts.applicationThresholdInterpolation)
+    end
+  end
+
   local overlays = parts.applicationThresholds
   local count = parts.applicationThresholdCount or 0
-
   for index = 1, count do
     overlays[index]:SetValue(value)
   end
 end
-
-local function FeedCDMStackApplications(parts, blizzardChild)
-  -- CDM's cache is authoritative. Restricted application counts pass directly
-  -- to native StatusBar setters without Lua comparison, coercion, or caching.
-  local auraData = blizzardChild.auraDataCached
-  if issecretvalue(auraData) or type(auraData) ~= "table" then
-    return false
-  end
-
-  if issecretvalue(auraData.applications) then
-    if parts.applicationThresholdMirror then
-      parts.applicationThresholdMirror:SetValue(
-        auraData.applications,
-        parts.applicationThresholdInterpolation
-      )
-    end
-    FeedApplicationThresholds(parts, auraData.applications)
-    return true
-  end
-
-  local applications = auraData.applications
-  if type(applications) ~= "number" then
-    return false
-  end
-
-  if parts.applicationThresholdMirror then
-    parts.applicationThresholdMirror:SetValue(
-      applications,
-      parts.applicationThresholdInterpolation
-    )
-  end
-  FeedApplicationThresholds(parts, applications)
-  return true
-end
-
-local function UpdateApplicationThresholdTracks()
-  local tickLive = false
-  local dataRestricted = IsApplicationThresholdDataRestricted()
-
-  applicationThresholdSnapshotGeneration = applicationThresholdSnapshotGeneration + 1
-
-  for parts, source in pairs(applicationThresholdTracks) do
-    if parts.applicationThresholdMirrorIsVisible ~= true then
-      applicationThresholdTracks[parts] = nil
-    else
-      local child = FindApplicationThresholdChild(source)
-      local active
-      if child and not dataRestricted then
-        active = child:IsActive()
-      end
-
-      local applicationsUpdated = child
-        and FeedCDMStackApplications(parts, child)
-        or false
-      if not dataRestricted
-        and applicationsUpdated ~= true
-        and child
-        and not issecretvalue(active)
-        and active ~= true
-      then
-        if parts.applicationThresholdMirror then
-          parts.applicationThresholdMirror:SetValue(0)
-        end
-        FeedApplicationThresholds(parts, 0)
-      end
-
-      if dataRestricted then
-        if applicationsUpdated == true then
-          tickLive = true
-        end
-      elseif issecretvalue(active) then
-        if applicationsUpdated == true then
-          tickLive = true
-        end
-      elseif active == true then
-        tickLive = true
-      end
-    end
-  end
-
-  if not next(applicationThresholdTracks) then
-    if applicationThresholdTickFrame then
-      applicationThresholdTickFrame:Hide()
-    end
-    if applicationThresholdWakeFrame then
-      applicationThresholdWakeFrame:UnregisterAllEvents()
-    end
-    return
-  end
-
-  if tickLive then
-    applicationThresholdIdleTicks = 0
-  elseif applicationThresholdTickFrame and applicationThresholdTickFrame:IsShown() then
-    applicationThresholdIdleTicks = applicationThresholdIdleTicks + 1
-    if applicationThresholdIdleTicks >= 10 then
-      applicationThresholdTickFrame:Hide()
-    end
-  end
-end
-
-local function EnableApplicationThresholdWakeEvents()
-  if applicationThresholdWakeFrame:IsEventRegistered("UNIT_AURA") then
-    return
-  end
-
-  applicationThresholdWakeFrame:RegisterEvent("ADDON_LOADED")
-  applicationThresholdWakeFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
-  applicationThresholdWakeFrame:RegisterEvent("PLAYER_REGEN_DISABLED")
-  applicationThresholdWakeFrame:RegisterEvent("PLAYER_TARGET_CHANGED")
-  applicationThresholdWakeFrame:RegisterUnitEvent("UNIT_AURA", "player", "target")
-end
-
-local function WakeApplicationThresholdTicker()
-  applicationThresholdIdleTicks = 0
-  EnableApplicationThresholdWakeEvents()
-
-  if not applicationThresholdTickFrame then
-    applicationThresholdTickFrame = CreateFrame("Frame")
-    local accumulator = 0
-    applicationThresholdTickFrame:SetScript("OnUpdate", function(_, elapsed)
-      accumulator = accumulator + elapsed
-      if accumulator < 0.05 then
-        return
-      end
-      accumulator = 0
-      UpdateApplicationThresholdTracks()
-    end)
-  end
-
-  applicationThresholdTickFrame:Show()
-end
-
-local function EnsureApplicationThresholdViewerHook(viewerKey)
-  local viewer = _G[viewerKey]
-  local pool = viewer and viewer.itemFramePool
-  if not pool or applicationThresholdViewerHooks[pool] then
-    return
-  end
-
-  applicationThresholdViewerHooks[pool] = true
-  hooksecurefunc(pool, "Acquire", function()
-    WakeApplicationThresholdTicker()
-  end)
-end
-
-applicationThresholdWakeFrame = CreateFrame("Frame")
-applicationThresholdWakeFrame:SetScript("OnEvent", function(_, event, arg1)
-  if event == "ADDON_LOADED" and arg1 ~= "Blizzard_CooldownViewer" then
-    return
-  end
-
-  EnsureApplicationThresholdViewerHook("BuffBarCooldownViewer")
-  EnsureApplicationThresholdViewerHook("BuffIconCooldownViewer")
-
-  if next(applicationThresholdTracks) then
-    WakeApplicationThresholdTicker()
-  end
-end)
 
 local function NormalizeStackColorThreshold(threshold, index)
   if type(threshold) ~= "table" then
@@ -663,63 +265,6 @@ function AuraWidget.ClearApplicationThresholdBar(parts)
   end
 end
 
-function AuraWidget.ConfigureApplicationThresholdSource(
-  parts,
-  spellIDs,
-  cooldownID,
-  viewerKey,
-  unit
-)
-  local spellSet, orderedSpellIDs = BuildApplicationThresholdSpellSet(spellIDs)
-  local source = parts.applicationThresholdSource or {}
-  local resolvedCooldownID = IsUsableSpellID(cooldownID) and cooldownID or nil
-  local resolvedViewerKey = viewerKey or "BuffBarCooldownViewer"
-  local resolvedUnit = unit or "player"
-  local sourceChanged = source.cooldownID ~= resolvedCooldownID
-    or source.viewerKey ~= resolvedViewerKey
-    or source.unit ~= resolvedUnit
-    or #(source.orderedSpellIDs or {}) ~= #orderedSpellIDs
-
-  if not sourceChanged then
-    for index = 1, #orderedSpellIDs do
-      if source.orderedSpellIDs[index] ~= orderedSpellIDs[index] then
-        sourceChanged = true
-        break
-      end
-    end
-  end
-
-  source.spellSet = spellSet
-  source.orderedSpellIDs = orderedSpellIDs
-  source.cooldownID = resolvedCooldownID
-  source.viewerKey = resolvedViewerKey
-  source.unit = resolvedUnit
-  if sourceChanged then
-    source.child = nil
-    source.childCooldownID = nil
-  end
-  parts.applicationThresholdSource = source
-
-  EnsureApplicationThresholdViewerHook(source.viewerKey)
-  if parts.applicationThresholdMirrorIsVisible == true
-  then
-    applicationThresholdTracks[parts] = source
-    WakeApplicationThresholdTicker()
-  end
-end
-
-function AuraWidget.DisableApplicationThresholdSource(parts)
-  applicationThresholdTracks[parts] = nil
-  parts.applicationThresholdSource = nil
-
-  if not next(applicationThresholdTracks) then
-    if applicationThresholdTickFrame then
-      applicationThresholdTickFrame:Hide()
-    end
-    applicationThresholdWakeFrame:UnregisterAllEvents()
-  end
-end
-
 function AuraWidget.ConfigureApplicationThresholds(
   parts,
   thresholds,
@@ -790,34 +335,6 @@ function AuraWidget.ConfigureApplicationThresholds(
   parts.applicationThresholdLayerCount = overlayCount
   parts.applicationThresholdMaximum = maximum
   parts.applicationThresholdsDirty = true
-
-  local source = parts.applicationThresholdSource
-  if source and parts.applicationThresholdMirrorIsVisible == true then
-    applicationThresholdTracks[parts] = source
-    WakeApplicationThresholdTicker()
-  end
-end
-
-function AuraWidget.ConfigureApplicationThresholdBarSource(parts)
-  parts.applicationThresholdBarSourceEnabled = true
-
-  if parts.applicationThresholdBarSource ~= parts.applicationBar then
-    parts.applicationThresholdBarSource = parts.applicationBar
-    hooksecurefunc(parts.applicationBar, "SetValue", function(_, value)
-      if parts.applicationThresholdBarSourceEnabled == true then
-        FeedApplicationThresholds(parts, value)
-      end
-    end)
-  end
-
-  local currentValue = parts.applicationBar:GetValue()
-  if not issecretvalue(currentValue) and currentValue ~= nil then
-    FeedApplicationThresholds(parts, currentValue)
-  end
-end
-
-function AuraWidget.DisableApplicationThresholdBarSource(parts)
-  parts.applicationThresholdBarSourceEnabled = nil
 end
 
 local SLOT_GLOW_PIXEL_TEX = [[Interface\Buttons\WHITE8X8]]
@@ -1288,11 +805,6 @@ function AuraWidget.ConfigureApplicationBar(parts, maxApplications, interpolatio
     and parts.applicationThresholdsDirty ~= true
   then
     parts.applicationBar:Show()
-    local source = parts.applicationThresholdSource
-    if source and parts.applicationThresholdMirrorIsVisible == true then
-      applicationThresholdTracks[parts] = source
-      WakeApplicationThresholdTicker()
-    end
     return
   end
 
@@ -1308,11 +820,6 @@ function AuraWidget.ConfigureApplicationBar(parts, maxApplications, interpolatio
     maxApplications = maxApplications,
     interpolation = interpolation,
   })
-  local source = parts.applicationThresholdSource
-  if source and parts.applicationThresholdMirrorIsVisible == true then
-    applicationThresholdTracks[parts] = source
-    WakeApplicationThresholdTicker()
-  end
   parts.applicationBar:Show()
 end
 
@@ -1330,17 +837,9 @@ function AuraWidget.DisableApplicationBar(parts)
   parts.applicationBar:Hide()
   parts.applicationThresholdCount = 0
   parts.applicationThresholdLayerCount = 0
-  applicationThresholdTracks[parts] = nil
   if parts.applicationThresholdMirror then
     parts.applicationThresholdMirror:SetValue(0)
     parts.applicationThresholdMirror:Hide()
-  end
-
-  if not next(applicationThresholdTracks) then
-    if applicationThresholdTickFrame then
-      applicationThresholdTickFrame:Hide()
-    end
-    applicationThresholdWakeFrame:UnregisterAllEvents()
   end
 
   local segments = parts.applicationThresholds
@@ -1520,14 +1019,6 @@ AuraWidget.ConfigureApplicationThresholds = P:Def(
   "AuraWidget.ConfigureApplicationThresholds",
   AuraWidget.ConfigureApplicationThresholds
 )
-AuraWidget.ConfigureApplicationThresholdBarSource = P:Def(
-  "AuraWidget.ConfigureApplicationThresholdBarSource",
-  AuraWidget.ConfigureApplicationThresholdBarSource
-)
-AuraWidget.DisableApplicationThresholdBarSource = P:Def(
-  "AuraWidget.DisableApplicationThresholdBarSource",
-  AuraWidget.DisableApplicationThresholdBarSource
-)
 AuraWidget.CreateSlotGlow = P:Def("AuraWidget.CreateSlotGlow", AuraWidget.CreateSlotGlow)
 AuraWidget.ConfigureSlotGlow = P:Def("AuraWidget.ConfigureSlotGlow", AuraWidget.ConfigureSlotGlow)
 AuraWidget.SetApplicationThresholdHost = P:Def(
@@ -1541,14 +1032,6 @@ AuraWidget.SetApplicationThresholdBar = P:Def(
 AuraWidget.ClearApplicationThresholdBar = P:Def(
   "AuraWidget.ClearApplicationThresholdBar",
   AuraWidget.ClearApplicationThresholdBar
-)
-AuraWidget.ConfigureApplicationThresholdSource = P:Def(
-  "AuraWidget.ConfigureApplicationThresholdSource",
-  AuraWidget.ConfigureApplicationThresholdSource
-)
-AuraWidget.DisableApplicationThresholdSource = P:Def(
-  "AuraWidget.DisableApplicationThresholdSource",
-  AuraWidget.DisableApplicationThresholdSource
 )
 AuraWidget.ConfigureApplicationBar = P:Def(
   "AuraWidget.ConfigureApplicationBar",

@@ -84,6 +84,7 @@ function Addon:Slash_PUI(input)
 end
 
 SLASH_PCM1 = "/cd"
+SLASH_PCM2 = "/cdm"
 function SlashCmdList.PCM()
   if not InCombatLockdown() then
     CooldownViewerSettings:TogglePanel()
@@ -1269,11 +1270,6 @@ end
 
 Addon:RegisterEvent("PLAYER_REGEN_ENABLED", function()
   Addon.FrameScale:ApplyPendingUIScale()
-
-  local optionsWindow = Addon._OptionsWindow
-  if not (optionsWindow and optionsWindow:IsShown()) then
-    ns.Modules.CooldownManager:FlushPendingEditModeChanges()
-  end
 
   local ub = Addon._puiUpdateBus
   local deferredSoft = ub and ub.deferredSoft

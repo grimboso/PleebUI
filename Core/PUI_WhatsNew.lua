@@ -31,6 +31,11 @@ local CURRENT_RELEASE = {
       location = "PleebUI > Combat frames > Cooldown Manager > Essential / Utility / Buff Icons > Icon overrides",
     },
     {
+      title = "Flexible cooldown groups",
+      description = "Cooldowns and tracked buffs now start in four familiar groups but can be reordered, moved between groups, or dropped into empty space as standalone groups while PleebUI Edit Mode is open.",
+      location = "PleebUI Edit Mode (/pe) / PleebUI > Pleeb Cooldown Manager",
+    },
+    {
       title = "Smarter Cooldown Manager keybinds",
       description = "Cooldown Manager keybind text now resolves live Action Bar bindings for spells, items, equipped trinkets, and supported macros, with compact key labels and event-driven updates when bindings or Action Bar assignments change.",
       location = "PleebUI > Combat frames > Cooldown Manager > Texts and Fonts / Consumable Tracker > Show keybinds",

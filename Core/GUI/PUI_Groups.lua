@@ -96,6 +96,109 @@ local function _PUI_TreeGroupUsesCustomCards(widget)
   return false
 end
 
+local function _PUI_IsPCMManagerTree(widget)
+  local hasOverview = false
+  local hasDefaultGroup = false
+  for index = 1, #(widget.lines or {}) do
+    local value = widget.lines[index].value
+    if value == "overview" then
+      hasOverview = true
+    elseif value == "essential"
+      or value == "utility"
+      or value == "buff-icons"
+      or value == "buff-bars"
+    then
+      hasDefaultGroup = true
+    end
+  end
+  return hasOverview and hasDefaultGroup
+end
+
+local PCM_TREE_ROW_HEIGHT = 54
+local PCM_TREE_ROW_GAP = 4
+local PCM_TREE_TOP_INSET = 10
+
+local function _PUI_GetPCMTreeVisibleRows(widget)
+  local availableHeight = math.max(
+    1,
+    (tonumber(widget.treeframe:GetHeight()) or 0) - (PCM_TREE_TOP_INSET * 2)
+  )
+  return math.max(
+    1,
+    math.floor(
+      (availableHeight + PCM_TREE_ROW_GAP)
+      / (PCM_TREE_ROW_HEIGHT + PCM_TREE_ROW_GAP)
+    )
+  )
+end
+
+local function _PUI_RefreshPCMManagerTree(widget, originalRefreshTree, ...)
+  local status = widget.status or widget.localstatus
+  local previousLineCount = #(widget.lines or {})
+  local nativeVisibleRows = math.max(
+    1,
+    math.floor(((tonumber(widget.treeframe:GetHeight()) or 0) - 20) / 18)
+  )
+  local pcmVisibleRows = _PUI_GetPCMTreeVisibleRows(widget)
+  local desiredScroll = tonumber(status.__puiPCMScrollValue)
+    or tonumber(status.scrollvalue)
+    or 0
+
+  desiredScroll = math.max(
+    0,
+    math.min(desiredScroll, math.max(0, previousLineCount - pcmVisibleRows))
+  )
+
+  local nativeScroll = math.min(
+    desiredScroll,
+    math.max(0, previousLineCount - nativeVisibleRows)
+  )
+  status.scrollvalue = nativeScroll
+  originalRefreshTree(widget, ...)
+
+  local lineCount = #(widget.lines or {})
+  pcmVisibleRows = _PUI_GetPCMTreeVisibleRows(widget)
+  desiredScroll = math.max(
+    0,
+    math.min(desiredScroll, math.max(0, lineCount - pcmVisibleRows))
+  )
+
+  local correctedNativeScroll = math.min(
+    desiredScroll,
+    math.max(0, lineCount - nativeVisibleRows)
+  )
+  if correctedNativeScroll ~= nativeScroll then
+    status.scrollvalue = correctedNativeScroll
+    originalRefreshTree(widget, ...)
+  end
+
+  local buttonOffset = desiredScroll - correctedNativeScroll
+  for index = 1, #widget.buttons do
+    local button = widget.buttons[index]
+    local nativeVisible = button:IsShown()
+    local visible = nativeVisible
+      and index > buttonOffset
+      and index <= buttonOffset + pcmVisibleRows
+      and button.treeline ~= nil
+    button:SetShown(visible)
+  end
+
+  status.scrollvalue = desiredScroll
+  status.__puiPCMScrollValue = desiredScroll
+
+  widget.noupdate = true
+  if lineCount > pcmVisibleRows then
+    widget:ShowScroll(true)
+    widget.scrollbar:SetMinMaxValues(0, lineCount - pcmVisibleRows)
+    widget.scrollbar:SetValue(desiredScroll)
+  else
+    widget:ShowScroll(false)
+    widget.scrollbar:SetMinMaxValues(0, 0)
+    widget.scrollbar:SetValue(0)
+  end
+  widget.noupdate = nil
+end
+
 local function _PUI_SkinGenericTreeButton(button, isSelected)
   local colors = Theme.GetColors()
 
@@ -360,6 +463,55 @@ local function _PUI_SkinPCMTrackerTreeButton(button, isSelected, data)
 end
 
 function WidgetSkins.TreeButton(button, isSelected)
+  if button.__puiCompactPCMTree == true then
+    button.__puiTreeCardLayoutKey = nil
+    _PUI_HidePCMTrackerTreeCard(button)
+    button.text:Show()
+    _PUI_SkinGenericTreeButton(button, isSelected)
+    button:SetHeight(PCM_TREE_ROW_HEIGHT)
+
+    button.text:ClearAllPoints()
+    button.text:SetPoint("LEFT", button, "LEFT", 12 * (button.level or 1), 0)
+    button.text:SetPoint("RIGHT", button.toggle, "LEFT", -8, 0)
+    button.text:SetHeight(20)
+    Theme.ApplyFont(button.text, "nav")
+
+    local toggle = button.toggle
+    toggle:ClearAllPoints()
+    toggle:SetPoint("RIGHT", button, "RIGHT", -8, 0)
+    toggle:SetSize(26, 26)
+    toggle:SetNormalTexture("")
+    toggle:SetPushedTexture("")
+    toggle:SetHighlightTexture("")
+
+    Theme.SetSquareBackdrop(toggle, {
+      bg = { 0, 0, 0, 0 },
+      border = Theme.GetColors().border,
+    }, math.max(Theme.GetEdgeSize(), 2))
+
+    local glyph = toggle.__puiTreeToggleGlyph
+    if not glyph then
+      glyph = toggle:CreateFontString(nil, "OVERLAY")
+      Theme.MarkCreatedWidgetChrome(glyph)
+      toggle.__puiTreeToggleGlyph = glyph
+    end
+
+    Theme.ApplyFont(glyph, "body")
+    glyph:ClearAllPoints()
+    glyph:SetPoint("CENTER", toggle, "CENTER", 0, 0)
+    glyph:SetTextColor(
+      Theme.GetColors().accent[1],
+      Theme.GetColors().accent[2],
+      Theme.GetColors().accent[3],
+      Theme.GetColors().accent[4]
+    )
+
+    local groups = (button.obj.status or button.obj.localstatus).groups
+    glyph:SetText(groups[button.uniquevalue] and "-" or "+")
+    glyph:SetShown(toggle:IsShown())
+    return
+  end
+
   local trackerData = _PUI_GetPCMTrackerTreeData(button)
   if button.__puiUseTreeCards == true and trackerData then
     button.__puiTreeCardLayoutKey = nil
@@ -626,14 +778,16 @@ local function _PUI_StyleTreeButtons(widget)
   local colors = Theme.GetColors()
   local accent = colors.accent
   local metrics = Theme.GetControlMetrics()
-  local buttonGap = metrics.treeButtonGap
-  local topInset = metrics.treeGroupTopInset
+  local pcmManagerTree = _PUI_IsPCMManagerTree(widget)
+  local buttonGap = pcmManagerTree and PCM_TREE_ROW_GAP or metrics.treeButtonGap
+  local topInset = pcmManagerTree and PCM_TREE_TOP_INSET or metrics.treeGroupTopInset
   local useCustomCards = _PUI_TreeGroupUsesCustomCards(widget)
   local buttons = widget.buttons
   local prev
   local treeWidth = math.floor((tonumber(widget.treeframe:GetWidth()) or 0) + 0.5)
   local treeLayoutKey = table.concat({
     tostring(useCustomCards == true),
+    tostring(pcmManagerTree == true),
     tostring(widget.showscroll == true),
     tostring(buttonGap),
     tostring(topInset),
@@ -651,7 +805,7 @@ local function _PUI_StyleTreeButtons(widget)
       button.__puiTreeButtonLayoutKey = nil
     end
 
-    if button:IsShown() and useCustomCards then
+    if button:IsShown() and (useCustomCards or pcmManagerTree) then
       local buttonLayoutKey = treeLayoutKey .. "\030" .. tostring(i) .. "\030" .. tostring(prev or "root")
       if button.__puiTreeButtonLayoutKey ~= buttonLayoutKey then
         button.__puiTreeButtonLayoutKey = buttonLayoutKey
@@ -675,6 +829,7 @@ local function _PUI_StyleTreeButtons(widget)
     end
 
     button.__puiUseTreeCards = useCustomCards
+    button.__puiCompactPCMTree = pcmManagerTree
     WidgetSkins.TreeButton(button, button.selected == true)
 
     local normal = button.toggle:GetNormalTexture()
@@ -702,13 +857,28 @@ function WidgetSkins.TreeGroup(widget)
 
   widget:SetCallback("OnClick", _PUI_HandleTreeGroupClick)
 
+  local pcmManagerTree = _PUI_IsPCMManagerTree(widget)
+  widget.__puiPCMManagerTree = pcmManagerTree
+  if not pcmManagerTree then
+    widget.__puiPCMTreeRefreshPrimed = nil
+    local status = widget.status or widget.localstatus
+    status.__puiPCMScrollValue = nil
+  end
+
   if not widget.__puiTreeRefreshHooked then
     widget.__puiTreeRefreshHooked = true
-    hooksecurefunc(widget, "RefreshTree", function(self)
+    local originalRefreshTree = widget.RefreshTree
+    widget.RefreshTree = function(self, ...)
+      if self.__puiPCMManagerTree == true then
+        _PUI_RefreshPCMManagerTree(self, originalRefreshTree, ...)
+      else
+        originalRefreshTree(self, ...)
+      end
+
       if self.__puiAceGUIOwnedByPleebUI == true then
         WidgetSkins.TreeGroup(self)
       end
-    end)
+    end
   end
 
   local treeframe = widget.treeframe
@@ -716,6 +886,15 @@ function WidgetSkins.TreeGroup(widget)
   local metrics = Theme.GetControlMetrics()
   local status = widget.status or widget.localstatus
   local treeWidth = status.treewidth or metrics.treeGroupWidth
+
+  if pcmManagerTree then
+    local minimumPCMTreeWidth = math.floor((metrics.treeGroupWidth * 1.5) + 0.5)
+    if treeWidth < minimumPCMTreeWidth then
+      treeWidth = minimumPCMTreeWidth
+      status.treewidth = treeWidth
+      widget:SetTreeWidth(treeWidth, status.treesizable)
+    end
+  end
 
   border:SetBackdrop(nil)
   border:SetBackdropColor(0, 0, 0, 0)
@@ -738,4 +917,9 @@ function WidgetSkins.TreeGroup(widget)
   WidgetSkins.Scrollbar(widget.scrollbar)
   widget.__puiTreeChromeHooked = true
   _PUI_StyleTreeButtons(widget)
+
+  if pcmManagerTree and widget.__puiPCMTreeRefreshPrimed ~= true then
+    widget.__puiPCMTreeRefreshPrimed = true
+    widget:RefreshTree()
+  end
 end

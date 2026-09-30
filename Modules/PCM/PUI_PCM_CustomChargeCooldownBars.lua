@@ -199,7 +199,7 @@ local function _CSB_RegisterMover(barData, cfg)
 
   local moverOpts = {
     label = label,
-    optionsString = "CooldownManager,custom_bars,chargeSpell:" .. tostring(barData.id),
+    optionsString = "CooldownManager,customTrackers,chargeSpell:" .. tostring(barData.id),
     useOverlayDrag = true,
     liveFrame = function()
       return barData.frame
@@ -709,7 +709,7 @@ _CSB_RebuildAll = function()
         CustomIcons:Configure("charge:" .. tostring(barData.id), cfg, {
           kind = "charge",
           label = Cooldowns:GetCustomBarDisplayName(cfg) .. " icon",
-          optionsString = "CooldownManager,custom_bars,chargeSpell:" .. tostring(barData.id),
+          optionsString = "CooldownManager,customTrackers,chargeSpell:" .. tostring(barData.id),
           moverKey = "PCM_CustomChargeIcon_" .. tostring(barData.id),
           defaultY = 60 - ((i - 1) * 50),
           spellID = tonumber(cfg.trackedSpellID),

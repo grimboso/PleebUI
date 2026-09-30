@@ -54,26 +54,36 @@ local FALLBACK_BAR_TEXTURE = Theme.GetBarTexture()
 local VIEWERS = {
   {
     key = "EssentialCooldownViewer",
-    tab = "cooldowns_essential",
+    tab = "essential",
     title = "Essential",
     accent = { 0.95, 0.68, 0.20, 1 },
   },
   {
     key = "UtilityCooldownViewer",
-    tab = "cooldowns_utility",
+    tab = "utility",
     title = "Utility",
     accent = { 0.28, 0.67, 0.95, 1 },
   },
 }
 
 local PREVIEW_PANEL_BY_TAB = {
-  cooldowns_essential = "essential",
-  cooldowns_utility = "utility",
+  overview = "essential",
+  essential = "essential",
+  utility = "utility",
   consumables = "consumables",
-  buff_icons = "buffs",
-  buff_bars = "buffBars",
-  custom_bars = "custom",
+  ["buff-icons"] = "buffs",
+  ["buff-bars"] = "buffBars",
+  customTrackers = "custom",
 }
+
+local function PCMPreview_GetEntryPath(entry, fallbackGroupID)
+  local record = entry and ns.PCMGroupManager:GetActiveRecord(entry.catalogKey) or nil
+  return {
+    "CooldownManager",
+    record and record.__puiPCMGroupID or fallbackGroupID,
+    entry.catalogKey,
+  }
+end
 
 local function PCMPreview_Clamp(value, minimum, maximum)
   value = tonumber(value) or minimum
@@ -534,6 +544,8 @@ local function PCMPreview_GetViewerStyle(root, viewerKey, defaultWidth)
   local growthMode = growth[viewerKey]
   local rowGrowthMode = rowGrowth[viewerKey] == "UP" and "UP" or "DOWN"
   local widthMode = widthModes[viewerKey] == "icon" and "icon" or "fixed"
+  local ownedViewer = viewerKey == "EssentialCooldownViewer"
+    or viewerKey == "UtilityCooldownViewer"
 
   if viewerKey == "BuffIconCooldownViewer" then
     widthMode = "icon"
@@ -544,13 +556,25 @@ local function PCMPreview_GetViewerStyle(root, viewerKey, defaultWidth)
   end
 
   return {
-    iconSize = PCMPreview_Clamp(sizes[viewerKey] or style.iconSize or 36, 12, 86),
-    spacing = PCMPreview_Clamp(spacings[viewerKey] or style.iconSpacing or 2, 0, 8),
+    iconSize = PCMPreview_Clamp(
+      sizes[viewerKey] or style.iconSize or 36,
+      ownedViewer and 8 or 12,
+      ownedViewer and 96 or 86
+    ),
+    spacing = PCMPreview_Clamp(
+      spacings[viewerKey] or style.iconSpacing or 2,
+      ownedViewer and -20 or 0,
+      ownedViewer and 40 or 8
+    ),
     columns = PCMPreview_Clamp(columnCount, 0, 40),
     growth = growthMode,
     rowGrowth = rowGrowthMode,
     widthMode = widthMode,
-    fixedWidth = PCMPreview_Clamp(fixedWidths[viewerKey] or defaultWidth, 120, 1000),
+    fixedWidth = PCMPreview_Clamp(
+      fixedWidths[viewerKey] or defaultWidth,
+      ownedViewer and 1 or 120,
+      1000
+    ),
   }
 end
 
@@ -562,7 +586,7 @@ local function PCMPreview_GetViewerBorder(root, viewerKey)
 
   return {
     enabled = config.enabled ~= false,
-    thickness = PCMPreview_Clamp(config.thickness or 2, 0, 6),
+    thickness = PCMPreview_Clamp(config.thickness or 2, 0, 8),
     color = config.color or { 0.20, 0.20, 0.24, 1 },
   }
 end
@@ -587,8 +611,10 @@ local function PCMPreview_GetViewerSwipe(root, viewerKey)
   local config = type(swipes[viewerKey]) == "table" and swipes[viewerKey] or {}
 
   return {
+    gcd = config.gcd ~= false,
     cooldown = config.cooldown ~= false,
     duration = config.duration ~= false,
+    forceCooldownSwipe = config.forceCooldownSwipe == true,
     drawEdge = config.drawEdge ~= false,
     color = config.swipeColor or { 0, 0, 0, 0.8 },
   }
@@ -621,6 +647,9 @@ local function PCMPreview_GetEffectiveIconSwipe(entry, viewerSwipe)
   if override and override.drawEdge ~= nil then
     drawEdge = override.drawEdge
   end
+  if entry.charges == true and override and override.rechargeEdge ~= nil then
+    drawEdge = override.rechargeEdge == true
+  end
 
   if override and override.show ~= nil then
     showCooldown = override.show == true
@@ -630,13 +659,39 @@ local function PCMPreview_GetEffectiveIconSwipe(entry, viewerSwipe)
   return {
     showCooldown = showCooldown,
     showDuration = showDuration,
+    source = override and override.source or nil,
     color = override and override.color or viewerSwipe.color,
     drawEdge = drawEdge,
     reverse = override and override.reverse == true,
   }
 end
 
-local function PCMPreview_LayoutViewerIcons(panel, icons, config)
+local PREVIEW_ABILITY_CAPABILITIES = {
+  "COOLDOWN",
+  "CHARGE",
+  "AURA",
+  "TOTEM",
+  "EQUIPMENT",
+  "ITEM",
+}
+
+local function PCMPreview_GetAbilityCapability(entry, index)
+  if entry.entryKind == "equipmentSlot" then
+    return "EQUIPMENT"
+  end
+  if entry.entryKind == "spellCategory" then
+    return "ITEM"
+  end
+  if entry.charges == true then
+    return "CHARGE"
+  end
+  if entry.hasAura == true then
+    return index % 2 == 0 and "TOTEM" or "AURA"
+  end
+  return PREVIEW_ABILITY_CAPABILITIES[((index - 1) % #PREVIEW_ABILITY_CAPABILITIES) + 1]
+end
+
+local function PCMPreview_LayoutViewerIcons(panel, icons, config, viewerKey, borderThickness)
   local content = panel.__puiPCMPreviewContent
   local availableWidth = math_max(1, content:GetWidth())
   local availableHeight = math_max(1, content:GetHeight())
@@ -646,6 +701,44 @@ local function PCMPreview_LayoutViewerIcons(panel, icons, config)
   )
 
   if count <= 0 then
+    return
+  end
+
+  if viewerKey == "EssentialCooldownViewer" or viewerKey == "UtilityCooldownViewer" then
+    local planEntries = {}
+    for index = 1, count do
+      planEntries[index] = { cooldownID = index }
+    end
+
+    local plan = ns.PCMAbilityLayout:Plan(viewerKey, planEntries, {
+      widthMode = config.widthMode,
+      fixedWidth = config.fixedWidth,
+      iconSize = config.iconSize,
+      spacing = config.spacing,
+      firstRowLimit = config.columns,
+      rowGrowth = config.rowGrowth,
+      borderThickness = borderThickness or 0,
+    })
+    if not plan then
+      return
+    end
+
+    local displayScale = PCMPreview_GetDisplayScale(panel)
+    for index = 1, count do
+      local icon = icons[index]
+      local item = plan.items[index]
+      icon.frame:ClearAllPoints()
+      icon.frame:SetPoint(
+        "CENTER",
+        content,
+        "CENTER",
+        Round(item.x * displayScale),
+        Round(item.y * displayScale)
+      )
+      local size = math_max(4, Round(item.size * displayScale))
+      icon.frame:SetSize(size, size)
+      icon.frame:Show()
+    end
     return
   end
 
@@ -783,7 +876,13 @@ local function PCMPreview_ConfigureViewerPanel(box, panel, definition, root)
     math_max(1, viewerBorder.thickness * displayScale)
   )
 
-  PCMPreview_LayoutViewerIcons(panel, panel.__puiPCMPreviewIcons, style)
+  PCMPreview_LayoutViewerIcons(
+    panel,
+    panel.__puiPCMPreviewIcons,
+    style,
+    viewerKey,
+    viewerBorder.enabled and viewerBorder.thickness or 0
+  )
 
   for index = 1, #entries do
     local entry = entries[index]
@@ -819,13 +918,31 @@ local function PCMPreview_ConfigureViewerPanel(box, panel, definition, root)
       { 0, 0, 0, 0.8 }
     )
 
+    local capability = PCMPreview_GetAbilityCapability(entry, index)
+    local useAuraLayer = capability == "AURA" or capability == "TOTEM"
+    if effectiveSwipe.source == "COOLDOWN" then
+      useAuraLayer = false
+    elseif effectiveSwipe.source == nil
+      and (swipe.forceCooldownSwipe == true
+        or (swipe.duration == false and counts.duration == false))
+    then
+      useAuraLayer = false
+    end
     local previewState = selectedEntry == entry and IconSettings:GetPreviewState(viewerKey) or nil
+    if previewState == nil then
+      previewState = useAuraLayer
+        and "AURA"
+        or "COOLDOWN"
+    end
     local customTexture = appearance and appearance.texture or nil
     icon.background:SetVertexColor(bgR, bgG, bgB, bgA)
     icon.icon:SetTexture(customTexture or entry.texture)
     icon.icon:SetVertexColor(1, 1, 1, 1)
     icon.__puiPCMPreviewState = previewState
     icon.__puiPCMPreviewStateViewerKey = selectedEntry == entry and viewerKey or nil
+    icon.__puiPCMPreviewAbilityCapability = capability
+    icon.__puiPCMPreviewAuraMode = useAuraLayer
+    icon.__puiPCMPreviewAutoAura = false
     icon.__puiPCMPreviewReadySaturation = appearance and appearance.readySaturation or nil
     icon.__puiPCMPreviewCooldownSaturation = appearance and appearance.cooldownSaturation or nil
     icon.cooldown:SetDrawEdge(effectiveSwipe.drawEdge)
@@ -882,22 +999,26 @@ local function PCMPreview_ConfigureViewerPanel(box, panel, definition, root)
 
     local showCooldownText = cooldownShown == nil and counts.cooldown or cooldownShown
     local showDurationText = cooldownShown == nil and counts.duration or cooldownShown
+    if capability == "CHARGE"
+      and record
+      and record.cooldown
+      and record.cooldown.rechargeShow ~= nil
+    then
+      showCooldownText = record.cooldown.rechargeShow == true
+    end
     local showChargeText = chargeShown == nil and counts.charge or chargeShown
     local showKeybindText = keybindShown == nil and counts.keybind or keybindShown
     icon.__puiPCMPreviewCooldownTextEnabled = showCooldownText
     icon.__puiPCMPreviewDurationTextEnabled = showDurationText
     icon.cooldownText:SetShown(showCooldownText)
-    icon.chargeText:SetShown(showChargeText and index % 2 == 0)
+    icon.chargeText:SetShown(
+      showChargeText
+        and (capability == "CHARGE" or capability == "AURA" or capability == "TOTEM")
+    )
     icon.keybindText:SetShown(showKeybindText)
     icon.keybindText:SetText(index <= 4 and tostring(index) or "S" .. tostring(index - 4))
 
-    local optionKey = IconSettings:GetOptionKey(entry)
-    local iconOverridePath = optionKey and {
-      "CooldownManager",
-      definition.tab,
-      "iconOverrides",
-      optionKey,
-    } or tabPath
+    local iconOverridePath = PCMPreview_GetEntryPath(entry, definition.tab)
 
     local function SelectIcon()
       IconSettings:Select(viewerKey, entry.settingsKey)
@@ -936,7 +1057,7 @@ end
 
 local function PCMPreview_ConfigureBuffIconPanel(box, panel, root, pcmRoot)
   local viewerKey = "BuffIconCooldownViewer"
-  local path = { "CooldownManager", "buff_icons" }
+  local path = { "CooldownManager", "buff-icons" }
   local style = PCMPreview_GetViewerStyle(root, viewerKey, 300)
   local viewerBorder = PCMPreview_GetViewerBorder(pcmRoot, viewerKey)
   local countFont = PCMPreview_GetFontConfig(root, viewerKey, "cooldown")
@@ -1037,13 +1158,7 @@ local function PCMPreview_ConfigureBuffIconPanel(box, panel, root, pcmRoot)
       2 * displayScale
     )
 
-    local optionKey = IconSettings:GetOptionKey(entry)
-    local iconOverridePath = optionKey and {
-      "CooldownManager",
-      "buff_icons",
-      "iconOverrides",
-      optionKey,
-    } or path
+    local iconOverridePath = PCMPreview_GetEntryPath(entry, "buff-icons")
 
     local function SelectIcon()
       IconSettings:Select(viewerKey, entry.settingsKey)
@@ -1387,7 +1502,7 @@ end
 local function PCMPreview_GetCustomPath(entry)
   return {
     "CooldownManager",
-    "custom_bars",
+    "customTrackers",
     entry.targetKey,
   }
 end
@@ -3090,11 +3205,11 @@ local function PCMPreview_UpdateIcon(icon, phase)
   local autoAuraActive = previewState == nil
     and icon.__puiPCMPreviewAutoAura == true
     and auraElapsed >= 8
-  local cooldownActive = previewState == "COOLDOWN"
-    or (previewState == nil and autoCooldownActive and not autoAuraActive)
   local auraActive = previewState == "AURA"
-    or icon.__puiPCMPreviewAuraMode == true
-    or autoAuraActive
+    or (previewState == nil
+      and (icon.__puiPCMPreviewAuraMode == true or autoAuraActive))
+  local cooldownActive = previewState == "COOLDOWN"
+    or (previewState == nil and autoCooldownActive and not auraActive)
 
   if icon.__puiPCMPreviewCooldownSwipeEnabled ~= nil then
     local showSwipe = auraActive and icon.__puiPCMPreviewDurationSwipeEnabled
@@ -3449,13 +3564,29 @@ function PCMPreview.Build(addon, frame, shell, path)
   local activeTab = type(path) == "table"
     and path[1] == "CooldownManager"
     and path[2]
-    or "cooldowns_essential"
+    or "overview"
   local previewState = shell:GetPreviewState()
   if type(previewState.pcmZooms) ~= "table" then
     previewState.pcmZooms = {}
   end
 
-  box.__puiPCMPreviewPanelKey = PREVIEW_PANEL_BY_TAB[activeTab] or "essential"
+  local panelKey = PREVIEW_PANEL_BY_TAB[activeTab]
+  if not panelKey then
+    local groups = ns.PCMGroupManager:GetGroups()
+    local group = groups.byID[activeTab]
+    if group then
+      if group.defaultViewerKey == "UtilityCooldownViewer" then
+        panelKey = "utility"
+      elseif group.defaultViewerKey == "BuffIconCooldownViewer" then
+        panelKey = "buffs"
+      elseif group.kind == "BAR" then
+        panelKey = "buffBars"
+      else
+        panelKey = "essential"
+      end
+    end
+  end
+  box.__puiPCMPreviewPanelKey = panelKey or "essential"
   box.__puiPCMPreviewState = previewState
 
   for key, panel in pairs(box.__puiPCMPreviewPanels) do

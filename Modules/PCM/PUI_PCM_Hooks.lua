@@ -29,30 +29,9 @@ local function GetFrameData(frame)
   return data
 end
 
-local function PeekFrameData(frame)
-  return frame and FrameData[frame] or nil
-end
-
 Hooks.GetFrameData = GetFrameData
-Hooks.PeekFrameData = PeekFrameData
-
-function Hooks.GetItemViewerKey(itemFrame, fallback)
-  local data = itemFrame and FrameData[itemFrame]
-  local viewerKey = data and data.viewerKey
-  if viewerKey ~= nil then
-    return viewerKey
-  end
-  return fallback
-end
-
-function Hooks.SetItemViewerKey(itemFrame, viewerKey)
-  local data = GetFrameData(itemFrame)
-  data.viewerKey = viewerKey
-  data.isViewerIconButton = viewerKey == "EssentialCooldownViewer" or viewerKey == "UtilityCooldownViewer"
-end
 
 local _PCM_HooksEnabled
-local _PCM_DataHooksShouldRun
 
 local _pcmHooksEnabledCache = nil
 local _pcmHooksEnabledDirty = true
@@ -139,59 +118,6 @@ _PCM_HooksEnabled = function()
   return _pcmHooksEnabledCache == true
 end
 
-_PCM_DataHooksShouldRun = function()
-  if _pcmHooksEnabledDirty or _pcmHooksEnabledCache == nil then
-    _PCM_RefreshHooksRuntimeState()
-  end
-
-  return _pcmHooksRuntimeActive == true
-    and not ns.PCMRuntime:IsPresentationSuspended()
-    and not ns.PCMRuntime:IsDataRestricted()
-end
-
-local _bbIconState = Hooks._bbIconState
-if not _bbIconState then
-  _bbIconState = setmetatable({}, { __mode = "k" })
-  Hooks._bbIconState = _bbIconState
-end
-
-function Hooks.SetBBIconHidden(icon, hidden, wasShown)
-  if not icon then
-    return
-  end
-
-  local st = _bbIconState[icon]
-  if not st then
-    st = {}
-    _bbIconState[icon] = st
-  end
-
-  st.hidden = hidden and true or nil
-  if wasShown ~= nil then
-    st.wasShown = wasShown and true or false
-  end
-
-  local fd = GetFrameData(icon)
-  if fd ~= EmptyFD then
-    fd.__puiBBHidden = st.hidden
-    if wasShown ~= nil then
-      fd.__puiBBWasShown = st.wasShown
-    end
-  end
-end
-
-function Hooks.GetBBIconHidden(icon)
-  if not icon then
-    return nil, nil
-  end
-
-  local st = _bbIconState[icon]
-  if not st then
-    return nil, nil
-  end
-  return st.hidden, st.wasShown
-end
-
 function Hooks.HookEditMode(module)
   if not module then
     return
@@ -243,126 +169,7 @@ function Hooks.HookEditMode(module)
   module.__puiPCM_LastBlizzardEditModeState = initialActive
 end
 
--- Proc glow hooks (ActionButtonSpellAlertManager)
-
-local glowHooked = false
-
-function Hooks.HookGlowManager(isEnabled, startProcGlow, stopProcGlow)
-  if glowHooked then
-    return
-  end
-
-  local mgr = ActionButtonSpellAlertManager
-  if not mgr then
-    return
-  end
-
-  glowHooked = true
-
-  local pendingIcons = {}
-  local queuedIcons = setmetatable({}, { __mode = "k" })
-  local desiredState = setmetatable({}, { __mode = "k" })
-  local pendingCount = 0
-  local flushFrame = CreateFrame("Frame")
-  flushFrame:Hide()
-
-  local function FlushPendingGlows(frame)
-    frame:Hide()
-
-    if not _PCM_DataHooksShouldRun() then
-      for i = 1, pendingCount do
-        local btn = pendingIcons[i]
-        pendingIcons[i] = nil
-        desiredState[btn] = nil
-        queuedIcons[btn] = nil
-
-        local st = btn and FrameData[btn] or nil
-        if st then
-          st.procGlowPending = nil
-        end
-      end
-
-      pendingCount = 0
-      return
-    end
-
-    local enabled = isEnabled() == true
-
-    for i = 1, pendingCount do
-      local btn = pendingIcons[i]
-      pendingIcons[i] = nil
-
-      if btn then
-        local wanted = desiredState[btn]
-        desiredState[btn] = nil
-        queuedIcons[btn] = nil
-
-        local st = FrameData[btn]
-        if st then
-          st.procGlowPending = nil
-        end
-
-        if st and st.isViewerIconButton == true then
-          if wanted == true then
-            if enabled and btn:IsShown() then
-              startProcGlow(btn)
-            end
-          elseif wanted == false and (st.procGlowActive or st.procGlowWanted) then
-            stopProcGlow(btn)
-          end
-        end
-      end
-    end
-
-    pendingCount = 0
-  end
-
-  flushFrame:SetScript("OnUpdate", FlushPendingGlows)
-
-  local function QueueGlowState(btn, wanted)
-    local st = btn and FrameData[btn]
-    if not st or st.isViewerIconButton ~= true or not _PCM_DataHooksShouldRun() then
-      return
-    end
-
-    if wanted == true then
-      if isEnabled() ~= true then
-        return
-      end
-      st.procGlowPending = true
-    elseif not (st.procGlowActive or st.procGlowPending or st.procGlowWanted) then
-      return
-    else
-      st.procGlowPending = nil
-    end
-
-    desiredState[btn] = wanted == true
-    if queuedIcons[btn] ~= true then
-      queuedIcons[btn] = true
-      pendingCount = pendingCount + 1
-      pendingIcons[pendingCount] = btn
-    end
-
-    flushFrame:Show()
-  end
-
-  if mgr.ShowAlert then
-    hooksecurefunc(mgr, "ShowAlert", function(_, btn)
-      QueueGlowState(btn, true)
-    end)
-  end
-
-  if mgr.HideAlert then
-    hooksecurefunc(mgr, "HideAlert", function(_, btn)
-      QueueGlowState(btn, false)
-    end)
-  end
-end
-
 GetFrameData = P:Def("GetFrameData", GetFrameData)
-Hooks.PeekFrameData = P:Def("Hooks:PeekFrameData", Hooks.PeekFrameData)
-Hooks.GetItemViewerKey = P:Def("Hooks:GetItemViewerKey", Hooks.GetItemViewerKey)
-Hooks.SetItemViewerKey = P:Def("Hooks:SetItemViewerKey", Hooks.SetItemViewerKey)
 Hooks.HookMethod = P:Def("Hooks:HookMethod", Hooks.HookMethod)
 _InBlizzardEditMode = P:Def("_InBlizzardEditMode", _InBlizzardEditMode)
 _PCM_RefreshHooksRuntimeState = P:Def("_PCM_RefreshHooksRuntimeState", _PCM_RefreshHooksRuntimeState)
@@ -370,11 +177,7 @@ Hooks.RefreshRuntimeState = P:Def("Hooks:RefreshRuntimeState", Hooks.RefreshRunt
 Hooks.SetRuntimeEnabled = P:Def("Hooks:SetRuntimeEnabled", Hooks.SetRuntimeEnabled)
 Hooks.SetBlizzardEditModeActive = P:Def("Hooks:SetBlizzardEditModeActive", Hooks.SetBlizzardEditModeActive)
 _PCM_HooksEnabled = P:Def("_PCM_HooksEnabled", _PCM_HooksEnabled)
-_PCM_DataHooksShouldRun = P:Def("_PCM_DataHooksShouldRun", _PCM_DataHooksShouldRun)
-Hooks.SetBBIconHidden = P:Def("Hooks:SetBBIconHidden", Hooks.SetBBIconHidden)
-Hooks.GetBBIconHidden = P:Def("Hooks:GetBBIconHidden", Hooks.GetBBIconHidden)
 Hooks.HookEditMode = P:Def("Hooks:HookEditMode", Hooks.HookEditMode)
-Hooks.HookGlowManager = P:Def("Hooks:HookGlowManager", Hooks.HookGlowManager)
 
 Hooks.GetFrameData = GetFrameData
 Hooks.InBlizzardEditMode = _InBlizzardEditMode
