@@ -844,9 +844,42 @@ local function _PUI_StyleTreeButtons(widget)
   end
 end
 
+local function _PUI_RefreshTreeSelection(widget)
+  local previousValue = widget.__puiPreviousTreeSelection
+  local selectedValue = widget.__puiNextTreeSelection
+  widget.__puiTreeSelectionOnlyRefresh = nil
+  widget.__puiPreviousTreeSelection = nil
+  widget.__puiNextTreeSelection = nil
+
+  for index = 1, #(widget.buttons or {}) do
+    local button = widget.buttons[index]
+    if button.uniquevalue == previousValue or button.uniquevalue == selectedValue then
+      local isSelected = button.uniquevalue == selectedValue
+      button.selected = isSelected
+      if isSelected then
+        button:LockHighlight()
+      else
+        button:UnlockHighlight()
+      end
+      WidgetSkins.TreeButton(button, isSelected)
+    end
+  end
+end
+
 local function _PUI_HandleTreeGroupClick(widget, _, uniquevalue, wasSelected)
+  widget.__puiTreeSelectionOnlyRefresh = nil
+  widget.__puiPreviousTreeSelection = nil
+  widget.__puiNextTreeSelection = nil
+
   if not wasSelected then
-    Addon:HandleOptionsGroupSelection(widget, uniquevalue)
+    local status = widget.status or widget.localstatus
+    local previousValue = status and status.selected or nil
+    local applied, optionsModelChanged = Addon:HandleOptionsGroupSelection(widget, uniquevalue)
+    if applied and not optionsModelChanged then
+      widget.__puiTreeSelectionOnlyRefresh = true
+      widget.__puiPreviousTreeSelection = previousValue
+      widget.__puiNextTreeSelection = uniquevalue
+    end
   end
 end
 
@@ -869,6 +902,11 @@ function WidgetSkins.TreeGroup(widget)
     widget.__puiTreeRefreshHooked = true
     local originalRefreshTree = widget.RefreshTree
     widget.RefreshTree = function(self, ...)
+      if self.__puiTreeSelectionOnlyRefresh == true then
+        _PUI_RefreshTreeSelection(self)
+        return
+      end
+
       if self.__puiPCMManagerTree == true then
         _PUI_RefreshPCMManagerTree(self, originalRefreshTree, ...)
       else
