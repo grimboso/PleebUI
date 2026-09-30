@@ -261,6 +261,59 @@ function Theme.GetColors()
   return colors
 end
 
+local PUI_EXPAND_ATLAS = "ui-questtrackerbutton-secondary-expand"
+local PUI_EXPAND_PRESSED_ATLAS = "ui-questtrackerbutton-secondary-expand-pressed"
+local PUI_COLLAPSE_ATLAS = "ui-questtrackerbutton-secondary-collapse"
+local PUI_COLLAPSE_PRESSED_ATLAS = "ui-questtrackerbutton-secondary-collapse-pressed"
+Theme._ExpandCollapseButtons = setmetatable({}, { __mode = "k" })
+Theme._ExpandCollapseTextures = setmetatable({}, { __mode = "k" })
+
+local function _PUI_StyleExpandCollapseTexture(texture)
+  local color = Theme.GetColors().text
+  texture:SetDesaturated(true)
+  texture:SetVertexColor(color[1], color[2], color[3], color[4])
+end
+
+function Theme.ApplyExpandCollapseTexture(texture, expanded)
+  if not texture then
+    return
+  end
+  expanded = expanded == true
+  Theme._ExpandCollapseTextures[texture] = expanded
+  texture:SetAtlas(expanded and PUI_COLLAPSE_ATLAS or PUI_EXPAND_ATLAS, true)
+  _PUI_StyleExpandCollapseTexture(texture)
+end
+
+function Theme.ApplyExpandCollapseButton(button, expanded)
+  if not button then
+    return
+  end
+  expanded = expanded == true
+  Theme._ExpandCollapseButtons[button] = expanded
+  button:SetNormalAtlas(expanded and PUI_COLLAPSE_ATLAS or PUI_EXPAND_ATLAS, true)
+  button:SetPushedAtlas(expanded and PUI_COLLAPSE_PRESSED_ATLAS or PUI_EXPAND_PRESSED_ATLAS, true)
+  button:SetHighlightTexture("")
+  local normal = button:GetNormalTexture()
+  if normal then
+    normal:SetAlpha(1)
+    _PUI_StyleExpandCollapseTexture(normal)
+  end
+  local pushed = button:GetPushedTexture()
+  if pushed then
+    pushed:SetAlpha(1)
+    _PUI_StyleExpandCollapseTexture(pushed)
+  end
+end
+
+function Theme.RefreshExpandCollapseControls()
+  for button, expanded in pairs(Theme._ExpandCollapseButtons) do
+    Theme.ApplyExpandCollapseButton(button, expanded)
+  end
+  for texture, expanded in pairs(Theme._ExpandCollapseTextures) do
+    Theme.ApplyExpandCollapseTexture(texture, expanded)
+  end
+end
+
 function Theme.GetBarTexture()
   return LSM:Fetch("statusbar", "Pleebar", true)
 end
@@ -2271,6 +2324,7 @@ local function _PUI_ThemeRegistry_NotifyChange(refreshPlayerBuffs, refreshFonts)
   end
 
   Addon:RefreshOptionsTheme()
+  Theme.RefreshExpandCollapseControls()
 
   if refreshFonts == false then
     Addon:RequestThemeUpdates()
