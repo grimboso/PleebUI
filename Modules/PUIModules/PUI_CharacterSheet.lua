@@ -1403,8 +1403,15 @@ local function RefreshReputationEntryTheme(entry)
   end
 
   local toggle = entry.ToggleCollapseButton
-  if toggle and toggle._puiToggleIcon then
-    toggle._puiToggleIcon:SetVertexColor(tr, tg, tb, ta)
+  if toggle and toggle.GetHeader then
+    local header = toggle:GetHeader()
+    if header then
+      Theme.ApplyExpandCollapseButton(toggle, not header:IsCollapsed())
+    end
+  elseif entry.Right and entry.IsCollapsed then
+    local expanded = not entry:IsCollapsed()
+    Theme.ApplyExpandCollapseTexture(entry.Right, expanded)
+    Theme.ApplyExpandCollapseTexture(entry.HighlightRight, expanded)
   end
 
   CS_SkinReputationBar(entry.Content and entry.Content.ReputationBar, tr, tg, tb, ta)
@@ -1449,11 +1456,7 @@ local function SkinReputationEntry(entry)
       if not (tex and tex.SetAtlas) then return end
       local atlas = tex.GetAtlas and tex:GetAtlas()
       if atlas == "Options_ListExpand_Right" or atlas == "Options_ListExpand_Right_Expanded" then
-        if entry.IsCollapsed and entry:IsCollapsed() then
-          tex:SetAtlas("Soulbinds_Collection_CategoryHeader_Expand", true)
-        else
-          tex:SetAtlas("Soulbinds_Collection_CategoryHeader_Collapse", true)
-        end
+        Theme.ApplyExpandCollapseTexture(tex, not (entry.IsCollapsed and entry:IsCollapsed()))
       end
     end
 
@@ -1501,33 +1504,7 @@ local function SkinReputationEntry(entry)
       if not header then return end
 
       StripTextures(btn, true)
-
-      if btn.SetNormalTexture then btn:SetNormalTexture("") end
-      if btn.SetPushedTexture then btn:SetPushedTexture("") end
-      if btn.SetHighlightTexture then btn:SetHighlightTexture("") end
-      if btn.SetDisabledTexture then btn:SetDisabledTexture("") end
-
-      if not btn._puiToggleIcon then
-        local tex = btn:CreateTexture(nil, "OVERLAY")
-        btn._puiToggleIcon = tex
-      end
-
-      local tex = btn._puiToggleIcon
-      tex:ClearAllPoints()
-      tex:SetPoint("CENTER", btn, "CENTER", 0, 0)
-      tex:SetSize(16, 16)
-      local rr, rg, rb, ra = GetTextColor()
-      tex:SetVertexColor(rr, rg, rb, ra)
-
-      if header:IsCollapsed() then
-        if tex.SetAtlas then tex:SetAtlas("Soulbinds_Collection_CategoryHeader_Expand", true) end
-      else
-        if tex.SetAtlas then tex:SetAtlas("Soulbinds_Collection_CategoryHeader_Collapse", true) end
-      end
-
-      if tex.Show then
-        tex:Show()
-      end
+      Theme.ApplyExpandCollapseButton(btn, not header:IsCollapsed())
     end
 
     if not entry.ToggleCollapseButton._puiHooked then
@@ -1606,8 +1583,15 @@ local function RefreshCurrencyEntryTheme(button, isHeader)
   end
 
   local toggle = button.ToggleCollapseButton
-  if toggle and toggle._puiToggleIcon then
-    toggle._puiToggleIcon:SetVertexColor(tr, tg, tb, ta)
+  if toggle and toggle.GetHeader then
+    local header = toggle:GetHeader()
+    if header then
+      Theme.ApplyExpandCollapseButton(toggle, not header:IsCollapsed())
+    end
+  elseif isHeader and button.Right and button.IsCollapsed then
+    local expanded = not button:IsCollapsed()
+    Theme.ApplyExpandCollapseTexture(button.Right, expanded)
+    Theme.ApplyExpandCollapseTexture(button.HighlightRight, expanded)
   end
 end
 
@@ -1684,33 +1668,7 @@ local function SkinCurrencyEntry(button)
       if not header then return end
 
       StripTextures(btn, true)
-
-      if btn.SetNormalTexture then btn:SetNormalTexture("") end
-      if btn.SetPushedTexture then btn:SetPushedTexture("") end
-      if btn.SetHighlightTexture then btn:SetHighlightTexture("") end
-      if btn.SetDisabledTexture then btn:SetDisabledTexture("") end
-
-      if not btn._puiToggleIcon then
-        local tex = btn:CreateTexture(nil, "OVERLAY")
-        btn._puiToggleIcon = tex
-      end
-
-      local tex = btn._puiToggleIcon
-      tex:ClearAllPoints()
-      tex:SetPoint("CENTER", btn, "CENTER", 0, 0)
-      tex:SetSize(16, 16)
-      local rr, rg, rb, ra = GetTextColor()
-      tex:SetVertexColor(rr, rg, rb, ra)
-
-      if header:IsCollapsed() then
-        if tex.SetAtlas then tex:SetAtlas("Soulbinds_Collection_CategoryHeader_Expand", true) end
-      else
-        if tex.SetAtlas then tex:SetAtlas("Soulbinds_Collection_CategoryHeader_Collapse", true) end
-      end
-
-      if tex.Show then
-        tex:Show()
-      end
+      Theme.ApplyExpandCollapseButton(btn, not header:IsCollapsed())
     end
 
     if not tcb._puiHooked then
@@ -1763,11 +1721,7 @@ local function SkinCurrencyHeader(button)
     if not (tex and tex.SetAtlas) then return end
     local atlas = tex.GetAtlas and tex:GetAtlas()
     if atlas == "Options_ListExpand_Right" or atlas == "Options_ListExpand_Right_Expanded" then
-      if button.IsCollapsed and button:IsCollapsed() then
-        tex:SetAtlas("Soulbinds_Collection_CategoryHeader_Expand", true)
-      else
-        tex:SetAtlas("Soulbinds_Collection_CategoryHeader_Collapse", true)
-      end
+      Theme.ApplyExpandCollapseTexture(tex, not (button.IsCollapsed and button:IsCollapsed()))
     end
   end
 
