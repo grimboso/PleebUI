@@ -3057,6 +3057,7 @@ local function _PUI_ApplySelectedOptionsPath(path)
     return false
   end
 
+  frame.__puiSelectedOptionsPathKey = table.concat(path, "\031")
   local callback = nextInfo and nextInfo.page and nextInfo.page.onOptionsPathChanged
   if type(callback) == "function" then
     callback(Addon, frame, frame.__puiPageShell, path)
@@ -3237,6 +3238,7 @@ local function _PUI_EnsureCustomOptionsFrame()
       end
 
       self.__puiLastRenderedOptionsPathKey = nil
+      self.__puiSelectedOptionsPathKey = nil
       ns.Theme.ResetWidgetRowBackgrounds()
       ns.Flags.__puiPCM_OptionsOpen = nil
       _PUI_ApplyAuraSpellIDTooltipCVarForOptions(false)
@@ -3697,6 +3699,7 @@ local function _PUI_RenderCustomOptionsPath(frame, AceConfigDialog, APP, path)
   frame.__puiQueuedOptionsPath = nil
 
   local pathKey = table.concat(requestedPath, "\031")
+  local selectionChanged = frame.__puiSelectedOptionsPathKey ~= pathKey
   local previousOptionsRootPathKey = _PUI_GetOptionsRootPathKey(State.currentOptionsPath)
   local nextOptionsRootPathKey = _PUI_GetOptionsRootPathKey(requestedPath)
 
@@ -3748,7 +3751,7 @@ local function _PUI_RenderCustomOptionsPath(frame, AceConfigDialog, APP, path)
   else
     local container = _PUI_GetShellACDContainer(frame, shell)
 
-    if #requestedPath > 1 then
+    if #requestedPath > 1 and selectionChanged then
       AceConfigDialog:SelectGroup(APP, unpack(requestedPath))
     end
 
@@ -3759,6 +3762,7 @@ local function _PUI_RenderCustomOptionsPath(frame, AceConfigDialog, APP, path)
   Addon:HandleOptionsPathOpened(requestedPath)
 
   frame.__puiLastRenderedOptionsPathKey = pathKey
+  frame.__puiSelectedOptionsPathKey = pathKey
   frame.__puiRenderingOptionsPath = nil
 
   local queuedPath = frame.__puiQueuedOptionsPath
