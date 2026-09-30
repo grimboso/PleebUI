@@ -648,7 +648,7 @@ end
 local _PCM_BuildIconOverrideArgs
 local _PCM_BuildIconOverrideTreeArgs
 
-local function _PCM_BuildBuffIconsTabArgs()
+local function _PCM_BuildBuffIconsTabArgs(includeIconOverrides)
   local cm = GetPCMBuffsRoot()
   local viewerCM = GetPCMRoot()
   local args = {}
@@ -814,6 +814,11 @@ local function _PCM_BuildBuffIconsTabArgs()
     args[k] = v
   end
 
+  local iconOverrideArgs
+  if includeIconOverrides ~= false then
+    iconOverrideArgs = _PCM_BuildIconOverrideTreeArgs(viewerKey)
+  end
+
   return {
     layout = {
       type = "group",
@@ -896,7 +901,7 @@ local function _PCM_BuildBuffIconsTabArgs()
       name = "Individual icons",
       order = 100,
       childGroups = "select",
-      args = _PCM_BuildIconOverrideTreeArgs(viewerKey),
+      args = iconOverrideArgs,
     },
   }
 end
@@ -2915,8 +2920,9 @@ _PCM_BuildIconOverrideTreeArgs = function(viewerKey)
 end
 
 local function _PCM_BuildCooldownViewerTreeArgs(cm, viewerKey, viewerLabel, opts, extraGroups)
+  opts = opts or {}
   local args = {}
-  local baseArgs = _PCM_BuildCooldownViewerArgs(cm, viewerKey, opts or {})
+  local baseArgs = _PCM_BuildCooldownViewerArgs(cm, viewerKey, opts)
   local order = 10
 
   local function CollectArgs(argKeys)
@@ -3044,18 +3050,20 @@ local function _PCM_BuildCooldownViewerTreeArgs(cm, viewerKey, viewerLabel, opts
     end
   end
 
-  args.iconOverrides = {
-    type = "group",
-    name = "Individual icons",
-    order = 1000,
-    childGroups = "select",
-    args = _PCM_BuildIconOverrideTreeArgs(viewerKey),
-  }
+  if opts.includeIconOverrides ~= false then
+    args.iconOverrides = {
+      type = "group",
+      name = "Individual icons",
+      order = 1000,
+      childGroups = "select",
+      args = _PCM_BuildIconOverrideTreeArgs(viewerKey),
+    }
+  end
 
   return args
 end
 
-local function _PCM_BuildEssentialTabArgs()
+local function _PCM_BuildEssentialTabArgs(includeIconOverrides)
   local cm = GetPCMRoot()
 
   if not cm then
@@ -3074,6 +3082,7 @@ local function _PCM_BuildEssentialTabArgs()
     fontLabelPrefix = "Essential",
     splitFonts = true,
     showIconBorder = true,
+    includeIconOverrides = includeIconOverrides,
   }, {
     {
       key = "glow",
@@ -8267,7 +8276,7 @@ local function _PCM_SortedCustomBarIds(root)
 end
 
 
-_PCM_BuildCustomBarsTreeNodes = function()
+_PCM_BuildCustomBarsTreeNodes = function(buildLeaves)
   local out = {}
   local unavailableArgs = {
     help = {
@@ -8291,7 +8300,7 @@ _PCM_BuildCustomBarsTreeNodes = function()
       name = "|cff808080" .. name .. "|r"
     end
 
-    local nodeArgs = buildArgs(id)
+    local nodeArgs = buildLeaves == false and {} or buildArgs(id)
 
     local node = {
       type = "group",
@@ -8376,39 +8385,40 @@ function ns.PCM_RefreshCustomBarsOptionsAfterSpecializationChange()
   _PCM_RefreshPreview()
 end
 
-local function _PCM_BuildCustomBarsManagerArgs()
+local function _PCM_BuildCustomBarsManagerArgs(buildContent)
   local args = {}
   local _, API = _PCM_GetCustomBarsRootLists()
 
-
-  args.create_controls = {
-    type = "group",
-    name = "Create custom tracker",
-    inline = true,
-    order = 1,
-    args = {
-      description = {
-        type = "description",
-        name = "Build a button or bar in a guided setup with a live state preview.",
-        order = 1,
+  if buildContent ~= false then
+    args.create_controls = {
+      type = "group",
+      name = "Create custom tracker",
+      inline = true,
+      order = 1,
+      args = {
+        description = {
+          type = "description",
+          name = "Build a button or bar in a guided setup with a live state preview.",
+          order = 1,
+        },
+        createButton = {
+          type = "execute",
+          name = function()
+            return ns.PCMCustomTrackerInstaller:HasDraft()
+              and "Resume custom tracker" or "Create custom tracker"
+          end,
+          desc = "Open the guided tracker installer.",
+          order = 2,
+          width = 1.5,
+          func = function()
+            ns.PCMCustomTrackerInstaller:Open()
+          end,
+        },
       },
-      createButton = {
-        type = "execute",
-        name = function()
-          return ns.PCMCustomTrackerInstaller:HasDraft()
-            and "Resume custom tracker" or "Create custom tracker"
-        end,
-        desc = "Open the guided tracker installer.",
-        order = 2,
-        width = 1.5,
-        func = function()
-          ns.PCMCustomTrackerInstaller:Open()
-        end,
-      },
-    },
-  }
+    }
+  end
 
-  local barArgs = _PCM_BuildCustomBarsTreeNodes()
+  local barArgs = _PCM_BuildCustomBarsTreeNodes(buildContent ~= false)
   for key, value in pairs(barArgs) do
     args[key] = value
   end
@@ -8666,35 +8676,40 @@ end
 
 local function _PCM_BuildDefaultGroupSettings(group)
   local viewerKey = group.defaultViewerKey
-  local args
   if viewerKey == "EssentialCooldownViewer" then
-    args = _PCM_BuildEssentialTabArgs()
+    return _PCM_BuildEssentialTabArgs(false)
   elseif viewerKey == "UtilityCooldownViewer" then
-    args = _PCM_BuildCooldownViewerTreeArgs(GetPCMRoot(), viewerKey, "Utility", {
+    return _PCM_BuildCooldownViewerTreeArgs(GetPCMRoot(), viewerKey, "Utility", {
       effectsKey = "utility",
       fontLabelPrefix = "Utility",
       splitFonts = true,
       showIconBorder = true,
+      includeIconOverrides = false,
     })
   elseif viewerKey == "BuffIconCooldownViewer" then
-    args = _PCM_BuildBuffIconsTabArgs()
-  else
-    args = _PCM_BuildBuffBarsTabArgs()
+    local args = _PCM_BuildBuffIconsTabArgs(false)
+    args.iconOverrides = nil
+    return args
   end
-  args.iconOverrides = nil
-  return args
+
+  return _PCM_BuildBuffBarsTabArgs()
 end
 
-local function _PCM_BuildGroupNode(groupID, group, order)
+local function _PCM_BuildGroupNode(groupID, group, order, buildContent)
+  local settingsArgs = {}
+  if buildContent then
+    settingsArgs = group.isDefault
+      and _PCM_BuildDefaultGroupSettings(group)
+      or _PCM_BuildCustomGroupSettings(groupID, group)
+  end
+
   local args = {
     settings = {
       type = "group",
       name = "Group settings",
       order = 1,
       childGroups = "tree",
-      args = group.isDefault
-        and _PCM_BuildDefaultGroupSettings(group)
-        or _PCM_BuildCustomGroupSettings(groupID, group),
+      args = settingsArgs,
     },
   }
 
@@ -8707,7 +8722,7 @@ local function _PCM_BuildGroupNode(groupID, group, order)
       type = "group",
       name = "|T" .. tostring(entry.texture or 134400) .. ":16:16:0:0|t " .. tostring(entry.name),
       order = index + 10,
-      args = _PCM_BuildGroupEntryArgs(groupID, record, index),
+      args = buildContent and _PCM_BuildGroupEntryArgs(groupID, record, index) or {},
     }
   end
 
@@ -8720,41 +8735,46 @@ local function _PCM_BuildGroupNode(groupID, group, order)
   }
 end
 
-local function _PCM_BuildUnifiedManagerArgs()
+local function _PCM_BuildUnifiedManagerArgs(activeKey)
+  local overviewArgs = {}
+  if activeKey == "overview" then
+    overviewArgs = {
+      information = {
+        type = "description",
+        name = "Default groups follow Blizzard's category and order from /cdm. Use /pe or Group to move entries into PleebUI custom groups. Custom groups use PleebUI order. Blizzard reminder sounds stay configured in /cdm.",
+        order = 1,
+      },
+      createIconGroup = {
+        type = "execute",
+        name = "Create icon group",
+        order = 2,
+        disabled = _PCM_IsGroupStructureLocked,
+        func = function() ns.PCMGroupManager:CreateGroup("ICON") end,
+      },
+      createBarGroup = {
+        type = "execute",
+        name = "Create bar group",
+        order = 3,
+        disabled = _PCM_IsGroupStructureLocked,
+        func = function() ns.PCMGroupManager:CreateGroup("BAR") end,
+      },
+      resetGroups = {
+        type = "execute",
+        name = "Reset groups",
+        order = 4,
+        confirm = true,
+        disabled = _PCM_IsGroupStructureLocked,
+        func = function() ns.PCMGroupManager:ResetGroups() end,
+      },
+    }
+  end
+
   local args = {
     overview = {
       type = "group",
       name = "Overview",
       order = 1,
-      args = {
-        information = {
-          type = "description",
-          name = "Default groups follow Blizzard's category and order from /cdm. Use /pe or Group to move entries into PleebUI custom groups. Custom groups use PleebUI order. Blizzard reminder sounds stay configured in /cdm.",
-          order = 1,
-        },
-        createIconGroup = {
-          type = "execute",
-          name = "Create icon group",
-          order = 2,
-          disabled = _PCM_IsGroupStructureLocked,
-          func = function() ns.PCMGroupManager:CreateGroup("ICON") end,
-        },
-        createBarGroup = {
-          type = "execute",
-          name = "Create bar group",
-          order = 3,
-          disabled = _PCM_IsGroupStructureLocked,
-          func = function() ns.PCMGroupManager:CreateGroup("BAR") end,
-        },
-        resetGroups = {
-          type = "execute",
-          name = "Reset groups",
-          order = 4,
-          confirm = true,
-          disabled = _PCM_IsGroupStructureLocked,
-          func = function() ns.PCMGroupManager:ResetGroups() end,
-        },
-      },
+      args = overviewArgs,
     },
   }
 
@@ -8763,7 +8783,12 @@ local function _PCM_BuildUnifiedManagerArgs()
     local groupID = groups.order[index]
     local group = groups.byID[groupID]
     if group then
-      args[groupID] = _PCM_BuildGroupNode(groupID, group, index + 10)
+      args[groupID] = _PCM_BuildGroupNode(
+        groupID,
+        group,
+        index + 10,
+        activeKey == groupID
+      )
     end
   end
 
@@ -8772,19 +8797,19 @@ local function _PCM_BuildUnifiedManagerArgs()
     name = "Custom trackers",
     order = 1000,
     childGroups = "tree",
-    args = _PCM_BuildCustomBarsManagerArgs(),
+    args = _PCM_BuildCustomBarsManagerArgs(activeKey == "customTrackers"),
   }
   args.consumables = {
     type = "group",
     name = "Consumables",
     order = 1010,
-    args = _PCM_BuildConsumablesTabArgs(),
+    args = activeKey == "consumables" and _PCM_BuildConsumablesTabArgs() or {},
   }
   args.developer = {
     type = "group",
     name = "Developer",
     order = 1020,
-    args = _PCM_BuildDeveloperTabArgs(),
+    args = activeKey == "developer" and _PCM_BuildDeveloperTabArgs() or {},
   }
   return args
 end
@@ -9221,11 +9246,17 @@ local function PCMOptionsProvider(Addon)
 
     ns.Flags.__puiPCM_OptionsOpen = true
 
+    local activePath = ns._PUIActiveOptionsPath
+    local activeKey = type(activePath) == "table"
+      and activePath[1] == "CooldownManager"
+      and activePath[2]
+      or "overview"
+
     local options = {
       type = "group",
       name = "Pleeb Cooldown Manager",
       childGroups = "tree",
-      args = _PCM_BuildUnifiedManagerArgs(),
+      args = _PCM_BuildUnifiedManagerArgs(activeKey),
     }
 
     _PCM_WrapPreviewRefresh(options)
