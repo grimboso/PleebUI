@@ -194,6 +194,23 @@ SetSlotActive = function(record, active)
   end
 end
 
+local function SlotConfigurationMatches(left, right)
+  if left.playerAuraOnly ~= right.playerAuraOnly or left.includeAnySource ~= right.includeAnySource then
+    return false
+  end
+  local leftIDs = left.identitySpellIDs
+  local rightIDs = right.identitySpellIDs
+  if #leftIDs ~= #rightIDs then
+    return false
+  end
+  for index = 1, #leftIDs do
+    if leftIDs[index] ~= rightIDs[index] then
+      return false
+    end
+  end
+  return true
+end
+
 local function ConfigureRecordSlots(record)
   if PCMRuntime:IsAuraRestricted() then
     record.slotConfigurationPending = true
@@ -261,13 +278,15 @@ local function ApplyRecordAppearance(record)
   record.appearancePending = nil
 end
 
-local function CreateRecord(viewer, entry)
+local function CreateRecord(viewer, entry, preparedOnly)
   local record = retiredRecords[viewer.key][entry.cooldownID]
   if record then
     retiredRecords[viewer.key][entry.cooldownID] = nil
     record.entry = entry
     viewer.records[entry.cooldownID] = record
-    ConfigureRecordSlots(record)
+    if not preparedOnly then
+      ConfigureRecordSlots(record)
+    end
     ApplyRecordAppearance(record)
     UpdateRecordVisibility(record)
     return record
@@ -334,22 +353,39 @@ local function ReleaseRecord(viewer, record)
   retiredRecords[viewer.key][record.cooldownID] = record
 end
 
-local function ReconcileViewer(viewer, entries, generation)
+local function ReconcileViewer(viewer, entries, generation, restricted)
   local retained = {}
   local ordered = {}
+  local deferred = false
   for index = 1, #entries do
     local entry = entries[index]
     local record = viewer.records[entry.cooldownID]
     if not record then
-      record = CreateRecord(viewer, entry)
+      local prepared = retiredRecords[viewer.key][entry.cooldownID]
+      if not restricted or prepared and SlotConfigurationMatches(prepared.entry, entry) then
+        record = CreateRecord(viewer, entry, restricted)
+      else
+        deferred = true
+      end
+    elseif not Catalog:EntriesMatch(record.entry, entry, true) then
+      local configurationMatches = SlotConfigurationMatches(record.entry, entry)
+      if restricted and not configurationMatches then
+        deferred = true
+      else
+        record.entry = entry
+        if not configurationMatches then
+          ConfigureRecordSlots(record)
+        end
+        ApplyRecordAppearance(record)
+      end
     else
       record.entry = entry
-      ConfigureRecordSlots(record)
-      ApplyRecordAppearance(record)
+    end
+    if record then
+      retained[entry.cooldownID] = true
+      ordered[#ordered + 1] = record
       UpdateRecordVisibility(record)
     end
-    retained[entry.cooldownID] = true
-    ordered[index] = record
   end
 
   for cooldownID, record in pairs(viewer.records) do
@@ -359,12 +395,15 @@ local function ReconcileViewer(viewer, entries, generation)
   end
 
   viewer.orderedRecords = ordered
-  viewer.generation = generation
+  if not deferred or viewer.generation > 0 then
+    viewer.generation = generation
+  end
   if groupLayoutEnabled then
     ns.PCMGroupManager:RequestLayout(true)
   else
     AuraLayout:RequestLayout(viewer.key)
   end
+  return deferred
 end
 
 local function GetLayoutFrames(viewer)
@@ -612,7 +651,9 @@ function AuraRuntime:OnCatalogChanged(generation)
     for _, viewer in pairs(viewers) do
       local entries = Catalog:GetViewerEntries(viewer.key)
       for index = 1, #entries do
-        if not viewer.records[entries[index].cooldownID] then
+        local entry = entries[index]
+        local record = viewer.records[entry.cooldownID] or retiredRecords[viewer.key][entry.cooldownID]
+        if not record or not SlotConfigurationMatches(record.entry, entry) then
           ns.Addon:PUI_ConfirmAction({
             title = "Buff tracking",
             text = "Buff tracking saved. Reload the UI to show newly tracked buffs now.",
@@ -636,12 +677,14 @@ function AuraRuntime:Flush()
   if pendingCatalog
     and viewers[BUFF_ICON_VIEWER].style ~= nil
     and viewers[BUFF_BAR_VIEWER].style ~= nil
-    and not PCMRuntime:IsAuraRestricted()
   then
     pendingCatalog = false
+    local restricted = PCMRuntime:IsAuraRestricted()
     for _, viewer in pairs(viewers) do
       local entries, generation = Catalog:GetViewerEntries(viewer.key)
-      ReconcileViewer(viewer, entries, generation)
+      if ReconcileViewer(viewer, entries, generation, restricted) then
+        pendingCatalog = true
+      end
     end
   end
 
