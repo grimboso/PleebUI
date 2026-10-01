@@ -834,10 +834,12 @@ local function ArrayEquals(left, right)
   return true
 end
 
-local function EntryEquals(left, right)
+function Catalog:EntriesMatch(left, right, ignorePlacement)
   for index = 1, #ENTRY_SCALAR_FIELDS do
     local field = ENTRY_SCALAR_FIELDS[index]
-    if left[field] ~= right[field] then
+    local placement = field == "globalOrder" or field == "viewerOrder" or field == "viewerKey"
+      or field == "resolvedCategory"
+    if not (ignorePlacement and placement) and left[field] ~= right[field] then
       return false
     end
   end
@@ -854,7 +856,7 @@ local function GenerationEquals(candidate)
   end
 
   for index = 1, #currentEntries do
-    if not EntryEquals(currentEntries[index], candidateEntries[index]) then
+    if not Catalog:EntriesMatch(currentEntries[index], candidateEntries[index]) then
       return false
     end
   end
@@ -957,6 +959,7 @@ function Catalog:Disable(owner)
 end
 
 local P = select(1, ns.Pleebug:DropIn(Catalog, { name = "PCM", bucket = "AbilityCatalog" }))
+Catalog.EntriesMatch = P:Def("Catalog:EntriesMatch", Catalog.EntriesMatch)
 Catalog.GetGeneration = P:Def("Catalog:GetGeneration", Catalog.GetGeneration)
 Catalog.GetViewerEntries = P:Def("Catalog:GetViewerEntries", Catalog.GetViewerEntries)
 Catalog.RegisterListener = P:Def("Catalog:RegisterListener", Catalog.RegisterListener)
