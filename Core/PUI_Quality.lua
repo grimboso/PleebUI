@@ -90,19 +90,17 @@ local function FormatCoinText(amount)
   return table.concat(parts, ", ")
 end
 
-local function GetGuildRepairRemaining()
-  local remaining = tonumber(GetGuildBankWithdrawMoney())
-  if not remaining then
+local function GetGuildRepairAllowance()
+  local allowance = tonumber(GetGuildBankWithdrawMoney())
+  if allowance == nil then
     return nil
   end
 
-  return remaining
+  return allowance
 end
 
 local function PlayRepairCoinSound()
-  C_Timer.After(0, function()
-    PlaySound(SOUNDKIT.ITEM_REPAIR, "Master")
-  end)
+  PlaySound(SOUNDKIT.ITEM_REPAIR, "Master")
 end
 
 local function CVarSetSafe(name, value)
@@ -335,8 +333,6 @@ local function NormalizeDB()
 
   if q.autoLoot == nil then q.autoLoot = true end
   if q.fasterLooting == nil then q.fasterLooting = true end
-
-  if q.enableMPlusJournalTeleports == nil then q.enableMPlusJournalTeleports = true end
 
   q.autoRepair = NormalizeBool(q.autoRepair, true)
   q.guildRepairFirst = NormalizeBool(q.guildRepairFirst, true)
@@ -1110,9 +1106,78 @@ end
 
 local MerchantFrameDriver
 local MerchantActionToken = 0
+local MerchantPendingRepair
 
 local function Merchant_ShouldSkipAutomation()
   return IsShiftKeyDown()
+end
+
+local function Merchant_ClearRepairWatch()
+  MerchantPendingRepair = nil
+
+  if MerchantFrameDriver then
+    MerchantFrameDriver:UnregisterEvent("PLAYER_MONEY")
+    MerchantFrameDriver:UnregisterEvent("GUILDBANK_UPDATE_MONEY")
+    MerchantFrameDriver:UnregisterEvent("GUILDBANK_UPDATE_WITHDRAWMONEY")
+    MerchantFrameDriver:UnregisterEvent("UPDATE_INVENTORY_DURABILITY")
+  end
+end
+
+local function Merchant_PrintRepairSummary(pending)
+  if not pending or pending.token ~= MerchantActionToken then
+    return
+  end
+
+  local msg
+
+  if pending.usedGuild then
+    msg = "Repaired for " .. FormatCoinText(pending.cost) .. "."
+
+    local allowance = GetGuildRepairAllowance()
+    if allowance ~= nil then
+      if allowance < 0 then
+        msg = msg .. " Guild repair allowance: unlimited."
+      else
+        msg = msg .. " Guild repair allowance left: " .. FormatCoinText(allowance) .. "."
+      end
+    end
+  else
+    msg = "Repaired from personal funds for " .. FormatCoinText(pending.cost) .. "."
+  end
+
+  Addon:Print(msg)
+end
+
+local function Merchant_TryFinishRepairWatch(event)
+  local pending = MerchantPendingRepair
+  if not pending or pending.token ~= MerchantActionToken then
+    Merchant_ClearRepairWatch()
+    return
+  end
+
+  if pending.usedGuild then
+    if event == "GUILDBANK_UPDATE_MONEY"
+      or event == "GUILDBANK_UPDATE_WITHDRAWMONEY"
+    then
+      pending.sawLedgerUpdate = true
+    end
+  elseif event == "PLAYER_MONEY" then
+    pending.sawLedgerUpdate = true
+  end
+
+  if not pending.sawLedgerUpdate then
+    return
+  end
+
+  local remainingCost, canRepair = GetRepairAllCost()
+  remainingCost = tonumber(remainingCost) or 0
+
+  if canRepair and remainingCost > 0 then
+    return
+  end
+
+  Merchant_PrintRepairSummary(pending)
+  Merchant_ClearRepairWatch()
 end
 
 local function Merchant_ProcessAutoRepair(q, token)
@@ -1140,60 +1205,23 @@ local function Merchant_ProcessAutoRepair(q, token)
   end
 
   local guildRepairAllowed = q.guildRepairFirst == true and IsInGuild() and CanGuildBankRepair()
-  local playerMoneyBefore = tonumber(GetMoney())
-  local guildRemainingBefore = guildRepairAllowed and GetGuildRepairRemaining() or nil
-
-  if guildRepairAllowed then
-    RepairAllItems(1)
-    RepairAllItems()
-  else
-    RepairAllItems()
-  end
-
-  local playerMoneyAfter = tonumber(GetMoney())
-  local playerSpent = 0
-
-  if playerMoneyBefore and playerMoneyAfter and playerMoneyBefore > playerMoneyAfter then
-    playerSpent = playerMoneyBefore - playerMoneyAfter
-  end
 
   if q.autoRepairShowSummary == true then
-    C_Timer.After(0, function()
-      local source = "personal funds"
-      local guildRemainingAfter = guildRepairAllowed and GetGuildRepairRemaining() or nil
+    Merchant_ClearRepairWatch()
+    MerchantPendingRepair = {
+      token = token,
+      cost = repairCost,
+      usedGuild = guildRepairAllowed,
+      sawLedgerUpdate = false,
+    }
 
-      if guildRepairAllowed then
-        local guildSpent = 0
-
-        if guildRemainingBefore and guildRemainingAfter and guildRemainingBefore >= 0 and guildRemainingAfter >= 0 and guildRemainingBefore > guildRemainingAfter then
-          guildSpent = guildRemainingBefore - guildRemainingAfter
-        elseif playerSpent > 0 and playerSpent < repairCost then
-          guildSpent = repairCost - playerSpent
-        elseif playerSpent <= 0 then
-          guildSpent = repairCost
-        end
-
-        if guildSpent > 0 and playerSpent > 0 then
-          source = "guild funds and personal funds"
-        elseif guildSpent > 0 then
-          source = "guild funds"
-        end
-      end
-
-      local msg = "Repaired from " .. source .. " for " .. FormatCoinText(repairCost) .. "."
-
-      if guildRepairAllowed and guildRemainingAfter ~= nil then
-        if guildRemainingAfter < 0 then
-          msg = msg .. " Guild repair funds left: unlimited."
-        else
-          msg = msg .. " Guild repair funds left: " .. FormatCoinText(guildRemainingAfter) .. "."
-        end
-      end
-
-      Addon:Print(msg)
-    end)
+    MerchantFrameDriver:RegisterEvent("PLAYER_MONEY")
+    MerchantFrameDriver:RegisterEvent("GUILDBANK_UPDATE_MONEY")
+    MerchantFrameDriver:RegisterEvent("GUILDBANK_UPDATE_WITHDRAWMONEY")
+    MerchantFrameDriver:RegisterEvent("UPDATE_INVENTORY_DURABILITY")
   end
 
+  RepairAllItems(guildRepairAllowed)
   PlayRepairCoinSound()
 end
 
@@ -1206,21 +1234,7 @@ local function Merchant_ProcessAutoSell(q, token)
     return
   end
 
-  if not MerchantFrame or not MerchantFrame:IsVisible() then
-    return
-  end
-
-  for bag = 0, 4 do
-    for slot = 1, C_Container.GetContainerNumSlots(bag) do
-      local info = C_Container.GetContainerItemInfo(bag, slot)
-      if info and info.quality == Enum.ItemQuality.Poor and not info.hasNoValue then
-        local _, _, _, _, _, itemClassID = C_Item.GetItemInfoInstant(info.itemID)
-        if itemClassID and itemClassID ~= Enum.ItemClass.Weapon and itemClassID ~= Enum.ItemClass.Armor then
-          C_Container.UseContainerItem(bag, slot)
-        end
-      end
-    end
-  end
+  C_MerchantFrame.SellAllJunkItems()
 end
 
 local function EnsureMerchantDriver()
@@ -1231,6 +1245,16 @@ local function EnsureMerchantDriver()
   f:SetScript("OnEvent", function(_, event)
     if event == "MERCHANT_CLOSED" then
       MerchantActionToken = MerchantActionToken + 1
+      Merchant_ClearRepairWatch()
+      return
+    end
+
+    if event == "PLAYER_MONEY"
+      or event == "GUILDBANK_UPDATE_MONEY"
+      or event == "GUILDBANK_UPDATE_WITHDRAWMONEY"
+      or event == "UPDATE_INVENTORY_DURABILITY"
+    then
+      Merchant_TryFinishRepairWatch(event)
       return
     end
 
@@ -1248,7 +1272,9 @@ local function EnsureMerchantDriver()
 
   function f:RefreshState()
     local q = GetQ()
+
     self:UnregisterAllEvents()
+    Merchant_ClearRepairWatch()
 
     if q.autoRepair or q.autoSellJunk then
       self:RegisterEvent("MERCHANT_SHOW")
@@ -1270,12 +1296,16 @@ local function EnsureKeystoneDriver()
   f:SetScript("OnEvent", function()
     local q = GetQ()
     if not q.autoKeystone then return end
+    if C_ChallengeMode.HasSlottedKeystone() then return end
 
     for bag = 0, 4 do
       for slot = 1, C_Container.GetContainerNumSlots(bag) do
         local id = C_Container.GetContainerItemID(bag, slot)
         if id and C_Item.IsItemKeystoneByID(id) then
-          C_Container.UseContainerItem(bag, slot)
+          C_Container.PickupContainerItem(bag, slot)
+          if CursorHasItem() then
+            C_ChallengeMode.SlotKeystone()
+          end
           return
         end
       end
@@ -1426,23 +1456,36 @@ local DestroyFrame
 
 local function EnsureDestroyDriver()
   if DestroyFrame then return DestroyFrame end
+
   local f = CreateFrame("Frame", "PleebUI_QualityDestroy")
   DestroyFrame = f
-  f:SetScript("OnEvent", function()
-    local q = GetQ()
-    if not q.easyItemDestroy then return end
 
-    StaticPopup1EditBox:Hide()
-    StaticPopup1Button1:Enable()
-  end)
+  for i = 1, 4 do
+    local popup = _G["StaticPopup" .. i]
+    if popup and not popup.__puiEasyDestroyHooked then
+      popup.__puiEasyDestroyHooked = true
+      popup:HookScript("OnShow", function(self)
+        local q = GetQ()
+        if not q.easyItemDestroy then
+          return
+        end
+
+        if self.which ~= "DELETE_GOOD_ITEM" and self.which ~= "DELETE_GOOD_QUEST_ITEM" then
+          return
+        end
+
+        local editBox = self.editBox or (self.GetEditBox and self:GetEditBox())
+        if not editBox then
+          return
+        end
+
+        editBox:SetText(DELETE_ITEM_CONFIRM_STRING)
+        editBox:SetFocus()
+      end)
+    end
+  end
 
   function f:RefreshState()
-    local q = GetQ()
-    self:UnregisterAllEvents()
-
-    if q.easyItemDestroy then
-      self:RegisterEvent("DELETE_ITEM_CONFIRM")
-    end
   end
 
   return f
@@ -2265,23 +2308,23 @@ end
 local AuctionHouseQoLFrame
 
 local function AuctionHouse_ApplyCurrentExpansionOnly()
-  local defaultFilters = _G.AUCTION_HOUSE_DEFAULT_FILTERS
-  if not defaultFilters then
+  local searchBar = _G.AuctionHouseFrame and _G.AuctionHouseFrame.SearchBar
+  local filterButton = searchBar and searchBar.FilterButton
+  if not filterButton or not filterButton.GetFilters or not filterButton.ToggleFilter then
     return false
   end
 
   local filter = Enum.AuctionHouseFilter.CurrentExpansionOnly
+  local filters = filterButton:GetFilters()
+  if not filters then
+    return false
+  end
+
   local enabled = GetQ().auctionHouseCurrentExpansionOnly == true
-  defaultFilters[filter] = enabled
+  local active = filters[filter] == true
 
-  local searchBar = _G.AuctionHouseFrame and _G.AuctionHouseFrame.SearchBar
-  local filterButton = searchBar and searchBar.FilterButton
-  if filterButton and filterButton.filters then
-    filterButton.filters[filter] = enabled
-
-    if searchBar.UpdateClearFiltersButton then
-      searchBar:UpdateClearFiltersButton()
-    end
+  if active ~= enabled then
+    filterButton:ToggleFilter(filter)
   end
 
   return true
@@ -2301,13 +2344,23 @@ local function EnsureAuctionHouseCurrentExpansionOnly()
 
     if AuctionHouse_ApplyCurrentExpansionOnly() then
       self:UnregisterEvent("ADDON_LOADED")
+
+      if GetQ().auctionHouseCurrentExpansionOnly then
+        self:RegisterEvent("AUCTION_HOUSE_SHOW")
+      else
+        self:UnregisterEvent("AUCTION_HOUSE_SHOW")
+      end
     end
   end)
 
   function f:RefreshState()
     self:UnregisterAllEvents()
 
-    if not AuctionHouse_ApplyCurrentExpansionOnly() then
+    if AuctionHouse_ApplyCurrentExpansionOnly() then
+      if GetQ().auctionHouseCurrentExpansionOnly then
+        self:RegisterEvent("AUCTION_HOUSE_SHOW")
+      end
+    else
       self:RegisterEvent("ADDON_LOADED")
     end
   end
@@ -2653,7 +2706,6 @@ local function QualityProvider(AddonObj)
               inline = true,
               args = {
                 autoKeystone = ToggleOption("Auto insert keystone", "autoKeystone", 1),
-                enableMPlusJournalTeleports = ToggleOption("Show teleports in the Mythic+ journal", "enableMPlusJournalTeleports", 2),
               },
             },
             auctionHouse = {
