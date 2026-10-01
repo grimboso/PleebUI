@@ -140,8 +140,7 @@ local function _PCM_GetNativeCDMRequirement()
 end
 
 local function _PCM_CanChangeNativeCDMState()
-  return not InCombatLockdown()
-    and not PCMRuntime:IsDataRestricted()
+  return not PCMRuntime:IsDataRestricted()
 end
 
 local function _PCM_ReconcileNativeCDM()
@@ -1615,6 +1614,18 @@ function Cooldowns:OnInitialize()
   ns.Modules.PCM_Buffs:SetEnabledState(enabled)
   ns.Modules.PCM_BuffBars:SetEnabledState(enabled)
   ns.Modules.PCM_BB:SetEnabledState(enabled)
+
+  if enabled and PCMRuntime:IsInitializing() then
+    C_AddOns.LoadAddOn("Blizzard_CooldownViewer")
+    -- Register before VARIABLES_LOADED, after Blizzard registers its provider setup.
+    EventUtil.ContinueAfterAllEvents(function()
+      if self:IsEnabled() then
+        _PCM_RunInitialViewerPass(self)
+        self:_ReconcileCustomTrackerStartupAvailability()
+      end
+      PCMRuntime:FinishInitialization()
+    end, "VARIABLES_LOADED", "PLAYER_ENTERING_WORLD", "COOLDOWN_VIEWER_DATA_LOADED")
+  end
 end
 
 local function _PCM_SetOneChildModuleEnabled(mod, want)
@@ -1754,19 +1765,39 @@ _PCM_RunInitialViewerPass = function(owner)
   local settings = _G.CooldownViewerSettings
   local provider = settings and settings:GetDataProvider() or nil
   if not provider
-    or type(provider.IsLayoutUpdateQueued) == "function"
-      and provider:IsLayoutUpdateQueued()
+    or not provider:GetLayoutManager()
+    or provider:IsLayoutUpdateQueued()
   then
     owner.__puiPCMStartupPending = true
     return false
   end
 
-  _PCM_MigrateOwnedViewerTooltips()
+  if ns.PCMGroupManager:IsStructureLocked() then
+    owner.__puiPCMStartupPending = true
+    return false
+  end
+
   _PCM_InitializeOwnedViewers(owner)
+
+  for _, info in owner:IterateViewers() do
+    local key = info and info.key
+    if key and not owner:GetViewerFrame(key) then
+      owner.__puiPCMStartupPending = true
+      return false
+    end
+  end
+
+  _PCM_MigrateOwnedViewerTooltips()
   ns.PCMAbilityCatalog:Invalidate("initial-viewer-pass")
   ns.PCMAbilityCatalog:Refresh()
   ns.PCMAbilityRuntime:Flush()
   ns.PCMAuraRuntime:Flush()
+  ns.PCMGroupManager:Flush()
+
+  if not ns.PCMAbilityRuntime:IsReady() or not ns.PCMAuraRuntime:IsReady() then
+    owner.__puiPCMStartupPending = true
+    return false
+  end
 
   for _, info in owner:IterateViewers() do
     local key = info and info.key
@@ -1787,9 +1818,7 @@ local function _PCM_PrepareStartupLayout()
     return
   end
 
-  if _PCM_RunInitialViewerPass(Cooldowns) then
-    ns.PCMGroupManager:Flush()
-  end
+  _PCM_RunInitialViewerPass(Cooldowns)
 end
 
 local function _PCM_OnFrameScaleChanged(_, scale)
