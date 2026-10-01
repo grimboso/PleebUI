@@ -4,7 +4,6 @@
 local ADDON_NAME, ns = ...
 local Cooldowns = ns.Modules.CooldownManager
 local IconSettings = ns.PCMIconSettings
-local PCMRuntime = ns.PCMRuntime
 local DB = ns.PCM_DBExports
 local P = select(1, ns.Pleebug:DropIn(Cooldowns, { name = "PCM", bucket = "Keybinds" }))
 
@@ -902,10 +901,6 @@ end
 local function _KB_OnRefreshFrameUpdate(self)
   self:Hide()
 
-  if PCMRuntime:IsDataRestricted() then
-    return
-  end
-
   _kbDirty = false
 
   local full = _kbFullRebuild
@@ -1008,11 +1003,8 @@ local function _KB_OnEvent(_, event, arg1, arg2)
   end
 
   if event == "ADDON_RESTRICTION_STATE_CHANGED" then
-    if arg2 == Enum.AddOnRestrictionState.Inactive
-      and not PCMRuntime:IsDataRestricted()
-      and _kbDirty
-    then
-      _kbEventFrame:Show()
+    if arg2 == Enum.AddOnRestrictionState.Inactive and _kbActive then
+      _KB_ScheduleRebuild(true)
     end
     return
   end
