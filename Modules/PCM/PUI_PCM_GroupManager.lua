@@ -14,6 +14,7 @@ local Pixel = ns.Pixel
 
 local CreateFrame = CreateFrame
 local C_RestrictedActions = C_RestrictedActions
+local C_Secrets = C_Secrets
 local GetCursorPosition = GetCursorPosition
 local InCombatLockdown = InCombatLockdown
 local UIParent = UIParent
@@ -77,9 +78,12 @@ local STRUCTURE_RESTRICTION_TYPES = {
 flushFrame:Hide()
 
 local function IsStructureLocked()
+  if PCMRuntime:IsInitializing() then
+    return false
+  end
+
   if InCombatLockdown()
     or next(activeRestrictions) ~= nil
-    or PCMRuntime:IsPresentationSuspended()
     or PCMRuntime:IsDataRestricted()
   then
     return true
@@ -520,6 +524,12 @@ local function RefreshDynamicBounds()
   end
 end
 
+local function IsDynamicBoundsRestrictionActive()
+  return next(activeRestrictions) ~= nil
+    or InCombatLockdown()
+    or C_Secrets.ShouldAurasBeSecret() == true
+end
+
 local function QueueDynamicBoundsRefresh()
   if not enabled or not dynamicBoundsActive then
     return
@@ -528,19 +538,33 @@ local function QueueDynamicBoundsRefresh()
   flushFrame:Show()
 end
 
+local function UpdateDynamicBoundsDriver()
+  dynamicBoundsEventFrame:UnregisterAllEvents()
+  dynamicBoundsEventFrame:SetScript("OnUpdate", nil)
+
+  if not dynamicBoundsActive then
+    return
+  end
+
+  if IsDynamicBoundsRestrictionActive() then
+    dynamicBoundsEventFrame:SetScript("OnUpdate", RefreshDynamicBounds)
+    return
+  end
+
+  dynamicBoundsEventFrame:RegisterUnitEvent("UNIT_AURA", "player", "target")
+  dynamicBoundsEventFrame:RegisterEvent("PLAYER_TARGET_CHANGED")
+end
+
 local function SetDynamicBoundsActive(active)
   active = active == true
   if dynamicBoundsActive ~= active then
     dynamicBoundsActive = active
-    if active then
-      dynamicBoundsEventFrame:RegisterUnitEvent("UNIT_AURA", "player", "target")
-      dynamicBoundsEventFrame:RegisterEvent("PLAYER_TARGET_CHANGED")
-    else
-      dynamicBoundsEventFrame:UnregisterAllEvents()
+    UpdateDynamicBoundsDriver()
+    if not active then
       dynamicBoundsRefreshPasses = 0
     end
   end
-  if active then
+  if active and not IsDynamicBoundsRestrictionActive() then
     QueueDynamicBoundsRefresh()
   end
   flushFrame:SetShown(enabled and (pendingLayout or dynamicBoundsRefreshPasses > 0))
@@ -1259,13 +1283,6 @@ FrameUtil.RegisterEditModeParticipant("PCM.Groups", GroupManager, 45)
 
 PCMRuntime:RegisterSubscriber("GroupManager", {
   OnLifecycleEvent = function(event, restrictionType, state)
-    if event == "LOADING_SCREEN_ENABLED" then
-      flushFrame:Hide()
-      SetDynamicBoundsActive(false)
-      HideEditHandles()
-      return
-    end
-
     local restrictionsCleared = false
     if event == "ADDON_RESTRICTION_STATE_CHANGED" then
       if not STRUCTURE_RESTRICTION_TYPES[restrictionType] then
@@ -1277,13 +1294,14 @@ PCMRuntime:RegisterSubscriber("GroupManager", {
       else
         activeRestrictions[restrictionType] = true
       end
+      UpdateDynamicBoundsDriver()
     end
 
-    if event == "LOADING_SCREEN_DISABLED"
-      or event == "PLAYER_ENTERING_WORLD"
+    if event == "PLAYER_ENTERING_WORLD"
       or event == "PLAYER_REGEN_ENABLED"
       or restrictionsCleared
     then
+      UpdateDynamicBoundsDriver()
       GroupManager:RequestLayout()
       GroupManager:Flush()
     elseif editing then
@@ -1300,7 +1318,9 @@ flushFrame:SetScript("OnUpdate", function()
     RefreshDynamicBounds()
     dynamicBoundsRefreshPasses = dynamicBoundsRefreshPasses - 1
   end
-  flushFrame:SetShown(enabled and (pendingLayout or dynamicBoundsRefreshPasses > 0))
+  flushFrame:SetShown(enabled and (
+    dynamicBoundsRefreshPasses > 0 or pendingLayout and not IsStructureLocked()
+  ))
 end)
 
 dynamicBoundsEventFrame:SetScript("OnEvent", QueueDynamicBoundsRefresh)
