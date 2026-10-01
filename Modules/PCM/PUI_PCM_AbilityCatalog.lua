@@ -27,15 +27,17 @@ local POWER_INFUSION_SPELL_IDS = { 10060 }
 local BLOODLUST_SPELL_IDS = { 2825, 32182, 80353, 264667, 390386, 466904 }
 
 local EMPTY = {}
-local ACTIVE_SOURCE_CATEGORIES = {
-  [Enum.CooldownViewerCategory.Essential] = true,
-  [Enum.CooldownViewerCategory.Utility] = true,
-  [Enum.CooldownViewerCategory.SpecAgnosticEssential] = true,
-  [Enum.CooldownViewerCategory.EquipSlotEssential] = true,
-  [Enum.CooldownViewerCategory.TrackedBuff] = true,
-  [Enum.CooldownViewerCategory.TrackedBar] = true,
-  [Enum.CooldownViewerCategory.SpecAgnosticTracked] = true,
-  [Enum.CooldownViewerCategory.EquipSlotTracked] = true,
+local CATEGORY_VIEWERS = {
+  [Enum.CooldownViewerCategory.Essential] = ESSENTIAL_VIEWER_KEY,
+  [Enum.CooldownViewerCategory.Utility] = UTILITY_VIEWER_KEY,
+  [Enum.CooldownViewerCategory.TrackedBuff] = BUFF_ICON_VIEWER_KEY,
+  [Enum.CooldownViewerCategory.TrackedBar] = BUFF_BAR_VIEWER_KEY,
+}
+local HIDDEN_CATEGORIES = {
+  [Enum.CooldownViewerCategory.Essential] = Enum.CooldownViewerCategory.HiddenActive,
+  [Enum.CooldownViewerCategory.Utility] = Enum.CooldownViewerCategory.HiddenActive,
+  [Enum.CooldownViewerCategory.TrackedBuff] = Enum.CooldownViewerCategory.HiddenPassive,
+  [Enum.CooldownViewerCategory.TrackedBar] = Enum.CooldownViewerCategory.HiddenPassive,
 }
 
 local ENTRY_SCALAR_FIELDS = {
@@ -437,48 +439,126 @@ local function BuildEntry(cooldownID, globalOrder, sourceInfo, defaultCategory, 
   }
 end
 
-local function BuildOrderMap(source)
-  local sourceTable, valid = ReadTable(source)
-  if not valid then
+local function ReadNativeConfiguration()
+  local tag = CooldownViewerUtil.GetCurrentClassAndSpecTag()
+  if IsSecretValue(tag) or type(tag) ~= "number" then
+    return nil
+  end
+  local serialized = C_CooldownViewer.GetLayoutData()
+  if IsSecretValue(serialized) or type(serialized) ~= "string" then
     return nil
   end
 
-  local orderByCooldownID = {}
-  for index = 1, #sourceTable do
-    local cooldownID, idValid = ReadRequiredPositiveNumber(sourceTable[index])
-    if not idValid or orderByCooldownID[cooldownID] ~= nil then
+  -- Decode saved configuration into addon-owned tables; provider getters can rebuild
+  -- Blizzard caches and notification state even when called only to read data.
+  local savedLayout
+  if serialized ~= "" then
+    local payload = serialized:match("^1|(.*)$")
+    if not payload then
       return nil
     end
-    orderByCooldownID[cooldownID] = index
-  end
-  return orderByCooldownID
-end
-
-local function ReadProviderCategory(provider, cooldownID)
-  local defaults = provider:GetCooldownDefaults(cooldownID)
-  local defaultTable, defaultsValid = ReadTable(defaults)
-  if not defaultsValid then
-    return nil, nil, false
-  end
-
-  local defaultCategory, categoryValid = ReadRequiredNumber(defaultTable.category)
-  if not categoryValid then
-    return nil, nil, false
-  end
-
-  local resolvedInfo = provider:GetCooldownInfoForID(cooldownID)
-  local resolvedTable, resolvedValid = ReadTable(resolvedInfo)
-  if not resolvedValid then
-    return nil, nil, false
-  end
-
-  local resolvedCategory
-  resolvedCategory, categoryValid = ReadRequiredNumber(resolvedTable.category)
-  if not categoryValid then
-    return nil, nil, false
+    local decoded = C_EncodingUtil.DecodeBase64(payload)
+    if not decoded then
+      return nil
+    end
+    local inflated = C_EncodingUtil.DecompressString(decoded, Enum.CompressionMethod.Deflate)
+    if not inflated then
+      return nil
+    end
+    local data = C_EncodingUtil.DeserializeCBOR(inflated)
+    if type(data) ~= "table" or (data[1] ~= 4 and data[1] ~= 5) then
+      return nil
+    end
+    local activeLayouts = data[2]
+    local layouts = data[3]
+    if activeLayouts and layouts then
+      local specLayouts = layouts[tag]
+      if specLayouts then
+        savedLayout = specLayouts[activeLayouts[tag]]
+      end
+    end
   end
 
-  return defaultCategory, resolvedCategory, true
+  local configuration = {
+    orderedCooldownIDs = {},
+    infoByID = {},
+    alertsByID = savedLayout and savedLayout[3] or EMPTY,
+  }
+  local categoryOverrides = {}
+  if savedLayout and savedLayout[2] then
+    for category, cooldownIDs in pairs(savedLayout[2]) do
+      for index = 1, #cooldownIDs do
+        categoryOverrides[cooldownIDs[index]] = category
+      end
+    end
+  end
+  local defaultOrder = {}
+  local categories = CooldownViewerSettingsDataProvider_GetCategories()
+  for index = 1, #categories do
+    local cooldownIDs, valid = ReadTable(C_CooldownViewer.GetCooldownViewerCategorySet(categories[index], true))
+    if not valid then
+      return nil
+    end
+    for idIndex = 1, #cooldownIDs do
+      local cooldownID, idValid = ReadRequiredPositiveNumber(cooldownIDs[idIndex])
+      if not idValid or configuration.infoByID[cooldownID] then
+        return nil
+      end
+      local sourceInfo = C_CooldownViewer.GetCooldownViewerCooldownInfo(cooldownID)
+      if IsSecretValue(sourceInfo) then
+        return nil
+      end
+      if sourceInfo then
+        local sourceTable, sourceValid = ReadTable(sourceInfo)
+        if not sourceValid then
+          return nil
+        end
+        local category, categoryValid = ReadRequiredNumber(sourceTable.category)
+        local flags, flagsValid = ReadRequiredNumber(sourceTable.flags)
+        if not categoryValid or not flagsValid then
+          return nil
+        end
+        local defaultCategory = category
+        if FlagsUtil.IsSet(flags, Enum.CooldownSetSpellFlags.HideByDefault) then
+          defaultCategory = HIDDEN_CATEGORIES[category] or category
+        end
+        local resolvedCategory = categoryOverrides[cooldownID] or defaultCategory
+        configuration.infoByID[cooldownID] = {
+          sourceInfo = sourceTable,
+          defaultCategory = defaultCategory,
+          resolvedCategory = resolvedCategory,
+        }
+        defaultOrder[#defaultOrder + 1] = cooldownID
+      end
+    end
+  end
+
+  local orderedIDs = configuration.orderedCooldownIDs
+  local seen = {}
+  local savedOrder = savedLayout and savedLayout[1] or nil
+  if savedOrder then
+    local savedTable, savedValid = ReadTable(savedOrder)
+    if not savedValid then
+      return nil
+    end
+    for index = 1, #savedTable do
+      local cooldownID, valid = ReadRequiredPositiveNumber(savedTable[index])
+      if not valid or seen[cooldownID] then
+        return nil
+      end
+      seen[cooldownID] = true
+      if configuration.infoByID[cooldownID] then
+        orderedIDs[#orderedIDs + 1] = cooldownID
+      end
+    end
+  end
+  for index = 1, #defaultOrder do
+    local cooldownID = defaultOrder[index]
+    if not seen[cooldownID] then
+      orderedIDs[#orderedIDs + 1] = cooldownID
+    end
+  end
+  return configuration
 end
 
 local function AssignSettingsKeys(entries)
@@ -653,163 +733,45 @@ local function AddCustomBuffEntries(entries, viewerEntries)
 end
 
 local function BuildGeneration()
-  local settings = _G.CooldownViewerSettings
-  if not settings then
+  local configuration = ReadNativeConfiguration()
+  if not configuration then
     return nil
-  end
-
-  local provider = settings:GetDataProvider()
-  if not provider or not provider:GetLayoutManager() then
-    return nil
-  end
-  if provider:IsLayoutUpdateQueued() then
-    return nil
-  end
-
-  local allIDs = provider:GetOrderedCooldownIDs()
-  local allIDTable, allIDsValid = ReadTable(allIDs)
-  if not allIDsValid then
-    return nil
-  end
-
-  local essentialIDs = provider:GetOrderedCooldownIDsForCategory(Enum.CooldownViewerCategory.Essential)
-  local utilityIDs = provider:GetOrderedCooldownIDsForCategory(Enum.CooldownViewerCategory.Utility)
-  local buffIconIDs = provider:GetOrderedCooldownIDsForCategory(Enum.CooldownViewerCategory.TrackedBuff)
-  local buffBarIDs = provider:GetOrderedCooldownIDsForCategory(Enum.CooldownViewerCategory.TrackedBar)
-  local essentialOrder = BuildOrderMap(essentialIDs)
-  local utilityOrder = BuildOrderMap(utilityIDs)
-  local buffIconOrder = BuildOrderMap(buffIconIDs)
-  local buffBarOrder = BuildOrderMap(buffBarIDs)
-  if not essentialOrder or not utilityOrder or not buffIconOrder or not buffBarOrder then
-    return nil
-  end
-
-  local viewerOrders = {
-    [ESSENTIAL_VIEWER_KEY] = essentialOrder,
-    [UTILITY_VIEWER_KEY] = utilityOrder,
-    [BUFF_ICON_VIEWER_KEY] = buffIconOrder,
-    [BUFF_BAR_VIEWER_KEY] = buffBarOrder,
-  }
-  local seenViewerCooldownIDs = {}
-  for viewerKey, orderMap in pairs(viewerOrders) do
-    for cooldownID in pairs(orderMap) do
-      if seenViewerCooldownIDs[cooldownID] then
-        return nil
-      end
-      seenViewerCooldownIDs[cooldownID] = viewerKey
-    end
-  end
-
-  for cooldownID in pairs(essentialOrder) do
-    if utilityOrder[cooldownID] ~= nil then
-      return nil
-    end
   end
 
   local entries = {}
-  local seenAllCooldownIDs = {}
-  local seenEssentialCount = 0
-  local seenUtilityCount = 0
-  local seenBuffIconCount = 0
-  local seenBuffBarCount = 0
-
-  for globalOrder = 1, #allIDTable do
-    local cooldownID, cooldownIDValid = ReadRequiredPositiveNumber(allIDTable[globalOrder])
-    if not cooldownIDValid or seenAllCooldownIDs[cooldownID] then
-      return nil
-    end
-    seenAllCooldownIDs[cooldownID] = true
-
-    local essentialViewerOrder = essentialOrder[cooldownID]
-    local utilityViewerOrder = utilityOrder[cooldownID]
-    local buffIconViewerOrder = buffIconOrder[cooldownID]
-    local buffBarViewerOrder = buffBarOrder[cooldownID]
-    local viewerKey
-    local viewerOrder
-
-    if essentialViewerOrder then
-      viewerKey = ESSENTIAL_VIEWER_KEY
-      viewerOrder = essentialViewerOrder
-      seenEssentialCount = seenEssentialCount + 1
-    elseif utilityViewerOrder then
-      viewerKey = UTILITY_VIEWER_KEY
-      viewerOrder = utilityViewerOrder
-      seenUtilityCount = seenUtilityCount + 1
-    elseif buffIconViewerOrder then
-      viewerKey = BUFF_ICON_VIEWER_KEY
-      viewerOrder = buffIconViewerOrder
-      seenBuffIconCount = seenBuffIconCount + 1
-    elseif buffBarViewerOrder then
-      viewerKey = BUFF_BAR_VIEWER_KEY
-      viewerOrder = buffBarViewerOrder
-      seenBuffBarCount = seenBuffBarCount + 1
-    end
-
-    local sourceInfo = C_CooldownViewer.GetCooldownViewerCooldownInfo(cooldownID)
-    local sourceTable, sourceValid = ReadTable(sourceInfo)
-    if not sourceValid then
-      return nil
-    end
-
-    local sourceCategory, sourceCategoryValid = ReadRequiredNumber(sourceTable.category)
-    if not sourceCategoryValid then
-      return nil
-    end
-
-    if viewerKey or ACTIVE_SOURCE_CATEGORIES[sourceCategory] == true then
-      local defaultCategory, resolvedCategory, categoriesValid = ReadProviderCategory(provider, cooldownID)
-      if not categoriesValid then
-        return nil
-      end
-
-      local entry = BuildEntry(
-        cooldownID,
-        globalOrder,
-        sourceTable,
-        defaultCategory,
-        resolvedCategory,
-        viewerKey,
-        viewerOrder
-      )
-      if not entry then
-        return nil
-      end
-
-      entries[#entries + 1] = entry
-    end
-  end
-
-  if seenEssentialCount ~= #essentialIDs
-    or seenUtilityCount ~= #utilityIDs
-    or seenBuffIconCount ~= #buffIconIDs
-    or seenBuffBarCount ~= #buffBarIDs
-  then
-    return nil
-  end
-
   local viewerEntries = {
     [ESSENTIAL_VIEWER_KEY] = {},
     [UTILITY_VIEWER_KEY] = {},
     [BUFF_ICON_VIEWER_KEY] = {},
     [BUFF_BAR_VIEWER_KEY] = {},
   }
-  for index = 1, #entries do
-    local entry = entries[index]
-    if entry.viewerKey then
-      local list = viewerEntries[entry.viewerKey]
-      if not list or entry.viewerOrder ~= (#list + 1) then
-        return nil
+  for globalOrder = 1, #configuration.orderedCooldownIDs do
+    local cooldownID = configuration.orderedCooldownIDs[globalOrder]
+    local info = configuration.infoByID[cooldownID]
+    local entry = BuildEntry(
+      cooldownID,
+      globalOrder,
+      info.sourceInfo,
+      info.defaultCategory,
+      info.resolvedCategory
+    )
+    if not entry then
+      return nil
+    end
+
+    local viewerKey = CATEGORY_VIEWERS[entry.resolvedCategory]
+    if viewerKey and entry.isKnown and not (CDM_HIDE_INVISIBLE_ITEMS and entry.isInvisible) then
+      local list = viewerEntries[viewerKey]
+      entry.viewerKey = viewerKey
+      entry.viewerOrder = #list + 1
+      if viewerKey == BUFF_ICON_VIEWER_KEY then
+        entry.settingsFamily = SETTINGS_FAMILY_BUFF
+      elseif viewerKey == BUFF_BAR_VIEWER_KEY then
+        entry.settingsFamily = SETTINGS_FAMILY_BAR
       end
       list[#list + 1] = entry
     end
-  end
-
-  if #viewerEntries[ESSENTIAL_VIEWER_KEY] ~= #essentialIDs
-    or #viewerEntries[UTILITY_VIEWER_KEY] ~= #utilityIDs
-    or #viewerEntries[BUFF_ICON_VIEWER_KEY] ~= #buffIconIDs
-    or #viewerEntries[BUFF_BAR_VIEWER_KEY] ~= #buffBarIDs
-  then
-    return nil
+    entries[#entries + 1] = entry
   end
 
   AddCustomBuffEntries(entries, viewerEntries)
@@ -818,6 +780,7 @@ local function BuildGeneration()
   return {
     entries = entries,
     viewerEntries = viewerEntries,
+    nativeConfiguration = configuration,
   }
 end
 
@@ -863,6 +826,13 @@ local function GenerationEquals(candidate)
   return true
 end
 
+function Catalog:GetNativeConfiguration()
+  if state.dirty then
+    return nil
+  end
+  return state.nativeConfiguration
+end
+
 function Catalog:GetGeneration()
   return state.generation
 end
@@ -904,6 +874,7 @@ function Catalog:Refresh()
     return false, state.generation
   end
 
+  state.nativeConfiguration = candidate.nativeConfiguration
   local changed = state.generation == 0 or not GenerationEquals(candidate)
   if changed then
     state.generation = state.generation + 1
@@ -960,6 +931,7 @@ end
 
 local P = select(1, ns.Pleebug:DropIn(Catalog, { name = "PCM", bucket = "AbilityCatalog" }))
 Catalog.EntriesMatch = P:Def("Catalog:EntriesMatch", Catalog.EntriesMatch)
+Catalog.GetNativeConfiguration = P:Def("Catalog:GetNativeConfiguration", Catalog.GetNativeConfiguration)
 Catalog.GetGeneration = P:Def("Catalog:GetGeneration", Catalog.GetGeneration)
 Catalog.GetViewerEntries = P:Def("Catalog:GetViewerEntries", Catalog.GetViewerEntries)
 Catalog.RegisterListener = P:Def("Catalog:RegisterListener", Catalog.RegisterListener)
