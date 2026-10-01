@@ -385,22 +385,6 @@ local function GetCenteredRowFrame(group, rowIndex)
     row = CreateFrame("Frame", nil, group.frame)
     row:SetSize(0.001, 0.001)
     row:SetIgnoringChildrenForBounds(true)
-    local startAssistant = CreateFrame(
-      "Frame",
-      nil,
-      row,
-      "DisableUntrustedLayoutScriptsTemplate"
-    )
-    startAssistant:SetSize(0.001, 0.001)
-    local endAssistant = CreateFrame(
-      "Frame",
-      nil,
-      row,
-      "DisableUntrustedLayoutScriptsTemplate"
-    )
-    endAssistant:SetSize(0.001, 0.001)
-    row.__puiPCMStartAssistant = startAssistant
-    row.__puiPCMEndAssistant = endAssistant
     rows[rowIndex] = row
   end
   return row
@@ -445,12 +429,12 @@ local function ApplyCollapsedAuraIconRows(group, records)
     row:Show()
     dynamicBoundsRows[#dynamicBoundsRows + 1] = row
 
-    local first
     local previous
     local rowItems = math.min(rowLimit, count - recordIndex + 1)
     for _ = 1, rowItems do
       local record = records[recordIndex]
       local layoutFrame = PrepareRecordLayout(record, size, size, spacing)
+      layoutFrame:SetParent(row)
       layoutFrame:ClearAllPoints()
       if growth == "LEFT" then
         if previous then
@@ -466,22 +450,11 @@ local function ApplyCollapsedAuraIconRows(group, records)
         end
       end
       AuraRuntime:FinalizeRecordLayout(record)
-      first = first or layoutFrame
       previous = layoutFrame
       if AuraRuntime:UsesCollapsedLayout(record) then
         dynamicBoundsRecords[#dynamicBoundsRecords + 1] = record
       end
       recordIndex = recordIndex + 1
-    end
-
-    row.__puiPCMStartAssistant:ClearAllPoints()
-    row.__puiPCMEndAssistant:ClearAllPoints()
-    if growth == "LEFT" then
-      row.__puiPCMStartAssistant:SetPoint("TOPRIGHT", first, "TOPRIGHT")
-      row.__puiPCMEndAssistant:SetPoint("BOTTOMLEFT", previous, "BOTTOMLEFT")
-    else
-      row.__puiPCMStartAssistant:SetPoint("TOPLEFT", first, "TOPLEFT")
-      row.__puiPCMEndAssistant:SetPoint("BOTTOMRIGHT", previous, "BOTTOMRIGHT")
     end
   end
 
@@ -565,6 +538,7 @@ local function ApplyPlan(group, records, plan)
     local record = records[index]
     local item = plan.items[index]
     local recordFrame = PrepareRecordLayout(record, item.width, item.height)
+    recordFrame:SetParent(frame)
     recordFrame:ClearAllPoints()
     local point = item.point or "CENTER"
     recordFrame:SetPoint(point, frame, point, item.x, item.y)
@@ -1090,6 +1064,14 @@ function GroupManager:Flush()
   flushFrame:SetShown(pendingLayout or dynamicBoundsRefreshPasses > 0)
 end
 
+function GroupManager:GetRecordIconLayout(record)
+  local group = GetAssignedGroup(GetDB(), record)
+  local style = ResolveIconLayout(group)
+  local size = math.max(8, math.min(96, Pixel.Round(tonumber(style.iconSize) or 36)))
+  local spacing = math.max(-20, math.min(40, Pixel.Round(tonumber(style.spacing) or 2)))
+  return size, spacing
+end
+
 function GroupManager:GetGroups()
   return GetDB()
 end
@@ -1309,6 +1291,7 @@ local P = select(1, ns.Pleebug:DropIn(GroupManager, { name = "PCM", bucket = "Gr
 GroupManager.RefreshEditHandles = P:Def("GroupManager:RefreshEditHandles", GroupManager.RefreshEditHandles)
 GroupManager.RequestLayout = P:Def("GroupManager:RequestLayout", GroupManager.RequestLayout)
 GroupManager.Flush = P:Def("GroupManager:Flush", GroupManager.Flush)
+GroupManager.GetRecordIconLayout = P:Def("GroupManager:GetRecordIconLayout", GroupManager.GetRecordIconLayout)
 GroupManager.GetGroups = P:Def("GroupManager:GetGroups", GroupManager.GetGroups)
 GroupManager.GetActiveGroup = P:Def("GroupManager:GetActiveGroup", GroupManager.GetActiveGroup)
 GroupManager.GetActiveRecord = P:Def("GroupManager:GetActiveRecord", GroupManager.GetActiveRecord)
