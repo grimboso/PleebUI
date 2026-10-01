@@ -4,6 +4,7 @@ local AbilityRuntime = {}
 ns.PCMAbilityRuntime = AbilityRuntime
 
 local AbilityCatalog = ns.PCMAbilityCatalog
+local PCMRuntime = ns.PCMRuntime
 local AbilityLayout = ns.PCMAbilityLayout
 local PCMPresentation = ns.PCMPresentation
 local IconSettings = ns.PCMIconSettings
@@ -22,7 +23,6 @@ local GetInventoryItemID = GetInventoryItemID
 local GetNumTotemSlots = GetNumTotemSlots
 local GetTotemInfo = GetTotemInfo
 local GetTotemDuration = GetTotemDuration
-local InCombatLockdown = InCombatLockdown
 local issecretvalue = issecretvalue
 local pairs = pairs
 local ipairs = ipairs
@@ -377,9 +377,7 @@ local function GetAuraFilter(unit)
 end
 
 local function CanRestyleAuraButton(button)
-  return not InCombatLockdown()
-    and C_Secrets.ShouldAurasBeSecret() ~= true
-    and button:CanBeAccessedInContext()
+  return not PCMRuntime:IsAuraRestricted() and button:CanBeAccessedInContext()
 end
 
 local function PrepareAuraButtonsForRestriction(restrictionType, state)
@@ -475,7 +473,7 @@ local function ConfigureAuraSlots(record)
     return
   end
 
-  if InCombatLockdown() or C_Secrets.ShouldAurasBeSecret() == true then
+  if PCMRuntime:IsAuraRestricted() then
     record.auraStylePending = true
     return
   end
@@ -493,7 +491,7 @@ local function ConfigureAuraSlots(record)
 end
 
 local function QueuePendingAuraStyles()
-  if InCombatLockdown() or C_Secrets.ShouldAurasBeSecret() == true then
+  if PCMRuntime:IsAuraRestricted() then
     return
   end
 
@@ -1685,7 +1683,7 @@ function AbilityRuntime:Flush()
     return
   end
 
-  if not InCombatLockdown() and C_Secrets.ShouldAurasBeSecret() ~= true then
+  if not PCMRuntime:IsAuraRestricted() then
     ApplyPendingCatalog(viewers[ESSENTIAL_VIEWER])
     ApplyPendingCatalog(viewers[UTILITY_VIEWER])
   end
@@ -1788,17 +1786,13 @@ function AbilityRuntime:Disable()
 end
 
 function AbilityRuntime:IsReady()
-  local generation = AbilityCatalog:GetGeneration()
   return enabled
-    and generation > 0
+    and viewers[ESSENTIAL_VIEWER].generation > 0
     and viewers[ESSENTIAL_VIEWER].frame ~= nil
     and viewers[UTILITY_VIEWER].frame ~= nil
     and viewers[ESSENTIAL_VIEWER].resolvedStyle ~= nil
     and viewers[UTILITY_VIEWER].resolvedStyle ~= nil
-    and viewers[ESSENTIAL_VIEWER].pendingEntries == nil
-    and viewers[UTILITY_VIEWER].pendingEntries == nil
-    and viewers[ESSENTIAL_VIEWER].generation == generation
-    and viewers[UTILITY_VIEWER].generation == generation
+    and viewers[ESSENTIAL_VIEWER].generation == viewers[UTILITY_VIEWER].generation
     and (
       groupLayoutEnabled and groupLayoutReady
       or AbilityLayout:GetLastPlan(ESSENTIAL_VIEWER) ~= nil
