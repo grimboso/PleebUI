@@ -79,6 +79,9 @@ local function RegisterMover(frame)
     smartSnap = {
       family = "combatBars",
       syncAxis = "NONE",
+      isRuntimeActive = function()
+        return ns.PCMAuraRuntime:IsReady()
+      end,
     },
     savePosition = function()
       SavePosition(frame)
