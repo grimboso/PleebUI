@@ -129,7 +129,7 @@ local function GetIconStyle(record)
 end
 
 local function ConfigureIconButton(record, button, unit, initializing)
-  if initializing ~= true and PCMRuntime:IsAuraRestricted() then
+  if initializing ~= true and not button:CanBeAccessedInContext() then
     record.stylePending = true
     return
   end
@@ -143,7 +143,7 @@ local function ConfigureIconButton(record, button, unit, initializing)
 end
 
 local function ConfigureBarButton(record, button, initializing)
-  if initializing ~= true and PCMRuntime:IsAuraRestricted() then
+  if initializing ~= true and not button:CanBeAccessedInContext() then
     record.stylePending = true
     return
   end
@@ -548,9 +548,8 @@ function AuraRuntime:PrepareRecordLayout(record, width, height, horizontalPaddin
 
   local frame = record.parts.frame
   frame:SetSize(width, height)
-
-  if not PCMRuntime:IsAuraRestricted() then
-    for _, button in pairs(record.buttons) do
+  for _, button in pairs(record.buttons) do
+    if button:CanBeAccessedInContext() then
       button:SetSize(width, height)
     end
   end
