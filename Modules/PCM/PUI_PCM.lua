@@ -1085,7 +1085,7 @@ local function _EnsureDefaultViewerAnchor(key)
   }
 end
 
-local function _RegisterViewerMover(info, structuralOnly)
+local function _RegisterViewerMover(info)
   if not _PCM_IsModuleEnabledFast() then
     return
   end
@@ -1357,20 +1357,16 @@ local function _RegisterViewerMover(info, structuralOnly)
 
 end
 
-local function _InitAllViewerMovers(structuralOnly)
+local function _InitAllViewerMovers()
   if not _PCM_IsModuleEnabledFast() then
     return
   end
 
   for _, info in Cooldowns:IterateViewers() do
     if info.key == "EssentialCooldownViewer" or info.key == "UtilityCooldownViewer" then
-      _RegisterViewerMover(info, structuralOnly)
+      _RegisterViewerMover(info)
     end
   end
-end
-
-local function _PCM_PrepareViewerMoverGeometry()
-  _InitAllViewerMovers(true)
 end
 
 local function _RefreshViewerBordersOnly(viewerKey)
@@ -1868,7 +1864,6 @@ function Cooldowns:OnEnable()
     _PCM_PrepareStartupLayout
   )
   PCMCVarFrame:RegisterEvent("CVAR_UPDATE")
-  _PCM_PrepareViewerMoverGeometry()
   _PCM_RunInitialViewerPass(self)
   EventRegistry:RegisterCallback(
     "CooldownViewerSettings.OnHide",
@@ -2297,7 +2292,6 @@ end
   _EnsureDefaultViewerAnchor = P:Def('_EnsureDefaultViewerAnchor', _EnsureDefaultViewerAnchor)
   _RegisterViewerMover = P:Def('_RegisterViewerMover', _RegisterViewerMover)
   _InitAllViewerMovers = P:Def('_InitAllViewerMovers', _InitAllViewerMovers)
-  _PCM_PrepareViewerMoverGeometry = P:Def('_PCM_PrepareViewerMoverGeometry', _PCM_PrepareViewerMoverGeometry)
   _RefreshViewerBordersOnly = P:Def('_RefreshViewerBordersOnly', _RefreshViewerBordersOnly)
   _RefreshViewerFontsOnly = P:Def('_RefreshViewerFontsOnly', _RefreshViewerFontsOnly)
   _RefreshIconViewers = P:Def('_RefreshIconViewers', _RefreshIconViewers)
