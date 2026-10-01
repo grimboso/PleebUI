@@ -466,15 +466,33 @@ local function ReadNativeConfiguration()
       return nil
     end
     local data = C_EncodingUtil.DeserializeCBOR(inflated)
-    if type(data) ~= "table" or (data[1] ~= 4 and data[1] ~= 5) then
+    if type(data) ~= "table" then
+      return nil
+    end
+    local version = data[1]
+    if version ~= 1 and version ~= 2 and version ~= 3 and version ~= 4 and version ~= 5 then
       return nil
     end
     local activeLayouts = data[2]
     local layouts = data[3]
-    if activeLayouts and layouts then
-      local specLayouts = layouts[tag]
-      if specLayouts then
-        savedLayout = specLayouts[activeLayouts[tag]]
+    local specLayouts = layouts and layouts[tag]
+    if specLayouts then
+      if version == 1 then
+        -- Version 1 selects the last layout loaded for the specialization.
+        for _, layout in pairs(specLayouts) do
+          savedLayout = layout
+        end
+      else
+        local activeLayout = activeLayouts and activeLayouts[tag]
+        if activeLayout ~= 0 then
+          savedLayout = activeLayout and specLayouts[activeLayout]
+          if not savedLayout then
+            for _, layout in pairs(specLayouts) do
+              savedLayout = layout
+              break
+            end
+          end
+        end
       end
     end
   end
