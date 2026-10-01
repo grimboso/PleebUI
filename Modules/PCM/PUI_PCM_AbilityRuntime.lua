@@ -1192,6 +1192,11 @@ local function ReleaseRecord(record)
   PCMPresentation.DeactivateOwnedIcon(record.parts)
   record.parts.frame:Hide()
   record.parts.frame:ClearAllPoints()
+  if record.pcmGroupLayoutFrame then
+    record.pcmGroupLayoutFrame:Hide()
+    record.pcmGroupLayoutFrame:ClearAllPoints()
+    record.pcmGroupLayoutFrame:SetParent(UIParent)
+  end
   retiredByCooldownID[record.cooldownID] = record
 end
 
