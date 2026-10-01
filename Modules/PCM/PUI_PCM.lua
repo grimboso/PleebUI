@@ -1787,7 +1787,9 @@ local function _PCM_PrepareStartupLayout()
     return
   end
 
-  _PCM_RunInitialViewerPass(Cooldowns)
+  if _PCM_RunInitialViewerPass(Cooldowns) then
+    ns.PCMGroupManager:Flush()
+  end
 end
 
 local function _PCM_OnFrameScaleChanged(_, scale)
@@ -2041,6 +2043,7 @@ function Cooldowns:ApplySettings(flags)
   if flags.profile == true then
     _PCM_MigrateOwnedViewerTooltips()
     ns.PCMGroupManager:RefreshProfile()
+    ns.PCMCatalog:Invalidate("profile")
     IconSettings:InvalidateCatalog()
     IconSettings:InvalidateSettings()
     needsIconRefresh = true

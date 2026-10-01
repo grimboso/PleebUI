@@ -4,12 +4,12 @@ local Catalog = {}
 ns.PCMAbilityCatalog = Catalog
 ns.PCMCatalog = Catalog
 
+local DB = ns.PCM_DBExports
 local C_CooldownViewer = C_CooldownViewer
 local C_Spell = C_Spell
 local Enum = Enum
 local EventRegistry = EventRegistry
 local FlagsUtil = FlagsUtil
-local hooksecurefunc = hooksecurefunc
 local CreateFromMixins = CreateFromMixins
 local DirtiableMixin = DirtiableMixin
 local issecretvalue = issecretvalue
@@ -23,6 +23,8 @@ local ESSENTIAL_VIEWER_KEY = "EssentialCooldownViewer"
 local UTILITY_VIEWER_KEY = "UtilityCooldownViewer"
 local BUFF_ICON_VIEWER_KEY = "BuffIconCooldownViewer"
 local BUFF_BAR_VIEWER_KEY = "BuffBarCooldownViewer"
+local POWER_INFUSION_SPELL_IDS = { 10060 }
+local BLOODLUST_SPELL_IDS = { 2825, 32182, 80353, 264667, 390386, 466904 }
 
 local EMPTY = {}
 local ACTIVE_SOURCE_CATEGORIES = {
@@ -72,6 +74,8 @@ local ENTRY_SCALAR_FIELDS = {
   "hasCharges",
   "cooldownSpellID",
   "spellID",
+  "playerAuraOnly",
+  "includeAnySource",
 }
 
 local STRUCTURAL_EVENTS = {
@@ -509,6 +513,145 @@ local function AssignSettingsKeys(entries)
   end
 end
 
+local function BuildCustomAuraEntry(catalogKey, spellIDs, viewerOrder, globalOrder, displayName)
+  local identitySpellIDs = {}
+  local seenIdentitySpellIDs = {}
+  for index = 1, #spellIDs do
+    if not AddIdentitySpellID(identitySpellIDs, seenIdentitySpellIDs, spellIDs[index]) then
+      return nil
+    end
+  end
+
+  local displaySpellID = spellIDs[1]
+  local canonicalSpellID, valid = ResolveBaseSpellID(displaySpellID)
+  if not valid then
+    return nil
+  end
+  local staticName, staticIcon = ReadStaticPresentation(displaySpellID)
+
+  return {
+    cooldownID = catalogKey,
+    catalogKey = catalogKey,
+    settingsFamily = SETTINGS_FAMILY_BUFF,
+    settingsKey = nil,
+    globalOrder = globalOrder,
+    viewerKey = BUFF_ICON_VIEWER_KEY,
+    viewerOrder = viewerOrder,
+    sourceCategory = Enum.CooldownViewerCategory.TrackedBuff,
+    defaultCategory = Enum.CooldownViewerCategory.TrackedBuff,
+    resolvedCategory = Enum.CooldownViewerCategory.TrackedBuff,
+    flags = 0,
+    isKnown = true,
+    isInvisible = false,
+    hasAura = true,
+    selfAura = true,
+    charges = false,
+    hideAura = false,
+    hideByDefault = false,
+    entryKind = "spell",
+    baseSpellID = displaySpellID,
+    overrideSpellID = nil,
+    overrideTooltipSpellID = nil,
+    linkedSpellIDs = {},
+    staticDisplaySpellID = displaySpellID,
+    chargeSpellID = displaySpellID,
+    canonicalSpellID = canonicalSpellID,
+    identitySpellIDs = identitySpellIDs,
+    equipSlot = nil,
+    buffSlot = nil,
+    spellCategoryID = nil,
+    staticName = staticName,
+    staticIcon = staticIcon,
+    name = displayName or staticName or ("Spell " .. tostring(displaySpellID)),
+    texture = staticIcon or 134400,
+    hasCharges = false,
+    cooldownSpellID = displaySpellID,
+    spellID = displaySpellID,
+    playerAuraOnly = true,
+    includeAnySource = true,
+  }
+end
+
+local function AddCustomBuffEntries(entries, viewerEntries)
+  local tracking = DB.GetBuffIconTrackingDB()
+  if not tracking then
+    return
+  end
+
+  local buffEntries = viewerEntries[BUFF_ICON_VIEWER_KEY]
+  local trackedSpellIDs = {}
+  for index = 1, #buffEntries do
+    local entry = buffEntries[index]
+    local identitySpellIDs = entry.identitySpellIDs
+    for identityIndex = 1, #identitySpellIDs do
+      trackedSpellIDs[identitySpellIDs[identityIndex]] = entry
+    end
+  end
+
+  local function AddEntry(catalogKey, spellIDs, displayName)
+    local existingEntry
+    for index = 1, #spellIDs do
+      if trackedSpellIDs[spellIDs[index]] then
+        existingEntry = trackedSpellIDs[spellIDs[index]]
+        break
+      end
+    end
+
+    if existingEntry then
+      local seenIdentitySpellIDs = {}
+      for index = 1, #existingEntry.identitySpellIDs do
+        seenIdentitySpellIDs[existingEntry.identitySpellIDs[index]] = true
+      end
+      for index = 1, #spellIDs do
+        if not AddIdentitySpellID(
+          existingEntry.identitySpellIDs,
+          seenIdentitySpellIDs,
+          spellIDs[index]
+        ) then
+          return
+        end
+      end
+      existingEntry.playerAuraOnly = true
+      existingEntry.includeAnySource = true
+      for index = 1, #existingEntry.identitySpellIDs do
+        trackedSpellIDs[existingEntry.identitySpellIDs[index]] = existingEntry
+      end
+      return
+    end
+
+    local entry = BuildCustomAuraEntry(
+      catalogKey,
+      spellIDs,
+      #buffEntries + 1,
+      #entries + 1,
+      displayName
+    )
+    if not entry then
+      return
+    end
+
+    entries[#entries + 1] = entry
+    buffEntries[#buffEntries + 1] = entry
+    for index = 1, #entry.identitySpellIDs do
+      trackedSpellIDs[entry.identitySpellIDs[index]] = entry
+    end
+  end
+
+  if tracking.powerInfusion == true then
+    AddEntry("custom-aura:power-infusion", POWER_INFUSION_SPELL_IDS, "Power Infusion")
+  end
+  if tracking.bloodlust == true then
+    AddEntry("custom-aura:bloodlust", BLOODLUST_SPELL_IDS, "Bloodlust")
+  end
+
+  for index = 1, #tracking.customSpellIDs do
+    local spellID = tonumber(tracking.customSpellIDs[index])
+    if spellID and spellID > 0 and spellID == math.floor(spellID) then
+      AddEntry("custom-aura:" .. tostring(spellID), { spellID })
+    end
+  end
+end
+
 local function BuildGeneration()
   local settings = _G.CooldownViewerSettings
   if not settings then
@@ -644,8 +787,6 @@ local function BuildGeneration()
     return nil
   end
 
-  AssignSettingsKeys(entries)
-
   local viewerEntries = {
     [ESSENTIAL_VIEWER_KEY] = {},
     [UTILITY_VIEWER_KEY] = {},
@@ -670,6 +811,9 @@ local function BuildGeneration()
   then
     return nil
   end
+
+  AddCustomBuffEntries(entries, viewerEntries)
+  AssignSettingsKeys(entries)
 
   return {
     entries = entries,
@@ -782,45 +926,22 @@ local function InvalidateFromStructuralEvent()
   Catalog:Invalidate("structural")
 end
 
-local function InvalidateAfterSettingsClose()
+local function InvalidateFromSettingsChange()
   Catalog:Invalidate("provider")
 end
 
-local settingsOrderHooked = false
-
-local function InstallSettingsOrderHook()
-  local settingsMixin = CooldownViewerSettingsMixin
-  if settingsOrderHooked
-    or type(settingsMixin) ~= "table"
-    or type(settingsMixin.EndOrderChange) ~= "function"
-  then
-    return
-  end
-
-  settingsOrderHooked = true
-  hooksecurefunc(settingsMixin, "EndOrderChange", function()
-    if enabled then
-      Catalog:Invalidate("provider-order")
-    end
-  end)
-end
-
-eventFrame:SetScript("OnEvent", function()
-  InstallSettingsOrderHook()
-  InvalidateFromStructuralEvent()
-end)
+eventFrame:SetScript("OnEvent", InvalidateFromStructuralEvent)
 
 function Catalog:Enable(owner)
   enableOwners[owner or self] = true
   if enabled then return end
   enabled = true
-  InstallSettingsOrderHook()
   for index = 1, #STRUCTURAL_EVENTS do
     eventFrame:RegisterEvent(STRUCTURAL_EVENTS[index])
   end
   EventRegistry:RegisterCallback(
-    "CooldownViewerSettings.OnHide",
-    InvalidateAfterSettingsClose,
+    "CooldownViewerSettings.OnDataChanged",
+    InvalidateFromSettingsChange,
     Catalog
   )
   self:Invalidate("initial")
@@ -832,7 +953,7 @@ function Catalog:Disable(owner)
   if not enabled then return end
   enabled = false
   eventFrame:UnregisterAllEvents()
-  EventRegistry:UnregisterCallback("CooldownViewerSettings.OnHide", Catalog)
+  EventRegistry:UnregisterCallback("CooldownViewerSettings.OnDataChanged", Catalog)
 end
 
 local P = select(1, ns.Pleebug:DropIn(Catalog, { name = "PCM", bucket = "AbilityCatalog" }))

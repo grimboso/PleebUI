@@ -1650,6 +1650,26 @@ do
     return groups
   end
 
+  function E.GetBuffIconTrackingDB()
+    local root = E.GetPCMRoot()
+    if not root then
+      return nil
+    end
+
+    local tracking = root.buffIconTracking
+    if type(tracking) ~= "table" then
+      tracking = {}
+      root.buffIconTracking = tracking
+    end
+
+    if tracking.powerInfusion == nil then tracking.powerInfusion = false end
+    if tracking.bloodlust == nil then tracking.bloodlust = false end
+    tracking.customSpellIDs = type(tracking.customSpellIDs) == "table"
+      and tracking.customSpellIDs
+      or {}
+    return tracking
+  end
+
   function E.GetViewerSwipeDB(viewerKey)
     if not viewerKey then
       return nil
@@ -2045,6 +2065,7 @@ end
   E.SetOwnedViewerHideWhenInactive = P:Def('E.SetOwnedViewerHideWhenInactive', E.SetOwnedViewerHideWhenInactive)
   E.GetPCMRoot = P:Def('E.GetPCMRoot', E.GetPCMRoot)
   E.GetCooldownGroupsDB = P:Def('E.GetCooldownGroupsDB', E.GetCooldownGroupsDB)
+  E.GetBuffIconTrackingDB = P:Def('E.GetBuffIconTrackingDB', E.GetBuffIconTrackingDB)
   E.GetViewerSwipeDB = P:Def('E.GetViewerSwipeDB', E.GetViewerSwipeDB)
   E.GetProfileBuffsDB = P:Def('E.GetProfileBuffsDB', E.GetProfileBuffsDB)
   E.GetProfileBuffsAnchorDB = P:Def('E.GetProfileBuffsAnchorDB', E.GetProfileBuffsAnchorDB)

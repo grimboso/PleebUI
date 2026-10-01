@@ -648,6 +648,26 @@ end
 local _PCM_BuildIconOverrideArgs
 local _PCM_BuildIconOverrideTreeArgs
 
+local function _PCM_ParseCustomBuffSpellIDs(value)
+  local spellIDs = {}
+  local seen = {}
+  for token in tostring(value or ""):gmatch("[^,%s]+") do
+    local spellID = tonumber(token)
+    if not spellID or spellID <= 0 or spellID ~= math.floor(spellID) then
+      return nil, "Enter positive SpellIDs separated by commas or spaces."
+    end
+    if not seen[spellID] then
+      seen[spellID] = true
+      spellIDs[#spellIDs + 1] = spellID
+    end
+  end
+  return spellIDs
+end
+
+local function _PCM_RefreshCustomBuffTracking()
+  ns.PCMCatalog:Invalidate("custom-buff-tracking")
+end
+
 local function _PCM_BuildBuffIconsTabArgs(includeIconOverrides)
   local cm = GetPCMBuffsRoot()
   local viewerCM = GetPCMRoot()
@@ -687,6 +707,54 @@ local function _PCM_BuildBuffIconsTabArgs(includeIconOverrides)
     end,
     set = function(_, enabled)
       Cooldowns:SetViewerHideWhenInactive(viewerKey, enabled == true)
+    end,
+  }
+
+  args.powerInfusion = {
+    type = "toggle",
+    name = "Track Power Infusion",
+    desc = "Add Power Infusion to this Buff Icon group even when it is not tracked in Blizzard's Cooldown Manager.",
+    order = 1,
+    get = function()
+      return ns.PCM_DBExports.GetBuffIconTrackingDB().powerInfusion == true
+    end,
+    set = function(_, enabled)
+      ns.PCM_DBExports.GetBuffIconTrackingDB().powerInfusion = enabled == true
+      _PCM_RefreshCustomBuffTracking()
+    end,
+  }
+
+  args.bloodlust = {
+    type = "toggle",
+    name = "Track Bloodlust effects",
+    desc = "Track Bloodlust, Heroism, Time Warp, Primal Rage, Fury of the Aspects, and Harrier's Cry as one icon.",
+    order = 2,
+    get = function()
+      return ns.PCM_DBExports.GetBuffIconTrackingDB().bloodlust == true
+    end,
+    set = function(_, enabled)
+      ns.PCM_DBExports.GetBuffIconTrackingDB().bloodlust = enabled == true
+      _PCM_RefreshCustomBuffTracking()
+    end,
+  }
+
+  args.customBuffSpellIDs = {
+    type = "input",
+    name = "Custom buff SpellIDs",
+    desc = "Add player buffs that are not tracked in Blizzard's Cooldown Manager. Separate multiple SpellIDs with commas or spaces.",
+    order = 3,
+    width = "full",
+    validate = function(_, value)
+      local _, errorMessage = _PCM_ParseCustomBuffSpellIDs(value)
+      return errorMessage or true
+    end,
+    get = function()
+      return table.concat(ns.PCM_DBExports.GetBuffIconTrackingDB().customSpellIDs, ", ")
+    end,
+    set = function(_, value)
+      local spellIDs = _PCM_ParseCustomBuffSpellIDs(value)
+      ns.PCM_DBExports.GetBuffIconTrackingDB().customSpellIDs = spellIDs
+      _PCM_RefreshCustomBuffTracking()
     end,
   }
 
@@ -820,6 +888,16 @@ local function _PCM_BuildBuffIconsTabArgs(includeIconOverrides)
   end
 
   return {
+    tracking = {
+      type = "group",
+      name = "Tracked buffs",
+      order = 5,
+      args = {
+        powerInfusion = args.powerInfusion,
+        bloodlust = args.bloodlust,
+        customBuffSpellIDs = args.customBuffSpellIDs,
+      },
+    },
     layout = {
       type = "group",
       name = "Layout",
@@ -8708,7 +8786,7 @@ local function _PCM_BuildGroupNode(groupID, group, order, buildContent)
       type = "group",
       name = "Group settings",
       order = 1,
-      childGroups = "tree",
+      inline = true,
       args = settingsArgs,
     },
   }

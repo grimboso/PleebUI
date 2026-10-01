@@ -1203,7 +1203,6 @@ local function AcquireRecord(viewer, entry, generation)
   if record then
     retiredByCooldownID[entry.cooldownID] = nil
     parts = record.parts
-    parts.frame:SetParent(viewer.frame)
     record.entry = entry
     record.catalogGeneration = generation
     record.viewerKey = viewer.key
@@ -1545,12 +1544,6 @@ function AbilityRuntime:InitializeViewer(viewerKey, parent)
 
   parent = parent or UIParent
   if viewer.frame then
-    if viewer.parent ~= parent then
-      viewer.parent = parent
-      viewer.frame:SetParent(parent)
-      viewer.frame:ClearAllPoints()
-      viewer.frame:SetPoint("CENTER", parent, "CENTER", 0, 0)
-    end
     return viewer.frame
   end
 

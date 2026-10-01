@@ -57,7 +57,14 @@ local activeRestrictions = {}
 local optionsTreeDirty = false
 local optionsTreeTargetGroupID
 local flushFrame = CreateFrame("Frame")
-local restrictionFrame = CreateFrame("Frame")
+local dynamicBoundsEventFrame = CreateFrame("Frame")
+local dynamicBoundsRows = {}
+local dynamicBoundsRecords = {}
+local centeredRowFrames = {}
+local dynamicBoundsActive = false
+local dynamicBoundsRefreshPasses = 0
+
+local DYNAMIC_BOUNDS_SETTLE_PASSES = 2
 
 local STRUCTURE_RESTRICTION_TYPES = {
   [Enum.AddOnRestrictionType.Combat] = true,
@@ -335,6 +342,210 @@ local function PlanBars(group, records)
   return plan
 end
 
+local function PrepareRecordLayout(record, width, height, horizontalPadding)
+  if record.viewerKey == "BuffIconCooldownViewer"
+    or record.viewerKey == "BuffBarCooldownViewer"
+  then
+    return AuraRuntime:PrepareRecordLayout(
+      record,
+      width,
+      height,
+      horizontalPadding
+    )
+  end
+
+  local frame = record.parts.frame
+  frame:SetSize(width, height)
+  if horizontalPadding ~= nil then
+    local layoutFrame = record.pcmGroupLayoutFrame
+    if not layoutFrame then
+      layoutFrame = CreateFrame("Frame", nil, frame:GetParent())
+      record.pcmGroupLayoutFrame = layoutFrame
+    end
+    layoutFrame:SetSize(math.max(0.001, width + horizontalPadding), height)
+    layoutFrame:Show()
+    frame:ClearAllPoints()
+    frame:SetPoint("CENTER", layoutFrame, "CENTER")
+    return layoutFrame
+  end
+  if record.pcmGroupLayoutFrame then
+    record.pcmGroupLayoutFrame:Hide()
+  end
+  return frame
+end
+
+local function GroupUsesCollapsedAuraLayout(group, records)
+  if group.data.kind ~= "ICON" then
+    return false
+  end
+  for index = 1, #records do
+    if AuraRuntime:UsesCollapsedLayout(records[index]) then
+      return true
+    end
+  end
+  return false
+end
+
+local function GetCenteredRowFrame(group, rowIndex)
+  local rows = centeredRowFrames[group.id]
+  if not rows then
+    rows = {}
+    centeredRowFrames[group.id] = rows
+  end
+
+  local row = rows[rowIndex]
+  if not row then
+    row = CreateFrame("Frame", nil, group.frame)
+    row:SetSize(0.001, 0.001)
+    row:SetIgnoringChildrenForBounds(true)
+    local startAssistant = CreateFrame(
+      "Frame",
+      nil,
+      row,
+      "DisableUntrustedLayoutScriptsTemplate"
+    )
+    startAssistant:SetSize(0.001, 0.001)
+    local endAssistant = CreateFrame(
+      "Frame",
+      nil,
+      row,
+      "DisableUntrustedLayoutScriptsTemplate"
+    )
+    endAssistant:SetSize(0.001, 0.001)
+    row.__puiPCMStartAssistant = startAssistant
+    row.__puiPCMEndAssistant = endAssistant
+    rows[rowIndex] = row
+  end
+  return row
+end
+
+local function ApplyCollapsedAuraIconRows(group, records)
+  local style = ResolveIconLayout(group.data)
+  local size = math.max(8, math.min(96, Pixel.Round(tonumber(style.iconSize) or 36)))
+  local spacing = math.max(-20, math.min(40, Pixel.Round(tonumber(style.spacing) or 2)))
+  local columns = math.max(0, math.min(40, math.floor(tonumber(style.columns) or 0)))
+  local count = #records
+  local rowLimit = columns > 0 and columns or math.max(count, 1)
+  local rowCount = count > 0 and math.ceil(count / rowLimit) or 0
+  local growUp = style.rowGrowth == "UP"
+  local growth = style.growth
+  local fullWidth = math.max(1, math.min(count, rowLimit) * size + math.max(0, math.min(count, rowLimit) - 1) * spacing)
+  local fullHeight = math.max(1, rowCount * size + math.max(0, rowCount - 1) * spacing)
+  group.frame:SetSize(fullWidth, fullHeight)
+
+  local rows = centeredRowFrames[group.id]
+  if rows then
+    for index = rowCount + 1, #rows do
+      rows[index]:Hide()
+    end
+  end
+
+  local recordIndex = 1
+  for rowIndex = 1, rowCount do
+    local row = GetCenteredRowFrame(group, rowIndex)
+    row:ClearAllPoints()
+    local y = (fullHeight / 2) - (size / 2) - ((rowIndex - 1) * (size + spacing))
+    if growUp then
+      y = -(fullHeight / 2) + (size / 2) + ((rowIndex - 1) * (size + spacing))
+    end
+    if growth == "LEFT" then
+      row:SetPoint("RIGHT", group.frame, "RIGHT", 0, Pixel.Round(y))
+    elseif growth == "RIGHT" then
+      row:SetPoint("LEFT", group.frame, "LEFT", 0, Pixel.Round(y))
+    else
+      row:SetPoint("CENTER", group.frame, "CENTER", 0, Pixel.Round(y))
+    end
+    row:Show()
+    dynamicBoundsRows[#dynamicBoundsRows + 1] = row
+
+    local first
+    local previous
+    local rowItems = math.min(rowLimit, count - recordIndex + 1)
+    for _ = 1, rowItems do
+      local record = records[recordIndex]
+      local layoutFrame = PrepareRecordLayout(record, size, size, spacing)
+      layoutFrame:ClearAllPoints()
+      if growth == "LEFT" then
+        if previous then
+          layoutFrame:SetPoint("RIGHT", previous, "LEFT", 0, 0)
+        else
+          layoutFrame:SetPoint("RIGHT", row, "RIGHT", 0, 0)
+        end
+      else
+        if previous then
+          layoutFrame:SetPoint("LEFT", previous, "RIGHT", 0, 0)
+        else
+          layoutFrame:SetPoint("LEFT", row, "LEFT", 0, 0)
+        end
+      end
+      AuraRuntime:FinalizeRecordLayout(record)
+      first = first or layoutFrame
+      previous = layoutFrame
+      if AuraRuntime:UsesCollapsedLayout(record) then
+        dynamicBoundsRecords[#dynamicBoundsRecords + 1] = record
+      end
+      recordIndex = recordIndex + 1
+    end
+
+    row.__puiPCMStartAssistant:ClearAllPoints()
+    row.__puiPCMEndAssistant:ClearAllPoints()
+    if growth == "LEFT" then
+      row.__puiPCMStartAssistant:SetPoint("TOPRIGHT", first, "TOPRIGHT")
+      row.__puiPCMEndAssistant:SetPoint("BOTTOMLEFT", previous, "BOTTOMLEFT")
+    else
+      row.__puiPCMStartAssistant:SetPoint("TOPLEFT", first, "TOPLEFT")
+      row.__puiPCMEndAssistant:SetPoint("BOTTOMRIGHT", previous, "BOTTOMRIGHT")
+    end
+  end
+
+  if not group.data.isDefault then
+    group.frame:SetShown(enabled)
+    RegisterCustomGroupMover(group.data, group.frame)
+    FrameUtil.RefreshSmartSnapRuntimeLayout("PCM_Group_" .. group.id)
+  else
+    FrameUtil.RefreshSmartSnapRuntimeLayout(group.data.defaultViewerKey)
+  end
+end
+
+local function RefreshDynamicBounds()
+  for index = 1, #dynamicBoundsRecords do
+    AuraRuntime:RefreshRecordLayoutBounds(dynamicBoundsRecords[index])
+  end
+  for index = 1, #dynamicBoundsRows do
+    local row = dynamicBoundsRows[index]
+    row:SetIgnoringChildrenForBounds(false)
+    row:SetSize(0.001, 0.001)
+    row:ResizeToBoundsRect()
+    row:SetIgnoringChildrenForBounds(true)
+  end
+end
+
+local function QueueDynamicBoundsRefresh()
+  if not enabled or not dynamicBoundsActive then
+    return
+  end
+  dynamicBoundsRefreshPasses = DYNAMIC_BOUNDS_SETTLE_PASSES
+  flushFrame:Show()
+end
+
+local function SetDynamicBoundsActive(active)
+  active = active == true
+  if dynamicBoundsActive ~= active then
+    dynamicBoundsActive = active
+    if active then
+      dynamicBoundsEventFrame:RegisterUnitEvent("UNIT_AURA", "player", "target")
+      dynamicBoundsEventFrame:RegisterEvent("PLAYER_TARGET_CHANGED")
+    else
+      dynamicBoundsEventFrame:UnregisterAllEvents()
+      dynamicBoundsRefreshPasses = 0
+    end
+  end
+  if active then
+    QueueDynamicBoundsRefresh()
+  end
+  flushFrame:SetShown(enabled and (pendingLayout or dynamicBoundsRefreshPasses > 0))
+end
+
 local function ApplyPlan(group, records, plan)
   local frame = group.frame
   local minimum = not group.data.isDefault and 40 or 1
@@ -346,12 +557,15 @@ local function ApplyPlan(group, records, plan)
   for index = 1, #records do
     local record = records[index]
     local item = plan.items[index]
-    local recordFrame = record.parts.frame
-    recordFrame:SetParent(frame)
-    recordFrame:SetSize(item.width, item.height)
+    local recordFrame = PrepareRecordLayout(record, item.width, item.height)
     recordFrame:ClearAllPoints()
     local point = item.point or "CENTER"
     recordFrame:SetPoint(point, frame, point, item.x, item.y)
+    if record.viewerKey == "BuffIconCooldownViewer"
+      or record.viewerKey == "BuffBarCooldownViewer"
+    then
+      AuraRuntime:FinalizeRecordLayout(record)
+    end
   end
 
   if not group.data.isDefault then
@@ -502,18 +716,10 @@ local function HideEditHandles()
   end
 end
 
-local function RestoreRuntimeParents()
+local function HideGroupLayoutFrames()
   for _, record in pairs(activeRecordsByKey) do
-    local parent
-    if record.viewerKey == "EssentialCooldownViewer"
-      or record.viewerKey == "UtilityCooldownViewer"
-    then
-      parent = AbilityRuntime:GetViewerFrame(record.viewerKey)
-    else
-      parent = AuraRuntime:GetViewerFrame(record.viewerKey)
-    end
-    if parent then
-      record.parts.frame:SetParent(parent)
+    if record.pcmGroupLayoutFrame then
+      record.pcmGroupLayoutFrame:Hide()
     end
   end
 end
@@ -604,9 +810,7 @@ local function GetOptionsRefreshPath(groupID)
   if groupID and db.byID[groupID] then
     if activeGroupID == groupID then
       local childKey = activePath[3]
-      if childKey == "settings"
-        or type(childKey) == "string" and GroupContainsRecord(groupID, childKey)
-      then
+      if type(childKey) == "string" and GroupContainsRecord(groupID, childKey) then
         return activePath
       end
     end
@@ -615,9 +819,7 @@ local function GetOptionsRefreshPath(groupID)
 
   if activeGroupID and db.byID[activeGroupID] then
     local childKey = activePath[3]
-    if childKey == "settings"
-      or type(childKey) == "string" and GroupContainsRecord(activeGroupID, childKey)
-    then
+    if type(childKey) == "string" and GroupContainsRecord(activeGroupID, childKey) then
       return activePath
     end
     return { "CooldownManager", activeGroupID }
@@ -838,32 +1040,50 @@ function GroupManager:RequestLayout(structureChanged, targetGroupID)
 end
 
 function GroupManager:Flush()
-  if not enabled or not pendingLayout then
+  if not enabled then
     flushFrame:Hide()
     return
   end
+  if not pendingLayout then
+    flushFrame:SetShown(dynamicBoundsRefreshPasses > 0)
+    return
+  end
   if IsStructureLocked() then
-    flushFrame:Hide()
+    flushFrame:SetShown(dynamicBoundsRefreshPasses > 0)
     HideEditHandles()
     return
   end
 
   pendingLayout = false
   RebuildActiveGroups()
+  wipe(dynamicBoundsRows)
+  wipe(dynamicBoundsRecords)
+  for _, rows in pairs(centeredRowFrames) do
+    for index = 1, #rows do
+      rows[index]:Hide()
+    end
+  end
 
   for _, group in pairs(activeGroups) do
-    local plan = group.data.kind == "BAR"
-      and PlanBars(group.data, group.records)
-      or PlanIcons(group.data, group.records)
-    ApplyPlan(group, group.records, plan)
+    if GroupUsesCollapsedAuraLayout(group, group.records) then
+      ApplyCollapsedAuraIconRows(group, group.records)
+    else
+      local plan = group.data.kind == "BAR"
+        and PlanBars(group.data, group.records)
+        or PlanIcons(group.data, group.records)
+      ApplyPlan(group, group.records, plan)
+    end
   end
+
+  RefreshDynamicBounds()
+  SetDynamicBoundsActive(#dynamicBoundsRows > 0)
 
   ready = ns.PCMCatalog:GetGeneration() > 0
   AbilityRuntime:SetGroupLayoutReady(ready)
   AuraRuntime:SetGroupLayoutReady(ready)
   self:RefreshEditHandles()
   FlushOptionsTreeChange()
-  flushFrame:SetShown(pendingLayout)
+  flushFrame:SetShown(pendingLayout or dynamicBoundsRefreshPasses > 0)
 end
 
 function GroupManager:GetGroups()
@@ -1007,11 +1227,7 @@ function GroupManager:Enable()
   ready = false
   AbilityRuntime:SetGroupLayoutEnabled(true)
   AuraRuntime:SetGroupLayoutEnabled(true)
-  restrictionFrame:RegisterEvent("ADDON_RESTRICTION_STATE_CHANGED")
-  restrictionFrame:RegisterEvent("LOADING_SCREEN_ENABLED")
-  restrictionFrame:RegisterEvent("LOADING_SCREEN_DISABLED")
-  restrictionFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
-  restrictionFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
+  PCMRuntime:SetSubscriberEnabled("GroupManager", true)
   self:RequestLayout(true)
 end
 
@@ -1024,10 +1240,13 @@ function GroupManager:Disable()
   pendingLayout = false
   editing = false
   flushFrame:Hide()
-  restrictionFrame:UnregisterAllEvents()
+  SetDynamicBoundsActive(false)
+  wipe(dynamicBoundsRows)
+  wipe(dynamicBoundsRecords)
+  PCMRuntime:SetSubscriberEnabled("GroupManager", false)
   wipe(activeRestrictions)
   HideEditHandles()
-  RestoreRuntimeParents()
+  HideGroupLayoutFrames()
   for groupID, frame in pairs(groupFrames) do
     FrameUtil:UnregisterMover("PCM_Group_" .. groupID)
     frame:Hide()
@@ -1038,38 +1257,53 @@ end
 
 FrameUtil.RegisterEditModeParticipant("PCM.Groups", GroupManager, 45)
 
-restrictionFrame:SetScript("OnEvent", function(_, event, restrictionType, state)
-  if event == "LOADING_SCREEN_ENABLED" then
-    flushFrame:Hide()
-    HideEditHandles()
-    return
-  end
-
-  if event == "ADDON_RESTRICTION_STATE_CHANGED" then
-    if not STRUCTURE_RESTRICTION_TYPES[restrictionType] then
+PCMRuntime:RegisterSubscriber("GroupManager", {
+  OnLifecycleEvent = function(event, restrictionType, state)
+    if event == "LOADING_SCREEN_ENABLED" then
+      flushFrame:Hide()
+      SetDynamicBoundsActive(false)
+      HideEditHandles()
       return
     end
-    if state == Enum.AddOnRestrictionState.Inactive then
-      activeRestrictions[restrictionType] = nil
-    else
-      activeRestrictions[restrictionType] = true
-    end
-  end
 
-  if event == "LOADING_SCREEN_DISABLED"
-    or event == "PLAYER_ENTERING_WORLD"
-    or event == "PLAYER_REGEN_ENABLED"
-    or next(activeRestrictions) == nil
-  then
-    GroupManager:RequestLayout()
-  elseif editing then
-    HideEditHandles()
-  end
-end)
+    local restrictionsCleared = false
+    if event == "ADDON_RESTRICTION_STATE_CHANGED" then
+      if not STRUCTURE_RESTRICTION_TYPES[restrictionType] then
+        return
+      end
+      if state == Enum.AddOnRestrictionState.Inactive then
+        activeRestrictions[restrictionType] = nil
+        restrictionsCleared = next(activeRestrictions) == nil
+      else
+        activeRestrictions[restrictionType] = true
+      end
+    end
+
+    if event == "LOADING_SCREEN_DISABLED"
+      or event == "PLAYER_ENTERING_WORLD"
+      or event == "PLAYER_REGEN_ENABLED"
+      or restrictionsCleared
+    then
+      GroupManager:RequestLayout()
+      GroupManager:Flush()
+    elseif editing then
+      HideEditHandles()
+    end
+  end,
+})
 
 flushFrame:SetScript("OnUpdate", function()
-  GroupManager:Flush()
+  if pendingLayout then
+    GroupManager:Flush()
+  end
+  if dynamicBoundsRefreshPasses > 0 then
+    RefreshDynamicBounds()
+    dynamicBoundsRefreshPasses = dynamicBoundsRefreshPasses - 1
+  end
+  flushFrame:SetShown(enabled and (pendingLayout or dynamicBoundsRefreshPasses > 0))
 end)
+
+dynamicBoundsEventFrame:SetScript("OnEvent", QueueDynamicBoundsRefresh)
 
 local P = select(1, ns.Pleebug:DropIn(GroupManager, { name = "PCM", bucket = "Groups" }))
 GroupManager.RefreshEditHandles = P:Def("GroupManager:RefreshEditHandles", GroupManager.RefreshEditHandles)

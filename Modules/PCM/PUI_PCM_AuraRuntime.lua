@@ -20,6 +20,8 @@ local type = type
 
 local BUFF_ICON_VIEWER = "BuffIconCooldownViewer"
 local BUFF_BAR_VIEWER = "BuffBarCooldownViewer"
+local AURA_UNITS = { "player", "target" }
+local PLAYER_AURA_UNITS = { "player" }
 
 local enabled = false
 local presentationActive = false
@@ -108,16 +110,21 @@ end
 
 local function UpdateRecordVisibility(record)
   local visible = presentationActive and RecordOccupiesLayout(record)
-  if record.layoutVisible == visible then
-    return
-  end
+  local layoutChanged = record.layoutVisible ~= visible
   record.layoutVisible = visible
-  record.parts.frame:SetShown(visible)
-  SetSlotActive(record, visible)
-  if groupLayoutEnabled then
-    ns.PCMGroupManager:RequestLayout()
-  else
-    AuraLayout:RequestLayout(record.viewerKey)
+  local shown = visible and (not groupLayoutEnabled or record.layoutPrepared == true)
+  record.presentationShown = shown
+  record.parts.frame:SetShown(shown)
+  if record.layoutFrame then
+    record.layoutFrame:SetShown(shown)
+  end
+  SetSlotActive(record, shown)
+  if layoutChanged then
+    if groupLayoutEnabled then
+      ns.PCMGroupManager:RequestLayout()
+    else
+      AuraLayout:RequestLayout(record.viewerKey)
+    end
   end
 end
 
@@ -163,12 +170,28 @@ local function InitializeAuraButton(record, button, unit)
   else
     ConfigureBarButton(record, button, true)
   end
+
+  if record.layoutFrame then
+    local sizeAssistant = CreateFrame(
+      "Frame",
+      nil,
+      record.layoutFrame,
+      "DisableUntrustedLayoutScriptsTemplate"
+    )
+    sizeAssistant:SetSize(0.001, 0.001)
+    sizeAssistant:SetPoint("TOPLEFT", button, "BOTTOMRIGHT")
+    record.boundsAssistants[unit] = sizeAssistant
+  end
 end
 
 SetSlotActive = function(record, active)
-  for _, handle in pairs(record.slots) do
+  active = active and (not groupLayoutEnabled or record.layoutPrepared == true)
+  for unit, handle in pairs(record.slots) do
     if handle then
-      AuraSlotDriver:SetSlotActive(handle, active)
+      AuraSlotDriver:SetSlotActive(
+        handle,
+        active and (record.entry.playerAuraOnly ~= true or unit == "player")
+      )
     end
   end
 end
@@ -181,9 +204,15 @@ local function ConfigureRecordSlots(record)
   end
 
   local candidates = BuildCandidates(record.entry)
-  for _, unit in ipairs({ "player", "target" }) do
+  local units = record.entry.playerAuraOnly and PLAYER_AURA_UNITS or AURA_UNITS
+  for _, unit in ipairs(units) do
     local handle = record.slots[unit]
-    local filter = unit == "player" and "HELPFUL|PLAYER" or "HARMFUL|PLAYER"
+    local filter
+    if unit == "player" then
+      filter = record.entry.includeAnySource == true and "HELPFUL" or "HELPFUL|PLAYER"
+    else
+      filter = "HARMFUL|PLAYER"
+    end
     if not handle then
       handle = AuraSlotDriver:CreateSlot(unit, filter, {
         candidateFilters = { includeSpellIDs = candidates },
@@ -208,7 +237,8 @@ end
 local function ApplyRecordAppearance(record)
   if record.viewerKey == BUFF_ICON_VIEWER then
     local style = GetIconStyle(record)
-    PCMPresentation.ApplyOwnedIconStyle(record.parts, style)
+    record.collapseWhenInactive = style.hideWhenInactive == true
+    PCMPresentation.ApplyOwnedAuraIconStyle(record.parts, style)
     PCMPresentation.SetStaticIcon(record.parts, record.entry.texture)
     record.parts.frame:SetAlpha(style.hideWhenInactive and 0 or 1)
     for unit, button in pairs(record.buttons) do
@@ -238,7 +268,6 @@ local function CreateRecord(viewer, entry)
   if record then
     retiredRecords[viewer.key][entry.cooldownID] = nil
     record.entry = entry
-    record.parts.frame:SetParent(viewer.frame)
     viewer.records[entry.cooldownID] = record
     ConfigureRecordSlots(record)
     ApplyRecordAppearance(record)
@@ -253,10 +282,15 @@ local function CreateRecord(viewer, entry)
     entry = entry,
     buttons = {},
     slots = {},
+    boundsAssistants = {},
   }
 
   if viewer.key == BUFF_ICON_VIEWER then
-    parts = PCMPresentation.CreateOwnedIcon(viewer.frame)
+    parts = PCMPresentation.CreateOwnedAuraIcon(viewer.frame)
+    local layoutFrame = CreateFrame("Frame", nil, viewer.frame)
+    layoutFrame:SetSize(1, 1)
+    layoutFrame:SetIgnoringChildrenForBounds(true)
+    record.layoutFrame = layoutFrame
   else
     parts = PCMPresentation.CreateOwnedAuraBar(viewer.frame)
     local placeholder = parts.frame:CreateTexture(nil, "BACKGROUND")
@@ -269,6 +303,12 @@ local function CreateRecord(viewer, entry)
     record.placeholderLabel = label
   end
   record.parts = parts
+  if record.layoutFrame then
+    parts.frame:ClearAllPoints()
+    parts.frame:SetPoint("TOPLEFT", record.layoutFrame, "TOPLEFT")
+    record.layoutFrame:Hide()
+  end
+  parts.frame:Hide()
   viewer.records[entry.cooldownID] = record
   ConfigureRecordSlots(record)
   ApplyRecordAppearance(record)
@@ -279,10 +319,18 @@ end
 local function ReleaseRecord(viewer, record)
   SetSlotActive(record, false)
   record.parts.frame:Hide()
-  record.parts.frame:ClearAllPoints()
+  if not record.layoutFrame then
+    record.parts.frame:ClearAllPoints()
+  end
+  if record.layoutFrame then
+    record.layoutFrame:Hide()
+    record.layoutFrame:ClearAllPoints()
+  end
   record.layoutVisible = nil
+  record.layoutPrepared = nil
+  record.presentationShown = nil
   if record.viewerKey == BUFF_ICON_VIEWER then
-    PCMPresentation.DeactivateOwnedIcon(record.parts)
+    PCMPresentation.DeactivateOwnedAuraIcon(record.parts)
   end
   viewer.records[record.cooldownID] = nil
   retiredRecords[viewer.key][record.cooldownID] = record
@@ -326,7 +374,7 @@ local function GetLayoutFrames(viewer)
   for index = 1, #viewer.orderedRecords do
     local record = viewer.orderedRecords[index]
     if record.layoutVisible == true then
-      frames[#frames + 1] = record.parts.frame
+      frames[#frames + 1] = record.layoutFrame or record.parts.frame
     end
   end
   return frames
@@ -362,8 +410,6 @@ function AuraRuntime:InitializeViewer(viewerKey, parent)
     viewer.frame:SetSize(1, 1)
     viewer.frame:SetPoint("CENTER", parent or UIParent, "CENTER", 0, 0)
     viewer.frame:Hide()
-  elseif parent and viewer.frame:GetParent() ~= parent then
-    viewer.frame:SetParent(parent)
   end
   RegisterLayout(viewer)
   return viewer.frame
@@ -385,6 +431,15 @@ function AuraRuntime:SetGroupLayoutEnabled(active)
 
   for _, viewer in pairs(viewers) do
     AuraLayout:UnregisterViewer(viewer.key)
+    if viewer.frame then
+      viewer.frame:SetShown(presentationActive and not groupLayoutEnabled)
+    end
+    for _, record in ipairs(viewer.orderedRecords) do
+      if groupLayoutEnabled then
+        record.layoutPrepared = nil
+      end
+      UpdateRecordVisibility(record)
+    end
     if not groupLayoutEnabled and viewer.frame then
       RegisterLayout(viewer)
     end
@@ -401,6 +456,13 @@ end
 
 function AuraRuntime:SetGroupLayoutReady(ready)
   groupLayoutReady = ready == true
+  for _, viewer in pairs(viewers) do
+    if viewer.frame then
+      viewer.frame:SetShown(
+        presentationActive and (not groupLayoutEnabled or groupLayoutReady)
+      )
+    end
+  end
   if groupLayoutReady and not readyNotified and self:IsReady() then
     readyNotified = true
     ns.PCMNativeBridge:Refresh()
@@ -429,7 +491,9 @@ function AuraRuntime:SetPresentationActive(active)
   presentationActive = active == true and enabled
   for _, viewer in pairs(viewers) do
     if viewer.frame then
-      viewer.frame:SetShown(presentationActive)
+      viewer.frame:SetShown(
+        presentationActive and (not groupLayoutEnabled or groupLayoutReady)
+      )
     end
     for _, record in ipairs(viewer.orderedRecords) do
       UpdateRecordVisibility(record)
@@ -470,6 +534,65 @@ function AuraRuntime:RefreshLayout(viewerKey)
   else
     AuraLayout:RequestLayout(viewerKey)
   end
+end
+
+function AuraRuntime:UsesCollapsedLayout(record)
+  return record.viewerKey == BUFF_ICON_VIEWER and record.collapseWhenInactive == true
+end
+
+function AuraRuntime:PrepareRecordLayout(record, width, height, horizontalPadding)
+  if record.viewerKey ~= BUFF_ICON_VIEWER then
+    local frame = record.parts.frame
+    frame:SetSize(width, height)
+    return frame
+  end
+
+  local layoutFrame = record.layoutFrame
+  layoutFrame:SetShown(record.layoutVisible == true)
+  horizontalPadding = horizontalPadding or 0
+
+  local frame = record.parts.frame
+  frame:SetSize(width, height)
+
+  if not IsRestyleLocked() then
+    for _, button in pairs(record.buttons) do
+      button:SetSize(width, height)
+    end
+  end
+
+  if record.collapseWhenInactive then
+    local halfPadding = horizontalPadding / 2
+    frame:ClearAllPoints()
+    frame:SetPoint("TOPLEFT", layoutFrame, "TOPLEFT", halfPadding, 0)
+    for unit, sizeAssistant in pairs(record.boundsAssistants) do
+      local button = record.buttons[unit]
+      sizeAssistant:ClearAllPoints()
+      sizeAssistant:SetPoint("TOPLEFT", button, "BOTTOMRIGHT", halfPadding, 0)
+    end
+    self:RefreshRecordLayoutBounds(record)
+  else
+    frame:ClearAllPoints()
+    frame:SetPoint("CENTER", layoutFrame, "CENTER")
+    layoutFrame:SetSize(math.max(0.001, width + horizontalPadding), height)
+  end
+  return layoutFrame
+end
+
+function AuraRuntime:FinalizeRecordLayout(record)
+  record.layoutPrepared = true
+  UpdateRecordVisibility(record)
+end
+
+function AuraRuntime:RefreshRecordLayoutBounds(record)
+  if record.viewerKey ~= BUFF_ICON_VIEWER or not record.collapseWhenInactive then
+    return
+  end
+
+  local layoutFrame = record.layoutFrame
+  layoutFrame:SetIgnoringChildrenForBounds(false)
+  layoutFrame:SetSize(0.001, 0.001)
+  layoutFrame:ResizeToBoundsRect()
+  layoutFrame:SetIgnoringChildrenForBounds(true)
 end
 
 function AuraRuntime:OnCatalogChanged(generation)
@@ -643,6 +766,10 @@ AuraRuntime.SetBuffIconHiddenResolver = P:Def("AuraRuntime:SetBuffIconHiddenReso
 AuraRuntime.RefreshBuffIconVisibility = P:Def("AuraRuntime:RefreshBuffIconVisibility", AuraRuntime.RefreshBuffIconVisibility)
 AuraRuntime.RefreshAppearance = P:Def("AuraRuntime:RefreshAppearance", AuraRuntime.RefreshAppearance)
 AuraRuntime.RefreshLayout = P:Def("AuraRuntime:RefreshLayout", AuraRuntime.RefreshLayout)
+AuraRuntime.UsesCollapsedLayout = P:Def("AuraRuntime:UsesCollapsedLayout", AuraRuntime.UsesCollapsedLayout)
+AuraRuntime.PrepareRecordLayout = P:Def("AuraRuntime:PrepareRecordLayout", AuraRuntime.PrepareRecordLayout)
+AuraRuntime.FinalizeRecordLayout = P:Def("AuraRuntime:FinalizeRecordLayout", AuraRuntime.FinalizeRecordLayout)
+AuraRuntime.RefreshRecordLayoutBounds = P:Def("AuraRuntime:RefreshRecordLayoutBounds", AuraRuntime.RefreshRecordLayoutBounds)
 AuraRuntime.OnCatalogChanged = P:Def("AuraRuntime:OnCatalogChanged", AuraRuntime.OnCatalogChanged)
 AuraRuntime.Flush = P:Def("AuraRuntime:Flush", AuraRuntime.Flush)
 AuraRuntime.Enable = P:Def("AuraRuntime:Enable", AuraRuntime.Enable)

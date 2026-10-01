@@ -940,6 +940,23 @@ function PCMPresentation.CreateOwnedIcon(parent)
   return parts
 end
 
+function PCMPresentation.CreateOwnedAuraIcon(parent)
+  local frame = CreateFrame("Frame", nil, parent)
+  ApplyRuntimeRootLayer(frame, parent)
+  frame:EnableMouse(false)
+
+  local background = frame:CreateTexture(nil, "BACKGROUND")
+  background:SetAllPoints(frame)
+  local icon = frame:CreateTexture(nil, "ARTWORK")
+  icon:SetAllPoints(frame)
+
+  return {
+    frame = frame,
+    background = background,
+    icon = icon,
+  }
+end
+
 local function ApplyOwnedTextStyle(fontString, parent, config, role, fallbackSize)
   ApplyFont(fontString, config, role, fallbackSize)
   local point, x, y = IconSkin.ResolveTextAnchor(
@@ -1014,6 +1031,26 @@ function PCMPresentation.ApplyOwnedIconStyle(parts, style)
   parts.customTexture = style.appearance and style.appearance.texture or nil
 end
 
+function PCMPresentation.ApplyOwnedAuraIconStyle(parts, style)
+  local size = math_max(Round(1), Round(tonumber(style.size) or 36))
+  local inset = math_max(0, Round(tonumber(style.inset) or 0))
+  local borderSize = math_max(0, tonumber(style.borderSize) or 2)
+
+  if style.manageFrameSize ~= false then
+    parts.frame:SetSize(size, size)
+  end
+  SetBackground(parts.background, style.backgroundColor)
+  BarWidget.ApplyBorder(parts.frame, borderSize, style.borderColor)
+
+  parts.icon:ClearAllPoints()
+  parts.icon:SetPoint("TOPLEFT", parts.frame, "TOPLEFT", inset, -inset)
+  parts.icon:SetPoint("BOTTOMRIGHT", parts.frame, "BOTTOMRIGHT", -inset, inset)
+  IconSkin.StripIconMasks(parts.icon)
+  IconSkin.MakeIconSquare(parts.icon, { crop = 0.08 })
+
+  parts.customTexture = style.appearance and style.appearance.texture or nil
+end
+
 function PCMPresentation.ApplyOwnedIconVisibility(parts, style)
   parts.frame:SetShown(style.visible ~= false)
 end
@@ -1021,7 +1058,8 @@ end
 function PCMPresentation.ConfigureOwnedAuraLayer(parts, button, unit, style)
   local auraParts = AuraWidget.BindApplicationDurationButton(button)
   button:ClearAllPoints()
-  button:SetAllPoints(parts.frame)
+  button:SetPoint("TOPLEFT", parts.frame, "TOPLEFT")
+  button:SetSize(style.size, style.size)
   button:SetFrameStrata(parts.frame:GetFrameStrata())
   button:SetFrameLevel(parts.frame:GetFrameLevel() + (unit == "player" and 7 or 6))
 
@@ -1064,21 +1102,24 @@ function PCMPresentation.ConfigureOwnedAuraLayer(parts, button, unit, style)
     swipeColor[4]
   )
 
-  auraParts.applicationFormatter = auraParts.applicationFormatter
-    or C_StringUtil.CreateNumericRuleFormatter()
-  if not auraParts.applicationFormatterReady then
-    auraParts.applicationFormatter:AddBreakpoint({ threshold = 0, format = "%.0f" })
-    auraParts.applicationFormatterReady = true
-  end
   local charge = style.charge or {}
   local counts = style.viewerCounts or {}
   local showApplications = charge.show
   if showApplications == nil then
     showApplications = counts.charge ~= false
   end
-  ApplyFont(auraParts.applicationText, style.chargeFont, "tiny", 10)
+  auraParts.applicationHolder:ClearAllPoints()
+  auraParts.applicationHolder:SetAllPoints(button)
+  auraParts.applicationHolder:SetFrameLevel(button:GetFrameLevel() + 5)
+  ApplyOwnedTextStyle(
+    auraParts.applicationText,
+    auraParts.applicationHolder,
+    style.chargeFont,
+    "charge",
+    10
+  )
   if showApplications then
-    AuraWidget.ConfigureApplicationCount(auraParts, auraParts.applicationFormatter)
+    AuraWidget.ConfigureApplicationCount(auraParts)
   else
     AuraWidget.DisableApplicationCount(auraParts)
   end
@@ -1389,6 +1430,12 @@ function PCMPresentation.DeactivateOwnedIcon(parts)
   parts.unavailable:SetAlpha(0)
   parts.outOfRange:SetAlpha(0)
   parts.glow:SetAlpha(0)
+end
+
+function PCMPresentation.DeactivateOwnedAuraIcon(parts)
+  parts.frame:SetAlpha(1)
+  parts.frame:SetMouseMotionEnabled(false)
+  parts.icon:SetDesaturation(0)
 end
 
 function PCMPresentation.SetTotemDuration(parts, duration)
@@ -1951,7 +1998,9 @@ Presentation.Register("PCMIcon", PCMIconAdapter)
 
 local P = select(1, ns.Pleebug:DropIn(PCMPresentation, { name = "PCM.Presentation" }))
 PCMPresentation.CreateOwnedIcon = P:Def("PCMPresentation.CreateOwnedIcon", PCMPresentation.CreateOwnedIcon)
+PCMPresentation.CreateOwnedAuraIcon = P:Def("PCMPresentation.CreateOwnedAuraIcon", PCMPresentation.CreateOwnedAuraIcon)
 PCMPresentation.ApplyOwnedIconStyle = P:Def("PCMPresentation.ApplyOwnedIconStyle", PCMPresentation.ApplyOwnedIconStyle)
+PCMPresentation.ApplyOwnedAuraIconStyle = P:Def("PCMPresentation.ApplyOwnedAuraIconStyle", PCMPresentation.ApplyOwnedAuraIconStyle)
 PCMPresentation.ApplyOwnedIconVisibility = P:Def("PCMPresentation.ApplyOwnedIconVisibility", PCMPresentation.ApplyOwnedIconVisibility)
 PCMPresentation.ConfigureOwnedAuraLayer = P:Def("PCMPresentation.ConfigureOwnedAuraLayer", PCMPresentation.ConfigureOwnedAuraLayer)
 PCMPresentation.CreateOwnedAuraBar = P:Def("PCMPresentation.CreateOwnedAuraBar", PCMPresentation.CreateOwnedAuraBar)
@@ -1964,6 +2013,7 @@ PCMPresentation.SetUsableState = P:Def("PCMPresentation.SetUsableState", PCMPres
 PCMPresentation.SetRangeState = P:Def("PCMPresentation.SetRangeState", PCMPresentation.SetRangeState)
 PCMPresentation.SetProcState = P:Def("PCMPresentation.SetProcState", PCMPresentation.SetProcState)
 PCMPresentation.DeactivateOwnedIcon = P:Def("PCMPresentation.DeactivateOwnedIcon", PCMPresentation.DeactivateOwnedIcon)
+PCMPresentation.DeactivateOwnedAuraIcon = P:Def("PCMPresentation.DeactivateOwnedAuraIcon", PCMPresentation.DeactivateOwnedAuraIcon)
 PCMPresentation.SetTotemDuration = P:Def("PCMPresentation.SetTotemDuration", PCMPresentation.SetTotemDuration)
 PCMPresentation.SetItemCooldown = P:Def("PCMPresentation.SetItemCooldown", PCMPresentation.SetItemCooldown)
 PCMPresentation.SetKeybindText = P:Def("PCMPresentation.SetKeybindText", PCMPresentation.SetKeybindText)
