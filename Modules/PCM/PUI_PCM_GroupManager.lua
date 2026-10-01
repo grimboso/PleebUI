@@ -13,10 +13,10 @@ local AuraRuntime = ns.PCMAuraRuntime
 local Pixel = ns.Pixel
 
 local CreateFrame = CreateFrame
-local C_RestrictedActions = C_RestrictedActions
 local C_Secrets = C_Secrets
 local GetCursorPosition = GetCursorPosition
 local InCombatLockdown = InCombatLockdown
+local issecretvalue = issecretvalue
 local UIParent = UIParent
 local ipairs = ipairs
 local pairs = pairs
@@ -78,24 +78,7 @@ local STRUCTURE_RESTRICTION_TYPES = {
 flushFrame:Hide()
 
 local function IsStructureLocked()
-  if PCMRuntime:IsInitializing() then
-    return false
-  end
-
-  if InCombatLockdown()
-    or next(activeRestrictions) ~= nil
-    or PCMRuntime:IsDataRestricted()
-  then
-    return true
-  end
-
-  for restrictionType in pairs(STRUCTURE_RESTRICTION_TYPES) do
-    if C_RestrictedActions.IsAddOnRestrictionActive(restrictionType) then
-      return true
-    end
-  end
-
-  return false
+  return InCombatLockdown() and not PCMRuntime:IsInitializing()
 end
 
 local function GetDB()
@@ -753,6 +736,9 @@ local function IsPointInsideFrame(x, y, frame)
     return false
   end
   local left, right, top, bottom = frame:GetLeft(), frame:GetRight(), frame:GetTop(), frame:GetBottom()
+  if issecretvalue(left) or issecretvalue(right) or issecretvalue(top) or issecretvalue(bottom) then
+    return false
+  end
   return left and right and top and bottom
     and x >= left and x <= right and y >= bottom and y <= top
 end
@@ -789,7 +775,7 @@ local function GetInsertIndex(group, x, y, movingKey)
 
   for index = 1, #remaining do
     local centerX, centerY = remaining[index].parts.frame:GetCenter()
-    if centerX and centerY then
+    if not issecretvalue(centerX) and not issecretvalue(centerY) and centerX and centerY then
       if group.data.kind == "BAR" then
         if y > centerY then
           return index
@@ -1017,7 +1003,7 @@ local function EnsureEditHandle(record)
         return
       end
       local centerX, centerY = self:GetCenter()
-      if not centerX or not centerY then
+      if issecretvalue(centerX) or issecretvalue(centerY) or not centerX or not centerY then
         return
       end
       self:ClearAllPoints()
@@ -1072,12 +1058,6 @@ function GroupManager:Flush()
     flushFrame:SetShown(dynamicBoundsRefreshPasses > 0)
     return
   end
-  if IsStructureLocked() then
-    flushFrame:SetShown(dynamicBoundsRefreshPasses > 0)
-    HideEditHandles()
-    return
-  end
-
   pendingLayout = false
   RebuildActiveGroups()
   wipe(dynamicBoundsRows)
@@ -1319,7 +1299,7 @@ flushFrame:SetScript("OnUpdate", function()
     dynamicBoundsRefreshPasses = dynamicBoundsRefreshPasses - 1
   end
   flushFrame:SetShown(enabled and (
-    dynamicBoundsRefreshPasses > 0 or pendingLayout and not IsStructureLocked()
+    dynamicBoundsRefreshPasses > 0 or pendingLayout
   ))
 end)
 
