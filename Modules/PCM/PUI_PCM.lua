@@ -94,30 +94,15 @@ end
 ns.PCM_IsModuleEnabledFast = _PCM_IsModuleEnabledFast
 
 local function _PCM_HasSoundAlerts()
-  local settings = _G.CooldownViewerSettings
-  local provider = settings and settings:GetDataProvider() or nil
-  local layoutManager = provider and provider:GetLayoutManager() or nil
+  ns.PCMCatalog:Refresh()
+  local configuration = ns.PCMCatalog:GetNativeConfiguration()
   local getAlertType = _G.CooldownViewerAlert_GetType
-  if not provider
-    or not layoutManager
-    or type(getAlertType) ~= "function"
-    or type(provider.IsLayoutUpdateQueued) ~= "function"
-    or provider:IsLayoutUpdateQueued()
-  then
+  if not configuration or type(getAlertType) ~= "function" then
     return nil
   end
-
-  local cooldownIDs = provider:GetOrderedCooldownIDs()
-  if issecretvalue(cooldownIDs) or type(cooldownIDs) ~= "table" then
-    return nil
-  end
-
+  local cooldownIDs = configuration.orderedCooldownIDs
   for index = 1, #cooldownIDs do
-    local cooldownID = cooldownIDs[index]
-    if issecretvalue(cooldownID) or type(cooldownID) ~= "number" then
-      return nil
-    end
-    local alerts = layoutManager:GetAlerts(cooldownID, Enum.CDMLayoutMode.AccessOnly)
+    local alerts = configuration.alertsByID[cooldownIDs[index]]
     if alerts ~= nil then
       if issecretvalue(alerts) or type(alerts) ~= "table" then
         return nil
@@ -182,6 +167,11 @@ local function _PCM_ReconcileNativeCDM()
 end
 
 ns.PCM_ReconcileNativeCDM = _PCM_ReconcileNativeCDM
+
+local function _PCM_OnNativeSettingsHidden()
+  ns.PCMCatalog:Invalidate("settings-saved")
+  _PCM_ReconcileNativeCDM()
+end
 
 
 local P, TrackThis = ns.Pleebug:DropIn(Cooldowns, { name = "PCM", bucket = "Core" })
@@ -459,9 +449,9 @@ function Cooldowns:GetCustomBarSpellDropdown(kind)
   }
   local sorting = { "none" }
 
-  local settings = _G.CooldownViewerSettings
-  local provider = settings and settings:GetDataProvider() or nil
-  if not provider then
+  ns.PCMCatalog:Refresh()
+  local configuration = ns.PCMCatalog:GetNativeConfiguration()
+  if not configuration then
     return values, sorting
   end
 
@@ -481,10 +471,11 @@ function Cooldowns:GetCustomBarSpellDropdown(kind)
         and type(cooldownID) == "number"
         and cooldownID > 0
       then
-        local info = provider:GetCooldownInfoForID(cooldownID)
-        if not _PCM_IsSecret(info) and type(info) == "table" then
+        local nativeInfo = configuration.infoByID[cooldownID]
+        if nativeInfo then
+          local info = nativeInfo.sourceInfo
           local isKnown = info.isKnown
-          local currentCategory = info.category
+          local currentCategory = nativeInfo.resolvedCategory
 
           if not _PCM_IsSecret(isKnown)
             and not _PCM_IsSecret(currentCategory)
@@ -1766,7 +1757,7 @@ _PCM_RunInitialViewerPass = function(owner)
   local settings = _G.CooldownViewerSettings
   local provider = settings and settings:GetDataProvider() or nil
   if not provider
-    or not provider:GetLayoutManager()
+    or type(provider.IsLayoutUpdateQueued) ~= "function"
     or provider:IsLayoutUpdateQueued()
   then
     owner.__puiPCMStartupPending = true
@@ -1867,7 +1858,7 @@ function Cooldowns:OnEnable()
   _PCM_RunInitialViewerPass(self)
   EventRegistry:RegisterCallback(
     "CooldownViewerSettings.OnHide",
-    _PCM_ReconcileNativeCDM,
+    _PCM_OnNativeSettingsHidden,
     self
   )
 end
