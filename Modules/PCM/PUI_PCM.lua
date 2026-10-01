@@ -34,6 +34,7 @@ local PCMCoreState = {
 }
 
 local PCMEnabled
+local PCMStartupDataReady = false
 
 local _EnsureViewerDurationCount
 local _PCM_GetDurationCountEnabledCached
@@ -1619,12 +1620,11 @@ function Cooldowns:OnInitialize()
     C_AddOns.LoadAddOn("Blizzard_CooldownViewer")
     -- Register before VARIABLES_LOADED, after Blizzard registers its provider setup.
     EventUtil.ContinueAfterAllEvents(function()
+      PCMStartupDataReady = true
       if self:IsEnabled() then
         _PCM_RunInitialViewerPass(self)
-        self:_ReconcileCustomTrackerStartupAvailability()
       end
-      PCMRuntime:FinishInitialization()
-    end, "VARIABLES_LOADED", "PLAYER_ENTERING_WORLD", "COOLDOWN_VIEWER_DATA_LOADED")
+    end, "VARIABLES_LOADED", "PLAYER_ENTERING_WORLD", "COOLDOWN_VIEWER_DATA_LOADED", "SPELLS_CHANGED")
   end
 end
 
@@ -1754,6 +1754,11 @@ _PCM_RunInitialViewerPass = function(owner)
     return true
   end
 
+  if PCMRuntime:IsInitializing() and not PCMStartupDataReady then
+    owner.__puiPCMStartupPending = true
+    return false
+  end
+
   if not _RunPCMStartupRefresh(owner) then
     return false
   end
@@ -1808,8 +1813,10 @@ _PCM_RunInitialViewerPass = function(owner)
   end
 
   _PCM_ReconcileNativeCDM()
+  owner:_ReconcileCustomTrackerStartupAvailability()
   owner.__puiPCMStartupPending = nil
   owner.__puiPCMStartupComplete = true
+  PCMRuntime:FinishInitialization()
   return true
 end
 
