@@ -1997,9 +1997,11 @@ local function _PUI_ApplyTypographyToChatFrame(chatFrame)
   _PUI_SkinTypographyFont(chatFrame, typography.message)
 
   local name = chatFrame.GetName and chatFrame:GetName()
-  local tab = chatFrame.tab or (name and _G[name .. "Tab"])
-  local tabText = tab and (tab.Text or tab.text or (tab.GetFontString and tab:GetFontString()))
-  _PUI_SkinTypographyFont(tabText, typography.tab)
+  if not chatFrame.isDocked and not _PUI_IsTemporaryChatFrame(chatFrame) then
+    local tab = chatFrame.tab or (name and _G[name .. "Tab"])
+    local tabText = tab and (tab.Text or tab.text or (tab.GetFontString and tab:GetFontString()))
+    _PUI_SkinTypographyFont(tabText, typography.tab)
+  end
 
   local editBox = chatFrame.editBox or (name and _G[name .. "EditBox"])
   if editBox then
@@ -2323,8 +2325,9 @@ local function _DisableChatButtonFrame(chatFrame)
     buttonFrame:EnableMouse(false)
   end
 
-  if buttonFrame.minimizeButton and buttonFrame.minimizeButton.Hide then
-    buttonFrame.minimizeButton:Hide()
+  if buttonFrame.minimizeButton and buttonFrame.minimizeButton.SetAlpha then
+    buttonFrame.minimizeButton:SetAlpha(0)
+    buttonFrame.minimizeButton:EnableMouse(false)
   end
 
   if buttonFrame.SetAlpha then
@@ -2746,11 +2749,16 @@ local function StartPrimaryChatMove()
 end
 
 local function EnablePrimaryChatTabDragging(tab, chatFrame)
-  if chatFrame ~= _G.ChatFrame1 or not tab or tab._puiPrimaryDragHooked then
+  if chatFrame ~= _G.ChatFrame1 or not tab then
     return
   end
 
-  tab._puiPrimaryDragHooked = true
+  local state = GetChatTabState(tab)
+  if state.primaryDragHooked then
+    return
+  end
+
+  state.primaryDragHooked = true
   tab:HookScript("OnDragStart", function(_, button)
     if button == "LeftButton" then
       StartPrimaryChatMove()
@@ -3007,12 +3015,15 @@ local function _PUI_ForEachChatVisual(chatFrame, callback)
     return
   end
 
+  local frameState = GetChatFrameState(chatFrame)
   local editBox = chatFrame.editBox
+  local editState = editBox and GetChatEditBoxState(editBox)
+
   for _, visual in ipairs({
-    chatFrame._puiShell,
-    editBox and editBox._puiInputBar,
-    chatFrame.PleebUICopyButton,
-    chatFrame.PleebUIChatToolsButton,
+    frameState.shell,
+    editState and editState.inputBar,
+    frameState.copyButton,
+    frameState.toolsButton,
   }) do
     if visual then
       callback(visual)
@@ -3198,27 +3209,79 @@ end
 local function EnsureChatInputBar(editBox)
   if not editBox then return end
 
-  local bg = editBox._puiInputBar
+  local state = GetChatEditBoxState(editBox)
+  local bg = state.inputBar
   if not bg then
-    bg = CreateFrame("Frame", nil, editBox)
-    bg:SetPoint("TOPLEFT", editBox, "TOPLEFT", 0, 0)
-    bg:SetPoint("BOTTOMRIGHT", editBox, "BOTTOMRIGHT", 0, 0)
+    bg = CreateFrame("Frame", nil, UIParent)
     bg:EnableMouse(false)
-
-    if bg.SetFrameStrata and editBox.GetFrameStrata then
-      bg:SetFrameStrata(editBox:GetFrameStrata())
-    end
-    if bg.SetFrameLevel and editBox.GetFrameLevel then
-      local lvl = (editBox:GetFrameLevel() or 1) - 1
-      if lvl < 0 then lvl = 0 end
-      bg:SetFrameLevel(lvl)
-    end
-
-    editBox._puiInputBar = bg
+    state.inputBar = bg
   end
+
+  bg:ClearAllPoints()
+  bg:SetPoint("TOPLEFT", editBox, "TOPLEFT", 0, 0)
+  bg:SetPoint("BOTTOMRIGHT", editBox, "BOTTOMRIGHT", 0, 0)
+
+  if bg.SetFrameStrata and editBox.GetFrameStrata then
+    bg:SetFrameStrata(editBox:GetFrameStrata())
+  end
+  if bg.SetFrameLevel and editBox.GetFrameLevel then
+    local lvl = (editBox:GetFrameLevel() or 1) - 1
+    if lvl < 0 then lvl = 0 end
+    bg:SetFrameLevel(lvl)
+  end
+
+  bg:SetShown(editBox:IsShown())
 
   local colors = ns.Theme.GetColors()
   _PUI_ApplyTextureBackdrop(bg, colors.control, colors.border, ns.Theme.GetEdgeSize())
+end
+
+local ChatEditBoxCallbacksInstalled = false
+
+local function EnsureChatEditBoxCallbacks()
+  if ChatEditBoxCallbacksInstalled then
+    return
+  end
+
+  ChatEditBoxCallbacksInstalled = true
+
+  EventRegistry:RegisterCallback("ChatFrame.OnEditBoxShow", function(_, editBox)
+    local state = ChatEditBoxState[editBox]
+    if state and state.inputBar then
+      state.inputBar:Show()
+    end
+  end, "PleebUI_Chat_EditBoxShow")
+
+  EventRegistry:RegisterCallback("ChatFrame.OnEditBoxHide", function(_, editBox)
+    local state = ChatEditBoxState[editBox]
+    if state and state.inputBar then
+      state.inputBar:Hide()
+    end
+  end, "PleebUI_Chat_EditBoxHide")
+
+  EventRegistry:RegisterCallback("ChatFrame.OnEditBoxFocusGained", function(_, editBox)
+    if editBox == _G.ChatFrame1EditBox then
+      ChatLinks:ChatInputActivated(_G.ChatFrame1)
+    end
+  end, "PleebUI_Chat_EditBoxFocusGained")
+
+  EventRegistry:RegisterCallback("ChatFrame.OnEditBoxFocusLost", function(_, editBox)
+    if editBox == _G.ChatFrame1EditBox then
+      ChatLinks:ChatInputDeactivated(_G.ChatFrame1)
+    end
+  end, "PleebUI_Chat_EditBoxFocusLost")
+end
+
+local function RemoveChatEditBoxCallbacks()
+  if not ChatEditBoxCallbacksInstalled then
+    return
+  end
+
+  ChatEditBoxCallbacksInstalled = false
+  EventRegistry:UnregisterCallback("ChatFrame.OnEditBoxShow", "PleebUI_Chat_EditBoxShow")
+  EventRegistry:UnregisterCallback("ChatFrame.OnEditBoxHide", "PleebUI_Chat_EditBoxHide")
+  EventRegistry:UnregisterCallback("ChatFrame.OnEditBoxFocusGained", "PleebUI_Chat_EditBoxFocusGained")
+  EventRegistry:UnregisterCallback("ChatFrame.OnEditBoxFocusLost", "PleebUI_Chat_EditBoxFocusLost")
 end
 
 -- Skin the chat edit box (bottom input)
@@ -3232,9 +3295,11 @@ local function SkinChatEditBox(chatFrame)
     return
   end
 
+  EnsureChatEditBoxCallbacks()
   EnsureChatInputBar(editBox)
 
-  if editBox._puiSkinned then
+  local state = GetChatEditBoxState(editBox)
+  if state.skinned then
     return
   end
 
@@ -3264,31 +3329,181 @@ local function SkinChatEditBox(chatFrame)
     end
   end
 
-  -- Hook focus events so we can adjust chat alpha.
-  -- We only care about the primary chat frame for fading.
-  if chatFrame == _G.ChatFrame1 then
-    editBox:HookScript("OnEditFocusGained", function()
-      ChatLinks:ChatInputActivated(chatFrame)
-    end)
-    editBox:HookScript("OnEditFocusLost", function()
-      ChatLinks:ChatInputDeactivated(chatFrame)
-    end)
-  end
-
-  editBox._puiSkinned = true
+  state.skinned = true
 end
 
 -- Skin the main tab for a chat frame (General, Combat Log, etc.)
-local function SkinChatTab(chatFrame)
-  if not chatFrame then return end
-  local name = chatFrame.GetName and chatFrame:GetName()
-  if not name then return end
+local function EnsureDockedChatTabGhostRoot()
+  local root = ChatLinks._puiChatTabGhostRoot
+  if root then
+    root:Show()
+    return root
+  end
 
-  local tab = _G[name .. "Tab"]
-  if not tab then
+  root = CreateFrame("Frame", nil, UIParent)
+  root:SetAllPoints(UIParent)
+  root:SetFrameStrata("MEDIUM")
+  root:SetFrameLevel(100)
+  root:EnableMouse(false)
+  ChatLinks._puiChatTabGhostRoot = root
+  return root
+end
+
+local function HideBlizzardDockedChatTabPixels()
+  local dock = _G.GeneralDockManager
+  if not dock then
     return
   end
 
+  dock:SetAlpha(0)
+
+  local overflow = dock.overflowButton or _G.GeneralDockManagerOverflowButton
+  if overflow and overflow.SetIgnoreParentAlpha then
+    overflow:SetIgnoreParentAlpha(true)
+  end
+  if overflow and overflow.list and overflow.list.SetIgnoreParentAlpha then
+    overflow.list:SetIgnoreParentAlpha(true)
+  end
+end
+
+local function HideBlizzardFloatingChatTabPixels(tab)
+  tab:SetAlpha(0)
+end
+
+local function GetDockedChatTabGhost(chatFrame)
+  local state = GetChatFrameState(chatFrame)
+  local ghost = state.tabGhost
+  if ghost then
+    return ghost
+  end
+
+  local root = EnsureDockedChatTabGhostRoot()
+  if not root then
+    return nil
+  end
+
+  ghost = CreateFrame("Frame", nil, root)
+  ghost:EnableMouse(false)
+
+  local selected = ghost:CreateTexture(nil, "ARTWORK")
+  selected:SetTexture("Interface\\Buttons\\WHITE8x8")
+  selected:SetAllPoints()
+  selected:Hide()
+  ghost._puiSelected = selected
+
+  local icon = ghost:CreateTexture(nil, "ARTWORK", nil, 2)
+  icon:SetSize(16, 16)
+  icon:SetTexture("Interface\\ChatFrame\\UI-ChatWhisperIcon")
+  icon:Hide()
+  ghost._puiConversationIcon = icon
+
+  local text = ghost:CreateFontString(nil, "OVERLAY")
+  text:SetWordWrap(false)
+  text:SetJustifyH("CENTER")
+  text:SetJustifyV("MIDDLE")
+  ghost._puiText = text
+
+  local glow = ghost:CreateTexture(nil, "OVERLAY", nil, 3)
+  glow:SetTexture("Interface\\Buttons\\WHITE8x8")
+  glow:SetPoint("BOTTOMLEFT", ghost, "BOTTOMLEFT", 4, 1)
+  glow:SetPoint("BOTTOMRIGHT", ghost, "BOTTOMRIGHT", -4, 1)
+  glow:SetHeight(2)
+  glow:Hide()
+  ghost._puiGlow = glow
+
+  state.tabGhost = ghost
+  return ghost
+end
+
+local function SkinDockedChatTab(chatFrame, tab)
+  local ghost = GetDockedChatTabGhost(chatFrame)
+  if not ghost then
+    return
+  end
+
+  if chatFrame.isDocked then
+    HideBlizzardDockedChatTabPixels()
+  else
+    HideBlizzardFloatingChatTabPixels(tab)
+  end
+
+  ghost:ClearAllPoints()
+  ghost:SetPoint("BOTTOMLEFT", tab, "BOTTOMLEFT", 1, 1)
+  ghost:SetPoint("BOTTOMRIGHT", tab, "BOTTOMRIGHT", -1, 1)
+  ghost:SetHeight(24)
+  ghost:SetShown(tab:IsShown())
+
+  local style = _GetChatWindowStyle()
+  local Theme = ns.Theme
+  _PUI_ApplyTextureBackdrop(
+    ghost,
+    style.bg,
+    style.border,
+    tonumber(style.borderSize) or Theme.GetEdgeSize()
+  )
+
+  local colors = Theme.GetColors()
+  local accent = colors.accent or { 0.20, 0.65, 1.00, 1.00 }
+  local selectedWindow = _G.FCFDock_GetSelectedWindow
+    and _G.GENERAL_CHAT_DOCK
+    and _G.FCFDock_GetSelectedWindow(_G.GENERAL_CHAT_DOCK)
+    or nil
+  local isSelected = selectedWindow == chatFrame
+
+  ghost._puiSelected:SetVertexColor(accent[1], accent[2], accent[3], 0.32)
+  ghost._puiSelected:SetShown(isSelected)
+
+  local text = ghost._puiText
+  local icon = ghost._puiConversationIcon
+  local fontPath, outline = _PUI_GetTypographyFont(_PUI_GetTypographyDB().tab)
+  text:SetFont(fontPath, 12, outline)
+  text:ClearAllPoints()
+  icon:ClearAllPoints()
+
+  local glowR, glowG, glowB = accent[1], accent[2], accent[3]
+
+  if _PUI_IsTemporaryChatFrame(chatFrame) then
+    local info = _G.ChatTypeInfo[chatFrame.chatType == "BN_WHISPER" and "BN_WHISPER" or "WHISPER"]
+    if info then
+      text:SetTextColor(info.r, info.g, info.b, 1)
+      glowR, glowG, glowB = info.r, info.g, info.b
+    else
+      text:SetTextColor(1, 1, 1, 1)
+    end
+
+    icon:SetPoint("LEFT", ghost, "LEFT", 5, 0)
+    icon:Show()
+    text:SetPoint("LEFT", icon, "RIGHT", 3, 0)
+    text:SetPoint("RIGHT", ghost, "RIGHT", -8, 0)
+
+    local label = chatFrame.chatTarget
+    if issecretvalue(label) then
+      text:SetText(label)
+    elseif label ~= nil then
+      text:SetText(label)
+    else
+      text:SetText("...")
+    end
+  else
+    text:SetTextColor(1, 1, 1, 1)
+    icon:Hide()
+    text:SetPoint("LEFT", ghost, "LEFT", 8, 0)
+    text:SetPoint("RIGHT", ghost, "RIGHT", -8, 0)
+
+    local windowName = GetChatWindowInfo(chatFrame:GetID())
+    text:SetText(windowName or "")
+  end
+
+  local alerting = tab.alerting
+  if canaccessvalue(alerting) then
+    ghost._puiGlow:SetVertexColor(glowR, glowG, glowB, 1)
+    ghost._puiGlow:SetShown(alerting == true and not isSelected)
+  else
+    ghost._puiGlow:Hide()
+  end
+end
+
+local function SkinUndockedChatTab(chatFrame, tab, name)
   EnablePrimaryChatTabDragging(tab, chatFrame)
 
   local Theme = ns.Theme
@@ -3305,7 +3520,8 @@ local function SkinChatTab(chatFrame)
     end
   end
 
-  if not tab._puiSkinned then
+  local tabState = GetChatTabState(tab)
+  if not tabState.skinned then
     for _, key in ipairs({ "Left", "Middle", "Right" }) do
       local tex = tab[key] or _G[name .. "Tab" .. key]
       if tex and tex.SetTexture then
@@ -3313,7 +3529,7 @@ local function SkinChatTab(chatFrame)
       end
     end
 
-    local bg = CreateFrame("Frame", nil, tab)
+    local bg = CreateFrame("Frame", nil, UIParent)
     bg:SetPoint("BOTTOMLEFT", tab, "BOTTOMLEFT", 1, 1)
     bg:SetPoint("BOTTOMRIGHT", tab, "BOTTOMRIGHT", -1, 1)
     bg:SetHeight(24)
@@ -3321,7 +3537,7 @@ local function SkinChatTab(chatFrame)
     if bg.SetIgnoreParentAlpha then
       bg:SetIgnoreParentAlpha(true)
     end
-    tab._puiTabBG = bg
+    tabState.bg = bg
 
     if bg.SetFrameStrata and tab.GetFrameStrata then
       bg:SetFrameStrata(tab:GetFrameStrata())
@@ -3332,13 +3548,16 @@ local function SkinChatTab(chatFrame)
       bg:SetFrameLevel(lvl)
     end
 
-    tab._puiSkinned = true
+    tabState.skinned = true
   end
 
   local colors = Theme.GetColors()
   local accent = colors.accent or { 0.20, 0.65, 1.00, 1.00 }
   local white = "Interface\\Buttons\\WHITE8x8"
-  local bg = tab._puiTabBG
+  local bg = tabState.bg
+  if bg then
+    bg:SetShown(tab:IsShown())
+  end
 
   for _, key in ipairs({
     "SelectedLeft", "SelectedRight",
@@ -3413,12 +3632,42 @@ local function SkinChatTab(chatFrame)
   end
 end
 
-local function CreateJumpToBottomButton(chatFrame)
-  if chatFrame.PleebUIJumpToBottomButton then
-    return chatFrame.PleebUIJumpToBottomButton
+-- Skin the visual tab without writing to Blizzard's docked tab regions.
+local function SkinChatTab(chatFrame)
+  if not chatFrame then return end
+  local name = chatFrame.GetName and chatFrame:GetName()
+  if not name then return end
+
+  local tab = _G[name .. "Tab"]
+  if not tab then
+    return
   end
 
-  local button = CreateFrame("Button", nil, chatFrame)
+  local state = GetChatFrameState(chatFrame)
+  local tabState = GetChatTabState(tab)
+
+  if chatFrame.isDocked or _PUI_IsTemporaryChatFrame(chatFrame) then
+    if tabState.bg then
+      tabState.bg:Hide()
+    end
+    SkinDockedChatTab(chatFrame, tab)
+    return
+  end
+
+  if state.tabGhost then
+    state.tabGhost:Hide()
+  end
+
+  SkinUndockedChatTab(chatFrame, tab, name)
+end
+
+local function CreateJumpToBottomButton(chatFrame)
+  local state = GetChatFrameState(chatFrame)
+  if state.jumpButton then
+    return state.jumpButton
+  end
+
+  local button = CreateFrame("Button", nil, UIParent)
   button:SetSize(20, 20)
   button:SetPoint("BOTTOMRIGHT", chatFrame, "BOTTOMRIGHT", 11, 3)
 
@@ -3437,7 +3686,10 @@ local function CreateJumpToBottomButton(chatFrame)
   highlight:SetAtlas("minimal-scrollbar-arrow-returntobottom-over")
   button:SetHighlightTexture(highlight)
 
+  state.jumpVisible = false
+
   button:SetScript("OnClick", function()
+    state.jumpVisible = false
     chatFrame:ScrollToBottom()
     button:Hide()
   end)
@@ -3446,6 +3698,7 @@ local function CreateJumpToBottomButton(chatFrame)
   chatFrame:HookScript("OnMouseWheel", function(_, delta)
     local lines = ClampInt(ChatLinks.db.profile.chatTweaks.scrollMessages, 1, 12)
     if delta > 0 then
+      state.jumpVisible = true
       button:Show()
     end
 
@@ -3459,10 +3712,11 @@ local function CreateJumpToBottomButton(chatFrame)
   end)
 
   hooksecurefunc(chatFrame, "ScrollToBottom", function()
+    state.jumpVisible = false
     button:Hide()
   end)
 
-  chatFrame.PleebUIJumpToBottomButton = button
+  state.jumpButton = button
   return button
 end
 
@@ -3480,6 +3734,7 @@ local function SkinTemporaryChatFrame(chatFrame)
 
   if state.temporarySkinned then
     if state.shell then
+      state.shell:SetShown(chatFrame:IsShown())
       local style = _GetChatWindowStyle and _GetChatWindowStyle()
       _ApplyDirectChatShellBackdrop(state.shell, style)
     end
@@ -3494,9 +3749,6 @@ local function SkinTemporaryChatFrame(chatFrame)
     if background.SetAlpha then
       background:SetAlpha(0)
     end
-    if background.Hide then
-      background:Hide()
-    end
     if background.EnableMouse then
       background:EnableMouse(false)
     end
@@ -3506,7 +3758,7 @@ local function SkinTemporaryChatFrame(chatFrame)
 
   local shell = state.shell
   if not shell then
-    shell = CreateFrame("Frame", nil, chatFrame)
+    shell = CreateFrame("Frame", nil, UIParent)
     shell:EnableMouse(false)
     state.shell = shell
   end
@@ -3516,6 +3768,7 @@ local function SkinTemporaryChatFrame(chatFrame)
   shell:SetPoint("TOPRIGHT", chatFrame, "TOPRIGHT", 4, 4)
   shell:SetPoint("BOTTOMLEFT", chatFrame, "BOTTOMLEFT", -4, -4)
   shell:SetPoint("BOTTOMRIGHT", chatFrame, "BOTTOMRIGHT", 4, -4)
+  shell:SetShown(chatFrame:IsShown())
 
   shell:SetFrameStrata(chatFrame:GetFrameStrata())
 
@@ -3559,17 +3812,21 @@ local function SkinChatFrame(chatFrame)
   end
 
   local name = chatFrame.GetName and chatFrame:GetName()
+  local state = GetChatFrameState(chatFrame)
 
-  if chatFrame._puiSkinned then
-    if chatFrame._puiShell then
+  if state.skinned then
+    if state.shell then
+      state.shell:SetShown(chatFrame:IsShown())
       local style = _GetChatWindowStyle and _GetChatWindowStyle()
-      _ApplyDirectChatShellBackdrop(chatFrame._puiShell, style)
+      _ApplyDirectChatShellBackdrop(state.shell, style)
     end
 
     _DisableChatButtonFrame(chatFrame)
     SkinChatEditBox(chatFrame)
     SkinChatTab(chatFrame)
-    CreateJumpToBottomButton(chatFrame)
+
+    local jumpButton = CreateJumpToBottomButton(chatFrame)
+    jumpButton:SetShown(chatFrame:IsShown() and state.jumpVisible == true)
     return
   end
 
@@ -3579,23 +3836,20 @@ local function SkinChatFrame(chatFrame)
     local bg = _G[name .. "Background"]
     if bg then
       if bg.SetAlpha    then bg:SetAlpha(0) end
-      if bg.Hide        then bg:Hide() end
       if bg.EnableMouse then bg:EnableMouse(false) end
     end
   end
   _DisableChatButtonFrame(chatFrame)
 
 
-  -- 2) Our visual shell is parented to the actual chat frame.
-  local shell = chatFrame._puiShell
+  -- 2) Our visual shell is addon-owned and only follows the Blizzard frame visually.
+  local shell = state.shell
   if not shell then
-    shell = CreateFrame("Frame", nil, chatFrame)
+    shell = CreateFrame("Frame", nil, UIParent)
     if shell.EnableMouse then
       shell:EnableMouse(false)
     end
-    chatFrame._puiShell = shell
-  elseif shell.GetParent and shell:GetParent() ~= chatFrame then
-    shell:SetParent(chatFrame)
+    state.shell = shell
   end
 
   local function RefreshShellAnchors()
@@ -3614,6 +3868,7 @@ local function SkinChatFrame(chatFrame)
     shell:SetPoint("TOPRIGHT", chatFrame, "TOPRIGHT", right, top)
     shell:SetPoint("BOTTOMLEFT", chatFrame, "BOTTOMLEFT", left, bottom)
     shell:SetPoint("BOTTOMRIGHT", chatFrame, "BOTTOMRIGHT", right, bottom)
+    shell:SetShown(chatFrame:IsShown())
   end
 
   if chatFrame.GetFrameStrata then
@@ -3671,26 +3926,23 @@ local function SkinChatFrame(chatFrame)
       end
     end
 
-    scrollBar:Hide()
     scrollBar:SetAlpha(0)
     scrollBar:EnableMouse(false)
   end
 
   local scrollToBottom = chatFrame.ScrollToBottomButton or (name and _G[name .. "ScrollToBottomButton"])
   if scrollToBottom then
-    scrollToBottom:Hide()
     scrollToBottom:SetAlpha(0)
     scrollToBottom:EnableMouse(false)
   end
 
   local minimize = (chatFrame.buttonFrame and chatFrame.buttonFrame.minimizeButton) or (name and _G[name .. "MinimizeButton"])
   if minimize then
-    minimize:Hide()
     minimize:SetAlpha(0)
     minimize:EnableMouse(false)
   end
 
-  chatFrame._puiSkinned = true
+  state.skinned = true
 
   SkinChatEditBox(chatFrame)
   SkinChatTab(chatFrame)
@@ -3749,7 +4001,8 @@ local function _PUI_ClickBlizzardChatTool(buttonName)
 end
 
 local function EnsureChatToolsButton(chatFrame)
-  local button = chatFrame.PleebUIChatToolsButton
+  local state = GetChatFrameState(chatFrame)
+  local button = state.toolsButton
   if button then
     local panel = button._puiPanel
     if panel then
@@ -3759,7 +4012,7 @@ local function EnsureChatToolsButton(chatFrame)
     return button
   end
 
-  button = CreateFrame("Button", nil, chatFrame, "UIPanelButtonTemplate")
+  button = CreateFrame("Button", nil, UIParent, "UIPanelButtonTemplate")
   button:SetSize(20, 20)
   button:SetPoint("TOPRIGHT", chatFrame, "TOPRIGHT", -27, -3)
   button:SetText("...")
@@ -3802,16 +4055,21 @@ local function EnsureChatToolsButton(chatFrame)
   panel:Hide()
 
   button._puiPanel = panel
-  chatFrame.PleebUIChatToolsButton = button
+  state.toolsButton = button
   return button
 end
 
 local function CreateCopyButton(chatFrame)
-  if not chatFrame or chatFrame.PleebUICopyButton then
-    return
+  if not chatFrame then
+    return nil
   end
 
-  local btn = CreateFrame("Button", nil, chatFrame)
+  local state = GetChatFrameState(chatFrame)
+  if state.copyButton then
+    return state.copyButton
+  end
+
+  local btn = CreateFrame("Button", nil, UIParent)
   btn:SetSize(18, 18)
   btn:SetPoint("TOPRIGHT", chatFrame, "TOPRIGHT", -4, -4)
 
@@ -3831,46 +4089,20 @@ local function CreateCopyButton(chatFrame)
   -- Always visible so it is obvious
   btn:Show()
 
-  chatFrame.PleebUICopyButton = btn
+  state.copyButton = btn
+  return btn
 end
 
-function ChatLinks:RefreshFloatingChatFrames()
-  if not self.db
-    or not self.db.profile
-    or self._puiRuntimeEnabled ~= true
-  then
+function ChatLinks:QueueChatFrameRefresh()
+  if self._puiChatFrameRefreshQueued then
     return
   end
 
-  ForEachBlizzardChatFrame(function(chatFrame)
-    if _PUI_IsChatFrameOpen(chatFrame) then
-      SkinChatFrame(chatFrame)
-    end
-  end)
-end
-
-local function SkinSettledTemporaryChatFrames()
-  if ChatLinks._puiRuntimeEnabled ~= true then
-    return
-  end
-
-  ForEachBlizzardChatFrame(function(chatFrame)
-    if chatFrame.isTemporary == true and chatFrame.inUse == true then
-      SkinTemporaryChatFrame(chatFrame)
-    end
-  end)
-end
-
-local function QueueTemporaryChatFrameSkin()
-  if ChatLinks._puiTemporarySkinQueued then
-    return
-  end
-
-  ChatLinks._puiTemporarySkinQueued = true
+  self._puiChatFrameRefreshQueued = true
 
   C_Timer.After(0, function()
-    ChatLinks._puiTemporarySkinQueued = nil
-    SkinSettledTemporaryChatFrames()
+    self._puiChatFrameRefreshQueued = nil
+    self:RefreshChatFrames()
   end)
 end
 
@@ -3882,6 +4114,28 @@ function ChatLinks:RefreshChatFrames(atPlayerEnteringWorld)
   ForEachBlizzardChatFrame(function(chatFrame)
     if _PUI_IsChatFrameOpen(chatFrame) then
       SkinChatFrame(chatFrame)
+      return
+    end
+
+    local state = ChatFrameState[chatFrame]
+    if state then
+      for _, visual in ipairs({
+        state.shell,
+        state.tabGhost,
+        state.copyButton,
+        state.toolsButton,
+        state.jumpButton,
+      }) do
+        if visual then
+          visual:Hide()
+        end
+      end
+    end
+
+    local editBox = chatFrame.editBox
+    local editState = editBox and ChatEditBoxState[editBox]
+    if editState and editState.inputBar then
+      editState.inputBar:Hide()
     end
   end)
 
@@ -3906,7 +4160,8 @@ function ChatLinks:RefreshChatFrames(atPlayerEnteringWorld)
 
   local primaryChat = _G.ChatFrame1
   if primaryChat then
-    local toolsButton = primaryChat.PleebUIChatToolsButton
+    local primaryState = GetChatFrameState(primaryChat)
+    local toolsButton = primaryState.toolsButton
     if self.db.profile.enableChatTools == true then
       toolsButton = toolsButton or EnsureChatToolsButton(primaryChat)
     end
@@ -4103,17 +4358,13 @@ function ChatLinks:OnEnable()
 
   self:SetUrlFiltersEnabled(self.db.profile.enableUrlCopy == true)
 
-  if not self.__puiTemporaryWindowHooked then
-    self.__puiTemporaryWindowHooked = true
-
-    hooksecurefunc("FCF_OpenTemporaryWindow", function()
-      QueueTemporaryChatFrameSkin()
-    end)
-  end
-
   self:RefreshChatFrames()
-  self:RegisterEvent("UPDATE_CHAT_WINDOWS", "RefreshChatFrames")
-  self:RegisterEvent("UPDATE_FLOATING_CHAT_WINDOWS", "RefreshFloatingChatFrames")
+  self:RegisterEvent("UPDATE_CHAT_WINDOWS", "QueueChatFrameRefresh")
+  self:RegisterEvent("UPDATE_FLOATING_CHAT_WINDOWS", "QueueChatFrameRefresh")
+  self:RegisterEvent("CHAT_MSG_WHISPER", "QueueChatFrameRefresh")
+  self:RegisterEvent("CHAT_MSG_WHISPER_INFORM", "QueueChatFrameRefresh")
+  self:RegisterEvent("CHAT_MSG_BN_WHISPER", "QueueChatFrameRefresh")
+  self:RegisterEvent("CHAT_MSG_BN_WHISPER_INFORM", "QueueChatFrameRefresh")
 
   FrameScale:RegisterScaleListener(InitializePrimaryChatLayout)
 
@@ -4131,7 +4382,60 @@ function ChatLinks:OnDisable()
   self:SetUrlFiltersEnabled(false)
   self:UnregisterEvent("UPDATE_CHAT_WINDOWS")
   self:UnregisterEvent("UPDATE_FLOATING_CHAT_WINDOWS")
+  self:UnregisterEvent("CHAT_MSG_WHISPER")
+  self:UnregisterEvent("CHAT_MSG_WHISPER_INFORM")
+  self:UnregisterEvent("CHAT_MSG_BN_WHISPER")
+  self:UnregisterEvent("CHAT_MSG_BN_WHISPER_INFORM")
   self:UnregisterEvent("PLAYER_REGEN_ENABLED")
+
+  RemoveChatEditBoxCallbacks()
+
+  local dock = _G.GeneralDockManager
+  if dock then
+    dock:SetAlpha(1)
+  end
+  if self._puiChatTabGhostRoot then
+    self._puiChatTabGhostRoot:Hide()
+  end
+
+  ForEachBlizzardChatFrame(function(chatFrame)
+    local state = ChatFrameState[chatFrame]
+    if state then
+      for _, visual in ipairs({
+        state.shell,
+        state.tabGhost,
+        state.copyButton,
+        state.toolsButton,
+        state.jumpButton,
+      }) do
+        if visual then
+          visual:Hide()
+        end
+      end
+
+      if state.toolsButton and state.toolsButton._puiPanel then
+        state.toolsButton._puiPanel:Hide()
+      end
+    end
+
+    local editBox = chatFrame.editBox
+    local editState = editBox and ChatEditBoxState[editBox]
+    if editState and editState.inputBar then
+      editState.inputBar:Hide()
+    end
+
+    local name = chatFrame.GetName and chatFrame:GetName()
+    local tab = name and _G[name .. "Tab"]
+    if tab then
+      tab:SetAlpha(1)
+
+      local tabState = ChatTabState[tab]
+      if tabState and tabState.bg then
+        tabState.bg:Hide()
+      end
+    end
+  end)
+
   self._pendingCopyOpenFrame = nil
   self._pendingCopyOpenHooked = nil
   self._puiPendingChatTweaks = nil
