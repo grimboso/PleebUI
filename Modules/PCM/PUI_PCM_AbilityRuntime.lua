@@ -1350,7 +1350,7 @@ local function ReconfigureRecord(record, viewer, entry, generation)
   MarkRecordDirty(record, bit_bor(DIRTY_STATE, DIRTY_APPEARANCE, DIRTY_VISIBILITY), STATE_ALL)
 end
 
-local function ApplyPendingCatalog(viewer)
+local function ApplyPendingCatalog(viewer, pendingCooldownIDs)
   local entries = viewer.pendingEntries
   if not entries then
     return
@@ -1368,13 +1368,21 @@ local function ApplyPendingCatalog(viewer)
     retained[cooldownID] = true
 
     local record = activeByCooldownID[cooldownID]
-    if record and record.viewerKey ~= viewer.key then
-      ReleaseRecord(record)
-      record = nil
-    end
-
     if record then
-      ReconfigureRecord(record, viewer, entry, generation)
+      local moved = record.viewerKey ~= viewer.key
+      if moved then
+        record.parts.frame:SetParent(viewer.frame)
+      end
+      if not AbilityCatalog:EntriesMatch(record.entry, entry, true) then
+        ReconfigureRecord(record, viewer, entry, generation)
+      else
+        record.entry = entry
+        record.catalogGeneration = generation
+        record.viewerKey = viewer.key
+        if moved then
+          MarkRecordDirty(record, bit_bor(DIRTY_APPEARANCE, DIRTY_VISIBILITY), 0, APPEARANCE_STYLE)
+        end
+      end
     else
       record = AcquireRecord(viewer, entry, generation)
     end
@@ -1384,7 +1392,10 @@ local function ApplyPendingCatalog(viewer)
   end
 
   for _, record in ipairs(viewer.orderedRuntimes) do
-    if record.viewerKey == viewer.key and not retained[record.cooldownID] then
+    if record.viewerKey == viewer.key
+      and not retained[record.cooldownID]
+      and not pendingCooldownIDs[record.cooldownID]
+    then
       ReleaseRecord(record)
     end
   end
@@ -1683,9 +1694,15 @@ function AbilityRuntime:Flush()
     return
   end
 
-  if not PCMRuntime:IsAuraRestricted() then
-    ApplyPendingCatalog(viewers[ESSENTIAL_VIEWER])
-    ApplyPendingCatalog(viewers[UTILITY_VIEWER])
+  if viewers[ESSENTIAL_VIEWER].pendingEntries or viewers[UTILITY_VIEWER].pendingEntries then
+    local pendingCooldownIDs = {}
+    for _, viewer in pairs(viewers) do
+      for _, entry in ipairs(viewer.pendingEntries or viewer.entries) do
+        pendingCooldownIDs[entry.cooldownID] = true
+      end
+    end
+    ApplyPendingCatalog(viewers[ESSENTIAL_VIEWER], pendingCooldownIDs)
+    ApplyPendingCatalog(viewers[UTILITY_VIEWER], pendingCooldownIDs)
   end
   if eventRegistrationsDirty then
     RefreshEventRegistrations()
