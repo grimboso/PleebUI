@@ -13,6 +13,7 @@ ns.MinimapData = MinimapData
 local LibStub = _G.LibStub
 local P = select(1, ns.Pleebug:DropIn(MinimapData, { name = "Modules.MinimapData" }))
 local _G = _G
+local issecretvalue = _G.issecretvalue
 local UIParent = UIParent
 local Minimap = _G.Minimap
 
@@ -353,6 +354,46 @@ local ignorePatterns = {
 }
 
 local function ShouldIgnore(frame)
+  local forbidden = frame:IsForbidden()
+  if issecretvalue(forbidden) then
+    return true
+  end
+  if forbidden then
+    return true
+  end
+
+  local hasSecretAspect = frame:HasAnySecretAspect()
+  if issecretvalue(hasSecretAspect) then
+    return true
+  end
+  if hasSecretAspect then
+    return true
+  end
+
+  local hasSecretValues = frame:HasSecretValues()
+  if issecretvalue(hasSecretValues) then
+    return true
+  end
+  if hasSecretValues then
+    return true
+  end
+
+  local anchoringSecret = frame:IsAnchoringSecret()
+  if issecretvalue(anchoringSecret) then
+    return true
+  end
+  if anchoringSecret then
+    return true
+  end
+
+  local protected = frame:IsProtected()
+  if issecretvalue(protected) then
+    return true
+  end
+  if protected then
+    return true
+  end
+
   if frame == Minimap.ZoomIn
     or frame == Minimap.ZoomOut
   then
@@ -376,7 +417,7 @@ local function ShouldIgnore(frame)
 end
 
 local function LooksLikeButton(frame)
-  if frame:IsForbidden() then return false end
+  if ShouldIgnore(frame) then return false end
   local name = frame:GetName()
 
   -- Fast-path: many addons use obvious names even if scripts are on subregions.

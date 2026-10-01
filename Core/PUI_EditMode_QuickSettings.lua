@@ -346,7 +346,7 @@ function QuickSettings:Open(anchor, spec)
     AddControl(panel, {
       type = "button",
       label = "Hide mover",
-      tooltip = "Hides only this mover for the current Edit Mode session. The frame and its position stay unchanged. Close and reopen /PE to show the mover again.",
+      tooltip = "Hides only this mover for the current Edit Mode session. The frame and its position stay unchanged. Use Show all below the selection controls, or leave Edit Mode, to restore hidden movers.",
       action = function()
         ns.FrameUtil.HideMoverForEditSession(moverKey)
       end,

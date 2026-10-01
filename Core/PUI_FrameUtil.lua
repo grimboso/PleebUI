@@ -3556,26 +3556,135 @@ function FrameUtil.AugmentSmartSnapQuickSettings(entry, spec)
   return spec
 end
 
+local function SetMoverEditSessionHidden(entry, hidden)
+  if not entry then
+    return false
+  end
+
+  hidden = hidden == true
+  if hidden == (entry._editSessionHidden == true) then
+    return false
+  end
+
+  entry._editSessionHidden = hidden and true or nil
+
+  local frame = entry.frame
+  if frame and frame.__puiEditMoverHelper then
+    if hidden then
+      entry._editSessionHelperAlpha = frame:GetAlpha()
+      frame:SetAlpha(0)
+    elseif entry._editSessionHelperAlpha ~= nil then
+      frame:SetAlpha(entry._editSessionHelperAlpha)
+      entry._editSessionHelperAlpha = nil
+    end
+  end
+
+  return true
+end
+
+local function RefreshMoverEditSessionVisibility(entry)
+  if not entry then
+    return false
+  end
+
+  local visible = ns.Flags.IsEditing
+    and not entry._suppressed
+    and not entry._editSessionHidden
+
+  if entry._ghostManaged then
+    visible = visible and entry._ghostVisible and true or false
+  end
+
+  ShowOverlay(entry, visible)
+  EnableDrag(entry, visible)
+
+  if not visible and entry.nudgeGroup then
+    entry.nudgeGroup:Hide()
+  end
+
+  return visible
+end
+
+local function GetEditSessionHiddenMoverCount()
+  local count = 0
+
+  for _, entry in ipairs(MoversList) do
+    if entry._editSessionHidden then
+      count = count + 1
+    end
+  end
+
+  return count
+end
+
 function FrameUtil.HideMoverForEditSession(key)
   local entry = MoversByKey[key]
   if not entry or not ns.Flags.IsEditing then
     return
   end
 
-  entry._editSessionHidden = true
-  ClearSmartSnapCandidate(entry)
-  ShowOverlay(entry, false)
-  EnableDrag(entry, false)
-
-  if entry.nudgeGroup then
-    entry.nudgeGroup:Hide()
+  if not SetMoverEditSessionHidden(entry, true) then
+    return
   end
+
+  ClearSmartSnapCandidate(entry)
+  RefreshMoverEditSessionVisibility(entry)
 
   if FrameUtil._IsMoverSelected(entry) then
     FrameUtil._RemoveMoverSelection(entry)
   end
 
+  if FrameUtil._UpdateMoverVisibilityControls then
+    FrameUtil._UpdateMoverVisibilityControls()
+  end
+
   ns.EditModeQuickSettings:Hide()
+end
+
+function FrameUtil.HideSelectedMoversForEditSession()
+  if not ns.Flags.IsEditing then
+    return
+  end
+
+  local keys = {}
+  for entry in pairs(SelectedEntries) do
+    keys[#keys + 1] = entry.key
+  end
+
+  for _, key in ipairs(keys) do
+    FrameUtil.HideMoverForEditSession(key)
+  end
+end
+
+function FrameUtil.HideUnselectedMoversForEditSession()
+  if not ns.Flags.IsEditing or not next(SelectedEntries) then
+    return
+  end
+
+  for _, entry in ipairs(MoversList) do
+    local hidden = SelectedEntries[entry] ~= true
+
+    if SetMoverEditSessionHidden(entry, hidden) and hidden then
+      ClearSmartSnapCandidate(entry)
+    end
+
+    RefreshMoverEditSessionVisibility(entry)
+  end
+
+  FrameUtil._RefreshSelectionVisuals()
+end
+
+function FrameUtil.ShowAllMoversForEditSession()
+  if not ns.Flags.IsEditing then
+    return
+  end
+
+  for _, entry in ipairs(MoversList) do
+    SetMoverEditSessionHidden(entry, false)
+    RefreshMoverEditSessionVisibility(entry)
+  end
+
+  FrameUtil._RefreshSelectionVisuals()
 end
 
 function FrameUtil.SetMoverSuppressed(key, suppressed)
@@ -3585,17 +3694,9 @@ function FrameUtil.SetMoverSuppressed(key, suppressed)
   end
 
   entry._suppressed = suppressed == true or nil
-  local visible = ns.Flags.IsEditing
-    and not entry._suppressed
-    and not entry._editSessionHidden
-  if entry._ghostManaged then
-    visible = visible and entry._ghostVisible and true or false
-  end
+  local visible = RefreshMoverEditSessionVisibility(entry)
 
-  ShowOverlay(entry, visible)
-  EnableDrag(entry, visible)
-
-  if entry._suppressed and FrameUtil._IsMoverSelected(entry) then
+  if not visible and FrameUtil._IsMoverSelected(entry) then
     FrameUtil._RemoveMoverSelection(entry)
   end
 end
@@ -3680,6 +3781,10 @@ function FrameUtil._RefreshSelectionVisuals()
   end
 
   FrameUtil._UpdateNudgeUI(SelectedEntry)
+
+  if FrameUtil._UpdateMoverVisibilityControls then
+    FrameUtil._UpdateMoverVisibilityControls()
+  end
 end
 
 local function AddEntryToMoveGroup(group, entry, includeSmartSnap)
@@ -3692,7 +3797,15 @@ local function AddEntryToMoveGroup(group, entry, includeSmartSnap)
   if includeSmartSnap then
     local cluster = GetSmartSnapCluster(entry)
     for peer in pairs(cluster) do
-      if IsSelectableEntry(peer) then
+      if peer.frame
+        and not peer._suppressed
+        and IsSmartSnapRuntimeEntryActive(peer)
+        and (
+          peer._editSessionHidden
+          or peer.frame:IsShown()
+          or (ns.Flags.IsEditing and peer.overlay and peer.overlay:IsShown())
+        )
+      then
         group[peer] = true
       end
     end
@@ -4040,6 +4153,7 @@ local function EnsureEditDialog()
     "• Drag any selected mover to move the full selection.\n" ..
     "• Right-click opens that mover's settings.\n" ..
     "• Ctrl+Right-click resets the mover to its default position.\n" ..
+    "• Shift+Right-click temporarily hides that mover; use Show all to restore hidden movers.\n" ..
     "• Alt+Right-click detaches Smart Snap links for that mover.\n" ..
     "• Shift+Left-drag detaches Smart Snap links and disables snapping for that drag.\n" ..
     "• Use the nudge arrows and X/Y boxes for precise positioning.\n" ..
@@ -4052,13 +4166,13 @@ local function EnsureEditDialog()
   FrameUtil._selectionFrame = selFrame
   selFrame:SetPoint("TOPLEFT", f, "BOTTOMLEFT", 0, -4)
   selFrame:SetPoint("TOPRIGHT", f, "BOTTOMRIGHT", 0, -4)
-  selFrame:SetHeight(52)
+  selFrame:SetHeight(84)
 
   ns.Theme.WidgetSkins.Frame(selFrame)
 
 
   local selLabel = selFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-  selLabel:SetPoint("LEFT", selFrame, "LEFT", 12, 2)
+  selLabel:SetPoint("TOPLEFT", selFrame, "TOPLEFT", 12, -10)
   selLabel:SetJustifyH("LEFT")
   selLabel:SetText("Selected: none")
   FrameUtil._selectedLabel = selLabel
@@ -4076,7 +4190,7 @@ local function EnsureEditDialog()
   local xbFrame = xBox.frame
   xbFrame:SetParent(selFrame)
   xbFrame:ClearAllPoints()
-  xbFrame:SetPoint("RIGHT", selFrame, "RIGHT", -140, 0)
+  xbFrame:SetPoint("TOPRIGHT", selFrame, "TOPRIGHT", -140, -4)
   xbFrame:Show()
   ns.AceHooks.TakeOwnership(xBox)
 
@@ -4098,7 +4212,7 @@ local function EnsureEditDialog()
   local ybFrame = yBox.frame
   ybFrame:SetParent(selFrame)
   ybFrame:ClearAllPoints()
-  ybFrame:SetPoint("RIGHT", selFrame, "RIGHT", -16, 0)
+  ybFrame:SetPoint("TOPRIGHT", selFrame, "TOPRIGHT", -16, -4)
   ybFrame:Show()
   ns.AceHooks.TakeOwnership(yBox)
 
@@ -4108,6 +4222,45 @@ local function EnsureEditDialog()
   yLabel:SetJustifyH("RIGHT")
   yLabel:SetText("Y")
   FrameUtil.ApplyGlobalEditFont(yLabel, 12, nil)
+
+  local hideSelectedBtn = CreateFrame("Button", nil, selFrame, "UIPanelButtonTemplate")
+  hideSelectedBtn:SetSize(Round(126), Round(24))
+  hideSelectedBtn:SetPoint("BOTTOMLEFT", selFrame, "BOTTOMLEFT", 12, 8)
+  hideSelectedBtn:SetText("Hide selected")
+  hideSelectedBtn:SetScript("OnClick", function()
+    FrameUtil.HideSelectedMoversForEditSession()
+  end)
+
+  local hideOthersBtn = CreateFrame("Button", nil, selFrame, "UIPanelButtonTemplate")
+  hideOthersBtn:SetSize(Round(126), Round(24))
+  hideOthersBtn:SetPoint("LEFT", hideSelectedBtn, "RIGHT", 6, 0)
+  hideOthersBtn:SetText("Hide others")
+  hideOthersBtn:SetScript("OnClick", function()
+    FrameUtil.HideUnselectedMoversForEditSession()
+  end)
+
+  local showAllBtn = CreateFrame("Button", nil, selFrame, "UIPanelButtonTemplate")
+  showAllBtn:SetSize(Round(126), Round(24))
+  showAllBtn:SetPoint("LEFT", hideOthersBtn, "RIGHT", 6, 0)
+  showAllBtn:SetText("Show all")
+  showAllBtn:SetScript("OnClick", function()
+    FrameUtil.ShowAllMoversForEditSession()
+  end)
+
+  ns.Theme.WidgetSkins.UIButton(hideSelectedBtn)
+  ns.Theme.WidgetSkins.UIButton(hideOthersBtn)
+  ns.Theme.WidgetSkins.UIButton(showAllBtn)
+
+  FrameUtil._UpdateMoverVisibilityControls = function()
+    local selectedCount = FrameUtil._GetSelectedMoverCount and FrameUtil._GetSelectedMoverCount() or 0
+    local hiddenCount = GetEditSessionHiddenMoverCount()
+
+    hideSelectedBtn:SetEnabled(selectedCount > 0)
+    hideOthersBtn:SetEnabled(selectedCount > 0)
+    showAllBtn:SetEnabled(hiddenCount > 0)
+    showAllBtn:SetText(hiddenCount > 0 and ("Show all (" .. tostring(hiddenCount) .. ")") or "Show all")
+  end
+  FrameUtil._UpdateMoverVisibilityControls()
 
 
   local panel = CreateFrame("Frame", nil, UIParent, "BackdropTemplate")
@@ -5780,12 +5933,7 @@ function FrameUtil:RefreshGhostMover(key)
     entry._smartSnapRuntimeActive = runtimeActive and true or false
 
     if ns.Flags.IsEditing then
-      local moverVisible = entry._ghostVisible
-        and not entry._suppressed
-        and not entry._editSessionHidden
-
-      ShowOverlay(entry, moverVisible)
-      EnableDrag(entry, moverVisible)
+      local moverVisible = RefreshMoverEditSessionVisibility(entry)
 
       if not moverVisible and FrameUtil._IsMoverSelected(entry) then
         FrameUtil._RemoveMoverSelection(entry)
@@ -5958,6 +6106,7 @@ function FrameUtil:RegisterMover(key, frame, opts)
 
   local entry = MoversByKey[key]
   local smartSnapRegistrationChanged = not entry or entry.frame ~= frame
+  local editSessionHidden = entry and entry._editSessionHidden == true
 
   if not entry then
     entry = {
@@ -5981,6 +6130,10 @@ function FrameUtil:RegisterMover(key, frame, opts)
     table.insert(MoversList, entry)
   else
     if entry.frame ~= frame then
+      if editSessionHidden then
+        SetMoverEditSessionHidden(entry, false)
+      end
+
       ClearSmartSnapCandidate(entry)
 
       if entry.overlay then
@@ -6027,6 +6180,10 @@ function FrameUtil:RegisterMover(key, frame, opts)
     entry.openOptions   = opts.openOptions
     entry.quickSettings = opts.quickSettings
     entry.label         = label
+
+    if editSessionHidden and not entry._editSessionHidden then
+      SetMoverEditSessionHidden(entry, true)
+    end
   end
 
   ns.Registry.Movers[key] = { frame = frame, opts = entry.opts }
@@ -6034,14 +6191,7 @@ function FrameUtil:RegisterMover(key, frame, opts)
   EnsureSmartSnapLoaded()
 
   if ns.Flags.IsEditing then
-    local moverVisible = not entry._suppressed
-      and not entry._editSessionHidden
-    if entry._ghostManaged then
-      moverVisible = moverVisible and entry._ghostVisible and true or false
-    end
-
-    ShowOverlay(entry, moverVisible)
-    EnableDrag(entry, moverVisible)
+    RefreshMoverEditSessionVisibility(entry)
     FrameUtil._OnMoverMoved(entry)
     FrameUtil._RefreshSelectionVisuals()
   end
@@ -6088,6 +6238,8 @@ function FrameUtil:UnregisterMover(key)
   end
 
   local relayoutSmartSnap = SmartSnapLinks[key] ~= nil
+
+  SetMoverEditSessionHidden(entry, false)
 
   -- Clear current selection if this was selected
   if FrameUtil._IsMoverSelected(entry) then
@@ -6296,23 +6448,11 @@ function FrameUtil.OnEditModeChanged(enable)
   FrameUtil.RefreshMoverLayering()
 
   for _, entry in ipairs(MoversList) do
-    local moverVisible = enable
-      and not entry._suppressed
-      and not entry._editSessionHidden
-    if entry._ghostManaged then
-      moverVisible = moverVisible and entry._ghostVisible and true or false
-    end
-
-    ShowOverlay(entry, moverVisible)
-    EnableDrag(entry, moverVisible)
-
     if not enable then
-      entry._editSessionHidden = nil
-
-      if entry.nudgeGroup then
-        entry.nudgeGroup:Hide()
-      end
+      SetMoverEditSessionHidden(entry, false)
     end
+
+    RefreshMoverEditSessionVisibility(entry)
   end
 
   if not enable then
