@@ -156,7 +156,7 @@ local function RegisterCustomGroupMover(group, frame)
       family = "combatBars",
       syncAxis = "NONE",
       isRuntimeActive = function()
-        return enabled
+        return enabled and ready
       end,
     },
     savePosition = function()
@@ -1032,6 +1032,10 @@ function GroupManager:Flush()
     flushFrame:SetShown(dynamicBoundsRefreshPasses > 0)
     return
   end
+  if ns.PCMCatalog:GetGeneration() == 0 then
+    flushFrame:Hide()
+    return
+  end
   pendingLayout = false
   RebuildActiveGroups()
   wipe(dynamicBoundsRows)
@@ -1275,6 +1279,9 @@ PCMRuntime:RegisterSubscriber("GroupManager", {
 flushFrame:SetScript("OnUpdate", function()
   if pendingLayout then
     GroupManager:Flush()
+    if pendingLayout then
+      return
+    end
   end
   if dynamicBoundsRefreshPasses > 0 then
     RefreshDynamicBounds()
