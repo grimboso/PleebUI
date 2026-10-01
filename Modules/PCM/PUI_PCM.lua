@@ -1316,7 +1316,7 @@ local function _RegisterViewerMover(info)
     smartSnap = isSmartCombatViewer and {
       family = "combatBars",
       isRuntimeActive = function()
-        return _PCM_IsModuleEnabledFast()
+        return _PCM_IsModuleEnabledFast() and ns.PCMAbilityRuntime:IsReady()
       end,
       syncAxis = "WIDTH",
       syncWidthMin = 1,
