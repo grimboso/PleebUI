@@ -15,15 +15,15 @@ Runtime.Dirty = {
 }
 
 local enabled = false
-local worldTransitionActive = false
+local initializing = true
 local subscribers = {}
 local subscriberOrder = {}
 local eventFrame = CreateFrame("Frame")
+eventFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
 
 local LIFECYCLE_EVENTS = {
   "ADDON_LOADED",
   "PLAYER_ENTERING_WORLD",
-  "LOADING_SCREEN_ENABLED",
   "LOADING_SCREEN_DISABLED",
   "PLAYER_REGEN_DISABLED",
   "PLAYER_REGEN_ENABLED",
@@ -42,9 +42,11 @@ local LIFECYCLE_EVENTS = {
 }
 
 local function IsDataRestricted()
-  return InCombatLockdown()
+  return not initializing and (
+    InCombatLockdown()
     or C_Secrets.ShouldAurasBeSecret()
     or C_Secrets.ShouldCooldownsBeSecret()
+  )
 end
 
 local function DispatchLifecycleEvent(event, ...)
@@ -84,14 +86,21 @@ function Runtime:IsDataRestricted()
   return IsDataRestricted()
 end
 
-function Runtime:IsPresentationSuspended()
-  return worldTransitionActive == true
+function Runtime:IsAuraRestricted()
+  return not initializing and (InCombatLockdown() or C_Secrets.ShouldAurasBeSecret() == true)
+end
+
+function Runtime:IsInitializing()
+  return initializing
+end
+
+function Runtime:FinishInitialization()
+  initializing = false
 end
 
 function Runtime:Enable()
   if enabled then return end
   enabled = true
-  worldTransitionActive = false
   for index = 1, #LIFECYCLE_EVENTS do
     eventFrame:RegisterEvent(LIFECYCLE_EVENTS[index])
   end
@@ -100,14 +109,22 @@ end
 function Runtime:Disable()
   if not enabled then return end
   enabled = false
-  worldTransitionActive = false
   eventFrame:UnregisterAllEvents()
+  if initializing then
+    eventFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
+  end
 end
 
 eventFrame:SetScript("OnEvent", function(_, event, ...)
-  if not enabled then return end
+  if not enabled then
+    if event == "PLAYER_ENTERING_WORLD" then
+      initializing = false
+      eventFrame:UnregisterAllEvents()
+    end
+    return
+  end
 
-  local arg1, arg2 = ...
+  local arg1 = ...
   if event == "ADDON_LOADED" and arg1 ~= "Blizzard_CooldownViewer" then
     return
   end
@@ -121,20 +138,6 @@ eventFrame:SetScript("OnEvent", function(_, event, ...)
     end
   end
 
-  if event == "LOADING_SCREEN_ENABLED" then
-    worldTransitionActive = true
-  elseif event == "LOADING_SCREEN_DISABLED" then
-    worldTransitionActive = IsDataRestricted()
-  elseif event == "PLAYER_ENTERING_WORLD"
-    or event == "PLAYER_REGEN_ENABLED"
-    or (event == "ADDON_RESTRICTION_STATE_CHANGED"
-      and arg2 == Enum.AddOnRestrictionState.Inactive)
-  then
-    if not IsDataRestricted() then
-      worldTransitionActive = false
-    end
-  end
-
   DispatchLifecycleEvent(event, ...)
 end)
 
@@ -144,6 +147,8 @@ Runtime.RegisterSubscriber = P:Def("Runtime:RegisterSubscriber", Runtime.Registe
 Runtime.SetSubscriberEnabled = P:Def("Runtime:SetSubscriberEnabled", Runtime.SetSubscriberEnabled)
 Runtime.MaskHas = P:Def("Runtime:MaskHas", Runtime.MaskHas)
 Runtime.IsDataRestricted = P:Def("Runtime:IsDataRestricted", Runtime.IsDataRestricted)
-Runtime.IsPresentationSuspended = P:Def("Runtime:IsPresentationSuspended", Runtime.IsPresentationSuspended)
+Runtime.IsAuraRestricted = P:Def("Runtime:IsAuraRestricted", Runtime.IsAuraRestricted)
+Runtime.IsInitializing = P:Def("Runtime:IsInitializing", Runtime.IsInitializing)
+Runtime.FinishInitialization = P:Def("Runtime:FinishInitialization", Runtime.FinishInitialization)
 Runtime.Enable = P:Def("Runtime:Enable", Runtime.Enable)
 Runtime.Disable = P:Def("Runtime:Disable", Runtime.Disable)
