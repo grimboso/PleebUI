@@ -790,7 +790,7 @@ _PCM_RunHardViewerTransition = function(owner, invalidateClassSpellCache)
     return
   end
 
-  if PCMRuntime:IsDataRestricted() then
+  if InCombatLockdown() and not PCMRuntime:IsInitializing() then
     _PCM_BeginTransition(owner, invalidateClassSpellCache)
     return
   end
@@ -879,7 +879,7 @@ local function _PCM_FlushTransition(token)
     return
   end
 
-  if PCMRuntime:IsDataRestricted() then
+  if InCombatLockdown() and not PCMRuntime:IsInitializing() then
     return
   end
 
@@ -1001,7 +1001,7 @@ _ForceAnchor = function(frame, key)
 end
 
 function Cooldowns:_OnDataRestrictionsCleared()
-  if PCMRuntime:IsDataRestricted() then
+  if InCombatLockdown() and not PCMRuntime:IsInitializing() then
     return
   end
 
@@ -1740,7 +1740,7 @@ local function _RunPCMStartupRefresh(self)
     C_AddOns.LoadAddOn("Blizzard_CooldownViewer")
   end
 
-  if PCMRuntime:IsDataRestricted() then
+  if InCombatLockdown() and not PCMRuntime:IsInitializing() then
     self.__puiPCMStartupPending = true
     return false
   end
@@ -1891,7 +1891,7 @@ function Cooldowns:_ReconcileCustomTrackerStartupAvailability()
     return
   end
 
-  if PCMRuntime:IsDataRestricted() then
+  if InCombatLockdown() and not PCMRuntime:IsInitializing() then
     self.__puiPCMCustomTrackerStartupPending = true
     return
   end
@@ -1992,7 +1992,7 @@ function Cooldowns:_OnSpellsChanged()
     return
   end
 
-  if not PCMRuntime:IsDataRestricted() then
+  if not InCombatLockdown() then
     IconSettings:InvalidateCatalog()
   end
 end
@@ -2010,7 +2010,7 @@ local function _PCM_RuntimeLifecycleEvent(event, ...)
     Cooldowns:_OnDataRestrictionsCleared()
   elseif event == "ADDON_RESTRICTION_STATE_CHANGED" then
     if arg2 == Enum.AddOnRestrictionState.Inactive
-      and not PCMRuntime:IsDataRestricted()
+      and not InCombatLockdown()
     then
       Cooldowns:_OnDataRestrictionsCleared()
     end
