@@ -1769,6 +1769,16 @@ _PCM_RunInitialViewerPass = function(owner)
     return false
   end
 
+  local migrationComplete = PCM_DB.IsRendererMigrationComplete()
+  if not _PCM_MigrateOwnedViewerTooltips() then
+    owner.__puiPCMStartupPending = true
+    return false
+  end
+  if not migrationComplete then
+    ns.Modules.PCM_Buffs:RefreshSettings()
+    ns.Modules.PCM_BuffBars:RefreshSettings()
+  end
+
   _PCM_InitializeOwnedViewers(owner)
 
   for _, info in owner:IterateViewers() do
@@ -1779,7 +1789,6 @@ _PCM_RunInitialViewerPass = function(owner)
     end
   end
 
-  _PCM_MigrateOwnedViewerTooltips()
   ns.PCMAbilityCatalog:Invalidate("initial-viewer-pass")
   ns.PCMAbilityCatalog:Refresh()
   ns.PCMAbilityRuntime:Flush()
@@ -2024,6 +2033,10 @@ local function _PCM_RuntimeLifecycleEvent(event, ...)
     Cooldowns:_OnSpellsChanged()
   elseif event == "ADDON_LOADED" then
     _PCM_RunInitialViewerPass(Cooldowns)
+  elseif event == "EDIT_MODE_LAYOUTS_UPDATED" or event == "LOADING_SCREEN_DISABLED" then
+    if Cooldowns.__puiPCMStartupPending then
+      _PCM_RunInitialViewerPass(Cooldowns)
+    end
   end
 end
 
