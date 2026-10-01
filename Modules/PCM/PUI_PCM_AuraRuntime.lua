@@ -162,6 +162,9 @@ local function InitializeAuraButton(record, button, unit)
 
   if record.viewerKey == BUFF_ICON_VIEWER then
     ConfigureIconButton(record, button, unit, true)
+    local size, padding = ns.PCMGroupManager:GetRecordIconLayout(record)
+    button:SetSize(size, size)
+    record.horizontalPadding = padding
   else
     ConfigureBarButton(record, button, true)
   end
@@ -174,7 +177,7 @@ local function InitializeAuraButton(record, button, unit)
       "DisableUntrustedLayoutScriptsTemplate"
     )
     sizeAssistant:SetSize(0.001, 0.001)
-    sizeAssistant:SetPoint("TOPLEFT", button, "BOTTOMRIGHT")
+    sizeAssistant:SetPoint("TOPLEFT", button, "BOTTOMRIGHT", record.horizontalPadding / 2, 0)
     record.boundsAssistants[unit] = sizeAssistant
   end
 end
@@ -555,14 +558,26 @@ function AuraRuntime:PrepareRecordLayout(record, width, height, horizontalPaddin
   end
 
   if record.collapseWhenInactive then
-    local halfPadding = horizontalPadding / 2
-    frame:ClearAllPoints()
-    frame:SetPoint("TOPLEFT", layoutFrame, "TOPLEFT", halfPadding, 0)
-    for unit, sizeAssistant in pairs(record.boundsAssistants) do
-      local button = record.buttons[unit]
-      sizeAssistant:ClearAllPoints()
-      sizeAssistant:SetPoint("TOPLEFT", button, "BOTTOMRIGHT", halfPadding, 0)
+    local appliedPadding = record.horizontalPadding or horizontalPadding
+    if appliedPadding ~= horizontalPadding then
+      local canUpdatePadding = true
+      for _, sizeAssistant in pairs(record.boundsAssistants) do
+        if not sizeAssistant:CanBeAccessedInContext() then
+          canUpdatePadding = false
+          break
+        end
+      end
+      if canUpdatePadding then
+        appliedPadding = horizontalPadding
+        for unit, sizeAssistant in pairs(record.boundsAssistants) do
+          sizeAssistant:ClearAllPoints()
+          sizeAssistant:SetPoint("TOPLEFT", record.buttons[unit], "BOTTOMRIGHT", appliedPadding / 2, 0)
+        end
+      end
     end
+    record.horizontalPadding = appliedPadding
+    frame:ClearAllPoints()
+    frame:SetPoint("TOPLEFT", layoutFrame, "TOPLEFT", appliedPadding / 2, 0)
     self:RefreshRecordLayoutBounds(record)
   else
     frame:ClearAllPoints()
