@@ -4,15 +4,14 @@ local AuraRuntime = {}
 ns.PCMAuraRuntime = AuraRuntime
 
 local Catalog = ns.PCMCatalog
+local PCMRuntime = ns.PCMRuntime
 local AuraLayout = ns.PCMAuraLayout
 local AuraSlotDriver = ns.AuraSlotDriver
 local AuraWidget = ns.AuraWidget
 local IconSettings = ns.PCMIconSettings
 local PCMPresentation = ns.PCMPresentation
 
-local C_Secrets = C_Secrets
 local CreateFrame = CreateFrame
-local InCombatLockdown = InCombatLockdown
 local UIParent = UIParent
 local ipairs = ipairs
 local pairs = pairs
@@ -70,10 +69,6 @@ local AURA_RESTRICTION_TYPES = {
   [Enum.AddOnRestrictionType.PvPMatch] = true,
   [Enum.AddOnRestrictionType.Map] = true,
 }
-
-local function IsRestyleLocked()
-  return InCombatLockdown() or C_Secrets.ShouldAurasBeSecret() == true
-end
 
 local function GetViewer(viewerKey)
   return viewers[viewerKey]
@@ -134,7 +129,7 @@ local function GetIconStyle(record)
 end
 
 local function ConfigureIconButton(record, button, unit, initializing)
-  if initializing ~= true and IsRestyleLocked() then
+  if initializing ~= true and PCMRuntime:IsAuraRestricted() then
     record.stylePending = true
     return
   end
@@ -148,7 +143,7 @@ local function ConfigureIconButton(record, button, unit, initializing)
 end
 
 local function ConfigureBarButton(record, button, initializing)
-  if initializing ~= true and IsRestyleLocked() then
+  if initializing ~= true and PCMRuntime:IsAuraRestricted() then
     record.stylePending = true
     return
   end
@@ -197,7 +192,7 @@ SetSlotActive = function(record, active)
 end
 
 local function ConfigureRecordSlots(record)
-  if IsRestyleLocked() then
+  if PCMRuntime:IsAuraRestricted() then
     record.slotConfigurationPending = true
     pendingSlotConfiguration = true
     return
@@ -554,7 +549,7 @@ function AuraRuntime:PrepareRecordLayout(record, width, height, horizontalPaddin
   local frame = record.parts.frame
   frame:SetSize(width, height)
 
-  if not IsRestyleLocked() then
+  if not PCMRuntime:IsAuraRestricted() then
     for _, button in pairs(record.buttons) do
       button:SetSize(width, height)
     end
@@ -598,6 +593,24 @@ end
 function AuraRuntime:OnCatalogChanged(generation)
   pendingCatalog = true
   ScheduleFlush()
+
+  if PCMRuntime:IsAuraRestricted() then
+    for _, viewer in pairs(viewers) do
+      local entries = Catalog:GetViewerEntries(viewer.key)
+      for index = 1, #entries do
+        if not viewer.records[entries[index].cooldownID] then
+          ns.Addon:PUI_ConfirmAction({
+            title = "Buff tracking",
+            text = "Buff tracking saved. Reload the UI to show newly tracked buffs now.",
+            yesText = RELOADUI,
+            noText = "Later",
+            onYes = ReloadUI,
+          })
+          return
+        end
+      end
+    end
+  end
 end
 
 function AuraRuntime:Flush()
@@ -609,7 +622,7 @@ function AuraRuntime:Flush()
   if pendingCatalog
     and viewers[BUFF_ICON_VIEWER].style ~= nil
     and viewers[BUFF_BAR_VIEWER].style ~= nil
-    and not IsRestyleLocked()
+    and not PCMRuntime:IsAuraRestricted()
   then
     pendingCatalog = false
     for _, viewer in pairs(viewers) do
@@ -618,7 +631,7 @@ function AuraRuntime:Flush()
     end
   end
 
-  if pendingSlotConfiguration and not IsRestyleLocked() then
+  if pendingSlotConfiguration and not PCMRuntime:IsAuraRestricted() then
     pendingSlotConfiguration = false
     for _, viewer in pairs(viewers) do
       for _, record in ipairs(viewer.orderedRecords) do
@@ -629,7 +642,7 @@ function AuraRuntime:Flush()
     end
   end
 
-  if pendingAppearance and not IsRestyleLocked() then
+  if pendingAppearance and not PCMRuntime:IsAuraRestricted() then
     pendingAppearance = false
     for _, viewer in pairs(viewers) do
       for _, record in ipairs(viewer.orderedRecords) do
@@ -706,16 +719,13 @@ function AuraRuntime:Disable()
 end
 
 function AuraRuntime:IsReady()
-  local generation = Catalog:GetGeneration()
   return enabled
-    and pendingCatalog ~= true
-    and generation > 0
+    and viewers[BUFF_ICON_VIEWER].generation > 0
     and viewers[BUFF_ICON_VIEWER].frame ~= nil
     and viewers[BUFF_BAR_VIEWER].frame ~= nil
     and viewers[BUFF_ICON_VIEWER].style ~= nil
     and viewers[BUFF_BAR_VIEWER].style ~= nil
-    and viewers[BUFF_ICON_VIEWER].generation == generation
-    and viewers[BUFF_BAR_VIEWER].generation == generation
+    and viewers[BUFF_ICON_VIEWER].generation == viewers[BUFF_BAR_VIEWER].generation
     and (
       groupLayoutEnabled and groupLayoutReady
       or AuraLayout:GetLastPlan(BUFF_ICON_VIEWER) ~= nil
