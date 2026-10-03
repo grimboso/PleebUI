@@ -354,12 +354,12 @@ end
 local HISTORY_VERSION = 2
 local HISTORY_TRIM_BUFFER = 128
 
-local function ApplyChatTweaks(atPlayerEnteringWorld)
+local function ApplyChatTweaks()
   if not ChatLinks or not ChatLinks.db or not ChatLinks.db.profile or not ChatLinks.db.profile.chatTweaks then
     return
   end
 
-  if InCombatLockdown() and atPlayerEnteringWorld ~= true then
+  if InCombatLockdown() then
     ChatLinks._puiPendingChatTweaks = true
     return
   end
@@ -1667,16 +1667,42 @@ Addon:RegisterOptionsSection("Chat", ChatProvider, 60, "Chat", nil, {
 
 
 local InitializePrimaryChatLayout
-
+local FlushPendingChatUpdates
+local ChatLayoutReady = false
+local ChatUpdatesQueued = false
 local ChatTweaksBoot = CreateFrame("Frame", "PleebUI_ChatTweaksBoot")
+local ChatWindowEvents = {
+  "UPDATE_CHAT_WINDOWS",
+  "UPDATE_FLOATING_CHAT_WINDOWS",
+  "CHAT_MSG_WHISPER",
+  "CHAT_MSG_WHISPER_INFORM",
+  "CHAT_MSG_BN_WHISPER",
+  "CHAT_MSG_BN_WHISPER_INFORM",
+}
+
+local function QueueChatUpdates()
+  if ChatLinks._puiRuntimeEnabled ~= true or ChatUpdatesQueued then
+    return
+  end
+
+  ChatUpdatesQueued = true
+  ChatTweaksBoot:SetScript("OnUpdate", FlushPendingChatUpdates)
+end
+
+local function QueuePrimaryChatLayout()
+  ChatLinks._puiPendingPrimaryChatLayout = true
+  QueueChatUpdates()
+end
+
 ChatTweaksBoot:RegisterEvent("PLAYER_ENTERING_WORLD")
 ChatTweaksBoot:RegisterEvent("PLAYER_LOGIN")
 ChatTweaksBoot:RegisterEvent("PLAYER_REGEN_ENABLED")
+ChatTweaksBoot:RegisterEvent("LOADING_SCREEN_DISABLED")
 ChatTweaksBoot:SetScript("OnEvent", function(_, event)
   if event == "PLAYER_ENTERING_WORLD" then
     if _PUI_RefreshChatRuntimeState() then
-      InitializePrimaryChatLayout()
-      ChatLinks:RefreshChatFrames(true)
+      ChatLinks._puiPendingPrimaryChatLayout = true
+      ChatLinks:QueueChatFrameRefresh()
     end
     return
   end
@@ -1688,28 +1714,41 @@ ChatTweaksBoot:SetScript("OnEvent", function(_, event)
     return
   end
 
+  if event == "LOADING_SCREEN_DISABLED" then
+    ChatLayoutReady = true
+    if ChatLinks._puiRuntimeEnabled == true then
+      ChatLinks._puiPendingPrimaryChatLayout = true
+      ChatLinks:QueueChatFrameRefresh()
+    end
+    return
+  end
+
   if event == "PLAYER_REGEN_ENABLED" then
     if ChatLinks._puiRuntimeEnabled == true then
       _PUI_BootHistoryOwner()
-      if ChatLinks._puiPendingChatTweaks then
-        ApplyChatTweaks()
+      if ChatLinks._puiPendingPrimaryChatBind then
+        ChatLinks._puiPendingPrimaryChatLayout = true
       end
-      if ChatLinks._puiPendingChatSideButtons then
-        HideChatSideButtons()
-        ChatLinks._puiPendingChatSideButtons = nil
+      if ChatLinks._puiPendingPrimaryChatLayout
+        or ChatLinks._puiPendingChatTweaks
+        or ChatLinks._puiPendingChatSideButtons
+      then
+        QueueChatUpdates()
       end
     end
 
     if ChatLinks._puiPendingHistoryReduce then
       ChatLinks._puiPendingHistoryReduce = nil
-
       if ChatLinks._puiRuntimeEnabled ~= true then
         return
       end
-
       _PUI_TrimHistoryState(_PUI_GetHistoryState(), true)
     end
+    return
   end
+
+  -- Whisper notifications only request discovery; their payload stays unused.
+  ChatLinks:QueueChatFrameRefresh()
 end)
 
 
@@ -2660,11 +2699,18 @@ local function BindPrimaryChatFrame(holder, chatFrame)
     return
   end
 
+  -- Blizzard's initial dock layout must settle before we own this rect.
+  if not ChatLayoutReady or InCombatLockdown() then
+    ChatLinks._puiPendingPrimaryChatBind = true
+    return false
+  end
+
   chatFrame:ClearAllPoints()
   chatFrame:SetPoint("TOPLEFT", holder, "TOPLEFT", 0, 0)
   chatFrame:SetPoint("BOTTOMRIGHT", holder, "BOTTOMRIGHT", 0, 0)
   chatFrame:SetClampRectInsets(0, 0, 0, 0)
   chatFrame:SetClampedToScreen(false)
+  ChatLinks._puiPendingPrimaryChatBind = nil
 end
 
 -- This is the only lifecycle path that writes Blizzard chat-frame anchors.
@@ -3205,6 +3251,13 @@ end
 
 -- Chat frame shell, tabs, side buttons and copy button wiring.
 
+local function SetChatVisualFrameLevel(visual, chatWidget)
+  local level = chatWidget:GetFrameLevel()
+  if canaccessvalue(level) then
+    visual:SetFrameLevel(math.max(0, level - 1))
+  end
+end
+
 -- Chat input background bar behind the edit box (so the input does not float).
 local function EnsureChatInputBar(editBox)
   if not editBox then return end
@@ -3224,11 +3277,7 @@ local function EnsureChatInputBar(editBox)
   if bg.SetFrameStrata and editBox.GetFrameStrata then
     bg:SetFrameStrata(editBox:GetFrameStrata())
   end
-  if bg.SetFrameLevel and editBox.GetFrameLevel then
-    local lvl = (editBox:GetFrameLevel() or 1) - 1
-    if lvl < 0 then lvl = 0 end
-    bg:SetFrameLevel(lvl)
-  end
+  SetChatVisualFrameLevel(bg, editBox)
 
   bg:SetShown(editBox:IsShown())
 
@@ -3542,11 +3591,7 @@ local function SkinUndockedChatTab(chatFrame, tab, name)
     if bg.SetFrameStrata and tab.GetFrameStrata then
       bg:SetFrameStrata(tab:GetFrameStrata())
     end
-    if bg.SetFrameLevel and tab.GetFrameLevel then
-      local lvl = (tab:GetFrameLevel() or 1) - 1
-      if lvl < 0 then lvl = 0 end
-      bg:SetFrameLevel(lvl)
-    end
+    SetChatVisualFrameLevel(bg, tab)
 
     tabState.skinned = true
   end
@@ -3772,11 +3817,7 @@ local function SkinTemporaryChatFrame(chatFrame)
 
   shell:SetFrameStrata(chatFrame:GetFrameStrata())
 
-  local level = chatFrame:GetFrameLevel() - 1
-  if level < 0 then
-    level = 0
-  end
-  shell:SetFrameLevel(level)
+  SetChatVisualFrameLevel(shell, chatFrame)
 
   if shell.SetIgnoreParentAlpha then
     shell:SetIgnoreParentAlpha(true)
@@ -3874,13 +3915,9 @@ local function SkinChatFrame(chatFrame)
   if chatFrame.GetFrameStrata then
     shell:SetFrameStrata(chatFrame:GetFrameStrata())
   end
-  if chatFrame.GetFrameLevel then
-    local lvl = (chatFrame:GetFrameLevel() or 1) - 1
-    if lvl < 0 then lvl = 0 end
-    shell:SetFrameLevel(lvl)
-    if shell.SetIgnoreParentAlpha then
-      shell:SetIgnoreParentAlpha(true)
-    end
+  SetChatVisualFrameLevel(shell, chatFrame)
+  if shell.SetIgnoreParentAlpha then
+    shell:SetIgnoreParentAlpha(true)
   end
 
   RefreshShellAnchors()
@@ -4093,21 +4130,51 @@ local function CreateCopyButton(chatFrame)
   return btn
 end
 
-function ChatLinks:QueueChatFrameRefresh()
-  if self._puiChatFrameRefreshQueued then
+FlushPendingChatUpdates = function()
+  ChatTweaksBoot:SetScript("OnUpdate", nil)
+  ChatUpdatesQueued = false
+  if ChatLinks._puiRuntimeEnabled ~= true or not ChatLayoutReady then
     return
   end
 
-  self._puiChatFrameRefreshQueued = true
+  if ChatLinks._puiPendingPrimaryChatLayout then
+    ChatLinks._puiPendingPrimaryChatLayout = nil
+    InitializePrimaryChatLayout()
+  end
 
-  C_Timer.After(0, function()
-    self._puiChatFrameRefreshQueued = nil
-    self:RefreshChatFrames()
-  end)
+  if ChatLinks._puiPendingChatFrameRefresh then
+    ChatLinks._puiPendingChatFrameRefresh = nil
+    ChatLinks:RefreshChatFrames()
+  elseif not InCombatLockdown() then
+    if ChatLinks._puiPendingChatTweaks then
+      ApplyChatTweaks()
+    end
+    if ChatLinks._puiPendingChatSideButtons then
+      HideChatSideButtons()
+      ChatLinks._puiPendingChatSideButtons = nil
+    end
+  end
+
+  if ChatLinks._puiPendingInitialFade then
+    ChatLinks._puiPendingInitialFade = nil
+    ChatLinks:ApplyInitialFade()
+  end
 end
 
-function ChatLinks:RefreshChatFrames(atPlayerEnteringWorld)
+function ChatLinks:QueueChatFrameRefresh()
+  if self._puiRuntimeEnabled ~= true then
+    return
+  end
+  self._puiPendingChatFrameRefresh = true
+  QueueChatUpdates()
+end
+
+function ChatLinks:RefreshChatFrames()
   if not self.db or not self.db.profile or self._puiRuntimeEnabled ~= true then
+    return
+  end
+  if not ChatLayoutReady then
+    self._puiPendingChatFrameRefresh = true
     return
   end
 
@@ -4139,7 +4206,7 @@ function ChatLinks:RefreshChatFrames(atPlayerEnteringWorld)
     end
   end)
 
-  ApplyChatTweaks(atPlayerEnteringWorld == true)
+  ApplyChatTweaks()
   self:ApplyChatTypography()
 
   local enableCopyFrame = self.db.profile.enableCopyFrame == true
@@ -4173,7 +4240,7 @@ function ChatLinks:RefreshChatFrames(atPlayerEnteringWorld)
     end
   end
 
-  if atPlayerEnteringWorld == true or not InCombatLockdown() then
+  if not InCombatLockdown() then
     HideChatSideButtons()
     self._puiPendingChatSideButtons = nil
   else
@@ -4357,35 +4424,31 @@ function ChatLinks:OnEnable()
   --    session and Chattynator is NOT loaded.
 
   self:SetUrlFiltersEnabled(self.db.profile.enableUrlCopy == true)
+  for _, event in ipairs(ChatWindowEvents) do
+    ChatTweaksBoot:RegisterEvent(event)
+  end
 
-  self:RefreshChatFrames()
-  self:RegisterEvent("UPDATE_CHAT_WINDOWS", "QueueChatFrameRefresh")
-  self:RegisterEvent("UPDATE_FLOATING_CHAT_WINDOWS", "QueueChatFrameRefresh")
-  self:RegisterEvent("CHAT_MSG_WHISPER", "QueueChatFrameRefresh")
-  self:RegisterEvent("CHAT_MSG_WHISPER_INFORM", "QueueChatFrameRefresh")
-  self:RegisterEvent("CHAT_MSG_BN_WHISPER", "QueueChatFrameRefresh")
-  self:RegisterEvent("CHAT_MSG_BN_WHISPER_INFORM", "QueueChatFrameRefresh")
-
-  FrameScale:RegisterScaleListener(InitializePrimaryChatLayout)
-
-  -- Primary chat holder mover
+  FrameScale:RegisterScaleListener(QueuePrimaryChatLayout)
   RegisterPrimaryChatMover()
 
-  -- Start chat fading behaviour once everything exists
-  self:ApplyInitialFade()
+  self._puiPendingInitialFade = true
+  self:QueueChatFrameRefresh()
+
 end
 
 
 function ChatLinks:OnDisable()
-  FrameScale:UnregisterScaleListener(InitializePrimaryChatLayout)
+  FrameScale:UnregisterScaleListener(QueuePrimaryChatLayout)
   self._puiRuntimeEnabled = false
   self:SetUrlFiltersEnabled(false)
-  self:UnregisterEvent("UPDATE_CHAT_WINDOWS")
-  self:UnregisterEvent("UPDATE_FLOATING_CHAT_WINDOWS")
-  self:UnregisterEvent("CHAT_MSG_WHISPER")
-  self:UnregisterEvent("CHAT_MSG_WHISPER_INFORM")
-  self:UnregisterEvent("CHAT_MSG_BN_WHISPER")
-  self:UnregisterEvent("CHAT_MSG_BN_WHISPER_INFORM")
+  for _, event in ipairs(ChatWindowEvents) do
+    ChatTweaksBoot:UnregisterEvent(event)
+  end
+  ChatTweaksBoot:SetScript("OnUpdate", nil)
+  ChatUpdatesQueued = false
+  self._puiPendingChatFrameRefresh = nil
+  self._puiPendingPrimaryChatLayout = nil
+  self._puiPendingInitialFade = nil
   self:UnregisterEvent("PLAYER_REGEN_ENABLED")
 
   RemoveChatEditBoxCallbacks()
@@ -4438,6 +4501,7 @@ function ChatLinks:OnDisable()
 
   self._pendingCopyOpenFrame = nil
   self._pendingCopyOpenHooked = nil
+  self._puiPendingPrimaryChatBind = nil
   self._puiPendingChatTweaks = nil
   self._puiPendingChatSideButtons = nil
   self:_CancelFadeTimers()
@@ -4533,6 +4597,7 @@ end
   ChatLinks.ApplyInitialFade = P:Def("ChatLinks.ApplyInitialFade", ChatLinks.ApplyInitialFade)
   ChatLinks.OpenCopyWindow = P:Def("ChatLinks.OpenCopyWindow", ChatLinks.OpenCopyWindow)
   EnsureChatInputBar = P:Def("EnsureChatInputBar", EnsureChatInputBar)
+  SetChatVisualFrameLevel = P:Def("SetChatVisualFrameLevel", SetChatVisualFrameLevel)
   SkinChatEditBox = P:Def("SkinChatEditBox", SkinChatEditBox)
   SkinChatTab = P:Def("SkinChatTab", SkinChatTab)
   CreateJumpToBottomButton = P:Def("CreateJumpToBottomButton", CreateJumpToBottomButton)
