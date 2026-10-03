@@ -802,11 +802,27 @@ function M:RefreshPlayerHealthReplacement()
 end
 
 function M:ReassertBlizzardPRDRoot()
-  if self._puiRuntimeStarted ~= true or self._puiBlizzardRootGhosted ~= true then
+  if self._puiRuntimeStarted ~= true then
     return
   end
 
-  self:SetBlizzardRootGhosted(true)
+  -- Showing the root alone does not enable Blizzard's native PRD event processing.
+  if C_CVar.GetCVar("nameplateShowSelf") ~= "1" then
+    if InCombatLockdown() then
+      return
+    end
+    C_CVar.SetCVar("nameplateShowSelf", "1")
+  end
+
+  if self._puiBlizzardRootGhosted == true then
+    self:SetBlizzardRootGhosted(true)
+  end
+end
+
+function M:OnNativePRDCVarChanged(event, cvarName)
+  if cvarName == "nameplateShowSelf" then
+    self:ReassertBlizzardPRDRoot()
+  end
 end
 
 function M:SyncEnabledState()
@@ -1021,6 +1037,8 @@ function M:OnPrimaryMaximumChanged(event, unit)
 end
 
 function M:OnPrimaryRestrictionsCleared()
+  self:ReassertBlizzardPRDRoot()
+
   if self._puiPrimaryMaxRefreshPending ~= true then
     return
   end
@@ -1047,6 +1065,7 @@ function M:OnEnable()
   end
   self._puiShutdownCleanupPending = nil
   self._puiNativeRestorePending = nil
+  self:RegisterEvent("CVAR_UPDATE", "OnNativePRDCVarChanged")
   self:RegisterEvent("PLAYER_ALIVE", "ReassertBlizzardPRDRoot")
   self:RegisterEvent("PLAYER_UNGHOST", "ReassertBlizzardPRDRoot")
   self:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED", "OnPrimaryResourceChanged")
@@ -2371,6 +2390,7 @@ function M:RefreshActive()
   self:EnsureInitialized()
   self._puiRuntimeStarted = true
 
+  self:ReassertBlizzardPRDRoot()
   self:AcquireBlizzardFrames()
   self:RefreshPrimaryResourceMaximum()
   self:RefreshHealthTexture()
@@ -2485,6 +2505,7 @@ end
   M.SetUsePlayerHealth = P:Def("SetUsePlayerHealth", M.SetUsePlayerHealth)
   M.RefreshPlayerHealthReplacement = P:Def("RefreshPlayerHealthReplacement", M.RefreshPlayerHealthReplacement)
   M.ReassertBlizzardPRDRoot = P:Def("ReassertBlizzardPRDRoot", M.ReassertBlizzardPRDRoot)
+  M.OnNativePRDCVarChanged = P:Def("OnNativePRDCVarChanged", M.OnNativePRDCVarChanged)
   M.SyncEnabledState = P:Def("SyncEnabledState", M.SyncEnabledState)
   M.EnsureInitialized = P:Def("EnsureInitialized", M.EnsureInitialized)
   M.ApplyRequestedFlags = P:Def("ApplyRequestedFlags", M.ApplyRequestedFlags)
