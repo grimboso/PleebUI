@@ -142,7 +142,9 @@ local function MoveEntryTo(entry, x, y, silent)
   local frame = entry.frame
 
   frame:ClearAllPoints()
-  Pixel.Point(frame, "CENTER", UIParent, "CENTER", x, y)
+  -- Preserve half-pixel centers; each mover owner handles its anchor alignment.
+  Pixel.DisableSnap(frame)
+  frame:SetPoint("CENTER", UIParent, "CENTER", x, y)
 
   if not silent then
     FinalizeEntryMove(entry)
