@@ -15,6 +15,7 @@ local CreateFrame = _G.CreateFrame
 local math_abs = _G.math.abs
 local math_floor = _G.math.floor
 local math_max = _G.math.max
+local math_min = _G.math.min
 local tonumber = _G.tonumber
 local type = _G.type
 local setmetatable = _G.setmetatable
@@ -380,7 +381,7 @@ function Text.GetConfigTextKey(cfg)
   return key
 end
 
-function Text.ApplyUnitTextFont(fontString, unit, kind, baseSize, cfg, useConfigText, groupKind)
+function Text.ApplyUnitTextFont(fontString, unit, kind, baseSize, cfg, useConfigText)
   if not fontString then
     return
   end
@@ -399,10 +400,6 @@ function Text.ApplyUnitTextFont(fontString, unit, kind, baseSize, cfg, useConfig
     outline = (globalFlags ~= "" and globalFlags) or "OUTLINE"
   end
 
-  if kind == "name" and groupKind == "raid" and outline == "OUTLINE" then
-    outline = "OUTLINE, SLUG"
-  end
-
   local useGlobalFont = fontKey == nil or fontKey == ""
   fontKey = OptionsUtil.ResolveFontKey(fontKey, useGlobalFont)
 
@@ -413,7 +410,7 @@ function Text.ApplyUnitTextFont(fontString, unit, kind, baseSize, cfg, useConfig
   )
 end
 
-function Text.ApplyUnitTextLayout(frame, unit, cfg, useConfigText)
+function Text.ApplyUnitTextLayout(frame, unit, cfg, useConfigText, groupKind)
   local healthBar = frame and frame.Health
   if not frame or not healthBar then
     return
@@ -429,7 +426,22 @@ function Text.ApplyUnitTextLayout(frame, unit, cfg, useConfigText)
     frame.NameText:ClearAllPoints()
     frame.NameText:SetJustifyH(justifyH)
     Pixel.Point(frame.NameText, frame.__puiNameAnchor, healthBar, frame.__puiNameAnchor, dx or 0, dy or 0)
-    ApplyFontStringFrameWidth(frame.NameText, healthBar, dx)
+    if groupKind == "raid" and justifyH == "LEFT" then
+      local rightAnchor = "RIGHT"
+      if frame.__puiNameAnchor == "TOPLEFT" then
+        rightAnchor = "TOPRIGHT"
+      elseif frame.__puiNameAnchor == "BOTTOMLEFT" then
+        rightAnchor = "BOTTOMRIGHT"
+      end
+
+      local offsetX = tonumber(dx) or 0
+      local maxInset = math_max(0, healthBar:GetWidth() - Round(1))
+      local rightOffset = offsetX - math_min(math_abs(offsetX), maxInset)
+      frame.NameText:SetWidth(0)
+      Pixel.Point(frame.NameText, rightAnchor, healthBar, rightAnchor, rightOffset, dy or 0)
+    else
+      ApplyFontStringFrameWidth(frame.NameText, healthBar, dx)
+    end
 
     frame.NameText:SetMaxLines(1)
     frame.NameText:SetWordWrap(false)
@@ -546,12 +558,12 @@ function Text.Construct(frame, unit, cfg, deferLayout)
     local useConfigText = frame.__puiUseConfigText == true
     local baseNameSize, baseHPSize, basePowerSize = ns.UnitFrames:GetBaseTextSizesForUnit(unit)
 
-    Text.ApplyUnitTextFont(frame.NameText, unit, "name", baseNameSize, cfg, useConfigText, frame.__puiGroupKind)
+    Text.ApplyUnitTextFont(frame.NameText, unit, "name", baseNameSize, cfg, useConfigText)
     Text.ApplyUnitTextFont(frame.HealthText, unit, "health", baseHPSize, cfg, useConfigText)
     Text.ApplyUnitTextFont(frame.PowerText, unit, "power", basePowerSize, cfg, useConfigText)
 
     if deferLayout ~= true then
-      Text.ApplyUnitTextLayout(frame, unit, cfg, useConfigText)
+      Text.ApplyUnitTextLayout(frame, unit, cfg, useConfigText, frame.__puiGroupKind)
     end
 
     frame.__puiTextConstructedUnit = unit
@@ -644,7 +656,6 @@ function Text.ApplyFrame(frame, unit, cfg, fontRev, opts)
   local classColoredNames = opts.colors and opts.colors.useClassForNames == true
 
   if frame.__puiTextApplyUnit ~= unit
-    or frame.__puiTextApplyGroupKind ~= groupKind
     or frame.__puiTextApplyUseConfigText ~= useConfigText
     or frame.__puiTextApplyFontRev ~= curRev
     or frame.__puiTextApplyHealthMode ~= hpMode
@@ -656,14 +667,11 @@ function Text.ApplyFrame(frame, unit, cfg, fontRev, opts)
     or frame.__puiTextApplyConfigKey ~= textKey
     or frame.__puiTextApplyClassColoredNames ~= classColoredNames
   then
-    if frame.__puiFontRev ~= curRev
-      or frame.__puiTextConfigKey ~= textKey
-      or frame.__puiTextApplyGroupKind ~= groupKind
-    then
+    if frame.__puiFontRev ~= curRev or frame.__puiTextConfigKey ~= textKey then
       local baseNameSize, baseHPSize, basePowerSize = ns.UnitFrames:GetBaseTextSizesForUnit(unit)
 
       if frame.NameText then
-        Text.ApplyUnitTextFont(frame.NameText, unit, "name", baseNameSize, cfg, useConfigText, groupKind)
+        Text.ApplyUnitTextFont(frame.NameText, unit, "name", baseNameSize, cfg, useConfigText)
       end
 
       if frame.HealthText then
@@ -679,7 +687,6 @@ function Text.ApplyFrame(frame, unit, cfg, fontRev, opts)
     end
 
     frame.__puiTextApplyUnit = unit
-    frame.__puiTextApplyGroupKind = groupKind
     frame.__puiTextApplyUseConfigText = useConfigText
     frame.__puiTextApplyFontRev = curRev
     frame.__puiTextApplyHealthMode = hpMode
@@ -730,6 +737,7 @@ function Text.ApplyFrame(frame, unit, cfg, fontRev, opts)
   local powerHeight = powerBar and Round(powerBar:GetHeight()) or 0
 
   if frame.__puiTextLayoutUnit ~= unit
+    or frame.__puiTextLayoutGroupKind ~= groupKind
     or frame.__puiTextLayoutUseConfigText ~= useConfigText
     or frame.__puiTextLayoutConfigKey ~= textKey
     or frame.__puiTextLayoutHealthMode ~= hpMode
@@ -743,6 +751,7 @@ function Text.ApplyFrame(frame, unit, cfg, fontRev, opts)
     or frame.__puiTextLayoutPowerHeight ~= powerHeight
   then
     frame.__puiTextLayoutUnit = unit
+    frame.__puiTextLayoutGroupKind = groupKind
     frame.__puiTextLayoutUseConfigText = useConfigText
     frame.__puiTextLayoutConfigKey = textKey
     frame.__puiTextLayoutHealthMode = hpMode
@@ -755,7 +764,7 @@ function Text.ApplyFrame(frame, unit, cfg, fontRev, opts)
     frame.__puiTextLayoutPowerWidth = powerWidth
     frame.__puiTextLayoutPowerHeight = powerHeight
 
-    Text.ApplyUnitTextLayout(frame, unit, cfg, useConfigText)
+    Text.ApplyUnitTextLayout(frame, unit, cfg, useConfigText, groupKind)
   end
 
   local colors = opts.colors
