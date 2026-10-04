@@ -29,10 +29,5 @@ jobs:
           ref: ${{ inputs.tag || github.ref }}
           fetch-depth: 0
 
-      - name: Resolve latest stable library releases
-        run: python3 .github/scripts/resolve-stable-externals.py .pkgmeta "$RUNNER_TEMP/pkgmeta-stable.yaml"
-
       - name: Package and release
         uses: BigWigsMods/packager@v2
-        with:
-          args: -m "${{ runner.temp }}/pkgmeta-stable.yaml"
