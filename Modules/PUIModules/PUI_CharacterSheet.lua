@@ -48,6 +48,8 @@ CharacterSheet._characterResizeState = nil
 CharacterSheet._activeItemStatHighlight = false
 CharacterSheet._hoveredStatFrame = nil
 CharacterSheet._statFontFrames = {}
+CharacterSheet._groupedStatFrames = {}
+CharacterSheet._attributeStatFrames = {}
 
 local CS_CHARACTER_SCALE_MIN = 0.75
 local CS_CHARACTER_SCALE_MAX = 1.50
@@ -815,6 +817,28 @@ local SECONDARY_STAT_RATING_IDS = {
   [ITEM_STAT_VERSATILITY] = _G.CR_VERSATILITY_DAMAGE_DONE,
 }
 
+local CS_STAT_GROUPS = {
+  {
+    title = "Secondary Stats",
+    stats = {
+      { ITEM_STAT_CRIT, "CRITCHANCE" },
+      { ITEM_STAT_HASTE, "HASTE" },
+      { ITEM_STAT_MASTERY, "MASTERY" },
+      { ITEM_STAT_VERSATILITY, "VERSATILITY" },
+    },
+  },
+  {
+    title = "Tertiary Stats",
+    stats = {
+      { ITEM_STAT_LIFESTEAL, "LIFESTEAL" },
+      { ITEM_STAT_AVOIDANCE, "AVOIDANCE" },
+      { ITEM_STAT_SPEED, "SPEED" },
+    },
+  },
+}
+
+local CS_DEFENSE_STATS = { "DODGE", "PARRY", "BLOCK" }
+
 local function CS_ClearSecondaryStatRatingText(statFrame)
   local secondaryValue = statFrame and statFrame._puiSecondaryStatValue
   if secondaryValue then
@@ -845,7 +869,11 @@ local function CS_ForwardSecondaryStatRatingText(statFrame, ratingID)
     CS_ApplyCharacterStatFont(statFrame)
   end
 
-  secondaryValue:SetFormattedText("%s (%s)", statFrame.Value:GetText(), _G.GetCombatRating(ratingID))
+  local rating = _G.GetCombatRating(ratingID)
+  if not issecretvalue(rating) and rating == nil then
+    rating = 0
+  end
+  secondaryValue:SetFormattedText("%s (%s)", statFrame.Value:GetText(), rating)
   statFrame.Value:Hide()
   secondaryValue:Show()
 end
@@ -945,6 +973,126 @@ local function CS_LayoutMaxHealthRow()
 
   CS_UpdateMaxHealthValue()
   row:Show()
+end
+
+local function CS_RefreshStatCategory(category, title)
+  category:SetSize(187, 22)
+  if not category._puiStatGroupSkinned then
+    Theme.WidgetSkins.Frame(category)
+    category._puiStatGroupSkinned = true
+  else
+    local backdrop = EnsureBackdropFrame(category)
+    backdrop:SetBackdropColor(CS_BG())
+    backdrop:SetBackdropBorderColor(CS_B())
+  end
+  Theme.ApplyFont(category.Title, "nav")
+  category.Title:SetText(title)
+  category.Title:SetTextColor(GetTextColor())
+end
+
+local function CS_LayoutStatGroups()
+  local pane = CharacterStatsPane
+  local rows = CharacterSheet._groupedStatFrames
+  local attributes = CharacterSheet._attributeStatFrames
+  for key in pairs(rows) do
+    rows[key] = nil
+  end
+  for frame in pairs(attributes) do
+    attributes[frame] = nil
+  end
+
+  for frame in pane.statsFramePool:EnumerateActive() do
+    local key = frame._puiItemStatKey or frame._puiDefenseStat
+    if key then
+      rows[key] = frame
+    else
+      attributes[frame] = true
+    end
+  end
+  for frame in pane.statsFramePool:EnumerateActive() do
+    if not frame._puiItemStatKey and not frame._puiDefenseStat then
+      local _, anchor = frame:GetPoint(1)
+      if anchor == CharacterSheet._maxHealthRow then
+        _, anchor = anchor:GetPoint(1)
+      end
+      attributes[anchor] = nil
+    end
+  end
+
+  local lastAnchor = next(attributes) or pane.AttributesCategory
+  local categoryOffset, rowOffset = 0, 0
+  if UnitLevel("player") < _G.MIN_PLAYER_LEVEL_FOR_ITEM_LEVEL_DISPLAY then
+    categoryOffset, rowOffset = -11, -5
+  end
+
+  for groupIndex, group in ipairs(CS_STAT_GROUPS) do
+    local category = groupIndex == 1 and pane.EnhancementsCategory or CharacterSheet._tertiaryStatCategory
+    if not category then
+      category = CreateFrame("Frame", nil, pane)
+      category.Title = category:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
+      category.Title:SetPoint("CENTER", category, "CENTER", 0, 1)
+      CharacterSheet._tertiaryStatCategory = category
+    end
+    CS_RefreshStatCategory(category, group.title)
+    category:ClearAllPoints()
+    category:SetPoint("TOP", lastAnchor, "BOTTOM", 0, categoryOffset)
+    category:Show()
+    lastAnchor = category
+
+    for index, stat in ipairs(group.stats) do
+      local row = rows[stat[1]]
+      if not row then
+        -- Reuse Blizzard's pool and setters without changing its hideAt definitions.
+        row = pane.statsFramePool:Acquire()
+        row.onEnterFunc = nil
+        row.UpdateTooltip = nil
+        row.tooltip3 = nil
+        _G.PAPERDOLL_STATINFO[stat[2]].updateFunc(row, "player")
+        rows[stat[1]] = row
+      end
+      local text = row.Value:GetText()
+      if not issecretvalue(text) and (text == nil or text == "") then
+        row.Value:SetText("0%")
+        local ratingID = SECONDARY_STAT_RATING_IDS[stat[1]]
+        if ratingID then
+          CS_ForwardSecondaryStatRatingText(row, ratingID)
+        end
+      end
+      row:ClearAllPoints()
+      row:SetPoint("TOP", lastAnchor, "BOTTOM", 0, index == 1 and -2 or rowOffset)
+      row.Background:SetShown(index % 2 == 0)
+      row:Show()
+      lastAnchor = row
+    end
+  end
+
+  local defenseCategory = CharacterSheet._defenseStatCategory
+  local defenseCount = 0
+  for _, key in ipairs(CS_DEFENSE_STATS) do
+    local row = rows[key]
+    if row then
+      if defenseCount == 0 then
+        if not defenseCategory then
+          defenseCategory = CreateFrame("Frame", nil, pane)
+          defenseCategory.Title = defenseCategory:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
+          defenseCategory.Title:SetPoint("CENTER", defenseCategory, "CENTER", 0, 1)
+          CharacterSheet._defenseStatCategory = defenseCategory
+        end
+        CS_RefreshStatCategory(defenseCategory, "Defense")
+        defenseCategory:ClearAllPoints()
+        defenseCategory:SetPoint("TOP", lastAnchor, "BOTTOM", 0, categoryOffset)
+        lastAnchor = defenseCategory
+      end
+      row:ClearAllPoints()
+      row:SetPoint("TOP", lastAnchor, "BOTTOM", 0, defenseCount == 0 and -2 or rowOffset)
+      defenseCount = defenseCount + 1
+      row.Background:SetShown(defenseCount % 2 == 0)
+      lastAnchor = row
+    end
+  end
+  if defenseCategory then
+    defenseCategory:SetShown(defenseCount > 0)
+  end
 end
 
 local function CS_SetItemStatHighlightVisible(highlight, visible, immediate)
@@ -1065,10 +1213,12 @@ local function CS_SetupPaperDollValueHooks()
   hooksecurefunc("PaperDollFrame_UpdateStats", function()
     UpdateCharacterAverageItemLevelText()
     CS_LayoutMaxHealthRow()
+    CS_LayoutStatGroups()
   end)
   hooksecurefunc("PaperDollFrame_SetLabelAndText", function(statFrame)
     statFrame._puiItemStatKey = nil
     statFrame._puiAttributeStat = nil
+    statFrame._puiDefenseStat = nil
     CS_ClearSecondaryStatRatingText(statFrame)
     CS_ApplyCharacterStatFont(statFrame)
   end)
@@ -1104,6 +1254,15 @@ local function CS_SetupPaperDollValueHooks()
   end)
   hooksecurefunc("PaperDollFrame_SetSpeed", function(statFrame)
     statFrame._puiItemStatKey = ITEM_STAT_SPEED
+  end)
+  hooksecurefunc("PaperDollFrame_SetDodge", function(statFrame)
+    statFrame._puiDefenseStat = "DODGE"
+  end)
+  hooksecurefunc("PaperDollFrame_SetParry", function(statFrame)
+    statFrame._puiDefenseStat = "PARRY"
+  end)
+  hooksecurefunc("PaperDollFrame_SetBlock", function(statFrame)
+    statFrame._puiDefenseStat = "BLOCK"
   end)
   hooksecurefunc("PaperDollStatTooltip", CS_ShowItemStatHighlights)
   hooksecurefunc("Mastery_OnEnter", CS_ShowItemStatHighlights)
@@ -3860,6 +4019,7 @@ local function SetupCharacterFrameSkinning()
     CharacterSheet._sidebarTabsHooked = true
   end
 
+  _G.PaperDollFrame_UpdateStats()
 end
 
 -- InspectFrame (identical behavior, no durability)
@@ -4115,6 +4275,7 @@ function CharacterSheet:RefreshTheme()
     UpdateCharacterAverageItemLevelText()
     CS_LayoutMaxHealthRow()
     CS_RefreshCharacterStatFonts()
+    CS_LayoutStatGroups()
     CS_RefreshSlotDisplaySettings()
 
     local tr, tg, tb, ta = GetTextColor()
@@ -4364,6 +4525,8 @@ end
   CS_EnsureMaxHealthRow = P:Def("CS_EnsureMaxHealthRow", CS_EnsureMaxHealthRow)
   CS_UpdateMaxHealthValue = P:Def("CS_UpdateMaxHealthValue", CS_UpdateMaxHealthValue)
   CS_LayoutMaxHealthRow = P:Def("CS_LayoutMaxHealthRow", CS_LayoutMaxHealthRow)
+  CS_RefreshStatCategory = P:Def("CS_RefreshStatCategory", CS_RefreshStatCategory)
+  CS_LayoutStatGroups = P:Def("CS_LayoutStatGroups", CS_LayoutStatGroups)
   CS_ClearItemStatHighlights = P:Def("CS_ClearItemStatHighlights", CS_ClearItemStatHighlights)
   CS_ShowItemStatHighlights = P:Def("CS_ShowItemStatHighlights", CS_ShowItemStatHighlights)
   CS_SetupPaperDollValueHooks = P:Def("CS_SetupPaperDollValueHooks", CS_SetupPaperDollValueHooks)
