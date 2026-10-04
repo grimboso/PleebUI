@@ -3,12 +3,14 @@ import io
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 import xml.etree.ElementTree as ET
 import zipfile
 from pathlib import Path, PurePosixPath, PureWindowsPath
 from urllib.parse import urljoin
+from urllib.error import URLError
 from urllib.request import Request, urlopen
 
 
@@ -17,6 +19,10 @@ STABLE_EXTERNAL = re.compile(
     r"    url: (?P<url>https://[^\n]+)\n"
     r"    tag: latest-stable(?:\n    path: (?P<subpath>[^\n]+))?$"
 )
+
+
+class ReleaseUnavailable(ValueError):
+    pass
 
 
 def read_url(url):
@@ -33,19 +39,24 @@ def resolve_github(url):
     repo = url.removeprefix("https://github.com/").removesuffix(".git")
     release = json.loads(read_url(f"https://api.github.com/repos/{repo}/releases/latest"))
 
+    if not isinstance(release, dict):
+        raise ReleaseUnavailable(f"{repo} has incomplete release metadata")
     tag = release.get("tag_name")
     if release.get("draft") is not False or release.get("prerelease") is not False or not tag:
-        raise ValueError(f"{repo} did not return a published stable release")
+        raise ReleaseUnavailable(f"{repo} did not return a published stable release")
 
     ref = f"refs/tags/{tag}"
-    result = subprocess.run(
-        ["git", "ls-remote", url, ref, f"{ref}^{{}}"],
-        check=True, capture_output=True, text=True, timeout=60,
-    )
+    try:
+        result = subprocess.run(
+            ["git", "ls-remote", url, ref, f"{ref}^{{}}"],
+            check=True, capture_output=True, text=True, timeout=60,
+        )
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as failure:
+        raise ReleaseUnavailable(f"{repo} stable release ref is unavailable") from failure
     refs = dict(line.split()[::-1] for line in result.stdout.splitlines())
     commit = refs.get(f"{ref}^{{}}", refs.get(ref))
     if not commit or not re.fullmatch(r"[0-9a-f]{40}", commit):
-        raise ValueError(f"{repo} has no Git ref for its stable release {tag}")
+        raise ReleaseUnavailable(f"{repo} has no Git ref for its stable release {tag}")
 
     return url, commit, tag
 
@@ -56,14 +67,18 @@ def latest_curse_file(url):
         result = json.loads(read_url(
             f"{url}?pageIndex={page}&pageSize=50&sort=dateCreated&sortDescending=true"
         ))
+        if not isinstance(result, dict) or not isinstance(result.get("data"), list):
+            raise ReleaseUnavailable(f"{url} has incomplete stable-file metadata")
         files = result["data"]
-        stable = [file for file in files if file["releaseType"] == 1
-                  and file["status"] == 4 and not file.get("isEarlyAccessContent")]
+        stable = [file for file in files if isinstance(file, dict) and file.get("releaseType") == 1
+                  and file.get("status") == 4 and not file.get("isEarlyAccessContent")]
         if stable:
+            if any(not all(file.get(key) for key in ("dateCreated", "id", "displayName")) for file in stable):
+                raise ReleaseUnavailable(f"{url} has incomplete stable-file metadata")
             file = max(stable, key=lambda file: (file["dateCreated"], file["id"]))
             return f"{url}/{file['id']}/download", file["displayName"]
         if len(files) < 50:
-            raise ValueError(f"{url} has no published stable file")
+            raise ReleaseUnavailable(f"{url} has no published stable file")
         page += 1
 
 
@@ -76,11 +91,11 @@ def latest_wowace_file(url):
                 link = re.search(r'href="([^"]+/download)"', row)
                 name = re.search(r'data-name="([^"]+)"', row)
                 if not link or not name:
-                    raise ValueError(f"{url} has incomplete stable-file metadata")
+                    raise ReleaseUnavailable(f"{url} has incomplete stable-file metadata")
                 return urljoin(url, html.unescape(link[1])), html.unescape(name[1])
         next_page = re.search(r'<a href="([^"]+)" rel="next" data-next-page', page)
         url = urljoin(url, html.unescape(next_page[1])) if next_page else None
-    raise ValueError("No published stable WowAce file was found")
+    raise ReleaseUnavailable("No published stable WowAce file was found")
 
 
 def snapshot_package(url, destination):
@@ -100,30 +115,52 @@ def snapshot_package(url, destination):
             else:
                 target.parent.mkdir(parents=True, exist_ok=True)
                 target.write_bytes(archive.read(entry))
+    return snapshot_directory(destination, "Snapshot published stable library file")
+
+
+def snapshot_directory(destination, message):
     git = ["git", "-C", str(destination)]
     subprocess.run(git + ["init", "-q"], check=True)
     subprocess.run(git + ["-c", "core.autocrlf=false", "add", "--force", "--all"], check=True)
     subprocess.run(git + ["-c", "user.name=PleebUI packaging", "-c", "user.email=packaging@pleebui.invalid",
-                         "commit", "-q", "-m", "Snapshot published stable library file"], check=True)
+                         "commit", "-q", "-m", message], check=True)
     commit = subprocess.check_output(git + ["rev-parse", "HEAD"], text=True).strip()
     return destination.as_uri(), commit
 
 
-def resolve_external(match, cache, staging, entry_files=()):
+def resolve_external(match, cache, staging, entry_files=(), bundled_root=Path("Libs")):
     url = match["url"]
     if url not in cache:
-        if url.startswith("https://github.com/"):
-            cache[url] = (*resolve_github(url), None)
-        else:
-            if url.startswith("https://www.wowace.com/projects/"):
-                download, name = latest_wowace_file(url)
-            elif url.startswith("https://www.curseforge.com/api/v1/mods/"):
-                download, name = latest_curse_file(url)
+        try:
+            if url.startswith("https://github.com/"):
+                cache[url] = (*resolve_github(url), None)
             else:
-                raise ValueError(f"Unsupported stable-release metadata source: {url}")
-            repo = staging / str(len(cache))
-            snapshot_url, commit = snapshot_package(download, repo)
-            cache[url] = snapshot_url, commit, name, repo
+                if url.startswith("https://www.wowace.com/projects/"):
+                    download, name = latest_wowace_file(url)
+                elif url.startswith("https://www.curseforge.com/api/v1/mods/"):
+                    download, name = latest_curse_file(url)
+                else:
+                    raise ValueError(f"Unsupported stable-release metadata source: {url}")
+                repo = staging / str(len(cache))
+                snapshot_url, commit = snapshot_package(download, repo)
+                cache[url] = snapshot_url, commit, name, repo
+        except (ReleaseUnavailable, URLError, TimeoutError, ConnectionError, json.JSONDecodeError) as failure:
+            cache[url] = str(failure)
+
+    if isinstance(cache[url], str):
+        relative = match["path"].removeprefix("PackagerLibs/")
+        bundled = bundled_root / relative
+        if not bundled.is_dir():
+            raise ValueError(f"{match['path']}: release unavailable and bundled copy missing: {bundled}")
+        prefix = "Libs/" + relative + "/"
+        for entry in entry_files:
+            if entry.startswith(prefix) and not (bundled / entry.removeprefix(prefix)).is_file():
+                raise ValueError(f"{match['path']}: bundled copy cannot load {entry}")
+        repo = staging / ("bundled-" + relative.replace("/", "_"))
+        shutil.copytree(bundled, repo)
+        snapshot_url, commit = snapshot_directory(repo, "Snapshot bundled library fallback")
+        print(f"::warning::{match['path']}: using bundled copy; latest stable could not be resolved ({cache[url]})")
+        return f"  {match['path']}:\n    url: {snapshot_url}\n    type: git\n    commit: {commit}"
 
     snapshot_url, commit, name, repo = cache[url]
     subpath = match["subpath"]
@@ -143,13 +180,14 @@ def resolve_external(match, cache, staging, entry_files=()):
     return block + (f"\n    path: {subpath}" if subpath else "")
 
 
-def resolve_metadata(source, staging, entry_files=()):
+def resolve_metadata(source, staging, entry_files=(), bundled_root=Path("Libs")):
     externals = source.split("externals:\n", 1)[1].split("\n\n", 1)[0]
     if len(re.findall(r"(?m)^  [^ #\n][^\n]*:", externals)) != len(STABLE_EXTERNAL.findall(externals)):
         raise ValueError("Every fetched library must have a stable-release metadata source")
     cache = {}
     staging.mkdir()
-    resolved, count = STABLE_EXTERNAL.subn(lambda match: resolve_external(match, cache, staging, entry_files), source)
+    resolved, count = STABLE_EXTERNAL.subn(
+        lambda match: resolve_external(match, cache, staging, entry_files, bundled_root), source)
     if not count or "tag: latest-stable" in resolved:
         raise ValueError("Stable-release external configuration was not fully resolved")
     return resolved
@@ -159,5 +197,6 @@ if __name__ == "__main__":
     source, destination = map(Path, sys.argv[1:])
     entry_files = [node.attrib["file"].replace("\\", "/")
                    for node in ET.parse(source.parent / "Bootstrap.xml").iter() if "file" in node.attrib]
-    resolved = resolve_metadata(source.read_text(encoding="utf-8"), destination.parent / "stable-libraries", entry_files)
+    resolved = resolve_metadata(source.read_text(encoding="utf-8"), destination.parent / "stable-libraries",
+                                entry_files, source.parent / "Libs")
     destination.write_text(resolved, encoding="utf-8", newline="\n")
