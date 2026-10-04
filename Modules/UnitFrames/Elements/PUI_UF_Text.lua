@@ -273,10 +273,12 @@ function Text.GetConfigTextKey(cfg)
   local uf = ns.UnitFrames
   local ufDB = uf and uf.db and uf.db.profile or nil
   local shortenValues = ShouldShortenValues(text, ufDB)
+  local fontSlug = ns.UnitFrames.db.profile.text.fontSlug == true
 
   local cache = TextConfigKeyCache[text]
   if cache
     and cache.shortenValues == shortenValues
+    and cache.fontSlug == fontSlug
     and cache.nameUseCustomTypography == nameUseCustomTypography
     and cache.healthUseCustomTypography == healthUseCustomTypography
     and cache.powerUseCustomTypography == powerUseCustomTypography
@@ -311,7 +313,8 @@ function Text.GetConfigTextKey(cfg)
     return cache.key
   end
 
-  local key = tostring(shortenValues)
+  local key = tostring(fontSlug)
+    .. "|" .. tostring(shortenValues)
     .. "|" .. tostring(nameUseCustomTypography)
     .. "|" .. tostring(healthUseCustomTypography)
     .. "|" .. tostring(powerUseCustomTypography)
@@ -345,6 +348,7 @@ function Text.GetConfigTextKey(cfg)
 
   TextConfigKeyCache[text] = {
     shortenValues = shortenValues,
+    fontSlug = fontSlug,
     nameUseCustomTypography = nameUseCustomTypography,
     healthUseCustomTypography = healthUseCustomTypography,
     powerUseCustomTypography = powerUseCustomTypography,
@@ -398,6 +402,10 @@ function Text.ApplyUnitTextFont(fontString, unit, kind, baseSize, cfg, useConfig
 
   if outline == "" then
     outline = (globalFlags ~= "" and globalFlags) or "OUTLINE"
+  end
+
+  if ns.UnitFrames.db.profile.text.fontSlug == true and outline == "OUTLINE" then
+    outline = "OUTLINE, SLUG"
   end
 
   local useGlobalFont = fontKey == nil or fontKey == ""
