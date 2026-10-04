@@ -14,6 +14,8 @@ local GetTime = GetTime
 local C_Spell = C_Spell
 local C_DurationUtil = C_DurationUtil
 local CreateFrame = CreateFrame
+local issecretvalue = issecretvalue
+local REUSE_GCD_DURATION = select(4, GetBuildInfo()) >= 120105
 
 local CB_GCD_DUMMY_SPELL_ID = 61304
 local CB_INSTANT_CLEANUP_DURATION = 1.50
@@ -27,6 +29,9 @@ end
 
 function Module:OnCreate(bar)
   bar.__puiInstantFallbackDuration = C_DurationUtil.CreateDuration()
+  if REUSE_GCD_DURATION then
+    self.gcdDuration = self.gcdDuration or C_DurationUtil.CreateDuration()
+  end
   bar.__puiInstantSpellNames = {}
   bar.__puiInstantSpellTextures = {}
 
@@ -44,7 +49,22 @@ function Module:OnCreate(bar)
 end
 
 local function CB_GetPublicGCDDuration()
-  local duration = C_Spell.GetSpellCooldownDuration(CB_GCD_DUMMY_SPELL_ID)
+  local duration
+  if REUSE_GCD_DURATION then
+    local cooldown = C_Spell.GetSpellCooldown(CB_GCD_DUMMY_SPELL_ID)
+    if not cooldown
+      or issecretvalue(cooldown.startTime)
+      or issecretvalue(cooldown.duration)
+      or issecretvalue(cooldown.modRate)
+    then
+      return nil, nil, nil
+    end
+
+    duration = Module.gcdDuration
+    duration:SetTimeFromStart(cooldown.startTime, cooldown.duration, cooldown.modRate)
+  else
+    duration = C_Spell.GetSpellCooldownDuration(CB_GCD_DUMMY_SPELL_ID)
+  end
   if not duration or duration:HasSecretValues() then
     return nil, nil, nil
   end
@@ -234,6 +254,10 @@ local function CB_ProcessPendingInstant(frame)
     duration = bar.__puiInstantFallbackDuration
     duration:SetTimeFromStart(GetTime(), CB_INSTANT_CLEANUP_DURATION)
     cleanupDuration = CB_INSTANT_CLEANUP_DURATION
+  elseif REUSE_GCD_DURATION then
+    -- Keep the displayed timer independent of the next sent-spell GCD snapshot.
+    bar.__puiInstantFallbackDuration:Assign(duration)
+    duration = bar.__puiInstantFallbackDuration
   end
 
   CB_PresentInstant(bar, spellID, duration, cleanupDuration)
