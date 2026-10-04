@@ -1219,6 +1219,20 @@ local function UFCB_BuildGeneralTextFontsArgs()
         UFCB_RefreshUFText()
       end,
     },
+    fontSlug = {
+      type = "toggle",
+      name = "SLUG rendering",
+      desc = "Use SLUG rendering for name, health, and power text on all unit frames, including party and raid. Applies to the Outline style; thick and shadow outlines keep their existing rendering.",
+      order = 2.5,
+      get = function()
+        return textGlobal.fontSlug == true
+      end,
+      set = function(_, v)
+        if UFCB_BlockCombat() then return end
+        textGlobal.fontSlug = v == true
+        UFCB_RefreshUFText()
+      end,
+    },
     useNSRTNicknames = {
       type = "toggle",
       name = "Enable nicknames",
