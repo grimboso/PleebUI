@@ -14,6 +14,7 @@ local OptionsUtil = ns.OptionsUtil
 local UF       = ns.UnitFrames
 local CastBar  = ns.Modules.CastBar
 local FrameUtil = ns.FrameUtil
+local USE_SECRET_ROLE_ICONS = select(4, _G.GetBuildInfo()) >= 120105
 local UFConfigDebug = ns.UFConfigDebug or {}
 ns.UFConfigDebug = UFConfigDebug
 
@@ -4762,8 +4763,10 @@ local function UFCB_BuildPartyGeneralArgs(groupKind, opts)
   local partyGroupByValues = {
     INDEX = "Index",
     NAME = "Name",
-    ROLE = "Role",
   }
+  if not USE_SECRET_ROLE_ICONS then
+    partyGroupByValues.ROLE = "Role"
+  end
 
   local roleOrderValues = {
     TANK = "Tank",
@@ -5250,14 +5253,14 @@ local function UFCB_BuildPartyGeneralArgs(groupKind, opts)
         get = function()
           local db = GetDB()
           local value = db and db.groupBy or nil
-          if value ~= "NAME" and value ~= "ROLE" then
+          if not partyGroupByValues[value] then
             value = "INDEX"
           end
           return value
         end,
         set = function(_, v)
           UFCB_MutateGrouped(groupedKind, true, { layout = true }, function(db)
-            if v ~= "NAME" and v ~= "ROLE" then
+            if not partyGroupByValues[v] then
               v = "INDEX"
             end
 
@@ -5270,6 +5273,7 @@ local function UFCB_BuildPartyGeneralArgs(groupKind, opts)
       }),
       sortOrder = BuildGroupedSelect("sortOrder", "Sort method", 2, sortOrderValues, {
         flags = { layout = true },
+        hidden = USE_SECRET_ROLE_ICONS,
         disabled = function()
           local db = GetDB()
           return not db or db.groupBy ~= "ROLE"
@@ -5299,6 +5303,7 @@ local function UFCB_BuildPartyGeneralArgs(groupKind, opts)
         name = "Role order",
         order = 4,
         inline = true,
+        hidden = USE_SECRET_ROLE_ICONS,
         disabled = function()
           local db = GetDB()
           return not db or db.groupBy ~= "ROLE"
