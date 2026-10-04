@@ -380,7 +380,7 @@ function Text.GetConfigTextKey(cfg)
   return key
 end
 
-function Text.ApplyUnitTextFont(fontString, unit, kind, baseSize, cfg, useConfigText)
+function Text.ApplyUnitTextFont(fontString, unit, kind, baseSize, cfg, useConfigText, groupKind)
   if not fontString then
     return
   end
@@ -397,6 +397,10 @@ function Text.ApplyUnitTextFont(fontString, unit, kind, baseSize, cfg, useConfig
 
   if outline == "" then
     outline = (globalFlags ~= "" and globalFlags) or "OUTLINE"
+  end
+
+  if kind == "name" and groupKind == "raid" and outline == "OUTLINE" then
+    outline = "OUTLINE, SLUG"
   end
 
   local useGlobalFont = fontKey == nil or fontKey == ""
@@ -542,7 +546,7 @@ function Text.Construct(frame, unit, cfg, deferLayout)
     local useConfigText = frame.__puiUseConfigText == true
     local baseNameSize, baseHPSize, basePowerSize = ns.UnitFrames:GetBaseTextSizesForUnit(unit)
 
-    Text.ApplyUnitTextFont(frame.NameText, unit, "name", baseNameSize, cfg, useConfigText)
+    Text.ApplyUnitTextFont(frame.NameText, unit, "name", baseNameSize, cfg, useConfigText, frame.__puiGroupKind)
     Text.ApplyUnitTextFont(frame.HealthText, unit, "health", baseHPSize, cfg, useConfigText)
     Text.ApplyUnitTextFont(frame.PowerText, unit, "power", basePowerSize, cfg, useConfigText)
 
@@ -599,6 +603,7 @@ function Text.ApplyFrame(frame, unit, cfg, fontRev, opts)
   end
 
   opts = type(opts) == "table" and opts or {}
+  local groupKind = opts.groupKind or frame.__puiGroupKind
 
   local useConfigText = opts.useConfigText == true or frame.__puiUseConfigText == true
   frame.__puiUseConfigText = useConfigText
@@ -639,6 +644,7 @@ function Text.ApplyFrame(frame, unit, cfg, fontRev, opts)
   local classColoredNames = opts.colors and opts.colors.useClassForNames == true
 
   if frame.__puiTextApplyUnit ~= unit
+    or frame.__puiTextApplyGroupKind ~= groupKind
     or frame.__puiTextApplyUseConfigText ~= useConfigText
     or frame.__puiTextApplyFontRev ~= curRev
     or frame.__puiTextApplyHealthMode ~= hpMode
@@ -650,11 +656,14 @@ function Text.ApplyFrame(frame, unit, cfg, fontRev, opts)
     or frame.__puiTextApplyConfigKey ~= textKey
     or frame.__puiTextApplyClassColoredNames ~= classColoredNames
   then
-    if frame.__puiFontRev ~= curRev or frame.__puiTextConfigKey ~= textKey then
+    if frame.__puiFontRev ~= curRev
+      or frame.__puiTextConfigKey ~= textKey
+      or frame.__puiTextApplyGroupKind ~= groupKind
+    then
       local baseNameSize, baseHPSize, basePowerSize = ns.UnitFrames:GetBaseTextSizesForUnit(unit)
 
       if frame.NameText then
-        Text.ApplyUnitTextFont(frame.NameText, unit, "name", baseNameSize, cfg, useConfigText)
+        Text.ApplyUnitTextFont(frame.NameText, unit, "name", baseNameSize, cfg, useConfigText, groupKind)
       end
 
       if frame.HealthText then
@@ -670,6 +679,7 @@ function Text.ApplyFrame(frame, unit, cfg, fontRev, opts)
     end
 
     frame.__puiTextApplyUnit = unit
+    frame.__puiTextApplyGroupKind = groupKind
     frame.__puiTextApplyUseConfigText = useConfigText
     frame.__puiTextApplyFontRev = curRev
     frame.__puiTextApplyHealthMode = hpMode
