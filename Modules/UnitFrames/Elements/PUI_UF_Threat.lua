@@ -13,6 +13,7 @@ local _G = _G
 local CreateFrame = _G.CreateFrame
 local tonumber = _G.tonumber
 local type = _G.type
+local USE_SECRET_ROLE_ICONS = select(4, _G.GetBuildInfo()) >= 120105
 
 local UFFrameGlow = ns.UFFrameGlow
 
@@ -55,6 +56,10 @@ function UFThreat.GetThreatConfigForFrame(frame)
 end
 
 function UFThreat.ShouldShowThreatHighlight(frame)
+  if USE_SECRET_ROLE_ICONS then
+    return true
+  end
+
   local role = frame.__puiGroupRole
   return role ~= nil and role ~= Enum.LFGRole.Tank
 end
