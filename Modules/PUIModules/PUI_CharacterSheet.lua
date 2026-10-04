@@ -884,9 +884,9 @@ local function CS_EnsureStatTextWidgets(statKey)
   local texts = CharacterSheet._statTextWidgets[statKey]
   if not texts then
     texts = {
-      value = CharacterStatsPane:CreateFontString(nil, "ARTWORK"),
-      tooltip = CharacterStatsPane:CreateFontString(nil, "ARTWORK"),
-      tooltip2 = CharacterStatsPane:CreateFontString(nil, "ARTWORK"),
+      value = CharacterStatsPane:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall"),
+      tooltip = CharacterStatsPane:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall"),
+      tooltip2 = CharacterStatsPane:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall"),
     }
     texts.value:Hide()
     texts.tooltip:Hide()
