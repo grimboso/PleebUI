@@ -50,6 +50,7 @@ CharacterSheet._hoveredStatFrame = nil
 CharacterSheet._statFontFrames = {}
 CharacterSheet._groupedStatFrames = {}
 CharacterSheet._attributeStatFrames = {}
+CharacterSheet._statTextWidgets = {}
 
 local CS_CHARACTER_SCALE_MIN = 0.75
 local CS_CHARACTER_SCALE_MAX = 1.50
@@ -62,6 +63,7 @@ local CS_CalculateUnitAverageItemLevel
 local UpdateItemSlotOverlay
 local CS_RefreshPlayerItemStatPresence
 local CS_EventDriver
+local CS_ShowGroupedStatTooltip
 local CS_SLOT_INFO_CACHE = {}
 local CS_INSPECT_ITEM_REQUEST_GUIDS = {}
 local CS_INSPECT_PENDING_ITEM_IDS = {}
@@ -821,18 +823,18 @@ local CS_STAT_GROUPS = {
   {
     title = "Secondary Stats",
     stats = {
-      { ITEM_STAT_CRIT, "CRITCHANCE" },
-      { ITEM_STAT_HASTE, "HASTE" },
-      { ITEM_STAT_MASTERY, "MASTERY" },
-      { ITEM_STAT_VERSATILITY, "VERSATILITY" },
+      ITEM_STAT_CRIT,
+      ITEM_STAT_HASTE,
+      ITEM_STAT_MASTERY,
+      ITEM_STAT_VERSATILITY,
     },
   },
   {
     title = "Tertiary Stats",
     stats = {
-      { ITEM_STAT_LIFESTEAL, "LIFESTEAL" },
-      { ITEM_STAT_AVOIDANCE, "AVOIDANCE" },
-      { ITEM_STAT_SPEED, "SPEED" },
+      ITEM_STAT_LIFESTEAL,
+      ITEM_STAT_AVOIDANCE,
+      ITEM_STAT_SPEED,
     },
   },
 }
@@ -876,6 +878,39 @@ local function CS_ForwardSecondaryStatRatingText(statFrame, ratingID)
   secondaryValue:SetFormattedText("%s (%s)", statFrame.Value:GetText(), rating)
   statFrame.Value:Hide()
   secondaryValue:Show()
+end
+
+local function CS_EnsureStatTextWidgets(statKey)
+  local texts = CharacterSheet._statTextWidgets[statKey]
+  if not texts then
+    texts = {
+      value = CharacterStatsPane:CreateFontString(nil, "ARTWORK"),
+      tooltip = CharacterStatsPane:CreateFontString(nil, "ARTWORK"),
+      tooltip2 = CharacterStatsPane:CreateFontString(nil, "ARTWORK"),
+    }
+    texts.value:Hide()
+    texts.tooltip:Hide()
+    texts.tooltip2:Hide()
+    CharacterSheet._statTextWidgets[statKey] = texts
+    texts.value:SetText("0%")
+    texts.tooltip:SetText(ITEM_STAT_DISPLAY_NAMES[statKey])
+    texts.tooltip2:SetText("")
+  end
+  return texts
+end
+
+local function CS_ForwardStatTexts(statFrame, statKey)
+  local texts = CS_EnsureStatTextWidgets(statKey)
+
+  -- Retain Blizzard's rendered text in widgets, never secret numbers in Lua state.
+  texts.value:SetText(statFrame.Value:GetText())
+  if statKey == ITEM_STAT_MASTERY then
+    texts.tooltip:SetFormattedText("%s: %s", ITEM_STAT_DISPLAY_NAMES[statKey], statFrame.Value:GetText())
+    texts.tooltip2:SetFormattedText("Rating: %s", _G.GetCombatRating(_G.CR_MASTERY))
+  else
+    texts.tooltip:SetText(statFrame.tooltip)
+    texts.tooltip2:SetText(statFrame.tooltip2)
+  end
 end
 
 local function CS_RefreshSecondaryStatRatingTexts()
@@ -1039,21 +1074,32 @@ local function CS_LayoutStatGroups()
     category:Show()
     lastAnchor = category
 
-    for index, stat in ipairs(group.stats) do
-      local row = rows[stat[1]]
+    for index, statKey in ipairs(group.stats) do
+      local row = rows[statKey]
       if not row then
-        -- Reuse Blizzard's pool and setters without changing its hideAt definitions.
         row = pane.statsFramePool:Acquire()
-        row.onEnterFunc = nil
+        row._puiItemStatKey = statKey
+        row._puiAttributeStat = nil
+        row._puiDefenseStat = nil
+        row.onEnterFunc = CS_ShowGroupedStatTooltip
         row.UpdateTooltip = nil
+        row.tooltip = nil
+        row.tooltip2 = nil
         row.tooltip3 = nil
-        _G.PAPERDOLL_STATINFO[stat[2]].updateFunc(row, "player")
-        rows[stat[1]] = row
+        row.Label:SetFormattedText(_G.STAT_FORMAT, ITEM_STAT_DISPLAY_NAMES[statKey])
+        row.Value:SetText(CS_EnsureStatTextWidgets(statKey).value:GetText())
+        CS_ApplyCharacterStatFont(row)
+        CS_ClearSecondaryStatRatingText(row)
+        local ratingID = SECONDARY_STAT_RATING_IDS[statKey]
+        if ratingID then
+          CS_ForwardSecondaryStatRatingText(row, ratingID)
+        end
+        rows[statKey] = row
       end
       local text = row.Value:GetText()
       if not issecretvalue(text) and (text == nil or text == "") then
         row.Value:SetText("0%")
-        local ratingID = SECONDARY_STAT_RATING_IDS[stat[1]]
+        local ratingID = SECONDARY_STAT_RATING_IDS[statKey]
         if ratingID then
           CS_ForwardSecondaryStatRatingText(row, ratingID)
         end
@@ -1205,6 +1251,15 @@ local function CS_ShowItemStatHighlights(statFrame)
   end
 end
 
+CS_ShowGroupedStatTooltip = function(statFrame)
+  local texts = CharacterSheet._statTextWidgets[statFrame._puiItemStatKey]
+  _G.GameTooltip:SetOwner(statFrame, "ANCHOR_RIGHT")
+  _G.GameTooltip:AddLine(texts.tooltip:GetText())
+  _G.GameTooltip:AddLine(texts.tooltip2:GetText(), 1, 1, 1, true)
+  _G.GameTooltip:Show()
+  CS_ShowItemStatHighlights(statFrame)
+end
+
 local function CS_SetupPaperDollValueHooks()
   if CharacterSheet._paperDollValueHooks then
     return
@@ -1232,28 +1287,35 @@ local function CS_SetupPaperDollValueHooks()
   end)
   hooksecurefunc("PaperDollFrame_SetCritChance", function(statFrame)
     statFrame._puiItemStatKey = ITEM_STAT_CRIT
+    CS_ForwardStatTexts(statFrame, ITEM_STAT_CRIT)
     CS_ForwardSecondaryStatRatingText(statFrame, SECONDARY_STAT_RATING_IDS[ITEM_STAT_CRIT])
   end)
   hooksecurefunc("PaperDollFrame_SetHaste", function(statFrame)
     statFrame._puiItemStatKey = ITEM_STAT_HASTE
+    CS_ForwardStatTexts(statFrame, ITEM_STAT_HASTE)
     CS_ForwardSecondaryStatRatingText(statFrame, SECONDARY_STAT_RATING_IDS[ITEM_STAT_HASTE])
   end)
   hooksecurefunc("PaperDollFrame_SetMastery", function(statFrame)
     statFrame._puiItemStatKey = ITEM_STAT_MASTERY
+    CS_ForwardStatTexts(statFrame, ITEM_STAT_MASTERY)
     CS_ForwardSecondaryStatRatingText(statFrame, SECONDARY_STAT_RATING_IDS[ITEM_STAT_MASTERY])
   end)
   hooksecurefunc("PaperDollFrame_SetVersatility", function(statFrame)
     statFrame._puiItemStatKey = ITEM_STAT_VERSATILITY
+    CS_ForwardStatTexts(statFrame, ITEM_STAT_VERSATILITY)
     CS_ForwardSecondaryStatRatingText(statFrame, SECONDARY_STAT_RATING_IDS[ITEM_STAT_VERSATILITY])
   end)
   hooksecurefunc("PaperDollFrame_SetLifesteal", function(statFrame)
     statFrame._puiItemStatKey = ITEM_STAT_LIFESTEAL
+    CS_ForwardStatTexts(statFrame, ITEM_STAT_LIFESTEAL)
   end)
   hooksecurefunc("PaperDollFrame_SetAvoidance", function(statFrame)
     statFrame._puiItemStatKey = ITEM_STAT_AVOIDANCE
+    CS_ForwardStatTexts(statFrame, ITEM_STAT_AVOIDANCE)
   end)
   hooksecurefunc("PaperDollFrame_SetSpeed", function(statFrame)
     statFrame._puiItemStatKey = ITEM_STAT_SPEED
+    CS_ForwardStatTexts(statFrame, ITEM_STAT_SPEED)
   end)
   hooksecurefunc("PaperDollFrame_SetDodge", function(statFrame)
     statFrame._puiDefenseStat = "DODGE"
@@ -4019,7 +4081,6 @@ local function SetupCharacterFrameSkinning()
     CharacterSheet._sidebarTabsHooked = true
   end
 
-  _G.PaperDollFrame_UpdateStats()
 end
 
 -- InspectFrame (identical behavior, no durability)
@@ -4527,6 +4588,9 @@ end
   CS_LayoutMaxHealthRow = P:Def("CS_LayoutMaxHealthRow", CS_LayoutMaxHealthRow)
   CS_RefreshStatCategory = P:Def("CS_RefreshStatCategory", CS_RefreshStatCategory)
   CS_LayoutStatGroups = P:Def("CS_LayoutStatGroups", CS_LayoutStatGroups)
+  CS_EnsureStatTextWidgets = P:Def("CS_EnsureStatTextWidgets", CS_EnsureStatTextWidgets)
+  CS_ForwardStatTexts = P:Def("CS_ForwardStatTexts", CS_ForwardStatTexts)
+  CS_ShowGroupedStatTooltip = P:Def("CS_ShowGroupedStatTooltip", CS_ShowGroupedStatTooltip)
   CS_ClearItemStatHighlights = P:Def("CS_ClearItemStatHighlights", CS_ClearItemStatHighlights)
   CS_ShowItemStatHighlights = P:Def("CS_ShowItemStatHighlights", CS_ShowItemStatHighlights)
   CS_SetupPaperDollValueHooks = P:Def("CS_SetupPaperDollValueHooks", CS_SetupPaperDollValueHooks)
