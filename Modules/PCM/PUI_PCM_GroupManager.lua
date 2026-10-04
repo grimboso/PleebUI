@@ -1004,7 +1004,7 @@ function GroupManager:RefreshEditHandles()
   for _, group in pairs(activeGroups) do
     for index = 1, #group.records do
       local record = group.records[index]
-      if record.parts.frame:IsShown() then
+      if record.viewerKey ~= "BuffIconCooldownViewer" and record.parts.frame:IsShown() then
         EnsureEditHandle(record)
       end
     end
