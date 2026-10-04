@@ -151,6 +151,7 @@ UFDefaults.Profile = {
 
     -- Outline flag: "", "OUTLINE", "THICKOUTLINE", "MONOCHROMEOUTLINE"
     outline = "OUTLINE",
+    fontSlug = false,
 
     -- Base sizes for the three text roles (player/target/most units).
     sizeName = 14,
