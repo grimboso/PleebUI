@@ -18,7 +18,7 @@ local _PUI_PRD_NativeBarState = setmetatable({}, { __mode = "k" })
 local _PUI_PRD_NativeRegionState = setmetatable({}, { __mode = "k" })
 local _PUI_PRD_NativeFontState = setmetatable({}, { __mode = "k" })
 local _PUI_PRD_NativePresentation = setmetatable({}, { __mode = "k" })
-local _PUI_PRD_NativeMouseoverOwner = setmetatable({}, { __mode = "k" })
+local _PUI_PRD_NativeMouseoverHooks = setmetatable({}, { __mode = "k" })
 
 local function _PUI_PRD_GetBarState(bar)
   local state = _PUI_PRD_NativeBarState[bar]
@@ -1137,17 +1137,22 @@ local function _RestoreOriginalBarLayout(self, key, bar)
   end
 
   local nativeState = _PUI_PRD_NativeBarState[bar]
-  if nativeState
-    and nativeState.originalPropagateMouseMotion ~= nil
-    and bar:CanPropagateMouseMotion() ~= nativeState.originalPropagateMouseMotion
+  if nativeState and nativeState.originalMouseMotionEnabled ~= nil
+    and bar:IsMouseMotionEnabled() ~= nativeState.originalMouseMotionEnabled
   then
-    bar:SetPropagateMouseMotion(nativeState.originalPropagateMouseMotion)
+    bar:EnableMouseMotion(nativeState.originalMouseMotionEnabled)
   end
 
   _PUI_PRD_NativeBarState[bar] = nil
   _PUI_PRD_NativePresentation[bar] = nil
 
   local centerText, leftText, rightText = _PUI_PRD_GetNativeBarText(bar)
+  if nativeState and nativeState.originalTextAlpha then
+    local alpha = nativeState.originalTextAlpha
+    if centerText then centerText:SetAlpha(alpha[1]) end
+    if leftText then leftText:SetAlpha(alpha[2]) end
+    if rightText then rightText:SetAlpha(alpha[3]) end
+  end
   if centerText then
     _PUI_PRD_NativeFontState[centerText] = nil
   end
@@ -1156,14 +1161,6 @@ local function _RestoreOriginalBarLayout(self, key, bar)
   end
   if rightText then
     _PUI_PRD_NativeFontState[rightText] = nil
-  end
-
-  local owner = key == "health" and self.health or key == "primary" and self.primary or nil
-  if owner then
-    owner:EnableMouseMotion(false)
-    owner:SetScript("OnEnter", nil)
-    owner:SetScript("OnLeave", nil)
-    _PUI_PRD_NativeMouseoverOwner[owner] = nil
   end
 
   bar:Show()
@@ -1370,82 +1367,39 @@ local function _PUI_PRD_UpdateNativeTextAlpha(bar)
   end
 end
 
-local function _PUI_PRD_InstallNativeTextMouseover(self, bar, role, enabled)
-  if not self or not bar then
-    return
-  end
-
-  local owner = _PUI_GetNativeBarOwner(self, role)
-  if not owner then
-    return
-  end
-
+local function _PUI_PRD_InstallNativeTextMouseover(bar, enabled)
   local state = _PUI_PRD_GetBarState(bar)
-  if state.originalPropagateMouseMotion == nil then
-    state.originalPropagateMouseMotion = bar:CanPropagateMouseMotion()
+  if state.originalMouseMotionEnabled == nil then
+    state.originalMouseMotionEnabled = bar:IsMouseMotionEnabled()
   end
 
-  local propagateMouseMotion = enabled == true or state.originalPropagateMouseMotion == true
-  if not InCombatLockdown() and bar:CanPropagateMouseMotion() ~= propagateMouseMotion then
-    bar:SetPropagateMouseMotion(propagateMouseMotion)
-  end
-
-  local binding = _PUI_PRD_NativeMouseoverOwner[owner]
-
-  if enabled ~= true then
-    state.textMouseover = false
-
-    if binding then
-      if binding.bar and binding.bar ~= bar then
-        local previousState = _PUI_PRD_NativeBarState[binding.bar]
-        if previousState then
-          previousState.textMouseover = false
+  if not InCombatLockdown() then
+    if not _PUI_PRD_NativeMouseoverHooks[bar] then
+      bar:HookScript("OnEnter", function(nativeBar)
+        local active = _PUI_PRD_NativeBarState[nativeBar]
+        if _PUI_ShouldApply() and active and active.nativeTextConfig then
+          active.textMouseover = true
+          _PUI_PRD_UpdateNativeTextAlpha(nativeBar)
         end
-      end
-
-      owner:EnableMouseMotion(false)
-      owner:SetScript("OnEnter", nil)
-      owner:SetScript("OnLeave", nil)
-      _PUI_PRD_NativeMouseoverOwner[owner] = nil
+      end)
+      bar:HookScript("OnLeave", function(nativeBar)
+        local active = _PUI_PRD_NativeBarState[nativeBar]
+        if _PUI_ShouldApply() and active and active.nativeTextConfig then
+          active.textMouseover = false
+          _PUI_PRD_UpdateNativeTextAlpha(nativeBar)
+        end
+      end)
+      _PUI_PRD_NativeMouseoverHooks[bar] = true
     end
 
-    _PUI_PRD_UpdateNativeTextAlpha(bar)
-    return
-  end
-
-  if not binding then
-    binding = {}
-    _PUI_PRD_NativeMouseoverOwner[owner] = binding
-
-    owner:SetScript("OnEnter", function(container)
-      local active = _PUI_PRD_NativeMouseoverOwner[container]
-      local nativeBar = active and active.bar
-      if nativeBar then
-        local mouseoverState = _PUI_PRD_GetBarState(nativeBar)
-        mouseoverState.textMouseover = true
-        _PUI_PRD_UpdateNativeTextAlpha(nativeBar)
-      end
-    end)
-
-    owner:SetScript("OnLeave", function(container)
-      local active = _PUI_PRD_NativeMouseoverOwner[container]
-      local nativeBar = active and active.bar
-      if nativeBar then
-        local mouseoverState = _PUI_PRD_GetBarState(nativeBar)
-        mouseoverState.textMouseover = false
-        _PUI_PRD_UpdateNativeTextAlpha(nativeBar)
-      end
-    end)
-  elseif binding.bar and binding.bar ~= bar then
-    local previousState = _PUI_PRD_NativeBarState[binding.bar]
-    if previousState then
-      previousState.textMouseover = false
+    local mouseMotionEnabled = enabled == true or state.originalMouseMotionEnabled == true
+    if bar:IsMouseMotionEnabled() ~= mouseMotionEnabled then
+      bar:EnableMouseMotion(mouseMotionEnabled)
     end
   end
 
-  binding.bar = bar
-  state.textMouseover = owner:IsMouseOver()
-  owner:EnableMouseMotion(true)
+  state.textMouseover = enabled == true and bar:IsMouseOver()
+  _PUI_PRD_UpdateNativeTextAlpha(bar)
 end
 
 local function _PUI_PRD_ConfigureNativeTextRegion(fs, cfg, alpha)
@@ -1525,8 +1479,15 @@ _PUI_PRD_ApplyNativeTextConfig = function(self, bar, key)
   local usesMouseover = leftMode == "MOUSEOVER" or rightMode == "MOUSEOVER"
 
   local state = _PUI_PRD_GetBarState(bar)
+  if not state.originalTextAlpha then
+    state.originalTextAlpha = {
+      text and text:GetAlpha() or 1,
+      leftText and leftText:GetAlpha() or 1,
+      rightText and rightText:GetAlpha() or 1,
+    }
+  end
   state.nativeTextConfig = cfg
-  _PUI_PRD_InstallNativeTextMouseover(self, bar, key, usesMouseover)
+  _PUI_PRD_InstallNativeTextMouseover(bar, usesMouseover)
 
   local sig = table.concat({
     key or "",
