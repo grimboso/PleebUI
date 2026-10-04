@@ -13,6 +13,8 @@ local Round = Pixel.Round
 
 local Theme     = ns.Theme
 local LSM       = ns.LSM
+local EditModeOverride = LibStub("LibEditModeOverride-1.0")
+local SHOW_BAR_TEXT_SETTING = Enum.EditModePersonalResourceDisplaySetting.ShowBarText
 local PLAYER_CLASS = select(2, UnitClass("player"))
 
 local M = Addon:NewModule("PRD", "NumyAceEvent-3.0")
@@ -436,16 +438,79 @@ function M:OnInitialize()
   end
 
   EventRegistry:RegisterCallback("EditMode.Exit", function()
-    self:ReassertBlizzardPRDRoot()
+    self:RequestBlizzardBarTextSync("EDIT_MODE_LAYOUTS_UPDATED")
   end, self)
-
-  -- Blizzard owns PRD bar-text state; changing it from addon execution taints secret power updates.
-  Addon.db.char.prdBarTextRestore = nil
-  Addon.db.char.prdEditModeLayoutName = nil
 end
 
 function M:IsNativeTextVisible(mode)
   return mode == "ALWAYS" or mode == "MOUSEOVER"
+end
+
+function M:SyncBlizzardBarText()
+  if self._puiRuntimeStarted ~= true
+    or InCombatLockdown()
+    or Addon:IsBlizzardEditModeActive()
+    or not EditModeOverride:IsReady()
+  then
+    return
+  end
+
+  local frame = _G.PersonalResourceDisplayFrame
+  if not frame then
+    return
+  end
+
+  EditModeOverride:LoadLayouts()
+  if not EditModeOverride:HasEditModeSettings(frame) then
+    return
+  end
+
+  local currentValue = EditModeOverride:GetFrameSetting(frame, SHOW_BAR_TEXT_SETTING)
+  if currentValue == nil then
+    return
+  end
+
+  if currentValue ~= 1 then
+    if not EditModeOverride:CanEditActiveLayout() then
+      local layoutName = "PleebUI"
+      local layoutNumber = 2
+      while EditModeOverride:DoesLayoutExist(layoutName) do
+        layoutName = "PleebUI " .. layoutNumber
+        layoutNumber = layoutNumber + 1
+      end
+      EditModeOverride:AddLayout(Enum.EditModeLayoutType.Character, layoutName)
+    end
+
+    EditModeOverride:SetFrameSetting(frame, SHOW_BAR_TEXT_SETTING, 1)
+    -- Blizzard applies the saved setting through EDIT_MODE_LAYOUTS_UPDATED;
+    -- do not enter Edit Mode or call the native secret-value text update from addon execution.
+    EditModeOverride:SaveOnly()
+    return
+  end
+
+  if self._puiBarTextLayoutRefreshPending then
+    self._puiBarTextLayoutRefreshPending = nil
+    self:RefreshActive()
+  end
+end
+
+function M:RequestBlizzardBarTextSync(event)
+  if self._puiRuntimeStarted ~= true then
+    return
+  end
+
+  if event == "EDIT_MODE_LAYOUTS_UPDATED" then
+    self._puiBarTextLayoutRefreshPending = true
+  end
+  if self._puiBarTextSyncTimer then
+    return
+  end
+
+  -- Leave Blizzard's layout transaction before saving or reclaiming PRD geometry.
+  self._puiBarTextSyncTimer = C_Timer.NewTimer(0, function()
+    self._puiBarTextSyncTimer = nil
+    self:SyncBlizzardBarText()
+  end)
 end
 
 function M:GetPrimaryResourceKey()
@@ -1038,6 +1103,8 @@ end
 
 function M:OnPrimaryRestrictionsCleared()
   self:ReassertBlizzardPRDRoot()
+  self:RequestBlizzardBarTextSync()
+  self:ApplyTextSettings()
 
   if self._puiPrimaryMaxRefreshPending ~= true then
     return
@@ -1074,6 +1141,8 @@ function M:OnEnable()
   self:RegisterEvent("UNIT_DISPLAYPOWER", "OnPrimaryResourceChanged")
   self:RegisterEvent("UNIT_MAXPOWER", "OnPrimaryMaximumChanged")
   self:RegisterEvent("PLAYER_REGEN_ENABLED", "OnPrimaryRestrictionsCleared")
+  self:RegisterEvent("EDIT_MODE_LAYOUTS_UPDATED", "RequestBlizzardBarTextSync")
+  self:RequestBlizzardBarTextSync()
 
   if not self._puiDidPEWRefresh then
     local f = self:EnsurePEWFrame()
@@ -1099,6 +1168,12 @@ function M:StopRuntime()
   end
   self:UnregisterAllEvents()
   self:UnregisterSecondaryEvents()
+  self._puiBarTextLayoutRefreshPending = nil
+
+  if self._puiBarTextSyncTimer then
+    self._puiBarTextSyncTimer:Cancel()
+    self._puiBarTextSyncTimer = nil
+  end
 
   if self._puiPEWFrame then
     self._puiPEWFrame:UnregisterEvent("PLAYER_ENTERING_WORLD")
@@ -2482,6 +2557,8 @@ end
   M.SeedHidePrimaryBySpec = P:Def("SeedHidePrimaryBySpec", M.SeedHidePrimaryBySpec)
   M.OnInitialize = P:Def("OnInitialize", M.OnInitialize)
   M.IsNativeTextVisible = P:Def("IsNativeTextVisible", M.IsNativeTextVisible)
+  M.SyncBlizzardBarText = P:Def("SyncBlizzardBarText", M.SyncBlizzardBarText)
+  M.RequestBlizzardBarTextSync = P:Def("RequestBlizzardBarTextSync", M.RequestBlizzardBarTextSync)
   M.GetPrimaryResourceKey = P:Def("GetPrimaryResourceKey", M.GetPrimaryResourceKey)
   M.GetPrimaryResourceSettings = P:Def("GetPrimaryResourceSettings", M.GetPrimaryResourceSettings)
   M.RefreshPrimaryResourceMaximum = P:Def("RefreshPrimaryResourceMaximum", M.RefreshPrimaryResourceMaximum)
