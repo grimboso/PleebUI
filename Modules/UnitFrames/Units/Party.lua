@@ -32,6 +32,7 @@ local math_max = _G.math.max
 local math_min = _G.math.min
 local table_sort = _G.table.sort
 local setmetatable = _G.setmetatable
+local USE_SECRET_ROLE_ICONS = select(4, _G.GetBuildInfo()) >= 120105
 
 local PartyFrames = Addon:NewModule("PartyFrames", "NumyAceEvent-3.0")
 ns.Modules.PartyFrames = PartyFrames
@@ -76,6 +77,10 @@ local VALID_ASSIGNED_ROLES = {
 
 local function GetPartyGroupBy(db)
   local value = db and db.groupBy or nil
+  if USE_SECRET_ROLE_ICONS and value == "ROLE" then
+    return "INDEX"
+  end
+
   if value ~= "NAME" and value ~= "ROLE" then
     value = "INDEX"
   end
@@ -1144,7 +1149,9 @@ end
 
 function PartyFrames:OnEnable()
   self:RegisterEvent("GROUP_ROSTER_UPDATE")
-  self:RegisterEvent("PLAYER_ROLES_ASSIGNED", "RefreshGroupLayout")
+  if not USE_SECRET_ROLE_ICONS then
+    self:RegisterEvent("PLAYER_ROLES_ASSIGNED", "RefreshGroupLayout")
+  end
   self:RegisterEvent("PLAYER_ENTERING_WORLD")
   self:RegisterEvent("PARTY_MEMBER_ENABLE", "RefreshAuraAvailability")
   self:RegisterEvent("PARTY_MEMBER_DISABLE", "RefreshAuraAvailability")
