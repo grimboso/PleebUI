@@ -16,6 +16,7 @@ local type = _G.type
 local tonumber = _G.tonumber
 local pairs = _G.pairs
 local math_max = _G.math.max
+local USE_SECRET_ROLE_ICONS = select(4, _G.GetBuildInfo()) >= 120105
 
 local Round = ns.Pixel.Round
 local SHARED_ICON_ANCHOR_POINTS = {
@@ -197,6 +198,18 @@ local function LayoutRaidRoleIndicators(frame)
 
   local layout = frame.__puiRaidRoleLayout
   if type(layout) ~= "table" then
+    return
+  end
+
+  if USE_SECRET_ROLE_ICONS then
+    local anchor = frame.PUIRaidRoleAnchor
+    local size = layout.size
+    local direction = layout.point:find("RIGHT", 1, true) and -1 or 1
+
+    -- Blizzard can set secret widths; each slot anchors directly to our container.
+    SetTexturePoint(frame.LeaderIndicator, layout.point, anchor, layout.point, layout.x, layout.y, size)
+    SetTexturePoint(frame.AssistantIndicator, layout.point, anchor, layout.point, layout.x + direction * size, layout.y, size)
+    SetTexturePoint(frame.RaidRoleIndicator, layout.point, anchor, layout.point, layout.x + direction * size * 2, layout.y, size)
     return
   end
 
@@ -406,7 +419,9 @@ function UFIndicators.EnsureSharedUnitIndicators(frame, parent, roleConfigProvid
     frame.GroupRoleIndicator = roleParent:CreateTexture(nil, "ARTWORK")
   end
   if frame.GroupRoleIndicator then
-    frame.GroupRoleIndicator.PostUpdate = PostUpdateGroupRoleIndicator
+    if not USE_SECRET_ROLE_ICONS then
+      frame.GroupRoleIndicator.PostUpdate = PostUpdateGroupRoleIndicator
+    end
   end
 
   if useRoleIndicators and not frame.PUIRaidRoleAnchor then
@@ -423,7 +438,9 @@ function UFIndicators.EnsureSharedUnitIndicators(frame, parent, roleConfigProvid
     frame.LeaderIndicator = frame.PUIRaidRoleAnchor:CreateTexture(nil, "OVERLAY")
   end
   if frame.LeaderIndicator then
-    frame.LeaderIndicator.PostUpdate = PostUpdateRaidRoleElement
+    if not USE_SECRET_ROLE_ICONS then
+      frame.LeaderIndicator.PostUpdate = PostUpdateRaidRoleElement
+    end
   end
 
   if useRoleIndicators and not frame.AssistantIndicator then
@@ -431,14 +448,18 @@ function UFIndicators.EnsureSharedUnitIndicators(frame, parent, roleConfigProvid
     frame.AssistantIndicator:SetTexture("Interface\\GroupFrame\\UI-Group-AssistantIcon")
   end
   if frame.AssistantIndicator then
-    frame.AssistantIndicator.PostUpdate = PostUpdateRaidRoleElement
+    if not USE_SECRET_ROLE_ICONS then
+      frame.AssistantIndicator.PostUpdate = PostUpdateRaidRoleElement
+    end
   end
 
   if useRoleIndicators and not frame.RaidRoleIndicator then
     frame.RaidRoleIndicator = frame.PUIRaidRoleAnchor:CreateTexture(nil, "OVERLAY")
   end
   if frame.RaidRoleIndicator then
-    frame.RaidRoleIndicator.PostUpdate = PostUpdateRaidRoleElement
+    if not USE_SECRET_ROLE_ICONS then
+      frame.RaidRoleIndicator.PostUpdate = PostUpdateRaidRoleElement
+    end
   end
 
   if not frame.RaidTargetIndicator then
@@ -525,7 +546,7 @@ function UFIndicators.ConfigureSharedUnitIndicators(frame, layout)
     frame.GroupRoleIndicator.__puiShowRoleIcon = IsIndicatorEnabled(config, "showRoleIcon") and not isPet
     frame.GroupRoleIndicator:SetAlpha(frame.GroupRoleIndicator.__puiShowRoleIcon and 1 or 0)
 
-    if isPet then
+    if isPet or (USE_SECRET_ROLE_ICONS and not frame.GroupRoleIndicator.__puiShowRoleIcon) then
       DisableElement(frame, "GroupRoleIndicator")
       frame.GroupRoleIndicator:Hide()
     else
@@ -578,6 +599,19 @@ function UFIndicators.ConfigureSharedUnitIndicators(frame, layout)
   end
 
   if frame.RaidRoleIndicator then
+    if USE_SECRET_ROLE_ICONS then
+      local mainTankAtlas = IsIndicatorEnabled(config, "showMainTank") and "RaidFrame-Icon-MainTank" or ""
+      local mainAssistAtlas = IsIndicatorEnabled(config, "showMainAssist") and "RaidFrame-Icon-MainAssist" or ""
+      local indicator = frame.RaidRoleIndicator
+
+      if indicator.mainTankAtlas ~= mainTankAtlas or indicator.mainAssistAtlas ~= mainAssistAtlas then
+        -- oUF copies the texture map on Enable, so changed options need a fresh map.
+        DisableElement(frame, "RaidRoleIndicator")
+        indicator.mainTankAtlas = mainTankAtlas
+        indicator.mainAssistAtlas = mainAssistAtlas
+      end
+    end
+
     if useRaidRoleStrip and (IsIndicatorEnabled(config, "showMainTank") or IsIndicatorEnabled(config, "showMainAssist")) then
       EnableElement(frame, "RaidRoleIndicator", unit)
     else
