@@ -4,7 +4,9 @@ enable-nolib-creation: no
 externals:
   PackagerLibs/LibStub: https://repos.wowace.com/wow/libstub/trunk
   PackagerLibs/LibEditModeOverride: https://github.com/plusmouse/LibEditModeOverride.git
-  PackagerLibs/oUF: https://github.com/oUF-wow/oUF.git
+  PackagerLibs/oUF:
+    url: https://github.com/oUF-wow/oUF.git
+    tag: 14.1.1
   PackagerLibs/AceGUI-3.0: https://repos.wowace.com/wow/ace3/trunk/AceGUI-3.0
   PackagerLibs/CallbackHandler-1.0: https://repos.wowace.com/wow/callbackhandler/trunk/CallbackHandler-1.0
   PackagerLibs/LibSharedMedia-3.0: https://repos.wowace.com/wow/libsharedmedia-3-0/trunk/LibSharedMedia-3.0
