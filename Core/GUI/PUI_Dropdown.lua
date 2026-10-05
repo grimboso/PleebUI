@@ -23,6 +23,35 @@ local WHITE8 = "Interface\\Buttons\\WHITE8x8"
 local ARROW_TEXTURE = "Interface\\ChatFrame\\UI-ChatIcon-ScrollDown-Up"
 local SEPARATOR_VALUE_PREFIX = "__PUI_SEPARATOR_BEFORE__"
 
+local function WatchDropdownOutsideClicks(widget, popup, button)
+  if not popup.__puiOutsideClickHooked then
+    popup.__puiOutsideClickHooked = true
+    popup:HookScript("OnHide", function(self)
+      self:UnregisterEvent("GLOBAL_MOUSE_DOWN")
+      self.__puiDropdownDismissOwner = nil
+      self.__puiDropdownDismissButton = nil
+    end)
+    popup:HookScript("OnEvent", function(self, event)
+      local owner = self.__puiDropdownDismissOwner
+      if event == "GLOBAL_MOUSE_DOWN" and owner
+        and not self:IsMouseOver() and not self.__puiDropdownDismissButton:IsMouseOver()
+      then
+        if AceGUI.FocusedWidget == owner then
+          AceGUI:ClearFocus()
+        else
+          owner:ClearFocus()
+        end
+      end
+    end)
+  end
+
+  if popup:IsShown() then
+    popup.__puiDropdownDismissOwner = widget
+    popup.__puiDropdownDismissButton = button
+    popup:RegisterEvent("GLOBAL_MOUSE_DOWN")
+  end
+end
+
 
 local function IsLSMDropdown(widgetType)
   return widgetType == "LSM30_Font"
@@ -780,6 +809,7 @@ local function SkinDropdownPullout(widget, isLSM, colors, edge)
     if frame then
       SkinPulloutFrame(frame, frame.slider, colors, edge)
       EnsureLSMFontDropdownSearch(widget)
+      WatchDropdownOutsideClicks(widget, frame, widget.frame.dropButton)
     end
     return
   end
@@ -788,6 +818,7 @@ local function SkinDropdownPullout(widget, isLSM, colors, edge)
   if pullout then
     EnsureDropdownPulloutLayout(pullout)
     SkinPulloutFrame(pullout.frame, pullout.slider, colors, edge)
+    WatchDropdownOutsideClicks(widget, pullout.frame, widget.button_cover)
   end
 end
 
@@ -1267,6 +1298,7 @@ local function PUI_Dropdown_OnPulloutOpen(pullout)
   end
 
   widget.open = true
+  WatchDropdownOutsideClicks(widget, pullout.frame, widget.button)
   widget:Fire("OnOpened")
 end
 

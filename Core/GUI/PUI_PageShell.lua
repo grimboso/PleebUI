@@ -20,6 +20,36 @@ local PUI_PAGE_GAP = 10
 local PUI_PREVIEW_MIN_HEIGHT = 140
 local PUI_PREVIEW_CONTENT_MIN_HEIGHT = 120
 
+local function CreateOptionsGroup()
+  local frame = CreateFrame("Frame", nil, UIParent)
+  local content = CreateFrame("Frame", nil, frame)
+  content:SetAllPoints(frame)
+
+  local widget = {
+    type = "PUI_OptionsGroup",
+    frame = frame,
+    content = content,
+  }
+
+  function widget:OnAcquire()
+    self:SetWidth(300)
+    self:SetHeight(100)
+  end
+
+  function widget:OnWidthSet(width)
+    self.content.width = width
+  end
+
+  function widget:OnHeightSet(height)
+    self.content.height = height
+  end
+
+  return AceGUI:RegisterAsContainer(widget)
+end
+
+-- SimpleGroup deliberately opts out of AceConfig's automatic scroll container.
+AceGUI:RegisterWidgetType("PUI_OptionsGroup", CreateOptionsGroup, 1)
+
 local function PUI_PageShell_ApplyBackdrop(frame, bgColor, borderColor, edge)
   Theme.SetSquareBackdrop(frame, {
     bg = bgColor,
@@ -468,7 +498,7 @@ function PageShell.Create(parent)
     self.acdHost:Show()
 
     if not container then
-      container = AceGUI:Create("SimpleGroup")
+      container = AceGUI:Create("PUI_OptionsGroup")
       container.parent = nil
       container.__puiACDHostContainer = true
       container.__puiAceGUIOwnedByPleebUI = true
