@@ -55,6 +55,10 @@ Use the packaged `PleebUI-v*.zip` asset, not GitHub's automatically generated so
 
 Addon authors can register PleebUI Edit Mode movers and options pages through the [PleebUI Public API](PublicAPI/README.md).
 
+## Development profiling
+
+Open Pleebug with `/pleebug` or `/pbug` to inspect function and event activity. Full captures include accumulated function cost and call counts per active frame, available in function tooltips and exports. See the [Pleebug measurement guide and instrumentation instructions](Libs/LibPleebug-1.0/README.md) for mode behavior, interpretation and validation.
+
 
 ## Feedback and issues
 
