@@ -901,6 +901,11 @@ local function _ensureFrame()
       "measurement_state",
       "measurement_kind",
       "canonical_path",
+      "active_frames",
+      "cpu_avg_active_frame_ms",
+      "cpu_peak_frame_ms",
+      "calls_avg_active_frame",
+      "calls_peak_frame",
     }, "\t")
 
     for i = 1, nRows do
@@ -917,6 +922,7 @@ local function _ensureFrame()
         local memAvgKB, memMaxKB = "", ""
         local cpuAvgMs, cpuMaxMs = "", ""
         local measurementState, measurementKind, canonicalPath = "", "", ""
+        local activeFrames, frameAvgMs, framePeakMs, frameAvgCalls, framePeakCalls = "", "", "", "", ""
 
         local hasChildren = node.children and next(node.children) ~= nil
 
@@ -946,6 +952,14 @@ local function _ensureFrame()
 
             cpuAvgMs = string.format("%.6f", avgMs)
             cpuMaxMs = string.format("%.6f", maxMs)
+
+            if st.activeFrames and st.activeFrames > 0 then
+              activeFrames = tostring(st.activeFrames)
+              frameAvgMs = string.format("%.6f", st.timeSum / st.activeFrames)
+              framePeakMs = string.format("%.6f", st.frameTimeMax)
+              frameAvgCalls = string.format("%.6f", st.n / st.activeFrames)
+              framePeakCalls = tostring(st.frameCallsMax)
+            end
 
             if st.native ~= true then
               if st.allocLast ~= nil then
@@ -983,6 +997,11 @@ local function _ensureFrame()
           tostring(measurementState),
           tostring(measurementKind),
           tostring(canonicalPath),
+          activeFrames,
+          frameAvgMs,
+          framePeakMs,
+          frameAvgCalls,
+          framePeakCalls,
         }, "\t")
       end
     end
@@ -1760,6 +1779,30 @@ function _ensureRow(i)
     local path = node.path
     W.expanded[path] = not W.expanded[path]
     W:Refresh()
+  end)
+
+  row:SetScript("OnEnter", function(self)
+    local entry = self._data
+    local path = entry and entry.node and entry.node.path
+    if not path or not path:match("^Funcs%.") then return end
+    local st = MemDebug.CPU:GetFuncStat(path:sub(7))
+    if not st or not st.activeFrames or st.activeFrames == 0 then return end
+
+    GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+    GameTooltip:AddLine(entry.node.name)
+    GameTooltip:AddDoubleLine("Active frames", tostring(st.activeFrames), 1, 1, 1, 1, 1, 1)
+    GameTooltip:AddDoubleLine("CPU per active frame", string.format("%.3f ms", st.timeSum / st.activeFrames), 1, 1, 1, 1, 1, 1)
+    GameTooltip:AddDoubleLine("Worst frame", string.format("%.3f ms", st.frameTimeMax), 1, 1, 1, 1, 1, 1)
+    GameTooltip:AddDoubleLine("Calls per active frame", string.format("%.1f", st.n / st.activeFrames), 1, 1, 1, 1, 1, 1)
+    GameTooltip:AddDoubleLine("Most calls in one frame", tostring(st.frameCallsMax), 1, 1, 1, 1, 1, 1)
+    GameTooltip:AddLine("Since Start or Clear. Idle frames are excluded. Nested measurements overlap.", 0.8, 0.8, 0.8, true)
+    GameTooltip:Show()
+  end)
+  row:SetScript("OnLeave", function(self)
+    if GameTooltip:IsOwned(self) then GameTooltip:Hide() end
+  end)
+  row:HookScript("OnHide", function(self)
+    if GameTooltip:IsOwned(self) then GameTooltip:Hide() end
   end)
 
   W.rows[i] = row
