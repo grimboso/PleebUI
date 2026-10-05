@@ -24,7 +24,7 @@
 
 
 
-local MAJOR, MINOR = "LibPleebug-1", 1
+local MAJOR, MINOR = "LibPleebug-1", 2
 local LibStub = _G.LibStub
 if not LibStub then return end
 
@@ -277,30 +277,14 @@ end
 
 local ROLLING_BUCKET_SECONDS = 62
 
-local function _rollingPush(key, amount, nowT)
-  if type(key) ~= "string" or key == "" or key:match("^__") then
-    return
-  end
-
-  amount = tonumber(amount) or 1
-  if amount <= 0 then
-    return
-  end
-
-  nowT = tonumber(nowT) or _now()
+local function _rollingPushBucket(key, amount, second)
   local store = MemDebug._rollingCounts
-  if type(store) ~= "table" then
-    store = {}
-    MemDebug._rollingCounts = store
-  end
-
   local buckets = store[key]
   if not buckets then
     buckets = {}
     store[key] = buckets
   end
 
-  local second = math.floor(nowT)
   local slot = (second % ROLLING_BUCKET_SECONDS) + 1
   local secondSlot = slot + ROLLING_BUCKET_SECONDS
   if buckets[secondSlot] ~= second then
@@ -310,6 +294,25 @@ local function _rollingPush(key, amount, nowT)
     buckets[slot] = (buckets[slot] or 0) + amount
   end
 end
+
+local function _rollingPush(key, amount, nowT)
+  if type(key) ~= "string" or key == "" or key:match("^__") then
+    return
+  end
+  amount = tonumber(amount) or 1
+  if amount <= 0 then return end
+  _rollingPushBucket(key, amount, math.floor(tonumber(nowT) or _now()))
+end
+
+function MemDebug:TrackRegisteredFunction(key)
+  local counts = self._counts
+  counts["Funcs.Total"] = (counts["Funcs.Total"] or 0) + 1
+  counts[key] = (counts[key] or 0) + 1
+  local second = math.floor(_now())
+  _rollingPushBucket("Funcs.Total", 1, second)
+  _rollingPushBucket(key, 1, second)
+end
+
 
 function MemDebug:BuildRollingSnapshot(windowSec, nowT, out)
   out = out or {}
@@ -797,6 +800,7 @@ function MemDebug:NewPrivate(moduleName, opt)
   opt = opt or {}
   moduleName = tostring(moduleName or "Unknown")
 
+  local modules = _ensureDB().modules
   local t = {}
   t.____pleebugPrivate = true
   t.__pleebugModuleName = moduleName
@@ -835,10 +839,7 @@ function MemDebug:NewPrivate(moduleName, opt)
     MemDebug._pdefBuckets[module][name] = bucket or ""
 
     local cpu = MemDebug.CPU
-    local path
-    if cpu and cpu.RegisterFunction then
-      path = cpu:RegisterFunction(module, bucket, name, fn, { kind = "native" })
-    end
+    local path, rec = cpu:RegisterFunction(module, bucket, name, fn, { kind = "native" })
 
     local mode = (MemDebug.GetLoadMode and MemDebug:GetLoadMode()) or MemDebug.__pleebugLoadMode or "light"
     if mode ~= "full" then
@@ -846,25 +847,8 @@ function MemDebug:NewPrivate(moduleName, opt)
     end
 
     if mode == "full" then
-      if cpu and path then
-        cpu:SetRegistrationKind(path, "wrapped")
-      end
-      local wrapped = function(...)
-        if not (MemDebug and MemDebug.IsEnabled and MemDebug:IsEnabled()) then
-          return fn(...)
-        end
-        if MemDebug.IsModuleEnabled and not MemDebug:IsModuleEnabled(module) then
-          return fn(...)
-        end
-
-        MemDebug:TrackFunc(module, bucket, name)
-
-        if MemDebug.CPU and MemDebug.CPU.CallMeasured then
-          return MemDebug.CPU:CallMeasured(module, bucket, name, fn, ...)
-        end
-
-        return fn(...)
-      end
+      cpu:SetRegistrationKind(path, "wrapped")
+      local wrapped = cpu:CreateMeasuredCall(rec, fn, modules, module)
 
       rawset(self, name, wrapped)
       return wrapped
@@ -892,37 +876,17 @@ function MemDebug:NewPrivate(moduleName, opt)
     end
 
     local cpu = MemDebug.CPU
-    local path
-    if cpu and cpu.RegisterFunction then
-      path = cpu:RegisterFunction(module, bucket, name, fn, {
-        kind = "secure-native",
-        owner = owner,
-        methodName = methodName,
-      })
-    end
+    local path, rec = cpu:RegisterFunction(module, bucket, name, fn, {
+      kind = "secure-native",
+      owner = owner,
+      methodName = methodName,
+    })
 
     local mode = (MemDebug.GetLoadMode and MemDebug:GetLoadMode()) or MemDebug.__pleebugLoadMode or "light"
     if mode == "full" then
-      if cpu and path then
-        cpu:SetRegistrationKind(path, "wrapped")
-      end
+      cpu:SetRegistrationKind(path, "wrapped")
 
-      local wrapped = function(...)
-        if not (MemDebug and MemDebug.IsEnabled and MemDebug:IsEnabled()) then
-          return fn(...)
-        end
-        if MemDebug.IsModuleEnabled and not MemDebug:IsModuleEnabled(module) then
-          return fn(...)
-        end
-
-        MemDebug:TrackFunc(module, bucket, name)
-
-        if MemDebug.CPU and MemDebug.CPU.CallMeasured then
-          return MemDebug.CPU:CallMeasured(module, bucket, name, fn, ...)
-        end
-
-        return fn(...)
-      end
+      local wrapped = cpu:CreateMeasuredCall(rec, fn, modules, module)
 
       owner[methodName] = wrapped
       rawset(self, name, wrapped)
