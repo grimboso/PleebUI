@@ -477,6 +477,7 @@ function CPU:ResetRuntime()
         rec.lastTime = nil
         rec.lastCount = nil
         rec.windowCalls = 0
+        rec.measuredStat = nil
       end
     end
   end
@@ -727,6 +728,8 @@ function CPU:RegisterFunction(moduleName, bucket, funcName, fn, opt)
     if previous.canonicalPath == path then
       local replacementPath, replacement = next(previous.aliases)
       previous.canonicalPath = replacementPath
+      previous.treeKey = replacementPath and ("Funcs." .. replacementPath) or nil
+      previous.measuredStat = nil
       if replacement then
         previous.moduleName = replacement.moduleName
         previous.bucket = replacement.bucket
@@ -752,6 +755,7 @@ function CPU:RegisterFunction(moduleName, bucket, funcName, fn, opt)
     rec.bucket = bucket
     rec.funcName = funcName
   end
+  rec.treeKey = "Funcs." .. rec.canonicalPath
   rec.retired = false
   self._nativeFuncs[path] = rec
 
@@ -1002,14 +1006,6 @@ function CPU:BuildNativeLiveSnapshot(windowSec, nowT, out)
   return out
 end
 
--------------------
--- Per-function measurement: path helpers + stats
--------------------
-local function _BuildPath(moduleName, bucket, funcName)
-  local name = tostring(funcName or "Unknown"):gsub("%.", ":")
-  return tostring(moduleName or "Unknown") .. "." .. name
-end
-
 function CPU:GetFuncStat(path)
   if not path or path == "" then return nil end
   local rec = self._nativeFuncs and self._nativeFuncs[path]
@@ -1034,14 +1030,16 @@ local function _ToNumber(v)
   return tonumber(s)
 end
 
-local function _PushFuncStat(path, ms, ticks, allocBytes, deallocBytes)
-  if not _EnsureCDB() then return end
-
-  local stats = _GetFuncStats()
-  local st = stats[path]
+local function _PushFuncStat(rec, frameID, ms, ticks, allocBytes, deallocBytes)
+  local st = rec.measuredStat
   if not st then
     st = {
       n = 0,
+      activeFrames = 0,
+      frameCalls = 0,
+      frameTime = 0,
+      frameTimeMax = 0,
+      frameCallsMax = 0,
 
       timeSum = 0,
       timeMin = nil,
@@ -1060,13 +1058,25 @@ local function _PushFuncStat(path, ms, ticks, allocBytes, deallocBytes)
       deallocMax = nil,
       deallocLast = nil,
     }
-    stats[path] = st
+    rec.measuredStat = st
+    CPU._rtFuncStats[rec.canonicalPath] = st
   end
 
-  st.n = (st.n or 0) + 1
+  st.n = st.n + 1
 
   ms = _ToNumber(ms) or 0
-  st.timeSum  = (st.timeSum or 0) + ms
+  if st.frameID ~= frameID then
+    st.frameID = frameID
+    st.activeFrames = st.activeFrames + 1
+    st.frameCalls = 0
+    st.frameTime = 0
+  end
+  st.frameCalls = st.frameCalls + 1
+  st.frameTime = st.frameTime + ms
+  if st.frameTime > st.frameTimeMax then st.frameTimeMax = st.frameTime end
+  if st.frameCalls > st.frameCallsMax then st.frameCallsMax = st.frameCalls end
+
+  st.timeSum  = st.timeSum + ms
   st.timeLast = ms
   if st.timeMin == nil or ms < st.timeMin then st.timeMin = ms end
   if st.timeMax == nil or ms > st.timeMax then st.timeMax = ms end
@@ -1095,36 +1105,28 @@ end
 
 
 
-local function _CallMeasuredPath(path, fn, ...)
-  if C_AddOnProfiler and C_AddOnProfiler.MeasureCall and _ProfilerEnabled() then
-    local measured = t_pack(C_AddOnProfiler.MeasureCall(fn, ...))
-    local results = measured[1]
-    if results and results.elapsedMilliseconds then
-      local ms = _ToNumber(results.elapsedMilliseconds) or 0
-      local ticks = _ToNumber(results.elapsedTicks)
-      local allocB = _ToNumber(results.allocatedBytes)
-      local dealloc = _ToNumber(results.deallocatedBytes)
-      _PushFuncStat(path, ms, ticks, allocB, dealloc)
+function CPU:CreateMeasuredCall(rec, fn, modules, module)
+  local measureCall = C_AddOnProfiler and C_AddOnProfiler.MeasureCall
+
+  return function(...)
+    if not MemDebug._enabled or modules[module] == false or rec.retired then
+      return fn(...)
     end
-    return t_unpack(measured, 2, measured.n)
-  end
+    -- GetTime is cached per frame across event and OnUpdate handlers.
+    local frameID = GetTime()
+    MemDebug:TrackRegisteredFunction(rec.treeKey)
+    if measureCall and _ProfilerEnabled() then
+      local measured = t_pack(measureCall(fn, ...))
+      local results = measured[1]
+      _PushFuncStat(rec, frameID, results.elapsedMilliseconds, results.elapsedTicks,
+        results.allocatedBytes, results.deallocatedBytes)
+      return t_unpack(measured, 2, measured.n)
+    end
 
-  local t0 = debugprofilestop and debugprofilestop() or 0
-  local returns = t_pack(fn(...))
-  local t1 = debugprofilestop and debugprofilestop() or t0
-  local ms = t1 - t0
-  _PushFuncStat(path, ms)
-  return t_unpack(returns, 1, returns.n)
-end
-
-function CPU:CallMeasured(moduleName, bucket, funcName, fn, ...)
-  local path = _BuildPath(moduleName, bucket, funcName)
-  if type(fn) ~= "function" then
-    return
+    local t0 = debugprofilestop()
+    local returns = t_pack(fn(...))
+    local ms = debugprofilestop() - t0
+    _PushFuncStat(rec, frameID, ms)
+    return t_unpack(returns, 1, returns.n)
   end
-  local rec = self._nativeFuncs and self._nativeFuncs[path]
-  if rec and rec.canonicalPath then
-    path = rec.canonicalPath
-  end
-  return _CallMeasuredPath(path, fn, ...)
 end
