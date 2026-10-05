@@ -1,23 +1,15 @@
--- File: PUI_Chat.lua
-
-local ADDON_NAME, ns = ...
-
-
+local _, ns = ...
 
 local Addon    = ns.Addon
 
-local FrameScale = ns.FrameScale
 local FrameUtil = ns.FrameUtil
 local OptionsUtil = ns.OptionsUtil
 local Round = ns.Pixel.Round
 
-
 local ChatLinks = Addon:NewModule("ChatLinks", "NumyAceEvent-3.0")
 ns.Registry.ChatLinks = ChatLinks
 
-
-local LibStub = _G.LibStub
-local P, TrackThis = ns.Pleebug:DropIn(ChatLinks, { name = "Modules.Chat" })
+local P = ns.Pleebug:DropIn(ChatLinks, { name = "Modules.Chat" })
 
 local function ClampInt(value, minimum, maximum)
   value = math.floor(tonumber(value) or minimum)
@@ -29,30 +21,10 @@ end
 local function ForEachBlizzardChatFrame(callback)
   for _, chatFrameName in pairs(_G.CHAT_FRAMES) do
     local chatFrame = _G[chatFrameName]
-    if chatFrame then
+    if canaccessvalue(chatFrame) and chatFrame then
       callback(chatFrame)
     end
   end
-end
-
-local function _PUI_IsChatMessagingRestricted()
-  if InCombatLockdown() then
-    return true
-  end
-
-  return C_ChatInfo.InChatMessagingLockdown()
-end
-
-
-local function _PUI_AreChatArgumentsAccessible(...)
-  for i = 1, select("#", ...) do
-    local value = select(i, ...)
-    if not canaccessvalue(value) then
-      return false
-    end
-  end
-
-  return true
 end
 
 local function _PUI_IsTemporaryChatFrame(chatFrame)
@@ -60,7 +32,7 @@ local function _PUI_IsTemporaryChatFrame(chatFrame)
     return false
   end
 
-  return chatFrame.isTemporary == true
+  return canaccessvalue(chatFrame.isTemporary) and chatFrame.isTemporary == true
 end
 
 local function _PUI_IsChatFrameOpen(chatFrame)
@@ -68,6 +40,7 @@ local function _PUI_IsChatFrameOpen(chatFrame)
     return false
   end
 
+  if not canaccessallvalues(chatFrame.isTemporary, chatFrame.inUse) then return false end
   if chatFrame.isTemporary == true then
     return chatFrame.inUse == true
   end
@@ -170,6 +143,7 @@ local function _PUI_ShowChattynatorChoicePopup(self)
         dbp.enabled = true
 
         _PUI_GetChatConflictDB().chattynator = "pui"
+        mod:OnEnable()
         Addon:Print("|cffffcc00[PUI]|r PleebUI Chat selected. Please disable Chattynator in the AddOns list and /reload for best results.")
       end,
       OnCancel = function(_, data)
@@ -200,6 +174,7 @@ local function _PUI_ShowPratChoicePopup(self)
         dbp.enabled = true
 
         _PUI_GetChatConflictDB().prat = "pui"
+        mod:OnEnable()
         Addon:Print("|cffffcc00[PUI]|r PleebUI Chat selected. Please disable Prat in the AddOns list and /reload for best results.")
       end,
       OnCancel = function(_, data)
@@ -211,7 +186,6 @@ local function _PUI_ShowPratChoicePopup(self)
 
   StaticPopup_Show("PUI_CHAT_PRAT_CHOICE", nil, nil, self)
 end
-
 
 function ChatLinks:OnInitialize()
   self.db = Addon.db:RegisterNamespace("ChatLinks", {
@@ -228,8 +202,11 @@ function ChatLinks:OnInitialize()
       -- Chat tweaks
       chatTweaks = {
         persistHistory = true,   -- persist chat history between sessions
-        maxLines       = 500,    -- visible lines restored back into the chat frame
-        savedLines     = 5000,
+        savedLines     = 256,
+        historyTypes = {
+          WHISPER = true, GUILD = true, PARTY = true, RAID = true, INSTANCE = true,
+          CHANNEL = true, SAY = true, YELL = true, EMOTE = true,
+        },
         scrollMessages = 3,
       },
 
@@ -252,7 +229,6 @@ function ChatLinks:OnInitialize()
         w             = 600,
         h             = 350,
       },
-
 
       -- Copy window custom style (independent of Theme background/border colors)
       copyWindowStyle = {
@@ -280,7 +256,6 @@ function ChatLinks:OnInitialize()
         },
       },
 
-
       -- Edit Mode layout for the addon-owned primary chat holder.
       chatFrame1 = {
         point         = "BOTTOMLEFT",
@@ -292,21 +267,21 @@ function ChatLinks:OnInitialize()
         height        = 180,
       },
 
-
-
-      -- Chat fade behaviour for the *primary* chat frame only.
       chatFade = {
-        enabled      = true,  -- master toggle
-        activeAlpha  = 0.9,   -- when chatting / hovered
-        idleAlpha    = 0.4,   -- when idle
-        idleDelay    = 10,    -- seconds after focus lost before fading
-
-        -- Smooth fade
-        animate      = true,  -- master toggle for alpha interpolation
-        fadeDuration = 1.25,  -- seconds to fade active -> idle
+        fadeWindow = false,
+        windowDelay = 2,
+        windowFadeInAlpha = 1,
+        windowFadeOutAlpha = 0,
+        windowFadeInDuration = 0.3,
+        windowFadeOutDuration = 0.3,
+        enabled = true,
+        idleDelay = 100,
+        fadeUndockedTabs = false,
+        fadeTabsNoBackdrop = true,
       },
     },
   })
+  self.db.profile.chatTweaks.maxLines = nil
 
   _G.PleebUIAPI:RegisterPlugin("PleebUI_Chat", {
     name = "Chat",
@@ -323,6 +298,83 @@ local HideChatSideButtons
 local ChatFrameState = setmetatable({}, { __mode = "k" })
 local ChatTabState = setmetatable({}, { __mode = "k" })
 local ChatEditBoxState = setmetatable({}, { __mode = "k" })
+local NativeVisuals = setmetatable({}, { __mode = "k" })
+
+local function CanChangeChatLayout(region)
+  if not InCombatLockdown() then return true end
+  local protected = region:IsProtected()
+  return canaccessvalue(protected) and not protected
+end
+
+local function SaveNativeVisual(region, geometry)
+  local state = NativeVisuals[region]
+  if not state then
+    state = {}
+    NativeVisuals[region] = state
+    local shown = region:IsShown()
+    if region.IsMouseEnabled then
+      local mouse = region:IsMouseEnabled()
+      if canaccessvalue(mouse) then state.mouse = mouse end
+    end
+    if canaccessvalue(shown) then state.shown = shown end
+    if region:IsObjectType("Texture") then
+      local texture, atlas = region:GetTexture(), region:GetAtlas()
+      local r, g, b, a = region:GetVertexColor()
+      if canaccessallvalues(texture, atlas, r, g, b, a) then
+        state.texture = { path = texture, atlas = atlas, r = r, g = g, b = b, a = a }
+      end
+    elseif region.SetFont and region.GetFont then
+      if region:IsObjectType("FontString") then
+        local r, g, b, a = region:GetTextColor()
+        local horizontal, vertical, wrap = region:GetJustifyH(), region:GetJustifyV(), region:CanWordWrap()
+        if canaccessallvalues(r, g, b, a, horizontal, vertical, wrap) then
+          state.textStyle = {r, g, b, a, horizontal, vertical, wrap}
+        end
+      end
+      local font, size, flags = region:GetFont()
+      if canaccessallvalues(font, size, flags) and font and size then state.font = {font, size, flags} end
+    end
+  end
+  if geometry and not state.points then
+    local count = region:GetNumPoints()
+    if not canaccessvalue(count) then return end
+    local points = {}
+    for i = 1, count do
+      local point, relativeTo, relativePoint, x, y = region:GetPoint(i)
+      if not canaccessallvalues(point, relativeTo, relativePoint, x, y) then return end
+      points[i] = {point, relativeTo, relativePoint, x, y}
+    end
+    state.points = points
+    local width, height = region:GetSize()
+    if canaccessallvalues(width, height) then state.size = {width, height} end
+  end
+end
+
+local function RestoreNativeVisuals()
+  for region, state in pairs(NativeVisuals) do
+    if state.opacityReset then region:SetAlpha(1) end
+    if state.texture then
+      local texture = state.texture
+      if texture.atlas then region:SetAtlas(texture.atlas) else region:SetTexture(texture.path) end
+      region:SetVertexColor(texture.r, texture.g, texture.b, texture.a)
+    end
+    if state.mouse ~= nil and CanChangeChatLayout(region) then region:EnableMouse(state.mouse) end
+    if state.font then region:SetFont(unpack(state.font)) end
+    if state.textStyle then
+      local style = state.textStyle
+      region:SetTextColor(style[1], style[2], style[3], style[4])
+      region:SetJustifyH(style[5])
+      region:SetJustifyV(style[6])
+      region:SetWordWrap(style[7])
+    end
+    if state.points and CanChangeChatLayout(region) then
+      if state.size then region:SetSize(unpack(state.size)) end
+      region:ClearAllPoints()
+      for _, point in ipairs(state.points) do region:SetPoint(unpack(point)) end
+    end
+    if state.shown ~= nil and CanChangeChatLayout(region) then region:SetShown(state.shown) end
+  end
+end
 
 local function GetChatFrameState(chatFrame)
   local state = ChatFrameState[chatFrame]
@@ -351,294 +403,6 @@ local function GetChatEditBoxState(editBox)
   return state
 end
 
-local HISTORY_VERSION = 2
-local HISTORY_TRIM_BUFFER = 128
-
-local function ApplyChatTweaks()
-  if not ChatLinks or not ChatLinks.db or not ChatLinks.db.profile or not ChatLinks.db.profile.chatTweaks then
-    return
-  end
-
-  if InCombatLockdown() then
-    ChatLinks._puiPendingChatTweaks = true
-    return
-  end
-
-  ChatLinks._puiPendingChatTweaks = nil
-
-  local t = ChatLinks.db.profile.chatTweaks
-
-  local maxLines = tonumber(t.maxLines) or 500
-  if maxLines < 128 then maxLines = 128 end
-  if maxLines > 5000 then maxLines = 5000 end
-
-  ForEachBlizzardChatFrame(function(chatFrame)
-    if chatFrame.SetMaxLines then
-      chatFrame:SetMaxLines(maxLines)
-    end
-  end)
-end
-
-local function GetNewLog()
-  return { current = {}, version = HISTORY_VERSION, cleanIndex = 0 }
-end
-
-local function _PUI_GetPersistentHistoryDB()
-  Addon.db.global = Addon.db.global or {}
-  Addon.db.global.chatHistoryLog = Addon.db.global.chatHistoryLog or GetNewLog()
-
-  local log = Addon.db.global.chatHistoryLog
-  if type(log) ~= "table" then
-    log = GetNewLog()
-    Addon.db.global.chatHistoryLog = log
-  elseif log.version ~= HISTORY_VERSION or type(log.current) ~= "table" then
-    local current = type(log.current) == "table" and log.current or {}
-    log = {
-      current = current,
-      version = HISTORY_VERSION,
-      cleanIndex = tonumber(log.cleanIndex) or 0,
-    }
-    Addon.db.global.chatHistoryLog = log
-  end
-
-  log.cleanIndex = tonumber(log.cleanIndex) or 0
-
-  return log
-end
-
-local function _PUI_GetHistoryOptions()
-  local db = ChatLinks and ChatLinks.db and ChatLinks.db.profile
-  if not db then
-    return nil
-  end
-
-  db.chatTweaks = db.chatTweaks or {}
-
-  local t = db.chatTweaks
-  if t.persistHistory == nil then t.persistHistory = true end
-  if t.maxLines == nil then t.maxLines = 500 end
-  if t.savedLines == nil then t.savedLines = 5000 end
-  if t.scrollMessages == nil then t.scrollMessages = 3 end
-
-  return t
-end
-
-local function _PUI_CleanStore(store, index)
-  if type(store) ~= "table" then
-    return 0
-  end
-
-  if #store <= index then
-    return #store
-  end
-
-  for i = index + 1, #store do
-    local data = store[i]
-    if type(data) == "table" and type(data.text) == "string" then
-      if data.text:find("|K.-|k") or (data.typeInfo and data.typeInfo.player and type(data.typeInfo.player.name) == "string" and data.typeInfo.player.name:find("|K.-|k")) then
-        data.text = data.text:gsub("|K.-|k", "???")
-        data.text = data.text:gsub("|HBNplayer.-|h(.-)|h", "%1")
-        if data.typeInfo and data.typeInfo.player and type(data.typeInfo.player.name) == "string" then
-          data.typeInfo.player.name = data.typeInfo.player.name:gsub("|K.-|k", "UNKNOWN")
-        end
-      end
-
-      if data.text:find("censoredmessage:") then
-        data.text = data.text:gsub("|Hcensoredmessage:.-|h.-|h", "[CENSORED]")
-      end
-
-      if data.text:find("reportcensoredmessage:") then
-        data.text = data.text:gsub("|Hreportcensoredmessage:.-|h.-|h", "[???]")
-      end
-    end
-  end
-
-  return #store
-end
-
-local function _PUI_GetHistoryState()
-  if ChatLinks._puiHistoryState then
-    return ChatLinks._puiHistoryState
-  end
-
-  local log = _PUI_GetPersistentHistoryDB()
-  if not log then
-    return nil
-  end
-
-  if log.cleanIndex <= #log.current then
-    log.cleanIndex = _PUI_CleanStore(log.current, log.cleanIndex)
-  end
-
-  local state = {
-    messages = log.current,
-    messageCount = #log.current,
-    bootstrapped = false,
-  }
-
-  ChatLinks._puiHistoryState = state
-  return state
-end
-
-local function _PUI_TrimHistoryState(state, force)
-  local t = _PUI_GetHistoryOptions()
-  if not state or not t then
-    return
-  end
-
-  local limit = ClampInt(t.savedLines, 128, 20000)
-  local threshold = limit + (force and 0 or HISTORY_TRIM_BUFFER)
-  if state.messageCount <= threshold then
-    return
-  end
-
-  if InCombatLockdown() then
-    ChatLinks._puiPendingHistoryReduce = true
-    return
-  end
-
-  local oldMessages = state.messages
-  local newMessages = {}
-  local first = state.messageCount - limit + 1
-  for i = first, state.messageCount do
-    newMessages[#newMessages + 1] = oldMessages[i]
-  end
-
-  state.messages = newMessages
-  state.messageCount = #newMessages
-
-  local log = _PUI_GetPersistentHistoryDB()
-  log.current = newMessages
-  log.cleanIndex = _PUI_CleanStore(newMessages, 0)
-  ChatLinks._puiPendingHistoryReduce = nil
-end
-
-local function _PUI_AddOwnedMessage(text, r, g, b)
-  if ChatLinks.db.profile.chatTweaks.persistHistory == false then
-    return
-  end
-
-  if issecretvalue(text)
-    or issecretvalue(r)
-    or issecretvalue(g)
-    or issecretvalue(b)
-  then
-    return
-  end
-
-  if type(text) ~= "string" then
-    return
-  end
-
-  if text == "" then
-    return
-  end
-
-  local state = _PUI_GetHistoryState()
-  if not state then
-    return
-  end
-
-  local data = {
-    text = text,
-    color = { r = r or 1, g = g or 1, b = b or 1 },
-    timestamp = time(),
-  }
-
-  state.messageCount = state.messageCount + 1
-  state.messages[state.messageCount] = data
-  local log = _PUI_GetPersistentHistoryDB()
-  log.cleanIndex = _PUI_CleanStore(state.messages, log.cleanIndex)
-  _PUI_TrimHistoryState(state, false)
-end
-
-local function _PUI_ClearSavedHistory()
-  local log = _PUI_GetPersistentHistoryDB()
-  wipe(log.current)
-  log.cleanIndex = 0
-
-  ChatLinks._puiHistoryState = {
-    messages = log.current,
-    messageCount = 0,
-    bootstrapped = true,
-  }
-  ChatLinks._puiPendingHistoryReduce = nil
-end
-
-local function _PUI_GetRenderableMessages()
-  local t = _PUI_GetHistoryOptions()
-  if not t or t.persistHistory == false then
-    return {}
-  end
-
-  local state = _PUI_GetHistoryState()
-  if not state then
-    return {}
-  end
-
-  local maxLines = tonumber(t.maxLines) or 500
-  if maxLines < 1 then
-    maxLines = 1
-  end
-
-  if state.messageCount <= maxLines then
-    return state.messages
-  end
-
-  local trimmed = {}
-  for i = state.messageCount - maxLines + 1, state.messageCount do
-    trimmed[#trimmed + 1] = state.messages[i]
-  end
-
-  return trimmed
-end
-
-local function _PUI_CaptureExistingDefaultChatFrame()
-  local cf = _G.DEFAULT_CHAT_FRAME
-  if not cf or not cf.GetNumMessages or not cf.GetMessageInfo then
-    return
-  end
-
-  ChatLinks._puiHistoryCapturingStartup = true
-
-  local messageCount = cf:GetNumMessages()
-  if issecretvalue(messageCount) or type(messageCount) ~= "number" then
-    ChatLinks._puiHistoryCapturingStartup = nil
-    return
-  end
-
-  for i = 1, messageCount do
-    local text, r, g, b = cf:GetMessageInfo(i)
-    _PUI_AddOwnedMessage(text, r, g, b)
-  end
-
-  ChatLinks._puiHistoryCapturingStartup = nil
-end
-
-local function _PUI_RenderHistoryIntoDefaultFrame()
-  local cf = _G.DEFAULT_CHAT_FRAME
-  if not cf or not cf.AddMessage then
-    return
-  end
-
-  local renderMessages = _PUI_GetRenderableMessages()
-
-  ChatLinks._puiHistoryRendering = true
-
-  if cf.Clear then
-    cf:Clear()
-  end
-
-  for _, entry in ipairs(renderMessages) do
-    local color = entry.color or {}
-    cf:AddMessage(entry.text, color.r or 1, color.g or 1, color.b or 1)
-  end
-
-  ChatLinks._puiHistoryRendering = nil
-end
-
-local _PUI_InstallPersistentHistoryHook
-
 local function _PUI_IsChatRuntimeEnabled()
   local db = ChatLinks.db.profile
 
@@ -663,72 +427,10 @@ local function _PUI_RefreshChatRuntimeState()
   return ChatLinks._puiRuntimeEnabled
 end
 
-local function _PUI_BootHistoryOwner()
-  if ChatLinks._puiRuntimeEnabled ~= true or _PUI_IsChatMessagingRestricted() then
-    return
-  end
-
-  local t = _PUI_GetHistoryOptions()
-  if not t or t.persistHistory == false then
-    return
-  end
-
-  local state = _PUI_GetHistoryState()
-  if not state or state.bootstrapped then
-    return
-  end
-
-  state.bootstrapped = true
-
-  _PUI_CaptureExistingDefaultChatFrame()
-  _PUI_InstallPersistentHistoryHook()
-  _PUI_RenderHistoryIntoDefaultFrame()
-end
-
-_PUI_InstallPersistentHistoryHook = function()
-  if ChatLinks.__puiPersistentHistoryHooked then
-    return
-  end
-
-  local cf = _G.DEFAULT_CHAT_FRAME
-  if not cf then
-    return
-  end
-
-  ChatLinks.__puiPersistentHistoryHooked = true
-
-  hooksecurefunc(cf, "AddMessage", function(_, text, r, g, b)
-    if ChatLinks._puiRuntimeEnabled ~= true or _PUI_IsChatMessagingRestricted() then
-      return
-    end
-
-    if ChatLinks._puiHistoryRendering or ChatLinks._puiHistoryCapturingStartup then
-      return
-    end
-
-    _PUI_AddOwnedMessage(text, r, g, b)
-  end)
-end
-
-
 local _PUI_GetTypographyDB
 
 local function ChatProvider(AddonObj)
   local provider = {}
-
-  local _puiChatFadeQueued = false
-  local function ApplyFadeNow()
-    if _puiChatFadeQueued then
-      return
-    end
-    _puiChatFadeQueued = true
-
-    C_Timer.After(0, function()
-      _puiChatFadeQueued = false
-      ChatLinks:ApplyInitialFade()
-    end)
-  end
-
 
   local function _EnsureCopyStyleDB(db)
     db.copyWindowStyle = db.copyWindowStyle or {}
@@ -752,7 +454,6 @@ local function ChatProvider(AddonObj)
     end)
   end
 
-
   function provider:GetOptions()
     local db = ChatLinks.db.profile
     db.chatFade = db.chatFade or {}
@@ -770,8 +471,7 @@ local function ChatProvider(AddonObj)
 
     local t = db.chatTweaks
     if t.persistHistory == nil then t.persistHistory = true end
-    if t.maxLines == nil then t.maxLines = 500 end
-    if t.savedLines == nil then t.savedLines = 5000 end
+    if t.savedLines == nil then t.savedLines = 256 end
     if t.scrollMessages == nil then t.scrollMessages = 3 end
 
     local f = db.chatFormat
@@ -810,20 +510,6 @@ local function ChatProvider(AddonObj)
       end
 
       return nil
-    end
-
-    local function Clamp01(x)
-      x = tonumber(x) or 0
-      if x < 0 then x = 0 end
-      if x > 1 then x = 1 end
-      return x
-    end
-
-    local function ClampRange(x, minv, maxv)
-      x = tonumber(x) or minv
-      if x < minv then x = minv end
-      if x > maxv then x = maxv end
-      return x
     end
 
     local function TsPreview(preset)
@@ -954,26 +640,12 @@ local function ChatProvider(AddonObj)
                   return
                 end
 
-                _PUI_RefreshChatRuntimeState()
-                ChatLinks:SetUrlFiltersEnabled(
-                  ChatLinks._puiRuntimeEnabled == true and db.enableUrlCopy == true
-                )
-
-                local doReload = function()
-                  if InCombatLockdown() then
-                    Addon:Print("|cffff4444[PUI]|r Cannot reload while in combat.")
-                    return
-                  end
-                  ReloadUI()
+                if v then
+                  ChatLinks:OnEnable()
+                else
+                  ChatLinks:OnDisable()
                 end
 
-                Addon:PUI_ConfirmAction({
-                  title = "Reload required",
-                  text = "Chat changes require a reload to fully apply.",
-                  yesText = "Reload",
-                  noText = CANCEL,
-                  onYes = doReload,
-                })
               end,
             },
 
@@ -1319,147 +991,145 @@ local function ChatProvider(AddonObj)
           name = "Fade",
           order = 7,
           args = {
-            behavior = {
-              type = "group",
-              name = "Behavior",
-              inline = true,
+            fadeWindow = {
+              type = "toggle",
+              name = "Fade chat window",
+              desc = "Fade the entire chat window when you are not typing or hovering over it.",
+              order = 5,
+              disabled = IsLocked,
+              get = function() return db.chatFade.fadeWindow end,
+              set = function(_, value)
+                db.chatFade.fadeWindow = value
+                ChatLinks:UpdateChatFocusFading(ns.Flags.IsEditing)
+              end,
+            },
+            windowDelay = {
+              type = "range",
+              name = "Fade-out delay",
+              desc = "Seconds to wait after a new message, leaving the chat window, or finishing typing.",
+              order = 6,
+              min = 0,
+              max = 30,
+              step = 0.5,
+              disabled = function() return IsLocked() or not db.chatFade.fadeWindow end,
+              get = function() return db.chatFade.windowDelay end,
+              set = function(_, value)
+                db.chatFade.windowDelay = value
+                ChatLinks:UpdateChatFocusFading(ns.Flags.IsEditing)
+              end,
+            },
+            windowFadeInAlpha = {
+              type = "range",
+              name = "Fade-in opacity",
+              desc = "Chat opacity while typing, hovering, or reading a new message.",
+              order = 7,
+              min = 0,
+              max = 1,
+              step = 0.05,
+              isPercent = true,
+              disabled = function() return IsLocked() or not db.chatFade.fadeWindow end,
+              get = function() return db.chatFade.windowFadeInAlpha end,
+              set = function(_, value)
+                db.chatFade.windowFadeInAlpha = value
+                ChatLinks:UpdateChatFocusFading(ns.Flags.IsEditing)
+              end,
+            },
+            windowFadeOutAlpha = {
+              type = "range",
+              name = "Fade-out opacity",
+              desc = "Chat opacity after the fade-out delay.",
+              order = 8,
+              min = 0,
+              max = 1,
+              step = 0.05,
+              isPercent = true,
+              disabled = function() return IsLocked() or not db.chatFade.fadeWindow end,
+              get = function() return db.chatFade.windowFadeOutAlpha end,
+              set = function(_, value)
+                db.chatFade.windowFadeOutAlpha = value
+                ChatLinks:UpdateChatFocusFading(ns.Flags.IsEditing)
+              end,
+            },
+            windowFadeInDuration = {
+              type = "range",
+              name = "Fade-in duration",
+              desc = "Seconds for the chat to reach its fade-in opacity. Zero changes it instantly.",
+              order = 9,
+              min = 0,
+              max = 5,
+              step = 0.05,
+              disabled = function() return IsLocked() or not db.chatFade.fadeWindow end,
+              get = function() return db.chatFade.windowFadeInDuration end,
+              set = function(_, value)
+                db.chatFade.windowFadeInDuration = value
+                ChatLinks:UpdateChatFocusFading(ns.Flags.IsEditing)
+              end,
+            },
+            windowFadeOutDuration = {
+              type = "range",
+              name = "Fade-out duration",
+              desc = "Seconds for the chat to reach its fade-out opacity. Zero changes it instantly.",
+              order = 10,
+              min = 0,
+              max = 5,
+              step = 0.05,
+              disabled = function() return IsLocked() or not db.chatFade.fadeWindow end,
+              get = function() return db.chatFade.windowFadeOutDuration end,
+              set = function(_, value)
+                db.chatFade.windowFadeOutDuration = value
+                ChatLinks:UpdateChatFocusFading(ns.Flags.IsEditing)
+              end,
+            },
+            enabled = {
+              type = "toggle",
+              name = "Fade chat text",
+              desc = "Fade older messages after a period of inactivity.",
               order = 1,
-              args = {
-                enabled = {
-                  type = "toggle",
-                  name = "Enable fade",
-                  order = 1,
-                  disabled = function()
-                    return IsLocked()
-                  end,
-                  get = function()
-                    return not not db.chatFade.enabled
-                  end,
-                  set = function(_, v)
-                    db.chatFade.enabled = not not v
-                    ApplyFadeNow()
-                  end,
-                },
-
-                animate = {
-                  type = "toggle",
-                  name = "Animate fade",
-                  order = 2,
-                  disabled = function()
-                    return IsLocked()
-                  end,
-                  get = function()
-                    return not not db.chatFade.animate
-                  end,
-                  set = function(_, v)
-                    db.chatFade.animate = not not v
-                    ApplyFadeNow()
-                  end,
-                },
-
-                applyNow = {
-                  type = "execute",
-                  name = "Apply now",
-                  order = 3,
-                  disabled = function()
-                    return IsLocked()
-                  end,
-                  func = function()
-                    ApplyFadeNow()
-                  end,
-                },
-              },
+              disabled = IsLocked,
+              get = function() return db.chatFade.enabled end,
+              set = function(_, value)
+                db.chatFade.enabled = value
+                ChatLinks:UpdateChatFading()
+              end,
             },
-            opacity = {
-              type = "group",
-              name = "Opacity",
-              inline = true,
+            idleDelay = {
+              type = "range",
+              name = "Inactivity timer",
               order = 2,
-              args = {
-                activeAlpha = {
-                  type = "range",
-                  name = "Active background opacity",
-                  order = 4,
-                  min = 0,
-                  max = 1,
-                  step = 0.01,
-                  disabled = function()
-                    return IsLocked()
-                  end,
-                  get = function()
-                    return Clamp01(db.chatFade.activeAlpha or 0.9)
-                  end,
-                  set = function(_, val)
-                    db.chatFade.activeAlpha = Clamp01(val)
-                    ChatLinks:ChatInputActivated(_G.ChatFrame1)
-                  end,
-                },
-
-                idleAlpha = {
-                  type = "range",
-                  name = "Idle background opacity",
-                  order = 5,
-                  min = 0,
-                  max = 1,
-                  step = 0.01,
-                  disabled = function()
-                    return IsLocked()
-                  end,
-                  get = function()
-                    return Clamp01(db.chatFade.idleAlpha or 0.4)
-                  end,
-                  set = function(_, val)
-                    db.chatFade.idleAlpha = Clamp01(val)
-                    ApplyFadeNow()
-                  end,
-                },
-              },
+              min = 5,
+              max = 600,
+              softMax = 120,
+              step = 1,
+              disabled = function() return IsLocked() or not db.chatFade.enabled end,
+              get = function() return db.chatFade.idleDelay end,
+              set = function(_, value)
+                db.chatFade.idleDelay = value
+                ChatLinks:UpdateChatFading()
+              end,
             },
-            timing = {
-              type = "group",
-              name = "Timing",
-              inline = true,
+            fadeUndockedTabs = {
+              type = "toggle",
+              name = "Fade undocked tabs",
+              desc = "Show undocked tab text while hovering over the tab or chat window.",
               order = 3,
-              args = {
-                idleDelay = {
-                  type = "range",
-                  name = "Idle delay",
-                  order = 6,
-                  min = 0,
-                  max = 60,
-                  step = 1,
-                  disabled = function()
-                    return IsLocked()
-                  end,
-                  get = function()
-                    return ClampRange(db.chatFade.idleDelay or 10, 0, 60)
-                  end,
-                  set = function(_, val)
-                    db.chatFade.idleDelay = ClampRange(val, 0, 60)
-                    ApplyFadeNow()
-                  end,
-                },
-
-                fadeDuration = {
-                  type = "range",
-                  name = "Background fade time",
-                  order = 7,
-                  min = 0,
-                  max = 5,
-                  step = 0.05,
-                  disabled = function()
-                    return IsLocked()
-                  end,
-                  get = function()
-                    return ClampRange(db.chatFade.fadeDuration or 1.25, 0, 5)
-                  end,
-                  set = function(_, val)
-                    db.chatFade.fadeDuration = ClampRange(val, 0, 5)
-                    ApplyFadeNow()
-                  end,
-                },
-
-              },
+              disabled = IsLocked,
+              get = function() return db.chatFade.fadeUndockedTabs end,
+              set = function(_, value)
+                db.chatFade.fadeUndockedTabs = value
+                ChatLinks:RefreshChatTabs()
+              end,
+            },
+            fadeTabsNoBackdrop = {
+              type = "toggle",
+              name = "Fade tabs without a background",
+              desc = "Show docked tab text on hover when the chat background is transparent.",
+              order = 4,
+              disabled = IsLocked,
+              get = function() return db.chatFade.fadeTabsNoBackdrop end,
+              set = function(_, value)
+                db.chatFade.fadeTabsNoBackdrop = value
+                ChatLinks:RefreshChatTabs()
+              end,
             },
           },
         },
@@ -1482,53 +1152,55 @@ local function ChatProvider(AddonObj)
               set = function(_, v)
                 t.persistHistory = not not v
                 if t.persistHistory then
-                  _PUI_BootHistoryOwner()
+                  ChatLinks:StartChatHistory()
+                else
+                  ChatLinks:StopChatHistory()
                 end
-              end,
-            },
-
-            maxLines = {
-              type = "range",
-              name = "Max visible chat lines",
-              order = 2,
-              min = 128,
-              max = 5000,
-              step = 64,
-              disabled = function()
-                return IsLocked()
-              end,
-              get = function()
-                return tonumber(t.maxLines) or 500
-              end,
-              set = function(_, v)
-                t.maxLines = math.floor(tonumber(v) or 500)
-                ApplyChatTweaks()
               end,
             },
 
             savedLines = {
               type = "range",
-              name = "Saved history lines",
+              name = "History lines",
+              desc = "Maximum saved messages. Chat scrollback grows to fit this limit.",
               order = 3,
-              min = 128,
-              max = 20000,
-              step = 128,
+              min = 10,
+              max = 5000,
+              step = 1,
               disabled = function()
                 return IsLocked() or t.persistHistory == false
               end,
               get = function()
-                return ClampInt(t.savedLines, 128, 20000)
+                return ClampInt(t.savedLines, 10, 5000)
               end,
               set = function(_, value)
-                t.savedLines = ClampInt(value, 128, 20000)
-                _PUI_TrimHistoryState(_PUI_GetHistoryState(), true)
+                t.savedLines = ClampInt(value, 10, 5000)
+                ChatLinks:StartChatHistory()
+                ChatLinks:QueueChatVisualRefresh()
+              end,
+            },
+
+            historyTypes = {
+              type = "multiselect",
+              name = "History types",
+              desc = "Save and restore these chat types.",
+              order = 4,
+              values = ChatLinks.ChatHistoryTypes,
+              disabled = function()
+                return IsLocked() or t.persistHistory == false
+              end,
+              get = function(_, category)
+                return t.historyTypes[category]
+              end,
+              set = function(_, category, enabled)
+                t.historyTypes[category] = enabled
               end,
             },
 
             scrollMessages = {
               type = "range",
               name = "Mouse wheel lines",
-              order = 4,
+              order = 5,
               min = 1,
               max = 12,
               step = 1,
@@ -1544,7 +1216,7 @@ local function ChatProvider(AddonObj)
             clearHistory = {
               type = "execute",
               name = "Clear saved history",
-              order = 5,
+              order = 6,
               disabled = function()
                 return IsLocked() or t.persistHistory == false
               end,
@@ -1555,7 +1227,7 @@ local function ChatProvider(AddonObj)
                   yesText = "Clear",
                   noText = CANCEL,
                   onYes = function()
-                    _PUI_ClearSavedHistory()
+                    ChatLinks:ClearChatHistory()
                     ChatLinks:RefreshCopyWindow()
                   end,
                 })
@@ -1663,139 +1335,44 @@ Addon:RegisterOptionsSection("Chat", ChatProvider, 60, "Chat", nil, {
   preview = false,
 })
 
-
-
-
-local InitializePrimaryChatLayout
-local FlushPendingChatUpdates
-local ChatLayoutReady = false
-local ChatUpdatesQueued = false
-local ChatTweaksBoot = CreateFrame("Frame", "PleebUI_ChatTweaksBoot")
-local ChatWindowEvents = {
-  "UPDATE_CHAT_WINDOWS",
-  "UPDATE_FLOATING_CHAT_WINDOWS",
-  "CHAT_MSG_WHISPER",
-  "CHAT_MSG_WHISPER_INFORM",
-  "CHAT_MSG_BN_WHISPER",
-  "CHAT_MSG_BN_WHISPER_INFORM",
-}
-
-local function QueueChatUpdates()
-  if ChatLinks._puiRuntimeEnabled ~= true or ChatUpdatesQueued then
-    return
-  end
-
-  ChatUpdatesQueued = true
-  ChatTweaksBoot:SetScript("OnUpdate", FlushPendingChatUpdates)
-end
-
-local function QueuePrimaryChatLayout()
-  ChatLinks._puiPendingPrimaryChatLayout = true
-  QueueChatUpdates()
-end
-
-ChatTweaksBoot:RegisterEvent("PLAYER_ENTERING_WORLD")
-ChatTweaksBoot:RegisterEvent("PLAYER_LOGIN")
-ChatTweaksBoot:RegisterEvent("PLAYER_REGEN_ENABLED")
-ChatTweaksBoot:RegisterEvent("LOADING_SCREEN_DISABLED")
-ChatTweaksBoot:SetScript("OnEvent", function(_, event)
-  if event == "PLAYER_ENTERING_WORLD" then
-    if _PUI_RefreshChatRuntimeState() then
-      ChatLinks._puiPendingPrimaryChatLayout = true
-      ChatLinks:QueueChatFrameRefresh()
-    end
-    return
-  end
-
-  if event == "PLAYER_LOGIN" then
-    if _PUI_RefreshChatRuntimeState() then
-      _PUI_BootHistoryOwner()
-    end
-    return
-  end
-
-  if event == "LOADING_SCREEN_DISABLED" then
-    ChatLayoutReady = true
-    if ChatLinks._puiRuntimeEnabled == true then
-      ChatLinks._puiPendingPrimaryChatLayout = true
-      ChatLinks:QueueChatFrameRefresh()
-    end
-    return
-  end
-
-  if event == "PLAYER_REGEN_ENABLED" then
-    if ChatLinks._puiRuntimeEnabled == true then
-      _PUI_BootHistoryOwner()
-      if ChatLinks._puiPendingPrimaryChatBind then
-        ChatLinks._puiPendingPrimaryChatLayout = true
-      end
-      if ChatLinks._puiPendingPrimaryChatLayout
-        or ChatLinks._puiPendingChatTweaks
-        or ChatLinks._puiPendingChatSideButtons
-      then
-        QueueChatUpdates()
-      end
-    end
-
-    if ChatLinks._puiPendingHistoryReduce then
-      ChatLinks._puiPendingHistoryReduce = nil
-      if ChatLinks._puiRuntimeEnabled ~= true then
-        return
-      end
-      _PUI_TrimHistoryState(_PUI_GetHistoryState(), true)
-    end
-    return
-  end
-
-  -- Whisper notifications only request discovery; their payload stays unused.
-  ChatLinks:QueueChatFrameRefresh()
-end)
-
-
-local URL_PROTOCOL_REPLACEMENT = "|cff00ccff|Haddon:pleebuiurl:%1|h[%1]|h|r"
-local URL_HTTP_REPLACEMENT = "|cff00ccff|Haddon:pleebuiurl:http://%1|h[%1]|h|r"
-local URL_HTTPS_REPLACEMENT = "|cff00ccff|Haddon:pleebuiurl:https://%1|h[%1]|h|r"
-local URL_MAILTO_REPLACEMENT = "|cff00ccff|Haddon:pleebuiurl:mailto:%1|h[%1]|h|r"
-
+local ApplyPrimaryChatLayout
 local _PUI_OnSetItemRef
 
-local function _SafeLinkify(msg, hasProtocol, hasWWW, hasDiscord, hasEmail, hasBareDomain)
-  local s = msg
-
-  if hasProtocol then
-    s = s:gsub("%f[%S]([%a][%w+.-]*://%S+)", URL_PROTOCOL_REPLACEMENT)
-  end
-
-  if hasWWW then
-    s = s:gsub("%f[%S](www%.[-%w_%%]+%.[%a%a]+/%S+)", URL_HTTP_REPLACEMENT)
-    s = s:gsub("%f[%S](www%.[-%w_%%]+%.[%a%a]+)", URL_HTTP_REPLACEMENT)
-  end
-
-  if hasDiscord then
-    s = s:gsub("%f[%S](discord%.gg/%S+)", URL_HTTPS_REPLACEMENT)
-  end
-
-  if hasEmail then
-    s = s:gsub("%f[%S]([%w%._%%%-]+@[%w%._%%%-]+%.[%a%a]+)", URL_MAILTO_REPLACEMENT)
-  end
-
-  if hasBareDomain then
-    s = s:gsub("%f[%S]([-%w_%%]+%.[%a%a]+/%S+)", URL_HTTP_REPLACEMENT)
-  end
-
-  return s
+local function LinkifyChatURLs(message)
+  local linked = message:gsub("%S+", function(word)
+    if word:find("|", 1, true) then
+      return word
+    end
+    local url
+    if word:match("^[%a][%w+.-]*://") then
+      url = word
+    elseif word:match("^www%.") then
+      url = "http://" .. word
+    elseif word:match("^discord%.gg/") then
+      url = "https://" .. word
+    elseif word:match("^[%w%._%%%-]+@[%w%._%%%-]+%.%a+$") then
+      url = "mailto:" .. word
+    elseif word:match("^[-%w_%%]+%.%a+/") then
+      url = "http://" .. word
+    end
+    if url then
+      return "|cff00ccff|Haddon:pleebuiurl:" .. url .. "|h[" .. word .. "]|h|r"
+    end
+    return word
+  end)
+  return linked
 end
 
 local function _PUI_UrlMessageFilter(chatFrame, _, msg, ...)
   if ChatLinks._puiRuntimeEnabled ~= true
     or ChatLinks.db.profile.enableUrlCopy ~= true
-    or _PUI_IsChatMessagingRestricted()
+    or not canaccessallvalues(chatFrame, _G.ChatFrame2)
     or chatFrame == _G.ChatFrame2
   then
     return
   end
 
-  if not _PUI_AreChatArgumentsAccessible(msg, ...) or type(msg) ~= "string" then
+  if C_ChatInfo.InChatMessagingLockdown() or not canaccessvalue(msg) or type(msg) ~= "string" then
     return
   end
 
@@ -1806,13 +1383,13 @@ local function _PUI_UrlMessageFilter(chatFrame, _, msg, ...)
   local hasBareDomain = false
 
   if msg:find(".", 1, true) and msg:find("/", 1, true) then
-    hasBareDomain = msg:find("%f[%S][-%w_%%]+%.[%a%a]+/%S+") ~= nil
+    hasBareDomain = msg:find("%f[%w][-%w_%%]+%.%a+/%S+") ~= nil
   end
 
   if (hasProtocol or hasWWW or hasDiscord or hasEmail or hasBareDomain)
     and not msg:find("|Haddon:pleebuiurl:", 1, true)
   then
-    return false, _SafeLinkify(msg, hasProtocol, hasWWW, hasDiscord, hasEmail, hasBareDomain), ...
+    return false, LinkifyChatURLs(msg), ...
   end
 end
 
@@ -1842,8 +1419,6 @@ function ChatLinks:SetUrlFiltersEnabled(enabled)
   end
 end
 
-
-
 local function _PUI_CF_GetFormatDB()
   local db = ChatLinks.db.profile
   db.chatFormat = db.chatFormat or {}
@@ -1857,7 +1432,6 @@ local function _PUI_CF_GetFormatDB()
 
   return f
 end
-
 
 local function _PUI_CF_SetShowTimestamps(fmt)
   -- Blizzard shows the timestamp prefix before the name/prefix.
@@ -1889,7 +1463,6 @@ function ChatLinks:ApplyChatFormatting()
   _PUI_CF_SetShowTimestamps(fmt)
 end
 
-
 local UrlPopupFrame
 local UrlPopupEditBox
 
@@ -1913,7 +1486,6 @@ local function EnsureUrlPopupFrame()
   f:SetScript("OnDragStop",  f.StopMovingOrSizing)
 
   ns.Theme.WidgetSkins.Frame(f)
-
 
   local title = f:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
   title:SetPoint("TOPLEFT", 16, -16)
@@ -1940,7 +1512,6 @@ local function EnsureUrlPopupFrame()
 
   ns.Theme.WidgetSkins.UIButton(btn)
 
-
   btn:SetScript("OnClick", function()
     f:Hide()
   end)
@@ -1965,12 +1536,11 @@ end
 _PUI_OnSetItemRef = function(_, link)
   if ChatLinks._puiRuntimeEnabled ~= true
     or ChatLinks.db.profile.enableUrlCopy ~= true
-    or _PUI_IsChatMessagingRestricted()
   then
     return
   end
 
-  if issecretvalue(link) or type(link) ~= "string" then
+  if not canaccessvalue(link) or type(link) ~= "string" then
     return
   end
 
@@ -2026,6 +1596,7 @@ local function _PUI_SkinTypographyFont(fontObject, area)
     return
   end
 
+  SaveNativeVisual(fontObject)
   local fontPath, outline = _PUI_GetTypographyFont(area)
   fontObject:SetFont(fontPath, currentSize, outline)
 end
@@ -2036,7 +1607,7 @@ local function _PUI_ApplyTypographyToChatFrame(chatFrame)
   _PUI_SkinTypographyFont(chatFrame, typography.message)
 
   local name = chatFrame.GetName and chatFrame:GetName()
-  if not chatFrame.isDocked and not _PUI_IsTemporaryChatFrame(chatFrame) then
+  if canaccessvalue(chatFrame.isDocked) and not chatFrame.isDocked and not _PUI_IsTemporaryChatFrame(chatFrame) then
     local tab = chatFrame.tab or (name and _G[name .. "Tab"])
     local tabText = tab and (tab.Text or tab.text or (tab.GetFontString and tab:GetFontString()))
     _PUI_SkinTypographyFont(tabText, typography.tab)
@@ -2062,7 +1633,7 @@ function ChatLinks:RefreshFonts()
     return
   end
 
-  self:ApplyChatTypography()
+  self:QueueChatVisualRefresh()
 end
 
 local CopyFrame
@@ -2079,13 +1650,13 @@ local function GetChatFrameLines(chatFrame)
 
   local out = {}
   local num = chatFrame:GetNumMessages()
-  if issecretvalue(num) or type(num) ~= "number" then
+  if not canaccessvalue(num) or type(num) ~= "number" then
     return out
   end
 
   for i = 1, num do
     local msg = chatFrame:GetMessageInfo(i)
-    if not issecretvalue(msg) and type(msg) == "string" then
+    if canaccessvalue(msg) and type(msg) == "string" and not msg:find("|K", 1, true) then
       out[#out + 1] = msg
     end
   end
@@ -2133,7 +1704,6 @@ function ChatLinks:RefreshCopyWindow()
   end
 end
 
-
 local function _GetCopyStyle()
   local db = ChatLinks.db.profile
 
@@ -2167,14 +1737,12 @@ local _ApplyBackdropStyle
 local _ApplyDirectChatShellBackdrop
 
 function ChatLinks:ApplyChatWindowStyle()
-  if self._puiRuntimeEnabled ~= true or _PUI_IsChatMessagingRestricted() then
+  if self._puiRuntimeEnabled ~= true then
     return
   end
 
   self:RefreshChatFrames()
 end
-
-
 
 local function _PUI_GetBackdropTarget(frame)
   if not frame then
@@ -2224,7 +1792,6 @@ local function _ApplyBorderSize(frame, borderSize)
     frame:SetBackdropBorderColor(c[1], c[2], c[3], c[4])
   end
 end
-
 
 _ApplyBackdropStyle = function(frame, style)
   frame = _PUI_GetBackdropTarget(frame)
@@ -2347,42 +1914,12 @@ _ApplyDirectChatShellBackdrop = function(frame, style, preset)
   _PUI_ApplyTextureBackdrop(frame, bg, br, edgeSize)
 end
 
-local function _DisableChatButtonFrame(chatFrame)
-  if not chatFrame then
-    return
-  end
-
-  local buttonFrame = chatFrame.buttonFrame
-    or (chatFrame.GetName and _G[chatFrame:GetName() .. "ButtonFrame"])
-    or nil
-
-  if not buttonFrame then
-    return
-  end
-
-  if buttonFrame.EnableMouse then
-    buttonFrame:EnableMouse(false)
-  end
-
-  if buttonFrame.minimizeButton and buttonFrame.minimizeButton.SetAlpha then
-    buttonFrame.minimizeButton:SetAlpha(0)
-    buttonFrame.minimizeButton:EnableMouse(false)
-  end
-
-  if buttonFrame.SetAlpha then
-    buttonFrame:SetAlpha(0)
-  end
-end
-
-
-
 function ChatLinks:ApplyCopyWindowStyle()
   local style = _GetCopyStyle()
   _ApplyBackdropStyle(CopyFrame, style)
   _ApplyBackdropStyle(CopyEditBox, style)
   _ApplyBackdropStyle(CopySearchBox, style)
 end
-
 
 local function SaveCopyFramePosition(f)
   local db = ChatLinks.db and ChatLinks.db.profile
@@ -2411,7 +1948,6 @@ local function SaveCopyFramePosition(f)
   end
 end
 
-
 local function ApplyCopyFramePosition(f)
   local cfg
   if ChatLinks.db and ChatLinks.db.profile then
@@ -2438,7 +1974,6 @@ local function ApplyCopyFramePosition(f)
   f:ClearAllPoints()
   f:SetPoint(point, rel, relPt, x, y)
 end
-
 
 local function _RegisterAsSpecialFrame(frameName)
   if not frameName or frameName == "" or not UISpecialFrames then
@@ -2590,7 +2125,7 @@ end
       yesText = "Clear",
       noText = CANCEL,
       onYes = function()
-        _PUI_ClearSavedHistory()
+        ChatLinks:ClearChatHistory()
       end,
     })
   end)
@@ -2601,14 +2136,12 @@ end
   CopyCountText:SetText("0 of 0 lines")
   Theme.ApplyFont(CopyCountText, "body", 11)
 
-
   -- ScrollFrame + EditBox
   local scroll = CreateFrame("ScrollFrame", "PleebUIChatCopyScrollFrame", CopyFrame, "UIPanelScrollFrameTemplate")
   scroll:SetPoint("TOPLEFT", 16, -78)
   scroll:SetPoint("BOTTOMRIGHT", -30, 16)
 
   ns.Theme.WidgetSkins.Scrollbar(scroll)
-
 
   CopyEditBox = CreateFrame("EditBox", "PleebUIChatCopyEditBox", scroll, "BackdropTemplate")
   CopyEditBox:SetMultiLine(true)
@@ -2628,10 +2161,8 @@ end
 
   scroll:SetScrollChild(CopyEditBox)
 
-
   -- Apply custom Copy window style (bg/border/borderSize)
   ChatLinks:ApplyCopyWindowStyle()
-
 
   -- Position from DB (and allow normal dragging outside Edit Mode without any mover)
   ApplyCopyFramePosition(CopyFrame)
@@ -2642,6 +2173,17 @@ local PRIMARY_CHAT_MOVER_RIGHT_INSET = 23
 local PRIMARY_CHAT_MOVER_TOP_INSET = 27
 local PRIMARY_CHAT_MOVER_BOTTOM_INSET = 34
 local PRIMARY_CHAT_RESIZE_IDLE_ALPHA = 0.18
+
+local BindPrimaryChatFrame
+
+local function PositionAddonPointFromFrame(visual, target, point, xOffset, yOffset)
+  if not visual or not target then
+    return false
+  end
+  visual:ClearAllPoints()
+  visual:SetPoint(point, target, point, xOffset or 0, yOffset or 0)
+  return true
+end
 
 local function EnsurePrimaryChatHolder()
   local holder = ChatLinks._primaryChatHolder
@@ -2672,6 +2214,11 @@ local function ApplyPrimaryChatHolderLayout(db)
 
   local holder = EnsurePrimaryChatHolder()
 
+  if not CanChangeChatLayout(holder) or not CanChangeChatLayout(_G.ChatFrame1) then
+    ChatLinks._puiPendingPrimaryChatBind = true
+    return holder
+  end
+
   local point      = cfg.point or "BOTTOMLEFT"
   local relName    = cfg.relativeTo or "UIParent"
   local relFrame   = _G[relName] or UIParent
@@ -2691,16 +2238,16 @@ local function ApplyPrimaryChatHolderLayout(db)
   holder:ClearAllPoints()
   holder:SetPoint(point, relFrame, relPoint, x, y)
   holder:SetSize(Round(tonumber(cfg.width) or 430), Round(tonumber(cfg.height) or 180))
+  BindPrimaryChatFrame(holder, _G.ChatFrame1)
   return holder
 end
 
-local function BindPrimaryChatFrame(holder, chatFrame)
-  if not holder or not chatFrame then
-    return
+BindPrimaryChatFrame = function(holder, chatFrame)
+  if ChatLinks._puiRuntimeEnabled ~= true or not holder or not chatFrame then
+    return false
   end
 
-  -- Blizzard's initial dock layout must settle before we own this rect.
-  if not ChatLayoutReady or InCombatLockdown() then
+  if not ChatLinks:IsChatLayoutReady() or not CanChangeChatLayout(chatFrame) then
     ChatLinks._puiPendingPrimaryChatBind = true
     return false
   end
@@ -2711,10 +2258,12 @@ local function BindPrimaryChatFrame(holder, chatFrame)
   chatFrame:SetClampRectInsets(0, 0, 0, 0)
   chatFrame:SetClampedToScreen(false)
   ChatLinks._puiPendingPrimaryChatBind = nil
+
+  return true
 end
 
 -- This is the only lifecycle path that writes Blizzard chat-frame anchors.
-InitializePrimaryChatLayout = function()
+ApplyPrimaryChatLayout = function()
   if ChatLinks._puiRuntimeEnabled ~= true then
     return
   end
@@ -2724,10 +2273,8 @@ InitializePrimaryChatLayout = function()
     return
   end
 
-  local holder = ApplyPrimaryChatHolderLayout(db)
-  BindPrimaryChatFrame(holder, _G.ChatFrame1)
+  ApplyPrimaryChatHolderLayout(db)
 end
-
 
 local function GetPrimaryChatMoverInsets(holder)
   if not holder then
@@ -2763,55 +2310,6 @@ local function SavePrimaryChatLayout(holder)
   cfg.y = Round(y or 0)
   cfg.width = ClampInt(holder:GetWidth(), 220, 1000)
   cfg.height = ClampInt(holder:GetHeight(), 100, 700)
-end
-
-local function StopPrimaryChatMove()
-  if ChatLinks._primaryChatMoving ~= true then
-    return
-  end
-
-  ChatLinks._primaryChatMoving = nil
-
-  local holder = ChatLinks._primaryChatHolder
-  if holder then
-    holder:StopMovingOrSizing()
-    SavePrimaryChatLayout(holder)
-    ApplyPrimaryChatHolderLayout(ChatLinks.db.profile)
-  end
-end
-
-local function StartPrimaryChatMove()
-  if ChatLinks._puiRuntimeEnabled ~= true or ns.Flags.IsEditing or InCombatLockdown() then
-    return
-  end
-
-  local holder = ChatLinks._primaryChatHolder
-  if not holder then
-    return
-  end
-
-  ChatLinks._primaryChatMoving = true
-  holder:StartMoving()
-end
-
-local function EnablePrimaryChatTabDragging(tab, chatFrame)
-  if chatFrame ~= _G.ChatFrame1 or not tab then
-    return
-  end
-
-  local state = GetChatTabState(tab)
-  if state.primaryDragHooked then
-    return
-  end
-
-  state.primaryDragHooked = true
-  tab:HookScript("OnDragStart", function(_, button)
-    if button == "LeftButton" then
-      StartPrimaryChatMove()
-    end
-  end)
-  tab:HookScript("OnDragStop", StopPrimaryChatMove)
-  tab:HookScript("OnHide", StopPrimaryChatMove)
 end
 
 local function StopPrimaryChatResize()
@@ -2947,7 +2445,6 @@ local function SetPrimaryChatResizeHandleShown(show)
   end
 end
 
-
 local function RegisterPrimaryChatMover()
   local db = ChatLinks.db and ChatLinks.db.profile
   if not db then
@@ -3047,6 +2544,7 @@ local function RegisterPrimaryChatMover()
 end
 
 function ChatLinks:OnEditModeChanged(enable)
+  self:UpdateChatFocusFading(enable)
   if enable then
     RegisterPrimaryChatMover()
   else
@@ -3054,184 +2552,8 @@ function ChatLinks:OnEditModeChanged(enable)
   end
 end
 
-local C_Timer = C_Timer
-
-local function _PUI_ForEachChatVisual(chatFrame, callback)
-  if not chatFrame then
-    return
-  end
-
-  local frameState = GetChatFrameState(chatFrame)
-  local editBox = chatFrame.editBox
-  local editState = editBox and GetChatEditBoxState(editBox)
-
-  for _, visual in ipairs({
-    frameState.shell,
-    editState and editState.inputBar,
-    frameState.copyButton,
-    frameState.toolsButton,
-  }) do
-    if visual then
-      callback(visual)
-    end
-  end
-end
-
--- Internal: set alpha on the primary chat frame + its shell if present.
-function ChatLinks:_SetChatVisualAlpha(chatFrame, alpha)
-  if not chatFrame or alpha == nil then
-    return
-  end
-
-  _PUI_ForEachChatVisual(chatFrame, function(visual)
-    visual:SetAlpha(alpha)
-  end)
-
-  self._chatAlphaCurrent = alpha
-end
-
-function ChatLinks:_CancelFadeTimers()
-  if self._chatFadeTimer then
-    self._chatFadeTimer:Cancel()
-    self._chatFadeTimer = nil
-  end
-
-  _PUI_ForEachChatVisual(_G.ChatFrame1, function(visual)
-    local animationGroup = visual._puiChatFadeAnimation
-    if animationGroup and animationGroup:IsPlaying() then
-      animationGroup:Stop()
-    end
-  end)
-end
-
-function ChatLinks:_AnimateChatVisualAlpha(chatFrame, fromAlpha, toAlpha, duration)
-  if not chatFrame then
-    return
-  end
-
-  self:_CancelFadeTimers()
-
-  duration = tonumber(duration) or 0
-  if duration <= 0 then
-    self:_SetChatVisualAlpha(chatFrame, toAlpha)
-    return
-  end
-
-  _PUI_ForEachChatVisual(chatFrame, function(visual)
-    local animationGroup = visual._puiChatFadeAnimation
-    local alphaAnimation
-    if not animationGroup then
-      animationGroup = visual:CreateAnimationGroup()
-      alphaAnimation = animationGroup:CreateAnimation("Alpha")
-      visual._puiChatFadeAnimation = animationGroup
-      visual._puiChatFadeAlpha = alphaAnimation
-      animationGroup:SetScript("OnFinished", function()
-        visual:SetAlpha(visual._puiChatFadeTarget or 1)
-      end)
-    else
-      alphaAnimation = visual._puiChatFadeAlpha
-    end
-
-    visual._puiChatFadeTarget = toAlpha
-    visual:SetAlpha(1)
-    alphaAnimation:SetFromAlpha(fromAlpha)
-    alphaAnimation:SetToAlpha(toAlpha)
-    alphaAnimation:SetDuration(duration)
-    animationGroup:Play()
-  end)
-
-  self._chatAlphaCurrent = toAlpha
-end
-
-function ChatLinks:_ScheduleIdleVisualFade(chatFrame)
-  local db = self.db.profile.chatFade
-  if not db.enabled then return end
-  if not chatFrame then return end
-
-  if self._chatFadeTimer then
-    self._chatFadeTimer:Cancel()
-    self._chatFadeTimer = nil
-  end
-
-  local delay = tonumber(db.idleDelay) or 15
-  self._chatFadeTimer = C_Timer.NewTimer(delay, function()
-    self._chatFadeTimer = nil
-
-    local toAlpha = tonumber(db.idleAlpha) or 0.4
-    if db.animate then
-      local fromAlpha = self._chatAlphaCurrent
-      if fromAlpha == nil then
-        fromAlpha = tonumber(db.activeAlpha) or 1.0
-      end
-
-      local duration = tonumber(db.fadeDuration) or 0
-      self:_AnimateChatVisualAlpha(chatFrame, fromAlpha, toAlpha, duration)
-    else
-      self:_SetChatVisualAlpha(chatFrame, toAlpha)
-    end
-  end)
-end
-
-function ChatLinks:ChatInputActivated(chatFrame)
-  local db = self.db.profile.chatFade
-  if not db.enabled then return end
-  if not chatFrame or chatFrame ~= _G.ChatFrame1 then return end
-
-  self:_CancelFadeTimers()
-  self:_SetChatVisualAlpha(chatFrame, tonumber(db.activeAlpha) or 1.0)
-end
-
-function ChatLinks:ChatInputDeactivated(chatFrame)
-  local db = self.db.profile.chatFade
-  if not db.enabled then return end
-  if not chatFrame or chatFrame ~= _G.ChatFrame1 then return end
-
-  self:_ScheduleIdleVisualFade(chatFrame)
-end
-
-function ChatLinks:ApplyInitialFade()
-  local cf = _G.ChatFrame1
-  local db = self.db.profile.chatFade
-
-  self:_CancelFadeTimers()
-
-  if not cf then
-    return
-  end
-
-  self:_SetChatVisualAlpha(cf, tonumber(db.activeAlpha) or 1.0)
-
-  if not db.enabled then
-    return
-  end
-
-  self:_ScheduleIdleVisualFade(cf)
-end
-
 function ChatLinks:OpenCopyWindow(chatFrame)
-  if _PUI_IsChatMessagingRestricted() then
-    if InCombatLockdown() then
-      self._pendingCopyOpenFrame = chatFrame or _G.DEFAULT_CHAT_FRAME
-
-      if not self._pendingCopyOpenHooked then
-        self._pendingCopyOpenHooked = true
-        self:RegisterEvent("PLAYER_REGEN_ENABLED", function()
-          local f = self._pendingCopyOpenFrame
-          self._pendingCopyOpenFrame = nil
-
-          if self._pendingCopyOpenHooked then
-            self._pendingCopyOpenHooked = nil
-            self:UnregisterEvent("PLAYER_REGEN_ENABLED")
-          end
-
-          self:OpenCopyWindow(f)
-        end)
-      end
-
-      Addon:Print("Copy Chat is blocked in combat. It will open when combat ends.")
-    else
-      Addon:Print("Copy Chat is blocked by encounter chat restrictions.")
-    end
+  if self._puiRuntimeEnabled ~= true or self.db.profile.enableCopyFrame ~= true then
     return
   end
 
@@ -3247,91 +2569,7 @@ function ChatLinks:OpenCopyWindow(chatFrame)
   CopyFrame:Show()
 end
 
-
-
 -- Chat frame shell, tabs, side buttons and copy button wiring.
-
-local function SetChatVisualFrameLevel(visual, chatWidget)
-  local level = chatWidget:GetFrameLevel()
-  if canaccessvalue(level) then
-    visual:SetFrameLevel(math.max(0, level - 1))
-  end
-end
-
--- Chat input background bar behind the edit box (so the input does not float).
-local function EnsureChatInputBar(editBox)
-  if not editBox then return end
-
-  local state = GetChatEditBoxState(editBox)
-  local bg = state.inputBar
-  if not bg then
-    bg = CreateFrame("Frame", nil, UIParent)
-    bg:EnableMouse(false)
-    state.inputBar = bg
-  end
-
-  bg:ClearAllPoints()
-  bg:SetPoint("TOPLEFT", editBox, "TOPLEFT", 0, 0)
-  bg:SetPoint("BOTTOMRIGHT", editBox, "BOTTOMRIGHT", 0, 0)
-
-  if bg.SetFrameStrata and editBox.GetFrameStrata then
-    bg:SetFrameStrata(editBox:GetFrameStrata())
-  end
-  SetChatVisualFrameLevel(bg, editBox)
-
-  bg:SetShown(editBox:IsShown())
-
-  local colors = ns.Theme.GetColors()
-  _PUI_ApplyTextureBackdrop(bg, colors.control, colors.border, ns.Theme.GetEdgeSize())
-end
-
-local ChatEditBoxCallbacksInstalled = false
-
-local function EnsureChatEditBoxCallbacks()
-  if ChatEditBoxCallbacksInstalled then
-    return
-  end
-
-  ChatEditBoxCallbacksInstalled = true
-
-  EventRegistry:RegisterCallback("ChatFrame.OnEditBoxShow", function(_, editBox)
-    local state = ChatEditBoxState[editBox]
-    if state and state.inputBar then
-      state.inputBar:Show()
-    end
-  end, "PleebUI_Chat_EditBoxShow")
-
-  EventRegistry:RegisterCallback("ChatFrame.OnEditBoxHide", function(_, editBox)
-    local state = ChatEditBoxState[editBox]
-    if state and state.inputBar then
-      state.inputBar:Hide()
-    end
-  end, "PleebUI_Chat_EditBoxHide")
-
-  EventRegistry:RegisterCallback("ChatFrame.OnEditBoxFocusGained", function(_, editBox)
-    if editBox == _G.ChatFrame1EditBox then
-      ChatLinks:ChatInputActivated(_G.ChatFrame1)
-    end
-  end, "PleebUI_Chat_EditBoxFocusGained")
-
-  EventRegistry:RegisterCallback("ChatFrame.OnEditBoxFocusLost", function(_, editBox)
-    if editBox == _G.ChatFrame1EditBox then
-      ChatLinks:ChatInputDeactivated(_G.ChatFrame1)
-    end
-  end, "PleebUI_Chat_EditBoxFocusLost")
-end
-
-local function RemoveChatEditBoxCallbacks()
-  if not ChatEditBoxCallbacksInstalled then
-    return
-  end
-
-  ChatEditBoxCallbacksInstalled = false
-  EventRegistry:UnregisterCallback("ChatFrame.OnEditBoxShow", "PleebUI_Chat_EditBoxShow")
-  EventRegistry:UnregisterCallback("ChatFrame.OnEditBoxHide", "PleebUI_Chat_EditBoxHide")
-  EventRegistry:UnregisterCallback("ChatFrame.OnEditBoxFocusGained", "PleebUI_Chat_EditBoxFocusGained")
-  EventRegistry:UnregisterCallback("ChatFrame.OnEditBoxFocusLost", "PleebUI_Chat_EditBoxFocusLost")
-end
 
 -- Skin the chat edit box (bottom input)
 local function SkinChatEditBox(chatFrame)
@@ -3344,8 +2582,9 @@ local function SkinChatEditBox(chatFrame)
     return
   end
 
-  EnsureChatEditBoxCallbacks()
-  EnsureChatInputBar(editBox)
+  local colors = ns.Theme.GetColors()
+  _PUI_ApplyTextureBackdrop(editBox, colors.control, colors.border, ns.Theme.GetEdgeSize())
+  editBox._puiTextureBackdrop.fill:Show()
 
   local state = GetChatEditBoxState(editBox)
   if state.skinned then
@@ -3358,22 +2597,27 @@ local function SkinChatEditBox(chatFrame)
   for _, suffix in ipairs({ "EditBoxLeft", "EditBoxRight", "EditBoxMid" }) do
     local tex = _G[name .. suffix]
     if tex and tex.SetAlpha then
+      SaveNativeVisual(tex)
       tex:SetAlpha(0)
     end
   end
 
   if editBox.focusLeft and editBox.focusLeft.SetAlpha then
+    SaveNativeVisual(editBox.focusLeft)
     editBox.focusLeft:SetAlpha(0)
   end
   if editBox.focusRight and editBox.focusRight.SetAlpha then
+    SaveNativeVisual(editBox.focusRight)
     editBox.focusRight:SetAlpha(0)
   end
   if editBox.focusMid and editBox.focusMid.SetAlpha then
+    SaveNativeVisual(editBox.focusMid)
     editBox.focusMid:SetAlpha(0)
   end
 
   for _, region in ipairs({ editBox:GetRegions() }) do
     if region:IsObjectType("FontString") then
+      SaveNativeVisual(region)
       Theme.ApplyFont(region, "body", 12, "OUTLINE")
     end
   end
@@ -3381,621 +2625,114 @@ local function SkinChatEditBox(chatFrame)
   state.skinned = true
 end
 
--- Skin the main tab for a chat frame (General, Combat Log, etc.)
-local function EnsureDockedChatTabGhostRoot()
-  local root = ChatLinks._puiChatTabGhostRoot
-  if root then
-    root:Show()
-    return root
+local function SkinChatTab(chatFrame)
+  local tab = _G[chatFrame:GetName() .. "Tab"]
+  if not tab then return end
+  local state = GetChatTabState(tab)
+  local Theme = ns.Theme
+  local style = _GetChatWindowStyle()
+  _PUI_ApplyTextureBackdrop(tab, style.bg, style.border, tonumber(style.borderSize) or Theme.GetEdgeSize())
+  SaveNativeVisual(tab, true)
+  tab:SetHeight(22)
+
+  if not state.skinned then
+    for _, key in ipairs({ "Left", "Middle", "Right", "ActiveLeft", "ActiveRight", "HighlightLeft", "HighlightRight" }) do
+      local texture = tab[key]
+      if texture then SaveNativeVisual(texture); texture:SetTexture(nil) end
+    end
+    SaveNativeVisual(tab.ActiveMiddle, true)
+    SaveNativeVisual(tab.HighlightMiddle, true)
+    SaveNativeVisual(tab.glow, true)
+    tab.ActiveMiddle:SetTexture("Interface\\Buttons\\WHITE8x8")
+    tab.ActiveMiddle:SetAllPoints(tab)
+    tab.HighlightMiddle:SetTexture("Interface\\Buttons\\WHITE8x8")
+    tab.HighlightMiddle:SetAllPoints(tab)
+    tab.glow:SetTexture("Interface\\Buttons\\WHITE8x8")
+    tab.glow:ClearAllPoints()
+    tab.glow:SetPoint("BOTTOMLEFT", tab, "BOTTOMLEFT", 4, 1)
+    tab.glow:SetPoint("BOTTOMRIGHT", tab, "BOTTOMRIGHT", -4, 1)
+    tab.glow:SetHeight(2)
+    state.skinned = true
   end
+  local colors = Theme.GetColors()
+  local accent = colors.accent
+  tab.ActiveMiddle:SetVertexColor(accent[1], accent[2], accent[3], 0.32)
+  tab.HighlightMiddle:SetVertexColor(accent[1], accent[2], accent[3], 0.18)
 
-  root = CreateFrame("Frame", nil, UIParent)
-  root:SetAllPoints(UIParent)
-  root:SetFrameStrata("MEDIUM")
-  root:SetFrameLevel(100)
-  root:EnableMouse(false)
-  ChatLinks._puiChatTabGhostRoot = root
-  return root
-end
-
-local function HideBlizzardDockedChatTabPixels()
-  local dock = _G.GeneralDockManager
-  if not dock then
-    return
-  end
-
-  dock:SetAlpha(0)
-
-  local overflow = dock.overflowButton or _G.GeneralDockManagerOverflowButton
-  if overflow and overflow.SetIgnoreParentAlpha then
-    overflow:SetIgnoreParentAlpha(true)
-  end
-  if overflow and overflow.list and overflow.list.SetIgnoreParentAlpha then
-    overflow.list:SetIgnoreParentAlpha(true)
-  end
-end
-
-local function HideBlizzardFloatingChatTabPixels(tab)
-  tab:SetAlpha(0)
-end
-
-local function GetDockedChatTabGhost(chatFrame)
-  local state = GetChatFrameState(chatFrame)
-  local ghost = state.tabGhost
-  if ghost then
-    return ghost
-  end
-
-  local root = EnsureDockedChatTabGhostRoot()
-  if not root then
-    return nil
-  end
-
-  ghost = CreateFrame("Frame", nil, root)
-  ghost:EnableMouse(false)
-
-  local selected = ghost:CreateTexture(nil, "ARTWORK")
-  selected:SetTexture("Interface\\Buttons\\WHITE8x8")
-  selected:SetAllPoints()
-  selected:Hide()
-  ghost._puiSelected = selected
-
-  local icon = ghost:CreateTexture(nil, "ARTWORK", nil, 2)
-  icon:SetSize(16, 16)
-  icon:SetTexture("Interface\\ChatFrame\\UI-ChatWhisperIcon")
-  icon:Hide()
-  ghost._puiConversationIcon = icon
-
-  local text = ghost:CreateFontString(nil, "OVERLAY")
-  text:SetWordWrap(false)
+  local text = tab.Text
+  local icon = tab.conversationIcon
+  local labelOffset = (_PUI_IsTemporaryChatFrame(chatFrame) and icon) and 9 or 0
+  -- Reserve half the icon-and-gap width so the whole label stays centered.
+  SaveNativeVisual(text, true)
+  text:ClearAllPoints()
+  text:SetPoint("CENTER", tab, "CENTER", labelOffset, -1)
   text:SetJustifyH("CENTER")
   text:SetJustifyV("MIDDLE")
-  ghost._puiText = text
-
-  local glow = ghost:CreateTexture(nil, "OVERLAY", nil, 3)
-  glow:SetTexture("Interface\\Buttons\\WHITE8x8")
-  glow:SetPoint("BOTTOMLEFT", ghost, "BOTTOMLEFT", 4, 1)
-  glow:SetPoint("BOTTOMRIGHT", ghost, "BOTTOMRIGHT", -4, 1)
-  glow:SetHeight(2)
-  glow:Hide()
-  ghost._puiGlow = glow
-
-  state.tabGhost = ghost
-  return ghost
-end
-
-local function SkinDockedChatTab(chatFrame, tab)
-  local ghost = GetDockedChatTabGhost(chatFrame)
-  if not ghost then
-    return
+  if icon then
+    SaveNativeVisual(icon, true)
+    icon:SetSize(16, 16)
+    icon:ClearAllPoints()
+    icon:SetPoint("RIGHT", text, "LEFT", -2, 0)
   end
-
-  if chatFrame.isDocked then
-    HideBlizzardDockedChatTabPixels()
-  else
-    HideBlizzardFloatingChatTabPixels(tab)
-  end
-
-  ghost:ClearAllPoints()
-  ghost:SetPoint("BOTTOMLEFT", tab, "BOTTOMLEFT", 1, 1)
-  ghost:SetPoint("BOTTOMRIGHT", tab, "BOTTOMRIGHT", -1, 1)
-  ghost:SetHeight(24)
-  ghost:SetShown(tab:IsShown())
-
-  local style = _GetChatWindowStyle()
-  local Theme = ns.Theme
-  _PUI_ApplyTextureBackdrop(
-    ghost,
-    style.bg,
-    style.border,
-    tonumber(style.borderSize) or Theme.GetEdgeSize()
-  )
-
-  local colors = Theme.GetColors()
-  local accent = colors.accent or { 0.20, 0.65, 1.00, 1.00 }
-  local selectedWindow = _G.FCFDock_GetSelectedWindow
-    and _G.GENERAL_CHAT_DOCK
-    and _G.FCFDock_GetSelectedWindow(_G.GENERAL_CHAT_DOCK)
-    or nil
-  local isSelected = selectedWindow == chatFrame
-
-  ghost._puiSelected:SetVertexColor(accent[1], accent[2], accent[3], 0.32)
-  ghost._puiSelected:SetShown(isSelected)
-
-  local text = ghost._puiText
-  local icon = ghost._puiConversationIcon
   local fontPath, outline = _PUI_GetTypographyFont(_PUI_GetTypographyDB().tab)
   text:SetFont(fontPath, 12, outline)
-  text:ClearAllPoints()
-  icon:ClearAllPoints()
-
-  local glowR, glowG, glowB = accent[1], accent[2], accent[3]
-
-  if _PUI_IsTemporaryChatFrame(chatFrame) then
-    local info = _G.ChatTypeInfo[chatFrame.chatType == "BN_WHISPER" and "BN_WHISPER" or "WHISPER"]
+  text:SetWordWrap(false)
+  if _PUI_IsTemporaryChatFrame(chatFrame) and canaccessvalue(chatFrame.chatType) then
+    local info = ChatTypeInfo[chatFrame.chatType]
     if info then
       text:SetTextColor(info.r, info.g, info.b, 1)
-      glowR, glowG, glowB = info.r, info.g, info.b
-    else
-      text:SetTextColor(1, 1, 1, 1)
-    end
-
-    icon:SetPoint("LEFT", ghost, "LEFT", 5, 0)
-    icon:Show()
-    text:SetPoint("LEFT", icon, "RIGHT", 3, 0)
-    text:SetPoint("RIGHT", ghost, "RIGHT", -8, 0)
-
-    local label = chatFrame.chatTarget
-    if issecretvalue(label) then
-      text:SetText(label)
-    elseif label ~= nil then
-      text:SetText(label)
-    else
-      text:SetText("...")
+      tab.glow:SetVertexColor(info.r, info.g, info.b, 1)
     end
   else
     text:SetTextColor(1, 1, 1, 1)
-    icon:Hide()
-    text:SetPoint("LEFT", ghost, "LEFT", 8, 0)
-    text:SetPoint("RIGHT", ghost, "RIGHT", -8, 0)
-
-    local windowName = GetChatWindowInfo(chatFrame:GetID())
-    text:SetText(windowName or "")
   end
-
-  local alerting = tab.alerting
-  if canaccessvalue(alerting) then
-    ghost._puiGlow:SetVertexColor(glowR, glowG, glowB, 1)
-    ghost._puiGlow:SetShown(alerting == true and not isSelected)
-  else
-    ghost._puiGlow:Hide()
-  end
-end
-
-local function SkinUndockedChatTab(chatFrame, tab, name)
-  EnablePrimaryChatTabDragging(tab, chatFrame)
-
-  local Theme = ns.Theme
-  local style = _GetChatWindowStyle()
-  local fill = style.bg
-  local border = style.border
-  local edgeSize = tonumber(style.borderSize) or Theme.GetEdgeSize()
-
-  local text = tab.Text or _G[name .. "TabText"]
-  if not text then
-    local r = select(2, tab:GetRegions())
-    if r and r.GetObjectType and r:GetObjectType() == "FontString" then
-      text = r
-    end
-  end
-
-  local tabState = GetChatTabState(tab)
-  if not tabState.skinned then
-    for _, key in ipairs({ "Left", "Middle", "Right" }) do
-      local tex = tab[key] or _G[name .. "Tab" .. key]
-      if tex and tex.SetTexture then
-        tex:SetTexture(nil)
-      end
-    end
-
-    local bg = CreateFrame("Frame", nil, UIParent)
-    bg:SetPoint("BOTTOMLEFT", tab, "BOTTOMLEFT", 1, 1)
-    bg:SetPoint("BOTTOMRIGHT", tab, "BOTTOMRIGHT", -1, 1)
-    bg:SetHeight(24)
-    bg:EnableMouse(false)
-    if bg.SetIgnoreParentAlpha then
-      bg:SetIgnoreParentAlpha(true)
-    end
-    tabState.bg = bg
-
-    if bg.SetFrameStrata and tab.GetFrameStrata then
-      bg:SetFrameStrata(tab:GetFrameStrata())
-    end
-    SetChatVisualFrameLevel(bg, tab)
-
-    tabState.skinned = true
-  end
-
-  local colors = Theme.GetColors()
-  local accent = colors.accent or { 0.20, 0.65, 1.00, 1.00 }
-  local white = "Interface\\Buttons\\WHITE8x8"
-  local bg = tabState.bg
-  if bg then
-    bg:SetShown(tab:IsShown())
-  end
-
-  for _, key in ipairs({
-    "SelectedLeft", "SelectedRight",
-    "ActiveLeft", "ActiveRight",
-  }) do
-    local texture = tab[key] or _G[name .. "Tab" .. key]
-    if texture then
-      texture:SetTexture(nil)
-    end
-  end
-
-  for _, key in ipairs({ "SelectedMiddle", "ActiveMiddle" }) do
-    local texture = tab[key] or _G[name .. "Tab" .. key]
-    if texture then
-      texture:SetTexture(white)
-      texture:SetVertexColor(accent[1], accent[2], accent[3], 0.32)
-      texture:ClearAllPoints()
-      texture:SetAllPoints(bg)
-    end
-  end
-
-  for _, key in ipairs({ "HighlightLeft", "HighlightRight" }) do
-    local texture = tab[key] or _G[name .. "Tab" .. key]
-    if texture then
-      texture:SetTexture(nil)
-    end
-  end
-
-  local highlight = tab.HighlightMiddle or _G[name .. "TabHighlightMiddle"]
-  if highlight then
-    highlight:SetTexture(white)
-    highlight:SetVertexColor(accent[1], accent[2], accent[3], 0.18)
-    highlight:ClearAllPoints()
-    highlight:SetAllPoints(bg)
-  end
-
-  local glow = tab.glow or _G[name .. "TabGlow"]
-  if glow then
-    glow:SetTexture(white)
-    glow:SetVertexColor(accent[1], accent[2], accent[3], 1)
-    glow:ClearAllPoints()
-    glow:SetPoint("BOTTOMLEFT", bg, "BOTTOMLEFT", 4, 1)
-    glow:SetPoint("BOTTOMRIGHT", bg, "BOTTOMRIGHT", -4, 1)
-    glow:SetHeight(2)
-  end
-
-  if text then
-    if text.ClearAllPoints then
-      text:ClearAllPoints()
-      text:SetPoint("CENTER", bg, "CENTER", tab.conversationIcon and 8 or 0, 0)
-    end
-
-    if text.SetJustifyH then
-      text:SetJustifyH("CENTER")
-    end
-    if text.SetJustifyV then
-      text:SetJustifyV("MIDDLE")
-    end
-  end
-
-  if tab.conversationIcon then
-    tab.conversationIcon:ClearAllPoints()
-    tab.conversationIcon:SetPoint("LEFT", bg, "LEFT", 5, 0)
-  end
-
-  if bg then
-    _PUI_ApplyTextureBackdrop(bg, fill, border, edgeSize)
-  end
-
-  if text then
-    _PUI_SkinTypographyFont(text, _PUI_GetTypographyDB().tab)
-  end
-end
-
--- Skin the visual tab without writing to Blizzard's docked tab regions.
-local function SkinChatTab(chatFrame)
-  if not chatFrame then return end
-  local name = chatFrame.GetName and chatFrame:GetName()
-  if not name then return end
-
-  local tab = _G[name .. "Tab"]
-  if not tab then
-    return
-  end
-
-  local state = GetChatFrameState(chatFrame)
-  local tabState = GetChatTabState(tab)
-
-  if chatFrame.isDocked or _PUI_IsTemporaryChatFrame(chatFrame) then
-    if tabState.bg then
-      tabState.bg:Hide()
-    end
-    SkinDockedChatTab(chatFrame, tab)
-    return
-  end
-
-  if state.tabGhost then
-    state.tabGhost:Hide()
-  end
-
-  SkinUndockedChatTab(chatFrame, tab, name)
-end
-
-local function CreateJumpToBottomButton(chatFrame)
-  local state = GetChatFrameState(chatFrame)
-  if state.jumpButton then
-    return state.jumpButton
-  end
-
-  local button = CreateFrame("Button", nil, UIParent)
-  button:SetSize(20, 20)
-  button:SetPoint("BOTTOMRIGHT", chatFrame, "BOTTOMRIGHT", 11, 3)
-
-  local normal = button:CreateTexture(nil, "ARTWORK")
-  normal:SetAllPoints()
-  normal:SetAtlas("minimal-scrollbar-arrow-returntobottom")
-  button:SetNormalTexture(normal)
-
-  local pushed = button:CreateTexture(nil, "ARTWORK")
-  pushed:SetAllPoints()
-  pushed:SetAtlas("minimal-scrollbar-arrow-returntobottom-down")
-  button:SetPushedTexture(pushed)
-
-  local highlight = button:CreateTexture(nil, "HIGHLIGHT")
-  highlight:SetAllPoints()
-  highlight:SetAtlas("minimal-scrollbar-arrow-returntobottom-over")
-  button:SetHighlightTexture(highlight)
-
-  state.jumpVisible = false
-
-  button:SetScript("OnClick", function()
-    state.jumpVisible = false
-    chatFrame:ScrollToBottom()
-    button:Hide()
-  end)
-  button:Hide()
-
-  chatFrame:HookScript("OnMouseWheel", function(_, delta)
-    local lines = ClampInt(ChatLinks.db.profile.chatTweaks.scrollMessages, 1, 12)
-    if delta > 0 then
-      state.jumpVisible = true
-      button:Show()
-    end
-
-    for _ = 2, lines do
-      if delta > 0 then
-        chatFrame:ScrollUp()
-      else
-        chatFrame:ScrollDown()
-      end
-    end
-  end)
-
-  hooksecurefunc(chatFrame, "ScrollToBottom", function()
-    state.jumpVisible = false
-    button:Hide()
-  end)
-
-  state.jumpButton = button
-  return button
-end
-
-local function SkinTemporaryChatFrame(chatFrame)
-  if not chatFrame or not _PUI_IsChatFrameOpen(chatFrame) then
-    return
-  end
-
-  local name = chatFrame.GetName and chatFrame:GetName()
-  if not name then
-    return
-  end
-
-  local state = GetChatFrameState(chatFrame)
-
-  if state.temporarySkinned then
-    if state.shell then
-      state.shell:SetShown(chatFrame:IsShown())
-      local style = _GetChatWindowStyle and _GetChatWindowStyle()
-      _ApplyDirectChatShellBackdrop(state.shell, style)
-    end
-
-    SkinChatEditBox(chatFrame)
-    SkinChatTab(chatFrame)
-    return
-  end
-
-  local background = _G[name .. "Background"]
-  if background then
-    if background.SetAlpha then
-      background:SetAlpha(0)
-    end
-    if background.EnableMouse then
-      background:EnableMouse(false)
-    end
-  end
-
-  _DisableChatButtonFrame(chatFrame)
-
-  local shell = state.shell
-  if not shell then
-    shell = CreateFrame("Frame", nil, UIParent)
-    shell:EnableMouse(false)
-    state.shell = shell
-  end
-
-  shell:ClearAllPoints()
-  shell:SetPoint("TOPLEFT", chatFrame, "TOPLEFT", -4, 4)
-  shell:SetPoint("TOPRIGHT", chatFrame, "TOPRIGHT", 4, 4)
-  shell:SetPoint("BOTTOMLEFT", chatFrame, "BOTTOMLEFT", -4, -4)
-  shell:SetPoint("BOTTOMRIGHT", chatFrame, "BOTTOMRIGHT", 4, -4)
-  shell:SetShown(chatFrame:IsShown())
-
-  shell:SetFrameStrata(chatFrame:GetFrameStrata())
-
-  SetChatVisualFrameLevel(shell, chatFrame)
-
-  if shell.SetIgnoreParentAlpha then
-    shell:SetIgnoreParentAlpha(true)
-  end
-
-  local style = _GetChatWindowStyle and _GetChatWindowStyle()
-  _ApplyDirectChatShellBackdrop(shell, style)
-
-  local scrollBar = chatFrame.ScrollBar or _G[name .. "ScrollBar"]
-  if scrollBar then
-    scrollBar:SetAlpha(0)
-  end
-
-  local scrollToBottom = chatFrame.ScrollToBottomButton or _G[name .. "ScrollToBottomButton"]
-  if scrollToBottom then
-    scrollToBottom:SetAlpha(0)
-  end
-
-  SkinChatEditBox(chatFrame)
-  SkinChatTab(chatFrame)
-
-  state.temporarySkinned = true
+  ChatLinks:AttachChatTabVisuals(chatFrame)
 end
 
 local function SkinChatFrame(chatFrame)
-  if not chatFrame then
-    return
-  end
-
-  if _PUI_IsTemporaryChatFrame(chatFrame) then
-    SkinTemporaryChatFrame(chatFrame)
-    return
-  end
-
-  local name = chatFrame.GetName and chatFrame:GetName()
   local state = GetChatFrameState(chatFrame)
+  local name = chatFrame:GetName()
 
-  if state.skinned then
-    if state.shell then
-      state.shell:SetShown(chatFrame:IsShown())
-      local style = _GetChatWindowStyle and _GetChatWindowStyle()
-      _ApplyDirectChatShellBackdrop(state.shell, style)
+  if not state.skinned then
+    chatFrame:SetClampRectInsets(0, 0, 0, 0)
+    chatFrame:SetClampedToScreen(false)
+    for _, region in ipairs({ chatFrame:GetRegions() }) do
+      if region:IsObjectType("Texture") then SaveNativeVisual(region); region:Hide() end
     end
-
-    _DisableChatButtonFrame(chatFrame)
-    SkinChatEditBox(chatFrame)
-    SkinChatTab(chatFrame)
-
-    local jumpButton = CreateJumpToBottomButton(chatFrame)
-    jumpButton:SetShown(chatFrame:IsShown() and state.jumpVisible == true)
-    return
-  end
-
-
-  -- 1) Hide Blizzard background and disable the unused side-button input surface.
-  if name then
-    local bg = _G[name .. "Background"]
-    if bg then
-      if bg.SetAlpha    then bg:SetAlpha(0) end
-      if bg.EnableMouse then bg:EnableMouse(false) end
-    end
-  end
-  _DisableChatButtonFrame(chatFrame)
-
-
-  -- 2) Our visual shell is addon-owned and only follows the Blizzard frame visually.
-  local shell = state.shell
-  if not shell then
-    shell = CreateFrame("Frame", nil, UIParent)
-    if shell.EnableMouse then
-      shell:EnableMouse(false)
-    end
-    state.shell = shell
-  end
-
-  local function RefreshShellAnchors()
-    local scrollbarWidth = 0
-    if chatFrame.ScrollBar then
-      scrollbarWidth = Round(8)
-    end
-
-    local left = Round(-2)
-    local top = Round(3)
-    local right = Round(15) + scrollbarWidth
-    local bottom = Round(-6)
-
-    shell:ClearAllPoints()
-    shell:SetPoint("TOPLEFT", chatFrame, "TOPLEFT", left, top)
-    shell:SetPoint("TOPRIGHT", chatFrame, "TOPRIGHT", right, top)
-    shell:SetPoint("BOTTOMLEFT", chatFrame, "BOTTOMLEFT", left, bottom)
-    shell:SetPoint("BOTTOMRIGHT", chatFrame, "BOTTOMRIGHT", right, bottom)
-    shell:SetShown(chatFrame:IsShown())
-  end
-
-  if chatFrame.GetFrameStrata then
-    shell:SetFrameStrata(chatFrame:GetFrameStrata())
-  end
-  SetChatVisualFrameLevel(shell, chatFrame)
-  if shell.SetIgnoreParentAlpha then
+    local shell = CreateFrame("Frame", nil, chatFrame)
+    shell:EnableMouse(false)
+    local level = chatFrame:GetFrameLevel()
+    if canaccessvalue(level) and type(level) == "number" then shell:SetFrameLevel(math.max(0, level - 1)) end
     shell:SetIgnoreParentAlpha(true)
+    shell:SetPoint("TOPLEFT", chatFrame, "TOPLEFT", -2, 3)
+    shell:SetPoint("BOTTOMRIGHT", chatFrame, "BOTTOMRIGHT", 23, -6)
+    state.shell = shell
+    state.skinned = true
   end
 
-  RefreshShellAnchors()
-
-  local style = _GetChatWindowStyle and _GetChatWindowStyle()
-  _ApplyDirectChatShellBackdrop(shell, style)
-
-
-  -- 3) Strip leftover Blizzard textures on the chat frame itself
-  local regions = { chatFrame:GetRegions() }
-  for i = 1, #regions do
-    local r = regions[i]
-    if r and r.GetObjectType and r:GetObjectType() == "Texture" and r.SetAlpha then
-      r:SetAlpha(0)
-    end
+  for _, suffix in pairs(CHAT_FRAME_TEXTURES) do
+    local texture = _G[name .. suffix]
+    if texture then SaveNativeVisual(texture); texture:Hide() end
   end
-
-
-  -- 4) Hide Blizzard scrollbar / minimize / scroll-to-bottom extras
-  local scrollBar = chatFrame.ScrollBar or (name and _G[name .. "ScrollBar"])
-  if scrollBar then
-    local sRegions = { scrollBar:GetRegions() }
-    for i = 1, #sRegions do
-      local r = sRegions[i]
-      if r and r:GetObjectType() == "Texture" then
-        r:SetTexture(nil)
-        r:SetAlpha(0)
-      end
-    end
-
-    for _, tex in ipairs({
-      scrollBar.Background,
-      scrollBar.BackgroundTop,
-      scrollBar.BackgroundBottom,
-      scrollBar.TrackBG,
-      scrollBar.Top,
-      scrollBar.Bottom,
-      scrollBar.Middle,
-    }) do
-      if tex then
-        tex:SetTexture(nil)
-        tex:SetAlpha(0)
-      end
-    end
-
-    scrollBar:SetAlpha(0)
-    scrollBar:EnableMouse(false)
-  end
-
-  local scrollToBottom = chatFrame.ScrollToBottomButton or (name and _G[name .. "ScrollToBottomButton"])
-  if scrollToBottom then
-    scrollToBottom:SetAlpha(0)
-    scrollToBottom:EnableMouse(false)
-  end
-
-  local minimize = (chatFrame.buttonFrame and chatFrame.buttonFrame.minimizeButton) or (name and _G[name .. "MinimizeButton"])
-  if minimize then
-    minimize:SetAlpha(0)
-    minimize:EnableMouse(false)
-  end
-
-  state.skinned = true
-
+  _ApplyDirectChatShellBackdrop(state.shell, _GetChatWindowStyle())
+  state.shell:Show()
   SkinChatEditBox(chatFrame)
   SkinChatTab(chatFrame)
-  CreateJumpToBottomButton(chatFrame)
 
-  if chatFrame == _G.ChatFrame1 then
-    chatFrame:HookScript("OnEnter", function()
-      ChatLinks:ChatInputActivated(chatFrame)
-    end)
-    chatFrame:HookScript("OnLeave", function()
-      ChatLinks:ChatInputDeactivated(chatFrame)
+  if not state.wheelHooked then
+    state.wheelHooked = true
+    chatFrame:HookScript("OnMouseWheel", function(_, delta)
+      if ChatLinks._puiRuntimeEnabled ~= true then return end
+      local lines = ClampInt(ChatLinks.db.profile.chatTweaks.scrollMessages, 1, 12)
+      for _ = 2, lines do
+        if delta > 0 then chatFrame:ScrollUp() else chatFrame:ScrollDown() end
+      end
     end)
   end
 end
 
 HideChatSideButtons = function()
+  ChatLinks._puiPendingChatSideButtons = nil
   local sideButtons = {
     "ChatFrameChannelButton",
     "ChatFrameToggleVoiceDeafenButton",
@@ -4008,17 +2745,29 @@ HideChatSideButtons = function()
   for _, n in ipairs(sideButtons) do
     local f = _G[n]
     if f then
-      f:Hide()
-      f:SetAlpha(0)
-      f:EnableMouse(false)
+      if not CanChangeChatLayout(f) then
+        ChatLinks._puiPendingChatSideButtons = true
+      else
+        SaveNativeVisual(f)
+        NativeVisuals[f].opacityReset = true
+        f:Hide()
+        f:SetAlpha(0)
+        f:EnableMouse(false)
+      end
     end
   end
 
   local ttsFrame = _G.TextToSpeechButtonFrame
   if ttsFrame then
-    ttsFrame:Hide()
-    ttsFrame:SetAlpha(0)
-    ttsFrame:EnableMouse(false)
+    if not CanChangeChatLayout(ttsFrame) then
+      ChatLinks._puiPendingChatSideButtons = true
+    else
+      SaveNativeVisual(ttsFrame)
+      NativeVisuals[ttsFrame].opacityReset = true
+      ttsFrame:Hide()
+      ttsFrame:SetAlpha(0)
+      ttsFrame:EnableMouse(false)
+    end
   end
 end
 
@@ -4029,7 +2778,7 @@ local function _PUI_ClickBlizzardChatTool(buttonName)
     return
   end
 
-  if InCombatLockdown() and button.IsProtected and button:IsProtected() then
+  if not CanChangeChatLayout(button) then
     Addon:Print("That Blizzard chat tool is blocked in combat.")
     return
   end
@@ -4041,6 +2790,7 @@ local function EnsureChatToolsButton(chatFrame)
   local state = GetChatFrameState(chatFrame)
   local button = state.toolsButton
   if button then
+    PositionAddonPointFromFrame(button, chatFrame, "TOPRIGHT", -27, -3)
     local panel = button._puiPanel
     if panel then
       local colors = ns.Theme.GetColors()
@@ -4049,13 +2799,13 @@ local function EnsureChatToolsButton(chatFrame)
     return button
   end
 
-  button = CreateFrame("Button", nil, UIParent, "UIPanelButtonTemplate")
+  button = CreateFrame("Button", nil, chatFrame, "UIPanelButtonTemplate")
   button:SetSize(20, 20)
-  button:SetPoint("TOPRIGHT", chatFrame, "TOPRIGHT", -27, -3)
+  PositionAddonPointFromFrame(button, chatFrame, "TOPRIGHT", -27, -3)
   button:SetText("...")
   ns.Theme.WidgetSkins.UIButton(button)
 
-  local panel = CreateFrame("Frame", nil, UIParent, "BackdropTemplate")
+  local panel = CreateFrame("Frame", nil, button, "BackdropTemplate")
   panel:SetSize(166, 132)
   panel:SetPoint("BOTTOMRIGHT", button, "TOPRIGHT", 0, 4)
   panel:SetFrameStrata("DIALOG")
@@ -4103,12 +2853,13 @@ local function CreateCopyButton(chatFrame)
 
   local state = GetChatFrameState(chatFrame)
   if state.copyButton then
+    PositionAddonPointFromFrame(state.copyButton, chatFrame, "TOPRIGHT", -4, -4)
     return state.copyButton
   end
 
-  local btn = CreateFrame("Button", nil, UIParent)
+  local btn = CreateFrame("Button", nil, chatFrame)
   btn:SetSize(18, 18)
-  btn:SetPoint("TOPRIGHT", chatFrame, "TOPRIGHT", -4, -4)
+  PositionAddonPointFromFrame(btn, chatFrame, "TOPRIGHT", -4, -4)
 
   -- Simple texture so we see it; you can replace this with a custom icon later
   local tex = btn:CreateTexture(nil, "ARTWORK")
@@ -4122,7 +2873,6 @@ local function CreateCopyButton(chatFrame)
     ChatLinks:OpenCopyWindow(chatFrame)
   end)
 
-
   -- Always visible so it is obvious
   btn:Show()
 
@@ -4130,100 +2880,91 @@ local function CreateCopyButton(chatFrame)
   return btn
 end
 
-FlushPendingChatUpdates = function()
-  ChatTweaksBoot:SetScript("OnUpdate", nil)
-  ChatUpdatesQueued = false
-  if ChatLinks._puiRuntimeEnabled ~= true or not ChatLayoutReady then
-    return
-  end
-
-  if ChatLinks._puiPendingPrimaryChatLayout then
-    ChatLinks._puiPendingPrimaryChatLayout = nil
-    InitializePrimaryChatLayout()
-  end
-
-  if ChatLinks._puiPendingChatFrameRefresh then
-    ChatLinks._puiPendingChatFrameRefresh = nil
-    ChatLinks:RefreshChatFrames()
-  elseif not InCombatLockdown() then
-    if ChatLinks._puiPendingChatTweaks then
-      ApplyChatTweaks()
+local function HideChatFrameVisuals(chatFrame)
+  local state = ChatFrameState[chatFrame]
+  if state then
+    for _, key in ipairs({"shell", "copyButton", "toolsButton"}) do
+      local visual = state[key]
+      if visual then
+        visual:Hide()
+      end
     end
-    if ChatLinks._puiPendingChatSideButtons then
-      HideChatSideButtons()
-      ChatLinks._puiPendingChatSideButtons = nil
+    if state.toolsButton and state.toolsButton._puiPanel then
+      state.toolsButton._puiPanel:Hide()
     end
-  end
-
-  if ChatLinks._puiPendingInitialFade then
-    ChatLinks._puiPendingInitialFade = nil
-    ChatLinks:ApplyInitialFade()
   end
 end
 
-function ChatLinks:QueueChatFrameRefresh()
+function ChatLinks:RefreshChatFrameVisuals(chatFrame)
   if self._puiRuntimeEnabled ~= true then
     return
   end
-  self._puiPendingChatFrameRefresh = true
-  QueueChatUpdates()
+  self:ApplyChatWindowFading(chatFrame)
+  local state = GetChatFrameState(chatFrame)
+  if not _PUI_IsChatFrameOpen(chatFrame) then
+    HideChatFrameVisuals(chatFrame)
+    return
+  end
+
+  self:ApplyChatHistoryCapacity(chatFrame)
+  if not CanChangeChatLayout(chatFrame) then return end
+  SkinChatFrame(chatFrame)
+  _PUI_ApplyTypographyToChatFrame(chatFrame)
+  local copyButton = state.copyButton
+  local enableCopyFrame = self.db.profile.enableCopyFrame == true
+  if enableCopyFrame and not _PUI_IsTemporaryChatFrame(chatFrame) then
+    if not copyButton then
+      copyButton = CreateCopyButton(chatFrame)
+      copyButton:SetAlpha(0.35)
+    end
+  end
+  if copyButton then
+    copyButton:SetShown(enableCopyFrame)
+  end
+  self:AttachChatFocusFading(chatFrame, state)
+  if not state.visibilityHooked then
+    state.visibilityHooked = true
+    chatFrame:HookScript("OnShow", function()
+      if ChatLinks._puiRuntimeEnabled == true then ChatLinks:QueueChatVisualRefresh() end
+    end)
+  end
+end
+
+function ChatLinks:RefreshChatTabs()
+  if self._puiRuntimeEnabled ~= true then
+    return
+  end
+  ForEachBlizzardChatFrame(function(chatFrame)
+    local state = ChatFrameState[chatFrame]
+    if state and state.skinned and _PUI_IsChatFrameOpen(chatFrame) and CanChangeChatLayout(chatFrame) then
+      SkinChatTab(chatFrame)
+      self:AttachChatFocusFading(chatFrame, state)
+    end
+  end)
+  self:RefreshChatDockFocusFading()
 end
 
 function ChatLinks:RefreshChatFrames()
   if not self.db or not self.db.profile or self._puiRuntimeEnabled ~= true then
     return
   end
-  if not ChatLayoutReady then
-    self._puiPendingChatFrameRefresh = true
-    return
+  ForEachBlizzardChatFrame(function(chatFrame)
+    self:RefreshChatFrameVisuals(chatFrame)
+  end)
+
+  if self:IsChatLayoutReady() then
+    local dock = GeneralDockManager
+    local primary = dock.primary
+    if canaccessvalue(primary) and primary and CanChangeChatLayout(dock) then
+      dock:ClearAllPoints()
+      dock:SetPoint("BOTTOMLEFT", primary, "TOPLEFT", 0, 3)
+      dock:SetPoint("BOTTOMRIGHT", primary, "TOPRIGHT", 0, 3)
+      dock:SetHeight(22)
+      self:AlignChatDockTabs(dock)
+    end
   end
 
-  ForEachBlizzardChatFrame(function(chatFrame)
-    if _PUI_IsChatFrameOpen(chatFrame) then
-      SkinChatFrame(chatFrame)
-      return
-    end
-
-    local state = ChatFrameState[chatFrame]
-    if state then
-      for _, visual in ipairs({
-        state.shell,
-        state.tabGhost,
-        state.copyButton,
-        state.toolsButton,
-        state.jumpButton,
-      }) do
-        if visual then
-          visual:Hide()
-        end
-      end
-    end
-
-    local editBox = chatFrame.editBox
-    local editState = editBox and ChatEditBoxState[editBox]
-    if editState and editState.inputBar then
-      editState.inputBar:Hide()
-    end
-  end)
-
-  ApplyChatTweaks()
-  self:ApplyChatTypography()
-
-  local enableCopyFrame = self.db.profile.enableCopyFrame == true
-  ForEachBlizzardChatFrame(function(chatFrame)
-    if not _PUI_IsChatFrameOpen(chatFrame) then
-      return
-    end
-
-    local state = GetChatFrameState(chatFrame)
-    local copyButton = state.copyButton
-    if enableCopyFrame and not _PUI_IsTemporaryChatFrame(chatFrame) then
-      copyButton = copyButton or CreateCopyButton(chatFrame)
-    end
-    if copyButton then
-      copyButton:SetShown(enableCopyFrame)
-    end
-  end)
+  ApplyPrimaryChatLayout()
 
   local primaryChat = _G.ChatFrame1
   if primaryChat then
@@ -4240,12 +2981,11 @@ function ChatLinks:RefreshChatFrames()
     end
   end
 
-  if not InCombatLockdown() then
-    HideChatSideButtons()
-    self._puiPendingChatSideButtons = nil
-  else
-    self._puiPendingChatSideButtons = true
+  if primaryChat and ChatFrameState[primaryChat].skinned then
+    self:AttachChatFocusFading(primaryChat, ChatFrameState[primaryChat])
   end
+  self:RefreshChatDockFocusFading()
+  HideChatSideButtons()
 end
 
 function ChatLinks:RefreshTheme()
@@ -4253,7 +2993,7 @@ function ChatLinks:RefreshTheme()
     return
   end
 
-  if self._puiRuntimeEnabled ~= true or _PUI_IsChatMessagingRestricted() then
+  if self._puiRuntimeEnabled ~= true then
     return
   end
 
@@ -4271,36 +3011,16 @@ function ChatLinks:OnProfileChanged()
   end
 
   if not _PUI_RefreshChatRuntimeState() then
-    self:SetUrlFiltersEnabled(false)
+    self:OnDisable()
     return
   end
 
-  self:SetUrlFiltersEnabled(self.db.profile.enableUrlCopy == true)
-
-  -- Per-profile chat tweaks (history)
-  ApplyChatTweaks()
-
-  -- Re-apply addon-owned frame positions immediately on profile switch.
+  self:OnEnable()
   if CopyFrame then
     ApplyCopyFramePosition(CopyFrame)
-  end
-  ApplyPrimaryChatHolderLayout(self.db.profile)
-
-  -- Refresh mover callbacks against the active profile.
-  RegisterPrimaryChatMover()
-
-  -- Per-profile styling
-  self:ApplyChatWindowStyle()
-  if CopyFrame then
     self:ApplyCopyWindowStyle()
   end
-
-  -- Fade uses per-profile values; refresh its initial state.
-  self:ApplyInitialFade()
-  self:ApplyChatFormatting()
 end
-
-
 
 function ChatLinks:OnEnable()
   if not self.db or not self.db.profile then
@@ -4313,11 +3033,12 @@ function ChatLinks:OnEnable()
   local chattyLoaded = _PUI_IsChattynatorLoaded()
   local pratLoaded = _PUI_IsPratLoaded()
   _PUI_RefreshChatRuntimeState()
-
+  self._puiRuntimeEnabled = false
 
   -- 1) Respect explicit manual disable from options
   if db.manualDisabled then
     db.enabled = false
+    self:OnDisable()
     return
   end
 
@@ -4329,10 +3050,12 @@ function ChatLinks:OnEnable()
     if chattyChoice == "chattynator" then
       db.manualDisabled = true
       db.enabled = false
+      self:OnDisable()
       return
     end
 
     if chattyChoice == "ask" then
+      self:OnDisable()
       if db.enabled ~= false and not self.__puiChattynatorPrompted then
         self.__puiChattynatorPrompted = true
         _PUI_ShowChattynatorChoicePopup(self)
@@ -4345,10 +3068,12 @@ function ChatLinks:OnEnable()
     if pratChoice == "prat" then
       db.manualDisabled = true
       db.enabled = false
+      self:OnDisable()
       return
     end
 
     if pratChoice == "ask" then
+      self:OnDisable()
       if db.enabled ~= false and not self.__puiPratPrompted then
         self.__puiPratPrompted = true
         _PUI_ShowPratChoicePopup(self)
@@ -4380,8 +3105,7 @@ function ChatLinks:OnEnable()
         if choice == "chattynator" then
           dbp.manualDisabled = true
           dbp.enabled = false
-          _PUI_RefreshChatRuntimeState()
-          self:SetUrlFiltersEnabled(false)
+          self:OnDisable()
           return
         end
         if dbp.enabled == false or choice ~= "ask" then
@@ -4399,8 +3123,7 @@ function ChatLinks:OnEnable()
         if choice == "prat" then
           dbp.manualDisabled = true
           dbp.enabled = false
-          _PUI_RefreshChatRuntimeState()
-          self:SetUrlFiltersEnabled(false)
+          self:OnDisable()
           return
         end
         if dbp.enabled == false or choice ~= "ask" then
@@ -4417,60 +3140,41 @@ function ChatLinks:OnEnable()
 
   -- If PleebUI Chat is disabled for any other reason, stop here.
   if db.enabled == false then
+    self:OnDisable()
     return
   end
 
   -- 4) From here on, PleebUI Chat is enabled for this
   --    session and Chattynator is NOT loaded.
 
-  self:SetUrlFiltersEnabled(self.db.profile.enableUrlCopy == true)
-  for _, event in ipairs(ChatWindowEvents) do
-    ChatTweaksBoot:RegisterEvent(event)
-  end
-
-  FrameScale:RegisterScaleListener(QueuePrimaryChatLayout)
+  self._puiRuntimeEnabled = true
+  self:StartChatTabs()
+  self:StartChatFocusFading()
   RegisterPrimaryChatMover()
-
-  self._puiPendingInitialFade = true
-  self:QueueChatFrameRefresh()
+  self:StartChatVisualLifecycle()
+  self:UpdateChatFocusFading(ns.Flags.IsEditing)
+  self:ApplyChatFormatting()
+  self:UpdateChatFading()
+  self:SetUrlFiltersEnabled(self.db.profile.enableUrlCopy == true)
+  self:StartChatHistory()
 
 end
 
-
 function ChatLinks:OnDisable()
-  FrameScale:UnregisterScaleListener(QueuePrimaryChatLayout)
   self._puiRuntimeEnabled = false
+  self:UnregisterEvent("ADDON_LOADED")
+  self.__puiChatConflictAddonHook = nil
+  self:StopChatHistory()
+  self:StopChatVisualLifecycle()
+  self:StopChatTabs()
+  self:StopChatFocusFading()
   self:SetUrlFiltersEnabled(false)
-  for _, event in ipairs(ChatWindowEvents) do
-    ChatTweaksBoot:UnregisterEvent(event)
-  end
-  ChatTweaksBoot:SetScript("OnUpdate", nil)
-  ChatUpdatesQueued = false
-  self._puiPendingChatFrameRefresh = nil
-  self._puiPendingPrimaryChatLayout = nil
-  self._puiPendingInitialFade = nil
-  self:UnregisterEvent("PLAYER_REGEN_ENABLED")
-
-  RemoveChatEditBoxCallbacks()
-
-  local dock = _G.GeneralDockManager
-  if dock then
-    dock:SetAlpha(1)
-  end
-  if self._puiChatTabGhostRoot then
-    self._puiChatTabGhostRoot:Hide()
-  end
 
   ForEachBlizzardChatFrame(function(chatFrame)
     local state = ChatFrameState[chatFrame]
     if state then
-      for _, visual in ipairs({
-        state.shell,
-        state.tabGhost,
-        state.copyButton,
-        state.toolsButton,
-        state.jumpButton,
-      }) do
+      for _, key in ipairs({"shell", "copyButton", "toolsButton"}) do
+        local visual = state[key]
         if visual then
           visual:Hide()
         end
@@ -4482,40 +3186,46 @@ function ChatLinks:OnDisable()
     end
 
     local editBox = chatFrame.editBox
-    local editState = editBox and ChatEditBoxState[editBox]
-    if editState and editState.inputBar then
-      editState.inputBar:Hide()
+    if editBox and ChatEditBoxState[editBox] then
+      for _, texture in pairs(editBox._puiTextureBackdrop) do texture:Hide() end
     end
 
     local name = chatFrame.GetName and chatFrame:GetName()
     local tab = name and _G[name .. "Tab"]
-    if tab then
-      tab:SetAlpha(1)
-
-      local tabState = ChatTabState[tab]
-      if tabState and tabState.bg then
-        tabState.bg:Hide()
-      end
+    if tab and tab._puiTextureBackdrop then
+      for _, texture in pairs(tab._puiTextureBackdrop) do texture:Hide() end
     end
   end)
 
-  self._pendingCopyOpenFrame = nil
-  self._pendingCopyOpenHooked = nil
+  RestoreNativeVisuals()
+  for _, chatFrameName in ipairs(CHAT_FRAMES) do
+    local editBox = _G[chatFrameName .. "EditBox"]
+    if editBox and ChatEditBoxState[editBox] then
+      for _, suffix in ipairs({"EditBoxLeft", "EditBoxRight", "EditBoxMid"}) do
+        local texture = _G[chatFrameName .. suffix]
+        if texture then texture:SetAlpha(1) end
+      end
+      for _, key in ipairs({"focusLeft", "focusRight", "focusMid"}) do
+        local texture = editBox[key]
+        if texture then texture:SetAlpha(1) end
+      end
+      ChatEditBoxState[editBox].skinned = nil
+    end
+    local tab = _G[chatFrameName .. "Tab"]
+    if tab and ChatTabState[tab] then ChatTabState[tab].skinned = nil end
+  end
   self._puiPendingPrimaryChatBind = nil
-  self._puiPendingChatTweaks = nil
   self._puiPendingChatSideButtons = nil
-  self:_CancelFadeTimers()
-
-  local cf = _G.ChatFrame1
-  if cf then
-    self:_SetChatVisualAlpha(cf, 1)
+  if CopyFrame then
+    CopyFrame:Hide()
+  end
+  if UrlPopupFrame then
+    UrlPopupFrame:Hide()
   end
 
-  StopPrimaryChatMove()
   SetPrimaryChatResizeHandleShown(false)
   FrameUtil:UnregisterMover("Chat_Primary")
 end
-
 
   _PUI_IsChattynatorLoaded = P:Def("_PUI_IsChattynatorLoaded", _PUI_IsChattynatorLoaded)
   _PUI_IsPratLoaded = P:Def("_PUI_IsPratLoaded", _PUI_IsPratLoaded)
@@ -4526,23 +3236,10 @@ end
   _PUI_ShowPratChoicePopup = P:Def("_PUI_ShowPratChoicePopup", _PUI_ShowPratChoicePopup)
   ChatLinks.OnInitialize = P:Def("ChatLinks.OnInitialize", ChatLinks.OnInitialize)
   ForEachBlizzardChatFrame = P:Def("ForEachBlizzardChatFrame", ForEachBlizzardChatFrame)
-  ApplyChatTweaks = P:Def("ApplyChatTweaks", ApplyChatTweaks)
-  GetNewLog = P:Def("GetNewLog", GetNewLog)
-  _PUI_GetPersistentHistoryDB = P:Def("_PUI_GetPersistentHistoryDB", _PUI_GetPersistentHistoryDB)
-  _PUI_GetHistoryOptions = P:Def("_PUI_GetHistoryOptions", _PUI_GetHistoryOptions)
-  _PUI_CleanStore = P:Def("_PUI_CleanStore", _PUI_CleanStore)
-  _PUI_GetHistoryState = P:Def("_PUI_GetHistoryState", _PUI_GetHistoryState)
-  _PUI_TrimHistoryState = P:Def("_PUI_TrimHistoryState", _PUI_TrimHistoryState)
-  _PUI_ClearSavedHistory = P:Def("_PUI_ClearSavedHistory", _PUI_ClearSavedHistory)
-  _PUI_GetRenderableMessages = P:Def("_PUI_GetRenderableMessages", _PUI_GetRenderableMessages)
-  _PUI_CaptureExistingDefaultChatFrame = P:Def("_PUI_CaptureExistingDefaultChatFrame", _PUI_CaptureExistingDefaultChatFrame)
-  _PUI_RenderHistoryIntoDefaultFrame = P:Def("_PUI_RenderHistoryIntoDefaultFrame", _PUI_RenderHistoryIntoDefaultFrame)
   _PUI_IsChatRuntimeEnabled = P:Def("_PUI_IsChatRuntimeEnabled", _PUI_IsChatRuntimeEnabled)
   _PUI_RefreshChatRuntimeState = P:Def("_PUI_RefreshChatRuntimeState", _PUI_RefreshChatRuntimeState)
-  _PUI_BootHistoryOwner = P:Def("_PUI_BootHistoryOwner", _PUI_BootHistoryOwner)
-  _PUI_InstallPersistentHistoryHook = P:Def("_PUI_InstallPersistentHistoryHook", _PUI_InstallPersistentHistoryHook)
   ChatProvider = P:Def("ChatProvider", ChatProvider)
-  _SafeLinkify = P:Def("_SafeLinkify", _SafeLinkify)
+  LinkifyChatURLs = P:Def("LinkifyChatURLs", LinkifyChatURLs)
   ChatLinks.SetUrlFiltersEnabled = P:Def("ChatLinks.SetUrlFiltersEnabled", ChatLinks.SetUrlFiltersEnabled)
   _PUI_CF_GetFormatDB = P:Def("_PUI_CF_GetFormatDB", _PUI_CF_GetFormatDB)
   _PUI_CF_SetShowTimestamps = P:Def("_PUI_CF_SetShowTimestamps", _PUI_CF_SetShowTimestamps)
@@ -4567,7 +3264,6 @@ end
   _PUI_EnsureTextureBackdrop = P:Def("_PUI_EnsureTextureBackdrop", _PUI_EnsureTextureBackdrop)
   _PUI_ApplyTextureBackdrop = P:Def("_PUI_ApplyTextureBackdrop", _PUI_ApplyTextureBackdrop)
   _ApplyDirectChatShellBackdrop = P:Def("_ApplyDirectChatShellBackdrop", _ApplyDirectChatShellBackdrop)
-  _DisableChatButtonFrame = P:Def("_DisableChatButtonFrame", _DisableChatButtonFrame)
   ChatLinks.ApplyCopyWindowStyle = P:Def("ChatLinks.ApplyCopyWindowStyle", ChatLinks.ApplyCopyWindowStyle)
   SaveCopyFramePosition = P:Def("SaveCopyFramePosition", SaveCopyFramePosition)
   ApplyCopyFramePosition = P:Def("ApplyCopyFramePosition", ApplyCopyFramePosition)
@@ -4575,12 +3271,9 @@ end
   EnsureCopyFrame = P:Def("EnsureCopyFrame", EnsureCopyFrame)
   ApplyPrimaryChatHolderLayout = P:Def("ApplyPrimaryChatHolderLayout", ApplyPrimaryChatHolderLayout)
   BindPrimaryChatFrame = P:Def("BindPrimaryChatFrame", BindPrimaryChatFrame)
-  InitializePrimaryChatLayout = P:Def("InitializePrimaryChatLayout", InitializePrimaryChatLayout)
+  ApplyPrimaryChatLayout = P:Def("ApplyPrimaryChatLayout", ApplyPrimaryChatLayout)
   GetPrimaryChatMoverInsets = P:Def("GetPrimaryChatMoverInsets", GetPrimaryChatMoverInsets)
   SavePrimaryChatLayout = P:Def("SavePrimaryChatLayout", SavePrimaryChatLayout)
-  StopPrimaryChatMove = P:Def("StopPrimaryChatMove", StopPrimaryChatMove)
-  StartPrimaryChatMove = P:Def("StartPrimaryChatMove", StartPrimaryChatMove)
-  EnablePrimaryChatTabDragging = P:Def("EnablePrimaryChatTabDragging", EnablePrimaryChatTabDragging)
   StopPrimaryChatResize = P:Def("StopPrimaryChatResize", StopPrimaryChatResize)
   UpdatePrimaryChatResize = P:Def("UpdatePrimaryChatResize", UpdatePrimaryChatResize)
   StartPrimaryChatResize = P:Def("StartPrimaryChatResize", StartPrimaryChatResize)
@@ -4588,31 +3281,19 @@ end
   SetPrimaryChatResizeHandleShown = P:Def("SetPrimaryChatResizeHandleShown", SetPrimaryChatResizeHandleShown)
   RegisterPrimaryChatMover = P:Def("RegisterPrimaryChatMover", RegisterPrimaryChatMover)
   ChatLinks.OnEditModeChanged = P:Def("ChatLinks.OnEditModeChanged", ChatLinks.OnEditModeChanged)
-  ChatLinks._SetChatVisualAlpha = P:Def("ChatLinks._SetChatVisualAlpha", ChatLinks._SetChatVisualAlpha)
-  ChatLinks._CancelFadeTimers = P:Def("ChatLinks._CancelFadeTimers", ChatLinks._CancelFadeTimers)
-  ChatLinks._AnimateChatVisualAlpha = P:Def("ChatLinks._AnimateChatVisualAlpha", ChatLinks._AnimateChatVisualAlpha)
-  ChatLinks._ScheduleIdleVisualFade = P:Def("ChatLinks._ScheduleIdleVisualFade", ChatLinks._ScheduleIdleVisualFade)
-  ChatLinks.ChatInputActivated = P:Def("ChatLinks.ChatInputActivated", ChatLinks.ChatInputActivated)
-  ChatLinks.ChatInputDeactivated = P:Def("ChatLinks.ChatInputDeactivated", ChatLinks.ChatInputDeactivated)
-  ChatLinks.ApplyInitialFade = P:Def("ChatLinks.ApplyInitialFade", ChatLinks.ApplyInitialFade)
   ChatLinks.OpenCopyWindow = P:Def("ChatLinks.OpenCopyWindow", ChatLinks.OpenCopyWindow)
-  EnsureChatInputBar = P:Def("EnsureChatInputBar", EnsureChatInputBar)
-  SetChatVisualFrameLevel = P:Def("SetChatVisualFrameLevel", SetChatVisualFrameLevel)
   SkinChatEditBox = P:Def("SkinChatEditBox", SkinChatEditBox)
   SkinChatTab = P:Def("SkinChatTab", SkinChatTab)
-  CreateJumpToBottomButton = P:Def("CreateJumpToBottomButton", CreateJumpToBottomButton)
   SkinChatFrame = P:Def("SkinChatFrame", SkinChatFrame)
   HideChatSideButtons = P:Def("HideChatSideButtons", HideChatSideButtons)
   _PUI_ClickBlizzardChatTool = P:Def("_PUI_ClickBlizzardChatTool", _PUI_ClickBlizzardChatTool)
   EnsureChatToolsButton = P:Def("EnsureChatToolsButton", EnsureChatToolsButton)
   CreateCopyButton = P:Def("CreateCopyButton", CreateCopyButton)
+  ChatLinks.RefreshChatFrameVisuals = P:Def("ChatLinks.RefreshChatFrameVisuals", ChatLinks.RefreshChatFrameVisuals)
+  ChatLinks.RefreshChatTabs = P:Def("ChatLinks.RefreshChatTabs", ChatLinks.RefreshChatTabs)
   ChatLinks.RefreshChatFrames = P:Def("ChatLinks.RefreshChatFrames", ChatLinks.RefreshChatFrames)
   ChatLinks.RefreshTheme = P:Def("ChatLinks.RefreshTheme", ChatLinks.RefreshTheme)
   ChatLinks.OnProfileChanged = P:Def("ChatLinks.OnProfileChanged", ChatLinks.OnProfileChanged)
   ChatLinks.OnEnable = P:Def("ChatLinks.OnEnable", ChatLinks.OnEnable)
   ChatLinks.OnDisable = P:Def("ChatLinks.OnDisable", ChatLinks.OnDisable)
-
-
-
-
 

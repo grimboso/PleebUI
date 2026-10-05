@@ -37,8 +37,20 @@ ns.Pixel = {}
 local Addon = AceAddon:NewAddon(ADDON_NAME, "NumyAceEvent-3.0")
 ns.Addon = Addon
 
+local MessageAPIFrame = CreateFrame("ScrollingMessageFrame")
+MessageAPIFrame:Hide()
+MessageAPIFrame:UnregisterAllEvents()
+-- The chat mixin's Lua override bypasses the intrinsic secure display entry point.
+ns.AddChatMessage = MessageAPIFrame.AddMessage
+ns.BackFillChatMessage = MessageAPIFrame.BackFillMessage
+ns.SetChatMaxLines = MessageAPIFrame.SetMaxLines
+
 function Addon:Print(message)
-  DEFAULT_CHAT_FRAME:AddMessage("|cff33ff99" .. ADDON_NAME .. "|r: " .. tostring(message))
+  local text = "|cff33ff99" .. ADDON_NAME .. "|r: " .. tostring(message)
+  ns.AddChatMessage(DEFAULT_CHAT_FRAME, text)
+  if canaccessvalue(text) and DEFAULT_CHAT_FRAME.addMessageObserver then
+    DEFAULT_CHAT_FRAME.addMessageObserver(DEFAULT_CHAT_FRAME, text)
+  end
 end
 
 function Addon:PUI_ResetAndReload(resetFn)
@@ -867,7 +879,7 @@ function Addon:OnInitialize()
   ns.MinimapData.Initialize()
 end
 
-function Addon:RefreshIconFonts()
+function Addon:RefreshIconFonts(atWorldEntry)
   local media = self.db.profile.pui.media
 
   ns.Theme.RefreshFontSizeOffsetCache()
@@ -891,7 +903,9 @@ function Addon:RefreshIconFonts()
   ns.Modules.PRD:RefreshIconFonts()
   ns.ActionBarsCore:RefreshAll({ fonts = true })
   ns.Modules.CooldownManager:RefreshIconFonts()
-  ns.Registry.ChatLinks:RefreshFonts()
+  if not atWorldEntry then
+    ns.Registry.ChatLinks:RefreshFonts()
+  end
   ns.Modules.PlayerBuffs:RefreshFonts()
   ns.Modules.HunterTools:RefreshFonts()
   ns.Registry.Minimap:RefreshFonts()
@@ -899,7 +913,7 @@ function Addon:RefreshIconFonts()
 end
 
 Addon:RegisterEvent("PLAYER_ENTERING_WORLD", function()
-  Addon:RefreshIconFonts()
+  Addon:RefreshIconFonts(true)
 end)
 
 
