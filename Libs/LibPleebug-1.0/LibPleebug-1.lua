@@ -10,9 +10,9 @@
 --     It shows CPU call counts/calls per second, but not per-call memory deltas.
 --
 --   Full debug mode
---     Routes every P:Def and P:SecDef function through Pleebug wrappers.
+--     Wraps selected files only during an explicitly armed capture reload.
 --     It tracks calls, CPU cost, and memory allocation data.
---     It is loaded only after the user explicitly selects Full debug and reloads.
+--     It is installed only after the user explicitly starts Full capture and reloads.
 --     It can taint and is meant for short debug sessions with frequent reloads.
 --
 -- Instrumentation note:
@@ -20,11 +20,11 @@
 --   Local functions still need P:Def(name, fn), because Lua local functions are invisible
 --   unless their function reference is passed to Pleebug.
 --   In Light mode P:Def returns the original function unchanged.
---   In Full debug mode P:Def and P:SecDef install wrappers for every registration.
+--   Full Start reloads to install selected wrappers; Stop reloads to remove them.
 
 
 
-local MAJOR, MINOR = "LibPleebug-1", 2
+local MAJOR, MINOR = "LibPleebug-1", 3
 local LibStub = _G.LibStub
 if not LibStub then return end
 
@@ -45,7 +45,11 @@ end
 MemDebug.__pleebugLoadMode = _GetSavedDebugMode()
 
 
-MemDebug._enabled = false
+-- Consume the explicit Start request once. Ordinary reloads never resume Full capture.
+MemDebug.__pleebugCaptureLoaded = MemDebug.__pleebugLoadMode == "full"
+  and _G.LibPleebugDB.captureOnNextLoad == true
+_G.LibPleebugDB.captureOnNextLoad = nil
+MemDebug._enabled = MemDebug.__pleebugCaptureLoaded
 MemDebug._ticker = nil
 MemDebug._counts = MemDebug._counts or {}
 MemDebug._rollingCounts = MemDebug._rollingCounts or {}
@@ -107,7 +111,7 @@ local function _ensureDB()
   MemDebug.__pleebugDBInit = true
   mdb.__pleebugInit = nil
 
-  -- Tracking must never persist across reloads. Only runtime Start() enables tracking.
+  -- Capture resumes only from the one-shot Full Start request consumed above.
   mdb.enabled = false
   if type(mdb.interval) ~= "number" then mdb.interval = 10 end
   if mdb.interval < 5 then mdb.interval = 5 end
@@ -184,8 +188,8 @@ function MemDebug:GetDebugMode()
 end
 
 function MemDebug:GetLoadMode()
-  -- Used by P:Def while addon files are loading.
-  return self.__pleebugLoadMode or "light"
+  -- Describes actual instrumentation, including files with Full-only exclusions.
+  return self.__pleebugCaptureLoaded and "full" or "light"
 end
 
 function MemDebug:SetDebugMode(mode)
@@ -198,6 +202,7 @@ function MemDebug:SetDebugMode(mode)
   if db then
     db.openAfterReload = true
     db.debugMode = mode
+    db.captureOnNextLoad = nil
     db.__pleebugLoadMode = nil
     db.__pleebugForceFullDebug = nil
     db.fullDebugOnNextLoad = nil
@@ -221,6 +226,7 @@ function MemDebug:SetDebugMode(mode)
 end
 
 function MemDebug:SetDebugModeAndReload(mode)
+  if InCombatLockdown() then return false end
   mode = tostring(mode or "light")
   if mode ~= "full" then
     mode = "light"
@@ -354,8 +360,6 @@ end
 
 function MemDebug:SetEnabled(state)
   state = not not state
-  self._enabled = state
-
   if state then
     self:Start()
   else
@@ -370,6 +374,7 @@ function MemDebug:GetInterval()
 end
 
 function MemDebug:SetInterval(seconds)
+  if self.__pleebugCaptureLoaded and InCombatLockdown() then return false end
   local mdb = _ensureDB()
   seconds = tonumber(seconds) or 10
   seconds = math.floor(seconds + 0.5)
@@ -523,6 +528,7 @@ function MemDebug:GetModuleGroupState(groupName)
 end
 
 function MemDebug:SetModuleGroupEnabled(groupName, enabled)
+  if self.__pleebugCaptureLoaded then return false end
   groupName = tostring(groupName or "")
   if groupName == "" then return end
 
@@ -556,6 +562,7 @@ function MemDebug:IsModuleEnabled(moduleName)
 end
 
 function MemDebug:EnableAllModules()
+  if self.__pleebugCaptureLoaded then return false end
   local mdb = _ensureDB()
   if not mdb then return end
   mdb.modules = mdb.modules or {}
@@ -569,6 +576,7 @@ function MemDebug:EnableAllModules()
 end
 
 function MemDebug:DisableAllModules()
+  if self.__pleebugCaptureLoaded then return false end
   local mdb = _ensureDB()
   if not mdb then return end
   mdb.modules = mdb.modules or {}
@@ -627,6 +635,7 @@ end
 
 
 function MemDebug:SetModuleEnabled(moduleName, enabled)
+  if self.__pleebugCaptureLoaded then return false end
   local mdb = _ensureDB()
   if not mdb then return end
 
@@ -788,7 +797,7 @@ end
 --     This gives CPU call counts/calls per second without Pleebug wrapper taint.
 --
 --   Full debug mode:
---     P:Def returns an instrumented wrapper for every registered function.
+--     P:Def returns a wrapper only in selected files during an armed Full capture.
 --     P:SecDef deliberately replaces the registered owner method with the same wrapper path.
 --
 -- IMPORTANT:
@@ -816,7 +825,7 @@ function MemDebug:NewPrivate(moduleName, opt)
   end
 
 
-  function t:Def(name, fn, bucketOverride)
+  function t:Def(name, fn, bucketOverride, phaseName)
     if type(name) ~= "string" or name == "" or type(fn) ~= "function" then
       return fn
     end
@@ -846,9 +855,9 @@ function MemDebug:NewPrivate(moduleName, opt)
       mode = "light"
     end
 
-    if mode == "full" then
+    if mode == "full" and modules[module] ~= false then
       cpu:SetRegistrationKind(path, "wrapped")
-      local wrapped = cpu:CreateMeasuredCall(rec, fn, modules, module)
+      local wrapped = cpu:CreateMeasuredCall(rec, fn, modules, module, phaseName)
 
       rawset(self, name, wrapped)
       return wrapped
@@ -858,8 +867,8 @@ function MemDebug:NewPrivate(moduleName, opt)
     return fn
   end
 
-  -- Light mode keeps the original owner method. Full mode deliberately replaces it.
-  function t:SecDef(name, owner, methodName, bucketOverride)
+  -- Owner methods remain original outside selected Full captures.
+  function t:SecDef(name, owner, methodName, bucketOverride, phaseName)
     if type(name) ~= "string" or name == "" then
       return
     end
@@ -883,10 +892,10 @@ function MemDebug:NewPrivate(moduleName, opt)
     })
 
     local mode = (MemDebug.GetLoadMode and MemDebug:GetLoadMode()) or MemDebug.__pleebugLoadMode or "light"
-    if mode == "full" then
+    if mode == "full" and modules[module] ~= false then
       cpu:SetRegistrationKind(path, "wrapped")
 
-      local wrapped = cpu:CreateMeasuredCall(rec, fn, modules, module)
+      local wrapped = cpu:CreateMeasuredCall(rec, fn, modules, module, phaseName)
 
       owner[methodName] = wrapped
       rawset(self, name, wrapped)
@@ -1325,6 +1334,15 @@ function MemDebug:SnapshotAndReset()
 end
 
 function MemDebug:Start()
+  if self:GetDebugMode() == "full" and not self.__pleebugCaptureLoaded then
+    if InCombatLockdown() then return false end
+    local db = _ensureDB()
+    db.captureOnNextLoad = true
+    db.stoppedCapture = nil
+    db.openAfterReload = true
+    ReloadUI()
+    return false
+  end
   if self._ticker then
     self._ticker:Cancel()
     self._ticker = nil
@@ -1355,7 +1373,7 @@ function MemDebug:Start()
   _wipe(self._lastSnapshot)
 
   -- CPU module keeps its own runtime buffers. Clear them only on Start (and Clear button),
-  -- never on Stop and never persist to SavedVariables.
+  -- Stop carries aggregates across its removal reload once, then removes the saved copy.
   if self.CPU and self.CPU.ResetRuntime then
     self.CPU:ResetRuntime()
   end
@@ -1379,6 +1397,8 @@ end
 
 
 function MemDebug:Stop()
+  -- A reload is required to remove local and previously captured callback references.
+  if self.__pleebugCaptureLoaded and InCombatLockdown() then return false end
   if self._ticker then
     self._ticker:Cancel()
     self._ticker = nil
@@ -1396,7 +1416,33 @@ function MemDebug:Stop()
     self.CPU:StopOverview()
   end
 
-  -- Keep runtime buffers for inspection after Stop(), but never persist to SavedVariables.
+  if self.__pleebugCaptureLoaded then
+    local db = _ensureDB()
+    -- Only profiler-owned numbers, names and aggregates cross this single reload.
+    db.stoppedCapture = {
+      snapshot = self._lastSnapshot,
+      stats = self.CPU._rtFuncStats,
+    }
+    db.captureOnNextLoad = nil
+    db.openAfterReload = true
+    ReloadUI()
+  end
+end
+
+function MemDebug:CompleteCaptureReload()
+  local db = _ensureDB()
+  local stopped = db.stoppedCapture
+  db.stoppedCapture = nil
+  if stopped and not self.__pleebugCaptureLoaded then
+    self.CPU._rtFuncStats = stopped.stats
+    self._lastSnapshot = stopped.snapshot
+    self.Window._stoppedSnapshot = stopped.snapshot
+    self.Window.lastSnapshot = stopped.snapshot
+  end
+  if self.__pleebugCaptureLoaded then
+    self:Start()
+  end
+  self:OpenAfterReloadIfRequested()
 end
 
 
@@ -1748,7 +1794,7 @@ end
 
 -- IMPORTANT:
 -- Do NOT install at file load. MemDebug is dev-only and must stay idle until Start().
--- Installation happens inside MemDebug:Start().
+-- Start arms Full installation on reload; Light installation begins in Start().
 
 local function _ToggleMemDebugWindow()
   if MemDebug and MemDebug.Window and MemDebug.Window.Toggle then
@@ -1777,12 +1823,12 @@ if not MemDebug.__pleebugOpenAfterReloadFrame then
   _openFrame:SetScript("OnEvent", function()
     if C_Timer and C_Timer.After then
       C_Timer.After(0.25, function()
-        if MemDebug and MemDebug.OpenAfterReloadIfRequested then
-          MemDebug:OpenAfterReloadIfRequested()
+        if MemDebug and MemDebug.CompleteCaptureReload then
+          MemDebug:CompleteCaptureReload()
         end
       end)
-    elseif MemDebug and MemDebug.OpenAfterReloadIfRequested then
-      MemDebug:OpenAfterReloadIfRequested()
+    elseif MemDebug and MemDebug.CompleteCaptureReload then
+      MemDebug:CompleteCaptureReload()
     end
   end)
 end
