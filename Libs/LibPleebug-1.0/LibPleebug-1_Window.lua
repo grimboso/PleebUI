@@ -208,6 +208,26 @@ function W:_ApplySnapshot(snapshot)
   _flatten(self._buildRoot, self._flat, 0, self.expanded or {})
 end
 
+function W:_FilterExportText(text)
+  local lines = {}
+  for line in text:gmatch("[^\n]+") do
+    local include = true
+    if #lines > 0 then
+      local path = line:match("^[^\t]+")
+      for dot in path:gmatch("()%.") do
+        if not self.expanded[path:sub(1, dot - 1)] then
+          include = false
+          break
+        end
+      end
+    end
+    if include then
+      lines[#lines + 1] = line
+    end
+  end
+  return table.concat(lines, "\n")
+end
+
 function W:_BuildExportRows(snapshot)
   -- Export must also work before the deferred display tree finishes building.
   local root = { name = "root", path = "", count = 0, children = {} }
@@ -1098,7 +1118,7 @@ local function _ensureFrame()
     _EnsureExportFrame()
     if not (ExportFrame and ExportEditBox) then return end
 
-    local txt = self:BuildExportText() or ""
+    local txt = self:_FilterExportText(self:BuildExportText())
     ExportEditBox:SetText(txt)
     ExportEditBox:HighlightText()
     ExportEditBox:SetFocus()
