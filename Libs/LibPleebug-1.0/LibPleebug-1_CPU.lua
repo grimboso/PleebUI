@@ -480,6 +480,7 @@ function CPU:ResetRuntime()
     for _, rec in pairs(self._nativeByFunction) do
       if type(rec) == "table" then
         rec.lastTime = nil
+        rec.lastSelfTime = nil
         rec.lastCount = nil
         rec.measuredStat = nil
         rec.recordingBucket = nil
@@ -534,11 +535,11 @@ local function _GetRecordingBucket(rec, path, nowT)
   return bucket
 end
 
-local SUM_FIELDS = { "n", "timeSum", "tickSum", "allocSum", "deallocSum",
+local SUM_FIELDS = { "n", "timeSum", "selfTimeSum", "tickSum", "allocSum", "deallocSum",
   "allocN", "deallocN", "activeFrames" }
-local MAX_FIELDS = { "timeMax", "tickMax", "allocMax", "deallocMax",
+local MAX_FIELDS = { "timeMax", "selfTimeMax", "tickMax", "allocMax", "deallocMax",
   "frameTimeMax", "frameCallsMax" }
-local LAST_FIELDS = { "timeLast", "tickLast", "allocLast", "deallocLast" }
+local LAST_FIELDS = { "timeLast", "selfTimeLast", "tickLast", "allocLast", "deallocLast" }
 
 local function _AggregateWindow(record, cutoff, lastSecond, out)
   _WipeTable(out)
@@ -557,6 +558,9 @@ local function _AggregateWindow(record, cutoff, lastSecond, out)
       end
       if bucket.timeMin ~= nil and (out.timeMin == nil or bucket.timeMin < out.timeMin) then
         out.timeMin = bucket.timeMin
+      end
+      if bucket.selfTimeMin ~= nil and (out.selfTimeMin == nil or bucket.selfTimeMin < out.selfTimeMin) then
+        out.selfTimeMin = bucket.selfTimeMin
       end
       if not latest or bucket.second > latest.second then latest = bucket end
       out.native = bucket.native
@@ -629,16 +633,25 @@ local function _BuildPathEarly(moduleName, bucket, funcName)
   return tostring(moduleName or "Unknown") .. "." .. name
 end
 
-local function _PushNativeFuncStat(rec, path, nowT, msDelta, countDelta)
+local function _PushNativeFuncStat(rec, path, nowT, inclusiveMsDelta, countDelta, selfMsDelta)
   if countDelta <= 0 then return end
   local st = _GetRecordingBucket(rec, path, nowT)
   st.native = true
-  local perCall = msDelta / countDelta
+
+  local inclusivePerCall = inclusiveMsDelta / countDelta
   st.n = st.n + countDelta
-  st.timeSum = st.timeSum + msDelta
-  st.timeLast = perCall
-  if st.timeMin == nil or perCall < st.timeMin then st.timeMin = perCall end
-  if st.timeMax == nil or perCall > st.timeMax then st.timeMax = perCall end
+  st.timeSum = st.timeSum + inclusiveMsDelta
+  st.timeLast = inclusivePerCall
+  if st.timeMin == nil or inclusivePerCall < st.timeMin then st.timeMin = inclusivePerCall end
+  if st.timeMax == nil or inclusivePerCall > st.timeMax then st.timeMax = inclusivePerCall end
+
+  if selfMsDelta ~= nil then
+    local selfPerCall = selfMsDelta / countDelta
+    st.selfTimeSum = (st.selfTimeSum or 0) + selfMsDelta
+    st.selfTimeLast = selfPerCall
+    if st.selfTimeMin == nil or selfPerCall < st.selfTimeMin then st.selfTimeMin = selfPerCall end
+    if st.selfTimeMax == nil or selfPerCall > st.selfTimeMax then st.selfTimeMax = selfPerCall end
+  end
 end
 
 
@@ -814,6 +827,14 @@ function CPU:SetRegistrationKind(path, kind)
   end
 end
 
+function CPU:SetRegistrationBackend(path, backend)
+  local rec = self._nativeFuncs and self._nativeFuncs[path]
+  local alias = rec and rec.aliases and rec.aliases[path]
+  if alias then
+    alias.backend = backend
+  end
+end
+
 function CPU:GetFunctionRegistration(path)
   local rec = self._nativeFuncs and self._nativeFuncs[path]
   if not rec then return nil end
@@ -851,13 +872,14 @@ function CPU:GetMeasurementState(path)
     if not MemDebug:IsModuleEnabled(alias.moduleName) then
       return "Original - file excluded" .. aliasSuffix
     end
-    local backend = self:GetFullMeasurementBackend()
+    local backend = alias.backend or self:GetFullMeasurementBackend()
     if alias.kind == "wrapped" then
       return "Wrapped - " .. backend .. (MemDebug:IsEnabled() and "" or " (stopped)") .. aliasSuffix
     end
     for wrappedPath, registeredAlias in pairs(rec.aliases) do
       if registeredAlias.kind == "wrapped" then
-        return "Measured via alias " .. tostring(wrappedPath) .. " - " .. backend .. aliasSuffix
+        local wrappedBackend = registeredAlias.backend or self:GetFullMeasurementBackend()
+        return "Measured via alias " .. tostring(wrappedPath) .. " - " .. wrappedBackend .. aliasSuffix
       end
     end
     return "Original - no Full wrapper" .. aliasSuffix
@@ -889,8 +911,10 @@ function CPU:PrimeNativeBaselines()
   if self._nativeByFunction and type(GetFunctionCPUUsage) == "function" then
     for _, rec in pairs(self._nativeByFunction) do
       if type(rec) == "table" and not rec.retired and type(rec.fn) == "function" then
-        local total, count = GetFunctionCPUUsage(rec.fn, false)
-        rec.lastTime = _ToNumberEarly(total)
+        local selfTotal, count = GetFunctionCPUUsage(rec.fn, false)
+        local inclusiveTotal = GetFunctionCPUUsage(rec.fn, true)
+        rec.lastSelfTime = _ToNumberEarly(selfTotal)
+        rec.lastTime = _ToNumberEarly(inclusiveTotal)
         rec.lastCount = _ToNumberEarly(count)
         rec.everCount = rec.lastCount or rec.everCount or 0
       end
@@ -921,31 +945,37 @@ function CPU:SampleNativeFunctions(nowT)
       or MemDebug:IsModuleEnabled(rec and rec.moduleName)
 
     if not rec.retired and moduleEnabled and type(fn) == "function" then
-      local total, count = GetFunctionCPUUsage(fn, false)
-      total = _ToNumberEarly(total)
+      local selfTotal, count = GetFunctionCPUUsage(fn, false)
+      local inclusiveTotal = GetFunctionCPUUsage(fn, true)
+      selfTotal = _ToNumberEarly(selfTotal)
+      inclusiveTotal = _ToNumberEarly(inclusiveTotal)
       count = _ToNumberEarly(count)
 
-      if total and count then
-        if rec.lastTime ~= nil and rec.lastCount ~= nil then
-          local msDelta = total - rec.lastTime
+      if selfTotal and inclusiveTotal and count then
+        if rec.lastSelfTime ~= nil and rec.lastTime ~= nil and rec.lastCount ~= nil then
+          local selfMsDelta = selfTotal - rec.lastSelfTime
+          local inclusiveMsDelta = inclusiveTotal - rec.lastTime
           local countDelta = count - rec.lastCount
 
-          if msDelta < 0 or countDelta < 0 then
-            msDelta = 0
+          if selfMsDelta < 0 or inclusiveMsDelta < 0 or countDelta < 0 then
+            selfMsDelta = 0
+            inclusiveMsDelta = 0
             countDelta = 0
           end
 
           if countDelta > 0 then
-            _PushNativeFuncStat(rec, path, nowT, msDelta, countDelta)
+            _PushNativeFuncStat(rec, path, nowT, inclusiveMsDelta, countDelta, selfMsDelta)
           end
         end
 
-        rec.lastTime = total
+        rec.lastSelfTime = selfTotal
+        rec.lastTime = inclusiveTotal
         rec.lastCount = count
         rec.everCount = count
       end
     elseif rec then
       -- Do not carry disabled-period calls into the first sample after re-enabling.
+      rec.lastSelfTime = nil
       rec.lastTime = nil
       rec.lastCount = nil
     end
@@ -1098,6 +1128,22 @@ local function _PushPhaseStats(st, events)
   end
 end
 
+
+function CPU:CreateMeasuredVoidCall(rec, fn, modules, module)
+  return function(...)
+    if not MemDebug._enabled or modules[module] == false or rec.retired then
+      return fn(...)
+    end
+
+    local frameID = GetTime()
+    local startedAt = debugprofilestop()
+
+    fn(...)
+
+    local elapsedMilliseconds = debugprofilestop() - startedAt
+    _PushFuncStat(rec, frameID, elapsedMilliseconds)
+  end
+end
 
 function CPU:CreateMeasuredCall(rec, fn, modules, module, phaseName)
   local measureCall = C_AddOnProfiler and C_AddOnProfiler.MeasureCall

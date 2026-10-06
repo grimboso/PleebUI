@@ -783,8 +783,8 @@ end
 --     This gives CPU call counts/calls per second without Pleebug wrapper taint.
 --
 --   Full debug mode:
---     P:Def installs a wrapper in selected files when Full mode loads.
---     P:SecDef deliberately replaces the registered owner method with the same wrapper path.
+--     P:Def installs a measured wrapper in selected files when Full mode loads.
+--     P:SecDef replaces void owner methods with an elapsed-time wrapper.
 --
 -- IMPORTANT:
 --   DropIn alone is not enough to see local functions, because Lua local function
@@ -811,7 +811,7 @@ function MemDebug:NewPrivate(moduleName, opt)
   end
 
 
-  function t:Def(name, fn, bucketOverride, phaseName)
+  function t:Def(name, fn, bucketOverride, phaseName, measureInFullMode)
     if type(name) ~= "string" or name == "" or type(fn) ~= "function" then
       return fn
     end
@@ -841,7 +841,7 @@ function MemDebug:NewPrivate(moduleName, opt)
       mode = "light"
     end
 
-    if mode == "full" and modules[module] ~= false then
+    if mode == "full" and modules[module] ~= false and measureInFullMode ~= false then
       cpu:SetRegistrationKind(path, "wrapped")
       local wrapped = cpu:CreateMeasuredCall(rec, fn, modules, module, phaseName)
 
@@ -854,7 +854,7 @@ function MemDebug:NewPrivate(moduleName, opt)
   end
 
   -- Owner methods remain original in Light mode and excluded Full files.
-  function t:SecDef(name, owner, methodName, bucketOverride, phaseName)
+  function t:SecDef(name, owner, methodName, bucketOverride, phaseName, measureInFullMode)
     if type(name) ~= "string" or name == "" then
       return
     end
@@ -878,10 +878,11 @@ function MemDebug:NewPrivate(moduleName, opt)
     })
 
     local mode = MemDebug:GetDebugMode()
-    if mode == "full" and modules[module] ~= false then
+    if mode == "full" and modules[module] ~= false and measureInFullMode ~= false then
       cpu:SetRegistrationKind(path, "wrapped")
+      cpu:SetRegistrationBackend(path, "debugprofilestop")
 
-      local wrapped = cpu:CreateMeasuredCall(rec, fn, modules, module, phaseName)
+      local wrapped = cpu:CreateMeasuredVoidCall(rec, fn, modules, module)
 
       owner[methodName] = wrapped
       rawset(self, name, wrapped)

@@ -469,7 +469,9 @@ local entry = flat[i]
         local avgMs = (st.timeSum or 0) / n
         local maxMs = st.timeMax or st.timeLast or 0
 
-        if st.native == true then
+        if st.native == true and isFuncLeaf and st.selfTimeSum ~= nil then
+          cpuText = string.format("%.3f/%.3fms self/incl", st.selfTimeSum / n, avgMs)
+        elseif st.native == true then
           cpuText = string.format("%.3fms avg", avgMs)
         else
           cpuText = string.format("%.3f(%.3f)ms", avgMs, maxMs)
@@ -1472,7 +1474,7 @@ local panel = CreateFrame("Frame", nil, sf, "BackdropTemplate")
 
   header.hCPU = _mkHeaderText()
   header.hCPU:SetPoint("RIGHT", header, "RIGHT", -30, 0)
-  header.hCPU:SetText(MemDebug:GetDebugMode() == "full" and "CPU avg / peak call" or "CPU sampled avg")
+  header.hCPU:SetText(MemDebug:GetDebugMode() == "full" and "CPU avg / peak call" or "CPU self / inclusive")
 
   header.hMem = _mkHeaderText()
   header.hMem:SetPoint("RIGHT", header.hCPU, "LEFT", -10, 0)
@@ -1902,9 +1904,16 @@ function _ensureRow(i)
 
     GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
     GameTooltip:AddLine(entry.node.name)
-    GameTooltip:AddDoubleLine("Average per call", string.format("%.3f ms", st.timeSum / st.n), 1, 1, 1, 1, 1, 1)
-    GameTooltip:AddDoubleLine(st.native and "Peak sampled average" or "Slowest measured call", string.format("%.3f ms", st.timeMax or 0), 1, 1, 1, 1, 1, 1)
-    GameTooltip:AddDoubleLine(st.native and "Latest sampled average" or "Latest measured call", string.format("%.3f ms", st.timeLast or 0), 1, 1, 1, 1, 1, 1)
+    if st.native and st.selfTimeSum ~= nil then
+      GameTooltip:AddDoubleLine("Self average per call", string.format("%.3f ms", st.selfTimeSum / st.n), 1, 1, 1, 1, 1, 1)
+      GameTooltip:AddDoubleLine("Inclusive average per call", string.format("%.3f ms", st.timeSum / st.n), 1, 1, 1, 1, 1, 1)
+      GameTooltip:AddDoubleLine("Peak sampled self average", string.format("%.3f ms", st.selfTimeMax or 0), 1, 1, 1, 1, 1, 1)
+      GameTooltip:AddDoubleLine("Peak sampled inclusive average", string.format("%.3f ms", st.timeMax or 0), 1, 1, 1, 1, 1, 1)
+    else
+      GameTooltip:AddDoubleLine("Average per call", string.format("%.3f ms", st.timeSum / st.n), 1, 1, 1, 1, 1, 1)
+      GameTooltip:AddDoubleLine(st.native and "Peak sampled average" or "Slowest measured call", string.format("%.3f ms", st.timeMax or 0), 1, 1, 1, 1, 1, 1)
+      GameTooltip:AddDoubleLine(st.native and "Latest sampled average" or "Latest measured call", string.format("%.3f ms", st.timeLast or 0), 1, 1, 1, 1, 1, 1)
+    end
     if st.activeFrames and st.activeFrames > 0 then
       GameTooltip:AddDoubleLine("Active frames", tostring(st.activeFrames), 1, 1, 1, 1, 1, 1)
       GameTooltip:AddDoubleLine("CPU per active frame", string.format("%.3f ms", st.timeSum / st.activeFrames), 1, 1, 1, 1, 1, 1)
