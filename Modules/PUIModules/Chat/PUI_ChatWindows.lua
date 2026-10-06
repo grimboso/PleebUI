@@ -7,6 +7,7 @@ local LoadingBoundary = CreateFrame("Frame")
 local Enabled = false
 local LayoutReady = false
 local RefreshTimer
+local DiscoveryTimer
 local WindowEvents = {
   "UPDATE_CHAT_WINDOWS", "UPDATE_FLOATING_CHAT_WINDOWS", "UPDATE_CHAT_COLOR",
   "PLAYER_ENTERING_WORLD", "PLAYER_REGEN_ENABLED", "CVAR_UPDATE",
@@ -21,10 +22,26 @@ local function RefreshVisuals()
   ChatLinks:RefreshChatFrames()
 end
 
+local function DiscoverVisuals()
+  DiscoveryTimer = nil
+  if not Enabled then return end
+  ChatLinks:DiscoverChatFrames()
+end
+
 function ChatLinks:QueueChatVisualRefresh()
   if not Enabled or RefreshTimer then return end
-  -- Discovery/layout runs after native window construction, without wrapping it.
+
+  if DiscoveryTimer then
+    DiscoveryTimer:Cancel()
+    DiscoveryTimer = nil
+  end
+
   RefreshTimer = C_Timer.NewTimer(0, RefreshVisuals)
+end
+
+function ChatLinks:QueueChatFrameDiscovery()
+  if not Enabled or RefreshTimer or DiscoveryTimer then return end
+  DiscoveryTimer = C_Timer.NewTimer(0, DiscoverVisuals)
 end
 
 function ChatLinks:IsChatLayoutReady()
@@ -39,11 +56,25 @@ LoadingBoundary:SetScript("OnEvent", function(self)
 end)
 
 Events:SetScript("OnEvent", function(_, event, ...)
-  -- Only the CVar branch binds arguments; secret whisper payloads stay untouched.
+  if event == "PLAYER_REGEN_ENABLED" then
+    ChatLinks:RefreshPendingChatVisuals()
+    return
+  end
+
+  if event == "CHAT_MSG_WHISPER"
+    or event == "CHAT_MSG_WHISPER_INFORM"
+    or event == "CHAT_MSG_BN_WHISPER"
+    or event == "CHAT_MSG_BN_WHISPER_INFORM"
+  then
+    ChatLinks:QueueChatFrameDiscovery()
+    return
+  end
+
   if event == "CVAR_UPDATE" then
     local cvar = ...
     if not canaccessvalue(cvar) or (cvar ~= "chatStyle" and cvar ~= "textToSpeech") then return end
   end
+
   ChatLinks:QueueChatVisualRefresh()
 end)
 
@@ -52,6 +83,7 @@ function ChatLinks:StartChatVisualLifecycle()
     self:QueueChatVisualRefresh()
     return
   end
+
   Enabled = true
   EventRegistry:RegisterCallback("EditMode.Exit", function() ChatLinks:QueueChatVisualRefresh() end, Lifecycle)
   for _, event in ipairs(WindowEvents) do Events:RegisterEvent(event) end
@@ -62,7 +94,17 @@ function ChatLinks:StopChatVisualLifecycle()
   Enabled = false
   Events:UnregisterAllEvents()
   EventRegistry:UnregisterCallback("EditMode.Exit", Lifecycle)
-  if RefreshTimer then RefreshTimer:Cancel(); RefreshTimer = nil end
+
+  if RefreshTimer then
+    RefreshTimer:Cancel()
+    RefreshTimer = nil
+  end
+
+  if DiscoveryTimer then
+    DiscoveryTimer:Cancel()
+    DiscoveryTimer = nil
+  end
 end
 
 RefreshVisuals = P:Def("RefreshVisuals", RefreshVisuals)
+DiscoverVisuals = P:Def("DiscoverVisuals", DiscoverVisuals)

@@ -2894,21 +2894,42 @@ local function HideChatFrameVisuals(chatFrame)
   end
 end
 
-function ChatLinks:RefreshChatFrameVisuals(chatFrame)
-  if self._puiRuntimeEnabled ~= true then
-    return
-  end
-  self:ApplyChatWindowFading(chatFrame)
-  local state = GetChatFrameState(chatFrame)
-  if not _PUI_IsChatFrameOpen(chatFrame) then
-    HideChatFrameVisuals(chatFrame)
+function ChatLinks:RefreshChatFrameVisuals(chatFrame, refreshStyle)
+  if self._puiRuntimeEnabled ~= true or not chatFrame then
     return
   end
 
+  local state = ChatFrameState[chatFrame]
+  if not _PUI_IsChatFrameOpen(chatFrame) then
+    if state then
+      if state.open then
+        HideChatFrameVisuals(chatFrame)
+      end
+      state.open = nil
+      state.pendingVisualRefresh = nil
+      state.pendingVisualStyle = nil
+    end
+    return
+  end
+
+  state = state or GetChatFrameState(chatFrame)
+  if state.open and refreshStyle ~= true and not state.pendingVisualRefresh then
+    return
+  end
+
+  self:ApplyChatWindowFading(chatFrame)
   self:ApplyChatHistoryCapacity(chatFrame)
-  if not CanChangeChatLayout(chatFrame) then return end
+
+  if not CanChangeChatLayout(chatFrame) then
+    state.open = true
+    state.pendingVisualRefresh = true
+    state.pendingVisualStyle = refreshStyle == true
+    return
+  end
+
   SkinChatFrame(chatFrame)
   _PUI_ApplyTypographyToChatFrame(chatFrame)
+
   local copyButton = state.copyButton
   local enableCopyFrame = self.db.profile.enableCopyFrame == true
   if enableCopyFrame and not _PUI_IsTemporaryChatFrame(chatFrame) then
@@ -2920,11 +2941,19 @@ function ChatLinks:RefreshChatFrameVisuals(chatFrame)
   if copyButton then
     copyButton:SetShown(enableCopyFrame)
   end
+
   self:AttachChatFocusFading(chatFrame, state)
+
+  state.open = true
+  state.pendingVisualRefresh = nil
+  state.pendingVisualStyle = nil
+
   if not state.visibilityHooked then
     state.visibilityHooked = true
     chatFrame:HookScript("OnShow", function()
-      if ChatLinks._puiRuntimeEnabled == true then ChatLinks:QueueChatVisualRefresh() end
+      if ChatLinks._puiRuntimeEnabled == true and not state.open then
+        ChatLinks:RefreshChatFrameVisuals(chatFrame)
+      end
     end)
   end
 end
@@ -2943,26 +2972,86 @@ function ChatLinks:RefreshChatTabs()
   self:RefreshChatDockFocusFading()
 end
 
+local function ApplyChatDockLayout()
+  if not ChatLinks:IsChatLayoutReady() then
+    return
+  end
+
+  local dock = GeneralDockManager
+  local primary = dock.primary
+  if not canaccessvalue(primary) or not primary then
+    return
+  end
+
+  if not CanChangeChatLayout(dock) then
+    ChatLinks._puiPendingChatDockLayout = true
+    return
+  end
+
+  ChatLinks._puiPendingChatDockLayout = nil
+
+  dock:ClearAllPoints()
+  dock:SetPoint("BOTTOMLEFT", primary, "TOPLEFT", 0, 3)
+  dock:SetPoint("BOTTOMRIGHT", primary, "TOPRIGHT", 0, 3)
+  dock:SetHeight(22)
+  ChatLinks:AlignChatDockTabs(dock)
+end
+
+function ChatLinks:DiscoverChatFrames()
+  if not self.db or not self.db.profile or self._puiRuntimeEnabled ~= true then
+    return
+  end
+
+  ForEachBlizzardChatFrame(function(chatFrame)
+    local state = ChatFrameState[chatFrame]
+    local open = _PUI_IsChatFrameOpen(chatFrame)
+
+    if open then
+      if not state or not state.open then
+        self:RefreshChatFrameVisuals(chatFrame)
+      end
+    elseif state and state.open then
+      self:RefreshChatFrameVisuals(chatFrame)
+    end
+  end)
+end
+
+function ChatLinks:RefreshPendingChatVisuals()
+  if not self.db or not self.db.profile or self._puiRuntimeEnabled ~= true then
+    return
+  end
+
+  for chatFrame, state in pairs(ChatFrameState) do
+    if state.pendingVisualRefresh then
+      self:RefreshChatFrameVisuals(chatFrame, state.pendingVisualStyle == true)
+    elseif state.open then
+      self:ApplyChatHistoryCapacity(chatFrame)
+    end
+  end
+
+  if self._puiPendingChatDockLayout then
+    ApplyChatDockLayout()
+  end
+
+  if self._puiPendingPrimaryChatBind then
+    ApplyPrimaryChatLayout()
+  end
+
+  if self._puiPendingChatSideButtons then
+    HideChatSideButtons()
+  end
+end
+
 function ChatLinks:RefreshChatFrames()
   if not self.db or not self.db.profile or self._puiRuntimeEnabled ~= true then
     return
   end
+
   ForEachBlizzardChatFrame(function(chatFrame)
-    self:RefreshChatFrameVisuals(chatFrame)
+    self:RefreshChatFrameVisuals(chatFrame, true)
   end)
 
-  if self:IsChatLayoutReady() then
-    local dock = GeneralDockManager
-    local primary = dock.primary
-    if canaccessvalue(primary) and primary and CanChangeChatLayout(dock) then
-      dock:ClearAllPoints()
-      dock:SetPoint("BOTTOMLEFT", primary, "TOPLEFT", 0, 3)
-      dock:SetPoint("BOTTOMRIGHT", primary, "TOPRIGHT", 0, 3)
-      dock:SetHeight(22)
-      self:AlignChatDockTabs(dock)
-    end
-  end
-
+  ApplyChatDockLayout()
   ApplyPrimaryChatLayout()
 
   local primaryChat = _G.ChatFrame1
@@ -2983,6 +3072,7 @@ function ChatLinks:RefreshChatFrames()
   if primaryChat and ChatFrameState[primaryChat].skinned then
     self:AttachChatFocusFading(primaryChat, ChatFrameState[primaryChat])
   end
+
   self:RefreshChatDockFocusFading()
   HideChatSideButtons()
 end
@@ -3290,6 +3380,9 @@ end
   CreateCopyButton = P:Def("CreateCopyButton", CreateCopyButton)
   ChatLinks.RefreshChatFrameVisuals = P:Def("ChatLinks.RefreshChatFrameVisuals", ChatLinks.RefreshChatFrameVisuals)
   ChatLinks.RefreshChatTabs = P:Def("ChatLinks.RefreshChatTabs", ChatLinks.RefreshChatTabs)
+  ApplyChatDockLayout = P:Def("ApplyChatDockLayout", ApplyChatDockLayout)
+  ChatLinks.DiscoverChatFrames = P:Def("ChatLinks.DiscoverChatFrames", ChatLinks.DiscoverChatFrames)
+  ChatLinks.RefreshPendingChatVisuals = P:Def("ChatLinks.RefreshPendingChatVisuals", ChatLinks.RefreshPendingChatVisuals)
   ChatLinks.RefreshChatFrames = P:Def("ChatLinks.RefreshChatFrames", ChatLinks.RefreshChatFrames)
   ChatLinks.RefreshTheme = P:Def("ChatLinks.RefreshTheme", ChatLinks.RefreshTheme)
   ChatLinks.OnProfileChanged = P:Def("ChatLinks.OnProfileChanged", ChatLinks.OnProfileChanged)
