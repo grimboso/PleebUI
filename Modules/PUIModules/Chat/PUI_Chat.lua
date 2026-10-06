@@ -2043,8 +2043,7 @@ local function EnsureCopyFrame()
     ChatLinks:ApplyCopyWindowStyle()
   end)
 
-  -- Above everything
-  CopyFrame:SetFrameStrata("TOOLTIP")
+  CopyFrame:SetFrameStrata("DIALOG")
   CopyFrame:SetFrameLevel(9999)
   CopyFrame:SetToplevel(true)
 

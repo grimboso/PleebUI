@@ -176,8 +176,8 @@ function ChatLinks:ReplayChatHistoryEvent(frame, entry)
   if not self.ChatHistoryEvents[entry.event] and not entry.primaryOnly then return end
   local text, info = RenderHistoryText(frame, entry)
   if not canaccessvalue(text) or type(text) ~= "string" then return end
-  -- Use the intrinsic elevation barrier, never the chat mixin's Lua override.
-  ns.BackFillChatMessage(frame, text, info.r, info.g, info.b)
+  -- BackFillMessage is the destination window's secure display entry point.
+  frame:BackFillMessage(text, info.r, info.g, info.b)
 end
 
 RenderHistoryText = P:Def("RenderHistoryText", RenderHistoryText)

@@ -113,27 +113,26 @@ function ChatLinks:ApplyChatHistoryCapacity(frame)
     or InCombatLockdown() or C_ChatInfo.InChatMessagingLockdown() then return end
   local capacity = math.max(128, math.min(5000, math.floor(self.db.profile.chatTweaks.savedLines)))
   if FrameCapacities[frame] == capacity then return end
-  -- Keep native buffer mutations inside the intrinsic secure entry point.
-  ns.SetChatMaxLines(frame, capacity)
+  -- SetMaxLines is the destination window's secure capacity entry point.
+  frame:SetMaxLines(capacity)
   FrameCapacities[frame] = capacity
 end
 
-local function GetHistoryChannelSubscriptions(frame)
-  local names, zones = {}, {}
-  local channels = frame.channelList
-  if not canaccessvalue(channels) or type(channels) ~= "table" or not canaccesstable(channels) then
-    return names, zones
+local function GetHistoryWindowSubscriptions(frame)
+  local messageTypes = { GetChatWindowMessages(frame:GetID()) }
+  local channels = { GetChatWindowChannels(frame:GetID()) }
+  local groups, names, zones = {}, {}, {}
+  for _, group in ipairs(messageTypes) do
+    if not canaccessvalue(group) then return end
+    if type(group) == "string" then groups[group] = true end
   end
-  local zoneChannels = frame.zoneChannelList
-  local zonesAccessible = canaccessvalue(zoneChannels) and type(zoneChannels) == "table" and canaccesstable(zoneChannels)
-  for index, name in pairs(channels) do
-    if canaccessvalue(name) and type(name) == "string" then names[string.upper(name)] = true end
-    if zonesAccessible and canaccessvalue(index) then
-      local zone = zoneChannels[index]
-      if canaccessvalue(zone) and type(zone) == "number" and zone > 0 then zones[zone] = true end
-    end
+  for index = 1, #channels, 2 do
+    local name, zone = channels[index], channels[index + 1]
+    if not canaccessallvalues(name, zone) then return end
+    if type(name) == "string" then names[string.upper(name)] = true end
+    if type(zone) == "number" and zone > 0 then zones[zone] = true end
   end
-  return names, zones
+  return groups, names, zones, next(groups) ~= nil or next(names) ~= nil
 end
 
 local function ReplayChatHistory()
@@ -145,39 +144,56 @@ local function ReplayChatHistory()
     return
   end
   if not ChatLinks:IsChatLayoutReady() or InCombatLockdown() or C_ChatInfo.InChatMessagingLockdown() then return end
-  HistoryReplayed = true
-  local selectedTypes = ChatLinks.db.profile.chatTweaks.historyTypes
+
+  -- Window settings come from the client; native routing tables may be restricted.
+  local windows, configured = {}, false
   for _, frameName in ipairs(CHAT_FRAMES) do
     local frame = _G[frameName]
-    if canaccessvalue(frame) and frame and canaccessvalue(frame.isTemporary) and not frame.isTemporary then
-      ChatLinks:ApplyChatHistoryCapacity(frame)
-      local groups = frame.messageTypeList
-      local groupsAccessible = canaccessvalue(groups) and type(groups) == "table" and canaccesstable(groups)
-      local channelNames, channelZones = GetHistoryChannelSubscriptions(frame)
-      for index = #ReplayEntries, 1, -1 do
-        local entry = ReplayEntries[index]
-        local category = HistoryEvents[entry.event]
-        if entry.primaryOnly then
-          if frame == DEFAULT_CHAT_FRAME then ChatLinks:ReplayChatHistoryEvent(frame, entry) end
-        elseif category and (category == true or selectedTypes[category]) then
-          if category == "CHANNEL" then
-            local zone, name = entry.args[7], entry.args[9]
-            local enabled = (canaccessvalue(zone) and type(zone) == "number" and zone > 0 and channelZones[zone])
-              or (canaccessvalue(name) and type(name) == "string" and channelNames[string.upper(name)])
-            if enabled then ChatLinks:ReplayChatHistoryEvent(frame, entry) end
-          elseif groupsAccessible then
-            local messageType = ChatTypeGroupInverted[entry.event] or entry.event:sub(10)
-            for _, group in pairs(groups) do
-              if canaccessvalue(group) and group == messageType then
-                ChatLinks:ReplayChatHistoryEvent(frame, entry)
-                break
-              end
-            end
+    if not canaccessvalue(frame) then return end
+    if frame then
+      if not canaccessvalue(frame.isTemporary) then return end
+      if not frame.isTemporary then
+        local id = frame:GetID()
+        if not canaccessvalue(id) then return end
+        if id > 0 then
+          local active = FCF_IsChatWindowIndexActive(id)
+          if not canaccessvalue(active) then return end
+          if active then
+            local groups, names, zones, hasSubscriptions = GetHistoryWindowSubscriptions(frame)
+            if not groups then return end
+            configured = configured or hasSubscriptions
+            windows[#windows + 1] = { frame = frame, groups = groups, names = names, zones = zones }
           end
         end
       end
     end
   end
+  -- An early pass must not consume the saved log before chat settings arrive.
+  if not configured then return end
+
+  local selectedTypes = ChatLinks.db.profile.chatTweaks.historyTypes
+  for _, window in ipairs(windows) do
+    local frame = window.frame
+    ChatLinks:ApplyChatHistoryCapacity(frame)
+    for index = #ReplayEntries, 1, -1 do
+      local entry = ReplayEntries[index]
+      local category = HistoryEvents[entry.event]
+      if entry.primaryOnly then
+        if frame == DEFAULT_CHAT_FRAME then ChatLinks:ReplayChatHistoryEvent(frame, entry) end
+      elseif category and (category == true or selectedTypes[category]) then
+        if category == "CHANNEL" then
+          local zone, name = entry.args[7], entry.args[9]
+          local subscribed = (canaccessvalue(zone) and type(zone) == "number" and zone > 0 and window.zones[zone])
+            or (canaccessvalue(name) and type(name) == "string" and window.names[string.upper(name)])
+          if subscribed then ChatLinks:ReplayChatHistoryEvent(frame, entry) end
+        else
+          local messageType = ChatTypeGroupInverted[entry.event] or entry.event:sub(10)
+          if window.groups[messageType] then ChatLinks:ReplayChatHistoryEvent(frame, entry) end
+        end
+      end
+    end
+  end
+  HistoryReplayed = true
   ReplayEntries = nil
 end
 
@@ -205,6 +221,9 @@ function ChatLinks:StartChatHistory()
   HistoryEnabled = true
   for event in pairs(HistoryEvents) do HistoryFrame:RegisterEvent(event) end
   HistoryFrame:RegisterEvent("LOADING_SCREEN_DISABLED")
+  HistoryFrame:RegisterEvent("SETTINGS_LOADED")
+  HistoryFrame:RegisterEvent("UPDATE_CHAT_WINDOWS")
+  HistoryFrame:RegisterEvent("ADDON_RESTRICTION_STATE_CHANGED")
   HistoryFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
   HistoryFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
   HistoryFrame:RegisterEvent("CHALLENGE_MODE_COMPLETED")
@@ -234,11 +253,10 @@ end
 SaveChatHistory = P:Def("SaveChatHistory", SaveChatHistory)
 ReplayChatHistory = P:Def("ReplayChatHistory", ReplayChatHistory)
 HistoryFrame:SetScript("OnEvent", function(self, event, ...)
-  if event:sub(1, 9) == "CHAT_MSG_" then
+  if HistoryEvents[event] then
     SaveChatHistory(self, event, ...)
-  end
-  if HistoryEnabled and not HistoryReplayed and not ReplayTimer
-    and ChatLinks:IsChatLayoutReady() and not InCombatLockdown() and not C_ChatInfo.InChatMessagingLockdown() then
+  elseif HistoryEnabled and not HistoryReplayed and not ReplayTimer then
+    -- Check readiness after every handler for this lifecycle event has run.
     ReplayTimer = C_Timer.NewTimer(0, ReplayChatHistory)
   end
 end)
