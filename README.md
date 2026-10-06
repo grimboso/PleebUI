@@ -57,7 +57,7 @@ Addon authors can register PleebUI Edit Mode movers and options pages through th
 
 ## Development profiling
 
-Open Pleebug with `/pleebug` or `/pbug` to inspect function and event activity. Full captures include accumulated function cost and call counts per active frame, available in function tooltips and exports. See the [Pleebug measurement guide and instrumentation instructions](Libs/LibPleebug-1.0/README.md) for mode behavior, interpretation and validation.
+Open Pleebug with `/pleebug` or `/pbug` to inspect function and event activity. Select files before a Full capture; Start and Stop reload to install and remove instrumentation. Function tooltips and exports distinguish call peaks, native sampled averages, active-frame cost and optional phase measurements. See the [Pleebug measurement guide and instrumentation instructions](Libs/LibPleebug-1.0/README.md) for mode behavior, interpretation and validation.
 
 
 ## Feedback and issues
