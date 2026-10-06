@@ -104,7 +104,7 @@ local function _flatten(node, out, depth, expanded)
     return out
   end
 
-  if node.path == "" or expanded[node.path] then
+  if node.path == "" or not expanded or expanded[node.path] then
     local kids = _sortedChildList(node)
     for i = 1, #kids do
       _flatten(kids[i], out, depth + 1, expanded)
@@ -159,9 +159,7 @@ local function _treeEnsurePath(root, index, key)
   return node, added
 end
 
-function W:_ApplySnapshot(snapshot)
-  local countedNodes = self._countedNodes
-  local countedNodeSet = self._countedNodeSet
+local function _applyTreeSnapshot(root, index, snapshot, countedNodes, countedNodeSet)
   for i = 1, #countedNodes do
     local node = countedNodes[i]
     node.count = 0
@@ -169,8 +167,6 @@ function W:_ApplySnapshot(snapshot)
     countedNodes[i] = nil
   end
 
-  local root = self._buildRoot
-  local index = self._treeIndex
   if not (root and index and type(snapshot) == "table") then
     return
   end
@@ -203,8 +199,28 @@ function W:_ApplySnapshot(snapshot)
     end
   end
 
+end
+
+function W:_ApplySnapshot(snapshot)
+  _applyTreeSnapshot(self._buildRoot, self._treeIndex, snapshot, self._countedNodes, self._countedNodeSet)
+  if not self._buildRoot then return end
   _wipe(self._flat)
-  _flatten(root, self._flat, 0, self.expanded or {})
+  _flatten(self._buildRoot, self._flat, 0, self.expanded or {})
+end
+
+function W:_BuildExportRows(snapshot)
+  -- Export must also work before the deferred display tree finishes building.
+  local root = { name = "root", path = "", count = 0, children = {} }
+  local index = {}
+  local cpu = MemDebug.CPU
+  for path in pairs(cpu._nativeFuncs) do
+    _treeEnsurePath(root, index, "Funcs." .. path)
+  end
+  for eventName in pairs(cpu._nativeEvents) do
+    _treeEnsurePath(root, index, "Events.Global." .. eventName)
+  end
+  _applyTreeSnapshot(root, index, snapshot, {}, {})
+  return _flatten(root, {}, 0)
 end
 
 -- Safe deferral: never use C_Timer.After(0) (can spinlock WoW)
@@ -888,8 +904,9 @@ local function _ensureFrame()
     if not MemDebug:IsEnabled() and self._stoppedExportText then
       return self._stoppedExportText
     end
-    local flat = self._flat or {}
-    local interval = self._pendingInterval or (MemDebug.GetInterval and MemDebug:GetInterval()) or 10
+    local snapshot = self._pendingSnapshot or self.lastSnapshot or MemDebug._lastSnapshot or {}
+    local flat = self:_BuildExportRows(snapshot)
+    local interval = snapshot.__interval or self._pendingInterval or MemDebug:GetInterval()
     interval = tonumber(interval) or 10
     if interval <= 0 then interval = 10 end
 
@@ -1068,8 +1085,8 @@ local function _ensureFrame()
           deallocTotal,
           allocationCalls,
           tostring(interval),
-          tostring((self._pendingSnapshot or self.lastSnapshot or {}).__windowStart or ""),
-          tostring((self._pendingSnapshot or self.lastSnapshot or {}).__windowEnd or ""),
+          tostring(snapshot.__windowStart or ""),
+          tostring(snapshot.__windowEnd or ""),
         }, "\t")
       end
     end
