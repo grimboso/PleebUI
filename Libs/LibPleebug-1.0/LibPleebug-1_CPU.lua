@@ -8,7 +8,7 @@
 --   Provides CPU call counts/calls per second, but not per-call memory deltas.
 --
 -- Full debug mode:
---   Executes selected registrations only during an armed Full capture.
+--   Records selected Full registrations only while measurement is enabled.
 --   Uses C_AddOnProfiler.MeasureCall when available, with a local timing fallback.
 --   Can taint and requires a reload to install or remove wrappers.
 
@@ -16,7 +16,7 @@ local LibStub = _G.LibStub
 if not LibStub then return end
 local Pleebug, minor = LibStub("LibPleebug-1", true)
 -- Components must match the core selected by LibStub across bundled copies.
-if not Pleebug or minor ~= 5 then return end
+if not Pleebug or minor ~= 6 then return end
 
 -- Backwards-compatible alias (rest of file can keep using MemDebug)
 local MemDebug = Pleebug
@@ -110,7 +110,7 @@ local function _EnsureCDB()
 
   cdb.measured = nil
 
-  -- Legacy persistent outputs are removed; core owns the one-shot Stop reload transfer.
+  -- Capture outputs stay runtime-only.
   if cdb.funcStats ~= nil then cdb.funcStats = nil end
   if cdb.samples ~= nil then cdb.samples = nil end
 
@@ -294,6 +294,9 @@ function CPU:StartOverview()
 
   local overview = self._overview
   overview.running = true
+  if InCombatLockdown() then
+    overview.currentCombat = _NewOverviewWindow(_now())
+  end
 
   if not self._overviewFrame then
     local frame = CreateFrame("Frame")
@@ -845,19 +848,12 @@ function CPU:GetMeasurementState(path)
 
   local mode = MemDebug and MemDebug.GetDebugMode and MemDebug:GetDebugMode() or "light"
   if mode == "full" then
-    local captured = self:GetStat(path)
-    if not MemDebug.__pleebugCaptureLoaded and captured and not captured.native then
-      return "Captured - original restored" .. aliasSuffix
-    end
-    if not MemDebug.__pleebugCaptureLoaded then
-      return "Original - Start requires reload" .. aliasSuffix
-    end
     if not MemDebug:IsModuleEnabled(alias.moduleName) then
       return "Original - file excluded" .. aliasSuffix
     end
     local backend = self:GetFullMeasurementBackend()
     if alias.kind == "wrapped" then
-      return "Wrapped - " .. backend .. aliasSuffix
+      return "Wrapped - " .. backend .. (MemDebug:IsEnabled() and "" or " (stopped)") .. aliasSuffix
     end
     for wrappedPath, registeredAlias in pairs(rec.aliases) do
       if registeredAlias.kind == "wrapped" then
