@@ -27,7 +27,6 @@ local type            = _G.type
 local GetInventoryItemLink       = _G.GetInventoryItemLink
 local GetInventoryItemQuality    = _G.GetInventoryItemQuality
 local GetInventoryItemDurability = _G.GetInventoryItemDurability
-local GetItemQualityColor        = _G.GetItemQualityColor
 local CharacterSheet = {}
 ns.Registry.CharacterSheet = CharacterSheet
 
@@ -2625,13 +2624,13 @@ local function GetSlotItemLevel(unit, slotId)
     end
   end
 
-  local detailed = GetDetailedItemLevelInfo(itemLink)
+  local detailed = C_Item.GetDetailedItemLevelInfo(itemLink)
   if detailed then
     itemLevel = detailed
   end
 
   if not itemLevel then
-    local _, _, _, ilvl = GetItemInfo(itemLink)
+    local _, _, _, ilvl = C_Item.GetItemInfo(itemLink)
     if ilvl then
       itemLevel = ilvl
     end
@@ -2877,7 +2876,7 @@ local function GetGemInfo(unit, slotId)
 
   local filledCount = 0
   for i = 1, 4 do
-    local gemName, gemLink = GetItemGem(itemLink, i)
+    local gemName, gemLink = C_Item.GetItemGem(itemLink, i)
     if gemLink then
       filledCount = filledCount + 1
       gems[filledCount] = {
@@ -3206,7 +3205,7 @@ UpdateItemSlotOverlay = function(button, unit, allowDurability)
 
           local gemInfo = gems[i]
           if gemInfo and gemInfo.link then
-            local iconTexture = GetItemIcon(gemInfo.link)
+            local iconTexture = C_Item.GetItemIconByID(gemInfo.link)
             if iconTexture then
               tex:SetTexture(iconTexture)
             else
@@ -3260,7 +3259,7 @@ UpdateItemSlotOverlay = function(button, unit, allowDurability)
     if not r then
       local q = GetInventoryItemQuality(unit, slotId)
       if q ~= nil then
-        r, g, b = GetItemQualityColor(q)
+        r, g, b = C_Item.GetItemQualityColor(q)
         a = 1.00
       else
         r, g, b, a = 0.20, 0.20, 0.24, 1.00
