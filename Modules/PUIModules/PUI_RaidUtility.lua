@@ -120,6 +120,7 @@ local BRL_ICON_GAP = 6
 local BRL_ICON_BRES = 136080
 local BRL_ICON_LUST = 136012
 local BRL_LUST_DURATION = 40
+local BRL_SATED_PROBE_DELAY = 590
 local BRL_LUST_GLOW_KEY = "PleebUIBloodlust"
 local BRL_LUST_GLOW_COLOR = { 1, 0.82, 0, 1 }
 local BRL_LUST_GLOW_LINES = 8
@@ -132,8 +133,7 @@ local BRLState = {
   lustWindowExpiration = 0,
   sated = false,
   satedSpellID = nil,
-  satedExpiration = 0,
-  satedDuration = 0,
+  satedSince = nil,
 }
 
 local function BRL_StopLustWindow()
@@ -380,22 +380,16 @@ local function BresLustWidget_UpdateBresDisplay()
   end
 end
 
-local function BresLustWidget_FindSatedAura()
+local function BresLustWidget_FindSatedSpellID()
   local currentSpellID = BRLState.satedSpellID
-  if currentSpellID then
-    local aura = C_UnitAuras.GetPlayerAuraBySpellID(currentSpellID)
-    if aura then
-      return aura, currentSpellID
-    end
+  if currentSpellID and C_UnitAuras.GetPlayerAuraBySpellID(currentSpellID) then
+    return currentSpellID
   end
 
   for i = 1, #BRL_SATED_IDS do
     local spellID = BRL_SATED_IDS[i]
-    if spellID ~= currentSpellID then
-      local aura = C_UnitAuras.GetPlayerAuraBySpellID(spellID)
-      if aura then
-        return aura, spellID
-      end
+    if spellID ~= currentSpellID and C_UnitAuras.GetPlayerAuraBySpellID(spellID) then
+      return spellID
     end
   end
 end
@@ -418,15 +412,7 @@ BresLustWidget_UpdateLustDisplay = function()
 
   if BRLState.sated then
     BRLWidgetLust.icon:SetDesaturated(true)
-
-    if BRLState.satedExpiration > 0 and BRLState.satedDuration > 0 then
-      BRLWidgetLust.cooldown:SetCooldown(
-        BRLState.satedExpiration - BRLState.satedDuration,
-        BRLState.satedDuration
-      )
-    else
-      BRLWidgetLust.cooldown:Clear()
-    end
+    BRLWidgetLust.cooldown:Clear()
     return
   end
 
@@ -435,9 +421,9 @@ BresLustWidget_UpdateLustDisplay = function()
 end
 
 local function BresLustWidget_SyncSatedState(startLustOnGain, forceDisplay)
-  local aura, spellID = BresLustWidget_FindSatedAura()
+  local spellID = BresLustWidget_FindSatedSpellID()
   local wasSated = BRLState.sated
-  local isSated = aura ~= nil
+  local isSated = spellID ~= nil
 
   if isSated == wasSated and not forceDisplay then
     return false
@@ -446,15 +432,10 @@ local function BresLustWidget_SyncSatedState(startLustOnGain, forceDisplay)
   BRLState.sated = isSated
   BRLState.satedSpellID = spellID
 
-  if isSated then
-    BRLState.satedExpiration = aura.expirationTime or 0
-    BRLState.satedDuration = aura.duration or 0
-  else
-    BRLState.satedExpiration = 0
-    BRLState.satedDuration = 0
-  end
-
-  if startLustOnGain and isSated and not wasSated then
+  if not isSated then
+    BRLState.satedSince = nil
+  elseif startLustOnGain and not wasSated then
+    BRLState.satedSince = GetTime()
     BRL_StartLustWindow()
   end
 
@@ -468,6 +449,12 @@ local function BresLustWidget_OnPlayerAuraChanged()
   end
 
   if BRLWidgetConfig.bresLustWidgetShowOnlyInGroup and not IsInGroup() then
+    return
+  end
+
+  if BRLState.sated and BRLState.satedSince
+    and GetTime() < BRLState.satedSince + BRL_SATED_PROBE_DELAY
+  then
     return
   end
 
@@ -531,7 +518,14 @@ local function EnsureBresLustWidgetEvents(enableBres, enableLust)
       end
 
       if event == "PLAYER_DEAD" then
+        BRLState.satedSince = nil
         BRL_StopLustWindow()
+        BresLustWidget_Refresh(false, true)
+        return
+      end
+
+      if event == "PLAYER_ALIVE" then
+        BRLState.satedSince = nil
         BresLustWidget_Refresh(false, true)
         return
       end
@@ -557,8 +551,7 @@ local function EnsureBresLustWidgetEvents(enableBres, enableLust)
     BRL_StopLustWindow()
     BRLState.sated = false
     BRLState.satedSpellID = nil
-    BRLState.satedExpiration = 0
-    BRLState.satedDuration = 0
+    BRLState.satedSince = nil
   end
 
   if not enableBres and not enableLust then
@@ -583,6 +576,7 @@ local function EnsureBresLustWidgetEvents(enableBres, enableLust)
   if enableLust then
     BRLWidgetEvents:RegisterUnitEvent("UNIT_AURA", "player")
     BRLWidgetEvents:RegisterEvent("PLAYER_DEAD")
+    BRLWidgetEvents:RegisterEvent("PLAYER_ALIVE")
   end
 
   return BRLWidgetEvents
@@ -2429,7 +2423,7 @@ end
   EnsureBresLustWidget = P:Def("EnsureBresLustWidget", EnsureBresLustWidget)
   BRLWidget_UpdateGhostMover = P:Def("BRLWidget_UpdateGhostMover", BRLWidget_UpdateGhostMover)
   BresLustWidget_UpdateBresDisplay = P:Def("BresLustWidget_UpdateBresDisplay", BresLustWidget_UpdateBresDisplay)
-  BresLustWidget_FindSatedAura = P:Def("BresLustWidget_FindSatedAura", BresLustWidget_FindSatedAura)
+  BresLustWidget_FindSatedSpellID = P:Def("BresLustWidget_FindSatedSpellID", BresLustWidget_FindSatedSpellID)
   BresLustWidget_UpdateLustDisplay = P:Def("BresLustWidget_UpdateLustDisplay", BresLustWidget_UpdateLustDisplay)
   BresLustWidget_SyncSatedState = P:Def("BresLustWidget_SyncSatedState", BresLustWidget_SyncSatedState)
   BresLustWidget_OnPlayerAuraChanged = P:Def("BresLustWidget_OnPlayerAuraChanged", BresLustWidget_OnPlayerAuraChanged)
