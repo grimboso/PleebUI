@@ -24,7 +24,7 @@
 
 
 
-local MAJOR, MINOR = "LibPleebug-1", 4
+local MAJOR, MINOR = "LibPleebug-1", 5
 local LibStub = _G.LibStub
 if not LibStub then return end
 
@@ -310,16 +310,6 @@ local function _rollingPush(key, amount, nowT)
   _rollingPushBucket(key, amount, math.floor(tonumber(nowT) or _now()))
 end
 
-function MemDebug:TrackRegisteredFunction(key)
-  local counts = self._counts
-  counts["Funcs.Total"] = (counts["Funcs.Total"] or 0) + 1
-  counts[key] = (counts[key] or 0) + 1
-  local second = math.floor(_now())
-  _rollingPushBucket("Funcs.Total", 1, second)
-  _rollingPushBucket(key, 1, second)
-end
-
-
 function MemDebug:BuildRollingSnapshot(windowSec, nowT, out)
   out = out or {}
   _wipe(out)
@@ -350,6 +340,7 @@ function MemDebug:BuildRollingSnapshot(windowSec, nowT, out)
     end
   end
 
+  self.CPU:BuildWindowSnapshot(windowSec, nowT, out)
   return out
 end
 
@@ -374,7 +365,6 @@ function MemDebug:GetInterval()
 end
 
 function MemDebug:SetInterval(seconds)
-  if self.__pleebugCaptureLoaded and InCombatLockdown() then return false end
   local mdb = _ensureDB()
   seconds = tonumber(seconds) or 10
   seconds = math.floor(seconds + 0.5)
@@ -385,9 +375,6 @@ function MemDebug:SetInterval(seconds)
   end
 
 
-  if self._ticker then
-    self:Start()
-  end
 end
 
 function MemDebug:GetFontSize()
@@ -1239,10 +1226,12 @@ function MemDebug:Clear()
   _wipe(self._lastSnapshot)
   self._liveStartedAt = _now()
   self._lastSnapshotTime = self._liveStartedAt
+  self._lastPrintedAt = self._liveStartedAt
 
   -- Clear CPU runtime buffers only when explicitly clearing (or on reload).
   if self.CPU and self.CPU.ResetRuntime then
     self.CPU:ResetRuntime()
+    self.CPU:PrimeNativeBaselines()
   end
   if self.Window then
     self.Window._stoppedSnapshot = nil
@@ -1274,16 +1263,8 @@ end
 
 function MemDebug:SnapshotAndReset()
   local interval = self:GetInterval()
-  local snap = {}
-  for k, v in pairs(self._counts) do
-    snap[k] = v
-  end
-  snap.__interval = interval
-  snap.__time = _now()
+  local snap = { __interval = interval, __time = _now() }
   self._lastSnapshotTime = snap.__time
-
-  self._lastSnapshot = snap
-
   _wipe(self._counts)
 
   -- Optional tick hooks (CPU module etc.)
@@ -1304,6 +1285,9 @@ function MemDebug:SnapshotAndReset()
   end
 
 
+  self:BuildRollingSnapshot(interval, snap.__time, snap)
+  self.CPU:SnapshotOverview(snap, snap.__time)
+  self._lastSnapshot = snap
   if MemDebug and MemDebug.Window and MemDebug.Window.OnSnapshot then
     MemDebug.Window:OnSnapshot(snap)
   end
@@ -1311,9 +1295,10 @@ function MemDebug:SnapshotAndReset()
 
 
   local mdb = _ensureDB()
-  if mdb and mdb.printToChat then
+  if mdb and mdb.printToChat and snap.__time - self._lastPrintedAt >= interval then
+    self._lastPrintedAt = snap.__time
     local lines = {}
-    lines[#lines + 1] = string.format("|cff00ffff[Pleebug]|r Interval: %.2fs", interval)
+    lines[#lines + 1] = string.format("|cff00ffff[Pleebug]|r Window: %.2fs", snap.__interval)
 
     local sorted = _sortedPairsByCount(snap)
     local maxLines = 20
@@ -1323,7 +1308,7 @@ function MemDebug:SnapshotAndReset()
       if entry.k and not entry.k:match("^__") then
         n = n + 1
         if n > maxLines then break end
-        local rate = entry.v / interval
+        local rate = entry.v / snap.__interval
         lines[#lines + 1] = string.format("%s = %d (%.1f/s)", entry.k, entry.v, rate)
       end
     end
@@ -1353,6 +1338,7 @@ function MemDebug:Start()
   self._enabled = true
   self._liveStartedAt = _now()
   self._lastSnapshotTime = self._liveStartedAt
+  self._lastPrintedAt = self._liveStartedAt
 
   if self.CPU and self.CPU.ApplyDebugModeDefaults and self.GetDebugMode then
     self.CPU:ApplyDebugModeDefaults(self:GetDebugMode())
@@ -1392,8 +1378,8 @@ function MemDebug:Start()
   self:TrackFunc("MemDebug", nil, "Start")
 
 
-  local interval = self:GetInterval()
-  self._ticker = C_Timer.NewTicker(interval, function()
+  -- Sampling cadence is independent of the selected display window.
+  self._ticker = C_Timer.NewTicker(1, function()
     if not MemDebug:IsEnabled() then return end
     MemDebug:SnapshotAndReset()
   end)
@@ -1401,6 +1387,7 @@ end
 
 
 function MemDebug:Stop()
+  if not self._enabled then return end
   -- A reload is required to remove local and previously captured callback references.
   if self.__pleebugCaptureLoaded and InCombatLockdown() then return false end
   if self._ticker then
@@ -1425,7 +1412,7 @@ function MemDebug:Stop()
     -- Only profiler-owned numbers, names and aggregates cross this single reload.
     db.stoppedCapture = {
       snapshot = self._lastSnapshot,
-      stats = self.CPU._rtFuncStats,
+      stats = self.CPU._windowFuncStats,
       exportText = self.Window.BuildExportText and self.Window:BuildExportText() or nil,
     }
     db.captureOnNextLoad = nil
@@ -1439,7 +1426,7 @@ function MemDebug:CompleteCaptureReload()
   local stopped = db.stoppedCapture
   db.stoppedCapture = nil
   if stopped and not self.__pleebugCaptureLoaded then
-    self.CPU._rtFuncStats = stopped.stats
+    self.CPU._windowFuncStats = stopped.stats
     self._lastSnapshot = stopped.snapshot
     self.Window._stoppedSnapshot = stopped.snapshot
     self.Window.lastSnapshot = stopped.snapshot
