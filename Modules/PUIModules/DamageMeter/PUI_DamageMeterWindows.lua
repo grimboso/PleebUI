@@ -920,25 +920,27 @@ local function SetRowSource(window, row, source, rank, maxAmount, meterKey)
   local sourceName = source.name
   if IsSecret(sourceName) then
     row.name:SetText(sourceName)
+    row.rawSourceName = nil
     row.plainSourceName = nil
     if meterKey == "DEATHS" then
       row.sourceDisplayName = nil
     end
   else
-    local displayName
-    if sourceName == "" then
-      displayName = "Unknown"
-    else
-      displayName = Ambiguate(sourceName, "short")
-    end
+    if row.rawSourceName ~= sourceName then
+      row.rawSourceName = sourceName
+      local displayName
+      if sourceName == "" then
+        displayName = "Unknown"
+      else
+        displayName = Ambiguate(sourceName, "short")
+      end
 
-    if row.plainSourceName ~= displayName then
       row.plainSourceName = displayName
       row.name:SetText(displayName)
     end
 
     if meterKey == "DEATHS" then
-      row.sourceDisplayName = displayName
+      row.sourceDisplayName = row.plainSourceName
     end
   end
 

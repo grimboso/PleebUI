@@ -207,10 +207,7 @@ local function GetCombatSession(windowDB, meterKey)
   local meterType = METER_TYPES[meterKey]
   local sessionID = GetBlizzardSessionID(windowDB)
   if sessionID then
-    if GetAvailableSessionInfo(sessionID) then
-      return C_DamageMeter.GetCombatSessionFromID(sessionID, meterType)
-    end
-    return nil
+    return C_DamageMeter.GetCombatSessionFromID(sessionID, meterType)
   end
 
   return C_DamageMeter.GetCombatSessionFromType(SESSION_TYPES[windowDB.session], meterType)
@@ -225,9 +222,6 @@ local function GetCombatSessionSource(
   local selection = GetWindowSelection(windowDB)
   local sessionID = GetBlizzardSessionID(windowDB)
   if sessionID then
-    if not GetAvailableSessionInfo(sessionID) then
-      return nil
-    end
     return C_DamageMeter.GetCombatSessionSourceFromID(
       sessionID,
       METER_TYPES[meterKey],
