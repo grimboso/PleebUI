@@ -24,7 +24,7 @@
 
 
 
-local MAJOR, MINOR = "LibPleebug-1", 3
+local MAJOR, MINOR = "LibPleebug-1", 4
 local LibStub = _G.LibStub
 if not LibStub then return end
 
@@ -1246,6 +1246,7 @@ function MemDebug:Clear()
   end
   if self.Window then
     self.Window._stoppedSnapshot = nil
+    self.Window._stoppedExportText = nil
   end
 end
 
@@ -1339,6 +1340,7 @@ function MemDebug:Start()
     local db = _ensureDB()
     db.captureOnNextLoad = true
     db.stoppedCapture = nil
+    self.Window._stoppedExportText = nil
     db.openAfterReload = true
     ReloadUI()
     return false
@@ -1366,6 +1368,8 @@ function MemDebug:Start()
       self:_InstallUniversalOnAttached(moduleName)
     end
   end
+
+  self.Window._stoppedExportText = nil
 
   -- Reset runtime-only tracking buffers on every start (never SavedVariables).
   _wipe(self._counts)
@@ -1422,6 +1426,7 @@ function MemDebug:Stop()
     db.stoppedCapture = {
       snapshot = self._lastSnapshot,
       stats = self.CPU._rtFuncStats,
+      exportText = self.Window.BuildExportText and self.Window:BuildExportText() or nil,
     }
     db.captureOnNextLoad = nil
     db.openAfterReload = true
@@ -1438,6 +1443,7 @@ function MemDebug:CompleteCaptureReload()
     self._lastSnapshot = stopped.snapshot
     self.Window._stoppedSnapshot = stopped.snapshot
     self.Window.lastSnapshot = stopped.snapshot
+    self.Window._stoppedExportText = stopped.exportText
   end
   if self.__pleebugCaptureLoaded then
     self:Start()
