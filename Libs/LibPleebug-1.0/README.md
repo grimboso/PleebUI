@@ -23,9 +23,9 @@ In Full mode, hover a function row for frame statistics. Export includes these c
 | `calls_avg_active_frame` | Completed measured calls divided by active frames |
 | `calls_peak_frame` | Most completed measured calls in one capture frame |
 
-These statistics cover the capture since Start or Clear, including the current partial frame. Idle frames are excluded. For example, 80 calls taking 0.04 ms each in one frame accumulate 3.2 ms. Light-mode exports leave these fields empty.
+These statistics cover the selected measurement window, including the current partial frame. Idle frames are excluded. For example, 80 calls taking 0.04 ms each in one frame accumulate 3.2 ms. Light-mode exports leave these fields empty.
 
-The frame key uses `GetTime()`, which is cached once per frame, so event and OnUpdate calls in that frame share the same key. There is no additional frame ticker or per-call history table. Each function retains one aggregate record. Profiling clock ticks (`elapsedTicks`) are a separate quantity. If consecutive rendered frames return the same `GetTime()` value, their statistics merge; per-frame caching alone does not guarantee a unique frame identifier.
+The frame key uses `GetTime()`, which is cached once per frame, so event and OnUpdate calls in that frame share the same key. There is no additional frame ticker or per-call history table. Each function retains at most 62 active-second aggregate buckets, covering the largest selectable window without retaining individual calls. Profiling clock ticks (`elapsedTicks`) are a separate quantity. If consecutive rendered frames return the same `GetTime()` value, their statistics merge; per-frame caching alone does not guarantee a unique frame identifier.
 
 Full measurements are inclusive: nested calls and their instrumentation can contribute to a parent's measurement. Recursive calls also overlap. Do not add parent and child rows to estimate independent addon CPU time. Light-mode function counters use `GetFunctionCPUUsage(fn, false)`. Their peak is the highest sampled average, not an individual slow call; global event counters have their own scope. Native allocation totals describe allocation activity, not retained memory. Allocation averages divide by calls with allocation data, so timer-fallback calls do not dilute them.
 
@@ -35,7 +35,7 @@ Function and global-event tooltips distinguish the average per call, latest valu
 
 | Column | Meaning |
 | --- | --- |
-| `cpu_avg_ms` | Capture cost divided by capture call count |
+| `cpu_avg_ms` | Window cost divided by completed measured or sampled calls in that window |
 | `cpu_peak_call_ms` | Slowest completed Full measured call; blank for native sampling |
 | `cpu_last_call_ms` | Latest completed Full measured call |
 | `cpu_peak_sampled_avg_ms` | Highest native sample cost divided by that sample's calls |
@@ -43,7 +43,19 @@ Function and global-event tooltips distinguish the average per call, latest valu
 | `cpu_scope` | Inclusive Full call, native function counter with subroutines disabled, or global event counter |
 | `phase_measurements` | Named phase call counts, average/peak milliseconds, allocated/deallocated averages |
 
-The old `cpu_peak_sample_ms` export column is replaced by the two explicit peak columns. Call counts shown in the tree use the rolling window; call-cost and frame aggregates cover the capture since Start or Clear.
+The old `cpu_peak_sample_ms` export column is replaced by the two explicit peak columns. Calls, CPU, allocations, frame statistics and phase statistics now use the same selected window. Full function counts include completed measurements; an errored call propagates its error and adds no completed measurement. Alias rows refer to the canonical function's same statistics and must not be added as independent work.
+
+## Capture windows and recording cost
+
+The Settings window slider selects 5-60 seconds. Changing it changes the view immediately without restarting capture or clearing retained history. Start and Clear still reset capture data. Old peaks, allocation totals and phase measurements disappear as their buckets leave the selected window. A wider selection can recover data still inside the bounded history.
+
+Full recording reads the cached frame timestamp once per call. The second conversion is shared across calls in that frame, and each function binds its current bucket. Count and cost updates go to that same bucket; there are no separate function-count ring writes or additional precise-clock reads per call. Aggregation runs when publishing a snapshot, refreshing the window or freezing Stop. Individual return values and result/event tables are not retained in history.
+
+Buckets have one-second resolution. The oldest partial second is included, so an established selected window can cover up to one extra second. A newly started capture covers only its elapsed duration. Tooltips and the status show the covered duration; calls per second divide by that duration. Exports include `window_seconds` (covered duration), `window_start` and `window_end` on every row. They also include `cpu_total_ms`, `alloc_total_kb`, `dealloc_avg_kb`, `dealloc_max_kb`, `dealloc_total_kb` and `allocation_calls`. Allocation averages divide by the measured allocation-call count, including when a window contains timer-fallback calls.
+
+One capture ticker owns native sampling, snapshot publication and visible-window refresh. Light sampling runs once per second while capture is active, whether the window is open or closed. There is no separate UI polling ticker. Native calls and CPU deltas are stored together at the sample timestamp. A sample cannot be split into individual call timestamps; delayed callbacks can make a sample span more than one second. Native peaks remain sample averages. The sampler never installs function wrappers. The addon overview in the status also uses the selected window; addon memory is a separate retained-memory snapshot, not window allocation activity.
+
+Stop freezes the selected window and its text. Frozen values do not age away while stopped or after the Full removal reload. Only the frozen view, not the history buckets, crosses that reload. A later ordinary reload clears it.
 
 ## Targeted phase markers
 
@@ -61,7 +73,7 @@ The existing Full wrapper emits begin/end markers only through the native backen
 
 This adds no calls to ordinary function bodies and no second wrapper around a phase function. Mark only the few named operations relevant to an investigation. Repeated and recursive same-name phases aggregate together and are inclusive; do not sum overlapping phases. Native markers reach all ongoing measurements, so ancestor rows can report the same phase. Unmatched markers are ignored. Original errors propagate unchanged, and an aborted measured call produces no completed phase statistics.
 
-Marker snapshots include instrumentation between their boundaries. They measure allocation activity, not retained memory. No per-call event history is kept. Start and Clear reset the phase aggregates along with call statistics.
+Marker snapshots include instrumentation between their boundaries. They measure allocation activity, not retained memory. No per-call event history is kept. Start and Clear reset phase history along with call statistics; phase aggregates also expire with their selected window.
 
 ## Instrumentation instructions
 
@@ -71,9 +83,12 @@ Marker snapshots include instrumentation between their boundaries. They measure 
 4. Pass local function references to `P:Def`. Use `P:SecDef` for named owner methods when required. Neither helper discovers inaccessible locals automatically.
 5. Keep payloads opaque. Do not inspect, compare, format or derive grouping from secret arguments or returns. Preserve the number and positions of all returns, including nils, and propagate original errors.
 6. Build stable names and keys during registration. Full capture binds its registration record, native measurement function, optional phase marker names and module-settings table once. Backend availability is checked while measuring because Blizzard controls it. Full file selections are frozen for the capture and apply at its armed reload; Light selections can change live. Do not normalize saved settings or reconstruct paths on each call.
-7. Start and Clear invalidate cached runtime statistics while preserving registrations. Stop freezes results, hides the existing frame sampler and removes Full instrumentation by reload. Keep these lifecycle responsibilities symmetrical.
+7. Keep completed call counts and costs in the same bounded bucket. Aggregate outside the measured execution path, and keep window selection separate from sampling cadence. Do not introduce per-call history allocations or an idle recording ticker.
+8. Start and Clear invalidate cached runtime statistics while preserving registrations. Stop freezes results, hides the existing frame sampler and removes Full instrumentation by reload. Keep these lifecycle responsibilities symmetrical.
 
 ## Validation
+
+Check window expiry with an old expensive call followed by newer inexpensive calls: narrow the selection and confirm the old count, CPU peak, allocation and phase totals disappear together; widen it and confirm retained data returns without resetting capture. Verify `cpu_avg_ms * calls` agrees with `cpu_total_ms` within rounding, and calls per second uses the exported duration. Check bounded history after several minutes and Light sampling with the window closed.
 
 Check Lua syntax and function contracts before in-game testing: no returns, nil gaps, trailing nils, multiple returns, errors, aliases, recursion, disabled files, group toggles, Stop, Start and Clear. Verify Light and unarmed Full mode return original function objects, selected Full files wrap after Start reload, excluded files preserve identity, and Stop reload restores originals while preserving inspectable aggregates. Test one-shot flags and snapshot consumption, combat controls, paired/recursive phase markers, and native/timer export fields.
 
