@@ -13,8 +13,10 @@
 --   Can taint and requires a reload to install or remove wrappers.
 
 local LibStub = _G.LibStub
-local Pleebug = LibStub and LibStub("LibPleebug-1", true)
-if not Pleebug then return end
+if not LibStub then return end
+local Pleebug, minor = LibStub("LibPleebug-1", true)
+-- Components must match the core selected by LibStub across bundled copies.
+if not Pleebug or minor ~= 5 then return end
 
 -- Backwards-compatible alias (rest of file can keep using MemDebug)
 local MemDebug = Pleebug
