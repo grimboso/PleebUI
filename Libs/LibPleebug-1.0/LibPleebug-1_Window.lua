@@ -436,7 +436,7 @@ local entry = flat[i]
 
         if st.native ~= true then
           if st.allocLast ~= nil then
-            local avgMemKB = ((st.allocSum or 0) / n) / 1024
+            local avgMemKB = ((st.allocSum or 0) / (st.allocN or n)) / 1024
             local maxMemKB = (st.allocMax or st.allocLast or 0) / 1024
             memText = string.format("%.1f(%.1f)kb", avgMemKB, maxMemKB)
           end
@@ -723,6 +723,11 @@ local function _ensureFrame()
 
   f:EnableMouse(true)
   f:RegisterForDrag("LeftButton")
+  f:RegisterEvent("PLAYER_REGEN_DISABLED")
+  f:RegisterEvent("PLAYER_REGEN_ENABLED")
+  f:SetScript("OnEvent", function(self)
+    if self:IsShown() then W:Refresh() end
+  end)
   f:SetScript("OnDragStart", function(self) self:StartMoving() end)
   f:SetScript("OnDragStop", function(self) self:StopMovingOrSizing() end)
 
@@ -897,7 +902,7 @@ local function _ensureFrame()
       "alloc_avg_kb",
       "alloc_max_kb",
       "cpu_avg_ms",
-      "cpu_peak_sample_ms",
+      "cpu_peak_call_ms",
       "measurement_state",
       "measurement_kind",
       "canonical_path",
@@ -906,6 +911,11 @@ local function _ensureFrame()
       "cpu_peak_frame_ms",
       "calls_avg_active_frame",
       "calls_peak_frame",
+      "cpu_peak_sampled_avg_ms",
+      "cpu_last_call_ms",
+      "cpu_last_sampled_avg_ms",
+      "cpu_scope",
+      "phase_measurements",
     }, "\t")
 
     for i = 1, nRows do
@@ -921,6 +931,7 @@ local function _ensureFrame()
 
         local memAvgKB, memMaxKB = "", ""
         local cpuAvgMs, cpuMaxMs = "", ""
+        local sampledPeak, lastCall, lastSample, scope, phaseText = "", "", "", "", ""
         local measurementState, measurementKind, canonicalPath = "", "", ""
         local activeFrames, frameAvgMs, framePeakMs, frameAvgCalls, framePeakCalls = "", "", "", "", ""
 
@@ -951,7 +962,25 @@ local function _ensureFrame()
             local maxMs = tonumber(st.timeMax) or tonumber(st.timeLast) or 0
 
             cpuAvgMs = string.format("%.6f", avgMs)
-            cpuMaxMs = string.format("%.6f", maxMs)
+            scope = st.native and (isFuncLeaf and "native includeSubroutines=false" or "native global event counter") or "inclusive"
+            if st.native then
+              sampledPeak = string.format("%.6f", maxMs)
+              lastSample = string.format("%.6f", st.timeLast or 0)
+            else
+              cpuMaxMs = string.format("%.6f", maxMs)
+              lastCall = string.format("%.6f", st.timeLast or 0)
+            end
+            if st.phaseOrder then
+              local phases = {}
+              for j = 1, #st.phaseOrder do
+                local phaseName = st.phaseOrder[j]
+                local phase = st.phases[phaseName]
+                phases[#phases + 1] = string.format("%s: calls=%d, avg_ms=%.6f, peak_ms=%.6f, alloc_avg_kb=%.3f, dealloc_avg_kb=%.3f",
+                  phaseName, phase.n, phase.timeSum / phase.n, phase.timeMax,
+                  phase.allocSum / phase.n / 1024, phase.deallocSum / phase.n / 1024)
+              end
+              phaseText = table.concat(phases, "; ")
+            end
 
             if st.activeFrames and st.activeFrames > 0 then
               activeFrames = tostring(st.activeFrames)
@@ -963,7 +992,7 @@ local function _ensureFrame()
 
             if st.native ~= true then
               if st.allocLast ~= nil then
-                local avgMem = ((tonumber(st.allocSum) or 0) / n) / 1024
+                local avgMem = ((tonumber(st.allocSum) or 0) / (st.allocN or n)) / 1024
                 local maxMem = (tonumber(st.allocMax) or tonumber(st.allocLast) or 0) / 1024
                 memAvgKB = string.format("%.3f", avgMem)
                 memMaxKB = string.format("%.3f", maxMem)
@@ -1002,6 +1031,11 @@ local function _ensureFrame()
           framePeakMs,
           frameAvgCalls,
           framePeakCalls,
+          sampledPeak,
+          lastCall,
+          lastSample,
+          scope,
+          phaseText,
         }, "\t")
       end
     end
@@ -1025,7 +1059,7 @@ local function _ensureFrame()
 
   startBtn:SetSize(90, 22)
   startBtn:SetPoint("TOPLEFT", f, "TOPLEFT", 12, -38)
-  startBtn:SetText("Start")
+  startBtn:SetText(MemDebug:GetDebugMode() == "full" and "Start / reload" or "Start")
   startBtn:SetScript("OnClick", function()
     MemDebug:SetEnabled(true)
     W:Refresh()
@@ -1036,7 +1070,8 @@ local function _ensureFrame()
   local stopBtn = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
   stopBtn:SetSize(90, 22)
   stopBtn:SetPoint("LEFT", startBtn, "RIGHT", 8, 0)
-  stopBtn:SetText("Stop")
+  stopBtn:SetText(MemDebug:GetDebugMode() == "full" and "Stop / reload" or "Stop")
+  f._startBtn, f._stopBtn = startBtn, stopBtn
   stopBtn:SetScript("OnClick", function()
     MemDebug:SetEnabled(false)
     W:Refresh()
@@ -1198,7 +1233,7 @@ local function _ensureFrame()
   modeHelp:SetPoint("TOPLEFT", spText, "BOTTOMLEFT", 0, -6)
   modeHelp:SetWidth(360)
   modeHelp:SetJustifyH("LEFT")
-  modeHelp:SetText("Light mode keeps original functions and uses Blizzard native CPU counters with scriptProfile. Full debug wraps every P:Def and P:SecDef registration after a reload and records CPU and allocation data. Full mode can taint.")
+  modeHelp:SetText("Light mode keeps original functions and uses Blizzard native CPU counters with scriptProfile. Select files before starting Full capture. Start and Stop reload to install and remove replacements. Full capture can taint; its controls require leaving combat.")
   _applyFontSafe(modeHelp, math.max(11, (W.fontSize or 14) - 1), nil)
   _colorText(modeHelp)
   f._modeHelpText = modeHelp
@@ -1265,6 +1300,8 @@ local panel = CreateFrame("Frame", nil, sf, "BackdropTemplate")
       end
     end)
 
+    enableAll:SetEnabled(not MemDebug.__pleebugCaptureLoaded)
+    disableAll:SetEnabled(not MemDebug.__pleebugCaptureLoaded)
     _skinButton(enableAll)
     _skinButton(disableAll)
 
@@ -1364,7 +1401,7 @@ local panel = CreateFrame("Frame", nil, sf, "BackdropTemplate")
 
   header.hCPU = _mkHeaderText()
   header.hCPU:SetPoint("RIGHT", header, "RIGHT", -30, 0)
-  header.hCPU:SetText("CPU avg (max)")
+  header.hCPU:SetText(MemDebug:GetDebugMode() == "full" and "CPU avg / peak call" or "CPU sampled avg")
 
   header.hMem = _mkHeaderText()
   header.hMem:SetPoint("RIGHT", header.hCPU, "LEFT", -10, 0)
@@ -1615,6 +1652,7 @@ local function _refreshModulePanel(f)
       end)
 
       cb:SetScript("OnClick", function()
+        if MemDebug.__pleebugCaptureLoaded then return end
         if row._kind == "group" then
           local groupName = row._groupName
           local enableGroup = (row._groupEnabledCount or 0) == 0
@@ -1700,6 +1738,7 @@ local function _refreshModulePanel(f)
       row._gear:Show()
     end
 
+    row._cb:SetEnabled(not MemDebug.__pleebugCaptureLoaded)
     row._text:SetAlpha(1)
     row._text:Show()
 
@@ -1784,18 +1823,32 @@ function _ensureRow(i)
   row:SetScript("OnEnter", function(self)
     local entry = self._data
     local path = entry and entry.node and entry.node.path
-    if not path or not path:match("^Funcs%.") then return end
-    local st = MemDebug.CPU:GetFuncStat(path:sub(7))
-    if not st or not st.activeFrames or st.activeFrames == 0 then return end
+    if not path then return end
+    local key = path:match("^Funcs%.(.+)$") or path:match("^(Events%.Global%..+)$")
+    if not key then return end
+    local st = MemDebug.CPU:GetStat(key)
+    if not st or not st.n or st.n == 0 then return end
 
     GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
     GameTooltip:AddLine(entry.node.name)
-    GameTooltip:AddDoubleLine("Active frames", tostring(st.activeFrames), 1, 1, 1, 1, 1, 1)
-    GameTooltip:AddDoubleLine("CPU per active frame", string.format("%.3f ms", st.timeSum / st.activeFrames), 1, 1, 1, 1, 1, 1)
-    GameTooltip:AddDoubleLine("Worst frame", string.format("%.3f ms", st.frameTimeMax), 1, 1, 1, 1, 1, 1)
-    GameTooltip:AddDoubleLine("Calls per active frame", string.format("%.1f", st.n / st.activeFrames), 1, 1, 1, 1, 1, 1)
-    GameTooltip:AddDoubleLine("Most calls in one frame", tostring(st.frameCallsMax), 1, 1, 1, 1, 1, 1)
-    GameTooltip:AddLine("Since Start or Clear. Idle frames are excluded. Nested measurements overlap.", 0.8, 0.8, 0.8, true)
+    GameTooltip:AddDoubleLine("Average per call", string.format("%.3f ms", st.timeSum / st.n), 1, 1, 1, 1, 1, 1)
+    GameTooltip:AddDoubleLine(st.native and "Peak sampled average" or "Slowest measured call", string.format("%.3f ms", st.timeMax or 0), 1, 1, 1, 1, 1, 1)
+    GameTooltip:AddDoubleLine(st.native and "Latest sampled average" or "Latest measured call", string.format("%.3f ms", st.timeLast or 0), 1, 1, 1, 1, 1, 1)
+    if st.activeFrames and st.activeFrames > 0 then
+      GameTooltip:AddDoubleLine("Active frames", tostring(st.activeFrames), 1, 1, 1, 1, 1, 1)
+      GameTooltip:AddDoubleLine("CPU per active frame", string.format("%.3f ms", st.timeSum / st.activeFrames), 1, 1, 1, 1, 1, 1)
+      GameTooltip:AddDoubleLine("Worst frame", string.format("%.3f ms", st.frameTimeMax), 1, 1, 1, 1, 1, 1)
+      GameTooltip:AddDoubleLine("Calls per active frame", string.format("%.1f", st.n / st.activeFrames), 1, 1, 1, 1, 1, 1)
+      GameTooltip:AddDoubleLine("Most calls in one frame", tostring(st.frameCallsMax), 1, 1, 1, 1, 1, 1)
+    end
+    if st.phaseOrder then
+      for j = 1, #st.phaseOrder do
+        local name = st.phaseOrder[j]
+        local phase = st.phases[name]
+        GameTooltip:AddDoubleLine("Phase: " .. name, string.format("%.3f ms avg / %.3f ms peak", phase.timeSum / phase.n, phase.timeMax), 1, 1, 1, 1, 1, 1)
+      end
+    end
+    GameTooltip:AddLine(st.native and "Native sample averages since Start or Clear; the peak is not an individual call." or "Since Start or Clear. Frame averages exclude idle frames. Calls and phases are inclusive; nested measurements overlap.", 0.8, 0.8, 0.8, true)
     GameTooltip:Show()
   end)
   row:SetScript("OnLeave", function(self)
@@ -1897,6 +1950,13 @@ function W:Refresh()
   end
 
   local enabled = MemDebug:IsEnabled()
+  if MemDebug:GetDebugMode() == "full" then
+    local available = not InCombatLockdown()
+    f._startBtn:SetEnabled(available and not enabled)
+    f._stopBtn:SetEnabled(available and enabled)
+  end
+  f._lightModeBtn:SetEnabled(not InCombatLockdown())
+  f._fullModeBtn:SetEnabled(not InCombatLockdown())
 
 
 
@@ -1992,7 +2052,7 @@ function W:Refresh()
     local addonMemoryText = addonMemoryKB and string.format("%.0fkb", addonMemoryKB) or "unavailable"
     if overview then
       f._statusText:SetText(string.format(
-        "Status: %s   Interval: %.2fs   Calls: %d   Instrumented PleebUI: %.1fms total, %.3fms avg, %.3fms peak, %.3fms recent   PleebUI memory: %s",
+        "Status: %s   Interval: %.2fs   Calls: %d   Instrumented PleebUI: %.1fms total, %.3fms/frame avg, %.3fms/frame peak, %.3fms/frame recent   PleebUI memory: %s",
         statusWord,
         interval,
         total,
