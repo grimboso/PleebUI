@@ -23,6 +23,7 @@ local MemDebug = Pleebug
 MemDebug.CPU = MemDebug.CPU or {}
 local CPU = MemDebug.CPU
 CPU._rtFuncStats = CPU._rtFuncStats or {}
+CPU._windowFuncStats = CPU._windowFuncStats or {}
 
 -- WoW Lua compatibility: table.pack/unpack may be nil in some clients
 local t_pack = table.pack or function(...)
@@ -35,7 +36,7 @@ local t_unpack = table.unpack or unpack
 -- Tick hook: publish native function/event deltas and the retained addon overview.
 ---------------------
 if MemDebug and MemDebug.RegisterTickHook then
-  MemDebug:RegisterTickHook("CPU", function(self, now, interval, snap)
+  MemDebug:RegisterTickHook("CPU", function(self, now)
     local cpu = self.CPU
     if not cpu then
       return
@@ -44,13 +45,10 @@ if MemDebug and MemDebug.RegisterTickHook then
     -- Native samplers replace wrapper-based TrackFunc counts.
     -- They must run when Pleebug is started, even if the optional CPU chart checkbox is off.
     if cpu.SampleNativeFunctions then
-      cpu:SampleNativeFunctions(now, interval, snap)
+      cpu:SampleNativeFunctions(now)
     end
     if cpu.SampleNativeEvents then
-      cpu:SampleNativeEvents(now, interval, snap)
-    end
-    if cpu.SnapshotOverview then
-      cpu:SnapshotOverview(snap, now)
+      cpu:SampleNativeEvents(now)
     end
   end)
 end
@@ -96,9 +94,7 @@ local function _EnsureCDB()
 
   if type(cdb.enabled) ~= "boolean" then cdb.enabled = false end
 
-  cdb.keepSeconds = tonumber(cdb.keepSeconds) or 120
-  if cdb.keepSeconds < 10 then cdb.keepSeconds = 10 end
-  if cdb.keepSeconds > 600 then cdb.keepSeconds = 600 end
+  cdb.keepSeconds = nil
 
   -- Native sampling is the safe default: P:Def registers original functions and returns them.
   if type(cdb.nativeFunctionSampling) ~= "boolean" then cdb.nativeFunctionSampling = true end
@@ -117,11 +113,10 @@ local function _EnsureCDB()
   if cdb.samples ~= nil then cdb.samples = nil end
 
   -- Runtime-only buffers (kept after Stop/closing window, cleared on Start/Clear/reload).
-  CPU._rtFuncStats = CPU._rtFuncStats or {} -- [path] = { time/tick/alloc/dealloc stats }
+  CPU._rtFuncStats = CPU._rtFuncStats or {} -- [path] = bounded measurement buckets
   CPU._nativeFuncs = CPU._nativeFuncs or {} -- [path] = original function sample state
   CPU._nativeByFunction = CPU._nativeByFunction or setmetatable({}, { __mode = "k" })
   CPU._nativeEvents = CPU._nativeEvents or {} -- [eventName] = global event sample state
-  CPU._nativeLive = CPU._nativeLive or {} -- [treeKey] = { {t=, c=} } native live call-count deltas
 
   return cdb
 end
@@ -326,6 +321,7 @@ function CPU:StopOverview()
   if overview then
     overview.running = false
     local nowT = _now()
+    overview.endedAt = nowT
     local combat = _FinishOverviewWindow(overview.currentCombat, nowT)
     local encounter = _FinishOverviewWindow(overview.currentEncounter, nowT)
     if combat then
@@ -347,15 +343,15 @@ function CPU:StopOverview()
   end
 end
 
-function CPU:GetOverview(windowSeconds)
+function CPU:GetOverview(windowSeconds, nowT)
   local overview = self._overview
   if not overview then return nil end
 
-  local nowT = _now()
+  nowT = nowT or overview.endedAt or _now()
   local window = tonumber(windowSeconds) or 5
   if window < 0.1 then window = 0.1 end
   if window > OVERVIEW_KEEP_SECONDS then window = OVERVIEW_KEEP_SECONDS end
-  local cutoff = nowT - window
+  local cutoff = math.floor(nowT - window)
   local recentTotal, recentFrames, recentPeak = 0, 0, 0
   local recentSpikes = {}
   local history = overview.history
@@ -470,6 +466,9 @@ end
 function CPU:ResetRuntime()
   local overviewRunning = self._overview and self._overview.running == true
   _WipeTable(self._rtFuncStats)
+  _WipeTable(self._windowFuncStats)
+  self._recordTime = nil
+  self._windowStartedAt = _now()
 
   -- Keep registered original function/event references, but reset baselines on Start/Clear.
   if self._nativeByFunction then
@@ -477,8 +476,9 @@ function CPU:ResetRuntime()
       if type(rec) == "table" then
         rec.lastTime = nil
         rec.lastCount = nil
-        rec.windowCalls = 0
         rec.measuredStat = nil
+        rec.recordingBucket = nil
+        rec.recordingSecond = nil
       end
     end
   end
@@ -487,20 +487,128 @@ function CPU:ResetRuntime()
       if type(rec) == "table" then
         rec.lastTime = nil
         rec.lastCount = nil
+        rec.measuredStat = nil
+        rec.recordingBucket = nil
+        rec.recordingSecond = nil
       end
     end
-  end
-  if self._nativeLive then
-    _WipeTable(self._nativeLive)
   end
   self:ResetOverviewRuntime()
   self._overview.running = overviewRunning
 end
 
 
-local function _GetFuncStats()
-  CPU._rtFuncStats = CPU._rtFuncStats or {}
-  return CPU._rtFuncStats
+local FUNCTION_BUCKET_SECONDS = 62
+
+-- One aggregate per active second, never one table per call. Cache the clock
+-- conversion across functions sharing a frame and bind the current bucket.
+local function _GetRecordingBucket(rec, path, nowT)
+  if CPU._recordTime ~= nowT then
+    CPU._recordTime = nowT
+    CPU._recordSecond = math.floor(nowT)
+  end
+  local second = CPU._recordSecond
+  if rec.recordingSecond == second then return rec.recordingBucket end
+
+  local record = rec.measuredStat
+  if not record then
+    record = { buckets = {}, event = rec.eventName ~= nil }
+    rec.measuredStat = record
+    CPU._rtFuncStats[path] = record
+  end
+  local slot = (second % FUNCTION_BUCKET_SECONDS) + 1
+  local bucket = record.buckets[slot]
+  if not bucket or bucket.second ~= second then
+    bucket = { second = second, n = 0, timeSum = 0, tickSum = 0,
+      allocSum = 0, deallocSum = 0, activeFrames = 0,
+      frameCalls = 0, frameTime = 0, frameTimeMax = 0, frameCallsMax = 0 }
+    record.buckets[slot] = bucket
+  end
+  rec.recordingSecond = second
+  rec.recordingBucket = bucket
+  return bucket
+end
+
+local SUM_FIELDS = { "n", "timeSum", "tickSum", "allocSum", "deallocSum",
+  "allocN", "deallocN", "activeFrames" }
+local MAX_FIELDS = { "timeMax", "tickMax", "allocMax", "deallocMax",
+  "frameTimeMax", "frameCallsMax" }
+local LAST_FIELDS = { "timeLast", "tickLast", "allocLast", "deallocLast" }
+
+local function _AggregateWindow(record, cutoff, lastSecond, out)
+  _WipeTable(out)
+  local latest
+  for _, bucket in pairs(record.buckets) do
+    if bucket.second >= cutoff and bucket.second <= lastSecond and bucket.n > 0 then
+      out = out or {}
+      for i = 1, #SUM_FIELDS do
+        local field = SUM_FIELDS[i]
+        if bucket[field] ~= nil then out[field] = (out[field] or 0) + bucket[field] end
+      end
+      for i = 1, #MAX_FIELDS do
+        local field = MAX_FIELDS[i]
+        local value = bucket[field]
+        if value ~= nil and (out[field] == nil or value > out[field]) then out[field] = value end
+      end
+      if bucket.timeMin ~= nil and (out.timeMin == nil or bucket.timeMin < out.timeMin) then
+        out.timeMin = bucket.timeMin
+      end
+      if not latest or bucket.second > latest.second then latest = bucket end
+      out.native = bucket.native
+      if bucket.phaseOrder then
+        out.phases = out.phases or {}
+        out.phaseOrder = out.phaseOrder or {}
+        for i = 1, #bucket.phaseOrder do
+          local name = bucket.phaseOrder[i]
+          local source = bucket.phases[name]
+          local phase = out.phases[name]
+          if not phase then
+            phase = { n = 0, timeSum = 0, timeMax = 0, allocSum = 0, deallocSum = 0 }
+            out.phases[name] = phase
+            out.phaseOrder[#out.phaseOrder + 1] = name
+          end
+          phase.n = phase.n + source.n
+          phase.timeSum = phase.timeSum + source.timeSum
+          phase.allocSum = phase.allocSum + source.allocSum
+          phase.deallocSum = phase.deallocSum + source.deallocSum
+          if source.timeMax > phase.timeMax then phase.timeMax = source.timeMax end
+        end
+      end
+    end
+  end
+  if latest then
+    for i = 1, #LAST_FIELDS do
+      local field = LAST_FIELDS[i]
+      out[field] = latest[field]
+    end
+    return out
+  end
+end
+
+function CPU:BuildWindowSnapshot(windowSec, nowT, out)
+  -- Whole second buckets include the oldest partial second. Report the actual
+  -- boundaries and use their duration for rates rather than pretending it is exact.
+  local cutoff = math.floor(nowT - windowSec)
+  local lastSecond = math.floor(nowT)
+  local startTime = math.max(cutoff, self._windowStartedAt or MemDebug._liveStartedAt or nowT)
+  out.__windowStart = startTime
+  out.__windowEnd = nowT
+  out.__windowSeconds = windowSec
+  out.__interval = math.max(nowT - startTime, 0.001)
+  local stats = self._windowFuncStats
+  local fnTotal, eventTotal = out["Funcs.Total"] or 0, out["Events.Total"] or 0
+  for path, record in pairs(self._rtFuncStats) do
+    local st = _AggregateWindow(record, cutoff, lastSecond, stats[path])
+    stats[path] = st
+    local key = record.event and path or ("Funcs." .. path)
+    out[key] = st and st.n or nil
+    if st then
+      if key:sub(1, 6) == "Funcs." then fnTotal = fnTotal + st.n
+      else eventTotal = eventTotal + st.n end
+    end
+  end
+  out["Funcs.Total"] = fnTotal
+  out["Events.Total"] = eventTotal
 end
 
 local function _ToNumberEarly(v)
@@ -516,92 +624,13 @@ local function _BuildPathEarly(moduleName, bucket, funcName)
   return tostring(moduleName or "Unknown") .. "." .. name
 end
 
-local function _AddSnapshotCount(snap, key, amount)
-  if type(snap) ~= "table" or type(key) ~= "string" or key == "" then
-    return
-  end
-  amount = tonumber(amount) or 0
-  if amount <= 0 then
-    return
-  end
-  snap[key] = (tonumber(snap[key]) or 0) + amount
-end
-
-local function _FuncTreeKey(path)
-  return "Funcs." .. tostring(path or "Unknown")
-end
-
-local function _PushNativeLive(key, countDelta, nowT)
-  key = tostring(key or "")
-  countDelta = tonumber(countDelta) or 0
-  if key == "" or countDelta <= 0 then
-    return
-  end
-
-  local cdb = _EnsureCDB()
-  CPU._nativeLive = CPU._nativeLive or {}
-  local list = CPU._nativeLive[key]
-  if not list then
-    list = {}
-    CPU._nativeLive[key] = list
-  end
-
-  nowT = tonumber(nowT) or _now()
-  list[#list + 1] = { t = nowT, c = countDelta }
-
-  local keep = tonumber(cdb and cdb.keepSeconds) or 120
-  local interval = MemDebug and MemDebug.GetInterval and MemDebug:GetInterval() or 10
-  interval = tonumber(interval) or 10
-  if keep < (interval + 2) then
-    keep = interval + 2
-  end
-
-  local cutoff = nowT - keep
-  local drop = 0
-  for i = 1, #list do
-    local e = list[i]
-    if e and e.t and e.t < cutoff then
-      drop = i
-    else
-      break
-    end
-  end
-  if drop > 0 then
-    for i = drop + 1, #list do
-      list[i - drop] = list[i]
-    end
-    for i = #list - drop + 1, #list do
-      list[i] = nil
-    end
-  end
-
-end
-
-local function _PushNativeFuncStat(path, msDelta, countDelta)
-  local stats = _GetFuncStats()
-  path = tostring(path or "Unknown")
-  countDelta = tonumber(countDelta) or 0
-  msDelta = _ToNumberEarly(msDelta) or 0
-  if countDelta <= 0 then
-    return
-  end
-
-  local st = stats[path]
-  if not st then
-    st = {
-      n = 0,
-      timeSum = 0,
-      timeLast = 0,
-      timeMax = 0,
-      native = true,
-    }
-    stats[path] = st
-  end
-
+local function _PushNativeFuncStat(rec, path, nowT, msDelta, countDelta)
+  if countDelta <= 0 then return end
+  local st = _GetRecordingBucket(rec, path, nowT)
   st.native = true
   local perCall = msDelta / countDelta
-  st.n = (st.n or 0) + countDelta
-  st.timeSum = (st.timeSum or 0) + msDelta
+  st.n = st.n + countDelta
+  st.timeSum = st.timeSum + msDelta
   st.timeLast = perCall
   if st.timeMin == nil or perCall < st.timeMin then st.timeMin = perCall end
   if st.timeMax == nil or perCall > st.timeMax then st.timeMax = perCall end
@@ -718,7 +747,6 @@ function CPU:RegisterFunction(moduleName, bucket, funcName, fn, opt)
       bucket = bucket,
       funcName = funcName,
       aliases = {},
-      windowCalls = 0,
     }
     self._nativeByFunction[fn] = rec
   end
@@ -729,9 +757,16 @@ function CPU:RegisterFunction(moduleName, bucket, funcName, fn, opt)
     if previous.canonicalPath == path then
       local replacementPath, replacement = next(previous.aliases)
       previous.canonicalPath = replacementPath
-      previous.treeKey = replacementPath and ("Funcs." .. replacementPath) or nil
-      previous.measuredStat = nil
+      local history = self._rtFuncStats[path]
+      local published = self._windowFuncStats[path]
+      self._rtFuncStats[path] = nil
+      self._windowFuncStats[path] = nil
+      previous.measuredStat = replacement and history or nil
+      previous.recordingBucket = nil
+      previous.recordingSecond = nil
       if replacement then
+        self._rtFuncStats[replacementPath] = history
+        self._windowFuncStats[replacementPath] = published
         previous.moduleName = replacement.moduleName
         previous.bucket = replacement.bucket
         previous.funcName = replacement.funcName
@@ -756,7 +791,6 @@ function CPU:RegisterFunction(moduleName, bucket, funcName, fn, opt)
     rec.bucket = bucket
     rec.funcName = funcName
   end
-  rec.treeKey = "Funcs." .. rec.canonicalPath
   rec.retired = false
   self._nativeFuncs[path] = rec
 
@@ -809,7 +843,7 @@ function CPU:GetMeasurementState(path)
 
   local mode = MemDebug and MemDebug.GetDebugMode and MemDebug:GetDebugMode() or "light"
   if mode == "full" then
-    local captured = self:GetFuncStat(path)
+    local captured = self:GetStat(path)
     if not MemDebug.__pleebugCaptureLoaded and captured and not captured.native then
       return "Captured - original restored" .. aliasSuffix
     end
@@ -834,7 +868,8 @@ function CPU:GetMeasurementState(path)
   if type(GetFunctionCPUUsage) ~= "function" or not self:IsScriptProfileEnabled() then
     return "Native unavailable - scriptProfile=1" .. aliasSuffix
   end
-  if (rec.windowCalls or 0) > 0 then
+  local sampled = self:GetStat(path)
+  if sampled and sampled.n > 0 then
     return (alias.kind == "secure-native" and "Secure native" or "Native") .. aliasSuffix
   end
   if (rec.everCount or 0) > 0 then
@@ -875,7 +910,7 @@ function CPU:PrimeNativeBaselines()
   end
 end
 
-function CPU:SampleNativeFunctions(nowT, interval, snap)
+function CPU:SampleNativeFunctions(nowT)
   if not self:NativeFunctionSamplingEnabled() then return end
   if not self._nativeByFunction then return end
 
@@ -903,11 +938,7 @@ function CPU:SampleNativeFunctions(nowT, interval, snap)
           end
 
           if countDelta > 0 then
-            _PushNativeFuncStat(path, msDelta, countDelta)
-            _PushNativeLive(_FuncTreeKey(path), countDelta, nowT)
-            _AddSnapshotCount(snap, "Funcs.Total", countDelta)
-            _AddSnapshotCount(snap, _FuncTreeKey(path), countDelta)
-            rec.windowCalls = (rec.windowCalls or 0) + countDelta
+            _PushNativeFuncStat(rec, path, nowT, msDelta, countDelta)
           end
         end
 
@@ -924,7 +955,7 @@ function CPU:SampleNativeFunctions(nowT, interval, snap)
 
 end
 
-function CPU:SampleNativeEvents(nowT, interval, snap)
+function CPU:SampleNativeEvents(nowT)
   if not self:NativeEventSamplingEnabled() then return end
   if not self._nativeEvents then return end
 
@@ -947,10 +978,7 @@ function CPU:SampleNativeEvents(nowT, interval, snap)
 
         if countDelta > 0 then
           local path = "Events.Global." .. tostring(eventName)
-          _PushNativeFuncStat(path, msDelta, countDelta)
-          _PushNativeLive(path, countDelta, nowT)
-          _AddSnapshotCount(snap, "Events.Global.Total", countDelta)
-          _AddSnapshotCount(snap, path, countDelta)
+          _PushNativeFuncStat(rec, path, nowT, msDelta, countDelta)
         end
       end
 
@@ -964,72 +992,18 @@ end
 function CPU:PollNative(nowT)
   nowT = tonumber(nowT) or _now()
   if self.SampleNativeFunctions then
-    self:SampleNativeFunctions(nowT, nil, nil)
+    self:SampleNativeFunctions(nowT)
   end
   if self.SampleNativeEvents then
-    self:SampleNativeEvents(nowT, nil, nil)
+    self:SampleNativeEvents(nowT)
   end
 end
 
-function CPU:BuildNativeLiveSnapshot(windowSec, nowT, out)
-  out = out or {}
-  for k in pairs(out) do out[k] = nil end
-
-  windowSec = tonumber(windowSec) or (MemDebug and MemDebug.GetInterval and MemDebug:GetInterval()) or 10
-  if windowSec < 0.1 then windowSec = 0.1 end
-  nowT = tonumber(nowT) or _now()
-
-  out.__interval = windowSec
-  out.__time = nowT
-
-  local cutoff = nowT - windowSec
-  local fnTotal, eventTotal = 0, 0
-  local live = self._nativeLive
-  if type(live) == "table" then
-    for key, list in pairs(live) do
-      local sum = 0
-      if type(list) == "table" then
-        for i = #list, 1, -1 do
-          local e = list[i]
-          if not e or not e.t then
-            break
-          end
-          if e.t < cutoff then
-            break
-          end
-          sum = sum + (tonumber(e.c) or 0)
-        end
-      end
-
-      if sum > 0 then
-        out[key] = sum
-        if key:sub(1, 6) == "Funcs." then
-          fnTotal = fnTotal + sum
-        elseif key:sub(1, 7) == "Events." then
-          eventTotal = eventTotal + sum
-        end
-      end
-    end
-  end
-
-  out["Funcs.Total"] = fnTotal
-  out["Events.Total"] = eventTotal
-  return out
-end
-
-function CPU:GetFuncStat(path)
-  if not path or path == "" then return nil end
-  local rec = self._nativeFuncs and self._nativeFuncs[path]
-  if rec and rec.canonicalPath then
-    path = rec.canonicalPath
-  end
-  local s = _GetFuncStats()
-  return s and s[path]
-end
-
--- Generic accessor (Funcs.* or Events.*). Kept separate so Window can show stats for event leaves.
+-- Rows, tooltips and exports read the same published window.
 function CPU:GetStat(path)
-  return self:GetFuncStat(path)
+  local rec = self._nativeFuncs and self._nativeFuncs[path]
+  path = rec and rec.canonicalPath or path
+  return self._windowFuncStats[path]
 end
 
 
@@ -1042,36 +1016,7 @@ local function _ToNumber(v)
 end
 
 local function _PushFuncStat(rec, frameID, ms, ticks, allocBytes, deallocBytes)
-  local st = rec.measuredStat
-  if not st then
-    st = {
-      n = 0,
-      activeFrames = 0,
-      frameCalls = 0,
-      frameTime = 0,
-      frameTimeMax = 0,
-      frameCallsMax = 0,
-
-      timeSum = 0,
-      timeMin = nil,
-      timeMax = nil,
-      timeLast = nil,
-
-      tickSum = 0,
-      tickMax = nil,
-      tickLast = nil,
-
-      allocSum = 0,
-      allocMax = nil,
-      allocLast = nil,
-
-      deallocSum = 0,
-      deallocMax = nil,
-      deallocLast = nil,
-    }
-    rec.measuredStat = st
-    CPU._rtFuncStats[rec.canonicalPath] = st
-  end
+  local st = _GetRecordingBucket(rec, rec.canonicalPath, frameID)
 
   st.n = st.n + 1
 
@@ -1171,7 +1116,6 @@ function CPU:CreateMeasuredCall(rec, fn, modules, module, phaseName)
     end
     -- GetTime is cached per frame across event and OnUpdate handlers.
     local frameID = GetTime()
-    MemDebug:TrackRegisteredFunction(rec.treeKey)
     if measureCall and _ProfilerEnabled() then
       if beginMarker then addEvent(beginMarker) end
       local measured = t_pack(measureCall(fn, ...))
@@ -1179,7 +1123,7 @@ function CPU:CreateMeasuredCall(rec, fn, modules, module, phaseName)
       local results = measured[1]
       _PushFuncStat(rec, frameID, results.elapsedMilliseconds, results.elapsedTicks,
         results.allocatedBytes, results.deallocatedBytes)
-      _PushPhaseStats(rec.measuredStat, results.events)
+      _PushPhaseStats(rec.recordingBucket, results.events)
       return t_unpack(measured, 2, measured.n)
     end
 
