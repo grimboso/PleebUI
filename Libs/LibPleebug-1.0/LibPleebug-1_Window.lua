@@ -3,7 +3,7 @@ local LibStub = _G.LibStub
 if not LibStub then return end
 local Pleebug, minor = LibStub("LibPleebug-1", true)
 -- Components must match the core selected by LibStub across bundled copies.
-if not Pleebug or minor ~= 5 then return end
+if not Pleebug or minor ~= 6 then return end
 
 -- Backwards-compatible alias (rest of file can keep using MemDebug)
 local MemDebug = Pleebug
@@ -1093,7 +1093,7 @@ local function _ensureFrame()
 
   startBtn:SetSize(90, 22)
   startBtn:SetPoint("TOPLEFT", f, "TOPLEFT", 12, -38)
-  startBtn:SetText(MemDebug:GetDebugMode() == "full" and "Start / reload" or "Start")
+  startBtn:SetText("Start")
   startBtn:SetScript("OnClick", function()
     MemDebug:SetEnabled(true)
     W:Refresh()
@@ -1104,7 +1104,7 @@ local function _ensureFrame()
   local stopBtn = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
   stopBtn:SetSize(90, 22)
   stopBtn:SetPoint("LEFT", startBtn, "RIGHT", 8, 0)
-  stopBtn:SetText(MemDebug:GetDebugMode() == "full" and "Stop / reload" or "Stop")
+  stopBtn:SetText("Stop")
   f._startBtn, f._stopBtn = startBtn, stopBtn
   stopBtn:SetScript("OnClick", function()
     MemDebug:SetEnabled(false)
@@ -1267,7 +1267,7 @@ local function _ensureFrame()
   modeHelp:SetPoint("TOPLEFT", spText, "BOTTOMLEFT", 0, -6)
   modeHelp:SetWidth(360)
   modeHelp:SetJustifyH("LEFT")
-  modeHelp:SetText("Light mode keeps original functions and uses Blizzard native CPU counters with scriptProfile. Select files before starting Full capture. Start and Stop reload to install and remove replacements. Full capture can taint; its controls require leaving combat.")
+  modeHelp:SetText("Choose files in Light mode before switching to Full. Mode changes reload. Start and Stop work during combat; Stop keeps the results. Full mode keeps selected wrappers installed while stopped and can taint.")
   _applyFontSafe(modeHelp, math.max(11, (W.fontSize or 14) - 1), nil)
   _colorText(modeHelp)
   f._modeHelpText = modeHelp
@@ -1334,8 +1334,8 @@ local panel = CreateFrame("Frame", nil, sf, "BackdropTemplate")
       end
     end)
 
-    enableAll:SetEnabled(not MemDebug.__pleebugCaptureLoaded)
-    disableAll:SetEnabled(not MemDebug.__pleebugCaptureLoaded)
+    enableAll:SetEnabled(MemDebug:GetDebugMode() ~= "full")
+    disableAll:SetEnabled(MemDebug:GetDebugMode() ~= "full")
     _skinButton(enableAll)
     _skinButton(disableAll)
 
@@ -1686,7 +1686,7 @@ local function _refreshModulePanel(f)
       end)
 
       cb:SetScript("OnClick", function()
-        if MemDebug.__pleebugCaptureLoaded then return end
+        if MemDebug:GetDebugMode() == "full" then return end
         if row._kind == "group" then
           local groupName = row._groupName
           local enableGroup = (row._groupEnabledCount or 0) == 0
@@ -1772,7 +1772,7 @@ local function _refreshModulePanel(f)
       row._gear:Show()
     end
 
-    row._cb:SetEnabled(not MemDebug.__pleebugCaptureLoaded)
+    row._cb:SetEnabled(MemDebug:GetDebugMode() ~= "full")
     row._text:SetAlpha(1)
     row._text:Show()
 
@@ -1918,6 +1918,8 @@ function W:FreezeForStop()
     snap.__time = snap.__time or now
     snap.__interval = snap.__interval or ((MemDebug and MemDebug.GetInterval and MemDebug:GetInterval()) or 10)
     self.lastSnapshot = snap
+    self._pendingSnapshot = snap
+    self._pendingInterval = snap.__interval
     self._buildInProgress = false
     if self._buildRoot and self._treeIndex then
       self:_ApplySnapshot(snap)
@@ -1944,11 +1946,8 @@ function W:Refresh(snapshot)
   end
 
   local enabled = MemDebug:IsEnabled()
-  if MemDebug:GetDebugMode() == "full" then
-    local available = not InCombatLockdown()
-    f._startBtn:SetEnabled(available and not enabled)
-    f._stopBtn:SetEnabled(available and enabled)
-  end
+  f._startBtn:SetEnabled(not enabled)
+  f._stopBtn:SetEnabled(enabled)
   f._lightModeBtn:SetEnabled(not InCombatLockdown())
   f._fullModeBtn:SetEnabled(not InCombatLockdown())
 
