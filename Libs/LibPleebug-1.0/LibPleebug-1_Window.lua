@@ -423,6 +423,9 @@ local entry = flat[i]
     if (isFuncLeaf or isEventLeaf) and cpu and cpu.GetStat and statKey then
       local st = cpu:GetStat(statKey)
       if st and st.n and st.n > 0 then
+        count = st.n
+        rate = count / interval
+        row.value:SetText(string.format("%d (%.1f/s)", count, rate))
         local n = (st.n or 1)
 
         local avgMs = (st.timeSum or 0) / n
@@ -435,7 +438,7 @@ local entry = flat[i]
         end
 
         if st.native ~= true then
-          if st.allocLast ~= nil then
+          if st.allocN and st.allocN > 0 then
             local avgMemKB = ((st.allocSum or 0) / (st.allocN or n)) / 1024
             local maxMemKB = (st.allocMax or st.allocLast or 0) / 1024
             memText = string.format("%.1f(%.1f)kb", avgMemKB, maxMemKB)
@@ -794,9 +797,6 @@ local function _ensureFrame()
     if sff and sff.IsShown and sff:IsShown() then
       sff:Hide()
     end
-    if W and W._StopUiTicker then
-      W:_StopUiTicker()
-    end
   end)
 
 
@@ -919,6 +919,15 @@ local function _ensureFrame()
       "cpu_last_sampled_avg_ms",
       "cpu_scope",
       "phase_measurements",
+      "cpu_total_ms",
+      "alloc_total_kb",
+      "dealloc_avg_kb",
+      "dealloc_max_kb",
+      "dealloc_total_kb",
+      "allocation_calls",
+      "window_seconds",
+      "window_start",
+      "window_end",
     }, "\t")
 
     for i = 1, nRows do
@@ -933,6 +942,7 @@ local function _ensureFrame()
         local rate = count / interval
 
         local memAvgKB, memMaxKB = "", ""
+        local cpuTotal, allocTotal, deallocAvg, deallocMax, deallocTotal, allocationCalls = "", "", "", "", "", ""
         local cpuAvgMs, cpuMaxMs = "", ""
         local sampledPeak, lastCall, lastSample, scope, phaseText = "", "", "", "", ""
         local measurementState, measurementKind, canonicalPath = "", "", ""
@@ -964,6 +974,9 @@ local function _ensureFrame()
             local avgMs = (tonumber(st.timeSum) or 0) / n
             local maxMs = tonumber(st.timeMax) or tonumber(st.timeLast) or 0
 
+            count = st.n
+            rate = count / interval
+            cpuTotal = string.format("%.6f", st.timeSum)
             cpuAvgMs = string.format("%.6f", avgMs)
             scope = st.native and (isFuncLeaf and "native includeSubroutines=false" or "native global event counter") or "inclusive"
             if st.native then
@@ -994,11 +1007,18 @@ local function _ensureFrame()
             end
 
             if st.native ~= true then
-              if st.allocLast ~= nil then
+              if st.allocN and st.allocN > 0 then
                 local avgMem = ((tonumber(st.allocSum) or 0) / (st.allocN or n)) / 1024
                 local maxMem = (tonumber(st.allocMax) or tonumber(st.allocLast) or 0) / 1024
                 memAvgKB = string.format("%.3f", avgMem)
                 memMaxKB = string.format("%.3f", maxMem)
+                allocTotal = string.format("%.3f", st.allocSum / 1024)
+                allocationCalls = tostring(st.allocN)
+              end
+              if st.deallocN and st.deallocN > 0 then
+                deallocAvg = string.format("%.3f", st.deallocSum / st.deallocN / 1024)
+                deallocMax = string.format("%.3f", st.deallocMax / 1024)
+                deallocTotal = string.format("%.3f", st.deallocSum / 1024)
               end
             end
 
@@ -1039,6 +1059,15 @@ local function _ensureFrame()
           lastSample,
           scope,
           phaseText,
+          cpuTotal,
+          allocTotal,
+          deallocAvg,
+          deallocMax,
+          deallocTotal,
+          allocationCalls,
+          tostring(interval),
+          tostring((self._pendingSnapshot or self.lastSnapshot or {}).__windowStart or ""),
+          tostring((self._pendingSnapshot or self.lastSnapshot or {}).__windowEnd or ""),
         }, "\t")
       end
     end
@@ -1851,7 +1880,9 @@ function _ensureRow(i)
         GameTooltip:AddDoubleLine("Phase: " .. name, string.format("%.3f ms avg / %.3f ms peak", phase.timeSum / phase.n, phase.timeMax), 1, 1, 1, 1, 1, 1)
       end
     end
-    GameTooltip:AddLine(st.native and "Native sample averages since Start or Clear; the peak is not an individual call." or "Since Start or Clear. Frame averages exclude idle frames. Calls and phases are inclusive; nested measurements overlap.", 0.8, 0.8, 0.8, true)
+    local snap = W._pendingSnapshot or W.lastSnapshot or {}
+    GameTooltip:AddDoubleLine("Measurement window", string.format("%.2f seconds", snap.__interval or MemDebug:GetInterval()), 1, 1, 1, 1, 1, 1)
+    GameTooltip:AddLine(st.native and "Calls and CPU use the same sampled window; peaks are sample averages, not individual calls." or "Calls, CPU, allocations and phases use the same window. Frame averages exclude idle frames. Nested measurements overlap.", 0.8, 0.8, 0.8, true)
     GameTooltip:Show()
   end)
   row:SetScript("OnLeave", function(self)
@@ -1870,61 +1901,16 @@ function W:OnSnapshot(snapshot)
   self.lastSnapshot = snapshot or {}
   self._stoppedSnapshot = nil
   if self.frame and self.frame:IsShown() then
-    self:Refresh()
+    self:Refresh(snapshot)
   end
-end
-
-local function _copyPositiveSnapshot(src, dst)
-  dst = dst or {}
-  _wipe(dst)
-
-  if type(src) ~= "table" then
-    return dst
-  end
-
-  for k, v in pairs(src) do
-    if type(k) == "string" then
-      if k:match("^__") then
-        dst[k] = v
-      elseif type(v) == "number" and v > 0 then
-        dst[k] = v
-      end
-    end
-  end
-
-  return dst
 end
 
 function W:FreezeForStop()
   local now = _nowPrecise()
   local cpu = MemDebug and MemDebug.CPU
-  local debugMode = (MemDebug and MemDebug.GetDebugMode and MemDebug:GetDebugMode()) or "light"
-  local nativeMode = false
-  if debugMode ~= "full" then
-    nativeMode = cpu and cpu.NativeFunctionSamplingEnabled and cpu:NativeFunctionSamplingEnabled() or false
-  end
-  local snap
-
-  if nativeMode and cpu then
-    if cpu.PollNative then
-      cpu:PollNative(now)
-    end
-    if cpu.BuildNativeLiveSnapshot then
-      self._stoppedSnapshot = self._stoppedSnapshot or {}
-      snap = cpu:BuildNativeLiveSnapshot((MemDebug.GetInterval and MemDebug:GetInterval()) or 10, now, self._stoppedSnapshot)
-    end
-  end
-
-  if not snap and debugMode == "full" and MemDebug and MemDebug.BuildRollingSnapshot then
-    self._stoppedSnapshot = self._stoppedSnapshot or {}
-    snap = MemDebug:BuildRollingSnapshot((MemDebug.GetInterval and MemDebug:GetInterval()) or 10, now, self._stoppedSnapshot)
-  end
-
-  if not snap then
-    snap = self._pendingSnapshot or self.lastSnapshot or (MemDebug and MemDebug.GetLastSnapshot and MemDebug:GetLastSnapshot()) or nil
-    self._stoppedSnapshot = _copyPositiveSnapshot(snap, self._stoppedSnapshot)
-    snap = self._stoppedSnapshot
-  end
+  cpu:PollNative(now)
+  self._stoppedSnapshot = self._stoppedSnapshot or {}
+  local snap = MemDebug:BuildRollingSnapshot(MemDebug:GetInterval(), now, self._stoppedSnapshot)
 
   if type(snap) == "table" then
     snap.__time = snap.__time or now
@@ -1940,7 +1926,7 @@ function W:FreezeForStop()
   end
 end
 
-function W:Refresh()
+function W:Refresh(snapshot)
 
   if self._inRefresh then return end
   self._inRefresh = true
@@ -1966,29 +1952,12 @@ function W:Refresh()
 
 
 
-  local snap
-  local liveMode = false
-  local debugMode = (MemDebug and MemDebug.GetDebugMode and MemDebug:GetDebugMode()) or "light"
-  local cpu = MemDebug and MemDebug.CPU
-  local nativeMode = false
-  if debugMode ~= "full" then
-    nativeMode = cpu and cpu.NativeFunctionSamplingEnabled and cpu:NativeFunctionSamplingEnabled() or false
-  end
-
-  -- Light mode: build a rolling live stats window from native cumulative CPU counters.
-  -- This keeps calls/sec live without putting Pleebug wrappers in the profiled call path.
-  if enabled and nativeMode and cpu and cpu.BuildNativeLiveSnapshot then
-    self._nativeLiveSnapshot = self._nativeLiveSnapshot or {}
-    snap = cpu:BuildNativeLiveSnapshot((MemDebug.GetInterval and MemDebug:GetInterval()) or 10, nil, self._nativeLiveSnapshot)
-    liveMode = true
-  end
-
-  -- Full debug mode: Pleebug wrappers push timestamped call deltas.
-  -- Build a sliding rolling window instead of showing the current bucket that gets
-  -- wiped every interval by SnapshotAndReset().
-  if not snap and enabled and debugMode == "full" and MemDebug.BuildRollingSnapshot then
-    self._fullLiveSnapshot = self._fullLiveSnapshot or {}
-    snap = MemDebug:BuildRollingSnapshot((MemDebug.GetInterval and MemDebug:GetInterval()) or 10, nil, self._fullLiveSnapshot)
+  local snap = snapshot
+  local liveMode = enabled
+  local cpu = MemDebug.CPU
+  if enabled and not snap then
+    self._liveSnapshot = self._liveSnapshot or {}
+    snap = MemDebug:BuildRollingSnapshot(MemDebug:GetInterval(), nil, self._liveSnapshot)
     liveMode = true
   end
 
@@ -2052,24 +2021,23 @@ function W:Refresh()
       statusWord = enabled and "Running" or "Stopped"
     end
 
-    local overview = MemDebug and MemDebug.CPU and MemDebug.CPU.GetOverview and MemDebug.CPU:GetOverview(5)
+    local overview = cpu:GetOverview(snap.__windowSeconds or MemDebug:GetInterval(), snap.__windowEnd)
     local addonMemoryKB = MemDebug and MemDebug.CPU and MemDebug.CPU.GetAddonMemoryKB
       and MemDebug.CPU:GetAddonMemoryKB()
     local addonMemoryText = addonMemoryKB and string.format("%.0fkb", addonMemoryKB) or "unavailable"
     if overview then
       f._statusText:SetText(string.format(
-        "Status: %s   Interval: %.2fs   Calls: %d   Instrumented PleebUI: %.1fms total, %.3fms/frame avg, %.3fms/frame peak, %.3fms/frame recent   PleebUI memory: %s",
+        "Status: %s   Window: %.2fs   Calls: %d   PleebUI in window: %.1fms total, %.3fms/frame avg, %.3fms/frame peak   PleebUI memory: %s",
         statusWord,
         interval,
         total,
-        overview.totalMs or 0,
-        overview.averageMs or 0,
-        overview.peakMs or 0,
+        overview.recentMs or 0,
         overview.recentAverageMs or 0,
+        overview.recentPeakMs or 0,
         addonMemoryText
       ))
     else
-      f._statusText:SetText(string.format("Status: %s   Interval: %.2fs   Calls: %d   Memory: %s",
+      f._statusText:SetText(string.format("Status: %s   Window: %.2fs   Calls: %d   Memory: %s",
         statusWord, interval, total, addonMemoryText))
     end
 
@@ -2079,41 +2047,10 @@ function W:Refresh()
 end
 
 
-function W:_StopUiTicker()
-  if self._uiTicker then
-    self._uiTicker:Cancel()
-    self._uiTicker = nil
-  end
-end
-
-function W:_StartUiTicker()
-  if self._uiTicker then return end
-
-  self._uiTicker = C_Timer.NewTicker(1.00, function()
-    local f = W.frame
-    if not (f and f:IsShown()) then return end
-    if not (MemDebug and MemDebug.IsEnabled and MemDebug:IsEnabled()) then return end
-
-    local cpu = MemDebug.CPU
-    local debugMode = (MemDebug.GetDebugMode and MemDebug:GetDebugMode()) or "light"
-    if debugMode ~= "full"
-      and cpu
-      and cpu.NativeFunctionSamplingEnabled
-      and cpu:NativeFunctionSamplingEnabled()
-      and cpu.PollNative
-    then
-      cpu:PollNative(_nowPrecise())
-    end
-
-    W:Refresh()
-  end)
-end
-
 function W:Open()
   local f = _ensureFrame()
   f:Show()
   self:Refresh()
-  self:_StartUiTicker()
 end
 
 function W:Toggle()
