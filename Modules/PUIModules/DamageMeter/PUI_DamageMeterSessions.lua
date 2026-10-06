@@ -170,8 +170,7 @@ local function GetAvailableSessionInfo(sessionID)
   return nil
 end
 
-local function GetBlizzardSessionID(windowDB)
-  local selection = GetWindowSelection(windowDB)
+local function GetBlizzardSessionIDForSelection(windowDB, selection)
   if IsAvailableSessionSelection(selection) then
     return selection.sessionID
   end
@@ -179,6 +178,10 @@ local function GetBlizzardSessionID(windowDB)
     return DamageMeters.currentDisplaySessionID
   end
   return nil
+end
+
+local function GetBlizzardSessionID(windowDB)
+  return GetBlizzardSessionIDForSelection(windowDB, GetWindowSelection(windowDB))
 end
 
 local function GetSessionStateKey(windowDB)
@@ -190,7 +193,7 @@ local function GetSessionStateKey(windowDB)
     return History:GetSelectionStateKey(selection)
   end
 
-  local sessionID = GetBlizzardSessionID(windowDB)
+  local sessionID = GetBlizzardSessionIDForSelection(windowDB, selection)
   if sessionID then
     return "ID:" .. sessionID
   end
@@ -205,7 +208,7 @@ local function GetCombatSession(windowDB, meterKey)
   end
 
   local meterType = METER_TYPES[meterKey]
-  local sessionID = GetBlizzardSessionID(windowDB)
+  local sessionID = GetBlizzardSessionIDForSelection(windowDB, selection)
   if sessionID then
     return C_DamageMeter.GetCombatSessionFromID(sessionID, meterType)
   end
@@ -220,7 +223,7 @@ local function GetCombatSessionSource(
   sourceCreatureID
 )
   local selection = GetWindowSelection(windowDB)
-  local sessionID = GetBlizzardSessionID(windowDB)
+  local sessionID = GetBlizzardSessionIDForSelection(windowDB, selection)
   if sessionID then
     return C_DamageMeter.GetCombatSessionSourceFromID(
       sessionID,
@@ -325,6 +328,7 @@ Sessions.WindowSelectionsEqual = WindowSelectionsEqual
 Sessions.FormatDuration = FormatDuration
 Sessions.GetAvailableSessionInfo = GetAvailableSessionInfo
 Sessions.GetBlizzardSessionID = GetBlizzardSessionID
+Sessions.GetBlizzardSessionIDForSelection = GetBlizzardSessionIDForSelection
 Sessions.GetSessionStateKey = GetSessionStateKey
 Sessions.GetCombatSession = GetCombatSession
 Sessions.GetCombatSessionSource = GetCombatSessionSource

@@ -52,7 +52,7 @@ local GetWindowSelection = Sessions.GetWindowSelection
 local SetWindowSelection = Sessions.SetWindowSelection
 local IsAvailableSessionSelection = Sessions.IsAvailableSessionSelection
 local GetCombatSession = Sessions.GetCombatSession
-local GetBlizzardSessionID = Sessions.GetBlizzardSessionID
+local GetBlizzardSessionIDForSelection = Sessions.GetBlizzardSessionIDForSelection
 local GetSessionDisplay = Sessions.GetSessionDisplay
 local FormatDuration = Sessions.FormatDuration
 local SetDeathTimeText = Sessions.SetDeathTimeText
@@ -832,8 +832,20 @@ local function ConfigureWindowRowDisplay(window, meterKey)
   window.rowDisplayMeter = meterKey
 end
 
-local function SetAbbreviatedRowValue(row, modeField, valueField, fontString, mode, value)
-  if IsSecret(value) then
+local function SetAbbreviatedRowValue(
+  row,
+  modeField,
+  valueField,
+  fontString,
+  mode,
+  value,
+  valueIsSecret
+)
+  if valueIsSecret == nil then
+    valueIsSecret = IsSecret(value)
+  end
+
+  if valueIsSecret then
     row[modeField] = nil
     row[valueField] = nil
     fontString:SetText(AbbreviateNumbers(value, NUMBER_ABBREVIATION_OPTIONS))
@@ -866,7 +878,15 @@ local function SetDeathTimeRowValue(row, value)
   SetDeathTimeText(row.primaryAmount, value)
 end
 
-local function SetRowSource(window, row, source, rank, maxAmount, meterKey)
+local function SetRowSource(
+  window,
+  row,
+  source,
+  rank,
+  maxAmount,
+  maxAmountIsSecret,
+  meterKey
+)
   local classFilename = source.classFilename
 
   if row.sourceIndex ~= rank then
@@ -885,22 +905,20 @@ local function SetRowSource(window, row, source, rank, maxAmount, meterKey)
   end
 
   local totalAmount = source.totalAmount
-  if meterKey == "DEATHS" and source.__puiSummaryDeathCount ~= true then
-    if row.fillMode ~= "FULL" then
-      row.fillMode = "FULL"
-      row.fillMaxAmount = nil
-      row.fillAmount = nil
-      row.fill:SetMinMaxValues(0, 1)
-      row.fill:SetValue(1)
-    end
-  else
+  local usesAmountFill = meterKey ~= "DEATHS"
+    or source.__puiSummaryDeathCount == true
+  local totalAmountIsSecret
+
+  if usesAmountFill then
+    totalAmountIsSecret = IsSecret(totalAmount)
+
     if row.fillMode ~= "AMOUNT" then
       row.fillMode = "AMOUNT"
       row.fillMaxAmount = nil
       row.fillAmount = nil
     end
 
-    if IsSecret(maxAmount) then
+    if maxAmountIsSecret then
       row.fillMaxAmount = nil
       row.fill:SetMinMaxValues(0, maxAmount)
     elseif row.fillMaxAmount ~= maxAmount then
@@ -908,13 +926,19 @@ local function SetRowSource(window, row, source, rank, maxAmount, meterKey)
       row.fill:SetMinMaxValues(0, maxAmount)
     end
 
-    if IsSecret(totalAmount) then
+    if totalAmountIsSecret then
       row.fillAmount = nil
       row.fill:SetValue(totalAmount)
     elseif row.fillAmount ~= totalAmount then
       row.fillAmount = totalAmount
       row.fill:SetValue(totalAmount)
     end
+  elseif row.fillMode ~= "FULL" then
+    row.fillMode = "FULL"
+    row.fillMaxAmount = nil
+    row.fillAmount = nil
+    row.fill:SetMinMaxValues(0, 1)
+    row.fill:SetValue(1)
   end
 
   local sourceName = source.name
@@ -952,7 +976,8 @@ local function SetRowSource(window, row, source, rank, maxAmount, meterKey)
         "primaryAmountValue",
         row.primaryAmount,
         "DEATH_COUNT",
-        totalAmount
+        totalAmount,
+        totalAmountIsSecret
       )
     else
       SetDeathTimeRowValue(row, source.deathTimeSeconds)
@@ -964,7 +989,8 @@ local function SetRowSource(window, row, source, rank, maxAmount, meterKey)
       "primaryAmountValue",
       row.primaryAmount,
       "TOTAL",
-      totalAmount
+      totalAmount,
+      totalAmountIsSecret
     )
   elseif meterKey == "DPS" or meterKey == "HPS" then
     SetAbbreviatedRowValue(
@@ -981,7 +1007,8 @@ local function SetRowSource(window, row, source, rank, maxAmount, meterKey)
       "secondaryAmountValue",
       row.secondaryAmount,
       "TOTAL",
-      totalAmount
+      totalAmount,
+      totalAmountIsSecret
     )
   else
     SetAbbreviatedRowValue(
@@ -990,7 +1017,8 @@ local function SetRowSource(window, row, source, rank, maxAmount, meterKey)
       "primaryAmountValue",
       row.primaryAmount,
       "TOTAL",
-      totalAmount
+      totalAmount,
+      totalAmountIsSecret
     )
     SetAbbreviatedRowValue(
       row,
@@ -1125,6 +1153,8 @@ local function RefreshWindow(window, session, windowDB)
   end
 
   local sources = session.combatSources
+  local maxAmount = session.maxAmount
+  local maxAmountIsSecret = IsSecret(maxAmount)
   local sourceCount = #sources
   window.sourceCount = sourceCount
 
@@ -1165,7 +1195,8 @@ local function RefreshWindow(window, session, windowDB)
       window.rows[rowIndex],
       sources[localPlayerIndex],
       localPlayerIndex,
-      session.maxAmount,
+      maxAmount,
+      maxAmountIsSecret,
       windowDB.meter
     )
   end
@@ -1183,7 +1214,8 @@ local function RefreshWindow(window, session, windowDB)
       window.rows[rowIndex],
       sources[sourceIndex],
       sourceIndex,
-      session.maxAmount,
+      maxAmount,
+      maxAmountIsSecret,
       windowDB.meter
     )
   end
@@ -1195,7 +1227,8 @@ local function RefreshWindow(window, session, windowDB)
       window.rows[rowIndex],
       sources[localPlayerIndex],
       localPlayerIndex,
-      session.maxAmount,
+      maxAmount,
+      maxAmountIsSecret,
       windowDB.meter
     )
   end
@@ -1864,7 +1897,10 @@ end
 
 local function DoesWindowSessionMatchEvent(windowRuntime, sessionID)
   local selection = GetWindowSelection(windowRuntime)
-  local blizzardSessionID = GetBlizzardSessionID(windowRuntime)
+  local blizzardSessionID = GetBlizzardSessionIDForSelection(
+    windowRuntime,
+    selection
+  )
   if blizzardSessionID then
     return blizzardSessionID == sessionID
   end
