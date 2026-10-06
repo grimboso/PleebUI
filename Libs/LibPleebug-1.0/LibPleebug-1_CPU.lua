@@ -8,7 +8,7 @@
 --   Provides CPU call counts/calls per second, but not per-call memory deltas.
 --
 -- Full debug mode:
---   Executes every P:Def and P:SecDef registration through Pleebug wrappers.
+--   Executes selected registrations only during an armed Full capture.
 --   Uses C_AddOnProfiler.MeasureCall when available, with a local timing fallback.
 --   Can taint and requires a reload to install or remove wrappers.
 
@@ -22,6 +22,7 @@ local MemDebug = Pleebug
 
 MemDebug.CPU = MemDebug.CPU or {}
 local CPU = MemDebug.CPU
+CPU._rtFuncStats = CPU._rtFuncStats or {}
 
 -- WoW Lua compatibility: table.pack/unpack may be nil in some clients
 local t_pack = table.pack or function(...)
@@ -111,7 +112,7 @@ local function _EnsureCDB()
 
   cdb.measured = nil
 
-  -- Tracking outputs must NEVER persist to SavedVariables.
+  -- Legacy persistent outputs are removed; core owns the one-shot Stop reload transfer.
   if cdb.funcStats ~= nil then cdb.funcStats = nil end
   if cdb.samples ~= nil then cdb.samples = nil end
 
@@ -808,6 +809,16 @@ function CPU:GetMeasurementState(path)
 
   local mode = MemDebug and MemDebug.GetDebugMode and MemDebug:GetDebugMode() or "light"
   if mode == "full" then
+    local captured = self:GetFuncStat(path)
+    if not MemDebug.__pleebugCaptureLoaded and captured and not captured.native then
+      return "Captured - original restored" .. aliasSuffix
+    end
+    if not MemDebug.__pleebugCaptureLoaded then
+      return "Original - Start requires reload" .. aliasSuffix
+    end
+    if not MemDebug:IsModuleEnabled(alias.moduleName) then
+      return "Original - file excluded" .. aliasSuffix
+    end
     local backend = self:GetFullMeasurementBackend()
     if alias.kind == "wrapped" then
       return "Wrapped - " .. backend .. aliasSuffix
@@ -817,7 +828,7 @@ function CPU:GetMeasurementState(path)
         return "Measured via alias " .. tostring(wrappedPath) .. " - " .. backend .. aliasSuffix
       end
     end
-    return "Registered after Full-mode wrapping" .. aliasSuffix
+    return "Original - no Full wrapper" .. aliasSuffix
   end
 
   if type(GetFunctionCPUUsage) ~= "function" or not self:IsScriptProfileEnabled() then
@@ -1090,6 +1101,7 @@ local function _PushFuncStat(rec, frameID, ms, ticks, allocBytes, deallocBytes)
 
   allocBytes = _ToNumber(allocBytes)
   if allocBytes then
+    st.allocN = (st.allocN or 0) + 1
     st.allocSum  = (st.allocSum or 0) + allocBytes
     st.allocLast = allocBytes
     if st.allocMax == nil or allocBytes > st.allocMax then st.allocMax = allocBytes end
@@ -1097,6 +1109,7 @@ local function _PushFuncStat(rec, frameID, ms, ticks, allocBytes, deallocBytes)
 
   deallocBytes = _ToNumber(deallocBytes)
   if deallocBytes then
+    st.deallocN = (st.deallocN or 0) + 1
     st.deallocSum  = (st.deallocSum or 0) + deallocBytes
     st.deallocLast = deallocBytes
     if st.deallocMax == nil or deallocBytes > st.deallocMax then st.deallocMax = deallocBytes end
@@ -1105,8 +1118,52 @@ end
 
 
 
-function CPU:CreateMeasuredCall(rec, fn, modules, module)
+-- Markers bracket named calls inside their enclosing native measurement.
+-- Keep only aggregate deltas; never retain Blizzard result/event tables.
+local function _PushPhaseStats(st, events)
+  if not events or #events == 0 then return end
+  local starts = {}
+  for i = 1, #events do
+    local event = events[i]
+    local prefix, name = event.name:match("^(PB[<>]):(.+)$")
+    if prefix then
+      local stack = starts[name]
+      if prefix == "PB<" then
+        if not stack then stack = {}; starts[name] = stack end
+        stack[#stack + 1] = event
+      elseif stack and #stack > 0 then
+        local first = stack[#stack]
+        stack[#stack] = nil
+        local ms = event.elapsedMilliseconds - first.elapsedMilliseconds
+        local alloc = (_ToNumber(event.allocatedBytes) or 0) - (_ToNumber(first.allocatedBytes) or 0)
+        local dealloc = (_ToNumber(event.deallocatedBytes) or 0) - (_ToNumber(first.deallocatedBytes) or 0)
+        st.phases = st.phases or {}
+        st.phaseOrder = st.phaseOrder or {}
+        local phase = st.phases[name]
+        if not phase then
+          phase = { n = 0, timeSum = 0, timeMax = 0, allocSum = 0, deallocSum = 0 }
+          st.phases[name] = phase
+          st.phaseOrder[#st.phaseOrder + 1] = name
+        end
+        phase.n = phase.n + 1
+        phase.timeSum = phase.timeSum + ms
+        if ms > phase.timeMax then phase.timeMax = ms end
+        phase.allocSum = phase.allocSum + alloc
+        phase.deallocSum = phase.deallocSum + dealloc
+      end
+    end
+  end
+end
+
+
+function CPU:CreateMeasuredCall(rec, fn, modules, module, phaseName)
   local measureCall = C_AddOnProfiler and C_AddOnProfiler.MeasureCall
+  local addEvent = C_AddOnProfiler and C_AddOnProfiler.AddMeasuredCallEvent
+  local beginMarker, endMarker
+  if addEvent and type(phaseName) == "string" and phaseName ~= "" and #phaseName < 44
+    and not phaseName:find("[%c]") then
+    beginMarker, endMarker = "PB<:" .. phaseName, "PB>:" .. phaseName
+  end
 
   return function(...)
     if not MemDebug._enabled or modules[module] == false or rec.retired then
@@ -1116,10 +1173,13 @@ function CPU:CreateMeasuredCall(rec, fn, modules, module)
     local frameID = GetTime()
     MemDebug:TrackRegisteredFunction(rec.treeKey)
     if measureCall and _ProfilerEnabled() then
+      if beginMarker then addEvent(beginMarker) end
       local measured = t_pack(measureCall(fn, ...))
+      if endMarker then addEvent(endMarker) end
       local results = measured[1]
       _PushFuncStat(rec, frameID, results.elapsedMilliseconds, results.elapsedTicks,
         results.allocatedBytes, results.deallocatedBytes)
+      _PushPhaseStats(rec.measuredStat, results.events)
       return t_unpack(measured, 2, measured.n)
     end
 
