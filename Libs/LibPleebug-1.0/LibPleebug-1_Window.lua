@@ -883,6 +883,9 @@ local function _ensureFrame()
   end
 
   function W:BuildExportText()
+    if not MemDebug:IsEnabled() and self._stoppedExportText then
+      return self._stoppedExportText
+    end
     local flat = self._flat or {}
     local interval = self._pendingInterval or (MemDebug.GetInterval and MemDebug:GetInterval()) or 10
     interval = tonumber(interval) or 10
@@ -1928,6 +1931,9 @@ function W:FreezeForStop()
     snap.__interval = snap.__interval or ((MemDebug and MemDebug.GetInterval and MemDebug:GetInterval()) or 10)
     self.lastSnapshot = snap
     self._buildInProgress = false
+    if self._buildRoot and self._treeIndex then
+      self:_ApplySnapshot(snap)
+    end
     if MemDebug then
       MemDebug._lastSnapshot = snap
     end
