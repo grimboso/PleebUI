@@ -2790,19 +2790,34 @@ local function PCMPreview_ConfigureInstallerStackStrip(icon, config, count)
     config,
     { 0.74, 0.48, 0.92, 1 }
   )
-  local r, g, b, a = PCMPreview_GetStackSegmentColor(
-    config,
-    count,
-    baseR, baseG, baseB, baseA
-  )
 
   strip:ClearAllPoints()
   strip:SetPoint("BOTTOMLEFT", icon.frame, "BOTTOMLEFT", 1, 1)
   strip:SetPoint("BOTTOMRIGHT", icon.frame, "BOTTOMRIGHT", -1, 1)
   strip:SetHeight(3)
   strip:SetMinMaxValues(0, maximum)
+  strip:SetStatusBarColor(baseR, baseG, baseB, baseA)
+
+  local thresholdParts = icon.stackStripThresholdParts
+  if not thresholdParts then
+    thresholdParts = {
+      applicationBar = strip,
+      applicationThresholds = {},
+    }
+    icon.stackStripThresholdParts = thresholdParts
+  end
+
+  AuraWidget.ConfigureApplicationThresholds(
+    thresholdParts,
+    config.stackColorThresholds,
+    WHITE_TEXTURE,
+    "HORIZONTAL",
+    false,
+    PLAYER_CLASS_COLOR,
+    maximum
+  )
+
   strip:SetValue(count)
-  strip:SetStatusBarColor(r, g, b, a)
   strip:Show()
 end
 
@@ -3521,7 +3536,7 @@ end
 
 function PCMPreview.RefreshBox(box)
   if not box
-    or not box:IsShown()
+    or not box:IsVisible()
     or not box.__puiPCMPreviewContentsReady
   then
     return

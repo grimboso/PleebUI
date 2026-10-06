@@ -45,11 +45,11 @@ local LIFECYCLE_EVENTS = {
 }
 
 local function IsDataRestricted()
-  return not initializing and (
-    InCombatLockdown()
-    or C_Secrets.ShouldAurasBeSecret()
-    or C_Secrets.ShouldCooldownsBeSecret()
-  )
+  return InCombatLockdown()
+    or (not initializing and (
+      C_Secrets.ShouldAurasBeSecret()
+      or C_Secrets.ShouldCooldownsBeSecret()
+    ))
 end
 
 local function DispatchLifecycleEvent(event, ...)
@@ -90,7 +90,8 @@ function Runtime:IsDataRestricted()
 end
 
 function Runtime:IsAuraRestricted()
-  return not initializing and (InCombatLockdown() or C_Secrets.ShouldAurasBeSecret() == true)
+  return InCombatLockdown()
+    or (not initializing and C_Secrets.ShouldAurasBeSecret() == true)
 end
 
 function Runtime:IsInitializing()

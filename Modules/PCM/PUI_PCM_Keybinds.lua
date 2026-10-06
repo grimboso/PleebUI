@@ -34,10 +34,14 @@ local _kbActionSnapshotReady = false
 local _kbItemMapBuilt = false
 local _kbMacroMapBuilt = false
 local _kbFallbackMapsBlocked = false
+local _kbCacheReady = false
 local _kbFormattedKeyCache = {}
 local _kbActionSlotKnown = {}
 local _kbActionSlotType = {}
 local _kbActionSlotID = {}
+local _kbMappedPages = {}
+local _kbExtraBarPages = {}
+local _kbBarOffsets = {}
 
 local _KB_MOD_LABELS = {
   SHIFT = "S",
@@ -139,7 +143,6 @@ local _KB_BAR_COMMANDS = {
   [13] = "MULTIACTIONBAR5BUTTON",
   [14] = "MULTIACTIONBAR6BUTTON",
   [15] = "MULTIACTIONBAR7BUTTON",
-  [16] = "MULTIACTIONBAR8BUTTON",
 }
 
 local _KB_BAR_UI_KEYS = {
@@ -156,6 +159,15 @@ local _KB_BAR_UI_KEYS = {
   [15] = "8",
 }
 
+local _KB_MAIN_STABLE_PAGES = {
+  [1] = true,
+  [7] = true,
+  [8] = true,
+  [9] = true,
+  [10] = true,
+  [11] = true,
+}
+
 local function _KB_PositiveNumber(value)
   if _KB_IsSecret(value) then
     return nil
@@ -165,22 +177,31 @@ local function _KB_PositiveNumber(value)
   return value and value > 0 and value or nil
 end
 
-local function _KB_IsStableBarPage(page)
-  if page == 1 then
-    return true
+local function _KB_RefreshBarTopology()
+  wipe(_kbMappedPages)
+  wipe(_kbExtraBarPages)
+  wipe(_kbBarOffsets)
+
+  local bars = ns.ActionBarsCore:GetDB().bars
+  _kbBarOffsets["1"] = bars["1"].buttonOffset or 0
+
+  for page in pairs(_KB_MAIN_STABLE_PAGES) do
+    _kbMappedPages[page] = true
   end
 
-  local uiKey = _KB_BAR_UI_KEYS[page]
-  if not uiKey then
-    return false
+  for page, uiKey in pairs(_KB_BAR_UI_KEYS) do
+    local barDB = bars[uiKey]
+    if barDB.enabled ~= false then
+      _kbMappedPages[page] = true
+      _kbExtraBarPages[page] = true
+      _kbBarOffsets[uiKey] = barDB.buttonOffset or 0
+    end
   end
-
-  return ns.ActionBarsCore:GetDB().bars[uiKey].enabled ~= false
 end
 
 local function _KB_IsMappedActionSlot(slot)
   local page = math_ceil(slot / _KB_SLOTS_PER_PAGE)
-  return _KB_IsStableBarPage(page)
+  return _kbMappedPages[page] == true
 end
 
 local function _KB_InvalidateBindings()
@@ -194,6 +215,7 @@ local function _KB_InvalidateBindings()
   wipe(_kbMacroEquipSlotToKey)
   _kbMacroMapBuilt = false
   _kbFallbackMapsBlocked = false
+  _kbCacheReady = false
 end
 
 local function _KB_InvalidateAll()
@@ -208,24 +230,7 @@ local function _KB_InvalidateActionContent()
   wipe(_kbItemKeyCache)
   wipe(_kbEquipSlotKeyCache)
   _kbFallbackMapsBlocked = false
-end
-
-local function _KB_RefreshActionSlotSnapshot()
-  _kbActionSnapshotReady = true
-  wipe(_kbActionSlotKnown)
-  wipe(_kbActionSlotType)
-  wipe(_kbActionSlotID)
-
-  for slot = 1, 192 do
-    if _KB_IsMappedActionSlot(slot) then
-      local actionType, actionID = GetActionInfo(slot)
-      if not _KB_IsSecret(actionType) and not _KB_IsSecret(actionID) then
-        _kbActionSlotKnown[slot] = true
-        _kbActionSlotType[slot] = actionType or false
-        _kbActionSlotID[slot] = actionID or false
-      end
-    end
-  end
+  _kbCacheReady = false
 end
 
 local function _KB_ActionSlotContentChanged(slot)
@@ -282,11 +287,7 @@ end
 
 
 local function _KB_ButtonIndexForActionIndex(actionIndex, uiKey)
-  local buttonOffset = 0
-  if uiKey then
-    buttonOffset = ns.ActionBarsCore:GetDB().bars[uiKey].buttonOffset
-  end
-
+  local buttonOffset = _kbBarOffsets[uiKey] or 0
   return ((actionIndex - buttonOffset - 1) % _KB_SLOTS_PER_PAGE) + 1
 end
 
@@ -311,7 +312,6 @@ local function _KB_KeybindForSlot(slot)
 
   local page = math_ceil(slot / _KB_SLOTS_PER_PAGE)
   local actionIndex = ((slot - 1) % _KB_SLOTS_PER_PAGE) + 1
-  local best = nil
   local blocked = false
 
   if page == 1 then
@@ -320,29 +320,36 @@ local function _KB_KeybindForSlot(slot)
     if keyBlocked then
       blocked = true
     elseif key then
-      best = key
+      return key, false, 1
     end
   end
 
-  local command = _KB_IsStableBarPage(page) and _KB_BAR_COMMANDS[page] or nil
-  if command then
-    local bindingIndex = _KB_ButtonIndexForActionIndex(actionIndex, _KB_BAR_UI_KEYS[page])
+  if _kbExtraBarPages[page] then
+    local uiKey = _KB_BAR_UI_KEYS[page]
+    local command = _KB_BAR_COMMANDS[page]
+    local bindingIndex = _KB_ButtonIndexForActionIndex(actionIndex, uiKey)
     local key, keyBlocked = _KB_KeybindForBinding(command .. bindingIndex)
     if keyBlocked then
       blocked = true
-    elseif key and (not best or #key < #best) then
-      best = key
+    elseif key then
+      return key, false, tonumber(uiKey) or 50
     end
   end
 
-  if best then
-    return best, false
+  if page ~= 1 and _KB_MAIN_STABLE_PAGES[page] then
+    local bindingIndex = _KB_ButtonIndexForActionIndex(actionIndex, "1")
+    local key, keyBlocked = _KB_KeybindForBinding("ACTIONBUTTON" .. bindingIndex)
+    if keyBlocked then
+      blocked = true
+    elseif key then
+      return key, false, 100 + page
+    end
   end
 
   return nil, blocked
 end
 
-local function _KB_ShortestFromSlots(slots)
+local function _KB_SelectKeybindFromSlots(slots)
   if _KB_IsSecret(slots) then
     return nil, true
   end
@@ -351,6 +358,7 @@ local function _KB_ShortestFromSlots(slots)
   end
 
   local best = nil
+  local bestRank = nil
   local blocked = false
 
   for index = 1, #slots do
@@ -358,11 +366,12 @@ local function _KB_ShortestFromSlots(slots)
     if _KB_IsSecret(slot) then
       blocked = true
     else
-      local key, slotBlocked = _KB_KeybindForSlot(slot)
+      local key, slotBlocked, rank = _KB_KeybindForSlot(slot)
       if slotBlocked then
         blocked = true
-      elseif key and (not best or #key < #best) then
+      elseif key and (not bestRank or rank < bestRank or (rank == bestRank and #key < #best)) then
         best = key
+        bestRank = rank
       end
     end
   end
@@ -606,12 +615,16 @@ local function _KB_BuildFallbackMaps()
 
   local needItems = not _kbItemMapBuilt
   local needMacros = not _kbMacroMapBuilt
-  if not needItems and not needMacros then
+  local refreshSnapshot = not _kbActionSnapshotReady
+  if not refreshSnapshot and not needItems and not needMacros then
     return true
   end
 
-  if not _kbActionSnapshotReady then
-    _KB_RefreshActionSlotSnapshot()
+  if refreshSnapshot then
+    _kbActionSnapshotReady = true
+    wipe(_kbActionSlotKnown)
+    wipe(_kbActionSlotType)
+    wipe(_kbActionSlotID)
   end
   if needItems then
     wipe(_kbItemSlots)
@@ -626,6 +639,17 @@ local function _KB_BuildFallbackMaps()
   local blocked = false
   for slot = 1, 192 do
     if _KB_IsMappedActionSlot(slot) then
+      if refreshSnapshot then
+        local actionType, actionID = GetActionInfo(slot)
+        if _KB_IsSecret(actionType) or _KB_IsSecret(actionID) then
+          blocked = true
+        else
+          _kbActionSlotKnown[slot] = true
+          _kbActionSlotType[slot] = actionType or false
+          _kbActionSlotID[slot] = actionID or false
+        end
+      end
+
       local actionType = _kbActionSlotType[slot]
       local actionID = _kbActionSlotID[slot]
       if not _kbActionSlotKnown[slot] then
@@ -696,7 +720,7 @@ function Cooldowns:GetSpellKeybind(spellID)
 
   local slots = C_ActionBar.FindSpellActionButtons(baseSpellID)
   local key
-  key, blocked = _KB_ShortestFromSlots(slots)
+  key, blocked = _KB_SelectKeybindFromSlots(slots)
   if blocked then return nil, true end
   if key then
     _KB_CacheSpell(baseSpellID, currentSpellID, key)
@@ -742,7 +766,7 @@ function Cooldowns:GetItemKeybind(itemID)
     return cached or nil, false
   end
 
-  local _, itemSpellID = GetItemSpell(itemID)
+  local _, itemSpellID = C_Item.GetItemSpell(itemID)
   if _KB_IsSecret(itemSpellID) then return nil, true end
   itemSpellID = _KB_PositiveNumber(itemSpellID)
   if itemSpellID then
@@ -768,7 +792,7 @@ function Cooldowns:GetItemKeybind(itemID)
 
   local slots = _kbItemSlots[itemID]
   if slots then
-    local key, blocked = _KB_ShortestFromSlots(slots)
+    local key, blocked = _KB_SelectKeybindFromSlots(slots)
     if blocked then return nil, true end
     if key then
       _kbItemKeyCache[itemID] = key
@@ -880,8 +904,8 @@ local function _KB_DoRefresh(full, content, bindings)
   end
 
   if full then
+    _KB_RefreshBarTopology()
     _KB_InvalidateAll()
-    _KB_RefreshActionSlotSnapshot()
   else
     if content then
       _KB_InvalidateActionContent()
@@ -891,6 +915,7 @@ local function _KB_DoRefresh(full, content, bindings)
     end
   end
 
+  _kbCacheReady = _KB_BuildFallbackMaps()
   _KB_RefreshOwnedKeybinds()
   Cooldowns:ConsumableTracker_RefreshKeybinds()
 end
@@ -993,14 +1018,14 @@ end
 local function _KB_OnEvent(_, event, arg1, arg2)
   if event == "PLAYER_ENTERING_WORLD" or event == "COOLDOWN_VIEWER_DATA_LOADED" then
     _KB_UpdateConsumerState()
-    if _kbActive then
+    if _kbActive and not _kbCacheReady and not _kbDirty then
       _KB_ScheduleRebuild(true)
     end
     return
   end
 
   if event == "ADDON_RESTRICTION_STATE_CHANGED" then
-    if arg2 == Enum.AddOnRestrictionState.Inactive and _kbActive then
+    if arg2 == Enum.AddOnRestrictionState.Inactive and _kbActive and _kbFallbackMapsBlocked then
       _KB_ScheduleRebuild(true)
     end
     return
@@ -1101,17 +1126,8 @@ function Cooldowns:ApplyKeybindTextRulesNow(viewerKey)
   end
 
   _KB_UpdateConsumerState()
-
-  if _kbActive then
-    _kbEventFrame:Hide()
-    _kbDirty = false
-    _kbFullRebuild = false
-    _kbContentRebuild = false
-    _kbBindingRebuild = false
-    _KB_DoRefresh(true, false, false)
-  else
-    _KB_RefreshOwnedKeybinds()
-  end
+  _KB_RefreshOwnedKeybinds()
+  Cooldowns:ConsumableTracker_RefreshKeybinds()
 end
 
 function Cooldowns:GetKeybindsEnabled(viewerKey)
@@ -1172,12 +1188,11 @@ end
 
 _KB_FormatKeybind = P:Def("_KB_FormatKeybind", _KB_FormatKeybind)
 _KB_IsAbilityViewerKey = P:Def("_KB_IsAbilityViewerKey", _KB_IsAbilityViewerKey)
-_KB_IsStableBarPage = P:Def("_KB_IsStableBarPage", _KB_IsStableBarPage)
+_KB_RefreshBarTopology = P:Def("_KB_RefreshBarTopology", _KB_RefreshBarTopology)
 _KB_IsMappedActionSlot = P:Def("_KB_IsMappedActionSlot", _KB_IsMappedActionSlot)
 _KB_InvalidateBindings = P:Def("_KB_InvalidateBindings", _KB_InvalidateBindings)
 _KB_InvalidateAll = P:Def("_KB_InvalidateAll", _KB_InvalidateAll)
 _KB_InvalidateActionContent = P:Def("_KB_InvalidateActionContent", _KB_InvalidateActionContent)
-_KB_RefreshActionSlotSnapshot = P:Def("_KB_RefreshActionSlotSnapshot", _KB_RefreshActionSlotSnapshot)
 _KB_ActionSlotContentChanged = P:Def("_KB_ActionSlotContentChanged", _KB_ActionSlotContentChanged)
 _KB_ButtonIndexForActionIndex = P:Def("_KB_ButtonIndexForActionIndex", _KB_ButtonIndexForActionIndex)
 _KB_KeybindForBinding = P:Def("_KB_KeybindForBinding", _KB_KeybindForBinding)
