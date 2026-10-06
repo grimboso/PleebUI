@@ -55,7 +55,7 @@ Buckets have one-second resolution. The oldest partial second is included, so an
 
 One capture ticker owns native sampling, snapshot publication and visible-window refresh. Light sampling runs once per second while capture is active, whether the window is open or closed. There is no separate UI polling ticker. Native calls and CPU deltas are stored together at the sample timestamp. A sample cannot be split into individual call timestamps; delayed callbacks can make a sample span more than one second. Native peaks remain sample averages. The sampler never installs function wrappers. The addon overview in the status also uses the selected window; addon memory is a separate retained-memory snapshot, not window allocation activity.
 
-Stop freezes the selected window and its text. Frozen values do not age away while stopped. Start or Clear discards them; reload clears all capture data. Export includes every registered function and event row with its available measurements, regardless of collapsed groups or the display row limit. Expand rows only when browsing the window; copying all results does not require expanding them.
+Stop freezes the selected window and its text. Frozen values do not age away while stopped. Start or Clear discards them; reload clears all capture data. Export follows the currently expanded categories: collapsed groups contribute their summary row, and expanded groups include their visible children and available measurements. You can expand or collapse categories after Stop and click Export again without changing the frozen values. The display row limit does not truncate expanded categories in the export.
 
 ## Targeted phase markers
 
