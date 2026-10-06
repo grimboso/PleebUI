@@ -9,9 +9,11 @@ ns.UFIndicators = ns.UFIndicators or {}
 
 local UFIndicators = ns.UFIndicators
 local Theme = ns.Theme
+local oUF = ns.oUF
 local P = select(1, ns.Pleebug:DropIn(UFIndicators, { name = "UnitFrames.Indicators" }))
 local _G = _G
 local CreateFrame = _G.CreateFrame
+local UnitIsConnected = _G.UnitIsConnected
 local type = _G.type
 local tonumber = _G.tonumber
 local pairs = _G.pairs
@@ -214,7 +216,9 @@ local function LayoutRaidRoleIndicators(frame)
   end
 
   local visibilityMask, isLeader, isAssistant, isRaidRole = GetRaidRoleVisibilityMask(frame)
-  frame.__puiRaidRoleVisibilityMask = visibilityMask
+  if frame.RaidRoleIndicator then
+    frame.RaidRoleIndicator.__puiRaidRoleWasShown = isRaidRole
+  end
 
   if visibilityMask == 0 then
     return
@@ -265,7 +269,24 @@ local function LayoutRaidRoleIndicators(frame)
   end
 end
 
-local function PostUpdateRaidRoleElement(element, role)
+local function UpdateRaidRoleLayoutOnVisibilityChanged(element)
+  local owner = element and element.__owner or nil
+  if owner then
+    LayoutRaidRoleIndicators(owner)
+  end
+end
+
+local function HookRaidRoleLayoutVisibility(element)
+  if USE_SECRET_ROLE_ICONS or not element or element.__puiRaidRoleVisibilityHooked == true then
+    return
+  end
+
+  element.__puiRaidRoleVisibilityHooked = true
+  element:HookScript("OnShow", UpdateRaidRoleLayoutOnVisibilityChanged)
+  element:HookScript("OnHide", UpdateRaidRoleLayoutOnVisibilityChanged)
+end
+
+local function PostUpdateRaidAssignmentIndicator(element, role)
   local owner = element and element.__owner or nil
   local layout = owner and owner.__puiRaidRoleLayout or nil
 
@@ -275,10 +296,12 @@ local function PostUpdateRaidRoleElement(element, role)
     element:Hide()
   end
 
-  if not owner or owner.__puiRaidRoleVisibilityMask == GetRaidRoleVisibilityMask(owner) then
+  local isShown = element:IsShown() == true
+  if not owner or element.__puiRaidRoleWasShown == isShown then
     return
   end
 
+  element.__puiRaidRoleWasShown = isShown
   LayoutRaidRoleIndicators(owner)
 end
 
@@ -438,9 +461,7 @@ function UFIndicators.EnsureSharedUnitIndicators(frame, parent, roleConfigProvid
     frame.LeaderIndicator = frame.PUIRaidRoleAnchor:CreateTexture(nil, "OVERLAY")
   end
   if frame.LeaderIndicator then
-    if not USE_SECRET_ROLE_ICONS then
-      frame.LeaderIndicator.PostUpdate = PostUpdateRaidRoleElement
-    end
+    HookRaidRoleLayoutVisibility(frame.LeaderIndicator)
   end
 
   if useRoleIndicators and not frame.AssistantIndicator then
@@ -448,9 +469,7 @@ function UFIndicators.EnsureSharedUnitIndicators(frame, parent, roleConfigProvid
     frame.AssistantIndicator:SetTexture("Interface\\GroupFrame\\UI-Group-AssistantIcon")
   end
   if frame.AssistantIndicator then
-    if not USE_SECRET_ROLE_ICONS then
-      frame.AssistantIndicator.PostUpdate = PostUpdateRaidRoleElement
-    end
+    HookRaidRoleLayoutVisibility(frame.AssistantIndicator)
   end
 
   if useRoleIndicators and not frame.RaidRoleIndicator then
@@ -458,7 +477,7 @@ function UFIndicators.EnsureSharedUnitIndicators(frame, parent, roleConfigProvid
   end
   if frame.RaidRoleIndicator then
     if not USE_SECRET_ROLE_ICONS then
-      frame.RaidRoleIndicator.PostUpdate = PostUpdateRaidRoleElement
+      frame.RaidRoleIndicator.PostUpdate = PostUpdateRaidAssignmentIndicator
     end
   end
 
@@ -514,6 +533,42 @@ function UFIndicators.UpdateOfflinePresentation(frame, isOffline)
   frame.Power:SetAlpha(isOffline and 0.20 or 1)
   frame.TextureParent:SetAlpha(isOffline and 0.45 or 1)
 end
+
+local function RefreshOfflinePresentation(frame, event, unit, isConnected)
+  if not unit or frame.__unit ~= unit then
+    return
+  end
+
+  if event ~= "UNIT_CONNECTION" then
+    isConnected = UnitIsConnected(unit)
+  end
+
+  local isOffline = not isConnected
+  if frame.__puiOfflineState ~= isOffline then
+    UFIndicators.UpdateOfflinePresentation(frame, isOffline)
+  end
+end
+
+local function EnableOfflinePresentation(frame)
+  local groupKind = frame.__puiGroupKind
+  if groupKind ~= "party" and groupKind ~= "raid" then
+    return false
+  end
+
+  frame:RegisterEvent("UNIT_CONNECTION", RefreshOfflinePresentation)
+  return true
+end
+
+local function DisableOfflinePresentation(frame)
+  frame:UnregisterEvent("UNIT_CONNECTION", RefreshOfflinePresentation)
+end
+
+oUF:AddElement(
+  "PUIOfflinePresentation",
+  RefreshOfflinePresentation,
+  EnableOfflinePresentation,
+  DisableOfflinePresentation
+)
 
 function UFIndicators.ConfigureSharedUnitIndicators(frame, layout)
   frame.__puiIndicatorLayout = layout
@@ -946,7 +1001,9 @@ end
   DisableElement = P:Def("DisableElement", DisableElement)
   SetTexturePoint = P:Def("SetTexturePoint", SetTexturePoint)
   LayoutRaidRoleIndicators = P:Def("LayoutRaidRoleIndicators", LayoutRaidRoleIndicators)
-  PostUpdateRaidRoleElement = P:Def("PostUpdateRaidRoleElement", PostUpdateRaidRoleElement)
+  UpdateRaidRoleLayoutOnVisibilityChanged = P:Def("UpdateRaidRoleLayoutOnVisibilityChanged", UpdateRaidRoleLayoutOnVisibilityChanged)
+  HookRaidRoleLayoutVisibility = P:Def("HookRaidRoleLayoutVisibility", HookRaidRoleLayoutVisibility)
+  PostUpdateRaidAssignmentIndicator = P:Def("PostUpdateRaidAssignmentIndicator", PostUpdateRaidAssignmentIndicator)
   PostUpdateGroupRoleIndicator = P:Def("PostUpdateGroupRoleIndicator", PostUpdateGroupRoleIndicator)
   CreatePhaseIndicator = P:Def("CreatePhaseIndicator", CreatePhaseIndicator)
   UFIndicators.ConstructNativeStatusElements = P:Def("UFIndicators.ConstructNativeStatusElements", UFIndicators.ConstructNativeStatusElements)

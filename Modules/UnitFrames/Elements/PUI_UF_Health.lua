@@ -65,18 +65,6 @@ function UFHealth.PostUpdateHealth(element, unit, cur, max)
   element:SetValue(cur)
 end
 
-function UFHealth.PostUpdateHealthColor(element, unit, color)
-  local frame = element.__owner
-  local isGroupFrame = frame.__puiGroupKind == "party" or frame.__puiGroupKind == "raid"
-  if not isGroupFrame then
-    return
-  end
-
-  local isOffline = color == frame.colors.disconnected
-  if frame.__puiOfflineState ~= isOffline then
-    ns.UFIndicators.UpdateOfflinePresentation(frame, isOffline)
-  end
-end
 
 local function EnsureFrameColors(frame)
   local frameColors = frame.__puiFrameColors
@@ -134,7 +122,6 @@ local function ConfigureHealthColors(frame, cfg, colors, forceUpdate)
     frame.__puiFrameColors.health = nil
   end
 
-  healthBar.PostUpdateColor = UFHealth.PostUpdateHealthColor
   healthBar.colorClass = not useCustomHealthColor
   local useReactionColors = not useCustomHealthColor and useReactionColor
 
@@ -185,7 +172,6 @@ function UFHealth.Construct(frame)
   frame.Health = healthBar
 
   healthBar.PostUpdate = nil
-  healthBar.PostUpdateColor = nil
   healthBar.colorDisconnected = true
   healthBar.colorTapping = true
   healthBar.colorClass = true
@@ -259,7 +245,6 @@ end
 
   P:SecDef("UFHealth.UpdateHealth", UFHealth, "UpdateHealth")
   P:SecDef("UFHealth.PostUpdateHealth", UFHealth, "PostUpdateHealth")
-  P:SecDef("UFHealth.PostUpdateHealthColor", UFHealth, "PostUpdateHealthColor")
   EnsureFrameColors = P:Def("EnsureFrameColors", EnsureFrameColors)
   ConfigureHealthColors = P:Def("ConfigureHealthColors", ConfigureHealthColors)
   UFHealth.RefreshMissingColor = P:Def("UFHealth.RefreshMissingColor", UFHealth.RefreshMissingColor)

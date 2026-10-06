@@ -232,6 +232,7 @@ function UFFrameGlow.EnsureSharedBorderHighlight(frame, key, edge)
   })
   border:EnableMouse(false)
   border:Hide()
+  border.__puiBorderShown = false
   border.__puiLogicalEdge = logicalEdge
   border.__puiCachedEdge = physicalEdge
   border.__puiBackdropEdgeSize = physicalEdge
@@ -244,26 +245,6 @@ function UFFrameGlow.EnsureSharedBorderHighlight(frame, key, edge)
   return border
 end
 
-local DEFAULT_TARGET_COLOR = { 1, 1, 1, 1 }
-
-local function ApplyBorderColor(border, color, fallback)
-  if not border or not border.SetBackdropBorderColor then
-    return
-  end
-
-  color = color or fallback or DEFAULT_TARGET_COLOR
-
-  if color.GetRGBA then
-    border:SetBackdropBorderColor(color:GetRGBA())
-  else
-    border:SetBackdropBorderColor(
-      color.r or color[1] or 1,
-      color.g or color[2] or 1,
-      color.b or color[3] or 1,
-      color.a or color[4] or 1
-    )
-  end
-end
 
 function UFFrameGlow.ShowPreparedBorderHighlight(border, r, g, b, a)
   if not border then
@@ -284,10 +265,7 @@ function UFFrameGlow.ShowPreparedBorderHighlight(border, r, g, b, a)
 
   if border.__puiBorderShown ~= true then
     border.__puiBorderShown = true
-
-    if not border:IsShown() then
-      border:Show()
-    end
+    border:Show()
   end
 end
 
@@ -343,49 +321,12 @@ function UFFrameGlow.GetLayerLevelOffset(kind)
 end
 
 function UFFrameGlow.HideBorderHighlight(border)
-  if not border then
+  if not border or border.__puiBorderShown ~= true then
     return
   end
 
-  if border.__puiBorderShown ~= false then
-    border.__puiBorderShown = false
-
-    if border:IsShown() then
-      border:Hide()
-    end
-  end
-end
-
-function UFFrameGlow.ShowBorderHighlight(frame, border, color, fallback, edge, levelOffset)
-  if not frame or not border then
-    return
-  end
-
-  local logicalEdge = ClampBorderSize(
-    edge,
-    __PUI_SHARED_TARGET_BORDER_SIZE
-  )
-  if logicalEdge <= 0 then
-    UFFrameGlow.HideBorderHighlight(border)
-    return
-  end
-
-  UFFrameGlow.PositionBorderHighlight(
-    frame,
-    border,
-    logicalEdge,
-    levelOffset or 1
-  )
-
-  ApplyBorderColor(border, color, fallback or DEFAULT_TARGET_COLOR)
-
-  if border.__puiBorderShown ~= true then
-    border.__puiBorderShown = true
-
-    if not border:IsShown() then
-      border:Show()
-    end
-  end
+  border.__puiBorderShown = false
+  border:Hide()
 end
 
 local function UnitTokensAreSame(unit1, unit2)
@@ -640,14 +581,12 @@ end
   GetGroupedProfile = P:Def("GetGroupedProfile", GetGroupedProfile)
   UFFrameGlow.InvalidateAnchorCache = P:Def("UFFrameGlow.InvalidateAnchorCache", UFFrameGlow.InvalidateAnchorCache)
   RefreshFrameAnchorCache = P:Def("RefreshFrameAnchorCache", RefreshFrameAnchorCache)
-  ApplyBorderColor = P:Def("ApplyBorderColor", ApplyBorderColor)
   UFFrameGlow.ShowPreparedBorderHighlight = P:Def("UFFrameGlow.ShowPreparedBorderHighlight", UFFrameGlow.ShowPreparedBorderHighlight)
   UFFrameGlow.PositionBorderHighlight = P:Def("UFFrameGlow.PositionBorderHighlight", UFFrameGlow.PositionBorderHighlight)
   UFFrameGlow.EnsureSharedBorderHighlight = P:Def("UFFrameGlow.EnsureSharedBorderHighlight", UFFrameGlow.EnsureSharedBorderHighlight)
   UFFrameGlow.GetBorderSize = P:Def("UFFrameGlow.GetBorderSize", UFFrameGlow.GetBorderSize)
   UFFrameGlow.GetLayerLevelOffset = P:Def("UFFrameGlow.GetLayerLevelOffset", UFFrameGlow.GetLayerLevelOffset)
   UFFrameGlow.HideBorderHighlight = P:Def("UFFrameGlow.HideBorderHighlight", UFFrameGlow.HideBorderHighlight)
-  UFFrameGlow.ShowBorderHighlight = P:Def("UFFrameGlow.ShowBorderHighlight", UFFrameGlow.ShowBorderHighlight)
   IsGroupedFrameGlowFrame = P:Def("IsGroupedFrameGlowFrame", IsGroupedFrameGlowFrame)
   UFFrameGlow.HideTargetHighlight = P:Def("UFFrameGlow.HideTargetHighlight", UFFrameGlow.HideTargetHighlight)
   UFFrameGlow.UpdateTargetHighlight = P:Def("UFFrameGlow.UpdateTargetHighlight", UFFrameGlow.UpdateTargetHighlight)

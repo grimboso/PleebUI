@@ -93,13 +93,59 @@ function UFThreat.Configure(frame)
   local threat = frame.ThreatIndicator
   frame.__puiThreatConfig = cfg
 
-  if not cfg or cfg.enabled == false then
+  if not cfg or cfg.enabled == false or cfg.borderSize <= 0 then
+    frame.__puiThreatShowBorderGlow = false
+    frame.__puiThreatShowFrameGlow = false
+
     if frame:IsElementEnabled("ThreatIndicator") then
       frame:DisableElement("ThreatIndicator")
     end
 
     UFThreat.HideThreatHighlight(frame)
     return threat
+  end
+
+  local style = cfg.style
+  local edge = cfg.borderSize
+  local level = UFFrameGlow.GetLayerLevelOffset("threat")
+  local showBorderGlow = style == "BORDER_GLOW" or style == "BOTH"
+  local showFrameGlow = style == "FRAME_GLOW" or style == "BOTH"
+  local presentationChanged = frame.__puiThreatShowBorderGlow ~= showBorderGlow
+    or frame.__puiThreatShowFrameGlow ~= showFrameGlow
+    or frame.__puiThreatBorderSize ~= edge
+    or frame.__puiThreatLevelOffset ~= level
+
+  frame.__puiThreatShowBorderGlow = showBorderGlow
+  frame.__puiThreatShowFrameGlow = showFrameGlow
+  frame.__puiThreatBorderSize = edge
+  frame.__puiThreatLevelOffset = level
+
+  if presentationChanged then
+    frame.__puiThreatColorObject = nil
+  end
+
+  if showBorderGlow and (threat.BorderGlow.__puiPositionReady ~= true
+    or threat.BorderGlow.__puiForcePositionRefresh == true
+    or threat.BorderGlow.__puiLogicalEdge ~= edge
+    or threat.BorderGlow.__puiCachedLevelOffset ~= level)
+  then
+    UFFrameGlow.PositionBorderHighlight(frame, threat.BorderGlow, edge, level)
+  end
+
+  if showFrameGlow and (threat.MainGlow.__puiPositionReady ~= true
+    or threat.MainGlow.__puiForcePositionRefresh == true
+    or threat.MainGlow.__puiLogicalEdge ~= edge
+    or threat.MainGlow.__puiCachedLevelOffset ~= level)
+  then
+    UFFrameGlow.PositionBorderHighlight(frame, threat.MainGlow, edge, level)
+  end
+
+  if not showBorderGlow then
+    UFFrameGlow.HideBorderHighlight(threat.BorderGlow)
+  end
+
+  if not showFrameGlow then
+    UFFrameGlow.HideBorderHighlight(threat.MainGlow)
   end
 
   threat.feedbackUnit = nil
@@ -116,57 +162,56 @@ function UFThreat.PostUpdate(self, unit, status, color)
   local cfg = frame.__puiThreatConfig
   if not cfg
     or cfg.enabled == false
-    or not self:IsShown()
     or not color
-    or not UFThreat.ShouldShowThreatHighlight(frame)
+    or (not USE_SECRET_ROLE_ICONS and not UFThreat.ShouldShowThreatHighlight(frame))
   then
     UFThreat.HideThreatHighlight(frame)
     return
   end
 
-  local style = cfg.style
-  local showBorderGlow = style == "BORDER_GLOW" or style == "BOTH"
-  local showFrameGlow = style == "FRAME_GLOW" or style == "BOTH"
+  local border = self.BorderGlow
+  local glow = self.MainGlow
+  local showBorderGlow = frame.__puiThreatShowBorderGlow == true
+  local showFrameGlow = frame.__puiThreatShowFrameGlow == true
+  local edge = frame.__puiThreatBorderSize
+  local level = frame.__puiThreatLevelOffset
 
-  local r, g, b = color:GetRGB()
-  local a = 0.95
-  local threatEdge = cfg.borderSize
-  local threatFrameEdge = cfg.borderSize
+  local borderNeedsPosition = showBorderGlow
+    and (border.__puiPositionReady ~= true
+      or border.__puiForcePositionRefresh == true
+      or border.__puiLogicalEdge ~= edge
+      or border.__puiCachedLevelOffset ~= level)
+  local glowNeedsPosition = showFrameGlow
+    and (glow.__puiPositionReady ~= true
+      or glow.__puiForcePositionRefresh == true
+      or glow.__puiLogicalEdge ~= edge
+      or glow.__puiCachedLevelOffset ~= level)
 
   if frame.__puiThreatHighlightShown == true
-    and frame.__puiThreatStyle == style
-    and frame.__puiThreatEdge == threatEdge
-    and frame.__puiThreatFrameEdge == threatFrameEdge
-    and frame.__puiThreatR == r
-    and frame.__puiThreatG == g
-    and frame.__puiThreatB == b
+    and frame.__puiThreatColorObject == color
+    and not borderNeedsPosition
+    and not glowNeedsPosition
   then
     return
   end
 
-  frame.__puiThreatStyle = style
-  frame.__puiThreatEdge = threatEdge
-  frame.__puiThreatFrameEdge = threatFrameEdge
-  frame.__puiThreatR = r
-  frame.__puiThreatG = g
-  frame.__puiThreatB = b
-
-  local border = self.BorderGlow
-  local glow = self.MainGlow
-
-  local threatLevel = UFFrameGlow.GetLayerLevelOffset("threat")
-  local threatColor = frame.__puiThreatColor or {}
-  frame.__puiThreatColor = threatColor
-  threatColor[1], threatColor[2], threatColor[3], threatColor[4] = r, g, b, a
+  frame.__puiThreatColorObject = color
+  local r, g, b = color:GetRGB()
 
   if showBorderGlow then
-    UFFrameGlow.ShowBorderHighlight(frame, border, threatColor, threatColor, threatEdge, threatLevel)
+    if borderNeedsPosition then
+      UFFrameGlow.PositionBorderHighlight(frame, border, edge, level)
+    end
+    UFFrameGlow.ShowPreparedBorderHighlight(border, r, g, b, 0.95)
   else
     UFFrameGlow.HideBorderHighlight(border)
   end
 
   if showFrameGlow then
-    UFFrameGlow.ShowBorderHighlight(frame, glow, threatColor, threatColor, threatFrameEdge, threatLevel)
+    if glowNeedsPosition then
+      UFFrameGlow.PositionBorderHighlight(frame, glow, edge, level)
+    end
+    UFFrameGlow.ShowPreparedBorderHighlight(glow, r, g, b, 0.95)
   else
     UFFrameGlow.HideBorderHighlight(glow)
   end

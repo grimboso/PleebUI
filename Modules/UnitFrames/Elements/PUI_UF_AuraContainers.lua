@@ -166,7 +166,7 @@ local function CreateAuraElement(frame, layout, appearance)
     growthY = layout.growthY,
   })
 
-  P:SecDef("BlizzardAuraContainer.UpdateAllAuras", container, "UpdateAllAuras")
+  P:SecDef("BlizzardAuraContainer.UpdateAllAuras", container, "UpdateAllAuras", nil, nil, false)
 
   frame.__puiAuraContainers = frame.__puiAuraContainers or {}
   frame.__puiAuraContainers[#frame.__puiAuraContainers + 1] = container
@@ -1104,7 +1104,7 @@ BuildAuraButtonAppearanceSignature = P:Def(
   "BuildAuraButtonAppearanceSignature",
   BuildAuraButtonAppearanceSignature
 )
-RefreshNativeAuraContainers = P:Def("RefreshNativeAuraContainers", RefreshNativeAuraContainers)
+RefreshNativeAuraContainers = P:Def("RefreshNativeAuraContainers", RefreshNativeAuraContainers, nil, nil, false)
 CreateAuraElement = P:Def("CreateAuraElement", CreateAuraElement)
 ApplyDisplayLayout = P:Def("ApplyDisplayLayout", ApplyDisplayLayout)
 InitializeAuraButton = P:Def("InitializeAuraButton", InitializeAuraButton)
@@ -1126,10 +1126,10 @@ ConfigureDisplayRuntime = P:Def("ConfigureDisplayRuntime", ConfigureDisplayRunti
 GetSortedDisplays = P:Def("GetSortedDisplays", GetSortedDisplays)
 SetAllRuntimeElementState = P:Def("SetAllRuntimeElementState", SetAllRuntimeElementState)
 SyncUnknownRuntimeElementState = P:Def("SyncUnknownRuntimeElementState", SyncUnknownRuntimeElementState)
-IsGroupAuraUnitAvailable = P:Def("IsGroupAuraUnitAvailable", IsGroupAuraUnitAvailable)
-ReconcileDisplayState = P:Def("ReconcileDisplayState", ReconcileDisplayState)
-AuditAvailabilityFrame = P:Def("AuditAvailabilityFrame", AuditAvailabilityFrame)
-StopAvailabilityTicker = P:Def("StopAvailabilityTicker", StopAvailabilityTicker)
+IsGroupAuraUnitAvailable = P:Def("IsGroupAuraUnitAvailable", IsGroupAuraUnitAvailable, nil, nil, false)
+ReconcileDisplayState = P:Def("ReconcileDisplayState", ReconcileDisplayState, nil, nil, false)
+AuditAvailabilityFrame = P:Def("AuditAvailabilityFrame", AuditAvailabilityFrame, nil, nil, false)
+StopAvailabilityTicker = P:Def("StopAvailabilityTicker", StopAvailabilityTicker, nil, nil, false)
 AuditAvailabilityFrames = P:Def("AuditAvailabilityFrames", AuditAvailabilityFrames)
 StartAvailabilityTicker = P:Def("StartAvailabilityTicker", StartAvailabilityTicker)
 AvailabilityFrame_OnShow = P:Def("AvailabilityFrame_OnShow", AvailabilityFrame_OnShow)
