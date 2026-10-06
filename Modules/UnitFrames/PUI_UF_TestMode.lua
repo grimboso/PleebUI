@@ -1288,7 +1288,7 @@ local function RefreshRaidFrames(context)
   if context:GetValue("uf.raid") ~= true then
     if UnitFrameTest.raidLayoutActive then
       UnitFrameTest.raidLayoutActive = false
-      RaidFrames:Refresh()
+      RaidFrames:ApplyAnchor()
     end
     return true
   end
@@ -1465,7 +1465,7 @@ function UnitFrameTest:Stop()
 
   if self.raidLayoutActive then
     self.raidLayoutActive = false
-    RaidFrames:Refresh()
+    RaidFrames:ApplyAnchor()
   end
 
   self.activeFrames = {}

@@ -21,6 +21,7 @@ local CreateFrame = _G.CreateFrame
 local C_AddOns = _G.C_AddOns
 local C_Timer = _G.C_Timer
 local InCombatLockdown = _G.InCombatLockdown
+local UnregisterAttributeDriver = _G.UnregisterAttributeDriver
 local hooksecurefunc = _G.hooksecurefunc
 local tostring = _G.tostring
 local tonumber = _G.tonumber
@@ -454,15 +455,18 @@ local function ApplyHeaderAttributes(header, db, groupIndex)
   SetHeaderAttribute(header, "groupFilter", attrs.groupFilter)
   SetHeaderAttribute(header, "groupBy", attrs.groupBy)
 
-  if not header.__puiRaidHeaderInitialized then
+  local precreatedCount = header.__puiRaidPrecreatedCount or 0
+  local expandsPrecreatedCapacity = attrs.precreateCount > precreatedCount
+
+  if expandsPrecreatedCapacity then
     SetHeaderAttribute(header, "startingIndex", -attrs.precreateCount + 1)
     header:Show()
-    header.__puiRaidHeaderInitialized = true
+    header.__puiRaidPrecreatedCount = attrs.precreateCount
   end
 
   SetHeaderAttribute(header, "startingIndex", 1)
 
-  if header.__puiRaidVisibility ~= "raid" then
+  if header.__puiRaidVisibility ~= "raid" or expandsPrecreatedCapacity then
     header.__puiRaidVisibility = "raid"
     header:SetVisibility("raid")
   end
@@ -489,6 +493,13 @@ local function RF_ResetHeader(header)
     return
   end
 
+  if header.__puiRaidVisibility then
+    UnregisterAttributeDriver(header, "state-visibility")
+    header.__puiRaidVisibility = nil
+    header.visibility = nil
+  end
+
+  header:Hide()
   RF_ClearHeaderChildPoints(header)
   header:ClearAllPoints()
 
@@ -497,14 +508,9 @@ local function RF_ResetHeader(header)
     for name in pairs(ownedAttributes) do
       header:SetAttribute(name, nil)
     end
+    header.__puiRaidOwnedAttributes = nil
   end
 
-  header:SetAttribute("showRaid", true)
-  header:SetAttribute("showParty", true)
-  header:SetAttribute("showSolo", true)
-  header:SetAttribute("showPlayer", true)
-  header:SetAttribute("sortMethod", "NAME")
-  header:Hide()
   header.__puiRaidHeaderReset = true
 end
 
@@ -863,11 +869,8 @@ function RaidFrames:CreateHeaders()
   self:RegisterStyle()
   self:EnsureAnchor()
 
-  local db = RaidFrames.db.profile
   local maxHeaders = UFLayout.GetRaidMaxAllowedGroups()
   local previousStyle = oUF:GetActiveStyle()
-
-  EnsureRaidDesignDefaults(db)
 
   self.headers = {}
 
@@ -877,7 +880,6 @@ function RaidFrames:CreateHeaders()
     local header = oUF:SpawnHeader("PleebUI_RaidHeader" .. index, nil)
     header:SetParent(self.anchor)
     self.headers[index] = header
-    ApplyHeaderAttributes(header, db, index)
   end
 
   oUF:SetActiveStyle(previousStyle)
@@ -1500,10 +1502,6 @@ function RaidFrames:OnEnable()
 end
 
 function RaidFrames:SetMoversVisible(show)
-  if show and not ns.TestMode:IsActive() then
-    self:Refresh()
-  end
-
   if self.mover then
     FrameUtil.SetMoverFrameVisible(
       self.mover,
