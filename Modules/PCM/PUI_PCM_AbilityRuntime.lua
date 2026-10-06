@@ -141,7 +141,6 @@ local SPELL_CATEGORY_ICONS = {
 local RUNTIME_EVENTS = {
   "COOLDOWN_VIEWER_SPELL_OVERRIDE_UPDATED",
   "SPELL_UPDATE_COOLDOWN",
-  "SPELL_UPDATE_CHARGES",
   "SPELL_UPDATE_USES",
   "SPELL_UPDATE_ICON",
   "SPELL_UPDATE_USABLE",
@@ -342,10 +341,13 @@ end
 
 local function BuildCandidateSet(record)
   local includeSpellIDs = {}
-  local spellIDs = record.entry.identitySpellIDs
+  local entry = record.entry
+  local spellIDs = entry.identitySpellIDs
   if spellIDs then
     for _, spellID in ipairs(spellIDs) do
-      includeSpellIDs[spellID] = true
+      if not record.runtimeOverrideKnown or spellID ~= entry.overrideSpellID then
+        includeSpellIDs[spellID] = true
+      end
     end
   end
   if record.runtimeSpellID then
@@ -559,6 +561,7 @@ local function ApplySpellOverride(baseSpellID, overrideSpellID)
 
   for _, record in pairs(buckets.spellAppearance.records) do
     if record.entry.baseSpellID == baseSpellID then
+      record.runtimeOverrideKnown = true
       record.runtimeOverrideSpellID = overrideSpellID
       RefreshRuntimeSpellIdentity(record, false)
     end
@@ -1040,20 +1043,51 @@ local function RefreshKeybind(record)
   PCMPresentation.SetKeybindText(record.parts, text)
 end
 
+local function HasCooldownStateAppearance(appearance)
+  return appearance ~= nil
+    and (
+      appearance.readyAlpha ~= nil
+      or appearance.readySaturation ~= nil
+      or appearance.readyGlowStyle ~= nil
+      or appearance.cooldownAlpha ~= nil
+      or appearance.cooldownSaturation ~= nil
+      or appearance.cooldownGlowStyle ~= nil
+      or appearance.maxChargeGlowStyle ~= nil
+    )
+end
+
+local function HasAuraStateAppearance(appearance)
+  return appearance ~= nil
+    and (
+      appearance.auraAlpha ~= nil
+      or appearance.auraSaturation ~= nil
+      or appearance.auraGlowStyle ~= nil
+    )
+end
+
 local function RefreshStateAppearance(record)
   local entry = record.entry
   if entry.entryKind ~= "spell" or not record.runtimeSpellID then
     return
   end
+
+  local appearance = GetRecordStyle(record).appearance
   if record.totemActive then
-    ApplyStateAppearance(record, "AURA", false)
+    ApplyStateAppearance(
+      record,
+      HasAuraStateAppearance(appearance) and "AURA" or "READY",
+      false
+    )
+    return
+  end
+  if not HasCooldownStateAppearance(appearance) then
+    ApplyStateAppearance(record, "READY", false)
     return
   end
   if C_Secrets.ShouldCooldownsBeSecret() == true then
     return
   end
 
-  local appearance = GetRecordStyle(record).appearance or {}
   local stateName
   local atMaxCharges = false
   if appearance.maxChargeGlowStyle ~= nil
@@ -1249,6 +1283,7 @@ local function AcquireRecord(viewer, entry, generation)
     record.catalogGeneration = generation
     record.viewerKey = viewer.key
     record.viewerOrder = entry.viewerOrder
+    record.runtimeOverrideKnown = false
     record.runtimeOverrideSpellID = entry.overrideSpellID
     record.runtimeTotemSpellID = nil
     record.totemActive = nil
@@ -1288,6 +1323,7 @@ local function AcquireRecord(viewer, entry, generation)
         player = nil,
         target = nil,
       },
+      runtimeOverrideKnown = false,
       runtimeOverrideSpellID = entry.overrideSpellID,
       runtimeTotemSpellID = nil,
       totemActive = nil,
@@ -1377,6 +1413,7 @@ local function ReconfigureRecord(record, viewer, entry, generation)
   record.catalogGeneration = generation
   record.viewerKey = viewer.key
   record.viewerOrder = entry.viewerOrder
+  record.runtimeOverrideKnown = false
   record.runtimeOverrideSpellID = entry.overrideSpellID
   record.runtimeTotemSpellID = nil
   record.totemActive = nil
@@ -1461,7 +1498,7 @@ local function WantsEvent(event)
     return buckets.spellAppearance.count > 0
   elseif event == "SPELL_UPDATE_COOLDOWN" then
     return buckets.cooldown.count > 0 or buckets.item.count > 0
-  elseif event == "SPELL_UPDATE_CHARGES" or event == "SPELL_UPDATE_USES" then
+  elseif event == "SPELL_UPDATE_USES" then
     return buckets.charge.count > 0
   elseif event == "SPELL_UPDATE_ICON" then
     return buckets.spellAppearance.count > 0
@@ -1617,6 +1654,11 @@ end
 function AbilityRuntime:GetViewerFrame(viewerKey)
   local viewer = GetViewer(viewerKey)
   return viewer and viewer.frame or nil
+end
+
+function AbilityRuntime:GetViewerStyle(viewerKey)
+  local viewer = GetViewer(viewerKey)
+  return viewer and viewer.resolvedStyle or nil
 end
 
 function AbilityRuntime:GetOrderedRecords(viewerKey)
@@ -1867,8 +1909,6 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1, arg2, arg3, arg4, arg5)
     MarkItemCooldownEventRecords(arg1, arg2, arg3, arg5)
     MarkCooldownEventBucket("cooldown", STATE_COOLDOWN, arg1, arg2)
     MarkCooldownEventBucket("charge", STATE_CHARGE, arg1, arg2)
-  elseif event == "SPELL_UPDATE_CHARGES" then
-    MarkBucket("charge", DIRTY_STATE, STATE_CHARGE)
   elseif event == "SPELL_UPDATE_USES" then
     MarkCooldownEventBucket("charge", STATE_CHARGE, arg1, arg2)
   elseif event == "SPELL_UPDATE_ICON" then
@@ -1928,6 +1968,7 @@ end)
 local P = select(1, ns.Pleebug:DropIn(AbilityRuntime, { name = "PCM", bucket = "AbilityRuntime" }))
 AbilityRuntime.InitializeViewer = P:Def("AbilityRuntime:InitializeViewer", AbilityRuntime.InitializeViewer)
 AbilityRuntime.GetViewerFrame = P:Def("AbilityRuntime:GetViewerFrame", AbilityRuntime.GetViewerFrame)
+AbilityRuntime.GetViewerStyle = P:Def("AbilityRuntime:GetViewerStyle", AbilityRuntime.GetViewerStyle)
 AbilityRuntime.GetOrderedRecords = P:Def("AbilityRuntime:GetOrderedRecords", AbilityRuntime.GetOrderedRecords)
 AbilityRuntime.SetGroupLayoutEnabled = P:Def("AbilityRuntime:SetGroupLayoutEnabled", AbilityRuntime.SetGroupLayoutEnabled)
 AbilityRuntime.SetGroupLayoutReady = P:Def("AbilityRuntime:SetGroupLayoutReady", AbilityRuntime.SetGroupLayoutReady)

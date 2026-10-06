@@ -16,12 +16,12 @@ local function _PCM_DB_Attach(Cooldowns)
   local Theme = ns.Theme
   local Round = ns.Pixel.Round
 
-  local function _GetWidthModeForViewer(viewerKey)
+  local function _GetWidthModeForViewer(viewerKey, style)
     if not viewerKey then
       return "icon"
     end
 
-    local style = ns.PCM_DBExports.GetStyleDB()
+    style = style or ns.PCM_DBExports.GetStyleDB()
     if not style then
       if viewerKey == "EssentialCooldownViewer" or viewerKey == "UtilityCooldownViewer" then
         return "fixed"
@@ -47,8 +47,8 @@ local function _PCM_DB_Attach(Cooldowns)
     return "icon"
   end
 
-  local function _GetFixedWidthForViewer(viewerKey)
-    local style = ns.PCM_DBExports.GetStyleDB()
+  local function _GetFixedWidthForViewer(viewerKey, style)
+    style = style or ns.PCM_DBExports.GetStyleDB()
     if not style or not viewerKey then
       return 300
     end
@@ -83,8 +83,8 @@ local function _PCM_DB_Attach(Cooldowns)
   local _PUI_PCM_ICON_SIZE_CACHE = {}
   local _PUI_PCM_OVERRIDE_FREEZE_UNTIL = 0
 
-  local function _GetIconSizeForViewer(viewerKey)
-    local style = ns.PCM_DBExports.GetStyleDB()
+  local function _GetIconSizeForViewer(viewerKey, style)
+    style = style or ns.PCM_DBExports.GetStyleDB()
     local sz = 36
 
     -- cache last known good size per viewerKey to avoid resizing flicker during override relayouts
@@ -124,8 +124,8 @@ local function _PCM_DB_Attach(Cooldowns)
     return sz
   end
 
-  local function _GetIconSpacingForViewer(viewerKey)
-    local style = ns.PCM_DBExports.GetStyleDB()
+  local function _GetIconSpacingForViewer(viewerKey, style)
+    style = style or ns.PCM_DBExports.GetStyleDB()
     local sp = 2
 
     if style then
@@ -1670,12 +1670,12 @@ do
     return tracking
   end
 
-  function E.GetViewerSwipeDB(viewerKey)
+  function E.GetViewerSwipeDB(viewerKey, root)
     if not viewerKey then
       return nil
     end
 
-    local root = E.GetPCMRoot()
+    root = root or E.GetPCMRoot()
     if not root then
       return nil
     end
@@ -1757,8 +1757,8 @@ do
   end
 
   -- Profile style DB (db.profile.cooldownManager.style)
-  function E.GetStyleDB()
-    local root = E.GetPCMRoot()
+  function E.GetStyleDB(root)
+    root = root or E.GetPCMRoot()
     if not root then
       return {
         buffBar = {

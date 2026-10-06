@@ -78,13 +78,12 @@ local STRUCTURE_RESTRICTION_TYPES = {
 flushFrame:Hide()
 
 local function IsStructureLocked()
-  return InCombatLockdown() and not PCMRuntime:IsInitializing()
+  return InCombatLockdown()
 end
 
 local function GetDB()
-  local current = DB.GetCooldownGroupsDB()
-  if profileDB ~= current then
-    profileDB = current
+  if not profileDB then
+    profileDB = DB.GetCooldownGroupsDB()
   end
   return profileDB
 end
@@ -122,7 +121,6 @@ local function ApplyCustomGroupPosition(group, frame)
       x = 0,
       y = 0,
     }
-    group.position = position
   end
 
   frame:ClearAllPoints()
@@ -168,47 +166,28 @@ local function RegisterCustomGroupMover(group, frame)
   })
 end
 
+local EMPTY_LAYOUT = {}
+
 local function ResolveIconLayout(group)
   if group.isDefault then
     if group.defaultViewerKey == "EssentialCooldownViewer"
       or group.defaultViewerKey == "UtilityCooldownViewer"
     then
-      return ns.Modules.CooldownManager:_ResolveOwnedViewerStyle(group.defaultViewerKey)
+      return AbilityRuntime:GetViewerStyle(group.defaultViewerKey)
     end
 
-    local style = DB.GetProfileBuffsDB().style
-    return {
-      iconSize = tonumber(style.viewerSizes.BuffIconCooldownViewer or style.iconSize) or 36,
-      spacing = tonumber(style.viewerSpacing.BuffIconCooldownViewer or style.iconSpacing) or 1,
-      columns = tonumber(style.viewerColumns.BuffIconCooldownViewer) or 0,
-      growth = style.viewerGrowth.BuffIconCooldownViewer or "CENTER",
-      rowGrowth = "DOWN",
-    }
+    return AuraRuntime:GetViewerStyle(group.defaultViewerKey) or EMPTY_LAYOUT
   end
 
-  group.layout = type(group.layout) == "table" and group.layout or {}
-  local layout = group.layout
-  if layout.iconSize == nil then layout.iconSize = 36 end
-  if layout.spacing == nil then layout.spacing = 2 end
-  if layout.columns == nil then layout.columns = 0 end
-  if layout.growth == nil then layout.growth = "CENTER" end
-  if layout.rowGrowth == nil then layout.rowGrowth = "DOWN" end
-  return layout
+  return type(group.layout) == "table" and group.layout or EMPTY_LAYOUT
 end
 
 local function ResolveBarLayout(group)
   if group.isDefault then
-    return DB.GetStyleDB().buffBar
+    return AuraRuntime:GetViewerStyle(group.defaultViewerKey) or EMPTY_LAYOUT
   end
 
-  group.layout = type(group.layout) == "table" and group.layout or {}
-  local layout = group.layout
-  if layout.width == nil then layout.width = 250 end
-  if layout.height == nil then layout.height = 20 end
-  if layout.rowSpacing == nil then layout.rowSpacing = 1 end
-  if layout.orientation == nil then layout.orientation = "HORIZONTAL" end
-  if layout.growthDirection == nil then layout.growthDirection = "DOWN" end
-  return layout
+  return type(group.layout) == "table" and group.layout or EMPTY_LAYOUT
 end
 
 local function PlanIconGrid(records, style)
@@ -1185,7 +1164,7 @@ function GroupManager:ResetGroups()
   end
   local root = DB.GetPCMRoot()
   root.groups = nil
-  profileDB = nil
+  profileDB = DB.GetCooldownGroupsDB()
   for groupID, frame in pairs(groupFrames) do
     FrameUtil.ClearSmartSnapForKey("PCM_Group_" .. groupID)
     FrameUtil:UnregisterMover("PCM_Group_" .. groupID)
@@ -1200,7 +1179,7 @@ function GroupManager:IsReady()
 end
 
 function GroupManager:RefreshProfile()
-  profileDB = nil
+  profileDB = DB.GetCooldownGroupsDB()
   self:RequestLayout(true)
 end
 
@@ -1213,6 +1192,7 @@ function GroupManager:Enable()
   if enabled then
     return
   end
+  profileDB = DB.GetCooldownGroupsDB()
   enabled = true
   ready = false
   AbilityRuntime:SetGroupLayoutEnabled(true)
@@ -1228,6 +1208,7 @@ function GroupManager:Disable()
   enabled = false
   ready = false
   pendingLayout = false
+  profileDB = nil
   editing = false
   flushFrame:Hide()
   SetDynamicBoundsActive(false)
