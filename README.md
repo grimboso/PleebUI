@@ -57,7 +57,7 @@ Addon authors can register PleebUI Edit Mode movers and options pages through th
 
 ## Development profiling
 
-Open Pleebug with `/pleebug` or `/pbug` to inspect function and event activity. Select files before a Full capture; Start and Stop reload to install and remove instrumentation. Calls, CPU, allocations and phase measurements share the selected window, which can change without restarting capture. Function tooltips and exports distinguish call peaks, native sampled averages and active-frame cost; stopped export text survives the removal reload. See the [Pleebug measurement guide and instrumentation instructions](Libs/LibPleebug-1.0/README.md) for mode behavior, interpretation and validation.
+Open Pleebug with `/pleebug` or `/pbug` to inspect function and event activity. Choose files in Light mode, switch to Full and reload before the encounter, then Start and Stop recording live, including during combat. Stop keeps the results and export text available; switching modes requires a reload. Calls, CPU, allocations and phase measurements share the selected window, which can change without restarting capture. Function tooltips and exports distinguish call peaks, native sampled averages and active-frame cost. See the [Pleebug measurement guide and instrumentation instructions](Libs/LibPleebug-1.0/README.md) for mode behavior, interpretation and validation.
 
 
 ## Feedback and issues
