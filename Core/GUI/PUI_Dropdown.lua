@@ -367,11 +367,28 @@ local function EnsurePulloutBackground(frame, colors, edge)
 end
 
 local PUI_DROPDOWN_PULL_OUT_VISIBLE_ROWS = 12
-local PUI_DROPDOWN_PULL_OUT_ROW_GAP = 2
+local PUI_DROPDOWN_PULL_OUT_ROW_GAP = 3
+local PUI_DROPDOWN_INLINE_ICON_SIZE = 14
+local PUI_DROPDOWN_INLINE_ICON_Y_OFFSET = -1
 local PUI_DROPDOWN_SEARCH_MIN_ITEMS = 9
 local PUI_DROPDOWN_SEARCH_SIDE_INSET = 8
 local PUI_DROPDOWN_SEARCH_TOP_INSET = 6
 local PUI_DROPDOWN_SEARCH_HEADER_GAP = 2
+
+local function NormalizeDropdownDisplayText(text)
+  local displayText = tostring(text or "")
+  local iconSize = PUI_DROPDOWN_INLINE_ICON_SIZE
+
+  return (displayText:gsub(
+    "(|T[^:|]+:)%d+:%d+:(%-?%d+):0",
+    "%1"
+      .. iconSize
+      .. ":"
+      .. iconSize
+      .. ":%2:"
+      .. PUI_DROPDOWN_INLINE_ICON_Y_OFFSET
+  ))
+end
 
 local function GetDropdownPulloutItemHeight()
   local role = Theme.GetFontRoleInfo("body")
@@ -1384,7 +1401,7 @@ end
 
 local function PUI_Dropdown_AddListItem(widget, value, text, itemType)
   local item = AceGUI:Create(itemType or "Dropdown-Item-Toggle")
-  item:SetText(text)
+  item:SetText(NormalizeDropdownDisplayText(text))
   item.userdata.obj = widget
   item.userdata.value = value
   item.userdata.__puiDropdownSearchText = string_lower(tostring(text or ""))
@@ -1511,7 +1528,7 @@ local PUI_Dropdown_Methods = {
   end,
 
   SetText = function(self, text)
-    self.text:SetText(text or "")
+    self.text:SetText(NormalizeDropdownDisplayText(text))
   end,
 
   SetLabel = function(self, text)
