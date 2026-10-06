@@ -1612,7 +1612,7 @@ function _customBarsAuraDriver:ApplyCombinedStyle(sub, f, cfg)
 
     AuraWidget.ConfigureApplicationThresholds(
       sub,
-      nil,
+      cfg.stackColorThresholds,
       texturePath,
       orientation,
       reverseFill,

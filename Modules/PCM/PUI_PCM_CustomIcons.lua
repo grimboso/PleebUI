@@ -1080,7 +1080,7 @@ local function ConfigureAuraParts(record, button, parts, initializing)
     )
     AuraWidget.ConfigureApplicationThresholds(
       parts,
-      nil,
+      record.cfg.stackColorThresholds,
       "Interface\\Buttons\\WHITE8x8",
       "HORIZONTAL",
       false,

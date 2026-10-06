@@ -2000,11 +2000,6 @@ end
 
 local ICON_INHERIT = "__INHERIT"
 
-local function _PCM_GetIconFontValues()
-  local values = OptionsUtil.BuildFontValues(false)
-  values[ICON_INHERIT] = "Use viewer setting"
-  return values
-end
 
 local function _PCM_GetIconOutlineValues()
   local values = OptionsUtil.BuildOutlineValues(false)
@@ -2078,21 +2073,41 @@ local function _PCM_BuildIconTextSettingsArgs(args, viewerKey, entry, role, labe
     end,
   }
 
-  args[prefix .. "Font"] = {
-    type = "select",
-    name = "Font",
+  args[prefix .. "FontOverride"] = {
+    type = "toggle",
+    name = "Custom font",
     order = orderBase + 2,
-    values = _PCM_GetIconFontValues,
     get = function()
-      return IconSettings:GetField(entry, role, "font") or ICON_INHERIT
+      return IconSettings:GetField(entry, role, "font") ~= nil
     end,
-    set = function(_, value)
+    set = function(_, enabled)
       IconSettings:SetField(
         entry,
         role,
         "font",
-        value == ICON_INHERIT and nil or value
+        enabled and OptionsUtil.ResolveFontKey(GetViewerFont().font) or nil
       )
+      Refresh()
+    end,
+  }
+
+  args[prefix .. "Font"] = {
+    type = "select",
+    dialogControl = "LSM30_Font",
+    name = "Font",
+    order = orderBase + 2.5,
+    values = function()
+      return OptionsUtil.BuildFontValues(false)
+    end,
+    disabled = function()
+      return IconSettings:GetField(entry, role, "font") == nil
+    end,
+    get = function()
+      return IconSettings:GetField(entry, role, "font")
+        or OptionsUtil.ResolveFontKey(GetViewerFont().font)
+    end,
+    set = function(_, value)
+      IconSettings:SetField(entry, role, "font", value)
       Refresh()
     end,
   }
@@ -9389,7 +9404,6 @@ ns.Registry.Options.CooldownManager.dynamicOptions = true
   _PCM_GetMainBuffBarsRoot = P:Def('_PCM_GetMainBuffBarsRoot', _PCM_GetMainBuffBarsRoot)
   _PCM_BuildCooldownViewerArgs = P:Def('_PCM_BuildCooldownViewerArgs', _PCM_BuildCooldownViewerArgs)
   _PCM_BuildEssentialGlowArgs = P:Def('_PCM_BuildEssentialGlowArgs', _PCM_BuildEssentialGlowArgs)
-  _PCM_GetIconFontValues = P:Def('_PCM_GetIconFontValues', _PCM_GetIconFontValues)
   _PCM_GetIconOutlineValues = P:Def('_PCM_GetIconOutlineValues', _PCM_GetIconOutlineValues)
   _PCM_GetIconTriState = P:Def('_PCM_GetIconTriState', _PCM_GetIconTriState)
   _PCM_SetIconTriState = P:Def('_PCM_SetIconTriState', _PCM_SetIconTriState)

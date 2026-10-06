@@ -778,6 +778,7 @@ _SB_RebuildAll = function()
   __PUI_PCM_SpellBars._keys = activeKeys
   __PUI_PCM_SpellBars._keysCount = #activeKeys
   __PUI_PCM_SpellBars._cooldownKeys = cooldownKeys
+  __PUI_PCM_SpellBars.activeSpecID = Cooldowns:GetCurrentSpecializationID()
 
   for k, bd in pairs(bars) do
     if not activeSet[tostring(k)] then
@@ -1201,26 +1202,10 @@ function Cooldowns:SpellBars_DeleteBar(id)
   self:SpellBars_Rebuild()
 end
 
-function Cooldowns:SpellBars_RefreshAfterTalentSwap()
-  if not ns.PCM_IsModuleEnabledFast() or not _SB_RuntimeEnabled then
-    return
-  end
-
-  if InCombatLockdown() then
-    __PUI_PCM_SpellBars.pendingSpecTalentRefresh = true
-    return
-  end
-
-  __PUI_PCM_SpellBars.pendingSpecTalentRefresh = false
-  __PUI_PCM_SpellBars.pendingSpellAvailabilityRefresh = nil
-  _SB_ClearKnownSpellCache()
-  self:SpellBars_Rebuild()
-end
-
 local function _SB_RefreshSpellAvailability()
   if InCombatLockdown() or ns.PCM_IsTransitionPending() then
     __PUI_PCM_SpellBars.pendingSpellAvailabilityRefresh = true
-    return
+    return false
   end
 
   __PUI_PCM_SpellBars.pendingSpellAvailabilityRefresh = nil
@@ -1230,10 +1215,36 @@ local function _SB_RefreshSpellAvailability()
       and (entry.cfg.forceShow == true
         or C_SpellBook.IsSpellKnown(spellID, Enum.SpellBookSpellBank.Player))
     if available ~= entry.available then
-      Cooldowns:SpellBars_RefreshAfterTalentSwap()
-      return
+      _SB_ClearKnownSpellCache()
+      Cooldowns:SpellBars_Rebuild()
+      return true
     end
   end
+
+  return false
+end
+
+function Cooldowns:SpellBars_ReconcileAvailability()
+  if not ns.PCM_IsModuleEnabledFast() or not _SB_RuntimeEnabled then
+    return
+  end
+
+  if InCombatLockdown() then
+    __PUI_PCM_SpellBars.pendingSpellAvailabilityRefresh = true
+    return
+  end
+
+  local currentSpecID = self:GetCurrentSpecializationID()
+  if currentSpecID ~= __PUI_PCM_SpellBars.activeSpecID then
+    __PUI_PCM_SpellBars.pendingSpecTalentRefresh = false
+    __PUI_PCM_SpellBars.pendingSpellAvailabilityRefresh = nil
+    _SB_ClearKnownSpellCache()
+    self:SpellBars_Rebuild()
+    return
+  end
+
+  __PUI_PCM_SpellBars.pendingSpecTalentRefresh = false
+  _SB_RefreshSpellAvailability()
 end
 
 PCMRuntime:RegisterSubscriber("SpellBars", {
@@ -1249,7 +1260,7 @@ PCMRuntime:RegisterSubscriber("SpellBars", {
         and __PUI_PCM_SpellBars.pendingSpecTalentRefresh
         and not ns.PCM_IsTransitionPending()
       then
-        Cooldowns:SpellBars_RefreshAfterTalentSwap()
+        Cooldowns:SpellBars_ReconcileAvailability()
       elseif event == "PLAYER_REGEN_ENABLED"
         and __PUI_PCM_SpellBars.pendingSpellAvailabilityRefresh
       then
@@ -1377,7 +1388,7 @@ end
   Cooldowns.SpellBars_Rebuild = P:Def('Cooldowns:SpellBars_Rebuild', Cooldowns.SpellBars_Rebuild)
   Cooldowns.SpellBars_RefreshBar = P:Def('Cooldowns:SpellBars_RefreshBar', Cooldowns.SpellBars_RefreshBar)
   Cooldowns.SpellBars_DeleteBar = P:Def('Cooldowns:SpellBars_DeleteBar', Cooldowns.SpellBars_DeleteBar)
-  Cooldowns.SpellBars_RefreshAfterTalentSwap = P:Def('Cooldowns:SpellBars_RefreshAfterTalentSwap', Cooldowns.SpellBars_RefreshAfterTalentSwap)
+  Cooldowns.SpellBars_ReconcileAvailability = P:Def('Cooldowns:SpellBars_ReconcileAvailability', Cooldowns.SpellBars_ReconcileAvailability)
   Cooldowns.SpellBars_Enable = P:Def('Cooldowns:SpellBars_Enable', Cooldowns.SpellBars_Enable)
   Cooldowns.SpellBars_Disable = P:Def('Cooldowns:SpellBars_Disable', Cooldowns.SpellBars_Disable)
   Cooldowns._SpellBars_ApplySettings = P:Def('Cooldowns:_SpellBars_ApplySettings', Cooldowns._SpellBars_ApplySettings)
