@@ -17,7 +17,6 @@ local CreateFrame = CreateFrame
 local UIParent = UIParent
 local C_DurationUtil = C_DurationUtil
 local C_Secrets = C_Secrets
-local C_StringUtil = C_StringUtil
 local issecretvalue = issecretvalue
 local math_max = math.max
 local math_floor = math.floor
@@ -113,8 +112,17 @@ local function SetBackground(texture, color)
     return
   end
 
-  local c = CopyColor(color, { 0.12, 0.12, 0.12, 0.95 })
-  texture:SetColorTexture(c[1], c[2], c[3], c[4])
+  if type(color) == "table" then
+    texture:SetColorTexture(
+      tonumber(color[1] or color.r) or 1,
+      tonumber(color[2] or color.g) or 1,
+      tonumber(color[3] or color.b) or 1,
+      tonumber(color[4] or color.a) or 1
+    )
+    return
+  end
+
+  texture:SetColorTexture(0.12, 0.12, 0.12, 0.95)
 end
 
 
@@ -762,6 +770,10 @@ function PCMIconAdapter.Create(parent)
   local keybindHolder = CreateFrame("Frame", nil, frame)
   local keybindText = keybindHolder:CreateFontString(nil, "OVERLAY")
   local glow = frame:CreateTexture(nil, "OVERLAY", nil, 5)
+
+  ApplyFont(cooldownText, nil, "cooldown", 11)
+  ApplyFont(chargeText, nil, "tiny", 10)
+  ApplyFont(keybindText, nil, "tiny", 8)
   local qualityHolder = CreateFrame("Frame", nil, frame)
   local qualityTexture = qualityHolder:CreateTexture(nil, "OVERLAY", nil, 7)
 
@@ -920,6 +932,15 @@ end
 function PCMPresentation.CreateOwnedIcon(parent)
   local parts = Presentation.Create("PCMIcon", parent, {})
   parts.itemDuration = C_DurationUtil.CreateDuration()
+
+  parts.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+  parts.cooldownText:Hide()
+  parts.chargeCooldown:SetFrameLevel(parts.frame:GetFrameLevel() + 3)
+  parts.cooldown:SetFrameLevel(parts.frame:GetFrameLevel() + 4)
+  parts.chargeHolder:SetFrameLevel(parts.frame:GetFrameLevel() + 5)
+  parts.keybindHolder:SetFrameLevel(parts.frame:GetFrameLevel() + 12)
+  parts.qualityHolder:SetFrameLevel(parts.frame:GetFrameLevel() + 2)
+
   local unavailable = parts.frame:CreateTexture(nil, "OVERLAY", nil, 3)
   unavailable:SetAllPoints(parts.icon)
   unavailable:SetTexture(WHITE_TEXTURE)
@@ -970,49 +991,77 @@ local function ApplyOwnedTextStyle(fontString, parent, config, role, fallbackSiz
 end
 
 function PCMPresentation.ApplyOwnedIconStyle(parts, style)
-  Presentation.Apply("PCMIcon", parts, style)
-  parts.tooltipsEnabled = style.tooltips == true
-  parts.frame:SetMouseMotionEnabled(parts.tooltipsEnabled)
-  parts.cooldownText:Hide()
+  local size = math_max(Round(1), Round(tonumber(style.size) or 36))
+  local borderSize = math_max(0, tonumber(style.borderSize) or 2)
+
+  SetBackground(parts.background, style.backgroundColor)
+  BarWidget.ApplyBorder(parts.frame, borderSize, style.borderColor)
+
   IconSkin.StyleCooldownText(parts.cooldown, style.cooldownFont)
   IconSkin.StyleCooldownText(parts.chargeCooldown, style.cooldownFont)
-  parts.chargeCooldown:SetFrameLevel(parts.frame:GetFrameLevel() + 3)
-  parts.cooldown:SetFrameLevel(parts.frame:GetFrameLevel() + 4)
   ApplyOwnedTextStyle(parts.chargeText, parts.frame, style.chargeFont, "charge", 10)
   ApplyOwnedTextStyle(parts.keybindText, parts.frame, style.keybindFont, "keybind", 8)
 
-  local swipe = style.swipe or {}
-  local viewerSwipe = style.viewerSwipe or {}
-  local show = swipe.show
+  parts.qualityTexture:ClearAllPoints()
+  local qualityOffset = Round(size * 11 / 36)
+  parts.qualityTexture:SetPoint(
+    "CENTER",
+    parts.qualityHolder,
+    "TOPLEFT",
+    qualityOffset,
+    -qualityOffset
+  )
+  parts.qualityTexture:SetScale(size / 36)
+
+  parts.tooltipsEnabled = style.tooltips == true
+  parts.frame:SetMouseMotionEnabled(parts.tooltipsEnabled)
+
+  local swipe = style.swipe
+  local viewerSwipe = style.viewerSwipe
+  local show = swipe and swipe.show
   if show == nil then
-    show = viewerSwipe.cooldown ~= false
+    show = viewerSwipe == nil or viewerSwipe.cooldown ~= false
   end
   parts.cooldown:SetDrawSwipe(show == true)
   parts.chargeCooldown:SetDrawSwipe(show == true)
 
-  local drawEdge = swipe.drawEdge
+  local drawEdge = swipe and swipe.drawEdge
   if drawEdge == nil then
-    drawEdge = viewerSwipe.drawEdge ~= false
+    drawEdge = viewerSwipe == nil or viewerSwipe.drawEdge ~= false
   end
   parts.cooldown:SetDrawEdge(drawEdge == true)
+
   local rechargeEdge = drawEdge
-  if style.hasCharges and swipe.rechargeEdge ~= nil then
+  if style.hasCharges and swipe and swipe.rechargeEdge ~= nil then
     rechargeEdge = swipe.rechargeEdge == true
   end
   parts.chargeCooldown:SetDrawEdge(rechargeEdge == true)
-  parts.cooldown:SetReverse(swipe.reverse == true)
-  parts.chargeCooldown:SetReverse(swipe.reverse == true)
 
-  local color = CopyColor(swipe.color or viewerSwipe.swipeColor, { 0, 0, 0, 0.8 })
-  parts.cooldown:SetSwipeColor(color[1], color[2], color[3], color[4])
-  parts.chargeCooldown:SetSwipeColor(color[1], color[2], color[3], color[4])
+  local reverse = swipe and swipe.reverse == true
+  parts.cooldown:SetReverse(reverse)
+  parts.chargeCooldown:SetReverse(reverse)
 
-  local counts = style.viewerCounts or {}
+  local swipeColor = swipe and swipe.color
+    or viewerSwipe and viewerSwipe.swipeColor
+  local swipeR, swipeG, swipeB, swipeA
+  if type(swipeColor) == "table" then
+    swipeR = tonumber(swipeColor[1] or swipeColor.r) or 1
+    swipeG = tonumber(swipeColor[2] or swipeColor.g) or 1
+    swipeB = tonumber(swipeColor[3] or swipeColor.b) or 1
+    swipeA = tonumber(swipeColor[4] or swipeColor.a) or 1
+  else
+    swipeR, swipeG, swipeB, swipeA = 0, 0, 0, 0.8
+  end
+  parts.cooldown:SetSwipeColor(swipeR, swipeG, swipeB, swipeA)
+  parts.chargeCooldown:SetSwipeColor(swipeR, swipeG, swipeB, swipeA)
+
+  local counts = style.viewerCounts
   local cooldownCount = style.cooldown and style.cooldown.show
   if cooldownCount == nil then
-    cooldownCount = counts.cooldown ~= false
+    cooldownCount = counts == nil or counts.cooldown ~= false
   end
   parts.cooldown:SetHideCountdownNumbers(cooldownCount ~= true)
+
   local rechargeCount = cooldownCount
   if style.hasCharges
     and style.cooldown
@@ -1024,7 +1073,7 @@ function PCMPresentation.ApplyOwnedIconStyle(parts, style)
 
   local chargeCount = style.charge and style.charge.show
   if chargeCount == nil then
-    chargeCount = counts.charge ~= false
+    chargeCount = counts == nil or counts.charge ~= false
   end
   parts.chargeText:SetShown(chargeCount == true)
 
@@ -1289,16 +1338,21 @@ function PCMPresentation.ConfigureOwnedAuraBar(parts, button, style)
   end
 
   auraParts.applicationHolder:ClearAllPoints()
-  auraParts.applicationHolder:SetAllPoints(showIcon and auraParts.icon or button)
+
   local counts = style.counts or {}
-  if counts.buff ~= false then
-    auraParts.applicationFormatter = auraParts.applicationFormatter
-      or C_StringUtil.CreateNumericRuleFormatter()
-    if not auraParts.applicationFormatterReady then
-      auraParts.applicationFormatter:AddBreakpoint({ threshold = 0, format = "%.0f" })
-      auraParts.applicationFormatterReady = true
-    end
-    AuraWidget.ConfigureApplicationCount(auraParts, auraParts.applicationFormatter)
+  if showIcon and counts.buff ~= false then
+    auraParts.applicationHolder:SetAllPoints(auraParts.icon)
+    AuraWidget.ConfigureApplicationCount(auraParts)
+
+    auraParts.applicationText:ClearAllPoints()
+    auraParts.applicationText:SetPoint(
+      "BOTTOMRIGHT",
+      auraParts.applicationHolder,
+      "BOTTOMRIGHT",
+      -5,
+      5
+    )
+    auraParts.applicationText:SetJustifyH("RIGHT")
   else
     AuraWidget.DisableApplicationCount(auraParts)
   end

@@ -69,7 +69,7 @@ local function NewDraft()
     showReady = true,
     showCooldown = true,
     showActive = true,
-    customGlowEnabled = true,
+    customGlowEnabled = false,
     customGlowThickness = 2,
     readyAlpha = 100,
     cooldownAlpha = 35,
@@ -464,65 +464,100 @@ local function SetPage(newPage)
     AddCheckbox("Desaturate while active", draft.desaturateActive, function(value) draft.desaturateActive = value end, "ACTIVE")
   elseif page == 6 then
     AddHeading("Active glow")
-    AddDescription("Choose the glow used while the tracked aura or configured active buff is active. Ready and cooldown/recharging glows are configured separately on the previous page.")
+    AddDescription("Cooldown and charge trackers can use the tracked spell's aura automatically or an optional different buff. Glow is separate and is off by default.")
+
+    local buffSource
+    local cdmBuff
+    local customBuff
+    local glowStyle
+    local glowThickness
+    local glowColor
+    local hideViewerIcon
+
+    local function RefreshActiveAuraControls()
+      local activeDisabled = draft.showActive ~= true
+      local glowDisabled = draft.customGlowEnabled ~= true
+
+      if buffSource then
+        buffSource:SetDisabled(activeDisabled)
+      end
+      if cdmBuff then
+        cdmBuff:SetDisabled(activeDisabled or draft.activeAuraSource == "CUSTOM")
+      end
+      if customBuff then
+        customBuff:SetDisabled(activeDisabled or draft.activeAuraSource ~= "CUSTOM")
+      end
+
+      glowStyle:SetDisabled(glowDisabled)
+      glowThickness:SetDisabled(glowDisabled)
+      glowColor:SetDisabled(glowDisabled)
+      hideViewerIcon:SetDisabled(glowDisabled)
+    end
+
+    if draft.kind == "cooldown" or draft.kind == "charge" then
+      buffSource = AddDropdown("Active buff source", {
+        CDM = "Cooldown Manager buff",
+        CUSTOM = "Custom player buff",
+      }, { "CDM", "CUSTOM" }, draft.activeAuraSource, function(value)
+        draft.activeAuraSource = value == "CUSTOM" and "CUSTOM" or "CDM"
+        draft.activeAuraSpellID = nil
+
+        if cdmBuff then
+          cdmBuff:SetValue("none")
+        end
+        if customBuff then
+          customBuff:SetText("")
+        end
+
+        RefreshActiveAuraControls()
+      end, "ACTIVE")
+
+      local values, sorting = Cooldowns:GetCustomBarSpellDropdown("aura")
+      AddDescription("Leave the active buff unselected to use the tracked spell's aura when available.")
+
+      cdmBuff = AddDropdown("Cooldown Manager buff", values, sorting, draft.activeAuraSpellID and tostring(draft.activeAuraSpellID) or "none", function(value)
+        draft.activeAuraSpellID = value ~= "none" and tonumber(value) or nil
+      end, "ACTIVE")
+
+      customBuff = AddEditBox("Custom buff spell ID", draft.activeAuraSpellID and tostring(draft.activeAuraSpellID) or "", function(value)
+        local spellID = tonumber(value)
+        draft.activeAuraSpellID = spellID and spellID > 0 and math.floor(spellID) or nil
+      end, "ACTIVE")
+    else
+      AddDescription("This tracker uses its tracked aura as the active state.")
+    end
+
     AddCheckbox("Glow while active", draft.customGlowEnabled, function(value)
       draft.customGlowEnabled = value
       if value then
         draft.showActive = true
       end
+      RefreshActiveAuraControls()
     end, "ACTIVE")
 
-    if draft.customGlowEnabled then
-      if draft.kind == "cooldown" or draft.kind == "charge" then
-        AddDropdown("Buff source", {
-          CDM = "Cooldown Manager buff",
-          CUSTOM = "Custom player buff",
-        }, { "CDM", "CUSTOM" }, draft.activeAuraSource, function(value)
-          draft.activeAuraSource = value == "CUSTOM" and "CUSTOM" or "CDM"
-          draft.activeAuraSpellID = nil
-          SetPage(6)
-        end, "ACTIVE")
+    glowStyle = AddDropdown("Glow style", GLOW_STYLES, GLOW_ORDER, draft.activeGlowStyle, function(value)
+      draft.activeGlowStyle = value
+    end, "ACTIVE")
 
-        if draft.activeAuraSource == "CUSTOM" then
-          AddEditBox("Custom buff spell ID", draft.activeAuraSpellID and tostring(draft.activeAuraSpellID) or "", function(value)
-            local spellID = tonumber(value)
-            draft.activeAuraSpellID = spellID and spellID > 0 and math.floor(spellID) or nil
-            SetPage(6)
-          end, "ACTIVE")
-        else
-          local values, sorting = Cooldowns:GetCustomBarSpellDropdown("aura")
-          AddDescription("Select the Cooldown Manager buff that triggers the active state and glow. Buffs shown in the Cooldown Manager are listed first.")
-          AddDropdown("Cooldown Manager buff", values, sorting, draft.activeAuraSpellID and tostring(draft.activeAuraSpellID) or "none", function(value)
-            draft.activeAuraSpellID = value ~= "none" and tonumber(value) or nil
-            SetPage(6)
-          end, "ACTIVE")
-        end
-      else
-        AddDescription("This tracker uses its tracked aura as the glow trigger.")
-      end
+    glowThickness = AddSlider("Glow thickness", draft.customGlowThickness, 1, 8, 1, function(value)
+      draft.customGlowThickness = math.floor(value + 0.5)
+    end, "ACTIVE")
 
-      AddDropdown("Glow style", GLOW_STYLES, GLOW_ORDER, draft.activeGlowStyle, function(value)
-        draft.activeGlowStyle = value
-      end, "ACTIVE")
-      AddSlider("Glow thickness", draft.customGlowThickness, 1, 8, 1, function(value)
-        draft.customGlowThickness = math.floor(value + 0.5)
-      end, "ACTIVE")
-      AddColor("Glow color", draft.icon.activeAuraGlowColor, function(color)
-        draft.icon.activeAuraGlowColor = color
-      end, "ACTIVE")
-      AddCheckbox("Hide active buff in Buff Icon Viewer", draft.activeAuraHideViewerIcon, function(value)
-        draft.activeAuraHideViewerIcon = value
-      end, "ACTIVE")
-    end
+    glowColor = AddColor("Glow color", draft.icon.activeAuraGlowColor, function(color)
+      draft.icon.activeAuraGlowColor = color
+    end, "ACTIVE")
+
+    hideViewerIcon = AddCheckbox("Hide active buff in Buff Icon Viewer", draft.activeAuraHideViewerIcon, function(value)
+      draft.activeAuraHideViewerIcon = value
+    end, "ACTIVE")
+
+    RefreshActiveAuraControls()
   end
 
   frame.Previous:SetDisabled(page <= 1)
   frame.Next.frame:SetShown(page < #PAGES)
   frame.Finish.frame:SetShown(page == #PAGES)
-  local activeAuraRequired = (draft.kind == "cooldown" or draft.kind == "charge")
-    and draft.customGlowEnabled == true
-    and tonumber(draft.activeAuraSpellID) == nil
-  frame.Finish:SetDisabled(draft.spellID == nil or activeAuraRequired)
+  frame.Finish:SetDisabled(draft.spellID == nil)
   ApplyPreviewState(previewState)
 end
 

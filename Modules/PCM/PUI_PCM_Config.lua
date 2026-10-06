@@ -665,7 +665,7 @@ local function _PCM_ParseCustomBuffSpellIDs(value)
 end
 
 local function _PCM_RefreshCustomBuffTracking()
-  ns.PCMCatalog:Invalidate("custom-buff-tracking")
+  Cooldowns:RefreshAbilityCatalog()
 end
 
 local function _PCM_BuildBuffIconsTabArgs(includeIconOverrides)

@@ -8,10 +8,7 @@ local DB = ns.PCM_DBExports
 local C_CooldownViewer = C_CooldownViewer
 local C_Spell = C_Spell
 local Enum = Enum
-local EventRegistry = EventRegistry
 local FlagsUtil = FlagsUtil
-local CreateFromMixins = CreateFromMixins
-local DirtiableMixin = DirtiableMixin
 local issecretvalue = issecretvalue
 local type = type
 local tostring = tostring
@@ -80,22 +77,6 @@ local ENTRY_SCALAR_FIELDS = {
   "includeAnySource",
 }
 
-local STRUCTURAL_EVENTS = {
-  "COOLDOWN_VIEWER_DATA_LOADED",
-  "COOLDOWN_VIEWER_TABLE_HOTFIXED",
-  "COOLDOWN_VIEWER_SPELL_OVERRIDE_UPDATED",
-  "ACTIVE_PLAYER_SPECIALIZATION_CHANGED",
-  "PLAYER_SPECIALIZATION_CHANGED",
-  "ACTIVE_COMBAT_CONFIG_CHANGED",
-  "ACTIVE_TALENT_GROUP_CHANGED",
-  "TRAIT_CONFIG_UPDATED",
-  "PLAYER_TALENT_UPDATE",
-  "PLAYER_PVP_TALENT_UPDATE",
-  "SPELLS_CHANGED",
-  "PLAYER_EQUIPMENT_CHANGED",
-  "PLAYER_ENTERING_WORLD",
-}
-
 local state = {
   generation = 0,
   dirty = true,
@@ -110,11 +91,11 @@ local state = {
 }
 
 local listeners = {}
-local eventFrame = CreateFrame("Frame")
-local enabled = false
-local enableOwners = setmetatable({}, { __mode = "k" })
-
-local refreshUpdater = CreateFromMixins(DirtiableMixin)
+local savedLayoutCache = {
+  tag = nil,
+  serialized = nil,
+  savedLayout = nil,
+}
 
 local function IsSecretValue(value)
   return issecretvalue(value) == true
@@ -439,39 +420,32 @@ local function BuildEntry(cooldownID, globalOrder, sourceInfo, defaultCategory, 
   }
 end
 
-local function ReadNativeConfiguration()
-  local tag = CooldownViewerUtil.GetCurrentClassAndSpecTag()
-  if IsSecretValue(tag) or type(tag) ~= "number" then
-    return nil
-  end
-  local serialized = C_CooldownViewer.GetLayoutData()
-  if IsSecretValue(serialized) or type(serialized) ~= "string" then
-    return nil
+local function ReadSavedLayout(tag, serialized)
+  if savedLayoutCache.tag == tag and savedLayoutCache.serialized == serialized then
+    return savedLayoutCache.savedLayout, true
   end
 
-  -- Decode saved configuration into addon-owned tables; provider getters can rebuild
-  -- Blizzard caches and notification state even when called only to read data.
   local savedLayout
   if serialized ~= "" then
     local payload = serialized:match("^1|(.*)$")
     if not payload then
-      return nil
+      return nil, false
     end
     local decoded = C_EncodingUtil.DecodeBase64(payload)
     if not decoded then
-      return nil
+      return nil, false
     end
     local inflated = C_EncodingUtil.DecompressString(decoded, Enum.CompressionMethod.Deflate)
     if not inflated then
-      return nil
+      return nil, false
     end
     local data = C_EncodingUtil.DeserializeCBOR(inflated)
     if type(data) ~= "table" then
-      return nil
+      return nil, false
     end
     local version = data[1]
     if version ~= 1 and version ~= 2 and version ~= 3 and version ~= 4 and version ~= 5 then
-      return nil
+      return nil, false
     end
     local activeLayouts = data[2]
     local layouts = data[3]
@@ -495,6 +469,27 @@ local function ReadNativeConfiguration()
         end
       end
     end
+  end
+
+  savedLayoutCache.tag = tag
+  savedLayoutCache.serialized = serialized
+  savedLayoutCache.savedLayout = savedLayout
+  return savedLayout, true
+end
+
+local function ReadNativeConfiguration()
+  local tag = CooldownViewerUtil.GetCurrentClassAndSpecTag()
+  if IsSecretValue(tag) or type(tag) ~= "number" then
+    return nil
+  end
+  local serialized = C_CooldownViewer.GetLayoutData()
+  if IsSecretValue(serialized) or type(serialized) ~= "string" then
+    return nil
+  end
+
+  local savedLayout, savedLayoutValid = ReadSavedLayout(tag, serialized)
+  if not savedLayoutValid then
+    return nil
   end
 
   local configuration = {
@@ -876,9 +871,6 @@ end
 function Catalog:Invalidate(reason)
   state.dirty = true
   state.invalidationSerial = state.invalidationSerial + 1
-  if enabled then
-    refreshUpdater:MarkDirty()
-  end
 end
 
 function Catalog:Refresh()
@@ -907,45 +899,6 @@ function Catalog:Refresh()
   return changed, state.generation
 end
 
-refreshUpdater:SetDirtyMethod(function()
-  if enabled then
-    Catalog:Refresh()
-  end
-end)
-
-local function InvalidateFromStructuralEvent()
-  Catalog:Invalidate("structural")
-end
-
-local function InvalidateFromSettingsChange()
-  Catalog:Invalidate("provider")
-end
-
-eventFrame:SetScript("OnEvent", InvalidateFromStructuralEvent)
-
-function Catalog:Enable(owner)
-  enableOwners[owner or self] = true
-  if enabled then return end
-  enabled = true
-  for index = 1, #STRUCTURAL_EVENTS do
-    eventFrame:RegisterEvent(STRUCTURAL_EVENTS[index])
-  end
-  EventRegistry:RegisterCallback(
-    "CooldownViewerSettings.OnDataChanged",
-    InvalidateFromSettingsChange,
-    Catalog
-  )
-  self:Invalidate("initial")
-end
-
-function Catalog:Disable(owner)
-  enableOwners[owner or self] = nil
-  for _ in pairs(enableOwners) do return end
-  if not enabled then return end
-  enabled = false
-  eventFrame:UnregisterAllEvents()
-  EventRegistry:UnregisterCallback("CooldownViewerSettings.OnDataChanged", Catalog)
-end
 
 local P = select(1, ns.Pleebug:DropIn(Catalog, { name = "PCM", bucket = "AbilityCatalog" }))
 Catalog.EntriesMatch = P:Def("Catalog:EntriesMatch", Catalog.EntriesMatch)
@@ -956,5 +909,3 @@ Catalog.RegisterListener = P:Def("Catalog:RegisterListener", Catalog.RegisterLis
 Catalog.UnregisterListener = P:Def("Catalog:UnregisterListener", Catalog.UnregisterListener)
 Catalog.Invalidate = P:Def("Catalog:Invalidate", Catalog.Invalidate)
 Catalog.Refresh = P:Def("Catalog:Refresh", Catalog.Refresh)
-Catalog.Enable = P:Def("Catalog:Enable", Catalog.Enable)
-Catalog.Disable = P:Def("Catalog:Disable", Catalog.Disable)

@@ -94,7 +94,6 @@ end
 ns.PCM_IsModuleEnabledFast = _PCM_IsModuleEnabledFast
 
 local function _PCM_HasSoundAlerts()
-  ns.PCMCatalog:Refresh()
   local configuration = ns.PCMCatalog:GetNativeConfiguration()
   local getAlertType = _G.CooldownViewerAlert_GetType
   if not configuration or type(getAlertType) ~= "function" then
@@ -137,18 +136,17 @@ local function _PCM_ReconcileNativeCDM()
   end
 
   local canChangeState = _PCM_CanChangeNativeCDMState()
-  local requiresNative = _PCM_GetNativeCDMRequirement()
-
-  if requiresNative == nil then
-    PCMNativePolicy.ReconcilePending = not canChangeState
+  if not canChangeState then
+    PCMNativePolicy.ReconcilePending = true
     ns.PCMNativeBridge:Refresh()
     return nil
   end
 
-  if not canChangeState then
+  local requiresNative = _PCM_GetNativeCDMRequirement()
+  if requiresNative == nil then
     PCMNativePolicy.ReconcilePending = true
     ns.PCMNativeBridge:Refresh()
-    return requiresNative
+    return nil
   end
 
   PCMNativePolicy.ReconcilePending = false
@@ -167,11 +165,6 @@ local function _PCM_ReconcileNativeCDM()
 end
 
 ns.PCM_ReconcileNativeCDM = _PCM_ReconcileNativeCDM
-
-local function _PCM_OnNativeSettingsHidden()
-  ns.PCMCatalog:Invalidate("settings-saved")
-  _PCM_ReconcileNativeCDM()
-end
 
 
 local P, TrackThis = ns.Pleebug:DropIn(Cooldowns, { name = "PCM", bucket = "Core" })
@@ -449,7 +442,6 @@ function Cooldowns:GetCustomBarSpellDropdown(kind)
   }
   local sorting = { "none" }
 
-  ns.PCMCatalog:Refresh()
   local configuration = ns.PCMCatalog:GetNativeConfiguration()
   if not configuration then
     return values, sorting
@@ -653,10 +645,7 @@ function Cooldowns:SetCooldownCountEnabled(viewerKey, enabled)
 
   cfg.cooldown = not not enabled
   _PCM_SetViewerCountFlagCached(viewerKey, "cooldown", cfg.cooldown)
-  self._RefreshViewerFontsOnly(viewerKey)
-
-  -- Ensure it takes effect immediately.
-  self:ApplyCooldownCountRulesNow()
+  self:ApplyCooldownCountRulesNow(viewerKey)
 end
 
 -- Buff stack/application count toggle
@@ -673,10 +662,7 @@ function Cooldowns:SetBuffCountEnabled(viewerKey, enabled)
 
   cfg.buff = not not enabled
   _PCM_SetViewerCountFlagCached(viewerKey, "buff", cfg.buff)
-  self._RefreshViewerFontsOnly(viewerKey)
-
-  -- The unified pass applies cooldown, application, charge, keybind, and duration rules.
-  self:ApplyCooldownCountRulesNow()
+  self:ApplyCooldownCountRulesNow(viewerKey)
 end
 
 -- Charge count toggle (cooldown viewers only).
@@ -693,15 +679,17 @@ function Cooldowns:SetChargeCountEnabled(viewerKey, enabled)
 
   cfg.charge = not not enabled
   _PCM_SetViewerCountFlagCached(viewerKey, "charge", cfg.charge)
-  self._RefreshViewerFontsOnly(viewerKey)
-
-  -- Ensure it takes effect immediately.
-  self:ApplyCooldownCountRulesNow()
+  self:ApplyCooldownCountRulesNow(viewerKey)
 end
 
 
-function Cooldowns:ApplyCooldownCountRulesNow()
+function Cooldowns:ApplyCooldownCountRulesNow(viewerKey)
   if not self or not _PCM_IsModuleEnabledFast() then
+    return
+  end
+
+  if viewerKey then
+    _PCM_RefreshOwnedViewer(self, viewerKey)
     return
   end
 
@@ -782,7 +770,7 @@ _PCM_RunHardViewerTransition = function(owner, invalidateClassSpellCache)
     return
   end
 
-  if InCombatLockdown() and not PCMRuntime:IsInitializing() then
+  if PCMRuntime:IsDataRestricted() then
     _PCM_BeginTransition(owner, invalidateClassSpellCache)
     return
   end
@@ -796,6 +784,18 @@ _PCM_RunHardViewerTransition = function(owner, invalidateClassSpellCache)
   ns.PCMAbilityRuntime:Flush()
   ns.PCMAuraRuntime:Flush()
   owner:_RequestViewerRefresh("layout")
+end
+
+function Cooldowns:RefreshAbilityCatalog()
+  _PCM_RunHardViewerTransition(self, false)
+end
+
+local function _PCM_OnNativeSettingsHidden()
+  if not _PCM_IsModuleEnabledFast() then
+    return
+  end
+
+  _PCM_BeginTransition(Cooldowns, false)
 end
 
 local function _PCM_ReconcileRuntimeViewers(owner)
@@ -843,8 +843,6 @@ local function _PCM_FinalizeTransition(token)
   PCMTransitionState.InvalidateClassSpellCache = false
 
   owner:_FlushViewerRefreshImmediate("all")
-  ns.Modules.PCM_Buffs:RefreshAfterTalentSwap()
-  ns.Modules.PCM_BuffBars:RefreshAfterTalentSwap()
   ns.Modules.PCM_BB.RefreshAfterTalentSwap()
   owner:SpellBars_RefreshAfterTalentSwap()
   owner:CooldownStackBars_RefreshAfterTalentSwap()
@@ -871,7 +869,7 @@ local function _PCM_FlushTransition(token)
     return
   end
 
-  if InCombatLockdown() and not PCMRuntime:IsInitializing() then
+  if PCMRuntime:IsDataRestricted() then
     return
   end
 
@@ -1727,7 +1725,7 @@ local function _RunPCMStartupRefresh(self)
     C_AddOns.LoadAddOn("Blizzard_CooldownViewer")
   end
 
-  if InCombatLockdown() and not PCMRuntime:IsInitializing() then
+  if PCMRuntime:IsDataRestricted() then
     self.__puiPCMStartupPending = true
     return false
   end
@@ -1950,22 +1948,11 @@ function Cooldowns:_OnCooldownViewerDataLoaded()
     return
   end
 
-  if _PCM_IsTransitionPending() then
-    _PCM_QueueTransitionFlush()
-    return
-  end
-
-  IconSettings:InvalidateCatalog()
   if self.__puiPCMStartupComplete == true then
-    ns.PCMAbilityCatalog:Invalidate("data-loaded")
-    ns.PCMAbilityCatalog:Refresh()
-    ns.PCMAbilityRuntime:Flush()
-    ns.PCMAuraRuntime:Flush()
-    ns.PCMGroupManager:RequestLayout()
+    _PCM_BeginTransition(self, true)
   else
     _PCM_RunInitialViewerPass(self)
   end
-  _PCM_ReconcileNativeCDM()
 end
 
 function Cooldowns:_OnCooldownViewerTableHotfixed()
@@ -1973,15 +1960,7 @@ function Cooldowns:_OnCooldownViewerTableHotfixed()
     return
   end
 
-  if _PCM_IsTransitionPending() then
-    _PCM_QueueTransitionFlush()
-    return
-  end
-
-  IconSettings:InvalidateCatalog()
-
-  _PCM_RunHardViewerTransition(self)
-  _PCM_ReconcileNativeCDM()
+  _PCM_BeginTransition(self, true)
 end
 
 function Cooldowns:_OnSpellsChanged()
@@ -1989,14 +1968,7 @@ function Cooldowns:_OnSpellsChanged()
     return
   end
 
-  if _PCM_IsTransitionPending() then
-    _PCM_QueueTransitionFlush()
-    return
-  end
-
-  if not InCombatLockdown() then
-    IconSettings:InvalidateCatalog()
-  end
+  _PCM_BeginTransition(self, true)
 end
 
 local function _PCM_RuntimeLifecycleEvent(event, ...)
@@ -2019,8 +1991,12 @@ local function _PCM_RuntimeLifecycleEvent(event, ...)
   elseif event == "PLAYER_SPECIALIZATION_CHANGED" then
     Cooldowns:_OnPlayerSpecializationChanged(event, arg1)
   elseif event == "ACTIVE_PLAYER_SPECIALIZATION_CHANGED"
+    or event == "ACTIVE_COMBAT_CONFIG_CHANGED"
     or event == "PLAYER_TALENT_UPDATE"
+    or event == "PLAYER_PVP_TALENT_UPDATE"
     or event == "ACTIVE_TALENT_GROUP_CHANGED"
+    or event == "COOLDOWN_VIEWER_SPELL_OVERRIDE_UPDATED"
+    or event == "PLAYER_EQUIPMENT_CHANGED"
   then
     _PCM_BeginTransition(Cooldowns, true)
   elseif event == "TRAIT_CONFIG_UPDATED" then
@@ -2078,7 +2054,6 @@ function Cooldowns:ApplySettings(flags)
   if flags.profile == true then
     _PCM_MigrateOwnedViewerTooltips()
     ns.PCMGroupManager:RefreshProfile()
-    ns.PCMCatalog:Invalidate("profile")
     IconSettings:InvalidateCatalog()
     IconSettings:InvalidateSettings()
     needsIconRefresh = true
@@ -2103,11 +2078,6 @@ function Cooldowns:ApplySettings(flags)
   self:_CooldownStackBars_ApplySettings(flags)
   self:_ConsumableTracker_ApplySettings(flags)
 
-  if needsIconRefresh or needsFontRefresh then
-    _PCM_RefreshOwnedViewer(self, "EssentialCooldownViewer")
-    _PCM_RefreshOwnedViewer(self, "UtilityCooldownViewer")
-  end
-
   if needsIconRefresh then
     _RefreshIconViewers(nil)
   elseif needsFontRefresh then
@@ -2115,6 +2085,7 @@ function Cooldowns:ApplySettings(flags)
   end
 
   if flags.profile == true then
+    self:RefreshAbilityCatalog()
     self:ApplyKeybindTextRulesNow(nil)
     _PCM_ReconcileNativeCDM()
   end
@@ -2243,8 +2214,6 @@ end
 function Cooldowns:OnProfileChanged()
   self:ApplySettings({ profile = true })
   self:SoftRebuild({ profile = true, movers = true, layout = true })
-
-  _PCM_RunHardViewerTransition(self)
 end
 
   Cooldowns.ApplyCustomBarsCDMProfile = P:Def('Cooldowns:ApplyCustomBarsCDMProfile', Cooldowns.ApplyCustomBarsCDMProfile)
@@ -2311,6 +2280,7 @@ end
   _EnsurePCMViewerMoverForKey = P:Def('_EnsurePCMViewerMoverForKey', _EnsurePCMViewerMoverForKey)
   _EnsureViewerMovers = P:Def('_EnsureViewerMovers', _EnsureViewerMovers)
   Cooldowns._RequestViewerRefresh = P:Def('Cooldowns:_RequestViewerRefresh', Cooldowns._RequestViewerRefresh)
+  Cooldowns.RefreshAbilityCatalog = P:Def('Cooldowns:RefreshAbilityCatalog', Cooldowns.RefreshAbilityCatalog)
   Cooldowns._FlushViewerRefreshImmediate = P:Def('Cooldowns:_FlushViewerRefreshImmediate', Cooldowns._FlushViewerRefreshImmediate)
   Cooldowns.RefreshViewerGlows = P:Def('Cooldowns:RefreshViewerGlows', Cooldowns.RefreshViewerGlows)
   _PCM_RegisterEditModeParticipant = P:Def('_PCM_RegisterEditModeParticipant', _PCM_RegisterEditModeParticipant)

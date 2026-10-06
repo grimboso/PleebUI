@@ -975,7 +975,11 @@ function CustomIcons:UpdateCharge(key, duration, currentCharges, maximum, active
     end
   end
   if cooldownShown then
-    cooldown:SetCooldownFromDurationObject(duration, true)
+    if active == true then
+      cooldown:SetCooldownFromDurationObject(duration, true)
+    else
+      cooldown:Clear()
+    end
   end
 
   local chargeTextShown = record.icon.showCount == true

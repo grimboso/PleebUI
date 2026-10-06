@@ -42,8 +42,6 @@ MessageAPIFrame:Hide()
 MessageAPIFrame:UnregisterAllEvents()
 -- The chat mixin's Lua override bypasses the intrinsic secure display entry point.
 ns.AddChatMessage = MessageAPIFrame.AddMessage
-ns.BackFillChatMessage = MessageAPIFrame.BackFillMessage
-ns.SetChatMaxLines = MessageAPIFrame.SetMaxLines
 
 function Addon:Print(message)
   local text = "|cff33ff99" .. ADDON_NAME .. "|r: " .. tostring(message)

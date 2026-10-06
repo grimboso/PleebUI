@@ -508,18 +508,24 @@ local function QueuePendingAuraStyles()
   end
 end
 
-local function RefreshRuntimeSpellIdentity(record)
+local function RefreshRuntimeSpellIdentity(record, refreshKeybind)
   if not AssignRuntimeSpellIDs(record) then
     return false
   end
 
   ConfigureRangeRegistration(record)
   ConfigureAuraSlots(record)
+
+  local appearanceMask = APPEARANCE_ICON
+  if refreshKeybind ~= false then
+    appearanceMask = bit_bor(appearanceMask, APPEARANCE_KEYBIND)
+  end
+
   MarkRecordDirty(
     record,
     bit_bor(DIRTY_STATE, DIRTY_APPEARANCE),
     bit_bor(STATE_COOLDOWN, STATE_CHARGE, STATE_USABLE, STATE_RANGE, STATE_PROC),
-    bit_bor(APPEARANCE_ICON, APPEARANCE_KEYBIND)
+    appearanceMask
   )
   return true
 end
@@ -554,7 +560,7 @@ local function ApplySpellOverride(baseSpellID, overrideSpellID)
   for _, record in pairs(buckets.spellAppearance.records) do
     if record.entry.baseSpellID == baseSpellID then
       record.runtimeOverrideSpellID = overrideSpellID
-      RefreshRuntimeSpellIdentity(record)
+      RefreshRuntimeSpellIdentity(record, false)
     end
   end
 end
@@ -1047,9 +1053,13 @@ local function RefreshStateAppearance(record)
     return
   end
 
+  local appearance = GetRecordStyle(record).appearance or {}
   local stateName
   local atMaxCharges = false
-  if entry.charges == true and record.runtimeChargeSpellID then
+  if appearance.maxChargeGlowStyle ~= nil
+    and entry.charges == true
+    and record.runtimeChargeSpellID
+  then
     local chargeInfo = C_Spell.GetSpellCharges(record.runtimeChargeSpellID)
     if chargeInfo and not IsSecret(chargeInfo.isActive) then
       atMaxCharges = chargeInfo.isActive ~= true
@@ -1110,25 +1120,54 @@ local function RefreshRecordState(record, stateMask)
   end
 end
 
-local function ApplySpellCategorySource(spellID, baseSpellID, spellCategory, itemID)
-  if IsSecret(spellCategory) or type(spellCategory) ~= "number"
-    or IsSecret(itemID) or type(itemID) ~= "number"
-  then
-    return
-  end
+local function MarkItemCooldownEventRecords(spellID, baseSpellID, spellCategory, itemID)
+  local spellIsSecret = IsSecret(spellID)
+  local baseSpellIsSecret = IsSecret(baseSpellID)
+  local categoryIsSecret = IsSecret(spellCategory)
+  local itemIsSecret = IsSecret(itemID)
 
-  if IsSecret(spellID) or (spellID ~= nil and type(spellID) ~= "number")
-    or IsSecret(baseSpellID) or (baseSpellID ~= nil and type(baseSpellID) ~= "number")
-  then
-    return
-  end
+  local hasSpecificSpell = not spellIsSecret and type(spellID) == "number"
+  local hasSpecificBase = not baseSpellIsSecret and type(baseSpellID) == "number"
+  local hasSpecificCategory = not categoryIsSecret and type(spellCategory) == "number"
+  local hasSpecificItem = not itemIsSecret and type(itemID) == "number"
+  local eventIdentityRestricted = spellIsSecret
+    or baseSpellIsSecret
+    or categoryIsSecret
+    or itemIsSecret
 
   for _, record in pairs(buckets.item.records) do
-    if record.entry.entryKind == "spellCategory"
-      and record.entry.spellCategoryID == spellCategory
-    then
-      record.safeContent.categorySpellID = baseSpellID or spellID
-      record.safeContent.categoryItemID = itemID
+    local entry = record.entry
+    local matches = false
+
+    if eventIdentityRestricted or not hasSpecificSpell then
+      matches = true
+    elseif entry.entryKind == "equipmentSlot" then
+      matches = RecordMatchesSpellIdentity(
+        record,
+        spellID,
+        hasSpecificBase and baseSpellID or spellID
+      )
+      if not matches and hasSpecificItem then
+        matches = record.safeContent.equippedItemID == itemID
+      end
+    elseif entry.entryKind == "spellCategory" then
+      matches = hasSpecificCategory and entry.spellCategoryID == spellCategory
+    end
+
+    if matches then
+      if entry.entryKind == "spellCategory"
+        and hasSpecificCategory
+        and entry.spellCategoryID == spellCategory
+        and not spellIsSecret
+        and (spellID == nil or type(spellID) == "number")
+        and not baseSpellIsSecret
+        and (baseSpellID == nil or type(baseSpellID) == "number")
+        and hasSpecificItem
+      then
+        record.safeContent.categorySpellID = baseSpellID or spellID
+        record.safeContent.categoryItemID = itemID
+      end
+      MarkRecordDirty(record, DIRTY_STATE, STATE_ITEM)
     end
   end
 end
@@ -1281,12 +1320,14 @@ local function AcquireRecord(viewer, entry, generation)
     if activeByCooldownID[record.cooldownID] ~= record then
       return
     end
-    RefreshTotemBindings()
-    MarkRecordDirty(
-      record,
-      DIRTY_STATE,
-      bit_bor(STATE_COOLDOWN, STATE_CHARGE, STATE_TOTEM)
-    )
+
+    local stateMask = bit_bor(STATE_COOLDOWN, STATE_CHARGE)
+    if verifiedTotemSlots[record.cooldownID] then
+      RefreshTotemBindings()
+      stateMask = bit_bor(stateMask, STATE_TOTEM)
+    end
+
+    MarkRecordDirty(record, DIRTY_STATE, stateMask)
   end
   parts.cooldown:SetScript("OnCooldownDone", OnCooldownDone)
   parts.chargeCooldown:SetScript("OnCooldownDone", OnCooldownDone)
@@ -1742,9 +1783,7 @@ function AbilityRuntime:Enable()
   readyNotified = false
   presentationActive = false
   groupLayoutReady = false
-  AbilityCatalog:Enable(self)
   AbilityCatalog:RegisterListener(self, self.OnCatalogChanged)
-  AbilityCatalog:Refresh()
 
   for _, viewer in pairs(viewers) do
     if viewer.frame then
@@ -1767,7 +1806,6 @@ function AbilityRuntime:Disable()
   readyNotified = false
   presentationActive = false
   AbilityCatalog:UnregisterListener(self)
-  AbilityCatalog:Disable(self)
 
   eventFrame:UnregisterAllEvents()
   for event in pairs(registeredEvents) do
@@ -1826,10 +1864,9 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1, arg2, arg3, arg4, arg5)
   if event == "COOLDOWN_VIEWER_SPELL_OVERRIDE_UPDATED" then
     ApplySpellOverride(arg1, arg2)
   elseif event == "SPELL_UPDATE_COOLDOWN" then
-    ApplySpellCategorySource(arg1, arg2, arg3, arg5)
+    MarkItemCooldownEventRecords(arg1, arg2, arg3, arg5)
     MarkCooldownEventBucket("cooldown", STATE_COOLDOWN, arg1, arg2)
     MarkCooldownEventBucket("charge", STATE_CHARGE, arg1, arg2)
-    MarkBucket("item", DIRTY_STATE, STATE_ITEM)
   elseif event == "SPELL_UPDATE_CHARGES" then
     MarkBucket("charge", DIRTY_STATE, STATE_CHARGE)
   elseif event == "SPELL_UPDATE_USES" then

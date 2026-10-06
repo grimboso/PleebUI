@@ -737,7 +737,6 @@ function AuraRuntime:Enable()
   readyNotified = false
   presentationActive = false
   groupLayoutReady = false
-  Catalog:Enable(self)
   Catalog:RegisterListener(self, self.OnCatalogChanged)
   restrictionFrame:RegisterEvent("ADDON_RESTRICTION_STATE_CHANGED")
   restrictionFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
@@ -753,7 +752,6 @@ function AuraRuntime:Disable()
   readyNotified = false
   presentationActive = false
   Catalog:UnregisterListener(self)
-  Catalog:Disable(self)
   restrictionFrame:UnregisterAllEvents()
   flushFrame:Hide()
   pendingCatalog = false

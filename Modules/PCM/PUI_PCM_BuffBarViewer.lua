@@ -163,10 +163,6 @@ function BuffBars:SoftRebuild(flags)
   end
 end
 
-function BuffBars:RefreshAfterTalentSwap()
-  ns.PCMCatalog:Invalidate("buff-bars-talent")
-end
-
 function BuffBars:OnInitialize()
   self:SetEnabledState(ns.PCM_DBExports.IsPCMEnabled() == true)
 end
@@ -183,7 +179,6 @@ BuffBars.GetLayoutGeometry = P:Def("BuffBars.GetLayoutGeometry", BuffBars.GetLay
 BuffBars.RefreshSettings = P:Def("BuffBars:RefreshSettings", BuffBars.RefreshSettings)
 BuffBars.ApplySettings = P:Def("BuffBars:ApplySettings", BuffBars.ApplySettings)
 BuffBars.SoftRebuild = P:Def("BuffBars:SoftRebuild", BuffBars.SoftRebuild)
-BuffBars.RefreshAfterTalentSwap = P:Def("BuffBars:RefreshAfterTalentSwap", BuffBars.RefreshAfterTalentSwap)
 BuffBars.OnInitialize = P:Def("BuffBars:OnInitialize", BuffBars.OnInitialize)
 BuffBars.OnEnable = P:Def("BuffBars:OnEnable", BuffBars.OnEnable)
 BuffBars.OnDisable = P:Def("BuffBars:OnDisable", BuffBars.OnDisable)

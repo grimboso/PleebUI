@@ -129,10 +129,6 @@ function Buffs:RefreshIndividualIconSettings()
   ns.PCMAuraRuntime:RefreshAppearance(VIEWER_KEY)
 end
 
-function Buffs:RefreshAfterTalentSwap()
-  ns.PCMCatalog:Invalidate("buff-icons-talent")
-end
-
 function Buffs:OnInitialize()
   self:SetEnabledState(ns.PCM_DBExports.IsPCMEnabled() == true)
 end
@@ -149,7 +145,6 @@ Buffs.RefreshSettings = P:Def("Buffs:RefreshSettings", Buffs.RefreshSettings)
 Buffs.ApplySettings = P:Def("Buffs:ApplySettings", Buffs.ApplySettings)
 Buffs.SoftRebuild = P:Def("Buffs:SoftRebuild", Buffs.SoftRebuild)
 Buffs.RefreshIndividualIconSettings = P:Def("Buffs:RefreshIndividualIconSettings", Buffs.RefreshIndividualIconSettings)
-Buffs.RefreshAfterTalentSwap = P:Def("Buffs:RefreshAfterTalentSwap", Buffs.RefreshAfterTalentSwap)
 Buffs.OnInitialize = P:Def("Buffs:OnInitialize", Buffs.OnInitialize)
 Buffs.OnEnable = P:Def("Buffs:OnEnable", Buffs.OnEnable)
 Buffs.OnDisable = P:Def("Buffs:OnDisable", Buffs.OnDisable)

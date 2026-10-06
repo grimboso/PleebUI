@@ -149,7 +149,8 @@ local function _CSB_EnsureBarFrame(id)
     return bd
   end
 
-  local safeId = tostring(id):gsub("[^%w]", "_")
+  local idText = tostring(id)
+  local safeId = idText:gsub("[^%w]", "_")
   local frameName = "PleebUI_PCM_CooldownStackBar_" .. safeId
 
   bd = Presentation.Create("PCMBar", UIParent, {
@@ -159,6 +160,8 @@ local function _CSB_EnsureBarFrame(id)
   bars[id] = bd
 
   bd.id = id
+  bd.customIconKey = "charge:" .. idText
+  bd.stateGlowKey = "charge-state:" .. idText
   bd.frame.__puiCooldownStackBarData = bd
   bd.frame.barData = bd
   bd.timerBinding = BarWidget.CreateDurationBinding(bd.timerText)
@@ -508,9 +511,20 @@ end
 
 local function _CSB_ApplyStateAppearance(barData, cfg)
   if cfg.presentation ~= "BAR" then
-    PCMPresentation.ReleaseCustomTrackerStateGlow("charge-state:" .. tostring(barData.id))
+    if barData.__puiCSBStateAppearanceMode ~= cfg.presentation then
+      PCMPresentation.ReleaseCustomTrackerStateGlow(barData.stateGlowKey)
+      barData.__puiCSBStateAppearanceMode = cfg.presentation
+      barData.__puiCSBGlowStyle = nil
+      barData.__puiCSBGlowR = nil
+      barData.__puiCSBGlowG = nil
+      barData.__puiCSBGlowB = nil
+      barData.__puiCSBGlowA = nil
+    end
     return
   end
+
+  barData.__puiCSBStateAppearanceMode = "BAR"
+
   local active = barData.__puiChargeActive == true
   local stateAlpha = active and cfg.onCooldownAlpha or cfg.readyAlpha
   local alpha = (tonumber(stateAlpha) or 100) / 100 * (barData.__puiCSBAlpha or 1)
@@ -519,7 +533,8 @@ local function _CSB_ApplyStateAppearance(barData, cfg)
     barData.frame:SetAlpha(alpha)
   end
 
-  local desaturated = active and cfg.desaturateCooldown == true or not active and cfg.desaturateReady == true
+  local desaturated = active and cfg.desaturateCooldown == true
+    or not active and cfg.desaturateReady == true
   if barData.__puiCSBAppliedDesaturated ~= desaturated then
     barData.__puiCSBAppliedDesaturated = desaturated
     for index = 1, #(barData.chargeSlots or {}) do
@@ -530,14 +545,32 @@ local function _CSB_ApplyStateAppearance(barData, cfg)
       end
     end
   end
-  local style = active and cfg.cooldownGlowStyle or cfg.readyGlowStyle
+
+  local style = alpha > 0 and (active and cfg.cooldownGlowStyle or cfg.readyGlowStyle) or "NONE"
   local color = active and cfg.cooldownGlowColor or cfg.readyGlowColor
-  PCMPresentation.ApplyCustomTrackerStateGlow(
-    "charge-state:" .. tostring(barData.id),
-    barData.frame,
-    alpha > 0 and style or "NONE",
-    color
-  )
+  local r = color and tonumber(color[1] or color.r) or 1
+  local g = color and tonumber(color[2] or color.g) or 1
+  local b = color and tonumber(color[3] or color.b) or 1
+  local a = color and tonumber(color[4] or color.a) or 1
+
+  if barData.__puiCSBGlowStyle ~= style
+    or barData.__puiCSBGlowR ~= r
+    or barData.__puiCSBGlowG ~= g
+    or barData.__puiCSBGlowB ~= b
+    or barData.__puiCSBGlowA ~= a
+  then
+    barData.__puiCSBGlowStyle = style
+    barData.__puiCSBGlowR = r
+    barData.__puiCSBGlowG = g
+    barData.__puiCSBGlowB = b
+    barData.__puiCSBGlowA = a
+    PCMPresentation.ApplyCustomTrackerStateGlow(
+      barData.stateGlowKey,
+      barData.frame,
+      style,
+      color
+    )
+  end
 end
 
 _CSB_UpdateOneBar = function(barData, cfg, chargeInfo)
@@ -554,7 +587,7 @@ _CSB_UpdateOneBar = function(barData, cfg, chargeInfo)
   if not spellID then
     _CSB_ClearDurationState(barData)
     barData.frame:Hide()
-    CustomIcons:Release("charge:" .. tostring(barData.id))
+    CustomIcons:Release(barData.customIconKey)
     return
   end
 
@@ -568,8 +601,13 @@ _CSB_UpdateOneBar = function(barData, cfg, chargeInfo)
     chargeInfo = C_Spell.GetSpellCharges(spellID)
   end
 
-  local duration = C_Spell.GetSpellChargeDuration(spellID)
-  barData.__puiChargeActive = chargeInfo.isActive == true
+  local active = chargeInfo.isActive == true
+  local activeChanged = barData.__puiChargeActive ~= active
+  local duration
+  if active then
+    duration = C_Spell.GetSpellChargeDuration(spellID)
+  end
+  barData.__puiChargeActive = active
 
   barData.frame:SetShown(barEnabled)
 
@@ -580,18 +618,25 @@ _CSB_UpdateOneBar = function(barData, cfg, chargeInfo)
 
   if barEnabled then
     PCMPresentation.ApplyChargeCount(barData, chargeInfo.currentCharges)
-    _CSB_ApplyDurationState(barData, cfg, duration)
+    if active then
+      _CSB_ApplyDurationState(barData, cfg, duration)
+    else
+      _CSB_ClearDurationState(barData)
+    end
   else
     _CSB_ClearDurationState(barData)
+    CustomIcons:UpdateCharge(
+      barData.customIconKey,
+      duration,
+      chargeInfo.currentCharges,
+      barData.maxCharges,
+      active
+    )
   end
-  CustomIcons:UpdateCharge(
-    "charge:" .. tostring(barData.id),
-    duration,
-    chargeInfo.currentCharges,
-    barData.maxCharges,
-    chargeInfo.isActive == true
-  )
-  _CSB_ApplyStateAppearance(barData, cfg)
+
+  if activeChanged then
+    _CSB_ApplyStateAppearance(barData, cfg)
+  end
 end
 
 
@@ -939,6 +984,8 @@ function Cooldowns:CooldownStackBars_RefreshBar(id, flags)
 
   if flags.visibility == true or flags.layout == true then
     _CSB_ApplyVisibility(barData, barData.cfg)
+  elseif flags.presentation == true then
+    _CSB_ApplyStateAppearance(barData, barData.cfg)
   end
 end
 

@@ -147,7 +147,6 @@ function IconSettings:InvalidateCatalog()
   state.catalogGeneration = state.catalogGeneration + 1
   state.catalogSpecID = specID
   wipe(state.catalogs)
-  ns.PCMCatalog:Invalidate("icon-settings")
 end
 
 function IconSettings:InvalidateSettings()
@@ -294,6 +293,7 @@ function IconSettings:PrimeRuntimeCache()
   if InCombatLockdown() then
     return false
   end
+
   if state.catalogInvalidationPending then
     self:InvalidateCatalog()
     return true
@@ -302,7 +302,7 @@ function IconSettings:PrimeRuntimeCache()
   for index = 1, #CATALOG_VIEWERS do
     self:GetViewerEntries(CATALOG_VIEWERS[index])
   end
-  return true
+  return false
 end
 
 
