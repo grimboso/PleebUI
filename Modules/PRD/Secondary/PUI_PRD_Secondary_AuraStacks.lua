@@ -225,12 +225,21 @@ local function AttachNativeDividers(owner, track)
   LayoutNativeDividers(track)
 end
 
-local function ConfigureNativeCountdownFallback(owner, track, button)
+local function ConfigureNativeCountdownFallback(track, button, sourceText)
   local config = track.config
-  local view = track.view
   local shown = Secondary.ShouldShowApplicationCountdown(config)
-  local sourceText = Secondary.PrepareSecondaryText(view, view.secondaryBar)
 
+  if not shown then
+    if track.countdownFallbackText then
+      track.countdownFallbackText:Hide()
+    end
+    if track.countdownCover then
+      track.countdownCover:Hide()
+    end
+    return
+  end
+
+  local view = track.view
   if not track.countdownFallbackText then
     track.countdownFallbackText = track.parent:CreateFontString(nil, "OVERLAY")
     track.countdownFallbackText:SetPoint("CENTER", track.parent, "CENTER", 0, 0)
@@ -245,7 +254,7 @@ local function ConfigureNativeCountdownFallback(owner, track, button)
       config.applicationCountdownMax or 0
     )
   )
-  fallbackText:SetShown(shown)
+  fallbackText:Show()
 
   if not track.countdownCover then
     track.countdownCover = button:CreateTexture(nil, "BACKGROUND", nil, 7)
@@ -263,41 +272,7 @@ local function ConfigureNativeCountdownFallback(owner, track, button)
     background[3] or 0,
     1
   )
-  cover:SetShown(shown)
-end
-
-local function ConfigureNativeApplicationVisuals(owner, track, parts, styleApplicationBar)
-  local applicationBar = parts.applicationThresholdMirror
-  local textureKey = track.config.texture or track.definition.texture
-  local texturePath = Secondary.FetchStatusbarTexture(textureKey)
-  local applicationTexture = texturePath or "Interface\\Buttons\\WHITE8X8"
-
-  if styleApplicationBar then
-    local r, g, b, a = Secondary.ResolveResourceColor(
-      track.config,
-      track.definition
-    )
-
-    applicationBar:SetStatusBarTexture(applicationTexture)
-    applicationBar:SetOrientation("HORIZONTAL")
-    applicationBar:SetReverseFill(false)
-    applicationBar:SetStatusBarColor(r, g, b, a)
-    applicationBar:SetAlpha(1)
-
-    AuraWidget.ConfigureApplicationThresholds(
-      parts,
-      track.config.stackColorThresholds,
-      applicationTexture,
-      "HORIZONTAL",
-      false,
-      PLAYER_CLASS_COLOR,
-      track.maximum
-    )
-    track.applicationThresholdTopFrameLevel =
-      applicationBar:GetFrameLevel() + (parts.applicationThresholdLayerCount or 0)
-  end
-
-  AttachNativeDividers(owner, track)
+  cover:Show()
 end
 
 local function CreateNativeResourceView(owner)
@@ -372,7 +347,7 @@ local function ConfigureNativeButton(owner, track, button, initializing)
     button:SetFrameLevel(track.parent:GetFrameLevel() + 1)
     button:EnableMouse(false)
     parts.applicationBase:Hide()
-    ConfigureNativeCountdownFallback(owner, track, button)
+    ConfigureNativeCountdownFallback(track, button, sourceText)
 
     engineBar:ClearAllPoints()
     engineBar:SetPoint("TOPLEFT", button, "TOPLEFT", inset, -inset)
@@ -383,24 +358,13 @@ local function ConfigureNativeButton(owner, track, button, initializing)
     local texturePath = Secondary.FetchStatusbarTexture(textureKey)
     local r, g, b, a = Secondary.ResolveResourceColor(track.config, track.definition)
 
-    AuraWidget.ClearApplicationThresholdBar(parts)
     view.secondaryStatusBar:Hide()
     engineBar:SetStatusBarTexture(texturePath or "Interface\\Buttons\\WHITE8X8")
     engineBar:SetOrientation("HORIZONTAL")
     engineBar:SetReverseFill(false)
     engineBar:SetStatusBarColor(r, g, b, a)
     engineBar:SetAlpha(1)
-    AuraWidget.ConfigureApplicationThresholds(
-      parts,
-      nil,
-      texturePath,
-      "HORIZONTAL",
-      false,
-      PLAYER_CLASS_COLOR,
-      track.maximum
-    )
-    track.applicationThresholdTopFrameLevel =
-      engineBar:GetFrameLevel() + (parts.applicationThresholdLayerCount or 0)
+    track.applicationThresholdTopFrameLevel = engineBar:GetFrameLevel()
     AttachNativeDividers(owner, track)
     AuraWidget.ConfigureApplicationBar(
       parts,
@@ -408,7 +372,7 @@ local function ConfigureNativeButton(owner, track, button, initializing)
       Enum.StatusBarInterpolation.ExponentialEaseOut
     )
   else
-    ConfigureNativeApplicationVisuals(owner, track, parts, false)
+    AttachNativeDividers(owner, track)
   end
 
   local formatter = GetNativeFormatter(owner, track)
@@ -480,7 +444,7 @@ local function EnsureNativeTrack(owner, resource, view)
       AuraSlotDriver:SetSlotFilter(track.auraSlot, filter)
     end
 
-    if track.candidateSpellIDs ~= spellSet or track.auraSlot.active ~= true then
+    if track.candidateSpellIDs ~= spellSet then
       AuraSlotDriver:SetSlotCandidates(track.auraSlot, { includeSpellIDs = spellSet })
       track.candidateSpellIDs = spellSet
     end
@@ -507,9 +471,6 @@ local function DisableNativeTrack(track)
     return
   end
 
-  if track.parts then
-    AuraWidget.ClearApplicationThresholdBar(track.parts)
-  end
   HideNativeDividers(track)
   AuraSlotDriver:SetSlotActive(track.auraSlot, false)
 end
@@ -528,7 +489,9 @@ local function BuildNative(owner)
       view.secondaryCustomEnabled = owner.secondaryCustomEnabled
 
       Secondary.BuildContinuous(view, resource.maximum, 0)
-      Secondary.ApplySecondaryAppearance(view)
+      if view ~= owner then
+        Secondary.ApplySecondaryAppearance(view)
+      end
       EnsureNativeTrack(owner, resource, view)
       activeTracks[definition.resourceKey] = true
       resource.frame:Show()
@@ -563,7 +526,7 @@ end
 
 local function UpdateNative(owner, event)
   if event == "SPELLS_CHANGED" then
-    owner:RefreshSecondaryAppearance()
+    owner:RebuildSecondary()
     return
   end
 
@@ -662,7 +625,6 @@ AttachNativeDividers = P:Def("AuraStacks.AttachNativeDividers", AttachNativeDivi
 CreateNativeResourceView = P:Def("AuraStacks.CreateNativeResourceView", CreateNativeResourceView)
 GetNativeResourceView = P:Def("AuraStacks.GetNativeResourceView", GetNativeResourceView)
 ConfigureNativeCountdownFallback = P:Def("AuraStacks.ConfigureNativeCountdownFallback", ConfigureNativeCountdownFallback)
-ConfigureNativeApplicationVisuals = P:Def("AuraStacks.ConfigureNativeApplicationVisuals", ConfigureNativeApplicationVisuals)
 ConfigureNativeButton = P:Def("AuraStacks.ConfigureNativeButton", ConfigureNativeButton)
 EnsureNativeTrack = P:Def("AuraStacks.EnsureNativeTrack", EnsureNativeTrack)
 DisableNativeTrack = P:Def("AuraStacks.DisableNativeTrack", DisableNativeTrack)

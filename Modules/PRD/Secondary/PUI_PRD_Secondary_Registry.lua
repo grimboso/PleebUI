@@ -128,7 +128,6 @@ local DEFINITIONS = {
         auraSpellIDs = {
           182104,
         },
-        applicationSource = "AURA_SLOT",
         forceContinuous = true,
         specIDs = {
           [66] = true,
@@ -235,8 +234,6 @@ local DEFINITIONS = {
             auraSpellIDs = {
               1242974,
             },
-            applicationSource = "AURA_SLOT",
-            cdmViewerKey = "BuffIconCooldownViewer",
             forceContinuous = true,
           },
         },
@@ -256,7 +253,6 @@ local DEFINITIONS = {
             auraSpellIDs = {
               205473,
             },
-            applicationSource = "AURA_SLOT",
           },
           {
             adapter = "AURA_STACKS",
@@ -271,7 +267,6 @@ local DEFINITIONS = {
             auraSpellIDs = {
               1221389,
             },
-            cdmViewerKey = "BuffIconCooldownViewer",
           },
         },
       },

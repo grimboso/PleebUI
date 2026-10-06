@@ -1376,12 +1376,6 @@ local function PRDPreview_UpdateSecondaryBar(
     bar.status:SetMinMaxValues(0, maximum)
     bar.status:SetValue(current)
 
-    if adapter == "AURA_STACKS" and bar.__puiStackColorParts then
-      AuraWidget.FeedApplicationThresholds(
-        bar.__puiStackColorParts,
-        current
-      )
-    end
   end
 
   PRDPreview_UpdateSecondaryText(

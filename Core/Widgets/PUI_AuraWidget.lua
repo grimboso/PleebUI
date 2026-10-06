@@ -9,21 +9,6 @@ local table_sort = table.sort
 local MAX_STACK_COLOR_THRESHOLD = 30
 local STACK_COLOR_THRESHOLD_DEFAULT_COLOR = { 1, 0.82, 0, 1 }
 
-local function FeedApplicationThresholds(parts, value)
-  if parts.applicationThresholdMirrorIsVisible == true then
-    local mirror = parts.applicationThresholdMirror
-    if mirror then
-      mirror:SetValue(value, parts.applicationThresholdInterpolation)
-    end
-  end
-
-  local overlays = parts.applicationThresholds
-  local count = parts.applicationThresholdCount or 0
-  for index = 1, count do
-    overlays[index]:SetValue(value)
-  end
-end
-
 local function NormalizeStackColorThreshold(threshold, index)
   if type(threshold) ~= "table" then
     threshold = {}
@@ -158,6 +143,41 @@ local function ResolveStackColorThresholdColor(threshold, classColor)
     color[4] or color.a or 1
 end
 
+local function FeedApplicationThresholds(parts, value)
+  local overlays = parts.applicationThresholds
+  local count = parts.applicationThresholdCount or 0
+
+  for index = 1, count do
+    overlays[index]:SetValue(value)
+  end
+end
+
+local function EnableApplicationThresholdFeed(parts)
+  if parts.applicationThresholdFeedEnabled == true then
+    return
+  end
+
+  local feed = parts.applicationThresholdFeed
+  if not feed then
+    feed = function(_, value)
+      FeedApplicationThresholds(parts, value)
+    end
+    parts.applicationThresholdFeed = feed
+  end
+
+  parts.applicationBar:SetScript("OnValueChanged", feed)
+  parts.applicationThresholdFeedEnabled = true
+end
+
+local function DisableApplicationThresholdFeed(parts)
+  if parts.applicationThresholdFeedEnabled ~= true then
+    return
+  end
+
+  parts.applicationBar:SetScript("OnValueChanged", nil)
+  parts.applicationThresholdFeedEnabled = nil
+end
+
 local function EnsureApplicationThresholdOverlay(parts, index)
   local overlays = parts.applicationThresholds
   local overlay = overlays[index]
@@ -165,10 +185,10 @@ local function EnsureApplicationThresholdOverlay(parts, index)
     return overlay
   end
 
-  local mirror = parts.applicationThresholdMirror or parts.applicationBar
-  overlay = CreateFrame("StatusBar", nil, overlays[index - 1] or mirror)
-  overlay:SetAllPoints(mirror:GetStatusBarTexture())
-  overlay:SetFrameLevel(mirror:GetFrameLevel() + 2)
+  local applicationBar = parts.applicationBar
+  overlay = CreateFrame("StatusBar", nil, overlays[index - 1] or applicationBar)
+  overlay:SetAllPoints(applicationBar:GetStatusBarTexture())
+  overlay:SetFrameLevel(applicationBar:GetFrameLevel() + 2)
   overlay:SetStatusBarTexture("Interface\\Buttons\\WHITE8X8")
   overlay:SetMinMaxValues(0, 1)
   overlay:SetValue(0)
@@ -188,7 +208,7 @@ local function ConfigureApplicationThresholdOverlay(
   reverseFill,
   classColor
 )
-  local mirror = parts.applicationThresholdMirror or parts.applicationBar
+  local applicationBar = parts.applicationBar
   local thresholdValue = tonumber(threshold.value) or 1
   local r, g, b, a = ResolveStackColorThresholdColor(threshold, classColor)
 
@@ -200,69 +220,23 @@ local function ConfigureApplicationThresholdOverlay(
   texture:SetVertexColor(r, g, b, a)
   texture:SetDrawLayer("ARTWORK", thresholdIndex)
 
-  overlay:SetFrameLevel(mirror:GetFrameLevel() + 2)
+  overlay:SetFrameLevel(applicationBar:GetFrameLevel() + 2)
   overlay:ClearAllPoints()
-  overlay:SetAllPoints(mirror:GetStatusBarTexture())
+  overlay:SetAllPoints(applicationBar:GetStatusBarTexture())
   overlay:SetMinMaxValues(thresholdValue - 1, thresholdValue)
+  overlay:SetValue(0)
   overlay:Show()
 end
 
-AuraWidget.FeedApplicationThresholds = FeedApplicationThresholds
-
-function AuraWidget.SetApplicationThresholdHost(parts, parent)
-  parts.applicationThresholdMirrorIsVisible = nil
-  local mirror = parts.applicationThresholdMirror
-  if not mirror then
-    mirror = CreateFrame("StatusBar", nil, parent)
-    mirror:SetStatusBarTexture("Interface\\Buttons\\WHITE8X8")
-    mirror:SetStatusBarColor(1, 1, 1, 0)
-    mirror:SetMinMaxValues(0, 1)
-    mirror:SetValue(0)
-    parts.applicationThresholdMirror = mirror
-  elseif mirror:GetParent() ~= parent then
-    mirror:SetParent(parent)
-  end
-
-  local overlays = parts.applicationThresholds
-  for index = 1, #overlays do
-    overlays[index]:SetParent(overlays[index - 1] or mirror)
-  end
-
-  mirror:Show()
-  return mirror
-end
-
-function AuraWidget.SetApplicationThresholdBar(parts, statusBar)
-  parts.applicationThresholdMirror = statusBar
-  parts.applicationThresholdMirrorIsVisible = true
-
-  local overlays = parts.applicationThresholds
-  for index = 1, #overlays do
-    overlays[index]:SetParent(overlays[index - 1] or statusBar)
-  end
-
-  statusBar:Show()
-  return statusBar
-end
-
 function AuraWidget.ClearApplicationThresholdBar(parts)
-  if parts.applicationThresholdMirrorIsVisible ~= true then
-    return
-  end
-
-  local mirror = parts.applicationThresholdMirror
-  if mirror then
-    mirror:SetValue(0)
-    mirror:Hide()
-  end
-
-  parts.applicationThresholdMirror = nil
-  parts.applicationThresholdMirrorIsVisible = nil
-
   local overlays = parts.applicationThresholds
   for index = 1, #overlays do
-    overlays[index]:SetParent(overlays[index - 1] or parts.applicationBar)
+    overlays[index]:Hide()
   end
+
+  parts.applicationThresholdCount = 0
+  parts.applicationThresholdLayerCount = 0
+  parts.applicationThresholdMaximum = nil
 end
 
 function AuraWidget.ConfigureApplicationThresholds(
@@ -300,31 +274,22 @@ function AuraWidget.ConfigureApplicationThresholds(
 
   local overlays = parts.applicationThresholds
   local overlayCount = 0
-  local mirror = parts.applicationThresholdMirror
-  if mirror then
-    mirror:SetStatusBarTexture(texturePath or "Interface\\Buttons\\WHITE8X8")
-    mirror:SetOrientation(orientation or "HORIZONTAL")
-    mirror:SetReverseFill(reverseFill == true)
-    if parts.applicationThresholdMirrorIsVisible ~= true then
-      mirror:SetStatusBarColor(1, 1, 1, 0)
-      mirror:SetFrameLevel(parts.applicationBar:GetFrameLevel())
-    end
-    mirror:SetMinMaxValues(0, maximum)
-    mirror:Show()
-  end
 
   for thresholdIndex = 1, #active do
-    overlayCount = thresholdIndex
-    ConfigureApplicationThresholdOverlay(
-      parts,
-      EnsureApplicationThresholdOverlay(parts, thresholdIndex),
-      active[thresholdIndex],
-      thresholdIndex,
-      texturePath,
-      orientation,
-      reverseFill,
-      classColor
-    )
+    local overlay = EnsureApplicationThresholdOverlay(parts, thresholdIndex)
+    if overlay then
+      overlayCount = thresholdIndex
+      ConfigureApplicationThresholdOverlay(
+        parts,
+        overlay,
+        active[thresholdIndex],
+        thresholdIndex,
+        texturePath,
+        orientation,
+        reverseFill,
+        classColor
+      )
+    end
   end
 
   for index = overlayCount + 1, #overlays do
@@ -334,7 +299,14 @@ function AuraWidget.ConfigureApplicationThresholds(
   parts.applicationThresholdCount = overlayCount
   parts.applicationThresholdLayerCount = overlayCount
   parts.applicationThresholdMaximum = maximum
-  parts.applicationThresholdsDirty = true
+
+  if overlayCount > 0 then
+    EnableApplicationThresholdFeed(parts)
+    parts.applicationThresholdsDirty = true
+  else
+    DisableApplicationThresholdFeed(parts)
+    parts.applicationThresholdsDirty = nil
+  end
 end
 
 local SLOT_GLOW_PIXEL_TEX = [[Interface\Buttons\WHITE8X8]]
@@ -832,20 +804,10 @@ function AuraWidget.DisableApplicationBar(parts)
   end
 
   parts.applicationThresholdsDirty = nil
-
+  DisableApplicationThresholdFeed(parts)
   parts.applicationBase:Hide()
   parts.applicationBar:Hide()
-  parts.applicationThresholdCount = 0
-  parts.applicationThresholdLayerCount = 0
-  if parts.applicationThresholdMirror then
-    parts.applicationThresholdMirror:SetValue(0)
-    parts.applicationThresholdMirror:Hide()
-  end
-
-  local segments = parts.applicationThresholds
-  for index = 1, #segments do
-    segments[index]:Hide()
-  end
+  AuraWidget.ClearApplicationThresholdBar(parts)
 end
 
 function AuraWidget.ConfigureApplicationCount(parts, formatter)
@@ -1002,6 +964,18 @@ ResolveStackColorThresholdColor = P:Def(
   "AuraWidget.ResolveStackColorThresholdColor",
   ResolveStackColorThresholdColor
 )
+FeedApplicationThresholds = P:Def(
+  "AuraWidget.FeedApplicationThresholds",
+  FeedApplicationThresholds
+)
+EnableApplicationThresholdFeed = P:Def(
+  "AuraWidget.EnableApplicationThresholdFeed",
+  EnableApplicationThresholdFeed
+)
+DisableApplicationThresholdFeed = P:Def(
+  "AuraWidget.DisableApplicationThresholdFeed",
+  DisableApplicationThresholdFeed
+)
 EnsureApplicationThresholdOverlay = P:Def(
   "AuraWidget.EnsureApplicationThresholdOverlay",
   EnsureApplicationThresholdOverlay
@@ -1010,25 +984,12 @@ ConfigureApplicationThresholdOverlay = P:Def(
   "AuraWidget.ConfigureApplicationThresholdOverlay",
   ConfigureApplicationThresholdOverlay
 )
-FeedApplicationThresholds = P:SecDef(
-  "AuraWidget.FeedApplicationThresholds",
-  AuraWidget,
-  "FeedApplicationThresholds"
-)
 AuraWidget.ConfigureApplicationThresholds = P:Def(
   "AuraWidget.ConfigureApplicationThresholds",
   AuraWidget.ConfigureApplicationThresholds
 )
 AuraWidget.CreateSlotGlow = P:Def("AuraWidget.CreateSlotGlow", AuraWidget.CreateSlotGlow)
 AuraWidget.ConfigureSlotGlow = P:Def("AuraWidget.ConfigureSlotGlow", AuraWidget.ConfigureSlotGlow)
-AuraWidget.SetApplicationThresholdHost = P:Def(
-  "AuraWidget.SetApplicationThresholdHost",
-  AuraWidget.SetApplicationThresholdHost
-)
-AuraWidget.SetApplicationThresholdBar = P:Def(
-  "AuraWidget.SetApplicationThresholdBar",
-  AuraWidget.SetApplicationThresholdBar
-)
 AuraWidget.ClearApplicationThresholdBar = P:Def(
   "AuraWidget.ClearApplicationThresholdBar",
   AuraWidget.ClearApplicationThresholdBar

@@ -267,13 +267,14 @@ function Cooldowns:GetViewerFrame(key)
 end
 
 function Cooldowns:_ResolveOwnedViewerStyle(viewerKey)
-  local style = PCM_DB.GetStyleDB()
+  local root = PCM_DB.GetPCMRoot()
+  local style = PCM_DB.GetStyleDB(root)
   local border = self.GetBorderConfig(viewerKey) or {}
   return {
-    widthMode = self._GetWidthModeForViewer(viewerKey),
-    fixedWidth = self._GetFixedWidthForViewer(viewerKey),
-    iconSize = self._GetIconSizeForViewer(viewerKey),
-    spacing = self._GetIconSpacingForViewer(viewerKey),
+    widthMode = self._GetWidthModeForViewer(viewerKey, style),
+    fixedWidth = self._GetFixedWidthForViewer(viewerKey, style),
+    iconSize = self._GetIconSizeForViewer(viewerKey, style),
+    spacing = self._GetIconSpacingForViewer(viewerKey, style),
     firstRowLimit = style.viewerColumns[viewerKey] or 0,
     rowGrowth = style.viewerRowGrowth[viewerKey] == "UP" and "UP" or "DOWN",
     borderThickness = border.enabled ~= false and border.thickness or 0,
@@ -282,11 +283,11 @@ function Cooldowns:_ResolveOwnedViewerStyle(viewerKey)
     cooldownFont = self._ResolveFontOpts("cooldown", viewerKey),
     chargeFont = self._ResolveFontOpts("charge", viewerKey),
     keybindFont = self._ResolveFontOpts("keybind", viewerKey),
-    swipe = PCM_DB.GetViewerSwipeDB(viewerKey),
-    counts = PCM_DB.GetViewerCountDB(viewerKey),
+    swipe = PCM_DB.GetViewerSwipeDB(viewerKey, root),
+    counts = PCMCoreState.ViewerCountCache[viewerKey],
     durationCount = self:GetDurationCountEnabled(viewerKey),
     tooltips = self:GetViewerTooltipsEnabled(viewerKey),
-    procGlow = PCM_DB.GetPCMRoot().glow,
+    procGlow = root and root.glow or nil,
   }
 end
 
@@ -762,7 +763,9 @@ local function _PCM_BeginTransition(owner, invalidateClassSpellCache)
   owner:ClearSavedSpellKnownCache()
 
   PCMTransitionFlushFrame:Hide()
-  _PCM_QueueTransitionFlush()
+  if not PCMRuntime:IsDataRestricted() then
+    _PCM_QueueTransitionFlush()
+  end
 end
 
 _PCM_RunHardViewerTransition = function(owner, invalidateClassSpellCache)
@@ -805,6 +808,7 @@ local function _PCM_ReconcileRuntimeViewers(owner)
 
   ns.PCMAbilityCatalog:Invalidate("transition-finalize")
   ns.PCMAbilityCatalog:Refresh()
+  owner:_RequestViewerRefresh("all")
   ns.PCMAbilityRuntime:Flush()
   ns.PCMAuraRuntime:Flush()
 
@@ -842,9 +846,8 @@ local function _PCM_FinalizeTransition(token)
   PCMTransitionState.Owner = nil
   PCMTransitionState.InvalidateClassSpellCache = false
 
-  owner:_FlushViewerRefreshImmediate("all")
   ns.Modules.PCM_BB.RefreshAfterTalentSwap()
-  owner:SpellBars_RefreshAfterTalentSwap()
+  owner:SpellBars_ReconcileAvailability()
   owner:CooldownStackBars_RefreshAfterTalentSwap()
   ns.PCM_RefreshCustomBarsOptionsAfterSpecializationChange()
   owner.RefreshKeybinds(nil)
@@ -991,7 +994,7 @@ _ForceAnchor = function(frame, key)
 end
 
 function Cooldowns:_OnDataRestrictionsCleared()
-  if InCombatLockdown() and not PCMRuntime:IsInitializing() then
+  if InCombatLockdown() then
     return
   end
 
@@ -1891,7 +1894,7 @@ function Cooldowns:_ReconcileCustomTrackerStartupAvailability()
     return
   end
 
-  if InCombatLockdown() and not PCMRuntime:IsInitializing() then
+  if InCombatLockdown() then
     self.__puiPCMCustomTrackerStartupPending = true
     return
   end
@@ -1899,7 +1902,7 @@ function Cooldowns:_ReconcileCustomTrackerStartupAvailability()
   self.__puiPCMCustomTrackerStartupPending = nil
 
   self:ClearSavedSpellKnownCache()
-  self:SpellBars_RefreshAfterTalentSwap()
+  self:SpellBars_ReconcileAvailability()
   self:CooldownStackBars_RefreshAfterTalentSwap()
   ns.Modules.PCM_BB.RefreshAfterTalentSwap()
   ns.PCM_RefreshCustomBarsOptionsAfterSpecializationChange()
@@ -1990,12 +1993,13 @@ local function _PCM_RuntimeLifecycleEvent(event, ...)
     end
   elseif event == "PLAYER_SPECIALIZATION_CHANGED" then
     Cooldowns:_OnPlayerSpecializationChanged(event, arg1)
+  elseif event == "COOLDOWN_VIEWER_SPELL_OVERRIDE_UPDATED" then
+    ns.PCMAuraRuntime:ApplySpellOverride(arg1, arg2)
   elseif event == "ACTIVE_PLAYER_SPECIALIZATION_CHANGED"
     or event == "ACTIVE_COMBAT_CONFIG_CHANGED"
     or event == "PLAYER_TALENT_UPDATE"
     or event == "PLAYER_PVP_TALENT_UPDATE"
     or event == "ACTIVE_TALENT_GROUP_CHANGED"
-    or event == "COOLDOWN_VIEWER_SPELL_OVERRIDE_UPDATED"
     or event == "PLAYER_EQUIPMENT_CHANGED"
   then
     _PCM_BeginTransition(Cooldowns, true)

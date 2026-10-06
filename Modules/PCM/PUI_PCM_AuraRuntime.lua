@@ -13,9 +13,11 @@ local PCMPresentation = ns.PCMPresentation
 
 local CreateFrame = CreateFrame
 local UIParent = UIParent
+local C_Spell = C_Spell
 local ipairs = ipairs
 local pairs = pairs
 local type = type
+local issecretvalue = issecretvalue
 
 local BUFF_ICON_VIEWER = "BuffIconCooldownViewer"
 local BUFF_BAR_VIEWER = "BuffBarCooldownViewer"
@@ -80,10 +82,17 @@ local function ScheduleFlush()
   end
 end
 
-local function BuildCandidates(entry)
+local function BuildCandidates(record)
   local spellIDs = {}
+  local entry = record.entry
   for index = 1, #(entry.identitySpellIDs or {}) do
-    spellIDs[entry.identitySpellIDs[index]] = true
+    local spellID = entry.identitySpellIDs[index]
+    if not record.runtimeOverrideKnown or spellID ~= entry.overrideSpellID then
+      spellIDs[spellID] = true
+    end
+  end
+  if record.runtimeOverrideSpellID then
+    spellIDs[record.runtimeOverrideSpellID] = true
   end
   return spellIDs
 end
@@ -218,7 +227,7 @@ local function ConfigureRecordSlots(record)
     return
   end
 
-  local candidates = BuildCandidates(record.entry)
+  local candidates = BuildCandidates(record)
   local units = record.entry.playerAuraOnly and PLAYER_AURA_UNITS or AURA_UNITS
   for _, unit in ipairs(units) do
     local handle = record.slots[unit]
@@ -254,7 +263,10 @@ local function ApplyRecordAppearance(record)
     local style = GetIconStyle(record)
     record.collapseWhenInactive = style.hideWhenInactive == true
     PCMPresentation.ApplyOwnedAuraIconStyle(record.parts, style)
-    PCMPresentation.SetStaticIcon(record.parts, record.entry.texture)
+    PCMPresentation.SetStaticIcon(
+      record.parts,
+      record.runtimeTexture or record.entry.texture
+    )
     record.parts.frame:SetAlpha(style.hideWhenInactive and 0 or 1)
     for unit, button in pairs(record.buttons) do
       ConfigureIconButton(record, button, unit, false)
@@ -272,7 +284,7 @@ local function ApplyRecordAppearance(record)
       style.backgroundColor[4] or style.backgroundColor.a or 0.95
     )
     record.parts.frame:SetAlpha(style.hideWhenInactive and 0 or 1)
-    record.placeholderLabel:SetText(record.entry.name or "")
+    record.placeholderLabel:SetText(record.runtimeName or record.entry.name or "")
     record.placeholderLabel:SetShown(style.orientation ~= "VERTICAL")
   end
   record.appearancePending = nil
@@ -283,6 +295,10 @@ local function CreateRecord(viewer, entry, preparedOnly)
   if record then
     retiredRecords[viewer.key][entry.cooldownID] = nil
     record.entry = entry
+    record.runtimeOverrideKnown = false
+    record.runtimeOverrideSpellID = entry.overrideSpellID
+    record.runtimeName = nil
+    record.runtimeTexture = nil
     viewer.records[entry.cooldownID] = record
     if not preparedOnly then
       ConfigureRecordSlots(record)
@@ -297,6 +313,10 @@ local function CreateRecord(viewer, entry, preparedOnly)
     cooldownID = entry.cooldownID,
     viewerKey = viewer.key,
     entry = entry,
+    runtimeOverrideKnown = false,
+    runtimeOverrideSpellID = entry.overrideSpellID,
+    runtimeName = nil,
+    runtimeTexture = nil,
     buttons = {},
     slots = {},
     boundsAssistants = {},
@@ -373,6 +393,10 @@ local function ReconcileViewer(viewer, entries, generation, restricted)
         deferred = true
       else
         record.entry = entry
+        record.runtimeOverrideKnown = false
+        record.runtimeOverrideSpellID = entry.overrideSpellID
+        record.runtimeName = nil
+        record.runtimeTexture = nil
         if not configurationMatches then
           ConfigureRecordSlots(record)
         end
@@ -455,6 +479,11 @@ end
 function AuraRuntime:GetViewerFrame(viewerKey)
   local viewer = GetViewer(viewerKey)
   return viewer and viewer.frame or nil
+end
+
+function AuraRuntime:GetViewerStyle(viewerKey)
+  local viewer = GetViewer(viewerKey)
+  return viewer and viewer.style or nil
 end
 
 function AuraRuntime:GetOrderedRecords(viewerKey)
@@ -643,6 +672,52 @@ function AuraRuntime:RefreshRecordLayoutBounds(record)
   layoutFrame:SetIgnoringChildrenForBounds(true)
 end
 
+function AuraRuntime:ApplySpellOverride(baseSpellID, overrideSpellID)
+  if issecretvalue(baseSpellID) or type(baseSpellID) ~= "number" then
+    return
+  end
+  if overrideSpellID ~= nil
+    and (issecretvalue(overrideSpellID) or type(overrideSpellID) ~= "number" or overrideSpellID <= 0)
+  then
+    return
+  end
+
+  local runtimeName
+  local runtimeTexture
+  if overrideSpellID then
+    local name = C_Spell.GetSpellName(overrideSpellID)
+    if not issecretvalue(name) and type(name) == "string" and name ~= "" then
+      runtimeName = name
+    end
+    local texture = C_Spell.GetSpellTexture(overrideSpellID)
+    if not issecretvalue(texture)
+      and (type(texture) == "number" or type(texture) == "string")
+    then
+      runtimeTexture = texture
+    end
+  end
+
+  for _, viewer in pairs(viewers) do
+    for _, record in ipairs(viewer.orderedRecords) do
+      if record.entry.baseSpellID == baseSpellID then
+        record.runtimeOverrideKnown = true
+        record.runtimeOverrideSpellID = overrideSpellID
+        record.runtimeName = runtimeName
+        record.runtimeTexture = runtimeTexture
+        ConfigureRecordSlots(record)
+        if record.viewerKey == BUFF_ICON_VIEWER then
+          PCMPresentation.SetStaticIcon(
+            record.parts,
+            record.runtimeTexture or record.entry.texture
+          )
+        else
+          record.placeholderLabel:SetText(record.runtimeName or record.entry.name or "")
+        end
+      end
+    end
+  end
+end
+
 function AuraRuntime:OnCatalogChanged(generation)
   pendingCatalog = true
   ScheduleFlush()
@@ -822,6 +897,7 @@ end)
 local P = select(1, ns.Pleebug:DropIn(AuraRuntime, { name = "PCM", bucket = "AuraRuntime" }))
 AuraRuntime.InitializeViewer = P:Def("AuraRuntime:InitializeViewer", AuraRuntime.InitializeViewer)
 AuraRuntime.GetViewerFrame = P:Def("AuraRuntime:GetViewerFrame", AuraRuntime.GetViewerFrame)
+AuraRuntime.GetViewerStyle = P:Def("AuraRuntime:GetViewerStyle", AuraRuntime.GetViewerStyle)
 AuraRuntime.GetOrderedRecords = P:Def("AuraRuntime:GetOrderedRecords", AuraRuntime.GetOrderedRecords)
 AuraRuntime.SetGroupLayoutEnabled = P:Def("AuraRuntime:SetGroupLayoutEnabled", AuraRuntime.SetGroupLayoutEnabled)
 AuraRuntime.SetGroupLayoutReady = P:Def("AuraRuntime:SetGroupLayoutReady", AuraRuntime.SetGroupLayoutReady)
@@ -835,6 +911,7 @@ AuraRuntime.UsesCollapsedLayout = P:Def("AuraRuntime:UsesCollapsedLayout", AuraR
 AuraRuntime.PrepareRecordLayout = P:Def("AuraRuntime:PrepareRecordLayout", AuraRuntime.PrepareRecordLayout)
 AuraRuntime.FinalizeRecordLayout = P:Def("AuraRuntime:FinalizeRecordLayout", AuraRuntime.FinalizeRecordLayout)
 AuraRuntime.RefreshRecordLayoutBounds = P:Def("AuraRuntime:RefreshRecordLayoutBounds", AuraRuntime.RefreshRecordLayoutBounds)
+AuraRuntime.ApplySpellOverride = P:Def("AuraRuntime:ApplySpellOverride", AuraRuntime.ApplySpellOverride)
 AuraRuntime.OnCatalogChanged = P:Def("AuraRuntime:OnCatalogChanged", AuraRuntime.OnCatalogChanged)
 AuraRuntime.Flush = P:Def("AuraRuntime:Flush", AuraRuntime.Flush)
 AuraRuntime.Enable = P:Def("AuraRuntime:Enable", AuraRuntime.Enable)
