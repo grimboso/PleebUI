@@ -792,8 +792,9 @@ function AuraWidget.ConfigureApplicationThresholdSource(parts, slot, spellIDs, c
   RefreshApplicationThresholdSource(parts)
 end
 
-function AuraWidget.HasApplicationThresholdSources()
-  return next(applicationThresholdSources) ~= nil
+function AuraWidget.RequiresNativeCDM()
+  return not USE_NATIVE_APPLICATION_THRESHOLDS
+    and next(applicationThresholdSources) ~= nil
 end
 
 QueueApplicationThresholdRefresh = function()
