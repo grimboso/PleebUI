@@ -3272,6 +3272,20 @@ local function _PCM_BuildBuffBarsTabArgs()
   local args = {}
   local viewerKey = "BuffBarCooldownViewer"
 
+  args.showName = {
+    type = "toggle",
+    name = "Show spell name",
+    desc = "Show spell names inside horizontal buff bars.",
+    order = 7,
+    get = function()
+      return ns.PCM_DBExports.GetStyleDB().buffBar.showName == true
+    end,
+    set = function(_, enabled)
+      ns.PCM_DBExports.GetStyleDB().buffBar.showName = enabled == true
+      ns.Modules.PCM_BuffBars:RefreshSettings()
+    end,
+  }
+
   args.help = {
     type = "description",
     name = "Buff bar (tracked buffs)",
@@ -3706,6 +3720,7 @@ local function _PCM_BuildBuffBarsTabArgs()
       args = {
         showTooltips = args.showTooltips,
         hideWhenInactive = args.hideWhenInactive,
+        showName = args.showName,
         iconPlacement = args.iconPlacement,
         useClassColor = args.useClassColor,
       },
