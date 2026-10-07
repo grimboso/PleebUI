@@ -8,6 +8,8 @@ local table_sort = table.sort
 
 local USE_NATIVE_APPLICATION_THRESHOLDS = select(4, GetBuildInfo()) >= 120105
 local applicationThresholdSources = {}
+local applicationThresholdSourceIndex = {}
+local applicationThresholdPolicyDirty = false
 local applicationThresholdFrames = setmetatable({}, { __mode = "k" })
 local applicationThresholdViewers = setmetatable({}, { __mode = "k" })
 local applicationThresholdPending = {}
@@ -156,7 +158,7 @@ end
 
 local function FeedApplicationThresholds(parts, value)
   local overlays = parts.applicationThresholds
-  local count = parts.applicationThresholdCount or 0
+  local count = math.min(parts.applicationThresholdCount or 0, #overlays)
 
   for index = 1, count do
     local overlay = overlays[index]
@@ -200,20 +202,34 @@ local function EnsureApplicationThresholdOverlay(parts, index)
   end
 
   local applicationBar = parts.applicationBar
-  -- Native aura fill anchors require opting out of untrusted layout scripts.
+  local parent = parts.applicationThresholdParent or applicationBar
   overlay = CreateFrame(
     "StatusBar",
     nil,
-    parts.applicationThresholdParent or applicationBar,
+    parent,
     "DisableUntrustedLayoutScriptsTemplate"
   )
   local config = parts.applicationThresholdConfiguration
-  overlay:SetAllPoints(config and config.anchor or applicationBar:GetStatusBarTexture())
+  overlay:SetAllPoints(parts.button and parent or applicationBar:GetStatusBarTexture())
   overlay:SetFrameLevel((config and config.frameLevel or applicationBar:GetFrameLevel()) + index)
   overlay:SetStatusBarTexture("Interface\\Buttons\\WHITE8X8")
   overlay:SetMinMaxValues(0, 1)
   overlay:SetValue(0)
   overlay:Hide()
+
+  if parts.button then
+    -- Keep the value gate independent of the restricted native fill geometry.
+    overlay:SetStatusBarColor(1, 1, 1, 0)
+    overlay.applicationThresholdTexture = overlay:CreateTexture(nil, "ARTWORK")
+    overlay.applicationThresholdMask = overlay:CreateMaskTexture()
+    overlay.applicationThresholdMask:SetTexture(
+      "Interface\\Buttons\\WHITE8X8",
+      "CLAMPTOBLACKADDITIVE",
+      "CLAMPTOBLACKADDITIVE",
+      "NEAREST"
+    )
+    overlay.applicationThresholdTexture:AddMaskTexture(overlay.applicationThresholdMask)
+  end
 
   overlays[index] = overlay
   return overlay
@@ -233,19 +249,35 @@ local function ConfigureApplicationThresholdOverlay(
   local thresholdValue = tonumber(threshold.value) or 1
   local r, g, b, a = ResolveStackColorThresholdColor(threshold, classColor)
 
-  overlay:SetStatusBarTexture(texturePath or "Interface\\Buttons\\WHITE8X8")
   overlay:SetOrientation(orientation or "HORIZONTAL")
   overlay:SetReverseFill(reverseFill == true)
 
-  local texture = overlay:GetStatusBarTexture()
+  local config = parts.applicationThresholdConfiguration
+  local texture
+  if parts.button then
+    texture = overlay.applicationThresholdTexture
+    texture:SetTexture(texturePath or "Interface\\Buttons\\WHITE8X8")
+    texture:ClearAllPoints()
+    texture:SetAllPoints(config.anchor)
+
+    local mask = overlay.applicationThresholdMask
+    mask:SetSize(parts.applicationThresholdParent:GetSize())
+    mask:ClearAllPoints()
+    local edge = orientation == "VERTICAL"
+      and (reverseFill == true and "BOTTOM" or "TOP")
+      or (reverseFill == true and "LEFT" or "RIGHT")
+    mask:SetPoint(edge, overlay:GetStatusBarTexture(), edge)
+  else
+    overlay:SetStatusBarTexture(texturePath or "Interface\\Buttons\\WHITE8X8")
+    texture = overlay:GetStatusBarTexture()
+  end
   texture:SetVertexColor(r, g, b, a)
   texture:SetDrawLayer("ARTWORK", 0)
 
-  local config = parts.applicationThresholdConfiguration
   overlay:SetAlpha(config and config.alpha or 1)
   overlay:SetFrameLevel((config and config.frameLevel or applicationBar:GetFrameLevel()) + thresholdIndex)
   overlay:ClearAllPoints()
-  overlay:SetAllPoints(config and config.anchor or applicationBar:GetStatusBarTexture())
+  overlay:SetAllPoints(parts.button and parts.applicationThresholdParent or applicationBar:GetStatusBarTexture())
   overlay:SetMinMaxValues(thresholdValue - 1, thresholdValue)
   -- CDM suppresses zero/one-stack text; the native fill anchors this constant layer.
   overlay.applicationThresholdValue = thresholdValue
@@ -281,11 +313,52 @@ function AuraWidget.ConfigureApplicationThresholds(
   maximum = math.floor((tonumber(maximum) or 1) + 0.5)
   maximum = math.max(1, maximum)
 
+  local config = parts.applicationThresholdConfiguration
+  local anchor = parts.button and parts.applicationBar:GetStatusBarTexture()
+  local frameLevel = parts.button and parts.applicationBar:GetFrameLevel()
+  local alpha = parts.applicationThresholdAlpha or 1
+  local inputCount = type(thresholds) == "table" and #thresholds or 0
+  if parts.button and config
+    and config.texturePath == texturePath
+    and config.orientation == orientation
+    and config.reverseFill == reverseFill
+    and config.maximum == maximum
+    and config.anchor == anchor
+    and config.frameLevel == frameLevel
+    and config.alpha == alpha
+    and #config.inputs == inputCount
+  then
+    local matches = true
+    for index = 1, inputCount do
+      local threshold = thresholds[index]
+      local input = config.inputs[index]
+      local r, g, b, a = ResolveStackColorThresholdColor(threshold, classColor)
+      if input.enabled ~= threshold.enabled
+        or input.value ~= tonumber(threshold.value)
+        or input.r ~= r or input.g ~= g or input.b ~= b or input.a ~= a
+      then
+        matches = false
+        break
+      end
+    end
+    if matches then
+      return
+    end
+  end
+
   local active = {}
+  local inputs = parts.button and {}
   if type(thresholds) == "table" then
     for index = 1, #thresholds do
       local threshold = thresholds[index]
       local value = threshold and tonumber(threshold.value)
+      if inputs then
+        local r, g, b, a = ResolveStackColorThresholdColor(threshold, classColor)
+        inputs[index] = {
+          enabled = threshold.enabled, value = value,
+          r = r, g = g, b = b, a = a,
+        }
+      end
 
       if threshold
         and threshold.enabled == true
@@ -293,7 +366,15 @@ function AuraWidget.ConfigureApplicationThresholds(
         and value >= 1
         and value <= maximum
       then
-        active[#active + 1] = threshold
+        if inputs then
+          local input = inputs[index]
+          active[#active + 1] = {
+            value = value,
+            color = { input.r, input.g, input.b, input.a },
+          }
+        else
+          active[#active + 1] = threshold
+        end
       end
     end
   end
@@ -305,14 +386,15 @@ function AuraWidget.ConfigureApplicationThresholds(
   if parts.button then
     parts.applicationThresholdConfiguration = {
       thresholds = active,
+      inputs = inputs,
       texturePath = texturePath,
       orientation = orientation,
       reverseFill = reverseFill,
       classColor = classColor,
       maximum = maximum,
-      anchor = parts.applicationBar:GetStatusBarTexture(),
-      frameLevel = parts.applicationBar:GetFrameLevel(),
-      alpha = parts.applicationThresholdAlpha or 1,
+      anchor = anchor,
+      frameLevel = frameLevel,
+      alpha = alpha,
     }
     parts.applicationThresholdCount = #active
     parts.applicationThresholdLayerCount = #active
@@ -364,6 +446,23 @@ local function ApplicationThresholdDataRestricted()
   return InCombatLockdown()
     or C_Secrets.ShouldAurasBeSecret()
     or C_Secrets.ShouldCooldownsBeSecret()
+end
+
+local function RemoveApplicationThresholdIndex(parts, source)
+  local cooldownID = source.indexedCooldownID
+  if cooldownID == nil then
+    return
+  end
+  local units = applicationThresholdSourceIndex[cooldownID]
+  local sources = units[source.slot.unit]
+  sources[parts] = nil
+  if not next(sources) then
+    units[source.slot.unit] = nil
+  end
+  if not next(units) then
+    applicationThresholdSourceIndex[cooldownID] = nil
+  end
+  source.indexedCooldownID = nil
 end
 
 local function ClearApplicationThresholdFrame(frame)
@@ -419,7 +518,12 @@ local function FeedApplicationThresholdFrame(frame, value)
     end
   end
 
-  for parts, source in pairs(applicationThresholdSources) do
+  local units = applicationThresholdSourceIndex[cooldownID]
+  local sources = units and units[unit]
+  if not sources then
+    return
+  end
+  for parts, source in pairs(sources) do
     if source.cooldownID ~= nil
       and source.cooldownID == cooldownID
       and source.slot.unit == unit
@@ -450,7 +554,11 @@ end
 local function RefreshApplicationThresholdViewer(viewer)
   for frame in viewer.itemFramePool:EnumerateActive() do
     HookApplicationThresholdFrame(frame)
-    FeedApplicationThresholdFrame(frame, frame:GetApplicationsFontString():GetText())
+    local text = frame:GetApplicationsFontString():GetText()
+    -- GetText returns a secret string, unlike Blizzard's numeric SetText input.
+    if not issecretvalue(text) then
+      FeedApplicationThresholdFrame(frame, text)
+    end
   end
 end
 
@@ -517,7 +625,7 @@ local function ConfigureNativeApplicationThreshold(parts, source, index)
   end
 end
 
-function AuraWidget.SetApplicationThresholdActive(parts, active)
+function AuraWidget.SetApplicationThresholdActive(parts, active, presentationChanged)
   local source = parts.applicationThresholdSource
   local config = parts.applicationThresholdConfiguration
   active = active == true
@@ -525,13 +633,25 @@ function AuraWidget.SetApplicationThresholdActive(parts, active)
     and #config.thresholds > 0
     and parts.applicationThresholdParent:IsShown()
 
+  if source.active == active and not presentationChanged then
+    return
+  end
+
   if USE_NATIVE_APPLICATION_THRESHOLDS then
     for index = 1, #source.gates do
       ns.AuraSlotDriver:SetSlotActive(source.gates[index].slot, active and index <= (parts.applicationThresholdCount or 0))
     end
   else
+    local width, height
+    if active then
+      width, height = parts.applicationThresholdParent:GetSize()
+    end
     for index = 1, #parts.applicationThresholds do
-      parts.applicationThresholds[index]:SetShown(active and index <= (parts.applicationThresholdCount or 0))
+      local overlay = parts.applicationThresholds[index]
+      overlay:SetShown(active and index <= (parts.applicationThresholdCount or 0))
+      if active then
+        overlay.applicationThresholdMask:SetSize(width, height)
+      end
     end
     if not active then
       source.frame = nil
@@ -543,7 +663,16 @@ function AuraWidget.SetApplicationThresholdActive(parts, active)
     return
   end
   source.active = active
+  local hadSources = next(applicationThresholdSources) ~= nil
   applicationThresholdSources[parts] = active and source or nil
+  if active then
+    source.identityDirty = true
+  else
+    RemoveApplicationThresholdIndex(parts, source)
+  end
+  if hadSources ~= (next(applicationThresholdSources) ~= nil) then
+    applicationThresholdPolicyDirty = true
+  end
   QueueApplicationThresholdRefresh()
 end
 
@@ -555,9 +684,14 @@ RefreshApplicationThresholdSource = function(parts)
     return
   end
 
-  if USE_NATIVE_APPLICATION_THRESHOLDS and ApplicationThresholdDataRestricted() then
-    applicationThresholdPending[parts] = true
+  if source.appliedConfiguration == config and not source.presentationDirty then
     AuraWidget.SetApplicationThresholdActive(parts, source.slot.active)
+    return
+  end
+
+  if ApplicationThresholdDataRestricted() then
+    applicationThresholdPending[parts] = true
+    AuraWidget.SetApplicationThresholdActive(parts, source.slot.active, true)
     QueueApplicationThresholdRefresh()
     return
   end
@@ -584,7 +718,9 @@ RefreshApplicationThresholdSource = function(parts)
       parts.applicationThresholds[index]:Hide()
     end
   end
-  AuraWidget.SetApplicationThresholdActive(parts, source.slot.active)
+  source.appliedConfiguration = config
+  source.presentationDirty = nil
+  AuraWidget.SetApplicationThresholdActive(parts, source.slot.active, true)
   QueueApplicationThresholdRefresh()
 end
 
@@ -609,6 +745,17 @@ function AuraWidget.ConfigureApplicationThresholdSource(parts, slot, spellIDs, c
           AuraWidget.SetApplicationThresholdActive(ownedParts, false)
         end
       end)
+      if not USE_NATIVE_APPLICATION_THRESHOLDS then
+        parent:HookScript("OnSizeChanged", function(_, width, height)
+          for ownedParts in pairs(sources) do
+            if ownedParts.applicationThresholdSource.active then
+              for _, overlay in ipairs(ownedParts.applicationThresholds) do
+                overlay.applicationThresholdMask:SetSize(width, height)
+              end
+            end
+          end
+        end)
+      end
       if USE_NATIVE_APPLICATION_THRESHOLDS then
         hooksecurefunc(parent, "SetAlpha", function()
           for ownedParts in pairs(sources) do
@@ -625,8 +772,23 @@ function AuraWidget.ConfigureApplicationThresholdSource(parts, slot, spellIDs, c
     end
     sources[parts] = true
   end
-  source.spellIDs = spellIDs
-  source.requestedCooldownID = cooldownID
+  if source.spellIDs ~= spellIDs
+    or source.requestedCooldownID ~= cooldownID
+    or source.filter ~= slot.filter
+  then
+    RemoveApplicationThresholdIndex(parts, source)
+    if source.frame then
+      applicationThresholdFrames[source.frame].sources[parts] = nil
+      source.frame = nil
+      FeedApplicationThresholds(parts, 0)
+    end
+    source.spellIDs = spellIDs
+    source.requestedCooldownID = cooldownID
+    source.filter = slot.filter
+    source.identityDirty = true
+    source.presentationDirty = true
+    QueueApplicationThresholdRefresh()
+  end
   RefreshApplicationThresholdSource(parts)
 end
 
@@ -652,6 +814,14 @@ applicationThresholdWork:SetScript("OnEvent", function(_, event, arg1)
   then
     return
   end
+  if event == "ADDON_LOADED" or event == "PLAYER_ENTERING_WORLD" or event == "CVAR_UPDATE" then
+    applicationThresholdPolicyDirty = true
+  end
+  if event ~= "PLAYER_REGEN_ENABLED" and event ~= "ADDON_RESTRICTION_STATE_CHANGED" then
+    for _, source in pairs(applicationThresholdSources) do
+      source.identityDirty = true
+    end
+  end
   applicationThresholdWork:Show()
 end)
 
@@ -664,25 +834,53 @@ applicationThresholdWork:SetScript("OnUpdate", function(frame)
   for parts in pairs(applicationThresholdPending) do
     RefreshApplicationThresholdSource(parts)
   end
+  frame:Hide()
 
   if not USE_NATIVE_APPLICATION_THRESHOLDS then
     for parts, source in pairs(applicationThresholdSources) do
-      local cooldownID
-      for spellID in pairs(source.spellIDs) do
-        cooldownID = ns.Modules.CooldownManager:ResolveCustomBarAuraEntry(spellID, source.requestedCooldownID)
-        if cooldownID then
-          break
+      if source.identityDirty then
+        local cooldownID
+        for spellID in pairs(source.spellIDs) do
+          cooldownID = ns.Modules.CooldownManager:ResolveCustomBarAuraEntry(
+            spellID, source.requestedCooldownID or source.cooldownID, false
+          )
+          if cooldownID then
+            break
+          end
+        end
+        if source.cooldownID ~= cooldownID then
+          source.frame = nil
+          FeedApplicationThresholds(parts, 0)
+        end
+        source.cooldownID = cooldownID
+        source.identityDirty = nil
+        if source.indexedCooldownID ~= cooldownID then
+          RemoveApplicationThresholdIndex(parts, source)
+          if cooldownID ~= nil then
+            local units = applicationThresholdSourceIndex[cooldownID]
+            if not units then
+              units = {}
+              applicationThresholdSourceIndex[cooldownID] = units
+            end
+            local sources = units[source.slot.unit]
+            if not sources then
+              sources = {}
+              units[source.slot.unit] = sources
+            end
+            sources[parts] = source
+            source.indexedCooldownID = cooldownID
+          end
         end
       end
-      if source.cooldownID ~= cooldownID then
-        source.frame = nil
-        FeedApplicationThresholds(parts, 0)
-      end
-      source.cooldownID = cooldownID
     end
   end
 
-  ns.PCM_ReconcileNativeCDM()
+  if applicationThresholdPolicyDirty then
+    applicationThresholdPolicyDirty = false
+    if ns.PCM_ReconcileNativeCDM() == nil then
+      applicationThresholdPolicyDirty = true
+    end
+  end
   if not USE_NATIVE_APPLICATION_THRESHOLDS and next(applicationThresholdSources) then
     RefreshApplicationThresholdFrames()
   end
@@ -1345,6 +1543,9 @@ AuraWidget.RemoveStackColorThreshold = P:Def(
 ResolveStackColorThresholdColor = P:Def(
   "AuraWidget.ResolveStackColorThresholdColor",
   ResolveStackColorThresholdColor
+)
+RemoveApplicationThresholdIndex = P:Def(
+  "AuraWidget.RemoveApplicationThresholdIndex", RemoveApplicationThresholdIndex
 )
 FeedApplicationThresholds = P:Def(
   "AuraWidget.FeedApplicationThresholds",
