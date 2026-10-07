@@ -2160,7 +2160,29 @@ local function _PCM_GetCustomBarInfoSpellSet(info)
   return spellSet
 end
 
-function Cooldowns:ResolveCustomBarAuraEntry(wantedSpellID, cachedCooldownID)
+local function _PCM_CustomBarSpellMatches(spellID, wantedSpellID)
+  return not _PCM_IsSecret(spellID) and tonumber(spellID) == wantedSpellID
+end
+
+local function _PCM_CustomBarInfoMatchesSpell(info, wantedSpellID)
+  if _PCM_CustomBarSpellMatches(info.spellID, wantedSpellID)
+    or _PCM_CustomBarSpellMatches(info.overrideSpellID, wantedSpellID)
+    or _PCM_CustomBarSpellMatches(info.overrideTooltipSpellID, wantedSpellID)
+  then
+    return true
+  end
+  local linkedSpellIDs = info.linkedSpellIDs
+  if not _PCM_IsSecret(linkedSpellIDs) and type(linkedSpellIDs) == "table" then
+    for index = 1, #linkedSpellIDs do
+      if _PCM_CustomBarSpellMatches(linkedSpellIDs[index], wantedSpellID) then
+        return true
+      end
+    end
+  end
+  return false
+end
+
+function Cooldowns:ResolveCustomBarAuraEntry(wantedSpellID, cachedCooldownID, includeSpellSet)
   if wantedSpellID == nil or _PCM_IsSecret(wantedSpellID) then
     return nil, nil
   end
@@ -2175,9 +2197,9 @@ function Cooldowns:ResolveCustomBarAuraEntry(wantedSpellID, cachedCooldownID)
     if cachedCooldownID and cachedCooldownID > 0 then
       local info = C_CooldownViewer.GetCooldownViewerCooldownInfo(cachedCooldownID)
       if not _PCM_IsSecret(info) and type(info) == "table" then
-        local spellSet = _PCM_GetCustomBarInfoSpellSet(info)
-        if spellSet[wantedSpellID] then
-          return cachedCooldownID, spellSet
+        if _PCM_CustomBarInfoMatchesSpell(info, wantedSpellID) then
+          return cachedCooldownID,
+            includeSpellSet ~= false and _PCM_GetCustomBarInfoSpellSet(info) or nil
         end
       end
     end
@@ -2201,9 +2223,9 @@ function Cooldowns:ResolveCustomBarAuraEntry(wantedSpellID, cachedCooldownID)
       then
         local info = C_CooldownViewer.GetCooldownViewerCooldownInfo(cooldownID)
         if not _PCM_IsSecret(info) and type(info) == "table" then
-          local spellSet = _PCM_GetCustomBarInfoSpellSet(info)
-          if spellSet[wantedSpellID] then
-            return cooldownID, spellSet
+          if _PCM_CustomBarInfoMatchesSpell(info, wantedSpellID) then
+            return cooldownID,
+              includeSpellSet ~= false and _PCM_GetCustomBarInfoSpellSet(info) or nil
           end
         end
       end
@@ -2321,6 +2343,8 @@ end
   _PCM_QueueTransitionFlush = P:Def('_PCM_QueueTransitionFlush', _PCM_QueueTransitionFlush)
   _PCM_AddCustomBarSpellID = P:Def('_PCM_AddCustomBarSpellID', _PCM_AddCustomBarSpellID)
   _PCM_GetCustomBarInfoSpellSet = P:Def('_PCM_GetCustomBarInfoSpellSet', _PCM_GetCustomBarInfoSpellSet)
+  _PCM_CustomBarSpellMatches = P:Def('_PCM_CustomBarSpellMatches', _PCM_CustomBarSpellMatches)
+  _PCM_CustomBarInfoMatchesSpell = P:Def('_PCM_CustomBarInfoMatchesSpell', _PCM_CustomBarInfoMatchesSpell)
   Cooldowns.ResolveCustomBarAuraEntry = P:Def('Cooldowns:ResolveCustomBarAuraEntry', Cooldowns.ResolveCustomBarAuraEntry)
   _EnsureViewerDurationCount = P:Def('_EnsureViewerDurationCount', _EnsureViewerDurationCount)
   Cooldowns._RefreshViewerBordersOnly = P:Def('Cooldowns._RefreshViewerBordersOnly', Cooldowns._RefreshViewerBordersOnly)
