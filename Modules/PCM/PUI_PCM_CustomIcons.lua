@@ -337,8 +337,20 @@ BuildQuickSettings = function(record, moverFrame)
   end
 
   controls[#controls + 1] = {
+    type = "select",
+    label = "Timer display",
+    values = { AUTOMATIC = "Duration while active", COOLDOWN = "Cooldown only" },
+    sorting = { "AUTOMATIC", "COOLDOWN" },
+    get = function() return icon.activeAuraEnabled == true and "AUTOMATIC" or "COOLDOWN" end,
+    set = function(value)
+      icon.activeAuraEnabled = value == "AUTOMATIC"
+      RefreshStyle()
+    end,
+  }
+
+  controls[#controls + 1] = {
     type = "toggle",
-    label = "Show cooldown swipe",
+    label = "Show timer swipe",
     get = function() return icon.showSwipe == true end,
     set = function(value)
       icon.showSwipe = value == true
@@ -675,7 +687,8 @@ local function ResolveButtonAuraSpellIDs(record, cueOnly)
     return { [spellID] = true }
   end
 
-  local _, spellIDs = ns.Modules.CooldownManager:ResolveCustomBarAuraEntry(spellID)
+  local spellIDs = {}
+  ns.PCMCatalog:AddAuraCandidates(spellIDs, spellID)
   return spellIDs
 end
 
@@ -765,6 +778,7 @@ local function ConfigureActiveAuraTrack(record)
   end
 
   if not record.activeAuraSlot then
+    if ns.PCMRuntime:IsAuraRestricted() then return end
     record.activeAuraSlot = AuraSlotDriver:CreateSlot("player", "HELPFUL|PLAYER", {
       candidateFilters = { includeSpellIDs = spellIDs },
       templateNames = { "PUI_AuraApplicationDurationTemplate" },
@@ -838,6 +852,7 @@ local function ConfigureCueAuraTrack(record)
   end
 
   if not record.cueAuraSlot then
+    if ns.PCMRuntime:IsAuraRestricted() then return end
     record.cueAuraSlot = AuraSlotDriver:CreateSlot("player", "HELPFUL|PLAYER", {
       candidateFilters = { includeSpellIDs = spellIDs },
       templateNames = { "PUI_AuraApplicationDurationTemplate" },
@@ -1223,12 +1238,8 @@ function CustomIcons:FlushAuraStyles()
       if record.auraParts then
         ConfigureAuraParts(record, record.auraParts.button, record.auraParts)
       end
-      if record.activeAuraParts then
-        ConfigureActiveAuraParts(record, record.activeAuraParts.button, record.activeAuraParts)
-      end
-      if record.cueAuraParts then
-        ConfigureCueAuraParts(record, record.cueAuraParts.button, record.cueAuraParts, false)
-      end
+      ConfigureActiveAuraTrack(record)
+      ConfigureCueAuraTrack(record)
     end
   end
 end
@@ -1263,6 +1274,15 @@ function CustomIcons:Delete(key)
   FrameUtil:UnregisterMover(record.moverKey)
   records[key] = nil
 end
+
+ns.PCMCatalog:RegisterListener(CustomIcons, function()
+  for _, record in pairs(records) do
+    if record.runtimeEnabled then
+      ConfigureActiveAuraTrack(record)
+      ConfigureCueAuraTrack(record)
+    end
+  end
+end)
 
 local P = select(1, ns.Pleebug:DropIn(CustomIcons, { name = "PCM", bucket = "CustomIcons" }))
 CustomIcons.Configure = P:Def("CustomIcons:Configure", CustomIcons.Configure)
