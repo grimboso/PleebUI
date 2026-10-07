@@ -364,7 +364,18 @@ local function ConfigureNativeButton(owner, track, button, initializing)
     engineBar:SetReverseFill(false)
     engineBar:SetStatusBarColor(r, g, b, a)
     engineBar:SetAlpha(1)
-    track.applicationThresholdTopFrameLevel = engineBar:GetFrameLevel()
+    parts.applicationThresholdParent = track.parent
+    AuraWidget.ConfigureApplicationThresholds(
+      parts,
+      track.config.stackColorThresholds,
+      texturePath,
+      "HORIZONTAL",
+      false,
+      PLAYER_CLASS_COLOR,
+      track.maximum
+    )
+    track.applicationThresholdTopFrameLevel =
+      engineBar:GetFrameLevel() + (parts.applicationThresholdLayerCount or 0)
     AttachNativeDividers(owner, track)
     AuraWidget.ConfigureApplicationBar(
       parts,
@@ -462,6 +473,11 @@ local function EnsureNativeTrack(owner, resource, view)
     track.candidateSpellIDs = spellSet
   end
 
+  AuraWidget.ConfigureApplicationThresholdSource(
+    track.parts,
+    track.auraSlot,
+    spellSet
+  )
   AuraSlotDriver:SetSlotActive(track.auraSlot, true)
   return track
 end
@@ -635,6 +651,7 @@ Secondary:RegisterAdapter("AURA_STACKS", {
   directUpdate = true,
   GetEvents = P:Def("AuraStacks.GetEvents", GetNativeEvents),
   Deactivate = P:Def("AuraStacks.Deactivate", DeactivateNative),
+  Suspend = DeactivateNative,
   RefreshText = P:Def("AuraStacks.RefreshText", RefreshNativeText),
   IsStructureReady = P:Def("AuraStacks.IsStructureReady", IsNativeStructureReady),
   Build = BuildNative,
