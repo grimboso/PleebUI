@@ -231,6 +231,42 @@ local function ResolveOwnedFont(record, role, viewerOptions, destination)
   return destination
 end
 
+local function ResolveOverride(value, inherited)
+  if value == nil then
+    return inherited
+  end
+  return value
+end
+
+function IconSettings:ResolveSwipeSettings(override, viewer, isBuff, destination)
+  override = override or {}
+  viewer = viewer or {}
+  local swipe = destination or {}
+  swipe.showCooldown = ResolveOverride(override.show, viewer.cooldown ~= false)
+  swipe.showGCD = ResolveOverride(override.showGCD, viewer.gcd ~= false)
+  swipe.showDuration = ResolveOverride(
+    override[isBuff and "show" or "showDuration"],
+    viewer.duration ~= false
+  )
+  local edge = ResolveOverride(override.drawEdge, viewer.drawEdge ~= false)
+  swipe.cooldownEdge = ResolveOverride(override.drawEdge, ResolveOverride(viewer.cooldownEdge, edge))
+  swipe.durationEdge = ResolveOverride(override.drawEdge, ResolveOverride(viewer.durationEdge, edge))
+  swipe.gcdEdge = ResolveOverride(override.drawEdge, ResolveOverride(viewer.gcdEdge, edge))
+  swipe.rechargeEdge = ResolveOverride(override.rechargeEdge, swipe.cooldownEdge)
+  local color = override.color or viewer.swipeColor or { 0, 0, 0, 0.8 }
+  swipe.cooldownColor = override.color or viewer.cooldownColor or color
+  swipe.durationColor = override.color or viewer.durationColor or color
+  swipe.gcdColor = override.color or viewer.gcdColor or color
+  swipe.reverse = override.reverse == true
+  swipe.durationReverse = ResolveOverride(override.reverse, true)
+  swipe.source = override.source
+  if swipe.source == nil then
+    swipe.source = viewer.forceCooldownSwipe == true and "COOLDOWN" or "AUTOMATIC"
+  end
+  swipe.desaturateCooldown = viewer.desaturateCooldown ~= false
+  return swipe
+end
+
 function IconSettings:ResolveOwnedStyle(entry, viewerKey, viewerStyle)
   local record = self:GetRecordForEntry(entry, false)
   local cached = ownedStyleCache[entry]
@@ -269,12 +305,17 @@ function IconSettings:ResolveOwnedStyle(entry, viewerKey, viewerStyle)
     style.keybindFont
   )
   style.appearance = record and record.appearance or nil
-  style.swipe = record and record.swipe or nil
   style.cooldown = record and record.cooldown or nil
   style.charge = record and record.charge or nil
-  style.viewerSwipe = viewerStyle.swipe
   style.viewerCounts = viewerStyle.counts
-  style.viewerDurationCount = viewerStyle.durationCount
+  local isBuff = viewerKey == "BuffIconCooldownViewer"
+  style.resolvedSwipe = self:ResolveSwipeSettings(record and record.swipe, viewerStyle.swipe, isBuff, style.resolvedSwipe)
+  style.showDurationText = ResolveOverride(
+    style.cooldown and style.cooldown[isBuff and "show" or "durationShow"],
+    viewerStyle.durationCount ~= false
+  )
+  style.useDurationDisplay = style.resolvedSwipe.source ~= "COOLDOWN"
+    and (style.resolvedSwipe.showDuration or style.showDurationText)
   style.tooltips = viewerStyle.tooltips
   style.hideWhenInactive = viewerStyle.hideWhenInactive == true
   style.procGlow = viewerStyle.procGlow
@@ -498,6 +539,7 @@ IconSettings.InvalidateCatalog = P:Def("IconSettings:InvalidateCatalog", IconSet
 IconSettings.InvalidateSettings = P:Def("IconSettings:InvalidateSettings", IconSettings.InvalidateSettings)
 IconSettings.GetViewerEntries = P:Def("IconSettings:GetViewerEntries", IconSettings.GetViewerEntries)
 IconSettings.GetRecordForEntry = P:Def("IconSettings:GetRecordForEntry", IconSettings.GetRecordForEntry)
+IconSettings.ResolveSwipeSettings = P:Def("IconSettings:ResolveSwipeSettings", IconSettings.ResolveSwipeSettings)
 IconSettings.ResolveOwnedStyle = P:Def("IconSettings:ResolveOwnedStyle", IconSettings.ResolveOwnedStyle)
 IconSettings.PrimeRuntimeCache = P:Def("IconSettings:PrimeRuntimeCache", IconSettings.PrimeRuntimeCache)
 IconSettings.HasShownTextOverride = P:Def("IconSettings:HasShownTextOverride", IconSettings.HasShownTextOverride)
