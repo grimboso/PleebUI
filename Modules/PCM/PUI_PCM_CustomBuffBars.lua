@@ -1452,6 +1452,7 @@ end
 
 function _customBarsAuraDriver:ApplyCombinedStyle(sub, f, cfg)
   local button = sub.button
+  sub.applicationThresholdParent = f
   local applicationsEnabled = sub.applicationsEnabled
   local textEnabled = cfg.showText ~= false
   local applicationTextEnabled = textEnabled
@@ -1601,7 +1602,8 @@ function _customBarsAuraDriver:ApplyCombinedStyle(sub, f, cfg)
       maxStacks = 1
     end
 
-    AuraWidget.ClearApplicationThresholdBar(sub)
+    sub.applicationThresholdAlpha = cfg.activeAuraEnabled == true
+      and (tonumber(cfg.activeAlpha) or 100) / 100 or 1
     engineBar:SetAlpha(1)
     local displayBar = engineBar
 
@@ -1997,6 +1999,9 @@ function _customBarsAuraDriver:CreateSlot(unit, filter, candidate, f, cfg, appli
       })
     end
 
+    AuraWidget.ConfigureApplicationThresholdSource(
+      sub, sub.auraSlot, candidate.spellIDs, candidate.cooldownID
+    )
     self:SetSlotAttached(sub, true)
 
     if self:IsButtonRestyleLocked() then
@@ -2030,6 +2035,9 @@ function _customBarsAuraDriver:CreateSlot(unit, filter, candidate, f, cfg, appli
     end,
   })
 
+  AuraWidget.ConfigureApplicationThresholdSource(
+    sub, sub.auraSlot, candidate.spellIDs, candidate.cooldownID
+  )
   self:SetSlotAttached(sub, true)
   return sub
 end
