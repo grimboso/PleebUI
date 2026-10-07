@@ -60,9 +60,17 @@ local function SetGroupNativeVisible(group, visible)
 end
 
 function NativeBridge:Refresh()
-  if not ns.PCM_IsModuleEnabledFast()
-    or not ns.PCM_DBExports.IsRendererMigrationComplete()
-  then
+  if not ns.PCM_IsModuleEnabledFast() then
+    self:Disable()
+    if ns.AuraWidget.HasApplicationThresholdSources() then
+      for index = 1, #GROUPS do
+        SetGroupNativeVisible(GROUPS[index], false)
+      end
+    end
+    return false
+  end
+
+  if not ns.PCM_DBExports.IsRendererMigrationComplete() then
     self:Disable()
     return false
   end
