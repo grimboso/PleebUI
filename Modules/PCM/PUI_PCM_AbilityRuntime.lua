@@ -350,12 +350,17 @@ local function BuildCandidateSet(record)
   if spellIDs then
     for _, spellID in ipairs(spellIDs) do
       if not record.runtimeOverrideKnown or spellID ~= entry.overrideSpellID then
-        includeSpellIDs[spellID] = true
+        ns.PCMCatalog:AddAuraCandidates(includeSpellIDs, spellID)
       end
     end
   end
   if record.runtimeSpellID then
-    includeSpellIDs[record.runtimeSpellID] = true
+    ns.PCMCatalog:AddAuraCandidates(includeSpellIDs, record.runtimeSpellID)
+  end
+  if record.runtimeOverrideKnown and entry.overrideSpellID
+    and entry.overrideSpellID ~= record.runtimeSpellID
+  then
+    includeSpellIDs[entry.overrideSpellID] = nil
   end
   return includeSpellIDs
 end
@@ -461,7 +466,6 @@ local function ConfigureAuraSlots(record)
   if not enabled
     or not presentationActive
     or verifiedTotemSlots[record.cooldownID]
-    or entry.hasAura ~= true
     or entry.hideAura == true
     or not style.useDurationDisplay
   then
