@@ -996,6 +996,7 @@ end
 local function ConfigureAuraParts(record, button, parts, initializing)
   local icon = record.icon
   AuraWidget.BindApplicationDurationButton(button, parts)
+  parts.applicationThresholdParent = record.parts.frame
   parts.durationCooldown:SetHideCountdownNumbers(true)
   parts.durationCooldown:SetReverse(true)
   parts.durationCooldown:SetSwipeColor(0, 0, 0, 0.72)
@@ -1078,6 +1079,7 @@ local function ConfigureAuraParts(record, button, parts, initializing)
       color.b or color[3] or 1,
       color.a or color[4] or 1
     )
+    parts.applicationThresholdAlpha = icon.activeAuraAlpha / 100
     AuraWidget.ConfigureApplicationThresholds(
       parts,
       record.cfg.stackColorThresholds,
@@ -1158,6 +1160,12 @@ function CustomIcons:ConfigureAura(key, cfg, options)
       ConfigureAuraParts(record, record.auraParts.button, record.auraParts)
     end
   end
+  AuraWidget.ConfigureApplicationThresholdSource(
+    record.auraParts,
+    record.auraSlot,
+    options.candidateSpellIDs,
+    cfg.__puiCooldownID
+  )
   AuraSlotDriver:SetSlotActive(record.auraSlot, true)
   ConfigureCueAuraTrack(record)
   self:RefreshVisibility(key, record.inCombat)
