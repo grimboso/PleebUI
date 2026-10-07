@@ -1361,7 +1361,7 @@ local function _PCM_BuildCooldownViewerArgs(cm, viewerKey, opts)
   args.forceCooldown = {
     type = "select",
     name = "Timer display",
-    desc = "Choose the timer shown when a spell has an active aura or ground effect. Duration uses its own swipe and text settings; cooldown only ignores active durations. Individual icon settings take priority.",
+    desc = "Show the duration while an aura or ground effect is active, then return to the cooldown. Cooldown only disables the duration layer. Swipe and countdown visibility are set separately. Individual icon settings take priority.",
     order = 38,
     values = { AUTOMATIC = "Duration while active", COOLDOWN = "Cooldown only" },
     get = function()
@@ -2594,7 +2594,7 @@ _PCM_BuildIconOverrideArgs = function(viewerKey, entry)
   args.swipeSource = {
     type = "select",
     name = "Timer display",
-    desc = "Duration while active shows the aura or ground-effect timer when its swipe or text is enabled. Otherwise the cooldown is shown. Cooldown only always ignores active durations.",
+    desc = "Show the duration while an aura or ground effect is active, then return to the cooldown. Cooldown only disables the duration layer. Swipe and countdown visibility are set separately.",
     order = 70.5,
     values = {
       [ICON_INHERIT] = "Use viewer setting",
@@ -4582,7 +4582,7 @@ local function _PCM_BuildCustomIconGroup(GetCfg, RebuildRuntime, kind, order)
     },
     showSwipe = {
       type = "toggle",
-      name = "Show cooldown swipe",
+      name = "Show timer swipe",
       order = 20,
       hidden = HiddenWhenIconOff,
       get = function()
@@ -4646,17 +4646,19 @@ local function _PCM_BuildCustomIconGroup(GetCfg, RebuildRuntime, kind, order)
       end,
       set = function(_, value) SetIconValue("showTooltip", value == true) end,
     },
-    activeAuraEnabled = {
-      type = "toggle",
-      name = "Show while aura is active",
-      desc = "Show the aura icon and its duration even when the cooldown state is hidden.",
+    timerDisplay = {
+      type = "select",
+      name = "Timer display",
+      desc = "Show the duration while the selected buff is active, then return to the cooldown. Cooldown only disables the duration layer. Swipe and countdown visibility are set separately.",
       order = 25.1,
+      values = { AUTOMATIC = "Duration while active", COOLDOWN = "Cooldown only" },
+      sorting = { "AUTOMATIC", "COOLDOWN" },
       hidden = function() return auraKind or HiddenWhenIconOff() end,
       get = function()
         local _, icon = GetIcon()
-        return icon and icon.activeAuraEnabled == true or false
+        return icon and icon.activeAuraEnabled == true and "AUTOMATIC" or "COOLDOWN"
       end,
-      set = function(_, value) SetIconValue("activeAuraEnabled", value == true) end,
+      set = function(_, value) SetIconValue("activeAuraEnabled", value == "AUTOMATIC") end,
     },
     activeAuraSource = {
       type = "select",
@@ -5144,7 +5146,6 @@ local function _PCM_BuildCustomIconGroup(GetCfg, RebuildRuntime, kind, order)
 
   local cooldownArgs = {}
   local activeArgs = {
-    activeAuraEnabled = args.activeAuraEnabled,
     activeAuraSource = args.activeAuraSource,
     activeAuraCDM = args.activeAuraCDM,
     activeAuraCustom = args.activeAuraCustom,
@@ -5156,8 +5157,6 @@ local function _PCM_BuildCustomIconGroup(GetCfg, RebuildRuntime, kind, order)
   }
 
   if auraKind then
-    activeArgs.showSwipe = args.showSwipe
-    activeArgs.showDuration = args.showDuration
     activeArgs.showCount = args.showCount
     activeArgs.showStackStrip = args.showStackStrip
   else
@@ -5165,8 +5164,6 @@ local function _PCM_BuildCustomIconGroup(GetCfg, RebuildRuntime, kind, order)
     cooldownArgs.desaturateCooldown = args.desaturateCooldown
     cooldownArgs.cooldownGlowStyle = args.cooldownGlowStyle
     cooldownArgs.cooldownGlowColor = args.cooldownGlowColor
-    cooldownArgs.showSwipe = args.showSwipe
-    cooldownArgs.showDuration = args.showDuration
     cooldownArgs.showCount = args.showCount
     cooldownArgs.showPips = args.showPips
   end
@@ -5193,6 +5190,17 @@ local function _PCM_BuildCustomIconGroup(GetCfg, RebuildRuntime, kind, order)
           borderColor = args.borderColor,
           backgroundColor = args.backgroundColor,
           showTooltip = args.showTooltip,
+        },
+      },
+      timer = {
+        type = "group",
+        name = "Timer",
+        order = 15,
+        inline = true,
+        args = {
+          timerDisplay = args.timerDisplay,
+          showSwipe = args.showSwipe,
+          showDuration = args.showDuration,
         },
       },
       ready = {
@@ -9076,7 +9084,7 @@ _PCM_BuildConsumablesTabArgs = function()
     },
     trinkets = {
       type = "group",
-      name = "Trinkets and potions",
+      name = "Trinkets",
       order = 15,
       inline = true,
       args = {
@@ -9088,20 +9096,45 @@ _PCM_BuildConsumablesTabArgs = function()
           get = function() return GetCfg().onlyOnUseTrinkets == true end,
           set = function(_, value) GetCfg().onlyOnUseTrinkets = value == true Rebuild() end,
         },
+      },
+    },
+    timer = {
+      type = "group",
+      name = "Timer",
+      order = 16,
+      inline = true,
+      args = {
+        timerDisplay = {
+          type = "select",
+          name = "Timer display",
+          desc = "Show the duration while an effect is active, then return to the cooldown. Cooldown only disables the duration layer. Swipe and countdown visibility are set separately.",
+          order = 2,
+          values = { AUTOMATIC = "Duration while active", COOLDOWN = "Cooldown only" },
+          sorting = { "AUTOMATIC", "COOLDOWN" },
+          get = function() return GetCfg().timerSource end,
+          set = function(_, value) GetCfg().timerSource = value Rebuild() end,
+        },
         showDurationSwipe = {
           type = "toggle",
           name = "Show duration swipe",
-          desc = "Show active trinket and potion effects over the normal cooldown.",
-          order = 2,
+          order = 3,
+          disabled = function() return GetCfg().timerSource == "COOLDOWN" end,
           get = function() return GetCfg().showDurationSwipe == true end,
           set = function(_, value) GetCfg().showDurationSwipe = value == true Rebuild() end,
         },
+        showDurationText = {
+          type = "toggle",
+          name = "Show duration countdown",
+          order = 4,
+          disabled = function() return GetCfg().timerSource == "COOLDOWN" end,
+          get = function() return GetCfg().showDurationText == true end,
+          set = function(_, value) GetCfg().showDurationText = value == true Rebuild() end,
+        },
         glowDuringDurationSwipe = {
           type = "toggle",
-          name = "Glow during duration swipe",
-          desc = "Glow while the duration swipe is active.",
-          order = 3,
-          disabled = function() return GetCfg().showDurationSwipe ~= true end,
+          name = "Glow while aura is active",
+          order = 5,
+          disabled = function() return GetCfg().timerSource == "COOLDOWN" end,
           get = function() return GetCfg().glowDuringDurationSwipe == true end,
           set = function(_, value) GetCfg().glowDuringDurationSwipe = value == true Rebuild() end,
         },
