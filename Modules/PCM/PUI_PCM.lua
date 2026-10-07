@@ -121,7 +121,10 @@ local PCMNativePolicy = {
 }
 
 local function _PCM_GetNativeCDMRequirement()
-  return _PCM_HasSoundAlerts()
+  if ns.AuraWidget.HasApplicationThresholdSources() then
+    return true
+  end
+  return _PCM_IsModuleEnabledFast() and _PCM_HasSoundAlerts()
 end
 
 local function _PCM_CanChangeNativeCDMState()
@@ -129,7 +132,10 @@ local function _PCM_CanChangeNativeCDMState()
 end
 
 local function _PCM_ReconcileNativeCDM()
-  if not _PCM_IsModuleEnabledFast() then
+  if not _PCM_IsModuleEnabledFast()
+    and not ns.AuraWidget.HasApplicationThresholdSources()
+    and not PCMNativePolicy.RecoloringOwned
+  then
     PCMNativePolicy.ReconcilePending = false
     ns.PCMNativeBridge:Disable()
     return false
@@ -150,6 +156,8 @@ local function _PCM_ReconcileNativeCDM()
   end
 
   PCMNativePolicy.ReconcilePending = false
+  PCMNativePolicy.RecoloringOwned = not _PCM_IsModuleEnabledFast()
+    and ns.AuraWidget.HasApplicationThresholdSources()
 
   local nativeEnabled = C_CVar.GetCVar(COOLDOWN_MANAGER_CVAR) == "1"
   if nativeEnabled ~= requiresNative then
