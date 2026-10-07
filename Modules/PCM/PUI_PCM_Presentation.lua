@@ -1117,7 +1117,14 @@ function PCMPresentation.ConfigureOwnedAuraLayer(parts, button, unit, style)
   else
     AuraWidget.ConfigureIcon(auraParts)
   end
+  auraParts.icon:ClearAllPoints()
   auraParts.icon:SetAllPoints(button)
+  IconSkin.MakeIconSquare(auraParts.icon, { crop = 0.08 })
+  if not auraParts.ownedBackground then
+    auraParts.ownedBackground = button:CreateTexture(nil, "BACKGROUND")
+    auraParts.ownedBackground:SetAllPoints(button)
+  end
+  SetBackground(auraParts.ownedBackground, style.backgroundColor)
   if not auraParts.ownedCustomTexture then
     auraParts.ownedCustomTexture = button:CreateTexture(nil, "ARTWORK", nil, 2)
     auraParts.ownedCustomTexture:SetAllPoints(auraParts.icon)
@@ -1138,6 +1145,13 @@ function PCMPresentation.ConfigureOwnedAuraLayer(parts, button, unit, style)
   IconSkin.StyleCooldownText(auraParts.durationCooldown, style.cooldownFont)
   local color = swipe.durationColor
   auraParts.durationCooldown:SetSwipeColor(color[1] or color.r, color[2] or color.g, color[3] or color.b, color[4] or color.a or 1)
+
+  if not auraParts.ownedIconBorder then
+    auraParts.ownedIconBorder = CreateFrame("Frame", nil, button)
+    auraParts.ownedIconBorder:SetAllPoints(button)
+  end
+  auraParts.ownedIconBorder:SetFrameLevel(auraParts.durationCooldown:GetFrameLevel() + 1)
+  BarWidget.ApplyBorder(auraParts.ownedIconBorder, style.borderSize, style.borderColor)
 
   local charge = style.charge or {}
   local counts = style.viewerCounts or {}
