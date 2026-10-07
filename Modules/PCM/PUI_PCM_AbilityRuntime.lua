@@ -295,6 +295,9 @@ local function AssignRuntimeSpellIDs(record)
   if changed and record.runtimeSpellID then
     record.previousRuntimeSpellID = record.runtimeSpellID
   end
+  if changed then
+    record.cooldownIsOnGCD = false
+  end
   record.runtimeSpellID = runtimeSpellID
   record.runtimeChargeSpellID = runtimeChargeSpellID
   return changed
@@ -814,24 +817,8 @@ local function RefreshSpellCooldown(record)
     return
   end
 
-  local style = GetRecordStyle(record)
-  local swipe = style.swipe or {}
-  local viewerSwipe = style.viewerSwipe or {}
-  local showCooldown = swipe.show
-  if showCooldown == nil then
-    showCooldown = viewerSwipe.cooldown ~= false
-  end
-  if showCooldown ~= true then
-    PCMPresentation.SetSpellCooldownDuration(record.parts, nil)
-    return
-  end
-
-  local showGCD = swipe.showGCD
-  if showGCD == nil then
-    showGCD = viewerSwipe.gcd ~= false
-  end
-  local duration = C_Spell.GetSpellCooldownDuration(spellID, showGCD ~= true)
-  PCMPresentation.SetSpellCooldownDuration(record.parts, duration)
+  local duration = C_Spell.GetSpellCooldownDuration(spellID)
+  PCMPresentation.SetSpellCooldownDuration(record.parts, duration, record.cooldownIsOnGCD)
 end
 
 local function RefreshChargeState(record)
@@ -1216,7 +1203,7 @@ local function RefreshRecordAppearance(record, appearanceMask)
     record.hasLastUsableState = nil
     record.lastRangeState = nil
     record.hasLastRangeState = nil
-    PCMPresentation.ApplyOwnedIconStyle(record.parts, ResolveRecordStyle(record))
+    PCMPresentation.ApplyOwnedIconStyle(record.parts, ResolveRecordStyle(record), record.cooldownIsOnGCD)
     ConfigureAuraSlots(record)
     for unit, button in pairs(record.auraButtons) do
       if button then
@@ -1529,19 +1516,30 @@ local function WantsEvent(event)
   return false
 end
 
-local function MarkCooldownEventBucket(bucketName, stateMask, spellID, baseSpellID)
+local function MarkCooldownEventBucket(bucketName, stateMask, spellID, baseSpellID, startRecoveryCategory)
   local bucket = buckets[bucketName]
   local hasSpecificSpell = not IsSecret(spellID) and type(spellID) == "number"
   local hasSpecificBase = not IsSecret(baseSpellID) and type(baseSpellID) == "number"
+  local refreshAll = not hasSpecificSpell
+  if bucketName == "cooldown" then
+    refreshAll = refreshAll
+      or IsSecret(startRecoveryCategory)
+      or startRecoveryCategory == Constants.SpellCooldownConsts.GLOBAL_RECOVERY_CATEGORY
+  end
 
   for _, record in pairs(bucket.records) do
-    if not hasSpecificSpell
+    if refreshAll
       or RecordMatchesSpellIdentity(
         record,
         spellID,
         hasSpecificBase and baseSpellID or spellID
       )
     then
+      if bucketName == "cooldown" then
+        local cooldownInfo = C_Spell.GetSpellCooldown(record.runtimeSpellID)
+        -- isOnGCD is never secret and is only reliable during SPELL_UPDATE_COOLDOWN.
+        record.cooldownIsOnGCD = cooldownInfo and cooldownInfo.isOnGCD == true or false
+      end
       MarkRecordDirty(record, DIRTY_STATE, stateMask)
     end
   end
@@ -1907,7 +1905,7 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1, arg2, arg3, arg4, arg5)
     ApplySpellOverride(arg1, arg2)
   elseif event == "SPELL_UPDATE_COOLDOWN" then
     MarkItemCooldownEventRecords(arg1, arg2, arg3, arg5)
-    MarkCooldownEventBucket("cooldown", STATE_COOLDOWN, arg1, arg2)
+    MarkCooldownEventBucket("cooldown", STATE_COOLDOWN, arg1, arg2, arg4)
     MarkCooldownEventBucket("charge", STATE_CHARGE, arg1, arg2)
   elseif event == "SPELL_UPDATE_USES" then
     MarkCooldownEventBucket("charge", STATE_CHARGE, arg1, arg2)
