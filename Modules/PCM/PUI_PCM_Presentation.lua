@@ -990,7 +990,7 @@ local function ApplyOwnedTextStyle(fontString, parent, config, role, fallbackSiz
   fontString:SetPoint(point, parent, point, x, y)
 end
 
-function PCMPresentation.ApplyOwnedIconStyle(parts, style)
+function PCMPresentation.ApplyOwnedIconStyle(parts, style, isOnGCD)
   local size = math_max(Round(1), Round(tonumber(style.size) or 36))
   local borderSize = math_max(0, tonumber(style.borderSize) or 2)
 
@@ -1022,20 +1022,34 @@ function PCMPresentation.ApplyOwnedIconStyle(parts, style)
   if show == nil then
     show = viewerSwipe == nil or viewerSwipe.cooldown ~= false
   end
-  parts.cooldown:SetDrawSwipe(show == true)
-  parts.chargeCooldown:SetDrawSwipe(show == true)
+  local showGCD = swipe and swipe.showGCD
+  if showGCD == nil then
+    showGCD = swipe and swipe.show
+  end
+  if showGCD == nil then
+    showGCD = viewerSwipe == nil or viewerSwipe.gcd ~= false
+  end
+  parts.showCooldownSwipe = show == true
+  parts.showGCDSwipe = showGCD == true
+  local showSwipe = parts.showCooldownSwipe
+  if isOnGCD == true then
+    showSwipe = parts.showGCDSwipe
+  end
+  parts.cooldown:SetDrawSwipe(showSwipe)
+  parts.chargeCooldown:SetDrawSwipe(parts.showCooldownSwipe)
 
   local drawEdge = swipe and swipe.drawEdge
   if drawEdge == nil then
     drawEdge = viewerSwipe == nil or viewerSwipe.drawEdge ~= false
   end
-  parts.cooldown:SetDrawEdge(drawEdge == true)
+  parts.drawCooldownEdge = drawEdge == true
+  parts.cooldown:SetDrawEdge(showSwipe and parts.drawCooldownEdge)
 
   local rechargeEdge = drawEdge
   if style.hasCharges and swipe and swipe.rechargeEdge ~= nil then
     rechargeEdge = swipe.rechargeEdge == true
   end
-  parts.chargeCooldown:SetDrawEdge(rechargeEdge == true)
+  parts.chargeCooldown:SetDrawEdge(parts.showCooldownSwipe and rechargeEdge == true)
 
   local reverse = swipe and swipe.reverse == true
   parts.cooldown:SetReverse(reverse)
@@ -1366,7 +1380,14 @@ function PCMPresentation.SetStaticIcon(parts, texture)
   parts.icon:SetTexture(parts.customTexture or texture)
 end
 
-function PCMPresentation.SetSpellCooldownDuration(parts, duration)
+function PCMPresentation.SetSpellCooldownDuration(parts, duration, isOnGCD)
+  local showSwipe = parts.showCooldownSwipe
+  if isOnGCD == true then
+    showSwipe = parts.showGCDSwipe
+  end
+  parts.cooldown:SetDrawSwipe(showSwipe)
+  parts.cooldown:SetDrawEdge(showSwipe and parts.drawCooldownEdge)
+
   if duration == nil then
     parts.cooldown:Clear()
     return
