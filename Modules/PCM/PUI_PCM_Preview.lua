@@ -1159,8 +1159,6 @@ local function PCMPreview_ConfigureBuffBarPanel(panel, style)
   rowWidth = math_max(1, Round(rowWidth * previewZoom))
   rowHeight = math_max(1, Round(rowHeight * previewZoom))
 
-  local labelWidth = vertical and 0 or math_max(88, Round(132 * previewZoom))
-  local labelGap = vertical and 0 or Round(6 * previewZoom)
   local texture = BarWidget.ResolveStatusBarTexture(config.texture or "Pleebar", FALLBACK_BAR_TEXTURE)
   local backgroundColor = style.buffBarBgColor or { 0.12, 0.12, 0.12, 0.95 }
   local fillColor = style.buffBarColor or colors.accent
@@ -1176,7 +1174,7 @@ local function PCMPreview_ConfigureBuffBarPanel(panel, style)
       or 0
     totalHeight = rowHeight
   else
-    totalWidth = labelWidth + labelGap + rowWidth
+    totalWidth = rowWidth
     totalHeight = #entries > 0
       and #entries * rowHeight + (#entries - 1) * displaySpacing
       or 0
@@ -1221,7 +1219,7 @@ local function PCMPreview_ConfigureBuffBarPanel(panel, style)
       y = startY
     else
       growthIndex = growthDirection == "UP" and (#entries - index) or (index - 1)
-      x = startX + labelWidth + labelGap
+      x = startX
       y = startY - growthIndex * (rowHeight + displaySpacing)
     end
 
@@ -1239,12 +1237,14 @@ local function PCMPreview_ConfigureBuffBarPanel(panel, style)
     bar.frame:SetSize(rowWidth, rowHeight)
     bar.frame:Show()
 
+    bar.label:SetParent(bar.valueTextFrame)
     bar.label:ClearAllPoints()
-    bar.label:SetShown(not vertical)
+    bar.label:SetWordWrap(false)
+    bar.label:SetShown(not vertical and config.showName == true)
     if not vertical then
-      bar.label:SetPoint("RIGHT", bar.frame, "LEFT", -labelGap, 0)
-      bar.label:SetWidth(labelWidth)
-      bar.label:SetJustifyH("RIGHT")
+      bar.label:SetPoint("LEFT", bar.status, "LEFT", 5 * previewZoom, 0)
+      bar.label:SetPoint("RIGHT", bar.status, "RIGHT", -32 * previewZoom, 0)
+      bar.label:SetJustifyH("LEFT")
     end
 
     bar.iconFrame:SetShown(showIcon)
@@ -1285,7 +1285,7 @@ local function PCMPreview_ConfigureBuffBarPanel(panel, style)
     bar.status:SetOrientation(vertical and "VERTICAL" or "HORIZONTAL")
     bar.status:SetReverseFill(reverseFill)
 
-    Theme.ApplyFont(bar.label, "tiny", math_max(4, displayThickness * 0.42), "OUTLINE")
+    Theme.ApplyFont(bar.label, "body", math_max(4, math.min(12, thickness - 4)) * previewZoom, "OUTLINE")
     Theme.ApplyFont(bar.valueText, "tiny", math_max(4, displayThickness * 0.42), "OUTLINE")
 
     bar.label:SetText(entry.name or ("Spell " .. tostring(entry.spellID or index)))
