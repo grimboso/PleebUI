@@ -62,7 +62,7 @@ end
 function NativeBridge:Refresh()
   if not ns.PCM_IsModuleEnabledFast() then
     self:Disable()
-    if ns.AuraWidget.HasApplicationThresholdSources() then
+    if ns.AuraWidget.RequiresNativeCDM() then
       for index = 1, #GROUPS do
         SetGroupNativeVisible(GROUPS[index], false)
       end
