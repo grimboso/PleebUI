@@ -82,13 +82,13 @@ local function ResolveFont(config, role, fallbackSize)
   return path, size, flags
 end
 
-local function ApplyFont(fontString, config, role, fallbackSize)
+local function ApplyFont(fontString, config, role, fallbackSize, maxSize)
   if not fontString then
     return
   end
 
   local path, size, flags = ResolveFont(config, role, fallbackSize)
-  fontString:SetFont(path, size, flags)
+  fontString:SetFont(path, maxSize and math.min(size, maxSize) or size, flags)
   fontString:SetShadowColor(0, 0, 0, 1)
   fontString:SetShadowOffset(1, -1)
 
@@ -1319,15 +1319,13 @@ function PCMPresentation.ConfigureOwnedAuraBar(parts, button, style, isTotem)
   auraParts.ownedIconBorder:SetShown(showIcon)
 
   if not auraParts.ownedName then
-    auraParts.ownedName = button:CreateFontString(nil, "OVERLAY")
+    auraParts.ownedName = auraParts.durationTextHolder:CreateFontString(nil, "OVERLAY")
     auraParts.ownedName:SetWordWrap(false)
-    ApplyFont(auraParts.ownedName, style.nameFont, "body", 12)
     if not isTotem then
       button:SetSpellName(auraParts.ownedName)
     end
-  else
-    ApplyFont(auraParts.ownedName, style.nameFont, "body", 12)
   end
+  ApplyFont(auraParts.ownedName, style.nameFont, "body", 12, math_max(4, math.min(12, thickness - 4)))
   auraParts.ownedName:ClearAllPoints()
   auraParts.durationTextHolder:ClearAllPoints()
   auraParts.durationTextHolder:SetAllPoints(auraParts.durationBar)
@@ -1339,7 +1337,7 @@ function PCMPresentation.ConfigureOwnedAuraBar(parts, button, style, isTotem)
     auraParts.ownedName:SetPoint("LEFT", auraParts.durationBar, "LEFT", 5, 0)
     auraParts.ownedName:SetPoint("RIGHT", auraParts.durationBar, "RIGHT", -32, 0)
     auraParts.ownedName:SetJustifyH("LEFT")
-    auraParts.ownedName:Show()
+    auraParts.ownedName:SetShown(style.showName == true)
     auraParts.durationText:SetPoint("RIGHT", auraParts.durationBar, "RIGHT", -8, 0)
   end
 
@@ -1365,7 +1363,7 @@ function PCMPresentation.ConfigureOwnedAuraBar(parts, button, style, isTotem)
     AuraWidget.DisableApplicationCount(auraParts)
   end
 
-  auraParts.durationTextHolder:SetFrameLevel(button:GetFrameLevel() + 4)
+  auraParts.durationTextHolder:SetFrameLevel(auraParts.durationBar:GetFrameLevel() + 3)
   auraParts.applicationHolder:SetFrameLevel(button:GetFrameLevel() + 5)
   return auraParts
 end
