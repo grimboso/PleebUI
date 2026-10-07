@@ -1763,6 +1763,7 @@ do
     if not root then
       return {
         buffBar = {
+          showName = false,
           height = 20,
           width = 250,
           rowSpacing = 1,
@@ -1810,6 +1811,7 @@ do
     style.buffBar = style.buffBar or {}
     local bb = style.buffBar
 
+    if bb.showName == nil then bb.showName = false end
     if bb.height == nil then bb.height = 20 end
     if bb.width == nil then bb.width = 250 end
     if bb.rowSpacing == nil then bb.rowSpacing = 1 end
