@@ -82,6 +82,7 @@ local state = {
   dirty = true,
   invalidationSerial = 1,
   entries = EMPTY,
+  auraCandidates = {},
   viewerEntries = {
     [ESSENTIAL_VIEWER_KEY] = EMPTY,
     [UTILITY_VIEWER_KEY] = EMPTY,
@@ -745,6 +746,25 @@ local function AddCustomBuffEntries(entries, viewerEntries)
   end
 end
 
+local function BuildAuraCandidates(entries)
+  local candidates = {}
+  for index = 1, #entries do
+    local spellIDs = entries[index].identitySpellIDs
+    for identityIndex = 1, #spellIDs do
+      local spellID = spellIDs[identityIndex]
+      local associated = candidates[spellID]
+      if not associated then
+        associated = {}
+        candidates[spellID] = associated
+      end
+      for linkedIndex = 1, #spellIDs do
+        associated[spellIDs[linkedIndex]] = true
+      end
+    end
+  end
+  return candidates
+end
+
 local function BuildGeneration()
   local configuration = ReadNativeConfiguration()
   if not configuration then
@@ -794,6 +814,7 @@ local function BuildGeneration()
     entries = entries,
     viewerEntries = viewerEntries,
     nativeConfiguration = configuration,
+    auraCandidates = BuildAuraCandidates(entries),
   }
 end
 
@@ -857,6 +878,16 @@ function Catalog:GetViewerEntries(viewerKey)
   return state.viewerEntries[viewerKey] or EMPTY, state.generation
 end
 
+function Catalog:AddAuraCandidates(destination, spellID)
+  destination[spellID] = true
+  local associated = state.auraCandidates[spellID]
+  if associated then
+    for associatedSpellID in pairs(associated) do
+      destination[associatedSpellID] = true
+    end
+  end
+end
+
 function Catalog:RegisterListener(owner, callback)
   if owner == nil or type(callback) ~= "function" then
     return
@@ -890,6 +921,7 @@ function Catalog:Refresh()
     state.generation = state.generation + 1
     state.entries = candidate.entries
     state.viewerEntries = candidate.viewerEntries
+    state.auraCandidates = candidate.auraCandidates
     for owner, callback in pairs(listeners) do
       callback(owner, state.generation)
     end
@@ -905,6 +937,7 @@ Catalog.EntriesMatch = P:Def("Catalog:EntriesMatch", Catalog.EntriesMatch)
 Catalog.GetNativeConfiguration = P:Def("Catalog:GetNativeConfiguration", Catalog.GetNativeConfiguration)
 Catalog.GetGeneration = P:Def("Catalog:GetGeneration", Catalog.GetGeneration)
 Catalog.GetViewerEntries = P:Def("Catalog:GetViewerEntries", Catalog.GetViewerEntries)
+Catalog.AddAuraCandidates = P:Def("Catalog:AddAuraCandidates", Catalog.AddAuraCandidates)
 Catalog.RegisterListener = P:Def("Catalog:RegisterListener", Catalog.RegisterListener)
 Catalog.UnregisterListener = P:Def("Catalog:UnregisterListener", Catalog.UnregisterListener)
 Catalog.Invalidate = P:Def("Catalog:Invalidate", Catalog.Invalidate)
