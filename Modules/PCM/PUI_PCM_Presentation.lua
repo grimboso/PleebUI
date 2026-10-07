@@ -1332,14 +1332,15 @@ function PCMPresentation.ConfigureOwnedAuraBar(parts, button, style, isTotem)
   )
   auraParts.ownedIconBorder:SetShown(showIcon)
 
-  if not auraParts.ownedName then
+  local nameCreated = auraParts.ownedName == nil
+  if nameCreated then
     auraParts.ownedName = auraParts.durationTextHolder:CreateFontString(nil, "OVERLAY")
     auraParts.ownedName:SetWordWrap(false)
-    if not isTotem then
-      button:SetSpellName(auraParts.ownedName)
-    end
   end
   ApplyFont(auraParts.ownedName, style.nameFont, "body", 12, math_max(4, math.min(12, thickness - 4)))
+  if nameCreated and not isTotem then
+    button:SetSpellName(auraParts.ownedName)
+  end
   auraParts.ownedName:ClearAllPoints()
   auraParts.durationTextHolder:ClearAllPoints()
   auraParts.durationTextHolder:SetAllPoints(auraParts.durationBar)
