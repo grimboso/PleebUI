@@ -115,6 +115,9 @@ function AuraSlotDriver:SetSlotActive(handle, active)
   end
 
   handle.active = active
+  if handle.applicationThresholdParts then
+    ns.AuraWidget.SetApplicationThresholdActive(handle.applicationThresholdParts, active)
+  end
   UpdateUnitRuntime(runtime)
 end
 
