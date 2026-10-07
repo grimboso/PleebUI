@@ -1249,7 +1249,8 @@ local function _PCM_BuildCooldownViewerArgs(cm, viewerKey, opts)
 
   args.swipeDuration = {
     type = "toggle",
-    name = "Show aura duration swipe",
+    name = "Show duration swipe",
+    desc = "Show the aura or ground-effect swipe with Duration while active. Cooldown and GCD swipes have separate controls.",
     order = 42,
 
     get = function()
@@ -1263,39 +1264,58 @@ local function _PCM_BuildCooldownViewerArgs(cm, viewerKey, opts)
     end,
   }
 
-  args.swipeColor = {
-    type = "color",
-    name = "Swipe color",
-    order = 42,
-    hasAlpha = true,
-
-    get = function()
-      local _, v = GetViewerSwipeDB(cm, viewerKey)
-      local c = v and v.swipeColor or { 0, 0, 0, 0.8 }
-      return c[1] or 0, c[2] or 0, c[3] or 0, c[4] or 0.8
-    end,
-    set = function(_, r, g, b, a)
-      local _, v = GetViewerSwipeDB(cm, viewerKey)
-      v.swipeColor = { r, g, b, a }
-      _PCM_ConfigRefreshViewers(viewerKey, opts)
-    end,
-  }
-
-  args.swipeEdge = {
+  args.desaturateCooldown = {
     type = "toggle",
-    name = "Show swipe edge",
-    order = 43,
-
+    name = "Desaturate icons on cooldown",
+    desc = "Turn icons gray during a spell cooldown. The global cooldown does not desaturate icons. Individual saturation settings take priority.",
+    order = 39,
     get = function()
       local _, v = GetViewerSwipeDB(cm, viewerKey)
-      return v and v.drawEdge ~= false or false
+      return v.desaturateCooldown ~= false
     end,
     set = function(_, enabled)
       local _, v = GetViewerSwipeDB(cm, viewerKey)
-      v.drawEdge = enabled == true
+      v.desaturateCooldown = enabled == true
       _PCM_ConfigRefreshViewers(viewerKey, opts)
     end,
   }
+
+  for index, kind in ipairs({ "cooldown", "duration", "gcd" }) do
+    local label = kind == "gcd" and "GCD" or kind == "duration" and "Duration" or "Cooldown"
+    local colorField = kind .. "Color"
+    local edgeField = kind .. "Edge"
+    args[kind .. "SwipeColor"] = {
+      type = "color",
+      name = label .. " swipe color",
+      order = 47 + index * 2,
+      hasAlpha = true,
+      get = function()
+        local _, v = GetViewerSwipeDB(cm, viewerKey)
+        local c = v[colorField] or v.swipeColor
+        return c.r or c[1] or 0, c.g or c[2] or 0, c.b or c[3] or 0, c.a or c[4] or 1
+      end,
+      set = function(_, r, g, b, a)
+        local _, v = GetViewerSwipeDB(cm, viewerKey)
+        v[colorField] = { r, g, b, a }
+        _PCM_ConfigRefreshViewers(viewerKey, opts)
+      end,
+    }
+    args[kind .. "SwipeEdge"] = {
+      type = "toggle",
+      name = label .. " swipe edge",
+      order = 48 + index * 2,
+      get = function()
+        local _, v = GetViewerSwipeDB(cm, viewerKey)
+        if v[edgeField] ~= nil then return v[edgeField] end
+        return v.drawEdge ~= false
+      end,
+      set = function(_, enabled)
+        local _, v = GetViewerSwipeDB(cm, viewerKey)
+        v[edgeField] = enabled == true
+        _PCM_ConfigRefreshViewers(viewerKey, opts)
+      end,
+    }
+  end
 
   args.countCooldown = {
     type = "toggle",
@@ -1314,7 +1334,7 @@ local function _PCM_BuildCooldownViewerArgs(cm, viewerKey, opts)
 
   args.countDuration = {
     type = "toggle",
-    name = "Show aura duration text",
+    name = "Show duration text",
     order = 45,
 
     get = function()
@@ -1339,18 +1359,18 @@ local function _PCM_BuildCooldownViewerArgs(cm, viewerKey, opts)
   }
 
   args.forceCooldown = {
-    type = "toggle",
-    name = "Prefer cooldown display",
-    desc = "Use cooldown swipe and text when both displays are available.",
-    order = 46,
-
+    type = "select",
+    name = "Timer display",
+    desc = "Choose the timer shown when a spell has an active aura or ground effect. Duration uses its own swipe and text settings; cooldown only ignores active durations. Individual icon settings take priority.",
+    order = 38,
+    values = { AUTOMATIC = "Duration while active", COOLDOWN = "Cooldown only" },
     get = function()
       local _, v = GetViewerSwipeDB(cm, viewerKey)
-      return v and v.forceCooldownSwipe == true or false
+      return v.forceCooldownSwipe == true and "COOLDOWN" or "AUTOMATIC"
     end,
-    set = function(_, enabled)
+    set = function(_, value)
       local _, v = GetViewerSwipeDB(cm, viewerKey)
-      v.forceCooldownSwipe = enabled == true
+      v.forceCooldownSwipe = value == "COOLDOWN"
       _PCM_ConfigRefreshViewers(viewerKey, opts)
     end,
   }
@@ -2312,6 +2332,7 @@ _PCM_BuildIconOverrideArgs = function(viewerKey, entry)
       if entry.settingsFamily == "buff" then
         values.AURA = "Aura active"
       else
+        values.GCD = "Global cooldown"
         values.READY = entry.hasCharges and "Maximum charges" or "Ready"
         values.COOLDOWN = entry.hasCharges and "Recharging" or "Cooldown"
       end
@@ -2516,13 +2537,13 @@ _PCM_BuildIconOverrideArgs = function(viewerKey, entry)
 
   args.swipeHeader = {
     type = "header",
-    name = "Cooldown swipe",
+    name = "Swipes and timers",
     order = 70,
   }
 
   args.swipeShow = {
     type = "select",
-    name = "Visibility",
+    name = "Cooldown swipe",
     order = 71,
     values = {
       [ICON_INHERIT] = "Use viewer setting",
@@ -2542,14 +2563,42 @@ _PCM_BuildIconOverrideArgs = function(viewerKey, entry)
     end,
   }
 
+  args.durationSwipe = {
+    type = "select",
+    name = "Duration swipe",
+    desc = "Controls only the aura or ground-effect swipe. Timer display decides which timer is shown.",
+    order = 71.1,
+    values = { [ICON_INHERIT] = "Use viewer setting", SHOW = "Show", HIDE = "Hide" },
+    get = function()
+      return _PCM_GetIconTriState(IconSettings:GetField(entry, "swipe", "showDuration"), "SHOW", "HIDE")
+    end,
+    set = function(_, value)
+      _PCM_SetIconTriState(entry, "swipe", "showDuration", value, "SHOW")
+      Refresh()
+    end,
+  }
+  args.durationText = {
+    type = "select",
+    name = "Duration text",
+    order = 71.2,
+    values = { [ICON_INHERIT] = "Use viewer setting", SHOW = "Show", HIDE = "Hide" },
+    get = function()
+      return _PCM_GetIconTriState(IconSettings:GetField(entry, "cooldown", "durationShow"), "SHOW", "HIDE")
+    end,
+    set = function(_, value)
+      _PCM_SetIconTriState(entry, "cooldown", "durationShow", value, "SHOW")
+      Refresh()
+    end,
+  }
+
   args.swipeSource = {
     type = "select",
-    name = "Swipe source",
-    desc = "Automatic shows an applied buff before the spell cooldown. Cooldown only ignores the buff duration.",
-    order = 72,
+    name = "Timer display",
+    desc = "Duration while active shows the aura or ground-effect timer when its swipe or text is enabled. Otherwise the cooldown is shown. Cooldown only always ignores active durations.",
+    order = 70.5,
     values = {
       [ICON_INHERIT] = "Use viewer setting",
-      AUTOMATIC = "Automatic",
+      AUTOMATIC = "Duration while active",
       COOLDOWN = "Cooldown only",
     },
     get = function()
@@ -2568,7 +2617,8 @@ _PCM_BuildIconOverrideArgs = function(viewerKey, entry)
 
   args.swipeEdge = {
     type = "select",
-    name = "Edge",
+    name = "All swipe edges",
+    desc = "Override the viewer edges for cooldown, duration and GCD swipes. Recharge edge takes priority for charge cooldowns.",
     order = 73,
     values = {
       [ICON_INHERIT] = "Use viewer setting",
@@ -2590,10 +2640,11 @@ _PCM_BuildIconOverrideArgs = function(viewerKey, entry)
 
   args.swipeReverse = {
     type = "select",
-    name = "Direction",
+    name = "Swipe direction",
+    desc = "The default is normal for cooldowns and reverse for durations. This override applies to both.",
     order = 74,
     values = {
-      [ICON_INHERIT] = "Use viewer setting",
+      [ICON_INHERIT] = "Default direction",
       NORMAL = "Normal",
       REVERSE = "Reverse",
     },
@@ -2612,7 +2663,8 @@ _PCM_BuildIconOverrideArgs = function(viewerKey, entry)
 
   args.swipeColorOverride = {
     type = "toggle",
-    name = "Custom swipe color",
+    name = "Override all swipe colors",
+    desc = "Apply this icon color to cooldown, duration and GCD swipes instead of the viewer colors.",
     order = 75,
     get = function()
       return IconSettings:GetField(entry, "swipe", "color") ~= nil
@@ -2621,7 +2673,7 @@ _PCM_BuildIconOverrideArgs = function(viewerKey, entry)
       local color
       if enabled then
         local _, viewerSwipe = GetViewerSwipeDB(GetPCMRoot(), viewerKey)
-        local r, g, b, a = _PCM_GetColorComponents(viewerSwipe.swipeColor)
+        local r, g, b, a = _PCM_GetColorComponents(viewerSwipe.cooldownColor or viewerSwipe.swipeColor)
         color = { r, g, b, a }
       end
       IconSettings:SetField(entry, "swipe", "color", color)
@@ -3064,8 +3116,13 @@ local function _PCM_BuildCooldownViewerTreeArgs(cm, viewerKey, viewerLabel, opts
     "swipeCooldown",
     "swipeDuration",
     "forceCooldown",
-    "swipeColor",
-    "swipeEdge",
+    "desaturateCooldown",
+    "cooldownSwipeColor",
+    "cooldownSwipeEdge",
+    "durationSwipeColor",
+    "durationSwipeEdge",
+    "gcdSwipeColor",
+    "gcdSwipeEdge",
   })
 
   local textArgs = {
