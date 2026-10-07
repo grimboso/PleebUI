@@ -884,13 +884,11 @@ local function PCMPreview_ConfigureViewerPanel(box, panel, definition, root)
     local capability = PCMPreview_GetAbilityCapability(entry, index)
     local durationText = record and record.cooldown and record.cooldown.durationShow
     if durationText == nil then durationText = counts.duration end
-    local useAuraLayer = (capability == "AURA" or capability == "TOTEM")
-      and entry.hideAura ~= true
+    local useAuraLayer = entry.hideAura ~= true
       and effectiveSwipe.source ~= "COOLDOWN"
-      and (effectiveSwipe.showDuration or durationText)
     local previewState = selectedEntry == entry and IconSettings:GetPreviewState(viewerKey) or nil
     if previewState == nil then
-      previewState = useAuraLayer
+      previewState = useAuraLayer and (capability == "AURA" or capability == "TOTEM")
         and "AURA"
         or "COOLDOWN"
     end
@@ -2380,6 +2378,10 @@ local function PCMPreview_ConfigureCustomPanel(box, panel)
     icon.__puiPCMPreviewAuraGlowStyle = auraGlowStyle
     icon.__puiPCMPreviewAuraGlowColor = auraGlowColor
     icon.__puiPCMPreviewAutoAura = auraTracker or iconConfig.activeAuraEnabled == true
+    icon.__puiPCMPreviewCooldownSwipeEnabled = iconConfig.showSwipe == true
+    icon.__puiPCMPreviewDurationSwipeEnabled = iconConfig.showSwipe == true
+    icon.__puiPCMPreviewCooldownTextEnabled = iconConfig.showDuration == true
+    icon.__puiPCMPreviewDurationTextEnabled = iconConfig.showDuration == true
     icon.__puiPCMPreviewGlowState = nil
     PCMPreview_HideGlow(icon)
 
@@ -2615,6 +2617,15 @@ local function PCMPreview_ConfigureConsumablesPanel(box, panel)
     icon.frame:SetAlpha(entry.available and 1 or cfg.missingAlpha)
     icon.icon:SetDesaturated(not entry.available)
     icon.__puiPCMPreviewCooldownEnabled = entry.available
+    icon.__puiPCMPreviewCooldownSwipeEnabled = entry.available
+    icon.__puiPCMPreviewDurationSwipeEnabled = entry.available and cfg.showDurationSwipe == true
+    icon.__puiPCMPreviewCooldownTextEnabled = entry.available and cfg.showCooldownText == true
+    icon.__puiPCMPreviewDurationTextEnabled = entry.available and cfg.showDurationText == true
+    icon.__puiPCMPreviewAutoAura = entry.available and cfg.timerSource == "AUTOMATIC"
+      and (definition.tracksDuration == true or definition.equipSlot ~= nil or definition.spellIDs ~= nil)
+    icon.__puiPCMPreviewAuraGlowStyle = cfg.glowDuringDurationSwipe and "PIXEL" or "NONE"
+    icon.__puiPCMPreviewAuraGlowColor = { 1, 0.55, 0.1, 1 }
+    icon.__puiPCMPreviewGlowState = nil
     icon.__puiPCMPreviewDuration = 10 + index
     icon.__puiPCMPreviewPhaseOffset = index * 0.6
     icon.__puiPCMPreviewCooldownCycle = nil
