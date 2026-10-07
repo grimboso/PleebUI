@@ -1278,7 +1278,7 @@ function PCMPresentation.ConfigureOwnedAuraBar(parts, button, style, isTotem)
   auraParts.ownedBackground:Show()
 
   if not auraParts.ownedBarBorder then
-    auraParts.ownedBarBorder = CreateFrame("Frame", nil, button)
+    auraParts.ownedBarBorder = CreateFrame("Frame", nil, button, "DisableUntrustedLayoutScriptsTemplate")
   end
   auraParts.ownedBarBorder:ClearAllPoints()
   auraParts.ownedBarBorder:SetAllPoints(auraParts.durationBar)
