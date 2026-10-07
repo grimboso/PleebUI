@@ -1120,13 +1120,18 @@ end
 
 function PCMPresentation.ConfigureOwnedAuraLayer(parts, button, unit, style)
   local auraParts = AuraWidget.BindApplicationDurationButton(button)
+  local isTotem = unit == "totem"
   button:ClearAllPoints()
   button:SetPoint("TOPLEFT", parts.frame, "TOPLEFT")
   button:SetSize(style.size, style.size)
   button:SetFrameStrata(parts.frame:GetFrameStrata())
   button:SetFrameLevel(parts.frame:GetFrameLevel() + (unit == "player" and 7 or 6))
 
-  AuraWidget.ConfigureIcon(auraParts)
+  if isTotem then
+    auraParts.icon:Show()
+  else
+    AuraWidget.ConfigureIcon(auraParts)
+  end
   auraParts.icon:SetAllPoints(button)
   if not auraParts.ownedCustomTexture then
     auraParts.ownedCustomTexture = button:CreateTexture(nil, "ARTWORK", nil, 2)
@@ -1134,7 +1139,11 @@ function PCMPresentation.ConfigureOwnedAuraLayer(parts, button, unit, style)
   end
   auraParts.ownedCustomTexture:SetTexture(parts.customTexture)
   auraParts.ownedCustomTexture:SetShown(parts.customTexture ~= nil)
-  AuraWidget.ConfigureDurationCooldown(auraParts)
+  if isTotem then
+    auraParts.durationCooldown:Show()
+  else
+    AuraWidget.ConfigureDurationCooldown(auraParts)
+  end
   auraParts.durationCooldown:SetAllPoints(button)
   auraParts.durationCooldown:SetReverse(true)
   local swipe = style.swipe or {}
@@ -1181,7 +1190,9 @@ function PCMPresentation.ConfigureOwnedAuraLayer(parts, button, unit, style)
     "charge",
     10
   )
-  if showApplications then
+  if isTotem then
+    auraParts.applicationHolder:Hide()
+  elseif showApplications then
     AuraWidget.ConfigureApplicationCount(auraParts)
   else
     AuraWidget.DisableApplicationCount(auraParts)
@@ -1228,7 +1239,7 @@ function PCMPresentation.CreateOwnedAuraBar(parent)
   }
 end
 
-function PCMPresentation.ConfigureOwnedAuraBar(parts, button, style)
+function PCMPresentation.ConfigureOwnedAuraBar(parts, button, style, isTotem)
   local auraParts = AuraWidget.BindApplicationDurationButton(button)
   local vertical = style.orientation == "VERTICAL"
   local length = math_max(1, tonumber(style.width) or 250)
@@ -1249,13 +1260,27 @@ function PCMPresentation.ConfigureOwnedAuraBar(parts, button, style)
   ApplyFont(auraParts.durationText, style.durationFont, "body", 12)
   ApplyFont(auraParts.applicationText, style.applicationFont, "tiny", 10)
 
-  AuraWidget.ConfigureDurationBar(
-    auraParts,
-    nil,
-    Enum.StatusBarTimerDirection.RemainingTime
-  )
-  AuraWidget.ConfigureDurationText(auraParts, BarWidget.GetDurationFormatter())
-  AuraWidget.ConfigureIcon(auraParts)
+  if isTotem then
+    auraParts.durationBar:Show()
+    auraParts.durationTextHolder:Show()
+    auraParts.durationText:Show()
+    auraParts.icon:Show()
+    auraParts.durationCooldown:SetAllPoints(button)
+    auraParts.durationCooldown:SetDrawSwipe(false)
+    auraParts.durationCooldown:SetHideCountdownNumbers(true)
+    auraParts.durationCooldown:Show()
+    if not auraParts.totemDurationBinding then
+      auraParts.totemDurationBinding = BarWidget.CreateDurationBinding(auraParts.durationText)
+    end
+  else
+    AuraWidget.ConfigureDurationBar(
+      auraParts,
+      nil,
+      Enum.StatusBarTimerDirection.RemainingTime
+    )
+    AuraWidget.ConfigureDurationText(auraParts, BarWidget.GetDurationFormatter())
+    AuraWidget.ConfigureIcon(auraParts)
+  end
 
   auraParts.durationBar:ClearAllPoints()
   auraParts.durationBar:SetSize(barWidth, barHeight)
@@ -1312,7 +1337,11 @@ function PCMPresentation.ConfigureOwnedAuraBar(parts, button, style)
     auraParts.icon:Show()
   else
     auraParts.durationBar:SetPoint("CENTER", button, "CENTER", 0, 0)
-    AuraWidget.DisableIcon(auraParts)
+    if isTotem then
+      auraParts.icon:Hide()
+    else
+      AuraWidget.DisableIcon(auraParts)
+    end
   end
 
   if not auraParts.ownedIconBorder then
@@ -1332,7 +1361,9 @@ function PCMPresentation.ConfigureOwnedAuraBar(parts, button, style)
     auraParts.ownedName = button:CreateFontString(nil, "OVERLAY")
     auraParts.ownedName:SetWordWrap(false)
     ApplyFont(auraParts.ownedName, style.nameFont, "body", 12)
-    button:SetSpellName(auraParts.ownedName)
+    if not isTotem then
+      button:SetSpellName(auraParts.ownedName)
+    end
   else
     ApplyFont(auraParts.ownedName, style.nameFont, "body", 12)
   end
@@ -1354,7 +1385,9 @@ function PCMPresentation.ConfigureOwnedAuraBar(parts, button, style)
   auraParts.applicationHolder:ClearAllPoints()
 
   local counts = style.counts or {}
-  if showIcon and counts.buff ~= false then
+  if isTotem then
+    auraParts.applicationHolder:Hide()
+  elseif showIcon and counts.buff ~= false then
     auraParts.applicationHolder:SetAllPoints(auraParts.icon)
     AuraWidget.ConfigureApplicationCount(auraParts)
 
@@ -1374,6 +1407,26 @@ function PCMPresentation.ConfigureOwnedAuraBar(parts, button, style)
   auraParts.durationTextHolder:SetFrameLevel(button:GetFrameLevel() + 4)
   auraParts.applicationHolder:SetFrameLevel(button:GetFrameLevel() + 5)
   return auraParts
+end
+
+function PCMPresentation.SetBuffTotemDuration(auraParts, duration)
+  if duration == nil then
+    auraParts.durationCooldown:Clear()
+    if auraParts.totemDurationBinding then
+      auraParts.totemDurationBinding:Disable()
+      auraParts.totemDurationBinding:SetDuration(nil)
+      BarWidget.StopTimerBar(auraParts.durationBar)
+      auraParts.durationText:SetText("")
+    end
+    return
+  end
+
+  auraParts.durationCooldown:SetCooldownFromDurationObject(duration, true)
+  if auraParts.totemDurationBinding then
+    auraParts.durationBar:SetTimerDuration(duration, nil, Enum.StatusBarTimerDirection.RemainingTime)
+    auraParts.totemDurationBinding:SetDuration(duration)
+    auraParts.totemDurationBinding:Enable()
+  end
 end
 
 function PCMPresentation.SetStaticIcon(parts, texture)
@@ -2080,6 +2133,7 @@ PCMPresentation.ApplyOwnedIconVisibility = P:Def("PCMPresentation.ApplyOwnedIcon
 PCMPresentation.ConfigureOwnedAuraLayer = P:Def("PCMPresentation.ConfigureOwnedAuraLayer", PCMPresentation.ConfigureOwnedAuraLayer)
 PCMPresentation.CreateOwnedAuraBar = P:Def("PCMPresentation.CreateOwnedAuraBar", PCMPresentation.CreateOwnedAuraBar)
 PCMPresentation.ConfigureOwnedAuraBar = P:Def("PCMPresentation.ConfigureOwnedAuraBar", PCMPresentation.ConfigureOwnedAuraBar)
+PCMPresentation.SetBuffTotemDuration = P:Def("PCMPresentation.SetBuffTotemDuration", PCMPresentation.SetBuffTotemDuration)
 PCMPresentation.SetStaticIcon = P:Def("PCMPresentation.SetStaticIcon", PCMPresentation.SetStaticIcon)
 PCMPresentation.SetSpellCooldownDuration = P:Def("PCMPresentation.SetSpellCooldownDuration", PCMPresentation.SetSpellCooldownDuration)
 PCMPresentation.SetChargeDuration = P:Def("PCMPresentation.SetChargeDuration", PCMPresentation.SetChargeDuration)
