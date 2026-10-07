@@ -33,6 +33,7 @@ local bit_bor = bit.bor
 
 local ESSENTIAL_VIEWER = "EssentialCooldownViewer"
 local UTILITY_VIEWER = "UtilityCooldownViewer"
+local AURA_UNITS = { "player", "target" }
 
 local DIRTY_STATE = 0x01
 local DIRTY_APPEARANCE = 0x02
@@ -468,21 +469,15 @@ local function ConfigureAuraSlots(record)
     return
   end
 
-  if PCMRuntime:IsAuraRestricted() then
-    record.auraStylePending = true
-    return
-  end
-
-  for _, button in pairs(record.auraButtons) do
-    if button and not button:CanBeAccessedInContext() then
+  local canCreateSlots = not PCMRuntime:IsAuraRestricted()
+  local candidates = BuildCandidateSet(record)
+  for _, unit in ipairs(AURA_UNITS) do
+    if record.auraSlots[unit] or canCreateSlots then
+      ConfigureAuraSlot(record, unit, candidates)
+    else
       record.auraStylePending = true
-      return
     end
   end
-
-  local candidates = BuildCandidateSet(record)
-  ConfigureAuraSlot(record, "player", candidates)
-  ConfigureAuraSlot(record, "target", candidates)
 end
 
 local function QueuePendingAuraStyles()
