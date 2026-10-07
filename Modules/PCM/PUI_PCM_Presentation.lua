@@ -990,6 +990,28 @@ local function ApplyOwnedTextStyle(fontString, parent, config, role, fallbackSiz
   fontString:SetPoint(point, parent, point, x, y)
 end
 
+local function ApplyOwnedCooldownDisplay(parts, isOnGCD, isTotem)
+  local swipe = parts.resolvedSwipe
+  local show, edge, color = swipe.showCooldown, swipe.cooldownEdge, swipe.cooldownColor
+  local reverse = swipe.reverse
+  local showText = parts.showCooldownText
+  if isTotem then
+    show, edge, color = swipe.showDuration, swipe.durationEdge, swipe.durationColor
+    reverse = swipe.durationReverse
+    showText = parts.showDurationText
+  elseif isOnGCD then
+    show, edge, color = swipe.showGCD, swipe.gcdEdge, swipe.gcdColor
+  end
+  parts.cooldown:SetDrawSwipe(show)
+  parts.cooldown:SetDrawEdge(show and edge)
+  parts.cooldown:SetReverse(reverse)
+  parts.cooldown:SetSwipeColor(color[1] or color.r, color[2] or color.g, color[3] or color.b, color[4] or color.a or 1)
+  parts.cooldown:SetHideCountdownNumbers(not showText)
+  parts.chargeCooldown:SetDrawSwipe(not isTotem and swipe.showCooldown)
+  parts.chargeCooldown:SetDrawEdge(not isTotem and swipe.showCooldown and swipe.rechargeEdge)
+  parts.chargeCooldown:SetHideCountdownNumbers(isTotem or not parts.showRechargeText)
+end
+
 function PCMPresentation.ApplyOwnedIconStyle(parts, style, isOnGCD)
   local size = math_max(Round(1), Round(tonumber(style.size) or 36))
   local borderSize = math_max(0, tonumber(style.borderSize) or 2)
@@ -1016,65 +1038,19 @@ function PCMPresentation.ApplyOwnedIconStyle(parts, style, isOnGCD)
   parts.tooltipsEnabled = style.tooltips == true
   parts.frame:SetMouseMotionEnabled(parts.tooltipsEnabled)
 
-  local swipe = style.swipe
-  local viewerSwipe = style.viewerSwipe
-  local show = swipe and swipe.show
-  if show == nil then
-    show = viewerSwipe == nil or viewerSwipe.cooldown ~= false
-  end
-  local showGCD = swipe and swipe.showGCD
-  if showGCD == nil then
-    showGCD = swipe and swipe.show
-  end
-  if showGCD == nil then
-    showGCD = viewerSwipe == nil or viewerSwipe.gcd ~= false
-  end
-  parts.showCooldownSwipe = show == true
-  parts.showGCDSwipe = showGCD == true
-  local showSwipe = parts.showCooldownSwipe
-  if isOnGCD == true then
-    showSwipe = parts.showGCDSwipe
-  end
-  parts.cooldown:SetDrawSwipe(showSwipe)
-  parts.chargeCooldown:SetDrawSwipe(parts.showCooldownSwipe)
-
-  local drawEdge = swipe and swipe.drawEdge
-  if drawEdge == nil then
-    drawEdge = viewerSwipe == nil or viewerSwipe.drawEdge ~= false
-  end
-  parts.drawCooldownEdge = drawEdge == true
-  parts.cooldown:SetDrawEdge(showSwipe and parts.drawCooldownEdge)
-
-  local rechargeEdge = drawEdge
-  if style.hasCharges and swipe and swipe.rechargeEdge ~= nil then
-    rechargeEdge = swipe.rechargeEdge == true
-  end
-  parts.chargeCooldown:SetDrawEdge(parts.showCooldownSwipe and rechargeEdge == true)
-
-  local reverse = swipe and swipe.reverse == true
-  parts.cooldown:SetReverse(reverse)
-  parts.chargeCooldown:SetReverse(reverse)
-
-  local swipeColor = swipe and swipe.color
-    or viewerSwipe and viewerSwipe.swipeColor
-  local swipeR, swipeG, swipeB, swipeA
-  if type(swipeColor) == "table" then
-    swipeR = tonumber(swipeColor[1] or swipeColor.r) or 1
-    swipeG = tonumber(swipeColor[2] or swipeColor.g) or 1
-    swipeB = tonumber(swipeColor[3] or swipeColor.b) or 1
-    swipeA = tonumber(swipeColor[4] or swipeColor.a) or 1
-  else
-    swipeR, swipeG, swipeB, swipeA = 0, 0, 0, 0.8
-  end
-  parts.cooldown:SetSwipeColor(swipeR, swipeG, swipeB, swipeA)
-  parts.chargeCooldown:SetSwipeColor(swipeR, swipeG, swipeB, swipeA)
+  local swipe = style.resolvedSwipe
+  parts.resolvedSwipe = swipe
+  parts.showDurationText = style.showDurationText
+  parts.chargeCooldown:SetReverse(swipe.reverse)
+  local color = swipe.cooldownColor
+  parts.chargeCooldown:SetSwipeColor(color[1] or color.r, color[2] or color.g, color[3] or color.b, color[4] or color.a or 1)
 
   local counts = style.viewerCounts
   local cooldownCount = style.cooldown and style.cooldown.show
   if cooldownCount == nil then
     cooldownCount = counts == nil or counts.cooldown ~= false
   end
-  parts.cooldown:SetHideCountdownNumbers(cooldownCount ~= true)
+  parts.showCooldownText = cooldownCount == true
 
   local rechargeCount = cooldownCount
   if style.hasCharges
@@ -1083,7 +1059,16 @@ function PCMPresentation.ApplyOwnedIconStyle(parts, style, isOnGCD)
   then
     rechargeCount = style.cooldown.rechargeShow == true
   end
-  parts.chargeCooldown:SetHideCountdownNumbers(rechargeCount ~= true)
+  parts.showRechargeText = rechargeCount == true
+  ApplyOwnedCooldownDisplay(parts, isOnGCD == true, parts.totemDisplayActive == true)
+  local appearance = style.appearance or {}
+  parts.readyDesaturation = 1 - math.max(0, math.min(1, tonumber(appearance.readySaturation) or 1))
+  local saturation = tonumber(appearance.cooldownSaturation)
+  if saturation == nil then
+    saturation = swipe.desaturateCooldown and 0 or 1
+  end
+  parts.cooldownDesaturation = 1 - math.max(0, math.min(1, saturation))
+  parts.auraDesaturation = 1 - math.max(0, math.min(1, tonumber(appearance.auraSaturation) or 1))
 
   local chargeCount = style.charge and style.charge.show
   if chargeCount == nil then
@@ -1145,34 +1130,14 @@ function PCMPresentation.ConfigureOwnedAuraLayer(parts, button, unit, style)
     AuraWidget.ConfigureDurationCooldown(auraParts)
   end
   auraParts.durationCooldown:SetAllPoints(button)
-  auraParts.durationCooldown:SetReverse(true)
-  local swipe = style.swipe or {}
-  local viewerSwipe = style.viewerSwipe or {}
-  local showDurationSwipe = swipe.show
-  if showDurationSwipe == nil then
-    showDurationSwipe = viewerSwipe.duration ~= false
-  end
-  local drawEdge = swipe.drawEdge
-  if drawEdge == nil then
-    drawEdge = viewerSwipe.drawEdge ~= false
-  end
-  auraParts.durationCooldown:SetDrawEdge(showDurationSwipe == true and drawEdge == true)
-  auraParts.durationCooldown:SetDrawSwipe(showDurationSwipe == true)
-
-  local showDurationCount = style.cooldown and style.cooldown.show
-  if showDurationCount == nil then
-    showDurationCount = style.viewerDurationCount ~= false
-  end
-  auraParts.durationCooldown:SetHideCountdownNumbers(showDurationCount ~= true)
+  local swipe = style.resolvedSwipe
+  auraParts.durationCooldown:SetReverse(swipe.durationReverse)
+  auraParts.durationCooldown:SetDrawEdge(swipe.showDuration and swipe.durationEdge)
+  auraParts.durationCooldown:SetDrawSwipe(swipe.showDuration)
+  auraParts.durationCooldown:SetHideCountdownNumbers(style.showDurationText ~= true)
   IconSkin.StyleCooldownText(auraParts.durationCooldown, style.cooldownFont)
-
-  local swipeColor = CopyColor(swipe.color or viewerSwipe.swipeColor, { 0, 0, 0, 0.72 })
-  auraParts.durationCooldown:SetSwipeColor(
-    swipeColor[1],
-    swipeColor[2],
-    swipeColor[3],
-    swipeColor[4]
-  )
+  local color = swipe.durationColor
+  auraParts.durationCooldown:SetSwipeColor(color[1] or color.r, color[2] or color.g, color[3] or color.b, color[4] or color.a or 1)
 
   local charge = style.charge or {}
   local counts = style.viewerCounts or {}
@@ -1433,12 +1398,8 @@ function PCMPresentation.SetStaticIcon(parts, texture)
 end
 
 function PCMPresentation.SetSpellCooldownDuration(parts, duration, isOnGCD)
-  local showSwipe = parts.showCooldownSwipe
-  if isOnGCD == true then
-    showSwipe = parts.showGCDSwipe
-  end
-  parts.cooldown:SetDrawSwipe(showSwipe)
-  parts.cooldown:SetDrawEdge(showSwipe and parts.drawCooldownEdge)
+  parts.totemDisplayActive = false
+  ApplyOwnedCooldownDisplay(parts, isOnGCD == true, false)
 
   if duration == nil then
     parts.cooldown:Clear()
@@ -1546,6 +1507,7 @@ function PCMPresentation.DeactivateOwnedIcon(parts)
   if parts.ownedStateGlowKey then
     PCMPresentation.ApplyCustomTrackerStateGlow(parts.ownedStateGlowKey, nil)
   end
+  parts.totemDisplayActive = false
   parts.cooldown:Clear()
   parts.chargeCooldown:Clear()
   parts.cooldownText:SetText(nil)
@@ -1566,6 +1528,8 @@ function PCMPresentation.DeactivateOwnedAuraIcon(parts)
 end
 
 function PCMPresentation.SetTotemDuration(parts, duration)
+  parts.totemDisplayActive = duration ~= nil
+  ApplyOwnedCooldownDisplay(parts, false, parts.totemDisplayActive)
   if duration == nil then
     parts.cooldown:Clear()
     return
@@ -1573,13 +1537,30 @@ function PCMPresentation.SetTotemDuration(parts, duration)
   parts.cooldown:SetCooldownFromDurationObject(duration, true)
 end
 
+function PCMPresentation.SetOwnedIconSaturation(parts, duration, isAura)
+  if isAura == true then
+    parts.icon:SetDesaturation(parts.auraDesaturation)
+  elseif duration == nil then
+    parts.icon:SetDesaturation(parts.readyDesaturation)
+  else
+    -- Forward restricted cooldown state through Blizzard's supported color evaluation.
+    parts.icon:SetDesaturation(C_CurveUtil.EvaluateColorValueFromBoolean(
+      duration:IsActive(), parts.cooldownDesaturation, parts.readyDesaturation
+    ))
+  end
+end
+
 function PCMPresentation.SetItemCooldown(parts, startTime, duration)
+  parts.totemDisplayActive = false
+  ApplyOwnedCooldownDisplay(parts, false, false)
   if startTime == 0 then
+    PCMPresentation.SetOwnedIconSaturation(parts, nil, false)
     parts.cooldown:Clear()
     return
   end
   parts.itemDuration:SetTimeFromStart(startTime, duration)
   parts.cooldown:SetCooldownFromDurationObject(parts.itemDuration, true)
+  PCMPresentation.SetOwnedIconSaturation(parts, parts.itemDuration, false)
 end
 
 function PCMPresentation.SetKeybindText(parts, text)
@@ -1659,23 +1640,19 @@ end
 function PCMPresentation.ApplyOwnedStateAppearance(parts, cooldownID, appearance, stateName, atMaxCharges)
   appearance = appearance or {}
   local alpha = 1
-  local saturation
   local glowStyle
   local glowColor
 
   if stateName == "AURA" then
     alpha = tonumber(appearance.auraAlpha) or 1
-    saturation = tonumber(appearance.auraSaturation)
     glowStyle = appearance.auraGlowStyle
     glowColor = appearance.auraGlowColor
   elseif stateName == "COOLDOWN" then
     alpha = tonumber(appearance.cooldownAlpha) or 1
-    saturation = tonumber(appearance.cooldownSaturation)
     glowStyle = appearance.cooldownGlowStyle
     glowColor = appearance.cooldownGlowColor
   elseif stateName == "READY" then
     alpha = tonumber(appearance.readyAlpha) or 1
-    saturation = tonumber(appearance.readySaturation)
     if atMaxCharges == true and appearance.maxChargeGlowStyle ~= nil then
       glowStyle = appearance.maxChargeGlowStyle
       glowColor = appearance.maxChargeGlowColor
@@ -1689,9 +1666,6 @@ function PCMPresentation.ApplyOwnedStateAppearance(parts, cooldownID, appearance
 
   parts.frame:SetAlpha(alpha)
   parts.frame:SetMouseMotionEnabled(parts.tooltipsEnabled == true and alpha > 0)
-  parts.icon:SetDesaturation(
-    saturation and (1 - math.max(0, math.min(1, saturation))) or 0
-  )
 
   parts.ownedStateGlowKey = parts.ownedStateGlowKey or ("pcm-owned:" .. tostring(cooldownID))
   PCMPresentation.ApplyCustomTrackerStateGlow(
@@ -2143,6 +2117,7 @@ PCMPresentation.SetProcState = P:Def("PCMPresentation.SetProcState", PCMPresenta
 PCMPresentation.DeactivateOwnedIcon = P:Def("PCMPresentation.DeactivateOwnedIcon", PCMPresentation.DeactivateOwnedIcon)
 PCMPresentation.DeactivateOwnedAuraIcon = P:Def("PCMPresentation.DeactivateOwnedAuraIcon", PCMPresentation.DeactivateOwnedAuraIcon)
 PCMPresentation.SetTotemDuration = P:Def("PCMPresentation.SetTotemDuration", PCMPresentation.SetTotemDuration)
+PCMPresentation.SetOwnedIconSaturation = P:Def("PCMPresentation.SetOwnedIconSaturation", PCMPresentation.SetOwnedIconSaturation)
 PCMPresentation.SetItemCooldown = P:Def("PCMPresentation.SetItemCooldown", PCMPresentation.SetItemCooldown)
 PCMPresentation.SetKeybindText = P:Def("PCMPresentation.SetKeybindText", PCMPresentation.SetKeybindText)
 PCMPresentation.ApplyOwnedStateAppearance = P:Def("PCMPresentation.ApplyOwnedStateAppearance", PCMPresentation.ApplyOwnedStateAppearance)
