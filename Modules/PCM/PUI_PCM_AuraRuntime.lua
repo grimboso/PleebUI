@@ -14,6 +14,9 @@ local PCMPresentation = ns.PCMPresentation
 local CreateFrame = CreateFrame
 local UIParent = UIParent
 local C_Spell = C_Spell
+local GetNumTotemSlots = GetNumTotemSlots
+local GetTotemInfo = GetTotemInfo
+local GetTotemDuration = GetTotemDuration
 local ipairs = ipairs
 local pairs = pairs
 local type = type
@@ -62,6 +65,9 @@ local pendingCatalog = false
 local pendingAppearance = false
 local pendingVisibility = false
 local pendingSlotConfiguration = false
+local pendingTotems = false
+local totemSpellIDs = {}
+local totemDurations = {}
 local SetSlotActive
 
 local AURA_RESTRICTION_TYPES = {
@@ -159,7 +165,8 @@ local function ConfigureBarButton(record, button, initializing)
   PCMPresentation.ConfigureOwnedAuraBar(
     record.parts,
     button,
-    viewers[record.viewerKey].style
+    viewers[record.viewerKey].style,
+    button == record.buttons.totem
   )
   record.stylePending = nil
 end
@@ -197,7 +204,23 @@ SetSlotActive = function(record, active)
     if handle then
       AuraSlotDriver:SetSlotActive(
         handle,
-        active and (record.entry.playerAuraOnly ~= true or unit == "player")
+        active and record.totemSlot == nil
+          and (record.entry.playerAuraOnly ~= true or unit == "player")
+      )
+    end
+  end
+  local button = record.buttons.totem
+  if button then
+    local shown = active and record.totemSlot ~= nil
+    if record.totemShown ~= shown then
+      record.totemShown = shown
+      button:SetShown(shown)
+      if record.boundsAssistants.totem then
+        record.boundsAssistants.totem:SetShown(shown)
+      end
+      PCMPresentation.SetBuffTotemDuration(
+        button.__puiAuraApplicationDurationParts,
+        shown and record.totemDuration or nil
       )
     end
   end
@@ -221,13 +244,14 @@ local function SlotConfigurationMatches(left, right)
 end
 
 local function ConfigureRecordSlots(record)
+  record.candidateSpellIDs = BuildCandidates(record)
   if PCMRuntime:IsAuraRestricted() then
     record.slotConfigurationPending = true
     pendingSlotConfiguration = true
     return
   end
 
-  local candidates = BuildCandidates(record)
+  local candidates = record.candidateSpellIDs
   local units = record.entry.playerAuraOnly and PLAYER_AURA_UNITS or AURA_UNITS
   for _, unit in ipairs(units) do
     local handle = record.slots[unit]
@@ -290,6 +314,84 @@ local function ApplyRecordAppearance(record)
   record.appearancePending = nil
 end
 
+local function SetRecordTotem(record, slot, duration)
+  local wasActive = record.totemSlot ~= nil
+  record.totemSlot = slot
+  record.totemDuration = duration
+  if slot and not record.buttons.totem then
+    local button = CreateFrame(
+      "Frame", nil, viewers[record.viewerKey].frame, "PUI_AuraApplicationDurationTemplate"
+    )
+    button:Hide()
+    InitializeAuraButton(record, button, "totem")
+    button.PUIDurationCooldown:SetScript("OnCooldownDone", function()
+      SetRecordTotem(record, nil, nil)
+    end)
+    button:SetScript("OnEnter", function()
+      GameTooltip:SetOwner(button, "ANCHOR_RIGHT")
+      GameTooltip:SetSpellByID(record.totemSpellID)
+      GameTooltip:Show()
+    end)
+    button:SetScript("OnLeave", function()
+      GameTooltip:Hide()
+    end)
+  end
+  if slot then
+    local auraParts = record.buttons.totem.__puiAuraApplicationDurationParts
+    auraParts.icon:SetTexture(record.runtimeTexture or record.entry.texture)
+    if auraParts.ownedName then
+      auraParts.ownedName:SetText(record.runtimeName or record.entry.name)
+    end
+  end
+  record.totemShown = nil
+  SetSlotActive(record, record.presentationShown == true)
+  if wasActive ~= (slot ~= nil) then
+    if groupLayoutEnabled then
+      ns.PCMGroupManager:RequestLayout()
+    else
+      AuraLayout:RequestLayout(record.viewerKey)
+    end
+  end
+end
+
+local function RefreshTotemBindings(preferredSlot)
+  if not presentationActive then
+    return
+  end
+  wipe(totemSpellIDs)
+  wipe(totemDurations)
+  local slotCount = GetNumTotemSlots()
+  for slot = 1, slotCount do
+    local spellID = select(7, GetTotemInfo(slot))
+    -- Totem identity may be secret; only public identities can select addon-owned records.
+    if not issecretvalue(spellID) and type(spellID) == "number" and spellID > 0 then
+      totemSpellIDs[slot] = spellID
+      totemDurations[slot] = GetTotemDuration(slot)
+    end
+  end
+  for _, viewer in pairs(viewers) do
+    for _, record in ipairs(viewer.orderedRecords) do
+      local selectedSlot
+      local candidates = record.candidateSpellIDs
+      for slot = 1, slotCount do
+        local spellID = totemSpellIDs[slot]
+        if spellID and candidates[spellID] and totemDurations[slot] then
+          if not selectedSlot or slot == record.totemSlot or slot == preferredSlot then
+            selectedSlot = slot
+          end
+          if slot == preferredSlot then
+            break
+          end
+        end
+      end
+      if selectedSlot or record.totemSlot then
+        record.totemSpellID = selectedSlot and totemSpellIDs[selectedSlot] or nil
+        SetRecordTotem(record, selectedSlot, selectedSlot and totemDurations[selectedSlot] or nil)
+      end
+    end
+  end
+end
+
 local function CreateRecord(viewer, entry, preparedOnly)
   local record = retiredRecords[viewer.key][entry.cooldownID]
   if record then
@@ -299,6 +401,7 @@ local function CreateRecord(viewer, entry, preparedOnly)
     record.runtimeOverrideSpellID = entry.overrideSpellID
     record.runtimeName = nil
     record.runtimeTexture = nil
+    record.candidateSpellIDs = BuildCandidates(record)
     viewer.records[entry.cooldownID] = record
     if not preparedOnly then
       ConfigureRecordSlots(record)
@@ -354,6 +457,9 @@ local function CreateRecord(viewer, entry, preparedOnly)
 end
 
 local function ReleaseRecord(viewer, record)
+  record.totemSlot = nil
+  record.totemDuration = nil
+  record.totemSpellID = nil
   SetSlotActive(record, false)
   record.parts.frame:Hide()
   if not record.layoutFrame then
@@ -397,6 +503,7 @@ local function ReconcileViewer(viewer, entries, generation, restricted)
         record.runtimeOverrideSpellID = entry.overrideSpellID
         record.runtimeName = nil
         record.runtimeTexture = nil
+        record.candidateSpellIDs = BuildCandidates(record)
         if not configurationMatches then
           ConfigureRecordSlots(record)
         end
@@ -555,6 +662,13 @@ end
 
 function AuraRuntime:SetPresentationActive(active)
   presentationActive = active == true and enabled
+  if presentationActive then
+    restrictionFrame:RegisterEvent("PLAYER_TOTEM_UPDATE")
+    restrictionFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
+  else
+    restrictionFrame:UnregisterEvent("PLAYER_TOTEM_UPDATE")
+    restrictionFrame:UnregisterEvent("PLAYER_ENTERING_WORLD")
+  end
   for _, viewer in pairs(viewers) do
     if viewer.frame then
       viewer.frame:SetShown(
@@ -565,6 +679,7 @@ function AuraRuntime:SetPresentationActive(active)
       UpdateRecordVisibility(record)
     end
   end
+  RefreshTotemBindings()
 end
 
 function AuraRuntime:SetBuffIconHiddenResolver(resolver)
@@ -716,10 +831,13 @@ function AuraRuntime:ApplySpellOverride(baseSpellID, overrideSpellID)
       end
     end
   end
+  pendingTotems = true
+  ScheduleFlush()
 end
 
 function AuraRuntime:OnCatalogChanged(generation)
   pendingCatalog = true
+  pendingTotems = true
   ScheduleFlush()
 
   if PCMRuntime:IsAuraRestricted() then
@@ -794,6 +912,11 @@ function AuraRuntime:Flush()
     end
   end
 
+  if pendingTotems then
+    pendingTotems = false
+    RefreshTotemBindings()
+  end
+
   if not groupLayoutEnabled then
     AuraLayout:Flush()
   end
@@ -833,6 +956,9 @@ function AuraRuntime:Disable()
   pendingAppearance = false
   pendingVisibility = false
   pendingSlotConfiguration = false
+  pendingTotems = false
+  wipe(totemSpellIDs)
+  wipe(totemDurations)
   for _, viewer in pairs(viewers) do
     AuraLayout:UnregisterViewer(viewer.key)
     for _, record in ipairs(viewer.orderedRecords) do
@@ -864,14 +990,21 @@ function AuraRuntime:IsReady()
 end
 
 restrictionFrame:SetScript("OnEvent", function(_, event, restrictionType, state)
+  if event == "PLAYER_TOTEM_UPDATE" then
+    RefreshTotemBindings(restrictionType)
+    return
+  elseif event == "PLAYER_ENTERING_WORLD" then
+    RefreshTotemBindings()
+    return
+  end
   if event == "ADDON_RESTRICTION_STATE_CHANGED"
     and state == Enum.AddOnRestrictionState.Activating
     and AURA_RESTRICTION_TYPES[restrictionType] == true
   then
     for _, viewer in pairs(viewers) do
       for _, record in ipairs(viewer.orderedRecords) do
-        for _, button in pairs(record.buttons) do
-          if button:CanBeAccessedInContext() then
+        for unit, button in pairs(record.buttons) do
+          if unit ~= "totem" and button:CanBeAccessedInContext() then
             button:SetAlpha(1)
             record.stylePending = true
           end
@@ -886,6 +1019,7 @@ restrictionFrame:SetScript("OnEvent", function(_, event, restrictionType, state)
     pendingAppearance = true
     pendingSlotConfiguration = true
     pendingVisibility = true
+    pendingTotems = true
     ScheduleFlush()
   end
 end)
