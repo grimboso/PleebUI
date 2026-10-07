@@ -9,6 +9,7 @@ local table_sort = table.sort
 local USE_NATIVE_APPLICATION_THRESHOLDS = select(4, GetBuildInfo()) >= 120105
 local applicationThresholdSources = {}
 local applicationThresholdFrames = setmetatable({}, { __mode = "k" })
+local applicationThresholdViewers = setmetatable({}, { __mode = "k" })
 local applicationThresholdPending = {}
 local applicationThresholdParents = setmetatable({}, { __mode = "k" })
 local applicationThresholdWork = CreateFrame("Frame")
@@ -158,7 +159,10 @@ local function FeedApplicationThresholds(parts, value)
   local count = parts.applicationThresholdCount or 0
 
   for index = 1, count do
-    overlays[index]:SetValue(value)
+    local overlay = overlays[index]
+    if overlay.applicationThresholdValue ~= 1 then
+      overlay:SetValue(value)
+    end
   end
 end
 
@@ -237,7 +241,9 @@ local function ConfigureApplicationThresholdOverlay(
   overlay:ClearAllPoints()
   overlay:SetAllPoints(config and config.anchor or applicationBar:GetStatusBarTexture())
   overlay:SetMinMaxValues(thresholdValue - 1, thresholdValue)
-  overlay:SetValue(0)
+  -- CDM suppresses zero/one-stack text; the native fill anchors this constant layer.
+  overlay.applicationThresholdValue = thresholdValue
+  overlay:SetValue(thresholdValue == 1 and 1 or 0)
   overlay:Show()
 end
 
@@ -369,17 +375,20 @@ local function ClearApplicationThresholdFrame(frame)
   end
 end
 
-local function GetApplicationThresholdFrameValue(frame)
-  local auraData = frame:GetAuraDataCached()
-  if issecretvalue(auraData) or type(auraData) ~= "table" then
-    return 0
-  end
-  return auraData.applications
-end
-
 local function FeedApplicationThresholdFrame(frame, value)
   if not next(applicationThresholdSources) then
     return
+  end
+
+  if not issecretvalue(value) then
+    if type(value) == "string" then
+      value = value == "" and 0 or tonumber(value)
+      if value == nil then
+        return
+      end
+    elseif type(value) ~= "number" then
+      return
+    end
   end
 
   local cooldownID = frame:GetCooldownID()
@@ -425,13 +434,6 @@ local function HookApplicationThresholdFrame(frame)
 
   local countText = frame:GetApplicationsFontString()
   hooksecurefunc(countText, "SetText", function(_, value)
-    if not next(applicationThresholdSources) then
-      return
-    end
-    -- CDM renders a number directly, but suppresses its text at one stack.
-    if not issecretvalue(value) and type(value) ~= "number" then
-      value = GetApplicationThresholdFrameValue(frame)
-    end
     FeedApplicationThresholdFrame(frame, value)
   end)
   hooksecurefunc(frame, "ResetCooldownData", function()
@@ -439,25 +441,26 @@ local function HookApplicationThresholdFrame(frame)
   end)
 end
 
-local applicationThresholdMixinHooksInstalled = false
+local function RefreshApplicationThresholdViewer(viewer)
+  for frame in viewer.itemFramePool:EnumerateActive() do
+    HookApplicationThresholdFrame(frame)
+    FeedApplicationThresholdFrame(frame, frame:GetApplicationsFontString():GetText())
+  end
+end
 
 local function RefreshApplicationThresholdFrames()
-  if not applicationThresholdMixinHooksInstalled
-    and CooldownViewerBuffIconItemMixin
-    and CooldownViewerBuffBarItemMixin
-  then
-    applicationThresholdMixinHooksInstalled = true
-    hooksecurefunc(CooldownViewerBuffIconItemMixin, "OnLoad", HookApplicationThresholdFrame)
-    hooksecurefunc(CooldownViewerBuffBarItemMixin, "OnLoad", HookApplicationThresholdFrame)
-  end
-
   for _, viewerKey in ipairs({ "BuffIconCooldownViewer", "BuffBarCooldownViewer" }) do
     local viewer = _G[viewerKey]
     if viewer and viewer.itemFramePool then
-      for frame in viewer.itemFramePool:EnumerateActive() do
-        HookApplicationThresholdFrame(frame)
-        FeedApplicationThresholdFrame(frame, GetApplicationThresholdFrameValue(frame))
+      if not applicationThresholdViewers[viewer] then
+        applicationThresholdViewers[viewer] = true
+        hooksecurefunc(viewer, "RefreshLayout", function()
+          if next(applicationThresholdSources) then
+            RefreshApplicationThresholdViewer(viewer)
+          end
+        end)
       end
+      RefreshApplicationThresholdViewer(viewer)
     end
   end
 end
@@ -520,9 +523,14 @@ function AuraWidget.SetApplicationThresholdActive(parts, active)
     for index = 1, #source.gates do
       ns.AuraSlotDriver:SetSlotActive(source.gates[index].slot, active and index <= (parts.applicationThresholdCount or 0))
     end
-  elseif not active then
-    source.frame = nil
-    FeedApplicationThresholds(parts, 0)
+  else
+    for index = 1, #parts.applicationThresholds do
+      parts.applicationThresholds[index]:SetShown(active and index <= (parts.applicationThresholdCount or 0))
+    end
+    if not active then
+      source.frame = nil
+      FeedApplicationThresholds(parts, 0)
+    end
   end
 
   if source.active == active then
