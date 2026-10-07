@@ -1990,7 +1990,13 @@ do
     if cfg.showKeybinds == nil then cfg.showKeybinds = true end
     if cfg.showTooltips == nil then cfg.showTooltips = true end
     if cfg.onlyOnUseTrinkets == nil then cfg.onlyOnUseTrinkets = true end
+    if cfg.timerSource == nil then
+      cfg.timerSource = cfg.showDurationSwipe == false and "COOLDOWN" or "AUTOMATIC"
+      cfg.showDurationSwipe = true
+    end
+    if cfg.timerSource ~= "COOLDOWN" then cfg.timerSource = "AUTOMATIC" end
     if cfg.showDurationSwipe == nil then cfg.showDurationSwipe = true end
+    if cfg.showDurationText == nil then cfg.showDurationText = true end
     if cfg.glowDuringDurationSwipe == nil then cfg.glowDuringDurationSwipe = false end
     if cfg.showCooldownText == nil then cfg.showCooldownText = true end
     if cfg.missingAlpha == nil then cfg.missingAlpha = 0.38 end
