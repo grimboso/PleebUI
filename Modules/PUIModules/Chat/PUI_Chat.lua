@@ -1161,8 +1161,8 @@ local function ChatProvider(AddonObj)
 
             savedLines = {
               type = "range",
-              name = "History lines",
-              desc = "Maximum saved messages. Chat scrollback grows to fit this limit.",
+              name = "History lines per tab",
+              desc = "Maximum saved messages per tab and per whisper conversation. Trade and Services are never saved.",
               order = 3,
               min = 10,
               max = 5000,
@@ -1183,7 +1183,7 @@ local function ChatProvider(AddonObj)
             historyTypes = {
               type = "multiselect",
               name = "History types",
-              desc = "Save and restore these chat types.",
+              desc = "Save and restore these chat types. Channels exclude Trade and Services.",
               order = 4,
               values = ChatLinks.ChatHistoryTypes,
               disabled = function()

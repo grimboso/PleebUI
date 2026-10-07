@@ -97,7 +97,22 @@ function ChatLinks:CreateChatHistoryEntry(event, ...)
     local censored = C_ChatInfo.IsChatLineCensored(lineID)
     if not canaccessvalue(censored) or censored then return end
   end
-  if event:sub(1, 12) == "CHAT_MSG_BN_" and sender:find("|K.-|k") then
+  local conversationType, conversationKey
+  if event == "CHAT_MSG_WHISPER" or event == "CHAT_MSG_WHISPER_INFORM" then
+    conversationType, conversationKey = "WHISPER", string.lower(sender)
+  elseif event == "CHAT_MSG_BN_WHISPER" or event == "CHAT_MSG_BN_WHISPER_INFORM" then
+    if canaccessvalue(accountID) and type(accountID) == "number" then
+      local account = C_BattleNet.GetAccountInfoByID(accountID)
+      if canaccessvalue(account) and account and canaccesstable(account) then
+        local battleTag = account.battleTag
+        if canaccessvalue(battleTag) and type(battleTag) == "string" and battleTag ~= "" then
+          conversationType, conversationKey = "BN_WHISPER", string.lower(battleTag)
+          if sender:find("|K.-|k") then sender = battleTag end
+        end
+      end
+    end
+    if sender:find("|K.-|k") then return end
+  elseif event:sub(1, 12) == "CHAT_MSG_BN_" and sender:find("|K.-|k") then
     if not canaccessvalue(accountID) or type(accountID) ~= "number" then return end
     local account = C_BattleNet.GetAccountInfoByID(accountID)
     if not canaccessvalue(account) or not account or not canaccesstable(account) then return end
@@ -123,7 +138,10 @@ function ChatLinks:CreateChatHistoryEntry(event, ...)
     args[7], args[8], args[9], args[10], args[11], args[12], args[13], args[14], args[18])
   local savedLabel, accessible = CopyHistoryValue(label, visiting)
   if not accessible or type(savedLabel) ~= "string" then savedLabel = args[2] end
-  return { event = event, args = args, timestamp = time(), senderLabel = savedLabel }
+  return {
+    event = event, args = args, timestamp = time(), senderLabel = savedLabel,
+    conversationType = conversationType, conversationKey = conversationKey,
+  }
 end
 
 ChatLinks.CreateChatHistoryEntry = P:Def("CreateChatHistoryEntry", ChatLinks.CreateChatHistoryEntry)
