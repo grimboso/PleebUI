@@ -123,9 +123,11 @@ function Addon:PUI_ConfirmAction(opts)
 
   _PUI_RefreshConfirmDialogSkin(f)
 
+  f:SetFrameStrata("FULLSCREEN_DIALOG")
   f:ClearAllPoints()
   f:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
   f:Show()
+  f:Raise()
 end
 
 function Addon:PUI_ConfirmResetAndReload(opts)
