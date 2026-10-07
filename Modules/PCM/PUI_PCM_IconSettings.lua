@@ -315,7 +315,6 @@ function IconSettings:ResolveOwnedStyle(entry, viewerKey, viewerStyle)
     viewerStyle.durationCount ~= false
   )
   style.useDurationDisplay = style.resolvedSwipe.source ~= "COOLDOWN"
-    and (style.resolvedSwipe.showDuration or style.showDurationText)
   style.tooltips = viewerStyle.tooltips
   style.hideWhenInactive = viewerStyle.hideWhenInactive == true
   style.procGlow = viewerStyle.procGlow
