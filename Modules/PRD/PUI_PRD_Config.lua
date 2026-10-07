@@ -11,6 +11,7 @@ local LSM = ns.LSM
 
 local P = ns.Pleebug:DropIn({}, { name = "PRD_Config" })
 local _, PLAYER_CLASS = UnitClass("player")
+local USE_NATIVE_APPLICATION_THRESHOLDS = select(4, GetBuildInfo()) >= 120105
 
 local PRDPreview = {}
 ns.PRDPreview = PRDPreview
@@ -4121,15 +4122,6 @@ do
       and ns.PRDSecondary:ResourceSupportsStackColorShifts(resource.key)
       and AuraWidget.EnsureStackColorThresholds(settings)
       or nil
-    local freezingRecoloringEnabled = false
-    if resource.key == "FREEZING" and stackColorThresholds then
-      for index = 1, #stackColorThresholds do
-        if stackColorThresholds[index].enabled == true then
-          freezingRecoloringEnabled = true
-          break
-        end
-      end
-    end
 
     local function AppearanceDisabled()
       return settings.useSharedAppearance ~= false
@@ -4606,11 +4598,21 @@ do
           },
         },
       },
-      freezingCdmNotice = {
+      stackRecolorCdmNotice = {
         type = "description",
-        name = "Stack recoloring requires Freezing to be tracked in Blizzard's Buff Icon Cooldown Manager.",
+        name = "Stack recoloring requires this effect to be tracked in Blizzard's Cooldown Manager.",
         order = 19,
-        hidden = resource.key ~= "FREEZING" or not freezingRecoloringEnabled,
+        hidden = function()
+          if USE_NATIVE_APPLICATION_THRESHOLDS or not stackColorThresholds then
+            return true
+          end
+          for index = 1, #stackColorThresholds do
+            if stackColorThresholds[index].enabled == true then
+              return false
+            end
+          end
+          return true
+        end,
       },
       appearance = {
         type = "group",
