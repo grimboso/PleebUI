@@ -51,6 +51,7 @@ local function GetStyle()
     borderColor = bb.borderColor,
     backgroundColor = root.buffBarBgColor or { 0.12, 0.12, 0.12, 0.95 },
     color = color,
+    showName = bb.showName == true,
     nameFont = owner._ResolveFontOpts("cooldown", VIEWER_KEY),
     durationFont = owner._ResolveFontOpts("cooldown", VIEWER_KEY),
     applicationFont = owner._ResolveFontOpts("charge", VIEWER_KEY),
