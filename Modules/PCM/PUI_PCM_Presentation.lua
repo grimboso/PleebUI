@@ -1264,11 +1264,7 @@ function PCMPresentation.ConfigureOwnedAuraBar(parts, button, style, isTotem)
     auraParts.durationBar:Show()
     auraParts.durationTextHolder:Show()
     auraParts.durationText:Show()
-    auraParts.icon:Show()
-    auraParts.durationCooldown:SetAllPoints(button)
-    auraParts.durationCooldown:SetDrawSwipe(false)
-    auraParts.durationCooldown:SetHideCountdownNumbers(true)
-    auraParts.durationCooldown:Show()
+    auraParts.durationCooldown:Hide()
     if not auraParts.totemDurationBinding then
       auraParts.totemDurationBinding = BarWidget.CreateDurationBinding(auraParts.durationText)
     end
@@ -1410,22 +1406,25 @@ function PCMPresentation.ConfigureOwnedAuraBar(parts, button, style, isTotem)
 end
 
 function PCMPresentation.SetBuffTotemDuration(auraParts, duration)
-  if duration == nil then
-    auraParts.durationCooldown:Clear()
-    if auraParts.totemDurationBinding then
+  if auraParts.totemDurationBinding then
+    if duration == nil then
       auraParts.totemDurationBinding:Disable()
-      auraParts.totemDurationBinding:SetDuration(nil)
       BarWidget.StopTimerBar(auraParts.durationBar)
       auraParts.durationText:SetText("")
+      return
     end
-    return
-  end
 
-  auraParts.durationCooldown:SetCooldownFromDurationObject(duration, true)
-  if auraParts.totemDurationBinding then
-    auraParts.durationBar:SetTimerDuration(duration, nil, Enum.StatusBarTimerDirection.RemainingTime)
+    auraParts.durationBar:SetTimerDuration(
+      duration,
+      Enum.StatusBarInterpolation.Immediate,
+      Enum.StatusBarTimerDirection.RemainingTime
+    )
     auraParts.totemDurationBinding:SetDuration(duration)
     auraParts.totemDurationBinding:Enable()
+  elseif duration == nil then
+    auraParts.durationCooldown:Clear()
+  else
+    auraParts.durationCooldown:SetCooldownFromDurationObject(duration, true)
   end
 end
 
