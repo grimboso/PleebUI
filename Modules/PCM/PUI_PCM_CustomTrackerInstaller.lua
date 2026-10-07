@@ -385,7 +385,7 @@ local function SetPage(newPage)
         or (draft.kind == "duration" or draft.kind == "stack") and "ACTIVE"
         or "COOLDOWN"
       AddSlider("Button size", draft.icon.size, 20, 96, 1, function(value) draft.icon.size = math.floor(value + 0.5) end)
-      AddCheckbox("Show cooldown swipe", draft.icon.showSwipe, function(value) draft.icon.showSwipe = value end, timedState)
+      AddCheckbox("Show timer swipe", draft.icon.showSwipe, function(value) draft.icon.showSwipe = value end, timedState)
       AddCheckbox("Show countdown", draft.icon.showDuration, function(value) draft.icon.showDuration = value end, timedState)
       AddCheckbox("Show tooltip on hover", draft.icon.showTooltip, function(value) draft.icon.showTooltip = value end)
       AddDescription("Tooltips apply to the live tracker. The setup preview stays display-only.")
@@ -444,12 +444,20 @@ local function SetPage(newPage)
       AddCheckbox(draft.kind == "charge" and "Desaturate while recharging" or "Desaturate while on cooldown", draft.desaturateCooldown, function(value) draft.desaturateCooldown = value end, draft.kind == "charge" and "RECHARGING" or "COOLDOWN")
       AddDropdown(draft.kind == "charge" and "Recharging glow" or "On cooldown glow", GLOW_STYLES, GLOW_ORDER, draft.cooldownGlowStyle, function(value) draft.cooldownGlowStyle = value end, draft.kind == "charge" and "RECHARGING" or "COOLDOWN")
 
-      AddCheckbox("Show while aura is active", draft.showActive, function(value)
-        draft.showActive = value
-        if not value then
-          draft.customGlowEnabled = false
-        end
-      end, "ACTIVE")
+      if draft.presentation == "BUTTON" then
+        AddDropdown("Timer display", {
+          AUTOMATIC = "Duration while active",
+          COOLDOWN = "Cooldown only",
+        }, { "AUTOMATIC", "COOLDOWN" }, draft.showActive and "AUTOMATIC" or "COOLDOWN", function(value)
+          draft.showActive = value == "AUTOMATIC"
+          if not draft.showActive then draft.customGlowEnabled = false end
+        end, "ACTIVE")
+      else
+        AddCheckbox("Show while aura is active", draft.showActive, function(value)
+          draft.showActive = value
+          if not value then draft.customGlowEnabled = false end
+        end, "ACTIVE")
+      end
       AddDescription("Choose the active buff and glow on the Active glow page.")
     else
       draft.showActive = true
