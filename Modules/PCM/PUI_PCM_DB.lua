@@ -1684,6 +1684,7 @@ do
     root.viewerSwipes[viewerKey] = root.viewerSwipes[viewerKey] or {}
     local entry = root.viewerSwipes[viewerKey]
 
+    if entry.desaturateCooldown == nil then entry.desaturateCooldown = true end
     if entry.gcd == nil then entry.gcd = true end
     if entry.cooldown == nil then entry.cooldown = true end
     if entry.duration == nil then entry.duration = true end
