@@ -514,7 +514,7 @@ local function GetKnownEquipSlotCooldownData(equipSlot, category, collectAuraSpe
   return found, spellIDs, readable
 end
 
-local function BuildDurationSpellIDs(definition, itemID, trackedSpellIDs)
+local function BuildDurationSpellIDs(definition, itemID, spellID, trackedSpellIDs)
   local spellIDs = {}
 
   if definition.tracksDuration and itemID then
@@ -522,13 +522,19 @@ local function BuildDurationSpellIDs(definition, itemID, trackedSpellIDs)
     AddDurationSpellID(spellIDs, itemSpellID)
   end
 
+  AddDurationSpellID(spellIDs, spellID)
+
   if trackedSpellIDs then
     for spellID in pairs(trackedSpellIDs) do
       AddDurationSpellID(spellIDs, spellID)
     end
   end
 
-  return next(spellIDs) and spellIDs or nil
+  local candidates = {}
+  for durationSpellID in pairs(spellIDs) do
+    ns.PCMCatalog:AddAuraCandidates(candidates, durationSpellID)
+  end
+  return next(candidates) and candidates or nil
 end
 
 local function ResolveTrinket(definition, cfg)
@@ -610,11 +616,11 @@ end
 local function ResolveDefinition(definition, cfg)
   if definition.spellIDs then
     local spellID, available = ResolveSpell(definition)
-    return nil, spellID, nil, available, nil, BuildDurationSpellIDs(definition, nil), false
+    return nil, spellID, nil, available, nil, BuildDurationSpellIDs(definition, nil, spellID), false
   end
   if definition.equipSlot then
     local itemID, count, available, trinketKind, trackedSpellIDs, filtered = ResolveTrinket(definition, cfg)
-    return itemID, nil, count, available, trinketKind, BuildDurationSpellIDs(definition, itemID, trackedSpellIDs), filtered
+    return itemID, nil, count, available, trinketKind, BuildDurationSpellIDs(definition, itemID, nil, trackedSpellIDs), filtered
   end
   local itemID, count, available = ResolveBagItem(definition, cfg.showKeybinds == true)
   return itemID, nil, count, available, nil, BuildDurationSpellIDs(definition, itemID), false
@@ -899,6 +905,14 @@ local function RefreshMover()
             set = function(value) GetDB().onlyOnUseTrinkets = value == true Rebuild() end,
           },
           {
+            type = "select",
+            label = "Timer display",
+            values = { AUTOMATIC = "Duration while active", COOLDOWN = "Cooldown only" },
+            sorting = { "AUTOMATIC", "COOLDOWN" },
+            get = function() return GetDB().timerSource end,
+            set = function(value) GetDB().timerSource = value Rebuild() end,
+          },
+          {
             type = "toggle",
             label = "Show duration swipe",
             get = function() return GetDB().showDurationSwipe == true end,
@@ -906,7 +920,13 @@ local function RefreshMover()
           },
           {
             type = "toggle",
-            label = "Glow during duration swipe",
+            label = "Show duration countdown",
+            get = function() return GetDB().showDurationText == true end,
+            set = function(value) GetDB().showDurationText = value == true Rebuild() end,
+          },
+          {
+            type = "toggle",
+            label = "Glow while aura is active",
             get = function() return GetDB().glowDuringDurationSwipe == true end,
             set = function(value) GetDB().glowDuringDurationSwipe = value == true Rebuild() end,
           },
@@ -967,7 +987,7 @@ local function RefreshCooldownFont(cfg)
 end
 
 local function ConfigureDurationAuraParts(icon, button, frameLevel, showGlow)
-  local parts = AuraWidget.BindApplicationDurationButton(button, {})
+  local parts = AuraWidget.BindApplicationDurationButton(button)
 
   button:ClearAllPoints()
   button:SetAllPoints(icon.frame)
@@ -980,7 +1000,12 @@ local function ConfigureDurationAuraParts(icon, button, frameLevel, showGlow)
   AuraWidget.DisableApplicationBar(parts)
   AuraWidget.DisableDurationBar(parts)
   parts.durationText:SetFontObject(durationFont)
-  AuraWidget.ConfigureDurationText(parts, BarWidget.GetDurationFormatter())
+  local cfg = GetDB()
+  if cfg.showDurationText then
+    AuraWidget.ConfigureDurationText(parts, BarWidget.GetDurationFormatter())
+  else
+    AuraWidget.DisableDurationText(parts)
+  end
   AuraWidget.ConfigureDurationCooldown(parts)
   parts.icon:SetAllPoints(button)
   parts.durationTextHolder:SetAllPoints(button)
@@ -989,12 +1014,12 @@ local function ConfigureDurationAuraParts(icon, button, frameLevel, showGlow)
   parts.durationCooldown:SetAllPoints(button)
   parts.durationCooldown:SetReverse(true)
   parts.durationCooldown:SetSwipeColor(0, 0, 0, 0.72)
-  parts.durationCooldown:SetDrawSwipe(true)
-  parts.durationCooldown:SetDrawEdge(true)
+  parts.durationCooldown:SetDrawSwipe(cfg.showDurationSwipe == true)
+  parts.durationCooldown:SetDrawEdge(cfg.showDurationSwipe == true)
   parts.durationCooldown:SetHideCountdownNumbers(true)
 
-  if showGlow then
-    AuraWidget.CreateSlotGlow(
+  if showGlow and not parts.durationGlow then
+    parts.durationGlow = AuraWidget.CreateSlotGlow(
       button,
       math.max(1, icon.frame:GetWidth()),
       math.max(1, icon.frame:GetHeight()),
@@ -1005,6 +1030,7 @@ local function ConfigureDurationAuraParts(icon, button, frameLevel, showGlow)
   end
 
   button:SetAlpha(1)
+  return parts
 end
 
 local function SetDurationAuraEntryActive(entry, active)
@@ -1031,15 +1057,18 @@ local function EnsureDurationAuraSlot(icon, key, unit, filter, frameLevel, spell
   local variantKey = showGlow and "glow" or "plain"
   local variant = entry[variantKey]
   if not variant then
+    if PCMRuntime:IsAuraRestricted() then return end
     variant = {}
     entry[variantKey] = variant
     variant.handle = AuraSlotDriver:CreateSlot(unit, filter, {
       candidateFilters = { includeSpellIDs = spellIDs },
       templateNames = { "PUI_AuraApplicationDurationTemplate" },
       initializeFrame = function(button)
-        ConfigureDurationAuraParts(icon, button, frameLevel, showGlow)
+        variant.parts = ConfigureDurationAuraParts(icon, button, frameLevel, showGlow)
       end,
     })
+  elseif not PCMRuntime:IsAuraRestricted() and variant.parts.button:CanBeAccessedInContext() then
+    ConfigureDurationAuraParts(icon, variant.parts.button, frameLevel, showGlow)
   end
 
   entry.activeVariant = variantKey
@@ -1066,7 +1095,7 @@ local function ConfigureDurationAuraTrack(icon, definition, spellIDs, cfg)
   local canRun = Tracker.active
     and (cfg.enabled == true or Tracker.testMode)
     and (Tracker.testMode or cfg.combatOnly ~= true or UnitAffectingCombat("player"))
-    and cfg.showDurationSwipe == true
+    and cfg.timerSource == "AUTOMATIC"
     and type(spellIDs) == "table"
     and next(spellIDs) ~= nil
 
@@ -1604,11 +1633,10 @@ end
 
 PCMRuntime:RegisterSubscriber("ConsumableTracker", {
   OnLifecycleEvent = function(event)
-    if event == "LOADING_SCREEN_DISABLED"
-      or event == "COOLDOWN_VIEWER_DATA_LOADED"
-      or event == "COOLDOWN_VIEWER_TABLE_HOTFIXED"
-    then
+    if event == "LOADING_SCREEN_DISABLED" then
       RefreshDefinitions(IsEquipmentDefinition)
+    elseif event == "ADDON_RESTRICTION_STATE_CHANGED" and not PCMRuntime:IsAuraRestricted() then
+      RefreshCountsAndVisibility()
     end
   end,
 })
@@ -1782,6 +1810,12 @@ function TestParticipant:Refresh()
 end
 
 ns.TestMode:RegisterParticipant(PARTICIPANT_KEY, TestParticipant)
+
+ns.PCMCatalog:RegisterListener(Tracker, function()
+  if Tracker.active and (GetDB().enabled == true or Tracker.testMode) then
+    RefreshDefinitions(function() return true end)
+  end
+end)
 
 Cooldowns.GetConsumableTrackerDefinitions = P:Def("Cooldowns:GetConsumableTrackerDefinitions", Cooldowns.GetConsumableTrackerDefinitions)
 Cooldowns.GetConsumableItemQualityAtlas = P:Def("Cooldowns:GetConsumableItemQualityAtlas", Cooldowns.GetConsumableItemQualityAtlas)
