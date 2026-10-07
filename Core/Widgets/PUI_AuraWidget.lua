@@ -200,7 +200,13 @@ local function EnsureApplicationThresholdOverlay(parts, index)
   end
 
   local applicationBar = parts.applicationBar
-  overlay = CreateFrame("StatusBar", nil, parts.applicationThresholdParent or applicationBar)
+  -- Native aura fill anchors require opting out of untrusted layout scripts.
+  overlay = CreateFrame(
+    "StatusBar",
+    nil,
+    parts.applicationThresholdParent or applicationBar,
+    "DisableUntrustedLayoutScriptsTemplate"
+  )
   local config = parts.applicationThresholdConfiguration
   overlay:SetAllPoints(config and config.anchor or applicationBar:GetStatusBarTexture())
   overlay:SetFrameLevel((config and config.frameLevel or applicationBar:GetFrameLevel()) + index)
