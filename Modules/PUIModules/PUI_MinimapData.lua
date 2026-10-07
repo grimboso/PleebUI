@@ -959,7 +959,7 @@ LayoutButtons = function()
       -(MARGIN + row * (BTN_SIZE + BTN_PAD))
     )
     btn:SetFrameStrata(PUIBucket:GetFrameStrata())
-    btn:SetFrameLevel(PUIBucket:GetFrameLevel() + 2)
+    btn:SetFrameLevel(panel:GetFrameLevel() + 1)
 
     if btn ~= expansionButton then
       btn:Show()
@@ -1008,15 +1008,14 @@ function MinimapData.InitializePUIBucket()
   if not Minimap then return end
 
   PUIBucket = CreateFrame("Frame", "PleebUI_MinimapPUIBucket", UIParent)
-  PUIBucket:SetFrameStrata("LOW")
+  PUIBucket:SetFrameStrata("HIGH")
   PUIBucket:SetFrameLevel(1)
   PUIBucket:SetPoint("BOTTOMRIGHT", Minimap, "BOTTOMRIGHT", -2, 2)
 
-  -- Handle overlaps the minimap and must render directly above it.
+  -- Keep the handle on the bucket's strata when the minimap is raised.
   local handle = CreateFrame("Frame", nil, PUIBucket, "BackdropTemplate")
   PUIBucket.__puiHandle = handle
-  handle:SetFrameStrata(Minimap:GetFrameStrata())
-  handle:SetFrameLevel(Minimap:GetFrameLevel() + 1)
+  handle:SetFrameLevel(PUIBucket:GetFrameLevel() + 1)
   handle:SetPoint("TOPRIGHT", PUIBucket, "TOPRIGHT", 0, 0)
   handle:SetSize(HANDLE_SIZE, HANDLE_SIZE)
   handle:SetBackdrop({
