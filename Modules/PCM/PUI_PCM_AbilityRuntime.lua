@@ -456,23 +456,13 @@ end
 local function ConfigureAuraSlots(record)
   local entry = record.entry
   local style = GetRecordStyle(record)
-  local swipe = style.swipe or {}
-  local viewerSwipe = style.viewerSwipe or {}
-  local useAuraLayer = swipe.source ~= "COOLDOWN"
-  if swipe.source == nil then
-    if viewerSwipe.forceCooldownSwipe == true then
-      useAuraLayer = false
-    elseif viewerSwipe.duration == false and style.viewerDurationCount == false then
-      useAuraLayer = false
-    end
-  end
 
   if not enabled
     or not presentationActive
     or verifiedTotemSlots[record.cooldownID]
     or entry.hasAura ~= true
     or entry.hideAura == true
-    or not useAuraLayer
+    or not style.useDurationDisplay
   then
     DeactivateAuraSlots(record)
     return
@@ -921,6 +911,11 @@ local function RefreshTotemState(record)
     return false
   end
 
+  if record.entry.hideAura == true or not GetRecordStyle(record).useDurationDisplay then
+    record.totemActive = false
+    return false
+  end
+
   local duration = GetTotemDuration(slot)
   PCMPresentation.SetTotemDuration(record.parts, duration)
   record.totemActive = duration ~= nil
@@ -984,6 +979,7 @@ local function RefreshVerifiedSpellCategorySource(record)
   elseif spellID then
     local duration = C_Spell.GetSpellCooldownDuration(spellID, true)
     PCMPresentation.SetSpellCooldownDuration(record.parts, duration)
+    PCMPresentation.SetOwnedIconSaturation(record.parts, duration, false)
     if C_Secrets.ShouldCooldownsBeSecret() == true then
       return
     end
@@ -1136,8 +1132,12 @@ local function RefreshRecordState(record, stateMask)
   then
     RefreshTotemState(record)
   end
-  if HasMask(stateMask, bit_bor(STATE_COOLDOWN, STATE_CHARGE)) then
+  if HasMask(stateMask, bit_bor(STATE_COOLDOWN, STATE_CHARGE, STATE_TOTEM)) then
     RefreshStateAppearance(record)
+    if entry.entryKind == "spell" then
+      local duration = record.runtimeSpellID and C_Spell.GetSpellCooldownDuration(record.runtimeSpellID, true)
+      PCMPresentation.SetOwnedIconSaturation(record.parts, duration, record.totemActive == true)
+    end
   end
 end
 
