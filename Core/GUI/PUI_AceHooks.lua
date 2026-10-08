@@ -127,6 +127,19 @@ local function _PUI_InstallAceGUIHooks()
     ns.Theme.InitializeCreatedWidget(widget)
     if widget.type == "DropdownGroup" and not widget.__puiGroupSelectionHooked then
       widget.__puiGroupSelectionHooked = true
+      local originalOnWidthSet = widget.OnWidthSet
+      widget.OnWidthSet = function(self, width)
+        originalOnWidthSet(self, width)
+        local user = self:GetUserDataTable()
+        if self.__puiAceGUIOwnedByPleebUI == true and user.appName == "PleebUI"
+          and user.path and user.path[1] == "CooldownManager" and user.path[4] == "entries"
+        then
+          self.titletext:SetText("")
+          self.dropdown.frame:ClearAllPoints()
+          self.dropdown.frame:SetPoint("TOPLEFT", self.frame, "TOPLEFT", 0, 0)
+          self:SetDropdownWidth(math.max(1, width - 2))
+        end
+      end
       local dropdown = widget.dropdown
       local selectedGroup = dropdown.events.OnValueChanged
       dropdown:SetCallback("OnValueChanged", function(control, event, value)
