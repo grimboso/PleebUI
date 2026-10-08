@@ -133,7 +133,7 @@ local DB_DEFAULTS = {
 
     blizzardFonts = {},
     movementWarning = {
-      enabled = true,
+      enabled = false,
       combatOnly = false,
       fontSize = 24,
       color = { r = 1, g = 1, b = 1, a = 1 },
@@ -209,6 +209,7 @@ local DB_DEFAULTS = {
       schemaVersion = 0,
       installComplete = false,
       installVersion = 0,
+      movementReminderPromptPending = false,
     },
     pui = {
       options = {
@@ -849,6 +850,10 @@ function Addon:OnInitialize()
 
   local previousReloadCount = tonumber(self.db.global.reloadCount) or 0
   local onboarding = self.db.global.onboarding
+
+  if previousReloadCount == 0 and self.db.global.installed ~= true then
+    onboarding.movementReminderPromptPending = true
+  end
 
   if (tonumber(onboarding.schemaVersion) or 0) < 1 then
     onboarding.installComplete = self.db.global.installed == true or previousReloadCount > 0
