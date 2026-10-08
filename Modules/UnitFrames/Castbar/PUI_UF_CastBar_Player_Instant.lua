@@ -48,7 +48,7 @@ function Module:OnCreate(bar)
   bar.__puiInstantCleanupAnimation = animation
 end
 
-local function CB_GetPublicGCDDuration()
+local function CB_GetPublicGCDDuration(displayDuration)
   local duration
   if REUSE_GCD_DURATION then
     local cooldown = C_Spell.GetSpellCooldown(CB_GCD_DUMMY_SPELL_ID)
@@ -60,7 +60,7 @@ local function CB_GetPublicGCDDuration()
       return nil, nil, nil
     end
 
-    duration = Module.gcdDuration
+    duration = displayDuration or Module.gcdDuration
     duration:SetTimeFromStart(cooldown.startTime, cooldown.duration, cooldown.modRate)
   else
     duration = C_Spell.GetSpellCooldownDuration(CB_GCD_DUMMY_SPELL_ID)
@@ -249,15 +249,11 @@ local function CB_ProcessPendingInstant(frame)
     return
   end
 
-  local duration, gcdStartTime, cleanupDuration = CB_GetPublicGCDDuration()
+  local duration, gcdStartTime, cleanupDuration = CB_GetPublicGCDDuration(bar.__puiInstantFallbackDuration)
   if not duration or gcdStartTime == previousGCDStartTime then
     duration = bar.__puiInstantFallbackDuration
     duration:SetTimeFromStart(GetTime(), CB_INSTANT_CLEANUP_DURATION)
     cleanupDuration = CB_INSTANT_CLEANUP_DURATION
-  elseif REUSE_GCD_DURATION then
-    -- Keep the displayed timer independent of the next sent-spell GCD snapshot.
-    bar.__puiInstantFallbackDuration:Assign(duration)
-    duration = bar.__puiInstantFallbackDuration
   end
 
   CB_PresentInstant(bar, spellID, duration, cleanupDuration)
