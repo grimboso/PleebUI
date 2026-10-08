@@ -162,7 +162,6 @@ local function _CSB_EnsureBarFrame(id)
   bd.id = id
   bd.customIconKey = "charge:" .. idText
   bd.stateGlowKey = "charge-state:" .. idText
-  bd.frame.__puiCooldownStackBarData = bd
   bd.frame.barData = bd
   bd.timerBinding = BarWidget.CreateDurationBinding(bd.timerText)
   bd.hiddenBySpec = false

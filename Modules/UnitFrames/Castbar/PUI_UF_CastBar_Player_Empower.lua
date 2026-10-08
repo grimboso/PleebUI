@@ -10,7 +10,6 @@ local CastBar = ns.Modules.CastBar
 
 local Module = {}
 ns.PUICastBarEmpower = Module
-ns.PUICastBarPlayerEmpower = Module
 
 local CreateFrame = CreateFrame
 local type = type

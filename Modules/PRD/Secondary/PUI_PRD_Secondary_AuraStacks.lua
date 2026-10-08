@@ -98,6 +98,9 @@ local function HideNativeDividers(track)
   if track and track.dividerFrame then
     track.dividerFrame:Hide()
   end
+  if track then
+    track.nativeDividerLayoutValid = nil
+  end
 end
 
 local function GetNativeTickValues(config, maximum)
@@ -133,15 +136,61 @@ end
 local function LayoutNativeDividers(track)
   local config = track.config
   local maximum = tonumber(track.maximum) or 0
-  local tickValues = GetNativeTickValues(config, maximum)
+  if config.showDividers == false or maximum <= 1 then
+    HideNativeDividers(track)
+    return
+  end
 
+  local pattern = config.stackTickValues or "ALL"
+  if track.nativeTickPattern ~= pattern or track.nativeTickMaximum ~= maximum then
+    track.nativeTickValues = GetNativeTickValues(config, maximum)
+    track.nativeTickPattern = pattern
+    track.nativeTickMaximum = maximum
+  end
+
+  local tickValues = track.nativeTickValues
   if not tickValues then
     HideNativeDividers(track)
     return
   end
 
   local parent = track.parent
+  local width = parent:GetWidth() or 0
+  if width <= 0 then
+    return
+  end
+
+  local strata = parent:GetFrameStrata()
+  local parentLevel = parent:GetFrameLevel()
+  local level = math.max(
+    parentLevel + 4,
+    (track.applicationThresholdTopFrameLevel or parentLevel + 3) + 1
+  )
+  local dividerSize = Secondary.GetSecondaryDividerSize(config)
+  local dividerColor = Secondary.ResolveSecondaryDividerColor(config)
+  local geometryChanged = track.nativeDividerParent ~= parent
+    or track.nativeDividerWidth ~= width
+    or track.nativeDividerMaximum ~= maximum
+    or track.nativeDividerPattern ~= pattern
+    or track.nativeDividerSize ~= dividerSize
+  local colorChanged = track.nativeDividerR ~= dividerColor.r
+    or track.nativeDividerG ~= dividerColor.g
+    or track.nativeDividerB ~= dividerColor.b
+    or track.nativeDividerA ~= dividerColor.a
+  local layerChanged = track.nativeDividerStrata ~= strata
+    or track.nativeDividerLevel ~= level
+
   local dividerFrame = track.dividerFrame
+  if track.nativeDividerLayoutValid
+    and not geometryChanged
+    and not colorChanged
+    and not layerChanged
+    and dividerFrame
+    and dividerFrame:IsShown()
+  then
+    return
+  end
+
   if not dividerFrame then
     dividerFrame = CreateFrame("Frame", nil, parent)
     dividerFrame:EnableMouse(false)
@@ -150,22 +199,16 @@ local function LayoutNativeDividers(track)
     dividerFrame:SetParent(parent)
   end
 
-  dividerFrame:ClearAllPoints()
-  dividerFrame:SetAllPoints(parent)
-  dividerFrame:SetFrameStrata(parent:GetFrameStrata())
-  dividerFrame:SetFrameLevel(math.max(
-    parent:GetFrameLevel() + 4,
-    (track.applicationThresholdTopFrameLevel or parent:GetFrameLevel() + 3) + 1
-  ))
+  if geometryChanged then
+    dividerFrame:ClearAllPoints()
+    dividerFrame:SetAllPoints(parent)
+  end
+  if layerChanged then
+    dividerFrame:SetFrameStrata(strata)
+    dividerFrame:SetFrameLevel(level)
+  end
   dividerFrame:Show()
 
-  local width = parent:GetWidth() or 0
-  if width <= 0 then
-    return
-  end
-
-  local dividerSize = Secondary.GetSecondaryDividerSize(config)
-  local dividerColor = Secondary.ResolveSecondaryDividerColor(config)
   local dividers = track.dividers
   if not dividers then
     dividers = {}
@@ -173,32 +216,47 @@ local function LayoutNativeDividers(track)
   end
 
   local dividerCount = #tickValues
-
   for i = 1, dividerCount do
     local divider = dividers[i]
     if not divider then
       divider = dividerFrame:CreateTexture(nil, "OVERLAY", nil, 7)
       dividers[i] = divider
+      divider:SetDrawLayer("OVERLAY", 7)
+      divider:SetColorTexture(
+        dividerColor.r, dividerColor.g, dividerColor.b, dividerColor.a
+      )
+    elseif colorChanged then
+      divider:SetColorTexture(
+        dividerColor.r, dividerColor.g, dividerColor.b, dividerColor.a
+      )
     end
 
-    local x = (width * tickValues[i] / maximum) - (dividerSize / 2)
-    divider:SetDrawLayer("OVERLAY", 7)
-    divider:SetColorTexture(
-      dividerColor.r,
-      dividerColor.g,
-      dividerColor.b,
-      dividerColor.a
-    )
-    divider:ClearAllPoints()
-    divider:SetWidth(dividerSize)
-    divider:SetPoint("TOPLEFT", dividerFrame, "TOPLEFT", x, 0)
-    divider:SetPoint("BOTTOMLEFT", dividerFrame, "BOTTOMLEFT", x, 0)
+    if geometryChanged then
+      local x = (width * tickValues[i] / maximum) - (dividerSize / 2)
+      divider:ClearAllPoints()
+      divider:SetWidth(dividerSize)
+      divider:SetPoint("TOPLEFT", dividerFrame, "TOPLEFT", x, 0)
+      divider:SetPoint("BOTTOMLEFT", dividerFrame, "BOTTOMLEFT", x, 0)
+    end
     divider:Show()
   end
 
   for i = dividerCount + 1, #dividers do
     dividers[i]:Hide()
   end
+
+  track.nativeDividerParent = parent
+  track.nativeDividerWidth = width
+  track.nativeDividerMaximum = maximum
+  track.nativeDividerPattern = pattern
+  track.nativeDividerSize = dividerSize
+  track.nativeDividerStrata = strata
+  track.nativeDividerLevel = level
+  track.nativeDividerR = dividerColor.r
+  track.nativeDividerG = dividerColor.g
+  track.nativeDividerB = dividerColor.b
+  track.nativeDividerA = dividerColor.a
+  track.nativeDividerLayoutValid = true
 end
 
 local function AttachNativeDividers(owner, track)
@@ -320,7 +378,13 @@ local function GetNativeResourceView(owner, resource)
   return view
 end
 
-local function ConfigureNativeButton(owner, track, button, initializing)
+local function ConfigureNativeButton(owner, track, button, initializing, textOnly)
+  local onlyText = textOnly == true
+    and track.parts ~= nil
+    and track.applicationThresholdTopFrameLevel ~= nil
+    and track.nativeButtonParent == track.parent
+    and track.nativeButtonMaximum == track.maximum
+    and owner._puiAuraStackButtonPending ~= true
   local restricted = initializing ~= true and NativeButtonRestricted()
   if restricted then
     owner._puiAuraStackButtonPending = true
@@ -340,14 +404,13 @@ local function ConfigureNativeButton(owner, track, button, initializing)
   local text = parts.applicationText
   local inset = 0
 
-  if not restricted then
+  if not restricted and not onlyText then
     button:ClearAllPoints()
     button:SetAllPoints(track.parent)
     button:SetFrameStrata(track.parent:GetFrameStrata())
     button:SetFrameLevel(track.parent:GetFrameLevel() + 1)
     button:EnableMouse(false)
     parts.applicationBase:Hide()
-    ConfigureNativeCountdownFallback(track, button, sourceText)
 
     engineBar:ClearAllPoints()
     engineBar:SetPoint("TOPLEFT", button, "TOPLEFT", inset, -inset)
@@ -382,8 +445,14 @@ local function ConfigureNativeButton(owner, track, button, initializing)
       track.maximum,
       Enum.StatusBarInterpolation.ExponentialEaseOut
     )
-  else
+    track.nativeButtonParent = track.parent
+    track.nativeButtonMaximum = track.maximum
+  elseif restricted and not onlyText then
     AttachNativeDividers(owner, track)
+  end
+
+  if not restricted then
+    ConfigureNativeCountdownFallback(track, button, sourceText)
   end
 
   local formatter = GetNativeFormatter(owner, track)
@@ -391,15 +460,16 @@ local function ConfigureNativeButton(owner, track, button, initializing)
     if formatter then
       CopyNativeTextStyle(sourceText, text)
       Secondary.ApplyResourceFont(view, text, track.config)
-      textHolder:SetFrameLevel(math.max(
-        track.parent:GetFrameLevel() + 5,
-        track.applicationThresholdTopFrameLevel + 2
-      ))
-
-      textHolder:ClearAllPoints()
-      textHolder:SetAllPoints(button)
-      text:ClearAllPoints()
-      text:SetPoint("CENTER", textHolder, "CENTER", 0, 0)
+      if not onlyText then
+        textHolder:SetFrameLevel(math.max(
+          track.parent:GetFrameLevel() + 5,
+          track.applicationThresholdTopFrameLevel + 2
+        ))
+        textHolder:ClearAllPoints()
+        textHolder:SetAllPoints(button)
+        text:ClearAllPoints()
+        text:SetPoint("CENTER", textHolder, "CENTER", 0, 0)
+      end
       AuraWidget.ConfigureApplicationCount(parts, formatter)
     else
       text:SetText("")
@@ -528,7 +598,6 @@ local function BuildNative(owner)
 end
 
 local NATIVE_EVENTS = {
-  SPELLS_CHANGED = true,
   PLAYER_REGEN_ENABLED = true,
   PLAYER_ENTERING_WORLD = true,
   ZONE_CHANGED_NEW_AREA = true,
@@ -536,14 +605,56 @@ local NATIVE_EVENTS = {
   ADDON_RESTRICTION_STATE_CHANGED = true,
 }
 
-local function GetNativeEvents()
+local NATIVE_SPELL_EVENTS = { SPELLS_CHANGED = true }
+for event in pairs(NATIVE_EVENTS) do
+  NATIVE_SPELL_EVENTS[event] = true
+end
+
+local function GetNativeEvents(owner)
+  local resources = owner.secondaryResources or {}
+  for index = 1, #resources do
+    local definition = resources[index].definition
+    if definition.adapter == "AURA_STACKS"
+      and (definition.knownMaxSpellID or definition.maxAuraSpellID)
+    then
+      return NATIVE_SPELL_EVENTS
+    end
+  end
   return NATIVE_EVENTS
 end
 
 local function UpdateNative(owner, event)
-  if event == "SPELLS_CHANGED" then
-    owner:RebuildSecondary()
-    return
+  if event == "SPELLS_CHANGED"
+    or (event ~= nil and owner._puiAuraStackSpellRefreshPending)
+  then
+    local resources = owner.secondaryResources
+    local maximumChanged = false
+    local refreshPending = false
+
+    for index = 1, #resources do
+      local resource = resources[index]
+      local definition = resource.definition
+
+      if definition.adapter == "AURA_STACKS"
+        and (definition.knownMaxSpellID or definition.maxAuraSpellID)
+      then
+        local maximum = Secondary.ResolveMaximum(definition, true)
+
+        if maximum == nil then
+          refreshPending = true
+        elseif maximum ~= resource.maximum then
+          maximumChanged = true
+        end
+      end
+    end
+
+    owner._puiAuraStackSpellRefreshPending = refreshPending or nil
+
+    if maximumChanged and not refreshPending then
+      owner._puiSecondaryDefinitionDirty = true
+      owner:RebuildSecondary()
+      return
+    end
   end
 
   if owner._puiAuraStackButtonPending and not NativeButtonRestricted() then
@@ -601,7 +712,7 @@ local function RefreshNativeText(owner)
       track.config = resource.config
       track.maximum = resource.maximum
       track.parent = view._puiSecondaryContent
-      ConfigureNativeButton(owner, track, track.button)
+      ConfigureNativeButton(owner, track, track.button, nil, true)
     end
   end
 end

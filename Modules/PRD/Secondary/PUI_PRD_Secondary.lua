@@ -1369,6 +1369,7 @@ end
 
 local function _ResolveResourceCueColor(config, current, r, g, b, a)
   if config.supportsNumericCues ~= true
+    or config.cues.desaturateMode == "NONE"
     or current == nil
     or issecretvalue(current)
   then
@@ -1376,8 +1377,7 @@ local function _ResolveResourceCueColor(config, current, r, g, b, a)
   end
 
   local cues = config.cues
-  local threshold = tonumber(cues.desaturateThreshold) or 0
-  if not _ThresholdMatches(cues.desaturateMode, current, threshold) then
+  if not _ThresholdMatches(cues.desaturateMode, current, cues.desaturateThreshold) then
     return r, g, b, a
   end
 
@@ -1464,8 +1464,16 @@ end
 
 local function _UpdateResourceThresholdCue(frame, config, current)
   local cues = config.cues
-  local active = false
 
+  if cues.glowMode == "NONE" then
+    local states = frame._puiResourceGlowState
+    local state = states and states[config.thresholdGlowKey]
+    if not state or state.active ~= true then
+      return
+    end
+  end
+
+  local active = false
   if config.supportsNumericCues
     and current ~= nil
     and not issecretvalue(current)
@@ -1473,7 +1481,7 @@ local function _UpdateResourceThresholdCue(frame, config, current)
     active = _ThresholdMatches(
       cues.glowMode,
       current,
-      tonumber(cues.glowThreshold) or 0
+      cues.glowThreshold
     )
   end
 

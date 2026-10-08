@@ -2037,8 +2037,6 @@ local function PRDPreview_EnsureContents(box)
     RegisterPreviewEvents()
   end
 
-  box.__puiPRDPreviewDriver = driver
-
   canvas:HookScript("OnSizeChanged", function()
     box.__puiPRDPreviewDirty = true
   end)

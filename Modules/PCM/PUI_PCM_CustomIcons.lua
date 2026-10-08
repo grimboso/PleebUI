@@ -539,7 +539,6 @@ local function EnsureRecord(key)
   parts.frame.__puiCustomIconBackground = parts.background
   record = { key = key, parts = parts, runtimeEnabled = false }
   records[key] = record
-  parts.frame.__puiCustomIconRecord = record
   return record
 end
 

@@ -495,7 +495,8 @@ local function EnsureEventFrame(owner)
       and currentOwner._puiSecondaryCueStylePending
     then
       currentOwner._puiSecondaryCueStylePending = nil
-      currentOwner:RefreshSecondaryAppearance()
+      ConfigureSecondaryCues(currentOwner)
+      currentOwner:RegisterSecondaryEvents()
     end
 
     local handler = currentOwner[event]

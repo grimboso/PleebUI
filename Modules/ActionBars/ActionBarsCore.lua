@@ -718,7 +718,6 @@ function Core:ApplyButtonCooldownAppearance(button, skin)
   local showNumbers = skin.showCooldownText ~= false
   local chargeCooldown = button.chargeCooldown
   local chargeShown = chargeCooldown and chargeCooldown:IsShown() or false
-  button.__puiActionBarChargeShown = chargeShown
 
   self:ApplyCooldownAppearance(button.cooldown, skin, (not showNumbers) or chargeShown)
   self:ApplyCooldownAppearance(chargeCooldown, skin, not showNumbers, CHARGE_SWIPE_COLOR)
@@ -800,7 +799,6 @@ function Core:CreateBar(key, frameName, moverKey, label, defaultPoint, dbKey)
     enabled = true,
   }
 
-  frame.__puiActionBarObject = bar
   self.bars[key] = bar
   return bar
 end

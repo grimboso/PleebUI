@@ -432,6 +432,7 @@ local function OnEvent(owner, event, unit, powerToken)
 
   if event == "UNIT_MAXPOWER" then
     if powerToken == "ESSENCE" then
+      owner._puiSecondaryDefinitionDirty = true
       owner:RebuildSecondary()
     end
     return

@@ -2546,7 +2546,6 @@ local function _PUI_CreateHeaderButton(parent, width, text, onClick)
   local btn = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate")
   btn:SetSize(width, 30)
   btn:SetText(text)
-  btn.__puiHeaderAction = true
 
   if onClick then
     btn:SetScript("OnClick", onClick)
@@ -3286,17 +3285,9 @@ local function _PUI_EnsureCustomOptionsFrame()
   _PUI_ApplyShellBackdrop(frame, colors.background, colors.border, ns.Theme.GetEdgeSize())
   _PUI_EnsurePleebUIOptionsChrome(frame)
 
-  frame.__puiChromeReady = true
-
   return frame
 end
 
-local function _PUI_GetShellACDContainer(frame, shell)
-  local container = shell:GetACDContainer()
-  ns._OptionsContentHost = container.frame
-  State.optionsContentHost = container.frame
-  return container
-end
 
 local _PUI_RefreshShellNavigationContext
 
@@ -3351,8 +3342,6 @@ end
 
 _PUI_RefreshCustomPageShell = function(frame, path)
   _PUI_HideActiveCustomOptionsPage(frame)
-  frame.__puiCustomBodyBuilt = nil
-
   local info = _PUI_GetPageShellInfo(path)
   local contentShell = frame.__puiContentShell
   local shell = ns.PageShell.Ensure(contentShell)
@@ -3466,7 +3455,6 @@ _PUI_RefreshCustomPageShell = function(frame, path)
   end
 
   shell:SetPreviewShown(wantsPreview, info.previewWidth, info.previewHeight)
-  frame.__puiCustomContentTopInset = 0
   shell:EndLayoutBatch()
 
   if wantsPreview then
@@ -3790,7 +3778,7 @@ local function _PUI_RenderCustomOptionsPath(frame, AceConfigDialog, APP, path)
       info.customPage.refresh(host, context)
     end
   else
-    local container = _PUI_GetShellACDContainer(frame, shell)
+    local container = shell:GetACDContainer()
 
     if #requestedPath > 1 then
       _PUI_SelectEmbeddedOptionsPath(AceConfigDialog, APP, requestedPath)

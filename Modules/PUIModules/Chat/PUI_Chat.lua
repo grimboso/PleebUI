@@ -2007,8 +2007,6 @@ local function EnsureCopyFrame()
     end
   end)
 
-  CopyFrame._puiSizer = sizer
-
   CopyFrame:HookScript("OnSizeChanged", function(f)
     SaveCopyFramePosition(f)
     ChatLinks:ApplyCopyWindowStyle()
@@ -2066,7 +2064,6 @@ end
   local searchHint = CopySearchBox:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
   searchHint:SetPoint("LEFT", 7, 0)
   searchHint:SetText("Search chat...")
-  CopySearchBox._puiHint = searchHint
   CopySearchBox:SetScript("OnTextChanged", function(self)
     searchHint:SetShown(self:GetText() == "")
     ChatLinks:RefreshCopyWindow()

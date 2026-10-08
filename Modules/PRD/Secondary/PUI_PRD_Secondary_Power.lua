@@ -70,6 +70,18 @@ local function OnEvent(owner, event, _, powerToken)
   end
 
   if event == "UNIT_MAXPOWER" then
+    if owner.secondaryAdapter.key == "POWER_SECRET" then
+      owner:UpdateSecondary()
+      return
+    end
+
+    local maximum = UnitPowerMax("player", owner.secondaryType)
+    if not issecretvalue(maximum) and maximum == owner.secondaryMax then
+      owner:UpdateSecondary()
+      return
+    end
+
+    owner._puiSecondaryDefinitionDirty = true
     owner:RebuildSecondary()
     return
   end

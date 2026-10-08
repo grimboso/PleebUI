@@ -4154,7 +4154,6 @@ local function EnsureEditDialog()
   FrameUtil.ApplyGlobalEditFont(hint, 13, nil)
 
   local selFrame = CreateFrame("Frame", "PUI_EditModeSelectionFrame", f, "BackdropTemplate")
-  FrameUtil._selectionFrame = selFrame
   selFrame:SetPoint("TOPLEFT", f, "BOTTOMLEFT", 0, -4)
   selFrame:SetPoint("TOPRIGHT", f, "BOTTOMRIGHT", 0, -4)
   selFrame:SetHeight(84)
@@ -4186,7 +4185,6 @@ local function EnsureEditDialog()
   ns.AceHooks.TakeOwnership(xBox)
 
   local xLabel = selFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-  FrameUtil._nudgeXLabel = xLabel
   xLabel:SetPoint("RIGHT", xbFrame, "LEFT", -6, 0)
   xLabel:SetJustifyH("RIGHT")
   xLabel:SetText("X")
@@ -4208,7 +4206,6 @@ local function EnsureEditDialog()
   ns.AceHooks.TakeOwnership(yBox)
 
   local yLabel = selFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-  FrameUtil._nudgeYLabel = yLabel
   yLabel:SetPoint("RIGHT", ybFrame, "LEFT", -6, 0)
   yLabel:SetJustifyH("RIGHT")
   yLabel:SetText("Y")
@@ -4458,7 +4455,6 @@ local function EnsureEditDialog()
   ns.Theme.WidgetSkins.UIButton(exitBtn)
 
   local toggleBtn = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
-  FrameUtil._settingsToggle = toggleBtn
   toggleBtn:SetSize(140, 22)
   toggleBtn:SetPoint("TOPRIGHT", f, "TOPRIGHT", -16, -10)
   toggleBtn:SetText("Edit Mode Settings")

@@ -488,6 +488,8 @@ function M:SyncBlizzardBarText()
     return
   end
 
+  self._puiBarTextSynced = true
+
   if self._puiBarTextLayoutRefreshPending then
     self._puiBarTextLayoutRefreshPending = nil
     self:RefreshActive()
@@ -500,8 +502,12 @@ function M:RequestBlizzardBarTextSync(event)
   end
 
   if event == "EDIT_MODE_LAYOUTS_UPDATED" then
+    self._puiBarTextSynced = nil
     self._puiBarTextLayoutRefreshPending = true
+  elseif self._puiBarTextSynced == true then
+    return
   end
+
   if self._puiBarTextSyncTimer then
     return
   end
@@ -1070,8 +1076,11 @@ function M:OnPrimaryResourceChanged(event, unit)
   end
 
   if event == "PLAYER_SPECIALIZATION_CHANGED" then
+    self._puiSecondaryDefinitionDirty = true
     self:SeedHidePrimaryBySpec()
     self:NormalizeStackOrder()
+  elseif event == "PLAYER_TALENT_UPDATE" or event == "UPDATE_SHAPESHIFT_FORM" then
+    self._puiSecondaryDefinitionDirty = true
   end
   self:RebuildSecondary()
   self:RefreshPrimaryResourcePresentation()
@@ -1091,9 +1100,13 @@ function M:OnPrimaryResourceChanged(event, unit)
   ns.Addon:NotifyOptionsTreeChanged("PRD", targetOptionsPath)
 end
 
-function M:OnPrimaryMaximumChanged(event, unit)
+function M:OnPrimaryMaximumChanged(event, unit, powerToken)
   if unit ~= "player" then
     return
+  end
+
+  if not self.secondaryDef or powerToken == self.secondaryToken then
+    self._puiSecondaryDefinitionDirty = true
   end
 
   self:RefreshPrimaryResourceMaximum()
@@ -1120,6 +1133,8 @@ function M:OnEnable()
     return
   end
 
+  self._puiSecondaryDefinitionDirty = true
+  self._puiBarTextSynced = nil
   self:EnsureInitialized()
   self._puiRuntimeStarted = true
 
@@ -1575,7 +1590,6 @@ function M:ApplyLayout()
   local size = db.size
   local healthAppearance = self:GetBarAppearance("health")
   local primaryAppearance = self:GetBarAppearance("primary")
-  local healthCfg = db.health
   local primaryCfg = db.primary
   local secondaryCfg = db.secondary
   local resources = self.secondaryResources or {}

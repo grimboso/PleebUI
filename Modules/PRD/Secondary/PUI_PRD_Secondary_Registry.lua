@@ -531,7 +531,7 @@ IsDefinitionEnabled = function(definition, profile)
   return profile.secondary.resourceEnabled[definition.resourceKey] ~= false
 end
 
-local function ResolveMaximum(definition)
+local function ResolveMaximum(definition, deferSecretAuraMaximum)
   local resolvedMax = tonumber(definition.max) or 0
 
   if definition.knownMaxSpellID then
@@ -542,7 +542,11 @@ local function ResolveMaximum(definition)
     end
   elseif definition.maxAuraSpellID then
     local auraMaximum = C_Spell.GetSpellMaxCumulativeAuraApplications(definition.maxAuraSpellID)
-    if not issecretvalue(auraMaximum) and auraMaximum > 0 then
+    if issecretvalue(auraMaximum) then
+      if deferSecretAuraMaximum then
+        return nil
+      end
+    elseif auraMaximum > 0 then
       resolvedMax = auraMaximum
     end
   elseif definition.maxFromPowerType ~= nil then
@@ -1008,6 +1012,16 @@ local function ResolveDefinitions()
 end
 
 function M:GetSecondaryDefinition()
+  local profile = self.db.profile
+  local revision = self._puiRuntimeConfigRevision or 0
+  if self._puiSecondaryDefinitionReady == true
+    and self._puiSecondaryDefinitionDirty ~= true
+    and self._puiSecondaryDefinitionProfile == profile
+    and self._puiSecondaryDefinitionRevision == revision
+  then
+    return self.secondaryDef
+  end
+
   local resources, specID = ResolveDefinitions()
   local primary = resources and resources[1] or nil
   local definition = primary and primary.definition or nil
@@ -1045,6 +1059,11 @@ function M:GetSecondaryDefinition()
     self:AssignSecondaryResourceFrames()
   end
 
+  self._puiSecondaryDefinitionProfile = profile
+  self._puiSecondaryDefinitionRevision = revision
+  self._puiSecondaryDefinitionDirty = nil
+  self._puiSecondaryDefinitionReady = true
+
   return definition
 end
 
@@ -1076,6 +1095,7 @@ GetResolvedDefinitionCandidates = P:Def(
 DefinitionContainsResourceForSpec = P:Def("DefinitionContainsResourceForSpec", DefinitionContainsResourceForSpec)
 IsDefinitionEnabled = P:Def("IsDefinitionEnabled", IsDefinitionEnabled)
 ResolveMaximum = P:Def("ResolveMaximum", ResolveMaximum)
+Secondary.ResolveMaximum = ResolveMaximum
 EnsureResourceSettings = P:Def("EnsureResourceSettings", EnsureResourceSettings)
 NormalizeDefinitionSettings = P:Def("NormalizeDefinitionSettings", NormalizeDefinitionSettings)
 BuildResourceConfigStateKey = P:Def("BuildResourceConfigStateKey", BuildResourceConfigStateKey)

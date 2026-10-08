@@ -759,7 +759,6 @@ _SB_RebuildAll = function()
 
       if cfg.presentation == "BAR" or cfg.presentation == "BUTTON" then
         bd.mode = "cooldown"
-        bd.__puiEffectiveMode = "cooldown"
 
         if cfg.presentation == "BAR" then
           y = _SB_LayoutOne(bd, cfg, y)
