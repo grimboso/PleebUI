@@ -36,7 +36,8 @@ end
 AssignFields("general", "enabled name group auraTrackMode maxStacks powerInfusion bloodlust customBuffSpellIDs onlyOnUseTrinkets nativeTracking showSwipe swipeShow showTooltips showTooltip hideWhenInactive visibility combatOnly hideOutOfCombat outOfCombatAlpha missingAlpha readyAlpha readyAlphaOverride cooldownAlpha cooldownAlphaOverride onCooldownAlpha activeAlpha activeAuraAlpha auraAlpha auraAlphaOverride alpha opacity showOnlyWhenActive hideViewerIcon activeAuraHideViewerIcon")
 AssignFields("layout", "size iconSize width height fixedWidth widthMode iconSpacing spacing columns iconsPerRow growUp growth rowGrowth growthDirection orientation rowSpacing wrap showIcon showSpellIconNextToBar iconPlacement iconAnchor durationHideIconFrame durationHideSpellIcon durationAnchor durationGap durationHeight durationIconSize borderThickness borderColor borderSize viewerBorderSize viewerBorderColor durationIconBorderSize durationIconBorderColor showSlotBorder slotBorderThickness slotBorderColor")
 AssignFields("timer", "forceCooldown cooldownTimerEnabled timerDisplay swipeSource durationSwipe durationText swipeGCD swipeCooldown swipeDuration countCooldown countDuration showCooldownText showDurationSwipe showDurationText rechargeCountdown barMode durationBarFillMode drainDirection fillDirection activeAuraSource activeAuraCDM activeAuraCustom source cdmBuff customBuff showActive hideDurationWhenMissing inheritedTimer swipeEdge swipeReverse swipeColorOverride swipeColor cooldownSwipeColor cooldownSwipeEdge cooldownSwipeEdgeColor durationSwipeColor durationSwipeEdge durationSwipeEdgeColor gcdSwipeColor gcdSwipeEdge gcdSwipeEdgeColor rechargeEdge")
-AssignFields("appearance", "texture barTexture stackTexture durationTexture useClassColor buffBarColor buffBarBgColor backgroundColor durationBarColor desaturateCooldown desaturateReady activeAuraDesaturate customTextureOverride chromeStyle readySaturationOverride readySaturation cooldownSaturationOverride cooldownSaturation auraSaturationOverride auraSaturation")
+AssignFields("general", "desaturateCooldown")
+AssignFields("appearance", "texture barTexture stackTexture durationTexture useClassColor buffBarColor buffBarBgColor backgroundColor durationBarColor desaturateReady activeAuraDesaturate customTextureOverride chromeStyle readySaturationOverride readySaturation cooldownSaturationOverride cooldownSaturation auraSaturationOverride auraSaturation")
 AssignFields("text", "cooldownShow showText showDuration showName countCharge countBuff countVisibility showItemQuality keybindToggle showKeybinds chargeShow keybindShow showCount showPips showStackStrip font fontSize fontColor fontOutline outline countFontSize cooldownFontSize keybindFontSize durationFont durationOutline durationCountFontSize countTextColor durationTextColor showCountdown durationTextScale durationTextAnchor durationTextX durationTextY countTextScale countTextAnchor countTextX countTextY")
 AssignFields("glow", "glowDuringDurationSwipe readyGlowStyle readyGlowColor cooldownGlowStyle cooldownGlowColor auraGlowStyle auraGlowColor activeAuraGlowStyle activeAuraGlowColor glow glowColor activeGlowStyle")
 AssignFields("advanced", "delete deleteBar resetIcon resetGroups customTexture rotateTexture dynamicTextOnSlot")
@@ -78,6 +79,37 @@ local QUICK_SETTINGS = {
   iconSpacing = { 53, "Icon spacing" },
   columns = { 54, "Icons per row" },
 }
+
+local INLINE_GROUPS = {
+  groupSettings = { "Group", 5 },
+  tracking = { "Tracking", 10 },
+  behavior = { "Visibility & behavior", 20 },
+  quickTimers = { "Timers & swipes", 30 },
+  quickText = { "Text", 40 },
+  quickLayout = { "Size & spacing", 50 },
+  quickGlow = { "Glow", 60 },
+  size = { "Size", 10 },
+  arrangement = { "Arrangement", 20 },
+  iconPlacement = { "Icon placement", 30 },
+  borders = { "Borders", 40 },
+  glowStyle = { "Glow style", 10 },
+  glowShape = { "Animation & shape", 20 },
+  readyGlow = { "Ready", 30 },
+  cooldownGlow = { "On cooldown / recharging", 40 },
+  auraGlow = { "While active", 50 },
+}
+
+local GENERAL_GROUPS, LAYOUT_GROUPS = {}, {}
+local function AssignInlineGroup(groups, group, fields)
+  for field in fields:gmatch("%S+") do groups[field] = group end
+end
+AssignInlineGroup(GENERAL_GROUPS, "groupSettings", "enabled name group")
+AssignInlineGroup(GENERAL_GROUPS, "tracking", "nativeTracking auraTrackMode maxStacks powerInfusion bloodlust customBuffSpellIDs onlyOnUseTrinkets")
+AssignInlineGroup(GENERAL_GROUPS, "quickTimers", "showSwipe swipeShow")
+AssignInlineGroup(LAYOUT_GROUPS, "size", "size iconSize width height fixedWidth widthMode durationHeight durationIconSize")
+AssignInlineGroup(LAYOUT_GROUPS, "arrangement", "iconSpacing spacing columns iconsPerRow growUp growth rowGrowth growthDirection orientation rowSpacing wrap")
+AssignInlineGroup(LAYOUT_GROUPS, "iconPlacement", "showIcon showSpellIconNextToBar iconPlacement iconAnchor durationHideIconFrame durationHideSpellIcon durationAnchor durationGap")
+AssignInlineGroup(LAYOUT_GROUPS, "borders", "borderThickness borderColor borderSize viewerBorderSize viewerBorderColor durationIconBorderSize durationIconBorderColor showSlotBorder slotBorderThickness slotBorderColor")
 
 local TIMER_ROWS = {
   forceCooldown = { 1, 0.5, "Enable duration timer" },
@@ -208,6 +240,25 @@ function Options:BuildSections(source)
             bucketPrefix, bucketLabel = "swipeSettings", "Swipe settings"
           end
         end
+        if destination == "general" and option.type ~= "description" then
+          bucketPrefix = GENERAL_GROUPS[key] or "behavior"
+        elseif destination == "layout" then
+          bucketPrefix = LAYOUT_GROUPS[key] or "arrangement"
+        elseif destination == "glow" then
+          if key:match("^ready") or prefix:match("whenReady$") then
+            bucketPrefix = "readyGlow"
+          elseif key:match("^cooldown") or prefix:match("whenCooldown$") then
+            bucketPrefix = "cooldownGlow"
+          elseif key:match("^aura") or key:match("^active") or prefix:match("whenActive$") then
+            bucketPrefix = "auraGlow"
+          elseif key == "speed" or key == "scale" or key == "lines" or key == "thickness" then
+            bucketPrefix = "glowShape"
+          else
+            bucketPrefix = "glowStyle"
+          end
+        end
+        local inlineDefinition = INLINE_GROUPS[bucketPrefix]
+        if inlineDefinition then bucketLabel = inlineDefinition[1] end
         if destination == "timer" then
           option.name = option.name:gsub("[Gg]lobal cooldown swipe", "Swipe"):gsub("GCD swipe", "Swipe")
             :gsub("[Cc]ooldown swipe", "Swipe"):gsub("[Dd]uration swipe", "Swipe")
@@ -220,10 +271,14 @@ function Options:BuildSections(source)
           and (key ~= "enabled" or destination == "glow")
           and (key ~= "showDuration" or destination == "text")
         then
-          local quickSettings = sections.general.args.quickSettings
+          local quickGroup = destination == "timer" and "quickTimers"
+            or destination == "text" and "quickText"
+            or destination == "layout" and "quickLayout" or "quickGlow"
+          local definition = INLINE_GROUPS[quickGroup]
+          local quickSettings = sections.general.args[quickGroup]
           if not quickSettings then
-            quickSettings = { type = "group", name = "Quick settings", inline = true, order = 2, args = {} }
-            sections.general.args.quickSettings = quickSettings
+            quickSettings = { type = "group", name = definition[1], inline = true, order = definition[2], args = {} }
+            sections.general.args[quickGroup] = quickSettings
           end
           local shortcut = {}
           for field, value in pairs(option) do
@@ -244,14 +299,14 @@ function Options:BuildSections(source)
         then
           local bucket = sectionArgs[bucketPrefix]
           if not bucket then
-            local order = destination == "timer" and (bucketPrefix == "durationTimer" and 10
+            local order = inlineDefinition and inlineDefinition[2] or destination == "timer" and (bucketPrefix == "durationTimer" and 10
               or bucketPrefix == "cooldownTimer" and 20 or bucketPrefix == "gcdTimer" and 30 or 40)
               or destination == "text" and (bucketPrefix == "cooldown" and 10
                 or bucketPrefix == "charge" and 20 or bucketPrefix == "keybind" and 30)
               or option.order
             bucket = { type = "group", name = bucketLabel, inline = true, order = order, args = {} }
             sectionArgs[bucketPrefix] = bucket
-          elseif destination ~= "timer" and destination ~= "text"
+          elseif not inlineDefinition and destination ~= "timer" and destination ~= "text"
             and (tonumber(option.order) or 50) < (tonumber(bucket.order) or 50) then
             bucket.order = option.order
           end
@@ -335,7 +390,7 @@ function Options.GetSearchEntries()
     results[#results + 1] = { label = label, path = path, keywords = keywords or "" }
   end
   local settingKeywords = {
-    general = "general quick settings enabled visibility opacity tooltip spell specialization assignment timer swipe countdown charges stacks keybind font size glow",
+    general = "general quick settings enabled visibility opacity tooltip spell specialization assignment timer swipe countdown charges stacks keybind font size glow desaturate saturation behavior",
     layout = "layout size width height spacing rows columns orientation growth icon position",
     timer = "timer display duration active aura buff cooldown gcd swipe countdown recharge fill drain",
     appearance = "appearance color saturation desaturate texture",
@@ -358,7 +413,7 @@ function Options.GetSearchEntries()
         elseif group.defaultViewerKey == "BuffBarCooldownViewer" then
           available = section[1] ~= "glow" and section[1] ~= "advanced"
         else
-          available = section[1] ~= "advanced"
+          available = section[1] ~= "advanced" and section[1] ~= "appearance"
         end
       else
         available = section[1] == "general" or section[1] == "layout" or section[1] == "advanced"
