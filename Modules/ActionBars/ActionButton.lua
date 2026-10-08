@@ -992,21 +992,25 @@ function Engine:RefreshButton(button)
     return
   end
 
-  if button:IsVisible() then
-    self:RegisterButtonRangeCheck(button)
-  end
-
   local hasAction = C_ActionBar.HasAction(action)
   if issecretvalue(hasAction) then
+    if button:IsVisible() then
+      self:RegisterButtonRangeCheck(button)
+    end
     return
   end
   button.__puiHasAction = hasAction
 
   if not hasAction then
+    self:UnregisterButtonRangeCheck(button)
     self:ClearButton(button)
     button:SetAlpha((Core.alwaysShowGrid ~= false or Core.actionGridShown == true) and 1 or 0)
     button:UpdateFlyout()
     return
+  end
+
+  if button:IsVisible() then
+    self:RegisterButtonRangeCheck(button)
   end
 
   self:RefreshButtonContent(button)
@@ -1502,7 +1506,9 @@ local function FlushBroadRefresh(
 
       if chargeCountRefresh then
         self:UpdateCount(button)
-        RefreshButtonChargeCooldown(button)
+        if not lossOfControlRefresh then
+          RefreshButtonChargeCooldown(button)
+        end
       end
 
       if cooldownRefresh or lossOfControlRefresh then
