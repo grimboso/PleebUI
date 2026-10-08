@@ -365,8 +365,10 @@ local function RefreshTotemBindings(preferredSlot)
   local slotCount = GetNumTotemSlots()
   for slot = 1, slotCount do
     local spellID = select(7, GetTotemInfo(slot))
-    -- Totem identity may be secret; only public identities can select addon-owned records.
-    if not issecretvalue(spellID) and type(spellID) == "number" and spellID > 0 then
+    if issecretvalue(spellID) then
+      totemSpellIDs[slot] = false
+      totemDurations[slot] = GetTotemDuration(slot)
+    elseif type(spellID) == "number" and spellID > 0 then
       totemSpellIDs[slot] = spellID
       totemDurations[slot] = GetTotemDuration(slot)
     end
@@ -386,7 +388,11 @@ local function RefreshTotemBindings(preferredSlot)
           end
         end
       end
-      if selectedSlot or record.totemSlot then
+      -- A secret identity cannot invalidate an already verified slot binding.
+      if not selectedSlot and record.totemSlot and totemSpellIDs[record.totemSlot] == false then
+        local duration = totemDurations[record.totemSlot]
+        SetRecordTotem(record, duration and record.totemSlot or nil, duration)
+      elseif selectedSlot or record.totemSlot then
         record.totemSpellID = selectedSlot and totemSpellIDs[selectedSlot] or nil
         SetRecordTotem(record, selectedSlot, selectedSlot and totemDurations[selectedSlot] or nil)
       end
