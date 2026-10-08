@@ -13,7 +13,6 @@ local AuraRuntime = ns.PCMAuraRuntime
 local Pixel = ns.Pixel
 
 local CreateFrame = CreateFrame
-local C_Secrets = C_Secrets
 local GetCursorPosition = GetCursorPosition
 local InCombatLockdown = InCombatLockdown
 local issecretvalue = issecretvalue
@@ -457,12 +456,6 @@ local function RefreshDynamicBounds()
   end
 end
 
-local function IsDynamicBoundsRestrictionActive()
-  return next(activeRestrictions) ~= nil
-    or InCombatLockdown()
-    or C_Secrets.ShouldAurasBeSecret() == true
-end
-
 local function QueueDynamicBoundsRefresh()
   if not enabled or not dynamicBoundsActive then
     return
@@ -473,19 +466,15 @@ end
 
 local function UpdateDynamicBoundsDriver()
   dynamicBoundsEventFrame:UnregisterAllEvents()
-  dynamicBoundsEventFrame:SetScript("OnUpdate", nil)
 
   if not dynamicBoundsActive then
     return
   end
 
-  if IsDynamicBoundsRestrictionActive() then
-    dynamicBoundsEventFrame:SetScript("OnUpdate", RefreshDynamicBounds)
-    return
-  end
-
+  -- UNIT_AURA payloads can be secret; bounds invalidation does not read them.
   dynamicBoundsEventFrame:RegisterUnitEvent("UNIT_AURA", "player", "target")
   dynamicBoundsEventFrame:RegisterEvent("PLAYER_TARGET_CHANGED")
+  dynamicBoundsEventFrame:RegisterEvent("PLAYER_TOTEM_UPDATE")
 end
 
 local function SetDynamicBoundsActive(active)
@@ -497,7 +486,7 @@ local function SetDynamicBoundsActive(active)
       dynamicBoundsRefreshPasses = 0
     end
   end
-  if active and not IsDynamicBoundsRestrictionActive() then
+  if active then
     QueueDynamicBoundsRefresh()
   end
   flushFrame:SetShown(enabled and (pendingLayout or dynamicBoundsRefreshPasses > 0))
@@ -1244,14 +1233,13 @@ PCMRuntime:RegisterSubscriber("GroupManager", {
       else
         activeRestrictions[restrictionType] = true
       end
-      UpdateDynamicBoundsDriver()
+      QueueDynamicBoundsRefresh()
     end
 
     if event == "PLAYER_ENTERING_WORLD"
       or event == "PLAYER_REGEN_ENABLED"
       or restrictionsCleared
     then
-      UpdateDynamicBoundsDriver()
       GroupManager:RequestLayout()
       GroupManager:Flush()
     elseif editing then
