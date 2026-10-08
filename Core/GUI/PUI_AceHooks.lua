@@ -125,6 +125,22 @@ local function _PUI_InstallAceGUIHooks()
 
     ns.Theme.BeginCreatedWidgetLease(widget)
     ns.Theme.InitializeCreatedWidget(widget)
+    if widget.type == "DropdownGroup" and not widget.__puiGroupSelectionHooked then
+      widget.__puiGroupSelectionHooked = true
+      local dropdown = widget.dropdown
+      local selectedGroup = dropdown.events.OnValueChanged
+      dropdown:SetCallback("OnValueChanged", function(control, event, value)
+        local owner = control.parentgroup
+        local user = owner:GetUserDataTable()
+        if owner.__puiAceGUIOwnedByPleebUI == true
+          and user.appName == "PleebUI" and user.path and user.path[1] == "CooldownManager"
+          and not ns.Addon:HandleOptionsGroupSelection(owner, value)
+        then
+          return
+        end
+        selectedGroup(control, event, value)
+      end)
+    end
   end
 
   function AceHooks.TakeOwnership(widget)
