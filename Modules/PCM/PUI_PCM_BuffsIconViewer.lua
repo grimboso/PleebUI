@@ -119,12 +119,6 @@ function Buffs:ApplySettings(flags)
   end
 end
 
-function Buffs:SoftRebuild(flags)
-  if flags and (flags.profile == true or flags.layout == true or flags.movers == true) then
-    self:RefreshSettings()
-  end
-end
-
 function Buffs:RefreshIndividualIconSettings()
   ns.PCMAuraRuntime:RefreshAppearance(VIEWER_KEY)
 end
@@ -143,7 +137,6 @@ end
 local P = select(1, ns.Pleebug:DropIn(Buffs, { name = "PCM", bucket = "BuffsIconViewer" }))
 Buffs.RefreshSettings = P:Def("Buffs:RefreshSettings", Buffs.RefreshSettings)
 Buffs.ApplySettings = P:Def("Buffs:ApplySettings", Buffs.ApplySettings)
-Buffs.SoftRebuild = P:Def("Buffs:SoftRebuild", Buffs.SoftRebuild)
 Buffs.RefreshIndividualIconSettings = P:Def("Buffs:RefreshIndividualIconSettings", Buffs.RefreshIndividualIconSettings)
 Buffs.OnInitialize = P:Def("Buffs:OnInitialize", Buffs.OnInitialize)
 Buffs.OnEnable = P:Def("Buffs:OnEnable", Buffs.OnEnable)
