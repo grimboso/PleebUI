@@ -1132,6 +1132,8 @@ local function RefreshRecordState(record, stateMask)
   end
   if HasMask(stateMask, bit_bor(STATE_COOLDOWN, STATE_CHARGE, STATE_TOTEM)) then
     RefreshStateAppearance(record)
+  end
+  if HasMask(stateMask, bit_bor(STATE_COOLDOWN_UPDATE, STATE_CHARGE, STATE_TOTEM)) then
     if entry.entryKind == "spell" then
       local parts = record.parts
       local isTotem = record.totemActive == true
@@ -1622,8 +1624,6 @@ local function FlushDirtyRecords()
       if HasMask(dirtyMask, DIRTY_STATE) then
         if stateMask == STATE_USABLE then
           RefreshUsableState(record)
-        elseif stateMask == STATE_GCD_ONLY then
-          RefreshSpellCooldown(record)
         else
           RefreshRecordState(record, stateMask)
         end
