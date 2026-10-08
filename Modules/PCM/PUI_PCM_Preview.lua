@@ -80,7 +80,9 @@ local function PCMPreview_GetEntryPath(entry, fallbackGroupID)
   local record = entry and ns.PCMGroupManager:GetActiveRecord(entry.catalogKey) or nil
   return {
     "CooldownManager",
+    "groups",
     record and record.__puiPCMGroupID or fallbackGroupID,
+    "entries",
     entry.catalogKey,
   }
 end
@@ -2438,9 +2440,9 @@ local function PCMPreview_ConfigureCustomPanel(box, panel)
     PCMPreview_SetInteraction(
       icon.interactions.body,
       entry.title .. " icon",
-      "Click to configure this custom button.",
-      path,
-      "icon",
+      "Click to configure this custom icon.",
+      { path[1], path[2], path[3], "layout" },
+      "layout",
       "showIcon"
     )
 
@@ -2636,9 +2638,9 @@ local function PCMPreview_ConfigureConsumablesPanel(box, panel)
       definition.label,
       definition.spellIDs and "Click to configure this tracked ability."
         or "Click to configure this tracked item.",
-      { "CooldownManager", "consumables" },
-      "slots",
-      definition.key
+      { "CooldownManager", "consumables", "slots", definition.key },
+      nil,
+      nil
     )
   end
 end
@@ -3581,7 +3583,7 @@ function PCMPreview.Build(addon, frame, shell, path)
 
   local activeTab = type(path) == "table"
     and path[1] == "CooldownManager"
-    and path[2]
+    and (path[2] == "groups" and path[3] or path[2])
     or "overview"
   local previewState = shell:GetPreviewState()
   if type(previewState.pcmZooms) ~= "table" then
