@@ -6396,9 +6396,11 @@ local function UFCB_BuildCastbarArgs(unitKey)
 
   cfg.text = cfg.text or {}
   cfg.timeText = cfg.timeText or {}
+  cfg.targetText = cfg.targetText or {}
 
   local text = cfg.text
   local time = cfg.timeText
+  local targetText = cfg.targetText
   local castbarUnit = UFCB_GetCastbarRefreshUnit(unitKey)
 
   local function refresh(extraFlags)
@@ -6634,11 +6636,49 @@ local function UFCB_BuildCastbarArgs(unitKey)
         nameFontSize = BuildCastbarRange(text, "size", "Name Font Size", 4, 6, 30),
         nameYOffset = BuildCastbarRange(text, "offY", "Name Y offset", 5, -40, 40, { default = 0 }),
         nameXOffset = BuildCastbarRange(text, "offX", "Name X offset", 6, -80, 80),
+        nameMaxWidth = BuildCastbarRange(cfg, "nameMaxWidth", "Max spell name width", 6.5, 40, 400),
         timeFontSize = BuildCastbarRange(time, "size", "Time font size", 7, 6, 30),
         timeYOffset = BuildCastbarRange(time, "offY", "Time Y offset", 8, -40, 40),
         timeXOffset = BuildCastbarRange(time, "offX", "Time X offset", 9, -80, 80),
         nameAnchor = BuildCastbarSelect(text, "anchor", "Spell Name Anchor", 10, anchorValues),
         timeAnchor = BuildCastbarSelect(time, "anchor", "Cast Time anchor", 11, anchorValues),
+      },
+    },
+    targetLabel = {
+      type = "group",
+      name = "Cast target",
+      inline = true,
+      order = 20.5,
+      args = {
+        anchor = BuildCastbarSelect(targetText, "anchor", "Position", 1, {
+          LEFT = "Left of bar",
+          RIGHT = "Right of bar",
+          TOP = "Above bar",
+          BOTTOM = "Below bar",
+        }, {
+          default = "RIGHT",
+          disabled = function()
+            return cfg.displayTarget ~= true
+          end,
+        }),
+        offX = BuildCastbarRange(targetText, "offX", "X offset", 2, -200, 200, {
+          default = 0,
+          disabled = function()
+            return cfg.displayTarget ~= true
+          end,
+        }),
+        offY = BuildCastbarRange(targetText, "offY", "Y offset", 3, -200, 200, {
+          default = 0,
+          disabled = function()
+            return cfg.displayTarget ~= true
+          end,
+        }),
+        maxWidth = BuildCastbarRange(targetText, "maxWidth", "Max target width", 4, 40, 400, {
+          default = 160,
+          disabled = function()
+            return cfg.displayTarget ~= true
+          end,
+        }),
       },
     },
     toggles = {
@@ -6669,17 +6709,29 @@ local function UFCB_BuildCastbarArgs(unitKey)
             refresh()
           end,
         }),
-        displayTarget = BuildCastbarToggle(cfg, "displayTarget", "Show cast target in name text", 5),
+        showRemainingTime = BuildCastbarToggle(cfg, "showRemainingTime", "Show remaining time", 5, {
+          defaultTrue = true,
+          disabled = function()
+            return time.showCast == false
+          end,
+        }),
+        showTotal = BuildCastbarToggle(cfg, "showTotal", "Show total duration", 6, {
+          defaultTrue = true,
+          disabled = function()
+            return time.showCast == false
+          end,
+        }),
+        displayTarget = BuildCastbarToggle(cfg, "displayTarget", "Show cast target", 7),
       },
     },
   }
 
   if unitKey == "player" then
-    args.toggles.args.showEmpowerPips = BuildCastbarToggle(cfg, "showEmpowerPips", "Show empower pips", 6, {  defaultTrue = true })
+    args.toggles.args.showEmpowerPips = BuildCastbarToggle(cfg, "showEmpowerPips", "Show empower pips", 8, {  defaultTrue = true })
 
-    args.toggles.args.showEmpowerHold = BuildCastbarToggle(cfg, "showEmpowerHold", "Show empower hold area", 7, {  defaultTrue = true })
+    args.toggles.args.showEmpowerHold = BuildCastbarToggle(cfg, "showEmpowerHold", "Show empower hold area", 9, {  defaultTrue = true })
 
-    args.toggles.args.empowerHoldColor = BuildCastbarColor(cfg, "empowerHoldColor", "Empower hold color", 8, {
+    args.toggles.args.empowerHoldColor = BuildCastbarColor(cfg, "empowerHoldColor", "Empower hold color", 10, {
       hasAlpha = true,
       alphaDefault = 1,
       disabled = function()
@@ -6687,9 +6739,9 @@ local function UFCB_BuildCastbarArgs(unitKey)
       end,
     })
 
-    args.toggles.args.showChannelTicks = BuildCastbarToggle(cfg, "showChannelTicks", "Show channel tick markers", 9, {  defaultTrue = true })
+    args.toggles.args.showChannelTicks = BuildCastbarToggle(cfg, "showChannelTicks", "Show channel tick markers", 11, {  defaultTrue = true })
 
-    args.toggles.args.channelTickThickness = BuildCastbarRange(cfg, "channelTickThickness", "Channel tick thickness", 10, 1, 10, {
+    args.toggles.args.channelTickThickness = BuildCastbarRange(cfg, "channelTickThickness", "Channel tick thickness", 12, 1, 10, {
       default = 2,
       numberDefault = 2,
       disabled = function()
@@ -6697,9 +6749,9 @@ local function UFCB_BuildCastbarArgs(unitKey)
       end,
     })
 
-    args.toggles.args.showDisintegrateClipWarning = BuildCastbarToggle(cfg, "showDisintegrateClipWarning", "Enable Disintegrate clip warning", 11)
+    args.toggles.args.showDisintegrateClipWarning = BuildCastbarToggle(cfg, "showDisintegrateClipWarning", "Enable Disintegrate clip warning", 13)
 
-    args.toggles.args.disintegrateClipWarningText = BuildCastbarInput(cfg, "disintegrateClipWarningText", "Disintegrate clip warning text", 12, {
+    args.toggles.args.disintegrateClipWarningText = BuildCastbarInput(cfg, "disintegrateClipWarningText", "Disintegrate clip warning text", 14, {
       
       default = "DON'T CLIP",
       disabled = function()
