@@ -774,16 +774,17 @@ function AuraRuntime:FinalizeRecordLayout(record)
   UpdateRecordVisibility(record)
 end
 
-function AuraRuntime:RefreshRecordLayoutBounds(record)
-  if record.viewerKey ~= BUFF_ICON_VIEWER or not record.collapseWhenInactive then
-    return
+function AuraRuntime:RefreshLayoutBounds(records)
+  for index = 1, #records do
+    local record = records[index]
+    if record.viewerKey == BUFF_ICON_VIEWER and record.collapseWhenInactive then
+      local layoutFrame = record.layoutFrame
+      layoutFrame:SetIgnoringChildrenForBounds(false)
+      layoutFrame:SetSize(0.001, 0.001)
+      layoutFrame:ResizeToBoundsRect()
+      layoutFrame:SetIgnoringChildrenForBounds(true)
+    end
   end
-
-  local layoutFrame = record.layoutFrame
-  layoutFrame:SetIgnoringChildrenForBounds(false)
-  layoutFrame:SetSize(0.001, 0.001)
-  layoutFrame:ResizeToBoundsRect()
-  layoutFrame:SetIgnoringChildrenForBounds(true)
 end
 
 function AuraRuntime:ApplySpellOverride(baseSpellID, overrideSpellID)
@@ -1043,7 +1044,7 @@ AuraRuntime.RefreshLayout = P:Def("AuraRuntime:RefreshLayout", AuraRuntime.Refre
 AuraRuntime.UsesCollapsedLayout = P:Def("AuraRuntime:UsesCollapsedLayout", AuraRuntime.UsesCollapsedLayout)
 AuraRuntime.PrepareRecordLayout = P:Def("AuraRuntime:PrepareRecordLayout", AuraRuntime.PrepareRecordLayout)
 AuraRuntime.FinalizeRecordLayout = P:Def("AuraRuntime:FinalizeRecordLayout", AuraRuntime.FinalizeRecordLayout)
-AuraRuntime.RefreshRecordLayoutBounds = P:Def("AuraRuntime:RefreshRecordLayoutBounds", AuraRuntime.RefreshRecordLayoutBounds)
+AuraRuntime.RefreshLayoutBounds = P:Def("AuraRuntime:RefreshLayoutBounds", AuraRuntime.RefreshLayoutBounds)
 AuraRuntime.ApplySpellOverride = P:Def("AuraRuntime:ApplySpellOverride", AuraRuntime.ApplySpellOverride)
 AuraRuntime.OnCatalogChanged = P:Def("AuraRuntime:OnCatalogChanged", AuraRuntime.OnCatalogChanged)
 AuraRuntime.Flush = P:Def("AuraRuntime:Flush", AuraRuntime.Flush)
