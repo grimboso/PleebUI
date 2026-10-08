@@ -29,9 +29,6 @@ end
 
 function Module:OnCreate(bar)
   bar.__puiInstantFallbackDuration = C_DurationUtil.CreateDuration()
-  if REUSE_GCD_DURATION then
-    self.gcdDuration = self.gcdDuration or C_DurationUtil.CreateDuration()
-  end
   bar.__puiInstantSpellNames = {}
   bar.__puiInstantSpellTextures = {}
 
@@ -57,25 +54,25 @@ local function CB_GetPublicGCDDuration(displayDuration)
       or issecretvalue(cooldown.duration)
       or issecretvalue(cooldown.modRate)
     then
-      return nil, nil, nil
+      return nil, nil
     end
 
-    duration = displayDuration or Module.gcdDuration
+    duration = displayDuration
     duration:SetTimeFromStart(cooldown.startTime, cooldown.duration, cooldown.modRate)
   else
     duration = C_Spell.GetSpellCooldownDuration(CB_GCD_DUMMY_SPELL_ID)
   end
   if not duration or duration:HasSecretValues() then
-    return nil, nil, nil
+    return nil, nil
   end
 
   local startTime = duration:GetStartTime()
   local remainingDuration = duration:GetRemainingDuration()
   if not startTime or startTime <= 0 or not remainingDuration or remainingDuration <= 0 then
-    return nil, nil, nil
+    return nil, nil
   end
 
-  return duration, startTime, remainingDuration
+  return duration, remainingDuration
 end
 
 function Module:MarkSpellSent(castGUID, spellID)
@@ -92,11 +89,8 @@ function Module:MarkSpellSent(castGUID, spellID)
 
   self.sentCastGUID = castGUID
   self.sentSpellID = spellID
-  local _, gcdStartTime = CB_GetPublicGCDDuration()
-  self.sentGCDStartTime = gcdStartTime
   self.pendingCastGUID = nil
   self.pendingSpellID = nil
-  self.pendingGCDStartTime = nil
 end
 
 function Module:CancelForCastStart(bar)
@@ -106,10 +100,8 @@ function Module:CancelForCastStart(bar)
 
   self.sentCastGUID = nil
   self.sentSpellID = nil
-  self.sentGCDStartTime = nil
   self.pendingCastGUID = nil
   self.pendingSpellID = nil
-  self.pendingGCDStartTime = nil
   self.pendingBar = nil
   self.pendingFrame:Hide()
 
@@ -122,13 +114,11 @@ function Module:MarkCastFailed(castGUID, spellID)
   if self.sentCastGUID == castGUID and self.sentSpellID == spellID then
     self.sentCastGUID = nil
     self.sentSpellID = nil
-    self.sentGCDStartTime = nil
   end
 
   if self.pendingCastGUID == castGUID and self.pendingSpellID == spellID then
     self.pendingCastGUID = nil
     self.pendingSpellID = nil
-    self.pendingGCDStartTime = nil
     self.pendingBar = nil
     self.pendingFrame:Hide()
   end
@@ -161,10 +151,8 @@ function Module:StopActive(owner)
 
   self.sentCastGUID = nil
   self.sentSpellID = nil
-  self.sentGCDStartTime = nil
   self.pendingCastGUID = nil
   self.pendingSpellID = nil
-  self.pendingGCDStartTime = nil
   self.pendingBar = nil
   self.pendingFrame:Hide()
 
@@ -238,19 +226,17 @@ local function CB_ProcessPendingInstant(frame)
   local bar = Module.pendingBar
   local castGUID = Module.pendingCastGUID
   local spellID = Module.pendingSpellID
-  local previousGCDStartTime = Module.pendingGCDStartTime
 
   Module.pendingBar = nil
   Module.pendingCastGUID = nil
   Module.pendingSpellID = nil
-  Module.pendingGCDStartTime = nil
 
   if Module.enabled ~= true or not bar or not castGUID or not spellID then
     return
   end
 
-  local duration, gcdStartTime, cleanupDuration = CB_GetPublicGCDDuration(bar.__puiInstantFallbackDuration)
-  if not duration or gcdStartTime == previousGCDStartTime then
+  local duration, cleanupDuration = CB_GetPublicGCDDuration(bar.__puiInstantFallbackDuration)
+  if not duration then
     duration = bar.__puiInstantFallbackDuration
     duration:SetTimeFromStart(GetTime(), CB_INSTANT_CLEANUP_DURATION)
     cleanupDuration = CB_INSTANT_CLEANUP_DURATION
@@ -279,10 +265,8 @@ function Module:HandleSucceeded(owner, castGUID, spellID, castBarID)
     return
   end
 
-  local previousGCDStartTime = self.sentGCDStartTime
   self.sentCastGUID = nil
   self.sentSpellID = nil
-  self.sentGCDStartTime = nil
 
   if castBarID ~= nil then
     return
@@ -291,7 +275,6 @@ function Module:HandleSucceeded(owner, castGUID, spellID, castBarID)
   self.pendingBar = owner.__puiPlayerCastBar
   self.pendingCastGUID = castGUID
   self.pendingSpellID = spellID
-  self.pendingGCDStartTime = previousGCDStartTime
   self.pendingFrame:Show()
 end
 
