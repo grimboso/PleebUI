@@ -498,12 +498,24 @@ local function FeedApplicationThresholdFrame(frame, value)
 
   local cooldownID = frame:GetCooldownID()
   local unit = frame:GetAuraDataUnit()
+  local state = applicationThresholdFrames[frame]
+
   if issecretvalue(cooldownID) or issecretvalue(unit) then
-    ClearApplicationThresholdFrame(frame)
+    -- A previously verified CDM binding remains valid until Blizzard changes it.
+    for parts in pairs(state.sources) do
+      local source = parts.applicationThresholdSource
+      if source
+        and applicationThresholdSources[parts] == source
+        and source.frame == frame
+        and source.active == true
+      then
+        FeedApplicationThresholds(parts, value)
+      else
+        state.sources[parts] = nil
+      end
+    end
     return
   end
-
-  local state = applicationThresholdFrames[frame]
   for parts in pairs(state.sources) do
     local source = parts.applicationThresholdSource
     if applicationThresholdSources[parts] ~= source
@@ -545,6 +557,9 @@ local function HookApplicationThresholdFrame(frame)
   local countText = frame:GetApplicationsFontString()
   hooksecurefunc(countText, "SetText", function(_, value)
     FeedApplicationThresholdFrame(frame, value)
+  end)
+  hooksecurefunc(frame, "OnCooldownIDSet", function()
+    ClearApplicationThresholdFrame(frame)
   end)
   hooksecurefunc(frame, "ResetCooldownData", function()
     ClearApplicationThresholdFrame(frame)

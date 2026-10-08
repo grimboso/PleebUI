@@ -251,7 +251,7 @@ local function _KB_ActionSlotContentChanged(slot)
   local changed = false
 
   for actionSlot = firstSlot, lastSlot do
-    if _KB_IsMappedActionSlot(actionSlot) then
+    if slot ~= 0 or _KB_IsMappedActionSlot(actionSlot) then
       local actionType, actionID = GetActionInfo(actionSlot)
       if not _KB_IsSecret(actionType) and not _KB_IsSecret(actionID) then
         local normalizedType = actionType or false

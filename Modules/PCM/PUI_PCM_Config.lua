@@ -13,6 +13,17 @@ local IconSettings = ns.PCMIconSettings
 local DB = ns.PCM_DBExports
 local Options = ns.PCMOptions
 local P, TrackThis = ns.Pleebug:DropIn(Addon, { name = "PCM", bucket = "Config" })
+
+-- Let AceConfigDialog finish its execute callback before replacing its controls.
+local function _PCM_NavigateAfterAceExecute(path)
+  local optionsFrame = Addon._OptionsWindow
+  C_Timer.After(0, function()
+    if optionsFrame and optionsFrame:IsShown() then
+      Addon:OpenOptions(path, false, true)
+    end
+  end)
+end
+
 local function _PCM_RefreshPreview()
   ns.PCMPreview.Refresh()
 end
@@ -664,8 +675,17 @@ local function _PCM_ParseCustomBuffSpellIDs(value)
   return spellIDs
 end
 
-local function _PCM_RefreshCustomBuffTracking()
+local function _PCM_RefreshCustomBuffTracking(addedBuff)
   Cooldowns:RefreshAbilityCatalog()
+  if addedBuff and ns.PCM_IsModuleEnabledFast() and ns.PCMRuntime:IsAuraRestricted() then
+    Addon:PUI_ConfirmAction({
+      title = "Reload required",
+      text = "New buff tracking was saved. Reload the UI to show the new icon now.",
+      yesText = "Reload now",
+      noText = "Later",
+      onYes = ReloadUI,
+    })
+  end
 end
 
 local function _PCM_BuildBuffIconsTabArgs()
@@ -719,8 +739,10 @@ local function _PCM_BuildBuffIconsTabArgs()
       return ns.PCM_DBExports.GetBuffIconTrackingDB().powerInfusion == true
     end,
     set = function(_, enabled)
-      ns.PCM_DBExports.GetBuffIconTrackingDB().powerInfusion = enabled == true
-      _PCM_RefreshCustomBuffTracking()
+      local tracking = ns.PCM_DBExports.GetBuffIconTrackingDB()
+      local addedBuff = enabled == true and tracking.powerInfusion ~= true
+      tracking.powerInfusion = enabled == true
+      _PCM_RefreshCustomBuffTracking(addedBuff)
     end,
   }
 
@@ -733,8 +755,10 @@ local function _PCM_BuildBuffIconsTabArgs()
       return ns.PCM_DBExports.GetBuffIconTrackingDB().bloodlust == true
     end,
     set = function(_, enabled)
-      ns.PCM_DBExports.GetBuffIconTrackingDB().bloodlust = enabled == true
-      _PCM_RefreshCustomBuffTracking()
+      local tracking = ns.PCM_DBExports.GetBuffIconTrackingDB()
+      local addedBuff = enabled == true and tracking.bloodlust ~= true
+      tracking.bloodlust = enabled == true
+      _PCM_RefreshCustomBuffTracking(addedBuff)
     end,
   }
 
@@ -753,8 +777,20 @@ local function _PCM_BuildBuffIconsTabArgs()
     end,
     set = function(_, value)
       local spellIDs = _PCM_ParseCustomBuffSpellIDs(value)
-      ns.PCM_DBExports.GetBuffIconTrackingDB().customSpellIDs = spellIDs
-      _PCM_RefreshCustomBuffTracking()
+      local tracking = ns.PCM_DBExports.GetBuffIconTrackingDB()
+      local previousIDs = {}
+      for _, spellID in ipairs(tracking.customSpellIDs) do
+        previousIDs[spellID] = true
+      end
+      local addedBuff = false
+      for _, spellID in ipairs(spellIDs) do
+        if not previousIDs[spellID] then
+          addedBuff = true
+          break
+        end
+      end
+      tracking.customSpellIDs = spellIDs
+      _PCM_RefreshCustomBuffTracking(addedBuff)
     end,
   }
 
@@ -2393,9 +2429,7 @@ _PCM_BuildIconOverrideArgs = function(viewerKey, entry)
     end,
     set = function(_, value)
       IconSettings:SetPreviewState(viewerKey, value == "AUTO" and nil or value)
-      if ns.PCMPreview and ns.PCMPreview.Refresh then
-        ns.PCMPreview.Refresh()
-      end
+      ns.PCMPreview.Refresh()
     end,
   }
 
@@ -2406,9 +2440,7 @@ _PCM_BuildIconOverrideArgs = function(viewerKey, entry)
     local function RefreshAuraPreview()
       IconSettings:SetPreviewState(viewerKey, "AURA", 3)
       Cooldowns:RefreshIndividualIconSettings(viewerKey)
-      if ns.PCMPreview and ns.PCMPreview.Refresh then
-        ns.PCMPreview.Refresh()
-      end
+      ns.PCMPreview.Refresh()
     end
 
     args.swipeHeader = {
@@ -8595,17 +8627,23 @@ end
 local _PCM_BuildConsumablesTabArgs
 local _PCM_BuildDeveloperTabArgs
 
+local PCM_CONSUMABLE_TRACKER_VALUE = "__PUI_PCM_CONSUMABLE_TRACKER"
 local PCM_CREATE_GROUP_VALUE = "__PUI_SEPARATOR_BEFORE__PCM_CREATE_GROUP"
 
 local function _PCM_GetGroupValues(kind, record)
   local values = {}
   local groups = ns.PCMGroupManager:GetGroups()
+  if record.viewerKey == "ConsumableTracker" then
+    values[PCM_CONSUMABLE_TRACKER_VALUE] = "Consumable Tracker"
+  end
   for index = 1, #groups.order do
     local groupID = groups.order[index]
     local group = groups.byID[groupID]
     if group
       and group.kind == kind
-      and (group.isDefault ~= true or group.defaultViewerKey == record.viewerKey)
+      and (group.isDefault ~= true
+        or record.viewerKey == "ConsumableTracker"
+        or group.defaultViewerKey == record.viewerKey)
     then
       values[groupID] = group.name
     end
@@ -8617,12 +8655,17 @@ end
 local function _PCM_GetGroupSorting(kind, record)
   local sorting = {}
   local groups = ns.PCMGroupManager:GetGroups()
+  if record.viewerKey == "ConsumableTracker" then
+    sorting[#sorting + 1] = PCM_CONSUMABLE_TRACKER_VALUE
+  end
   for index = 1, #groups.order do
     local groupID = groups.order[index]
     local group = groups.byID[groupID]
     if group
       and group.kind == kind
-      and (group.isDefault ~= true or group.defaultViewerKey == record.viewerKey)
+      and (group.isDefault ~= true
+        or record.viewerKey == "ConsumableTracker"
+        or group.defaultViewerKey == record.viewerKey)
     then
       sorting[#sorting + 1] = groupID
     end
@@ -8657,11 +8700,21 @@ local function _PCM_BuildGroupEntryArgs(groupID, record, order)
       end,
       disabled = _PCM_IsGroupStructureLocked,
       set = function(_, value)
-        if value == PCM_CREATE_GROUP_VALUE then
-          ns.PCMGroupManager:CreateGroupForRecord(recordKey)
+        if record.viewerKey == "ConsumableTracker" and value == PCM_CONSUMABLE_TRACKER_VALUE then
+          if ns.PCMGroupManager:ClearRecordAssignment(recordKey) then
+            Cooldowns:ConsumableTracker_Rebuild()
+          end
           return
         end
-        ns.PCMGroupManager:MoveRecord(recordKey, value)
+        if value == PCM_CREATE_GROUP_VALUE then
+          if ns.PCMGroupManager:CreateGroupForRecord(recordKey) and record.viewerKey == "ConsumableTracker" then
+            Cooldowns:ConsumableTracker_Rebuild()
+          end
+          return
+        end
+        if ns.PCMGroupManager:MoveRecord(recordKey, value) and record.viewerKey == "ConsumableTracker" then
+          Cooldowns:ConsumableTracker_Rebuild()
+        end
       end,
     },
   }
@@ -8669,7 +8722,9 @@ local function _PCM_BuildGroupEntryArgs(groupID, record, order)
   if isDefaultGroup then
     placementArgs.orderSource = {
       type = "description",
-      name = "Order follows Blizzard Cooldown Manager. Reorder this entry in /cdm.",
+      name = record.viewerKey == "ConsumableTracker"
+        and "Consumables are placed after Blizzard entries. Use Order under Consumables to arrange them."
+        or "Order follows Blizzard Cooldown Manager. Reorder this entry in /cdm.",
       order = 2,
     }
   else
@@ -8724,7 +8779,7 @@ local function _PCM_BuildGroupEntryArgs(groupID, record, order)
           local definition = definitions[index]
           if Cooldowns:GetConsumableTrackerRecordKey(definition.key) == recordKey then
             Options.itemReturnPath = { "CooldownManager", "groups", groupID, "entries", recordKey }
-            Addon:OpenOptions({ "CooldownManager", "consumables", "slots", definition.key }, false, true)
+            _PCM_NavigateAfterAceExecute({ "CooldownManager", "consumables", "slots", definition.key })
             return
           end
         end
@@ -8827,7 +8882,7 @@ local function _PCM_BuildGroupEntryArgs(groupID, record, order)
           EssentialCooldownViewer = "essential", UtilityCooldownViewer = "utility",
           BuffIconCooldownViewer = "buff-icons",
         }
-        Addon:OpenOptions({ "CooldownManager", "groups", groupIDs[record.viewerKey], "timer" }, false, true)
+        _PCM_NavigateAfterAceExecute({ "CooldownManager", "groups", groupIDs[record.viewerKey], "timer" })
       end,
     }
   end
@@ -9112,16 +9167,16 @@ local function _PCM_BuildUnifiedManagerArgs(activeKey, activePath)
       overviewArgs.groups.args[groupID] = {
         type = "execute", order = index,
         name = group.name .. " (" .. tostring(activeGroup and #activeGroup.records or 0) .. " entries)",
-        func = function() Addon:OpenOptions({ "CooldownManager", "groups", groupID }, false, true) end,
+        func = function() _PCM_NavigateAfterAceExecute({ "CooldownManager", "groups", groupID }) end,
       }
     end
     overviewArgs.items = {
       type = "execute", name = "Edit items & racials", order = 11,
-      func = function() Addon:OpenOptions({ "CooldownManager", "consumables" }, false, true) end,
+      func = function() _PCM_NavigateAfterAceExecute({ "CooldownManager", "consumables" }) end,
     }
     overviewArgs.trackers = {
       type = "execute", name = "Edit custom trackers", order = 12,
-      func = function() Addon:OpenOptions({ "CooldownManager", "customTrackers" }, false, true) end,
+      func = function() _PCM_NavigateAfterAceExecute({ "CooldownManager", "customTrackers" }) end,
     }
     overviewArgs.information = {
       type = "description", order = 20,
@@ -9496,8 +9551,10 @@ _PCM_BuildConsumablesTabArgs = function()
   }
 
   local definitions = Cooldowns:GetConsumableTrackerDefinitions()
+  local consumableGroupRecord = { viewerKey = "ConsumableTracker" }
   local function BuildSlotArgs(definition, index)
     local slotKey = definition.key
+    local recordKey = Cooldowns:GetConsumableTrackerRecordKey(slotKey)
     return {
       type = "group",
       name = definition.label,
@@ -9511,10 +9568,42 @@ _PCM_BuildConsumablesTabArgs = function()
           get = function() return GetCfg().slots[slotKey].enabled ~= false end,
           set = function(_, value) GetCfg().slots[slotKey].enabled = value == true Rebuild() end,
         },
+        group = {
+          type = "select",
+          name = "Group",
+          order = 2,
+          values = function()
+            return _PCM_GetGroupValues("ICON", consumableGroupRecord)
+          end,
+          sorting = function()
+            return _PCM_GetGroupSorting("ICON", consumableGroupRecord)
+          end,
+          get = function()
+            return ns.PCMGroupManager:GetRecordGroupID(recordKey) or PCM_CONSUMABLE_TRACKER_VALUE
+          end,
+          disabled = _PCM_IsGroupStructureLocked,
+          set = function(_, value)
+            if value == PCM_CONSUMABLE_TRACKER_VALUE then
+              if ns.PCMGroupManager:ClearRecordAssignment(recordKey) then
+                Rebuild()
+              end
+              return
+            end
+            if value == PCM_CREATE_GROUP_VALUE then
+              if ns.PCMGroupManager:CreateGroupForRecord(recordKey) then
+                Rebuild()
+              end
+              return
+            end
+            if ns.PCMGroupManager:MoveRecord(recordKey, value) then
+              Rebuild()
+            end
+          end,
+        },
         missing = {
           type = "select",
           name = "When unavailable",
-          order = 2,
+          order = 3,
           values = { GRAY = "Gray", HIDE = "Hide" },
           get = function() return GetCfg().slots[slotKey].missing end,
           set = function(_, value) GetCfg().slots[slotKey].missing = value Rebuild() end,
@@ -9522,7 +9611,7 @@ _PCM_BuildConsumablesTabArgs = function()
         order = {
           type = "range",
           name = "Order",
-          order = 3,
+          order = 4,
           min = 1,
           max = #definitions,
           step = 1,
@@ -9551,7 +9640,7 @@ _PCM_BuildConsumablesTabArgs = function()
   sections.returnToGroup = {
     type = "execute", name = "Back to group entry", order = 0,
     hidden = function() return Options.itemReturnPath == nil end,
-    func = function() Addon:OpenOptions(Options.itemReturnPath, false, true) end,
+    func = function() _PCM_NavigateAfterAceExecute(Options.itemReturnPath) end,
   }
   return sections
 end
@@ -9685,7 +9774,7 @@ Addon:RegisterOptionsSection("CooldownManager", PCMOptionsProvider, 50, "Pleeb C
   page = {
     previewWidth = 380,
     previewHeight = 360,
-    previewAlwaysShown = true,
+    previewAlwaysShown = false,
     buildPreview = ns.PCMPreview.Build,
   },
 })

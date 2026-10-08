@@ -81,7 +81,6 @@ local function _PCM_DB_Attach(Cooldowns)
   --   2) style.iconSize
   --   3) hard fallback
   local _PUI_PCM_ICON_SIZE_CACHE = {}
-  local _PUI_PCM_OVERRIDE_FREEZE_UNTIL = 0
 
   local function _GetIconSizeForViewer(viewerKey, style)
     style = style or ns.PCM_DBExports.GetStyleDB()
@@ -1331,10 +1330,6 @@ local function _PCM_DB_Attach(Cooldowns)
   Cooldowns._HasAnyFontField = _HasAnyFontField
   Cooldowns._SavePosition = _SavePosition
   Cooldowns._SetViewerSwipeFlag = _SetViewerSwipeFlag
-
-
-  -- Mark successful attach so runtime can detect missing DB wiring.
-  Cooldowns.__pui_pcm_db_attached = true
 end
 
 

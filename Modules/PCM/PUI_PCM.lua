@@ -419,6 +419,20 @@ function Cooldowns:SetViewerHideWhenInactive(viewerKey, enabled)
   return changed
 end
 
+local function _PCM_CompleteRendererSettingsMigration(owner)
+  if not owner.__puiPCMStartupComplete
+    or PCM_DB.IsRendererMigrationComplete()
+    or PCMRuntime:IsDataRestricted()
+    or not _PCM_MigrateOwnedViewerTooltips()
+  then
+    return
+  end
+
+  for _, info in owner:IterateViewers() do
+    _PCM_RefreshOwnedViewer(owner, info.key)
+  end
+end
+
 
 local _GetOrCreateViewerAnchorFrame
 local _ForceAnchor
@@ -800,12 +814,38 @@ function Cooldowns:RefreshAbilityCatalog()
   _PCM_RunHardViewerTransition(self, false)
 end
 
+local NativeCDMSettingsChanged = false
+
+local function _PCM_OnNativeSettingsPending(_, _, hasPendingChanges)
+  if hasPendingChanges ~= true or not _PCM_IsModuleEnabledFast() then
+    return
+  end
+
+  local settings = _G.CooldownViewerSettings
+  if settings and settings:IsShown() then
+    NativeCDMSettingsChanged = true
+  end
+end
+
 local function _PCM_OnNativeSettingsHidden()
   if not _PCM_IsModuleEnabledFast() then
     return
   end
 
+  local reloadRequired = NativeCDMSettingsChanged and PCMRuntime:IsDataRestricted()
+  NativeCDMSettingsChanged = false
+
   _PCM_BeginTransition(Cooldowns, false)
+
+  if reloadRequired then
+    ns.Addon:PUI_ConfirmAction({
+      title = "Reload required",
+      text = "Cooldown Manager changes were saved. Reload the UI to update your icons now.",
+      yesText = "Reload now",
+      noText = "Later",
+      onYes = ReloadUI,
+    })
+  end
 end
 
 local function _PCM_ReconcileRuntimeViewers(owner)
@@ -1008,6 +1048,7 @@ function Cooldowns:_OnDataRestrictionsCleared()
   if self.__puiPCMStartupPending then
     _PCM_RunInitialViewerPass(self)
   end
+  _PCM_CompleteRendererSettingsMigration(self)
 
   if IconSettings:PrimeRuntimeCache() then
     for _, info in self:IterateViewers() do
@@ -1577,13 +1618,12 @@ function Cooldowns:OnInitialize()
 
   if enabled and PCMRuntime:IsInitializing() then
     C_AddOns.LoadAddOn("Blizzard_CooldownViewer")
-    -- Register before VARIABLES_LOADED, after Blizzard registers its provider setup.
-    EventUtil.ContinueAfterAllEvents(function()
+    EventUtil.ContinueOnPlayerLogin(function()
       PCMStartupDataReady = true
       if self:IsEnabled() then
         _PCM_RunInitialViewerPass(self)
       end
-    end, "VARIABLES_LOADED", "PLAYER_ENTERING_WORLD", "COOLDOWN_VIEWER_DATA_LOADED", "SPELLS_CHANGED")
+    end)
   end
 end
 
@@ -1726,14 +1766,16 @@ _PCM_RunInitialViewerPass = function(owner)
     IconSettings:PrimeRuntimeCache()
   end
 
-  local settings = _G.CooldownViewerSettings
-  local provider = settings and settings:GetDataProvider() or nil
-  if not provider
-    or type(provider.IsLayoutUpdateQueued) ~= "function"
-    or provider:IsLayoutUpdateQueued()
-  then
-    owner.__puiPCMStartupPending = true
-    return false
+  if not PCMRuntime:IsInitializing() then
+    local settings = _G.CooldownViewerSettings
+    local provider = settings and settings:GetDataProvider() or nil
+    if not provider
+      or type(provider.IsLayoutUpdateQueued) ~= "function"
+      or provider:IsLayoutUpdateQueued()
+    then
+      owner.__puiPCMStartupPending = true
+      return false
+    end
   end
 
   if ns.PCMGroupManager:IsStructureLocked() then
@@ -1741,14 +1783,16 @@ _PCM_RunInitialViewerPass = function(owner)
     return false
   end
 
-  local migrationComplete = PCM_DB.IsRendererMigrationComplete()
-  if not _PCM_MigrateOwnedViewerTooltips() then
-    owner.__puiPCMStartupPending = true
-    return false
-  end
-  if not migrationComplete then
-    ns.Modules.PCM_Buffs:RefreshSettings()
-    ns.Modules.PCM_BuffBars:RefreshSettings()
+  if not PCMRuntime:IsInitializing() then
+    local migrationComplete = PCM_DB.IsRendererMigrationComplete()
+    if not _PCM_MigrateOwnedViewerTooltips() then
+      owner.__puiPCMStartupPending = true
+      return false
+    end
+    if not migrationComplete then
+      ns.Modules.PCM_Buffs:RefreshSettings()
+      ns.Modules.PCM_BuffBars:RefreshSettings()
+    end
   end
 
   _PCM_InitializeOwnedViewers(owner)
@@ -1842,9 +1886,17 @@ function Cooldowns:OnEnable()
     _PCM_OnNativeSettingsHidden,
     self
   )
+
+  EventRegistry:RegisterCallback(
+    "CooldownViewerSettings.OnPendingChanges",
+    _PCM_OnNativeSettingsPending,
+    self
+  )
 end
 
 function Cooldowns:OnDisable()
+  NativeCDMSettingsChanged = false
+  EventRegistry:UnregisterCallback("CooldownViewerSettings.OnPendingChanges", self)
   EventRegistry:UnregisterCallback("CooldownViewerSettings.OnHide", self)
   PCMCVarFrame:UnregisterEvent("CVAR_UPDATE")
   PCMCVarRefreshFrame:Hide()
@@ -1889,6 +1941,7 @@ function Cooldowns:_OnPlayerEnteringWorld()
   end
 
   _PCM_RunInitialViewerPass(self)
+  _PCM_CompleteRendererSettingsMigration(self)
   self:_ReconcileCustomTrackerStartupAvailability()
 end
 
@@ -1988,6 +2041,7 @@ local function _PCM_RuntimeLifecycleEvent(event, ...)
     if Cooldowns.__puiPCMStartupPending then
       _PCM_RunInitialViewerPass(Cooldowns)
     end
+    _PCM_CompleteRendererSettingsMigration(Cooldowns)
   end
 end
 

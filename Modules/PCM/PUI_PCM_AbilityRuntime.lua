@@ -559,7 +559,9 @@ local function ApplySpellOverride(baseSpellID, overrideSpellID)
   end
 
   for _, record in pairs(buckets.spellAppearance.records) do
-    if record.entry.baseSpellID == baseSpellID then
+    if record.entry.baseSpellID == baseSpellID
+      and (not record.runtimeOverrideKnown or record.runtimeOverrideSpellID ~= overrideSpellID)
+    then
       record.runtimeOverrideKnown = true
       record.runtimeOverrideSpellID = overrideSpellID
       RefreshRuntimeSpellIdentity(record, false)
@@ -1148,8 +1150,16 @@ local function RefreshRecordState(record, stateMask)
   if HasMask(stateMask, bit_bor(STATE_COOLDOWN, STATE_CHARGE, STATE_TOTEM)) then
     RefreshStateAppearance(record)
     if entry.entryKind == "spell" then
-      local duration = record.runtimeSpellID and C_Spell.GetSpellCooldownDuration(record.runtimeSpellID, true)
-      PCMPresentation.SetOwnedIconSaturation(record.parts, duration, record.totemActive == true)
+      local parts = record.parts
+      local isTotem = record.totemActive == true
+      local duration
+      if not isTotem
+        and parts.readyDesaturation ~= parts.cooldownDesaturation
+        and record.runtimeSpellID
+      then
+        duration = C_Spell.GetSpellCooldownDuration(record.runtimeSpellID, true)
+      end
+      PCMPresentation.SetOwnedIconSaturation(parts, duration, isTotem)
     end
   end
 end
@@ -1505,10 +1515,6 @@ local function ApplyPendingCatalog(viewer, pendingCooldownIDs)
   viewer.orderedRuntimes = orderedRuntimes
   viewer.generation = generation
   viewer.layoutDirty = true
-  RefreshTotemBindings()
-  if groupLayoutEnabled then
-    ns.PCMGroupManager:RequestLayout(true)
-  end
 end
 
 local function WantsEvent(event)
@@ -1828,7 +1834,9 @@ function AbilityRuntime:Flush()
     return
   end
 
-  if viewers[ESSENTIAL_VIEWER].pendingEntries or viewers[UTILITY_VIEWER].pendingEntries then
+  local catalogChanged = viewers[ESSENTIAL_VIEWER].pendingEntries
+    or viewers[UTILITY_VIEWER].pendingEntries
+  if catalogChanged then
     local pendingCooldownIDs = {}
     for _, viewer in pairs(viewers) do
       for _, entry in ipairs(viewer.pendingEntries or viewer.entries) do
@@ -1837,21 +1845,26 @@ function AbilityRuntime:Flush()
     end
     ApplyPendingCatalog(viewers[ESSENTIAL_VIEWER], pendingCooldownIDs)
     ApplyPendingCatalog(viewers[UTILITY_VIEWER], pendingCooldownIDs)
+    RefreshTotemBindings()
   end
   if eventRegistrationsDirty then
     RefreshEventRegistrations()
   end
   FlushDirtyRecords()
 
+  local groupLayoutDirty = catalogChanged ~= nil
   for _, viewer in pairs(viewers) do
     if viewer.layoutDirty then
       viewer.layoutDirty = false
       if groupLayoutEnabled then
-        ns.PCMGroupManager:RequestLayout()
+        groupLayoutDirty = true
       else
         AbilityLayout:RequestLayout(viewer.key)
       end
     end
+  end
+  if groupLayoutEnabled and groupLayoutDirty then
+    ns.PCMGroupManager:RequestLayout(catalogChanged ~= nil)
   end
 
   if not readyNotified and self:IsReady() then

@@ -799,22 +799,30 @@ function AuraRuntime:ApplySpellOverride(baseSpellID, overrideSpellID)
 
   local runtimeName
   local runtimeTexture
-  if overrideSpellID then
-    local name = C_Spell.GetSpellName(overrideSpellID)
-    if not issecretvalue(name) and type(name) == "string" and name ~= "" then
-      runtimeName = name
-    end
-    local texture = C_Spell.GetSpellTexture(overrideSpellID)
-    if not issecretvalue(texture)
-      and (type(texture) == "number" or type(texture) == "string")
-    then
-      runtimeTexture = texture
-    end
-  end
+  local appearanceResolved = false
+  local changed = false
 
   for _, viewer in pairs(viewers) do
     for _, record in ipairs(viewer.orderedRecords) do
-      if record.entry.baseSpellID == baseSpellID then
+      if record.entry.baseSpellID == baseSpellID
+        and (not record.runtimeOverrideKnown or record.runtimeOverrideSpellID ~= overrideSpellID)
+      then
+        if not appearanceResolved then
+          appearanceResolved = true
+          if overrideSpellID then
+            local name = C_Spell.GetSpellName(overrideSpellID)
+            if not issecretvalue(name) and type(name) == "string" and name ~= "" then
+              runtimeName = name
+            end
+            local texture = C_Spell.GetSpellTexture(overrideSpellID)
+            if not issecretvalue(texture)
+              and (type(texture) == "number" or type(texture) == "string")
+            then
+              runtimeTexture = texture
+            end
+          end
+        end
+
         record.runtimeOverrideKnown = true
         record.runtimeOverrideSpellID = overrideSpellID
         record.runtimeName = runtimeName
@@ -828,11 +836,15 @@ function AuraRuntime:ApplySpellOverride(baseSpellID, overrideSpellID)
         else
           record.placeholderLabel:SetText(record.runtimeName or record.entry.name or "")
         end
+        changed = true
       end
     end
   end
-  pendingTotems = true
-  ScheduleFlush()
+
+  if changed then
+    pendingTotems = true
+    ScheduleFlush()
+  end
 end
 
 function AuraRuntime:OnCatalogChanged(generation)
@@ -840,25 +852,7 @@ function AuraRuntime:OnCatalogChanged(generation)
   pendingTotems = true
   ScheduleFlush()
 
-  if PCMRuntime:IsAuraRestricted() then
-    for _, viewer in pairs(viewers) do
-      local entries = Catalog:GetViewerEntries(viewer.key)
-      for index = 1, #entries do
-        local entry = entries[index]
-        local record = viewer.records[entry.cooldownID] or retiredRecords[viewer.key][entry.cooldownID]
-        if not record or not SlotConfigurationMatches(record.entry, entry) then
-          ns.Addon:PUI_ConfirmAction({
-            title = "Buff tracking",
-            text = "Buff tracking saved. Reload the UI to show newly tracked buffs now.",
-            yesText = RELOADUI,
-            noText = "Later",
-            onYes = ReloadUI,
-          })
-          return
-        end
-      end
-    end
-  end
+
 end
 
 function AuraRuntime:Flush()

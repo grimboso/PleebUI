@@ -15,6 +15,8 @@ local P = select(1, ns.Pleebug:DropIn(Cooldowns, { name = "PCM", bucket = "Consu
 
 local TRACKER_MOVER_KEY = "PCM_ConsumableTracker"
 local PARTICIPANT_KEY = "pcmConsumables"
+local GROUP_VIEWER_KEY = "ConsumableTracker"
+local GROUP_RECORD_PREFIX = "consumable:"
 local DURATION_GLOW_COLOR = { 1, 0.55, 0.1, 1 }
 local DURATION_GLOW_OPTIONS = { pixelThickness = 2 }
 local COOLDOWN_FONT_STYLE = {
@@ -32,6 +34,7 @@ local UnitClassBase = UnitClassBase
 local GetInventoryItemID = GetInventoryItemID
 local PCMRuntime = ns.PCMRuntime
 local DB = ns.PCM_DBExports
+local GroupManager = ns.PCMGroupManager
 
 local ACTIVE_TRINKET_CATEGORY = Enum.CooldownViewerCategory.EquipSlotEssential
 local TRACKED_TRINKET_CATEGORY = Enum.CooldownViewerCategory.EquipSlotTracked
@@ -181,6 +184,7 @@ local Tracker = {
   icons = {},
   orderedIcons = {},
   visibleIcons = {},
+  groupRecords = {},
   combatLockouts = {},
   hasWarlock = false,
   warlockRosterDirty = false,
@@ -190,8 +194,13 @@ local Tracker = {
 }
 
 local QUALITY_ATLAS_CACHE = {}
+local EMPTY_GROUP_RECORDS = {}
 
 local GetDB = DB.GetConsumableTrackerDB
+
+local function GetGroupRecordKey(slotKey)
+  return GROUP_RECORD_PREFIX .. slotKey
+end
 
 local function GetSlotDB(cfg, key)
   return cfg.slots[key]
@@ -781,12 +790,28 @@ end
 local function EnsureIcons()
   local container = EnsureContainer()
   for index = #Tracker.icons + 1, #DEFINITIONS do
+    local definition = DEFINITIONS[index]
     local icon = Presentation.Create("PCMIcon", container)
-    icon.definition = DEFINITIONS[index]
+    icon.definition = definition
     icon.frame:SetFrameLevel(container:GetFrameLevel() + 2)
     icon.frame:Hide()
     SetTooltip(icon)
+
+    local record = {
+      viewerKey = GROUP_VIEWER_KEY,
+      entry = {
+        catalogKey = GetGroupRecordKey(definition.key),
+        name = definition.label,
+        texture = 134400,
+        viewerOrder = index,
+      },
+      parts = icon,
+      groupVisible = false,
+    }
+    icon.groupRecord = record
+
     Tracker.icons[index] = icon
+    Tracker.groupRecords[index] = record
   end
 end
 
@@ -1172,6 +1197,7 @@ local function SetIconRuntime(icon, definition, cfg, available, itemID, spellID,
   local texture = GetDefinitionTexture(definition, itemID, spellID)
   if texture then
     icon.icon:SetTexture(texture)
+    icon.groupRecord.entry.texture = texture
   elseif not definition.equipSlot then
     icon.icon:SetTexture(WHITE_TEXTURE)
   end
@@ -1195,6 +1221,9 @@ local function ConfigureIcon(icon, definition, cfg, available, itemID, spellID, 
   local texture = GetDefinitionTexture(definition, itemID, spellID)
   if not texture and not definition.equipSlot then
     texture = WHITE_TEXTURE
+  end
+  if texture then
+    icon.groupRecord.entry.texture = texture
   end
 
   Presentation.Apply("PCMIcon", icon, {
@@ -1266,6 +1295,7 @@ local function LayoutIcons(visible, cfg)
       end
     end
 
+    icon.frame:SetParent(Tracker.container)
     icon.frame:ClearAllPoints()
     icon.frame:SetPoint("TOPLEFT", Tracker.container, "TOPLEFT", x, y)
     icon.frame:Show()
@@ -1320,6 +1350,18 @@ function Cooldowns:GetConsumableTrackerDefinitions()
   return DEFINITIONS
 end
 
+function Cooldowns:GetConsumableTrackerGroupRecords()
+  if not Tracker.active then
+    return EMPTY_GROUP_RECORDS
+  end
+  EnsureIcons()
+  return Tracker.groupRecords
+end
+
+function Cooldowns:GetConsumableTrackerRecordKey(slotKey)
+  return GetGroupRecordKey(slotKey)
+end
+
 function Cooldowns:GetConsumableItemQualityAtlas(itemID)
   return GetItemQualityAtlas(itemID)
 end
@@ -1349,13 +1391,18 @@ local function RefreshContainerVisibility(cfg)
 end
 
 local function RelayoutVisibleIcons(cfg)
-
   local visible = Tracker.visibleIcons
   wipe(visible)
+
+  local runtimeVisible = ShouldShowContainer(cfg)
   for index = 1, #Tracker.orderedIcons do
     local icon = Tracker.orderedIcons[index]
+    local record = icon.groupRecord
+    local shown = icon.trackerVisible == true and runtimeVisible
+    record.groupVisible = shown
+    icon.frame:SetShown(shown)
 
-    if icon.frame:IsShown() then
+    if shown and not GroupManager:GetRecordGroupID(record.entry.catalogKey) then
       visible[#visible + 1] = icon
     end
   end
@@ -1365,6 +1412,7 @@ local function RelayoutVisibleIcons(cfg)
   end
   RefreshContainerVisibility(cfg)
   RefreshMover()
+  GroupManager:RequestLayout()
 end
 
 local function ShouldShowDefinition(definition, slot, available, filtered)
@@ -1416,7 +1464,9 @@ function Cooldowns:ConsumableTracker_Rebuild()
     local icon = ordered[index]
     local definition = icon.definition
     local slot = GetSlotDB(cfg, definition.key)
+    icon.groupRecord.entry.viewerOrder = slot.order or index
     DeactivateDurationAuraTrack(icon)
+    icon.trackerVisible = false
     icon.frame:Hide()
 
     if slot.enabled ~= false then
@@ -1424,6 +1474,7 @@ function Cooldowns:ConsumableTracker_Rebuild()
       local show = ShouldShowDefinition(definition, slot, available, filtered)
       if show then
         ConfigureIcon(icon, definition, cfg, available, itemID, spellID, count, trinketKind, durationSpellIDs)
+        icon.trackerVisible = true
         icon.frame:Show()
       end
     end
@@ -1470,13 +1521,14 @@ local function RefreshDefinitions(predicate)
     local definition = icon.definition
     if predicate(definition) then
       local slot = GetSlotDB(cfg, definition.key)
-      local wasShown = icon.frame:IsShown()
+      local wasShown = icon.trackerVisible == true
 
       if slot.enabled ~= false then
         local itemID, spellID, count, available, trinketKind, durationSpellIDs, filtered = ResolveDefinition(definition, cfg)
         local show = ShouldShowDefinition(definition, slot, available, filtered)
-        
+
         if show then
+          icon.trackerVisible = true
           if wasShown then
             SetIconRuntime(icon, definition, cfg, available, itemID, spellID, count, trinketKind, durationSpellIDs)
           else
@@ -1485,6 +1537,7 @@ local function RefreshDefinitions(predicate)
             layoutChanged = true
           end
         else
+          icon.trackerVisible = false
           DeactivateDurationAuraTrack(icon)
           if wasShown then
             icon.frame:Hide()
@@ -1492,6 +1545,7 @@ local function RefreshDefinitions(predicate)
           end
         end
       else
+        icon.trackerVisible = false
         DeactivateDurationAuraTrack(icon)
         if wasShown then
           icon.frame:Hide()
@@ -1554,7 +1608,7 @@ local function RefreshCooldownEvent(spellID, baseSpellID, itemID)
 
   for index = 1, #Tracker.icons do
     local icon = Tracker.icons[index]
-    if icon.frame:IsShown() then
+    if icon.trackerVisible == true then
       local definition = icon.definition
       local refresh = refreshItems and IsItemCooldownDefinition(definition)
 
@@ -1579,13 +1633,13 @@ local function RefreshCountsAndVisibility()
   local showCounts = ShouldShowCounts(cfg)
   for index = 1, #Tracker.icons do
     local icon = Tracker.icons[index]
-    if icon.frame:IsShown() then
+    if icon.trackerVisible == true then
       local count = icon.count
       icon.chargeText:SetText(showCounts and count and count > 0 and tostring(count) or "")
       ConfigureDurationAuraTrack(icon, icon.definition, icon.durationSpellIDs, cfg)
     end
   end
-  RefreshContainerVisibility(cfg)
+  RelayoutVisibleIcons(cfg)
 end
 
 local function GetItemInfoOwners(itemID)
@@ -1650,7 +1704,7 @@ function Cooldowns:ConsumableTracker_RefreshKeybinds()
 
   for index = 1, #Tracker.icons do
     local icon = Tracker.icons[index]
-    if icon.frame:IsShown() and not IsBagItemDefinition(icon.definition) then
+    if icon.trackerVisible == true and not IsBagItemDefinition(icon.definition) then
       icon.keybindText:SetText(GetKeybind(icon.definition, icon.itemID, icon.spellID))
     end
   end
@@ -1761,11 +1815,16 @@ function Cooldowns:ConsumableTracker_Disable()
   end
   Tracker.eventsRegistered = false
   for index = 1, #Tracker.icons do
-    DeactivateDurationAuraTrack(Tracker.icons[index])
+    local icon = Tracker.icons[index]
+    DeactivateDurationAuraTrack(icon)
+    icon.trackerVisible = false
+    icon.groupRecord.groupVisible = false
+    icon.frame:Hide()
   end
   if Tracker.container then
     Tracker.container:Hide()
   end
+  GroupManager:RequestLayout()
   FrameUtil:RefreshGhostMover(TRACKER_MOVER_KEY)
 end
 
@@ -1818,6 +1877,8 @@ ns.PCMCatalog:RegisterListener(Tracker, function()
 end)
 
 Cooldowns.GetConsumableTrackerDefinitions = P:Def("Cooldowns:GetConsumableTrackerDefinitions", Cooldowns.GetConsumableTrackerDefinitions)
+Cooldowns.GetConsumableTrackerGroupRecords = P:Def("Cooldowns:GetConsumableTrackerGroupRecords", Cooldowns.GetConsumableTrackerGroupRecords)
+Cooldowns.GetConsumableTrackerRecordKey = P:Def("Cooldowns:GetConsumableTrackerRecordKey", Cooldowns.GetConsumableTrackerRecordKey)
 Cooldowns.GetConsumableItemQualityAtlas = P:Def("Cooldowns:GetConsumableItemQualityAtlas", Cooldowns.GetConsumableItemQualityAtlas)
 Cooldowns.GetConsumableCategoryItemIDs = P:Def("Cooldowns:GetConsumableCategoryItemIDs", Cooldowns.GetConsumableCategoryItemIDs)
 Cooldowns.GetConsumableTrackerEnabled = P:Def("Cooldowns:GetConsumableTrackerEnabled", Cooldowns.GetConsumableTrackerEnabled)

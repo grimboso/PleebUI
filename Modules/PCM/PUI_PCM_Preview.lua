@@ -17,7 +17,6 @@ local pairs = _G.pairs
 local select = _G.select
 local table_sort = _G.table.sort
 local string_format = _G.string.format
-local string_lower = _G.string.lower
 local tostring = _G.tostring
 local tonumber = _G.tonumber
 local type = _G.type
@@ -341,10 +340,8 @@ local function PCMPreview_CreatePanel(box, canvas, key, title)
   content:SetFrameLevel(panel:GetFrameLevel() + 2)
   content:SetClipsChildren(true)
 
-  panel.__puiPCMPreviewKey = key
   panel.__puiPCMPreviewZoom = 1
   panel.__puiPCMPreviewZoomControl = zoomControl
-  panel.__puiPCMPreviewTitle = titleText
   panel.__puiPCMPreviewContent = content
 
   return panel
@@ -806,7 +803,6 @@ end
 
 local function PCMPreview_ConfigureViewerPanel(box, panel, definition, root)
   local viewerKey = definition.key
-  local tabPath = { "CooldownManager", definition.tab }
   local defaultWidth = viewerKey == "EssentialCooldownViewer" and 400 or 300
   local style = PCMPreview_GetViewerStyle(root, viewerKey, defaultWidth)
   local viewerBorder = PCMPreview_GetViewerBorder(root, viewerKey)
@@ -2087,10 +2083,6 @@ local function PCMPreview_ConfigureCustomBar(
     yOffset,
     zoom
   )
-  local orientation = config.orientation == "vertical" and "VERTICAL" or "HORIZONTAL"
-  local fillDirection = string_lower(tostring(
-    config.fillDirection or "RIGHT"
-  ))
   local r, g, b, a = PCMPreview_GetClassBarColor(
     config,
     { 0.28, 0.67, 0.95, 1 }
@@ -2158,7 +2150,6 @@ local function PCMPreview_ConfigureCustomBar(
   })
 
   bar.__puiPCMPreviewMode = entry.kind
-  bar.__puiPCMPreviewOrientation = orientation
   bar.__puiPCMPreviewDrain = config.direction == "drain"
   bar.__puiPCMPreviewDurationDrain = config.durationBarFillMode ~= "fill"
   bar.__puiPCMPreviewDuration = entry.kind == "stack"
@@ -3145,7 +3136,6 @@ local function PCMPreview_Layout(box)
   local canvas = box:GetCanvas()
   local panels = box.__puiPCMPreviewPanels
   local width = math_max(1, canvas:GetWidth())
-  local height = math_max(1, canvas:GetHeight())
   local activePanel = panels[box.__puiPCMPreviewPanelKey]
 
   for _, panel in pairs(panels) do
@@ -3156,7 +3146,6 @@ local function PCMPreview_Layout(box)
   activePanel:SetAllPoints(canvas)
 
   box.__puiPCMPreviewCanvasWidth = Round(width)
-  box.__puiPCMPreviewCanvasHeight = Round(height)
 end
 
 local function PCMPreview_Configure(box)
@@ -3583,6 +3572,13 @@ function PCMPreview.Build(addon, frame, shell, path)
 
     local canvas = box:GetCanvas()
     canvas:HookScript("OnSizeChanged", function()
+      local panelKey = box.__puiPCMPreviewPanelKey
+      if (panelKey == "essential" or panelKey == "utility")
+        and box.__puiPCMPreviewCanvasWidth
+      then
+        return
+      end
+
       PCMPreview.RefreshBox(box)
     end)
 
@@ -3625,6 +3621,15 @@ function PCMPreview.Build(addon, frame, shell, path)
   end
 
   box:SetParent(previewHost)
+
+  local previewToggle = frame.__puiPreviewToggleButton
+  local titleRightInset = previewToggle and previewToggle:IsShown()
+    and (previewToggle:GetWidth() + 28) or 14
+
+  box.title:ClearAllPoints()
+  box.title:SetPoint("TOPLEFT", box, "TOPLEFT", 14, -12)
+  box.title:SetPoint("TOPRIGHT", box, "TOPRIGHT", -titleRightInset, -12)
+
   box:ClearAllPoints()
   box:SetPoint("TOPLEFT", previewHost, "TOPLEFT", 0, 0)
   box:SetPoint("TOPRIGHT", previewHost, "TOPRIGHT", 0, 0)

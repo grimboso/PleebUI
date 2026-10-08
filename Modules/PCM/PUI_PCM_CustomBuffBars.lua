@@ -2607,12 +2607,32 @@ function BB:_OnCooldownViewerDataLoaded()
   _BB_QueueTrackedSpellAvailabilityRefresh()
 end
 
-function BB:_OnCooldownViewerSpellOverrideUpdated()
-  if ns.PCM_IsTransitionPending() then
+function BB:_OnCooldownViewerSpellOverrideUpdated(baseSpellID, overrideSpellID)
+  if ns.PCM_IsTransitionPending() or IsSecret(baseSpellID) or type(baseSpellID) ~= "number" then
+    return
+  end
+  if overrideSpellID ~= nil
+    and (IsSecret(overrideSpellID) or type(overrideSpellID) ~= "number")
+  then
     return
   end
 
-  _BB_QueueTrackedSpellAvailabilityRefresh()
+  for _, cfg in pairs(_GetStackBarsDB()) do
+    if type(cfg) == "table" and cfg.enabled ~= false then
+      local trackedSpellID = tonumber(cfg.trackedSpellID)
+      local candidate = _customBarsAuraDriver.candidateCache[cfg]
+      local spellIDs = candidate and candidate.spellIDs
+      if not spellIDs
+        or trackedSpellID == baseSpellID
+        or trackedSpellID == overrideSpellID
+        or spellIDs[baseSpellID]
+        or (overrideSpellID and spellIDs[overrideSpellID])
+      then
+        _BB_QueueTrackedSpellAvailabilityRefresh()
+        return
+      end
+    end
+  end
 end
 
 function BB:_OnCooldownViewerTableHotfixed()
@@ -2639,7 +2659,7 @@ PCMRuntime:RegisterSubscriber("CustomBuffBars", {
     elseif event == "COOLDOWN_VIEWER_DATA_LOADED" then
       BB:_OnCooldownViewerDataLoaded()
     elseif event == "COOLDOWN_VIEWER_SPELL_OVERRIDE_UPDATED" then
-      BB:_OnCooldownViewerSpellOverrideUpdated()
+      BB:_OnCooldownViewerSpellOverrideUpdated(...)
     elseif event == "COOLDOWN_VIEWER_TABLE_HOTFIXED" then
       BB:_OnCooldownViewerTableHotfixed()
     end

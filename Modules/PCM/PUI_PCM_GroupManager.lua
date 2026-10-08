@@ -35,6 +35,7 @@ local VIEWER_KIND = {
   UtilityCooldownViewer = "ICON",
   BuffIconCooldownViewer = "ICON",
   BuffBarCooldownViewer = "BAR",
+  ConsumableTracker = "ICON",
 }
 
 local VIEWER_PRIORITY = {
@@ -42,6 +43,7 @@ local VIEWER_PRIORITY = {
   UtilityCooldownViewer = 2,
   BuffIconCooldownViewer = 3,
   BuffBarCooldownViewer = 4,
+  ConsumableTracker = 5,
 }
 
 local enabled = false
@@ -549,8 +551,8 @@ local function GetAssignedGroup(db, record)
   local assigned = recordKey and db.assignments[recordKey] or nil
   local group = assigned and db.byID[assigned] or nil
   if type(group) == "table"
-    and group.isDefault ~= true
     and group.kind == VIEWER_KIND[record.viewerKey]
+    and (record.viewerKey == "ConsumableTracker" or group.isDefault ~= true)
   then
     return group
   end
@@ -573,6 +575,11 @@ local function AddRuntimeRecords(target)
     for index = 1, #records do
       target[#target + 1] = records[index]
     end
+  end
+
+  local consumableRecords = ns.Modules.CooldownManager:GetConsumableTrackerGroupRecords()
+  for index = 1, #consumableRecords do
+    target[#target + 1] = consumableRecords[index]
   end
 end
 
@@ -626,6 +633,7 @@ local function RebuildActiveGroups()
         data = data,
         frame = frame,
         records = {},
+        layoutRecords = {},
       }
     end
   end
@@ -644,15 +652,23 @@ local function RebuildActiveGroups()
     local recordKey = GetRecordKey(record)
     local groupData = GetAssignedGroup(db, record)
     local group = groupData and activeGroups[groupData.id] or nil
-    if recordKey and group then
-      group.records[#group.records + 1] = record
+    if recordKey then
       activeRecordsByKey[recordKey] = record
-      record.__puiPCMGroupID = group.id
+      record.__puiPCMGroupID = group and group.id or nil
+      if group then
+        group.records[#group.records + 1] = record
+      end
     end
   end
 
   for _, group in pairs(activeGroups) do
     SortGroupRecords(group)
+    for index = 1, #group.records do
+      local record = group.records[index]
+      if record.groupVisible ~= false then
+        group.layoutRecords[#group.layoutRecords + 1] = record
+      end
+    end
   end
 end
 
@@ -690,6 +706,7 @@ local function FindDropGroup(record, x, y)
   for _, group in pairs(activeGroups) do
     local defaultMatches = group.data.isDefault ~= true
       or group.data.defaultViewerKey == record.viewerKey
+      or record.viewerKey == "ConsumableTracker"
     if group.data.kind == kind
       and defaultMatches
       and IsPointInsideFrame(x, y, group.frame)
@@ -757,6 +774,10 @@ local function GetOptionsRefreshPath(groupID)
     and activePath[1] == "CooldownManager"
     and (activePath[2] == "groups" and activePath[3] or activePath[2])
     or nil
+
+  if activeGroupID == "consumables" then
+    return { "CooldownManager", "consumables" }
+  end
 
   if groupID and db.byID[groupID] then
     if activeGroupID == groupID then
@@ -863,11 +884,11 @@ local function MoveRecord(recordKey, groupID, insertIndex)
   end
 
   if target.isDefault then
-    if target.defaultViewerKey ~= record.viewerKey then
+    if record.viewerKey ~= "ConsumableTracker" and target.defaultViewerKey ~= record.viewerKey then
       return false
     end
     RemoveMemberFromOrders(db, recordKey)
-    db.assignments[recordKey] = nil
+    db.assignments[recordKey] = record.viewerKey == "ConsumableTracker" and groupID or nil
     GroupManager:RequestLayout(true, groupID)
     return true
   end
@@ -1018,13 +1039,14 @@ function GroupManager:Flush()
   end
 
   for _, group in pairs(activeGroups) do
-    if GroupUsesCollapsedAuraLayout(group, group.records) then
-      ApplyCollapsedAuraIconRows(group, group.records)
+    local records = group.layoutRecords
+    if GroupUsesCollapsedAuraLayout(group, records) then
+      ApplyCollapsedAuraIconRows(group, records)
     else
       local plan = group.data.kind == "BAR"
-        and PlanBars(group.data, group.records)
-        or PlanIcons(group.data, group.records)
-      ApplyPlan(group, group.records, plan)
+        and PlanBars(group.data, records)
+        or PlanIcons(group.data, records)
+      ApplyPlan(group, records, plan)
     end
   end
 
@@ -1139,6 +1161,7 @@ function GroupManager:DeleteGroup(groupID)
   if groupFrames[groupID] then
     groupFrames[groupID]:Hide()
   end
+  ns.Modules.CooldownManager:ConsumableTracker_Rebuild()
   self:RequestLayout(true, "essential")
   return true
 end
@@ -1148,6 +1171,32 @@ function GroupManager:MoveRecord(recordKey, groupID, insertIndex)
     return false
   end
   return MoveRecord(recordKey, groupID, insertIndex)
+end
+
+function GroupManager:ClearRecordAssignment(recordKey)
+  if IsStructureLocked() then
+    return false
+  end
+
+  local record = activeRecordsByKey[recordKey]
+  if not record or record.viewerKey ~= "ConsumableTracker" then
+    return false
+  end
+
+  local db = GetDB()
+  RemoveMemberFromOrders(db, recordKey)
+  db.assignments[recordKey] = nil
+  self:RequestLayout(true)
+  return true
+end
+
+function GroupManager:GetRecordGroupID(recordKey)
+  local groupID = GetDB().assignments[recordKey]
+  local group = groupID and GetDB().byID[groupID] or nil
+  if type(group) ~= "table" or group.kind ~= "ICON" then
+    return nil
+  end
+  return groupID
 end
 
 function GroupManager:ResetGroups()
@@ -1162,6 +1211,7 @@ function GroupManager:ResetGroups()
     FrameUtil:UnregisterMover("PCM_Group_" .. groupID)
     frame:Hide()
   end
+  ns.Modules.CooldownManager:ConsumableTracker_Rebuild()
   self:RequestLayout(true, "essential")
   return true
 end
@@ -1280,6 +1330,8 @@ GroupManager.CreateGroupForRecord = P:Def("GroupManager:CreateGroupForRecord", G
 GroupManager.RenameGroup = P:Def("GroupManager:RenameGroup", GroupManager.RenameGroup)
 GroupManager.DeleteGroup = P:Def("GroupManager:DeleteGroup", GroupManager.DeleteGroup)
 GroupManager.MoveRecord = P:Def("GroupManager:MoveRecord", GroupManager.MoveRecord)
+GroupManager.ClearRecordAssignment = P:Def("GroupManager:ClearRecordAssignment", GroupManager.ClearRecordAssignment)
+GroupManager.GetRecordGroupID = P:Def("GroupManager:GetRecordGroupID", GroupManager.GetRecordGroupID)
 GroupManager.ResetGroups = P:Def("GroupManager:ResetGroups", GroupManager.ResetGroups)
 GroupManager.IsReady = P:Def("GroupManager:IsReady", GroupManager.IsReady)
 GroupManager.RefreshProfile = P:Def("GroupManager:RefreshProfile", GroupManager.RefreshProfile)
