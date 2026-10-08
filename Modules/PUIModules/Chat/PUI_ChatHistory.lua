@@ -212,8 +212,7 @@ local function SaveChatHistory(_, event, ...)
 end
 
 function ChatLinks:ApplyChatHistoryCapacity(frame)
-  if self._puiRuntimeEnabled ~= true or not self:IsChatLayoutReady()
-    or InCombatLockdown() or C_ChatInfo.InChatMessagingLockdown() then return end
+  if self._puiRuntimeEnabled ~= true or not self:IsChatLayoutReady() then return end
   local capacity = math.max(128, GetHistoryLimit())
   if FrameCapacities[frame] == capacity then return end
   -- SetMaxLines is the destination window's secure capacity entry point.
@@ -333,7 +332,7 @@ end
 local function ReplayChatHistory()
   ReplayTimer = nil
   if not HistoryEnabled then return end
-  if not ChatLinks:IsChatLayoutReady() or InCombatLockdown() or C_ChatInfo.InChatMessagingLockdown() then return end
+  if not ChatLinks:IsChatLayoutReady() then return end
   if SubscriptionsDirty then
     local configured
     configured, SubscriptionsPending = RefreshHistoryWindowSubscriptions()
