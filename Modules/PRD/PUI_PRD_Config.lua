@@ -28,11 +28,9 @@ local UnitPowerType = UnitPowerType
 local RAID_CLASS_COLORS = RAID_CLASS_COLORS
 local PowerBarColor = PowerBarColor
 local AbbreviateLargeNumbers = AbbreviateLargeNumbers
-local math_abs = math.abs
 local math_floor = math.floor
 local math_max = math.max
 local math_min = math.min
-local math_sin = math.sin
 local tonumber = tonumber
 local tostring = tostring
 local type = type
@@ -176,22 +174,6 @@ local function PRD_UsesSecondaryResourceTabs(resourceOptions)
   return #resourceOptions > 1
 end
 
-local function PRDPreview_GetResourceOptionCategory(resourceKey)
-  local resources = ns.PRDSecondary:GetResourceOptionsForClass(PLAYER_CLASS)
-
-  for index = 1, #resources do
-    local resource = resources[index]
-
-    if resource.key == resourceKey then
-      return resource.category == "TRACKED_EFFECT"
-        and "trackedEffectsGroup"
-        or "classResourcesGroup"
-    end
-  end
-
-  return "classResourcesGroup"
-end
-
 local function PRDPreview_Navigate(box, path, sectionKey, optionKey)
   ns.PreviewBox.NavigateToOption(
     box.__puiPRDPreviewAddon or Addon,
@@ -220,24 +202,24 @@ local function PRDPreview_CreateEdgeInteractions(bar)
   local right = PRDPreview_CreateInteraction(frame, frame, frameLevel + 3)
 
   top:ClearAllPoints()
-  top:SetPoint("TOPLEFT", frame, "TOPLEFT", 0, 0)
-  top:SetPoint("TOPRIGHT", frame, "TOPRIGHT", 0, 0)
-  top:SetHeight(5)
+  top:SetPoint("TOPLEFT", frame, "TOPLEFT", 0, 4)
+  top:SetPoint("TOPRIGHT", frame, "TOPRIGHT", 0, 4)
+  top:SetHeight(8)
 
   bottom:ClearAllPoints()
-  bottom:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 0, 0)
-  bottom:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", 0, 0)
-  bottom:SetHeight(5)
+  bottom:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 0, -4)
+  bottom:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", 0, -4)
+  bottom:SetHeight(8)
 
   left:ClearAllPoints()
-  left:SetPoint("TOPLEFT", top, "BOTTOMLEFT", 0, 0)
-  left:SetPoint("BOTTOMLEFT", bottom, "TOPLEFT", 0, 0)
-  left:SetWidth(5)
+  left:SetPoint("TOPLEFT", frame, "TOPLEFT", -4, 0)
+  left:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", -4, 0)
+  left:SetWidth(8)
 
   right:ClearAllPoints()
-  right:SetPoint("TOPRIGHT", top, "BOTTOMRIGHT", 0, 0)
-  right:SetPoint("BOTTOMRIGHT", bottom, "TOPRIGHT", 0, 0)
-  right:SetWidth(5)
+  right:SetPoint("TOPRIGHT", frame, "TOPRIGHT", 4, 0)
+  right:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", 4, 0)
+  right:SetWidth(8)
 
   return {
     top,
@@ -304,12 +286,12 @@ end
 
 local function PRDPreview_CreateOrderButton(bar, text, point, relativePoint, xOffset)
   local button = CreateFrame("Button", nil, bar.frame, "UIPanelButtonTemplate")
-  button:SetSize(22, 22)
+  button:SetSize(44, 24)
   button:SetPoint(point, bar.frame, relativePoint, xOffset, 0)
   button:SetFrameLevel(bar.frame:GetFrameLevel() + 80)
   button:SetText(text)
   Theme.WidgetSkins.UIButton(button)
-  Theme.ApplyFont(button:GetFontString(), "button", 10, "OUTLINE")
+  Theme.ApplyFont(button:GetFontString(), "button", 12, "OUTLINE")
   button:SetScript("OnClick", PRDPreview_OrderButtonOnClick)
   button:Hide()
   return button
@@ -357,62 +339,14 @@ local function PRDPreview_SetTextInteractionVisibility(bar)
   )
 end
 
-local function PRDPreview_GetResourceAppearanceTarget(profile, definition)
-  if profile.appearance.unified ~= false then
-    return { "PRD", "general" }, "appearanceGroup", "borderSize"
+local function PRDPreview_GetResourcePath(definition)
+  if definition.isAlternatePower == true then
+    return { "PRD", "primary" }
   end
-
-  local resourceKey = definition and definition.resourceKey
-  local settings = resourceKey
-    and profile.secondary.resourceSettings
-    and profile.secondary.resourceSettings[resourceKey]
-  local usesResourceTabs = resourceKey ~= nil and PRD_UsesSecondaryResourceTabs()
-  local resourcePath = usesResourceTabs
-    and { "PRD", "secondary", resourceKey }
-    or { "PRD", "secondary" }
-
-  if settings and settings.useSharedAppearance == false then
-    if usesResourceTabs then
-      return resourcePath, "styleGroup", "borderSize"
-    end
-
-    return resourcePath, resourceKey, "styleGroup"
+  if PRD_UsesSecondaryResourceTabs() then
+    return { "PRD", "secondary", definition.resourceKey }
   end
-
-  if usesResourceTabs then
-    return resourcePath, "sharedSecondaryStyleGroup", "borderSize"
-  end
-
-  return resourcePath, "styleGroup", "borderSize"
-end
-
-local function PRDPreview_GetResourceTextTarget(profile, definition)
-  if profile.appearance.unified ~= false then
-    return { "PRD", "general" }, "appearanceGroup", "fontSize"
-  end
-
-  local resourceKey = definition and definition.resourceKey
-  local settings = resourceKey
-    and profile.secondary.resourceSettings
-    and profile.secondary.resourceSettings[resourceKey]
-  local usesResourceTabs = resourceKey ~= nil and PRD_UsesSecondaryResourceTabs()
-  local resourcePath = usesResourceTabs
-    and { "PRD", "secondary", resourceKey }
-    or { "PRD", "secondary" }
-
-  if settings and settings.useSharedAppearance == false then
-    if usesResourceTabs then
-      return resourcePath, "textGroup", "textMode"
-    end
-
-    return resourcePath, resourceKey, "textGroup"
-  end
-
-  if usesResourceTabs then
-    return resourcePath, "sharedSecondaryTextGroup", "textMode"
-  end
-
-  return resourcePath, "textGroup", "textMode"
+  return { "PRD", "secondary" }
 end
 
 local function PRDPreview_ConfigureBarInteractions(
@@ -439,67 +373,46 @@ local function PRDPreview_ConfigureBarInteractions(
     title = "Health"
     bodyPath = { "PRD", "health" }
     bodySection = "layoutGroup"
-    bodyOption = "texture"
+    bodyOption = "height"
     textPath = bodyPath
     textSection = "textGroup"
     textOption = "leftVisibility"
 
-    if profile.appearance.unified ~= false then
-      borderPath = { "PRD", "general" }
-      borderSection = "appearanceGroup"
-      borderOption = "borderSize"
-    else
-      borderPath = bodyPath
-      borderSection = "styleGroup"
-      borderOption = "borderSize"
-    end
+    borderPath = bodyPath
+    borderSection = "appearanceGroup"
+    borderOption = "borderSize"
   elseif role == "primary" then
     title = "Primary power"
     bodyPath = { "PRD", "primary" }
     bodySection = "layoutGroup"
-    bodyOption = "texture"
+    bodyOption = "height"
     textPath = bodyPath
     textSection = "textGroup"
     textOption = "leftVisibility"
 
-    if profile.appearance.unified ~= false then
-      borderPath = { "PRD", "general" }
-      borderSection = "appearanceGroup"
-      borderOption = "borderSize"
-    else
-      borderPath = bodyPath
-      borderSection = "styleGroup"
-      borderOption = "borderSize"
-    end
+    borderPath = bodyPath
+    borderSection = "appearanceGroup"
+    borderOption = "borderSize"
   else
     title = config and config.resourceName
       or definition and definition.resourceKey
       or "Secondary resource"
 
-    if definition and definition.isAlternatePower == true then
-      bodyPath = { "PRD", "primary" }
-      bodySection = "visibilityGroup"
-      bodyOption = "hideAlternateMana"
-    elseif definition and definition.resourceKey and PRD_UsesSecondaryResourceTabs() then
-      bodyPath = { "PRD", "secondary", definition.resourceKey }
-      bodySection = "layout"
-      bodyOption = "detached"
-    else
-      bodyPath = { "PRD", "secondary" }
-      bodySection = PRDPreview_GetResourceOptionCategory(
-        definition and definition.resourceKey
-      )
-      bodyOption = definition and definition.resourceKey
+    bodyPath = PRDPreview_GetResourcePath(definition)
+    bodySection = definition.isAlternatePower == true and "visibilityGroup" or "layout"
+    bodyOption = definition.isAlternatePower == true and "hideAlternateMana" or "detached"
+    textPath = bodyPath
+    textSection = "textGroup"
+    textOption = "textMode"
+    borderPath = bodyPath
+    borderSection = "appearanceGroup"
+    borderOption = "borderSize"
+    if definition.isAlternatePower == true then
+      textSection = "visibilityGroup"
+      textOption = "hideAlternateMana"
+      borderSection = textSection
+      borderOption = textOption
     end
-
-    textPath, textSection, textOption = PRDPreview_GetResourceTextTarget(
-      profile,
-      definition
-    )
-    borderPath, borderSection, borderOption = PRDPreview_GetResourceAppearanceTarget(
-      profile,
-      definition
-    )
   end
 
   interactions.body:SetPreviewInteractionOptions({
@@ -562,22 +475,11 @@ local function PRDPreview_ConfigureBarInteractions(
   end
 end
 
-local function PRDPreview_CreateBorderTarget(parent)
-  local frame = CreateFrame("Frame", nil, parent)
-  frame:SetAllPoints(parent)
-  frame:SetFrameLevel(parent:GetFrameLevel() + 30)
-  frame:EnableMouse(false)
-
-  return frame
-end
-
 local function PRDPreview_CreateBar(parent)
   local bar = Presentation.Create("PRDBar", parent)
-  bar.cue = PRDPreview_CreateBorderTarget(bar.frame)
-  bar.cue:Hide()
   bar.interactions = PRDPreview_CreateBarInteractions(bar)
-  bar.orderDown = PRDPreview_CreateOrderButton(bar, "▼", "RIGHT", "LEFT", -6)
-  bar.orderUp = PRDPreview_CreateOrderButton(bar, "▲", "LEFT", "RIGHT", 6)
+  bar.orderDown = PRDPreview_CreateOrderButton(bar, "Down", "RIGHT", "LEFT", -6)
+  bar.orderUp = PRDPreview_CreateOrderButton(bar, "Up", "LEFT", "RIGHT", 6)
   return bar
 end
 
@@ -689,7 +591,13 @@ local function PRDPreview_EnsureSegment(bar, index)
   text:SetJustifyH("CENTER")
   text:Hide()
 
+  local glow = frame:CreateTexture(nil, "OVERLAY")
+  glow:SetAllPoints(fill)
+  glow:SetBlendMode("ADD")
+  glow:SetAlpha(0)
+
   segment = {
+    glow = glow,
     frame = frame,
     background = background,
     fill = fill,
@@ -774,11 +682,31 @@ local function PRDPreview_LayoutDividers(bar, maximum, config)
     return
   end
 
-  local count = maximum - 1
+  local tickValues = {}
+  local pattern = config.stackTickValues or "ALL"
+  if pattern:upper():find("ALL", 1, true) then
+    for value = 1, maximum - 1 do
+      tickValues[#tickValues + 1] = value
+    end
+  else
+    local seen = {}
+    for token in pattern:gmatch("[^,]+") do
+      local value = tonumber(token:match("^%s*(.-)%s*$"))
+      if value then
+        value = math_floor(value + 0.5)
+        if value > 0 and value < maximum and not seen[value] then
+          seen[value] = true
+          tickValues[#tickValues + 1] = value
+        end
+      end
+    end
+    table.sort(tickValues)
+  end
+  local count = #tickValues
 
   for index = 1, count do
     local divider = PRDPreview_EnsureDivider(bar, index)
-    local x = width * index / maximum - dividerSize * 0.5
+    local x = width * tickValues[index] / maximum - dividerSize * 0.5
 
     divider:ClearAllPoints()
     divider:SetPoint(
@@ -822,7 +750,7 @@ local function PRDPreview_LayoutSegments(
     return
   end
 
-  local gap = maximum > 1 and PRD_PREVIEW_SEGMENT_GAP or 0
+  local gap = maximum > 1 and (config.resourceKey == "RUNES" and 2 or PRD_PREVIEW_SEGMENT_GAP) or 0
   local width = bar.status:GetWidth()
   local height = bar.status:GetHeight()
 
@@ -863,6 +791,7 @@ local function PRDPreview_LayoutSegments(
       color[4]
     )
     segment.background:SetAlpha(inactiveAlpha)
+    segment.background:SetShown(config.resourceKey ~= "ESSENCE")
 
     PRDPreview_SetTexture(segment.fill, textureKey)
     segment.fill:SetStatusBarColor(
@@ -872,11 +801,10 @@ local function PRDPreview_LayoutSegments(
       color[4]
     )
 
-    segment.text:SetFont(
-      STANDARD_TEXT_FONT or "Fonts\\FRIZQT__.TTF",
-      math_max(7, math_min(11, height - 3)),
-      "OUTLINE"
-    )
+    segment.glow:SetTexture(PRDPreview_FetchStatusbar(textureKey))
+    segment.__puiWasFull = nil
+    segment.__puiReadyTime = nil
+    ns.PRDSecondary.ApplyResourceFont(ns.Modules.PRD, segment.text, config)
 
     segment.frame:Show()
   end
@@ -932,9 +860,9 @@ local function PRDPreview_UpdateNativeText(
     hovered
   )
 
-  local current = role == "health"
-    and math_floor(785000 * fraction + 0.5)
-    or math_floor(100 * fraction + 0.5)
+  local maximum = role == "health" and 785000
+    or ns.Modules.PRD:GetPrimaryResourceMaximum() or 100
+  local current = math_floor(maximum * fraction + 0.5)
 
   local leftValue = PRDPreview_FormatPercent(fraction)
   local rightValue
@@ -962,6 +890,19 @@ local function PRDPreview_UpdateNativeText(
     bar.centerText:Hide()
     bar.leftText:SetShown(leftShown)
     bar.rightText:SetShown(rightShown)
+    local centered = config.centerText == true and leftShown and rightShown
+    if bar.__puiPreviewTextsCentered ~= centered then
+      bar.__puiPreviewTextsCentered = centered
+      bar.leftText:ClearAllPoints()
+      bar.rightText:ClearAllPoints()
+      if centered then
+        bar.leftText:SetPoint("RIGHT", bar.status, "CENTER", -2, 0)
+        bar.rightText:SetPoint("LEFT", bar.status, "CENTER", 2, 0)
+      else
+        bar.leftText:SetPoint("LEFT", bar.status, "LEFT", 2, 0)
+        bar.rightText:SetPoint("RIGHT", bar.status, "RIGHT", -2, 0)
+      end
+    end
   end
 
   PRDPreview_SetTextInteractionVisibility(bar)
@@ -975,6 +916,9 @@ local function PRDPreview_UpdateSecondaryText(
 )
   local text = config and config.text or {}
   local mode = text.mode or "CUR"
+  if bar.__puiPreviewDefinition.adapter == "AURA_STACKS" and (mode == "PCT" or mode == "CURP") then
+    mode = "CUR"
+  end
   local show = text.showNumber ~= false and mode ~= "HIDE"
   local value = ""
   local percentage = maximum > 0
@@ -1013,72 +957,19 @@ local function PRDPreview_UpdateSecondaryText(
 
   bar.leftText:Hide()
   bar.rightText:Hide()
+  if bar.__puiPreviewDefinition.adapter == "STAGGER" and config.behavior.showSeverityLabel == true then
+    local behavior = config.behavior
+    local percentage = current / maximum * 100
+    local label = percentage >= behavior.redThreshold and "HIGH"
+      or percentage >= behavior.yellowThreshold and "MED" or "LOW"
+    value = label .. "  " .. value
+  end
+  if bar.__puiPreviewDefinition.adapter == "POWER_SECRET" then
+    show = false
+  end
   bar.centerText:SetText(value)
   bar.centerText:SetShown(show)
   PRDPreview_SetTextInteractionVisibility(bar)
-end
-
-local function PRDPreview_ThresholdMatches(
-  mode,
-  value,
-  threshold
-)
-  threshold = tonumber(threshold) or 0
-
-  if mode == "BELOW" then
-    return value < threshold
-  elseif mode == "AT_OR_ABOVE" then
-    return value >= threshold
-  end
-
-  return false
-end
-
-local function PRDPreview_UpdateCue(
-  bar,
-  current,
-  config,
-  now
-)
-  local cues = config and config.cues
-
-  if not cues or config.supportsNumericCues ~= true then
-    bar.cue:Hide()
-    return false
-  end
-
-  local desaturate = PRDPreview_ThresholdMatches(
-    cues.desaturateMode,
-    current,
-    cues.desaturateThreshold
-  )
-
-  local glow = PRDPreview_ThresholdMatches(
-    cues.glowMode,
-    current,
-    cues.glowThreshold
-  )
-
-  if glow then
-    local PRD = ns.Modules.PRD
-    local color = cues.glowColor or {
-      1,
-      0.82,
-      0,
-      1,
-    }
-
-    PRD:ApplyBarBorder(bar.cue, 2, color)
-
-    bar.cue:SetAlpha(
-      0.55 + 0.45 * math_abs(math_sin(now * 4))
-    )
-    bar.cue:Show()
-  else
-    bar.cue:Hide()
-  end
-
-  return desaturate
 end
 
 local function PRDPreview_ApplySegmentValues(
@@ -1099,23 +990,38 @@ local function PRDPreview_ApplySegmentValues(
       1
     )
 
-    current = current + value
+    local behavior = config.behavior
+    local timed = config.resourceKey == "RUNES" or config.resourceKey == "ESSENCE"
+    current = current + (timed and (value >= 1 and 1 or 0) or value)
 
     segment.fill:SetMinMaxValues(0, 1)
     segment.fill:SetValue(value)
     segment.fill:SetAlpha(1)
-    segment.frame:SetAlpha(
-      value > 0
-        and 1
-        or PRDPreview_Clamp(
-          config.inactiveAlpha or 0.15,
-          0,
-          1
-        )
-    )
+    local inactiveAlpha = PRDPreview_Clamp(config.inactiveAlpha or 0.15, 0, 1)
+    local fullAlpha = config.resourceKey == "RUNES"
+      or config.resourceKey == "ESSENCE" and behavior.completionAnimation == "FADE"
+      or value > 0
+    segment.frame:SetAlpha(fullAlpha and 1 or inactiveAlpha)
+    local direction = config.resourceKey == "ESSENCE" and behavior.rechargeDirection or "LTR"
+    segment.fill:SetOrientation((direction == "TTB" or direction == "BTT") and "VERTICAL" or "HORIZONTAL")
+    segment.fill:SetReverseFill(direction == "RTL" or direction == "BTT")
+    local full = value >= 1
+    local readyGlow = timed and behavior.showReadyGlow ~= false
+    local completionGlow = timed and (config.resourceKey == "ESSENCE" or readyGlow)
+    local pulse = completionGlow and full and segment.__puiWasFull == false
+    if pulse then
+      segment.__puiReadyTime = now
+    end
+    segment.__puiWasFull = full
+    local duration = config.resourceKey == "ESSENCE" and 0.25
+      or behavior.completionAnimation == "PULSE" and 0.25 or 0.45
+    local strength = behavior.completionAnimation == "PULSE" and 0.80 or 0.45
+    local base = readyGlow and full and config.resourceKey == "ESSENCE" and 0.25 or 0
+    local age = now - (segment.__puiReadyTime or -10)
+    segment.glow:SetAlpha(math_min(1, base + (completionGlow and full and age < duration and strength * (1 - age / duration) or 0)))
 
-    if config.behavior
-      and config.behavior.showRechargeTime ~= false
+    if timed
+      and behavior.showRechargeTime ~= false
       and value > 0
       and value < 1
     then
@@ -1134,31 +1040,11 @@ local function PRDPreview_ApplySegmentValues(
     end
   end
 
-  local desaturate = PRDPreview_UpdateCue(
-    bar,
-    current,
-    config,
-    now
-  )
-
-  if desaturate then
-    for index = 1, maximum do
-      bar.segments[index].fill:SetStatusBarColor(
-        color[1] * 0.35,
-        color[2] * 0.35,
-        color[3] * 0.35,
-        color[4]
-      )
-    end
-  else
-    for index = 1, maximum do
-      bar.segments[index].fill:SetStatusBarColor(
-        color[1],
-        color[2],
-        color[3],
-        color[4]
-      )
-    end
+  ns.PRDSecondary.UpdateResourceThresholdCue(bar.frame, config, current)
+  local r, g, b, a = ns.PRDSecondary.ResolveResourceCueColor(config, current, unpack(color))
+  for index = 1, maximum do
+    bar.segments[index].fill:SetStatusBarColor(r, g, b, a)
+    bar.segments[index].glow:SetVertexColor(r, g, b, 1)
   end
 
   return current
@@ -1249,7 +1135,8 @@ local function PRDPreview_UpdateSecondaryBar(
   definition,
   maximum,
   config,
-  now
+  now,
+  sample
 )
   if not definition or not config or maximum <= 0 then
     return
@@ -1276,6 +1163,11 @@ local function PRDPreview_UpdateSecondaryBar(
       values
     )
 
+    if sample ~= nil then
+      for index = 1, maximum do
+        values[index] = index <= math_floor(sample * maximum) and 1 or 0
+      end
+    end
     current = PRDPreview_ApplySegmentValues(
       bar,
       values,
@@ -1291,6 +1183,11 @@ local function PRDPreview_UpdateSecondaryBar(
       values
     )
 
+    if sample ~= nil then
+      for index = 1, maximum do
+        values[index] = index <= math_floor(sample * maximum) and 1 or 0
+      end
+    end
     current = PRDPreview_ApplySegmentValues(
       bar,
       values,
@@ -1303,7 +1200,7 @@ local function PRDPreview_UpdateSecondaryBar(
     and definition.forceContinuous ~= true
     and adapter ~= "AURA_STACKS"
   then
-    local fraction = PRDPreview_Triangle(now, 7)
+    local fraction = sample or PRDPreview_Triangle(now, 7)
     local exact = fraction * maximum
 
     for index = 1, maximum do
@@ -1314,6 +1211,11 @@ local function PRDPreview_UpdateSecondaryBar(
       )
     end
 
+    if sample ~= nil then
+      for index = 1, maximum do
+        values[index] = index <= math_floor(sample * maximum) and 1 or 0
+      end
+    end
     current = PRDPreview_ApplySegmentValues(
       bar,
       values,
@@ -1355,30 +1257,37 @@ local function PRDPreview_UpdateSecondaryBar(
       current = fraction * maximum
     end
 
-    local desaturate = PRDPreview_UpdateCue(
-      bar,
-      current,
-      config,
-      now
-    )
-    local r, g, b, a =
-      color[1],
-      color[2],
-      color[3],
-      color[4]
-
-    if desaturate then
-      r = r * 0.35
-      g = g * 0.35
-      b = b * 0.35
+    if sample ~= nil then
+      current = adapter == "AURA_STACKS" and math_floor(sample * maximum) or sample * maximum
+      bar.__puiApplicationCountdownReady = adapter == "AURA_STACKS" and sample == 1
+        and ns.PRDSecondary.ShouldShowApplicationCountdown(config)
     end
-
+    ns.PRDSecondary.UpdateResourceThresholdCue(bar.frame, config, current)
+    local r, g, b, a = ns.PRDSecondary.ResolveResourceCueColor(config, current, unpack(color))
+    if adapter == "STAGGER" and config.behavior.useSeverityColors ~= false then
+      local percentage = current / maximum * 100
+      if percentage >= config.behavior.redThreshold then
+        r, g, b, a = 1, 0, 0, 1
+      elseif percentage >= config.behavior.yellowThreshold then
+        r, g, b, a = 1, 1, 0, 1
+      else
+        r, g, b, a = 0, 1, 0, 1
+      end
+    end
     bar.status:SetStatusBarColor(r, g, b, a)
     bar.status:SetMinMaxValues(0, maximum)
     bar.status:SetValue(current)
 
   end
 
+  local buffActive = config.cues.buffGlowSpellID > 0
+    and (sample ~= nil and sample == 1 or sample == nil and now % 9 < 1)
+  if bar.__puiBuffGlow then
+    bar.__puiBuffGlow.root:SetShown(buffActive)
+  end
+  if buffActive and ns.PRDSecondary.ShouldShowApplicationCountdown(config) then
+    bar.__puiApplicationCountdownReady = true
+  end
   PRDPreview_UpdateSecondaryText(
     bar,
     current,
@@ -1418,7 +1327,11 @@ local function PRDPreview_ConfigureSecondaryMode(
       config.texture,
       color
     )
-    PRDPreview_HideDividers(bar, 0)
+    if adapter == "RUNES" then
+      PRDPreview_HideDividers(bar, 0)
+    else
+      PRDPreview_LayoutDividers(bar, maximum, config)
+    end
 
     if bar.__puiStackColorParts then
       PRDPreview_ConfigureStackColorSegments(bar, maximum, nil)
@@ -1470,17 +1383,6 @@ local function PRDPreview_GetEffectivePrimaryColorConfig(
   end
 
   return config
-end
-
-local function PRDPreview_GetNativeAppearance(
-  profile,
-  role
-)
-  if profile.appearance.unified ~= false then
-    return profile.appearance
-  end
-
-  return profile[role]
 end
 
 local function PRDPreview_GetNativeText(
@@ -1541,7 +1443,10 @@ end
 local function PRDPreview_HideAllBars(box)
   for _, bar in pairs(box.__puiPRDPreviewBars) do
     bar.frame:Hide()
-    bar.cue:Hide()
+    local config = bar.__puiPreviewConfig
+    if config then
+      ns.PRDSecondary.UpdateResourceThresholdCue(bar.frame, config, nil)
+    end
   end
 end
 
@@ -1561,8 +1466,8 @@ local function PRDPreview_RefreshLayout(box)
   local stackGap = PRDPreview_Clamp(profile.size.gap or 0, 0, 20)
   local secondaryGap = PRDPreview_Clamp(profile.secondary.gap or 2, 0, 20)
 
-  local healthAppearance = PRDPreview_GetNativeAppearance(profile, "health")
-  local primaryAppearance = PRDPreview_GetNativeAppearance(profile, "primary")
+  local healthAppearance = profile.health
+  local primaryAppearance = profile.primary
   local healthText, healthFont = PRDPreview_GetNativeText(profile, "health", healthAppearance)
   local primaryText, primaryFont = PRDPreview_GetNativeText(profile, "primary", primaryAppearance)
   local healthHeight = PRDPreview_Clamp(healthAppearance.height or 15, 6, 40)
@@ -1658,6 +1563,16 @@ local function PRDPreview_RefreshLayout(box)
       bar.__puiPreviewDefinition = definition
       bar.__puiPreviewMaximum = maximum
       bar.__puiPreviewConfig = config
+      if config.cues.buffGlowSpellID > 0 then
+        if not bar.__puiBuffGlow then
+          bar.__puiBuffGlow = AuraWidget.CreateSlotGlow(bar.frame, width, height, "PIXEL", config.cues.buffGlowColor, { pixelThickness = 2 })
+        else
+          AuraWidget.ConfigureSlotGlow(bar.__puiBuffGlow, width, height, "PIXEL", config.cues.buffGlowColor, { pixelThickness = 2 })
+        end
+        bar.__puiBuffGlow.root:Hide()
+      elseif bar.__puiBuffGlow then
+        bar.__puiBuffGlow.root:Hide()
+      end
       PRDPreview_ConfigureBarInteractions(
         box,
         bar,
@@ -1836,17 +1751,17 @@ local function PRDPreview_UpdateAnimation(
 
   local now =
     (box.__puiPRDPreviewTime or 0)
-    + elapsed
+    + (box.__puiPRDPreviewPaused and 0 or elapsed)
 
   box.__puiPRDPreviewTime = now
+  local sample = box.__puiPRDPreviewSample
 
   local healthBar =
     box.__puiPRDPreviewBars.health
 
   if healthBar.frame:IsShown() then
     local healthFraction =
-      0.35
-      + PRDPreview_Triangle(now, 8) * 0.60
+      sample or (0.35 + PRDPreview_Triangle(now, 8) * 0.60)
 
     healthBar.status:SetMinMaxValues(0, 1)
     healthBar.status:SetValue(healthFraction)
@@ -1864,7 +1779,7 @@ local function PRDPreview_UpdateAnimation(
 
   if primaryBar.frame:IsShown() then
     local primaryFraction =
-      PRDPreview_Triangle(now + 1.5, 6)
+      sample or PRDPreview_Triangle(now + 1.5, 6)
 
     primaryBar.status:SetMinMaxValues(0, 1)
     primaryBar.status:SetValue(primaryFraction)
@@ -1888,7 +1803,8 @@ local function PRDPreview_UpdateAnimation(
         resourceBar.__puiPreviewDefinition,
         resourceBar.__puiPreviewMaximum,
         resourceBar.__puiPreviewConfig,
-        now + ((index - 1) * 2.25)
+        now + ((index - 1) * 2.25),
+        sample
       )
     end
   end
@@ -1965,30 +1881,34 @@ local function PRDPreview_EnsureContents(box)
     canvas,
     "BOTTOMLEFT",
     8,
-    30
+    36
   )
   resourceLabel:SetPoint(
     "BOTTOMRIGHT",
     canvas,
     "BOTTOMRIGHT",
     -8,
-    30
+    36
   )
   resourceLabel:SetJustifyH("CENTER")
-  resourceLabel:SetWordWrap(false)
+  resourceLabel:SetWordWrap(true)
 
   ns.Theme.ApplyFont(
     resourceLabel,
-    "tiny",
-    9
+    "body",
+    12
   )
 
   box.__puiPRDPreviewResourceLabel =
     resourceLabel
 
   local zoomControl = ns.PreviewBox.CreateZoomControl(canvas, {
-    sliderWidth = 110,
+    width = 136,
+    sliderWidth = 75,
     sliderHeight = 14,
+    sliderOffsetX = -20,
+    showLabel = true,
+    fontSize = 11,
     frameLevel = canvas:GetFrameLevel() + 100,
     onValueChanged = function(_, zoom)
       box.__puiPRDPreviewZoom = zoom
@@ -1996,8 +1916,52 @@ local function PRDPreview_EnsureContents(box)
       PRDPreview_RefreshLayout(box)
     end,
   })
-  zoomControl:SetPoint("BOTTOM", canvas, "BOTTOM", 0, 8)
+  zoomControl:SetPoint("BOTTOMRIGHT", canvas, "BOTTOMRIGHT", -8, 8)
   box.__puiPRDPreviewZoomControl = zoomControl
+
+  local pause = CreateFrame("Button", nil, canvas, "UIPanelButtonTemplate")
+  pause:SetSize(62, 24)
+  pause:SetPoint("BOTTOMLEFT", canvas, "BOTTOMLEFT", 8, 5)
+  pause:SetFrameLevel(canvas:GetFrameLevel() + 100)
+  Theme.WidgetSkins.UIButton(pause)
+  pause:SetScript("OnClick", function()
+    box.__puiPRDPreviewPaused = not box.__puiPRDPreviewPaused
+    box.__puiPRDPreviewSample = nil
+    box.__puiPRDPreviewState.paused = box.__puiPRDPreviewPaused
+    box.__puiPRDPreviewState.sample = nil
+    pause:SetText(box.__puiPRDPreviewPaused and "Play" or "Pause")
+    box.__puiPRDPreviewSampleButton:SetText("Sample")
+  end)
+  box.__puiPRDPreviewPauseButton = pause
+
+  Theme.ApplyFont(pause:GetFontString(), "button", 12)
+  local sampleButton = CreateFrame("Button", nil, canvas, "UIPanelButtonTemplate")
+  sampleButton:SetSize(100, 24)
+  sampleButton:SetPoint("LEFT", pause, "RIGHT", 4, 0)
+  sampleButton:SetFrameLevel(canvas:GetFrameLevel() + 100)
+  sampleButton:SetText("Sample")
+  Theme.WidgetSkins.UIButton(sampleButton)
+  Theme.ApplyFont(sampleButton:GetFontString(), "button", 12)
+  sampleButton:SetScript("OnClick", function()
+    local sample = box.__puiPRDPreviewSample
+    sample = sample == 0.5 and 1 or sample == 1 and 0 or 0.5
+    box.__puiPRDPreviewSample = sample
+    box.__puiPRDPreviewPaused = true
+    box.__puiPRDPreviewState.sample = sample
+    box.__puiPRDPreviewState.paused = true
+    sampleButton:SetText("Sample: " .. tostring(sample * 100) .. "%")
+    pause:SetText("Play")
+  end)
+  box.__puiPRDPreviewSampleButton = sampleButton
+
+  box:HookScript("OnHide", function()
+    for _, bar in pairs(box.__puiPRDPreviewBars) do
+      local config = bar.__puiPreviewConfig
+      if config then
+        ns.PRDSecondary.UpdateResourceThresholdCue(bar.frame, config, nil)
+      end
+    end
+  end)
 
   local driver = CreateFrame(
     "Frame",
@@ -2078,7 +2042,7 @@ function PRDPreview.Build(
     "Personal Resource Display preview"
   )
   box:SetDescription(
-    "Mirrors the current PRD settings. Use the arrows beside stacked bars to change their order, or click a bar, text value, or border to open its settings."
+    "Sample display. Click a bar, text, or border to edit it. Use Up and Down to reorder; Pause or Sample to inspect a fixed value."
   )
 
   canvas:SetFrameStrata(box:GetFrameStrata())
@@ -2099,6 +2063,11 @@ function PRDPreview.Build(
 
   box.__puiPRDPreviewAddon = addon
   box.__puiPRDPreviewState = previewState
+  box.__puiPRDPreviewPaused = previewState.paused == true
+  box.__puiPRDPreviewSample = previewState.sample
+  box.__puiPRDPreviewPauseButton:SetText(box.__puiPRDPreviewPaused and "Play" or "Pause")
+  box.__puiPRDPreviewSampleButton:SetText(previewState.sample ~= nil
+    and ("Sample: " .. tostring(previewState.sample * 100) .. "%") or "Sample")
   box.__puiPRDPreviewZoom = previewZoom
   box.__puiPRDPreviewZoomControl:SetZoom(previewZoom)
   box.__puiPRDPreviewTime = 0
@@ -2383,7 +2352,7 @@ do
     PRD_NormalizeNativeTextConfig(text, role == "health" and "PCT" or "CUR")
 
     local flags = role == "health" and { healthText = true } or { primaryText = true }
-    local rightName = role == "health" and "Right text (HP #)" or "Right text (Power #)"
+    local rightName = role == "health" and "Health value" or "Power value"
     local visibilityValues = {
       ALWAYS = "Always",
       MOUSEOVER = "On mouseover",
@@ -2398,7 +2367,8 @@ do
       args = {
         leftVisibility = {
           type = "select",
-          name = "Left text (Percent)",
+          name = "Percent text",
+          desc = "Example: 60%. Choose when this text is visible.",
           order = 1,
           values = visibilityValues,
           get = function()
@@ -2412,6 +2382,8 @@ do
         rightVisibility = {
           type = "select",
           name = rightName,
+          desc = role == "health" and "Example: 785k. Choose when this text is visible."
+            or "Example: 60. Choose when this text is visible.",
           order = 2,
           values = visibilityValues,
           get = function()
@@ -2425,7 +2397,7 @@ do
         centerText = {
           type = "toggle",
           name = "Show centered",
-          desc = "Reanchors the visible native Blizzard text regions toward the center of the bar.",
+          desc = "Centers a single visible value. When both are visible, places percent and value together around the center.",
           order = 3,
           get = function()
             return text.centerText == true
@@ -2440,9 +2412,6 @@ do
           name = "Bar font",
           order = 10,
           inline = true,
-          hidden = function()
-            return ns.Modules.PRD.db.profile.appearance.unified ~= false
-          end,
           args = {
             useGlobalFont = {
               type = "toggle",
@@ -2594,7 +2563,7 @@ do
     if db.text.secondary.mode == nil then db.text.secondary.mode = "CUR" end
     if db.text.secondary.showNumber == nil then db.text.secondary.showNumber = true end
     if db.appearance.height == nil then db.appearance.height = 15 end
-    db.appearance.unified = false
+    db.appearance.unified = nil
     if db.appearance.texture == nil then db.appearance.texture = "Pleebar" end
     if db.appearance.squareTexture == nil then db.appearance.squareTexture = true end
     if db.appearance.style.borderSize == nil then db.appearance.style.borderSize = 1 end
@@ -2663,14 +2632,12 @@ do
       M = M,
       db = db,
       size = db.size,
-      appearance = db.appearance,
       outerBorder = db.outerBorder,
       healthCfg = db.health,
       primaryCfg = db.primary,
       primaryResourceCfg = primaryResourceCfg,
       secondaryCfg = db.secondary,
       healthTextCfg = db.text.health,
-      secondaryTextCfg = db.text.secondary,
     }
   end
 
@@ -2806,6 +2773,133 @@ do
     return true
   end
 
+  local function PRD_ArrangeNativeBarArgs(args, state, role)
+    local config = state.db[role]
+    local layout = args.layoutGroup.args
+    args.visibilityGroup = args.visibilityGroup or {
+      type = "group", name = "Visibility", order = 5, inline = true, args = {},
+    }
+    args.visibilityGroup.hidden = nil
+    args.visibilityGroup.args.showBar = {
+      type = "toggle", name = role == "health" and "Show health" or "Show primary power", order = 0,
+      get = function() return PRD:GetQuickSetupValue(role == "health" and "showHealth" or "showPrimary") end,
+      set = function(_, value) PRD:SetQuickSetupValue(role == "health" and "showHealth" or "showPrimary", value) end,
+    }
+    if args.visibilityGroup.args.hideAlternateMana then
+      args.visibilityGroup.args.hideAlternateMana.hidden = not ns.PRDSecondary.PlayerClassHasAlternatePower
+    end
+    layout.detached = {
+      type = "toggle",
+      name = "Detach this bar",
+      desc = "Gives this bar its own mover and width.",
+      order = 0,
+      get = function()
+        return role == "health" and state.db.detachHealth == true or role == "primary" and config.detached == true
+      end,
+      set = function(_, value)
+        if role == "health" then
+          state.db.detachHealth = value and true or false
+        else
+          config.detached = value and true or false
+        end
+        Addon:ApplyOptionsChange("PRD", { layout = true, mover = true })
+      end,
+    }
+    layout.width.disabled = function()
+      return not layout.detached.get()
+    end
+    local appearance = args.colorGroup
+    appearance.name = "Appearance"
+    appearance.order = 20
+    appearance.args.texture = layout.texture
+    appearance.args.texture.order = 0
+    appearance.args.squareTexture = layout.squareTexture
+    appearance.args.squareTexture.order = 0.5
+    layout.texture = nil
+    layout.squareTexture = nil
+    for key, option in pairs(args.styleGroup.args) do
+      option.order = option.order + 10
+      appearance.args[key] = option
+    end
+    args.appearanceGroup = appearance
+    args.colorGroup = nil
+    args.styleGroup = nil
+    args.textGroup.order = 30
+    if args.ticksGroup then args.ticksGroup.order = 40 end
+    return args
+  end
+
+  local function PRD_BuildAppearanceCopyGroup(state)
+    local sourceKey = "health"
+    local targetKey = "ALL"
+    local labels = { health = "Health", primary = "Primary power" }
+    local targets = {
+      health = { config = state.healthCfg, font = state.healthCfg.text },
+      primary = { config = state.primaryCfg, font = state.primaryResourceCfg.text },
+    }
+    for _, resource in ipairs(ns.PRDSecondary:GetResourceOptionsForClass(PLAYER_CLASS)) do
+      local config = ns.PRDSecondary:GetResourceSettings(state.db, resource.key)
+      targets[resource.key] = { config = config, font = config.text }
+      labels[resource.key] = resource.name
+    end
+    if ns.PRDSecondary.PlayerClassHasAlternatePower then
+      local config = ns.PRDSecondary:GetResourceSettings(state.db, "ALTERNATE_MANA")
+      targets.ALTERNATE_MANA = { config = config, font = config.text }
+      labels.ALTERNATE_MANA = "Alternate Mana"
+    end
+    local targetLabels = { ALL = "All other PRD bars" }
+    for key, label in pairs(labels) do targetLabels[key] = label end
+    return {
+      type = "group",
+      name = "Copy appearance",
+      order = 30,
+      inline = true,
+      args = {
+        description = {
+          type = "description",
+          name = "Copy height, texture, border, background, and font. Each bar keeps its colors, text format, position, and behavior.",
+          order = 0,
+        },
+        source = {
+          type = "select", name = "Copy from", order = 1, values = labels,
+          get = function() return sourceKey end,
+          set = function(_, value) sourceKey = value end,
+        },
+        target = {
+          type = "select", name = "Copy to", order = 2, values = targetLabels,
+          get = function() return targetKey end,
+          set = function(_, value) targetKey = value end,
+        },
+        copy = {
+          type = "execute", name = "Copy appearance", order = 3,
+          disabled = function() return sourceKey == targetKey end,
+          func = function()
+            local source = targets[sourceKey]
+            for key, target in pairs(targets) do
+              if key ~= sourceKey and (targetKey == "ALL" or key == targetKey) then
+                local config = target.config
+                config.height = source.config.height
+                config.texture = source.config.texture
+                if (key == "health" or key == "primary") and source.config.squareTexture ~= nil then
+                  config.squareTexture = source.config.squareTexture
+                end
+                config.style = PRD_CopyResourceSetting(source.config.style)
+                for _, field in ipairs({ "font", "size", "flags", "useGlobalFont" }) do
+                  target.font[field] = source.font[field]
+                end
+              end
+            end
+            Addon:ApplyOptionsChange("PRD", {
+              health = true, primary = true, healthText = true, primaryText = true,
+              secondaryAppearance = true, secondaryText = true, layout = true,
+            })
+            Addon:NotifyOptionsTreeChanged("PRD", { "PRD", "general" })
+          end,
+        },
+      },
+    }
+  end
+
   local function PRD_BuildGeneralArgs()
     local s = GetPRDState()
     if not s then
@@ -2851,51 +2945,64 @@ do
           },
           hideHealth = {
             type = "toggle",
-            name = "Hide health bar",
-            desc = "Hides the health bar from the stacked PRD layout.",
+            name = "Show health",
+            desc = "Shows health in the PRD.",
             order = 1,
             get = function()
-              return not PRD:GetQuickSetupValue("showHealth")
+              return PRD:GetQuickSetupValue("showHealth")
             end,
             set = function(_, val)
-              PRD:SetQuickSetupValue("showHealth", not val)
+              PRD:SetQuickSetupValue("showHealth", val)
             end,
           },
           hidePrimary = {
             type = "toggle",
-            name = "Hide primary bar",
-            desc = "Hides the primary resource bar from the stacked PRD layout.",
+            name = "Show primary power",
+            desc = "Shows your current primary power in the PRD.",
             order = 2,
             get = function()
-              return not PRD:GetQuickSetupValue("showPrimary")
+              return PRD:GetQuickSetupValue("showPrimary")
             end,
             set = function(_, val)
-              PRD:SetQuickSetupValue("showPrimary", not val)
+              PRD:SetQuickSetupValue("showPrimary", val)
             end,
           },
           hideSecondary = {
             type = "toggle",
-            name = "Hide secondary bar",
-            desc = "Hides the custom class-resource bar. Alternate Mana is controlled separately.",
+            name = "Show class resources and tracked effects",
+            desc = "Shows enabled class resources and tracked effects. Alternate Mana is controlled separately.",
             order = 3,
             get = function()
-              return not PRD:GetQuickSetupValue("showSecondary")
+              return PRD:GetQuickSetupValue("showSecondary")
             end,
             set = function(_, val)
-              PRD:SetQuickSetupValue("showSecondary", not val)
+              PRD:SetQuickSetupValue("showSecondary", val)
+            end,
+          },
+          secondaryVisibility = {
+            type = "select", name = "Show resources and tracked effects", order = 3.5,
+            values = {
+              ALWAYS = "Always", COMBAT = "In combat", TARGET = "With a target",
+              COMBAT_OR_TARGET = "In combat or with a target",
+            },
+            disabled = function() return secondaryCfg.enabled == false end,
+            get = function() return secondaryCfg.visibilityMode or "ALWAYS" end,
+            set = function(_, value)
+              secondaryCfg.visibilityMode = value
+              Addon:ApplyOptionsChange("PRD", { secondaryVisibility = true })
             end,
           },
           hideAlternateMana = {
             type = "toggle",
-            name = "Hide alternate Mana bar",
-            desc = "Hides Mana when your active specialization or form uses another primary power.",
+            name = "Show alternate Mana",
+            desc = "Shows Mana when your specialization or form uses another primary power.",
             order = 4,
             hidden = PLAYER_CLASS ~= "PRIEST" and PLAYER_CLASS ~= "DRUID" and PLAYER_CLASS ~= "SHAMAN",
             get = function()
-              return primaryCfg.hideAlternateMana == true
+              return primaryCfg.hideAlternateMana ~= true
             end,
             set = function(_, val)
-              primaryCfg.hideAlternateMana = val and true or false
+              primaryCfg.hideAlternateMana = not val
               Addon:ApplyOptionsChange("PRD", { secondaryRebuild = true, secondaryText = true, layout = true })
             end,
           },
@@ -2926,6 +3033,16 @@ do
             end,
             set = function(_, val)
               PRD:SetQuickSetupValue("width", val)
+            end,
+          },
+          resourceGap = {
+            type = "range", name = "Gap between resource bars", order = 3,
+            desc = "Used between adjacent class-resource or tracked-effect bars. Other gaps use the stacked-bar setting.",
+            min = 0, max = 20, step = 1,
+            get = function() return Clamp(secondaryCfg.gap or 2, 0, 20) end,
+            set = function(_, value)
+              secondaryCfg.gap = Clamp(value, 0, 20)
+              Addon:ApplyOptionsChange("PRD", { secondaryLayout = true })
             end,
           },
           stackGap = {
@@ -3027,51 +3144,7 @@ do
           },
         },
       },
-      detachGroup = {
-        type = "group",
-        name = "Separate bars",
-        order = 30,
-        inline = true,
-        args = {
-          detachIntro = {
-            type = "description",
-            name = "Detach a bar when you want it to leave the shared stack and use its own mover.",
-            order = 0,
-            fontSize = "medium",
-          },
-          detachHealth = {
-            type = "toggle",
-            name = "Detach health bar",
-            desc = "Lets the health bar be positioned separately from the main PRD stack.",
-            order = 1,
-            get = function()
-              return db.detachHealth == true
-            end,
-            set = function(_, val)
-              db.detachHealth = not not val
-              Addon:ApplyOptionsChange("PRD", { layout = true, mover = true })
-            end,
-          },
-          detachPrimary = {
-            type = "toggle",
-            name = "Detach primary bar",
-            desc = "Lets the primary resource bar be positioned separately from the main PRD stack.",
-            order = 2,
-            get = function()
-              return primaryCfg.detached == true
-            end,
-            set = function(_, val)
-              primaryCfg.detached = not not val
-              Addon:ApplyOptionsChange("PRD", { layout = true, mover = true })
-            end,
-          },
-          secondaryResourceDetach = {
-            type = "description",
-            name = "Secondary resources are detached separately on the Secondary page, under Resources.",
-            order = 3,
-          },
-        },
-      },
+      appearanceCopyGroup = PRD_BuildAppearanceCopyGroup(s),
     }
   end
 
@@ -3091,10 +3164,10 @@ do
     local size = s.size
     local cfg = s.healthCfg
     local text = s.healthTextCfg
-    local appearance = s.appearance.unified ~= false and s.appearance or cfg
+    local appearance = cfg
     local style = appearance.style
 
-    return {
+    local args = {
       header = {
         type = "header",
         name = "Health bar",
@@ -3222,6 +3295,7 @@ do
         },
       },
     }
+    return PRD_ArrangeNativeBarArgs(args, s, "health")
   end
 
   local DRUID_FORM_COLOR_VALUES = {
@@ -3541,10 +3615,10 @@ do
     local cfg = s.primaryCfg
     local resourceSettings = s.primaryResourceCfg
     local text = resourceSettings.text
-    local appearance = s.appearance.unified ~= false and s.appearance or cfg
+    local appearance = cfg
     local style = appearance.style
 
-    return {
+    local args = {
       header = {
         type = "header",
         name = function()
@@ -3568,14 +3642,14 @@ do
         args = {
           hideAlternateMana = {
             type = "toggle",
-            name = "Hide alternate Mana bar",
-            desc = "Hides Mana when your active specialization or form uses another primary power.",
+            name = "Show alternate Mana",
+            desc = "Shows Mana when your specialization or form uses another primary power.",
             order = 1,
             get = function()
-              return cfg.hideAlternateMana == true
+              return cfg.hideAlternateMana ~= true
             end,
             set = function(_, value)
-              cfg.hideAlternateMana = value and true or false
+              cfg.hideAlternateMana = not value
               Addon:ApplyOptionsChange("PRD", { secondaryRebuild = true, secondaryText = true, layout = true })
             end,
           },
@@ -3649,6 +3723,7 @@ do
           },
         },
       },
+      formOverridesGroup = PRD_BuildDruidPrimaryFormArgs(s),
       ticksGroup = PRD_BuildPrimaryTicksGroup(s.M, resourceSettings.ticks),
       textGroup = PRD_BuildNativeTextGroup(text, "primary", text),
       colorGroup = PRD_BuildNativeBarColorGroup(cfg, "primary"),
@@ -3704,6 +3779,7 @@ do
         },
       },
     }
+    return PRD_ArrangeNativeBarArgs(args, s, "primary")
   end
 
   local RESOURCE_ANCHOR_VALUES = {
@@ -3774,7 +3850,9 @@ do
         completionAnimation = {
           type = "select",
           name = "Completion animation",
+          desc = "Changes the effect shown when a segment finishes recharging.",
           order = 3,
+          disabled = resourceKey == "RUNES" and function() return behavior.showReadyGlow == false end or nil,
           values = RESOURCE_COMPLETION_ANIMATION_VALUES,
           get = function()
             return behavior.completionAnimation or "FADE"
@@ -3904,10 +3982,6 @@ do
       and ns.PRDSecondary:ResourceSupportsStackColorShifts(resource.key)
       and AuraWidget.EnsureStackColorThresholds(settings)
       or nil
-
-    local function AppearanceDisabled()
-      return settings.useSharedAppearance ~= false
-    end
 
     local function RefreshStackColorOptions()
       Addon:NotifyOptionsTreeChanged("PRD", { "PRD", "secondary" })
@@ -4042,35 +4116,19 @@ do
     end
 
     local function BuffGlowDisabled()
-      return (tonumber(cues.buffGlowSpellID) or 0) <= 0
+      return cues.buffGlowEnabled ~= true or (tonumber(cues.buffGlowSpellID) or 0) <= 0
     end
 
-    return {
+    local args = {
       enabled = {
         type = "toggle",
-        name = "Enable " .. resource.name,
+        name = "Show " .. resource.name,
         order = 1,
         get = function()
           return PRD:IsSecondaryResourceEnabled(resource.key)
         end,
         set = function(_, value)
           PRD:SetSecondaryResourceEnabled(resource.key, value)
-        end,
-      },
-      useSharedAppearance = {
-        type = "toggle",
-        name = "Use shared secondary appearance",
-        desc = resource.category == "TRACKED_EFFECT"
-          and "Uses the shared Secondary height, texture, text, and frame style. Bar color stays specific to this tracked effect."
-          or "Uses the shared Secondary height, texture, colors, text, and frame style. Layout, tick separators, and spend cues stay specific to this resource.",
-        order = 2,
-        hidden = true,
-        get = function()
-          return settings.useSharedAppearance ~= false
-        end,
-          set = function(_, value)
-            settings.useSharedAppearance = value and true or false
-            Addon:ApplyOptionsChange("PRD", { secondaryAppearance = true })
         end,
       },
       behaviorGroup = PRD_BuildResourceBehaviorGroup(settings, resource.key),
@@ -4097,9 +4155,6 @@ do
             type = "range",
             name = "Height",
             order = 2,
-            hidden = function()
-              return state.appearance.unified ~= false or AppearanceDisabled()
-            end,
             min = 6,
             max = 40,
             step = 1,
@@ -4194,6 +4249,7 @@ do
           segmentedMode = {
             type = "toggle",
             name = "Use segmented mode",
+            hidden = not supportsNumericCues or resource.key == "RUNES" or resource.key == "ESSENCE",
             order = 1,
             get = function()
               return settings.perSegment == true
@@ -4220,6 +4276,9 @@ do
           showDividers = {
             type = "toggle",
             name = "Show tick separators",
+            hidden = function()
+              return resource.key == "RUNES" or resource.key == "STAGGER"
+            end,
             desc = "Draws separators for each possible stack or resource point.",
             order = 2,
             get = function()
@@ -4250,6 +4309,9 @@ do
           dividerSize = {
             type = "range",
             name = "Tick thickness",
+            hidden = function()
+              return resource.key == "RUNES" or resource.key == "STAGGER"
+            end,
             order = 3,
             min = 1,
             max = 6,
@@ -4268,6 +4330,9 @@ do
           dividerColor = {
             type = "color",
             name = "Tick color",
+            hidden = function()
+              return resource.key == "RUNES" or resource.key == "STAGGER"
+            end,
             order = 4,
             hasAlpha = true,
             disabled = function()
@@ -4285,6 +4350,11 @@ do
           inactiveAlpha = {
             type = "range",
             name = "Inactive segment opacity",
+            hidden = function()
+              return resource.category == "TRACKED_EFFECT" or resource.key == "STAGGER"
+                or not (settings.perSegment == true or resource.key == "RUNES"
+                  or resource.key == "ESSENCE" and settings.behavior.completionAnimation == "PULSE")
+            end,
             order = 5,
             min = 0,
             max = 1,
@@ -4383,7 +4453,7 @@ do
       stackRecolorCdmNotice = {
         type = "description",
         name = "Stack recoloring requires this effect to be tracked in Blizzard's Cooldown Manager.",
-        order = 19,
+        order = 45.5,
         hidden = function()
           if USE_NATIVE_APPLICATION_THRESHOLDS or not stackColorThresholds then
             return true
@@ -4401,10 +4471,6 @@ do
         name = "Appearance",
         order = 20,
         inline = true,
-        hidden = function()
-          return state.appearance.unified ~= false or AppearanceDisabled()
-        end,
-        disabled = AppearanceDisabled,
         args = {
           texture = {
             type = "select",
@@ -4462,23 +4528,18 @@ do
         name = "Text",
         order = 30,
         inline = true,
-        hidden = function()
-          return state.appearance.unified ~= false or AppearanceDisabled()
-        end,
-        disabled = AppearanceDisabled,
         args = {
           textMode = {
             type = "select",
             name = "Text format",
             order = 1,
-            values = {
-              CUR = "Show current #",
-              BOTH = "Show current # / max #",
-              CURP = "Show current # / %",
-              PCT = "Show %",
-              HIDE = "Hide",
-            },
+            values = resource.category == "TRACKED_EFFECT"
+              and { CUR = "Current (3)", BOTH = "Current / Maximum (3 / 5)", HIDE = "Hide" }
+              or { CUR = "Current (3)", BOTH = "Current / Maximum (3 / 5)", CURP = "Current / Percent (3 / 60%)", PCT = "Percent (60%)", HIDE = "Hide" },
             get = function()
+              if resource.category == "TRACKED_EFFECT" and (text.mode == "CURP" or text.mode == "PCT") then
+                return "CUR"
+              end
               return text.mode or "CUR"
             end,
             set = function(_, value)
@@ -4506,7 +4567,7 @@ do
             order = 3,
             values = OptionsUtil.BuildFontValues,
             disabled = function()
-              return AppearanceDisabled() or PRD_UseGlobalFont(text)
+              return PRD_UseGlobalFont(text)
             end,
             get = function()
               return OptionsUtil.ResolveFontKey(text.font, text.useGlobalFont)
@@ -4554,10 +4615,6 @@ do
         name = "Frame style",
         order = 50,
         inline = true,
-        hidden = function()
-          return state.appearance.unified ~= false or AppearanceDisabled()
-        end,
-        disabled = AppearanceDisabled,
         args = {
           borderSize = {
             type = "range",
@@ -4715,17 +4772,40 @@ do
               Addon:ApplyOptionsChange("PRD", { secondaryUpdate = true })
             end,
           },
+          buffGlowEnabled = {
+            type = "toggle", name = "Glow while a buff is active", order = 9,
+            get = function() return cues.buffGlowEnabled == true end,
+            set = function(_, value)
+              cues.buffGlowEnabled = value and true or false
+              Addon:ApplyOptionsChange("PRD", { secondaryCues = true })
+            end,
+          },
+          buffGlowSpell = {
+            type = "description", order = 10.5,
+            name = function()
+              local spellID = tonumber(cues.buffGlowSpellID) or 0
+              if spellID <= 0 then return "Enter a player buff spell ID." end
+              local name = C_Spell.GetSpellName(spellID)
+              if not name then return "Unknown spell ID: " .. tostring(spellID) end
+              local icon = C_Spell.GetSpellTexture(spellID)
+              return (icon and ("|T" .. icon .. ":20:20|t ") or "") .. name .. " (" .. tostring(spellID) .. ")"
+            end,
+          },
           buffGlowSpellID = {
             type = "input",
-            name = "Glow while buff is active",
-            desc = "Enter a player buff spell ID. Use 0 to disable this cue.",
+            name = "Buff spell ID",
+            desc = "Enter the spell ID of a player buff. The selected spell is shown below; switching the glow off keeps your selection.",
             order = 10,
+            disabled = function() return cues.buffGlowEnabled ~= true end,
             validate = function(_, value)
               local spellID = tonumber(value)
-              if spellID and spellID >= 0 and spellID == math.floor(spellID) then
-                return true
+              if not spellID or spellID <= 0 or spellID ~= math_floor(spellID) then
+                return "Enter a whole spell ID greater than 0."
               end
-              return "Enter a whole spell ID or 0."
+              if not C_Spell.GetSpellName(spellID) then
+                return "Spell not found. Check the spell ID."
+              end
+              return true
             end,
             get = function()
               return tostring(cues.buffGlowSpellID or 0)
@@ -4752,421 +4832,62 @@ do
           },
         },
       },
-      formOverridesGroup = PRD_BuildDruidPrimaryFormArgs(s),
+
     }
+    local appearance = args.appearance
+    appearance.name = "Appearance"
+    appearance.order = 20
+    for key, option in pairs(args.styleGroup.args) do
+      option.order = option.order + 10
+      appearance.args[key] = option
+    end
+    if resource.category == "TRACKED_EFFECT" then
+      appearance.args.colorMode = args.resourceColor.args.colorMode
+      appearance.args.colorMode.order = 2
+      appearance.args.customColor = args.resourceColor.args.customColor
+      appearance.args.customColor.order = 3
+      args.stackColorsGroup = args.resourceColor.args.stackColorShifts
+      args.stackColorsGroup.order = 45
+    end
+    args.appearanceGroup = appearance
+    args.appearance = nil
+    args.resourceColor = nil
+    args.styleGroup = nil
+    args.display.order = 40
+    if args.behaviorGroup then args.behaviorGroup.order = 50 end
+    args.cueGroup.name = "Cues"
+    return args
   end
 
   local function PRD_BuildSecondaryArgs()
-    local s = GetPRDState()
-    if not s then
+    local state = GetPRDState()
+    if not state then
       return {
         unavailable = {
-          type = "description",
-          name = "Personal Resource Display module is not loaded or has no profile data yet.",
-          order = 1,
-          fontSize = "medium",
+          type = "description", name = "Personal Resource Display is not available yet.", order = 1,
         },
       }
     end
-
-    local cfg = s.secondaryCfg
-    local text = s.secondaryTextCfg
-    cfg.resourceEnabled = cfg.resourceEnabled or {}
-
-    local classResourceArgs = {}
-    local trackedEffectArgs = {}
-    local classResourceCount = 0
-    local trackedEffectCount = 0
-    local resourceOptions = ns.PRDSecondary:GetResourceOptionsForClass(PLAYER_CLASS) or {}
-    local useResourceTabs = PRD_UsesSecondaryResourceTabs(resourceOptions)
-
-    for i = 1, #resourceOptions do
-      local resource = resourceOptions[i]
-      local targetArgs
-      local order
-
-      if resource.category == "TRACKED_EFFECT" then
-        trackedEffectCount = trackedEffectCount + 1
-        targetArgs = trackedEffectArgs
-        order = trackedEffectCount
-      else
-        classResourceCount = classResourceCount + 1
-        targetArgs = classResourceArgs
-        order = classResourceCount
+    local resources = ns.PRDSecondary:GetResourceOptionsForClass(PLAYER_CLASS)
+    if not PRD_UsesSecondaryResourceTabs(resources) then
+      if #resources == 0 then
+        return {
+          unavailable = { type = "description", name = "No class resources or tracked effects for this specialization.", order = 1 },
+        }
       end
-
-      targetArgs[resource.key] = {
-        type = "group",
-        name = resource.name,
-        order = order,
-        inline = true,
-        args = PRD_BuildResourceLayoutArgs(s, resource),
-      }
-    end
-
-    local args = {
-      visibilityGroup = {
-        type = "group",
-        name = "Overview",
-        order = 10,
-        inline = true,
-        args = {
-          summary = {
-            type = "description",
-            name = "Controls class resources and tracked effects shown below the Personal Resource Display.",
-            order = 1,
-          },
-          enabled = {
-            type = "toggle",
-            name = "Enable secondary displays",
-            desc = "Enables the secondary displays available to your current specialization.",
-            order = 2,
-            get = function()
-              return cfg.enabled ~= false
-            end,
-            set = function(_, value)
-              cfg.enabled = value and true or false
-              Addon:ApplyOptionsChange("PRD", { secondaryRebuild = true, secondaryText = true, layout = true })
-            end,
-          },
-          visibilityMode = {
-            type = "select",
-            name = "Show secondary displays",
-            order = 3,
-            values = {
-              ALWAYS = "Always",
-              COMBAT = "In combat",
-              TARGET = "When you have a target",
-              COMBAT_OR_TARGET = "In combat or with a target",
-            },
-            get = function()
-              return cfg.visibilityMode or "ALWAYS"
-            end,
-            set = function(_, value)
-              cfg.visibilityMode = value or "ALWAYS"
-              Addon:ApplyOptionsChange("PRD", { secondaryVisibility = true })
-            end,
-          },
-        },
-      },
-      classResourcesGroup = {
-        type = "group",
-        name = "Class resources",
-        order = 20,
-        inline = true,
-        hidden = classResourceCount == 0,
-        args = classResourceArgs,
-      },
-      trackedEffectsGroup = {
-        type = "group",
-        name = "Tracked effects",
-        order = 30,
-        inline = true,
-        hidden = trackedEffectCount == 0,
-        args = trackedEffectArgs,
-      },
-      layoutGroup = {
-        type = "group",
-        name = "Shared appearance",
-        order = 40,
-        inline = true,
-        args = {
-          sharedInfo = {
-            type = "description",
-            name = "Resources that use the shared secondary appearance inherit these settings. Width, detach state, and position remain specific to each resource.",
-            order = 1,
-          },
-          height = {
-            type = "range",
-            name = "Height",
-            order = 2,
-            min = 6,
-            max = 40,
-            step = 1,
-            hidden = function()
-              return s.appearance.unified ~= false
-            end,
-            get = function()
-              return Clamp(cfg.height or 15, 6, 40)
-            end,
-            set = function(_, value)
-              cfg.height = Clamp(value, 6, 40)
-              Addon:ApplyOptionsChange("PRD", { secondaryLayout = true })
-            end,
-          },
-          resourceGap = {
-            type = "range",
-            name = "Multiple resource gap",
-            desc = "Spacing between simultaneous secondary-resource rows, such as Icicles and Freezing.",
-            order = 3,
-            min = 0,
-            max = 20,
-            step = 1,
-            get = function()
-              return Clamp(cfg.gap or 2, 0, 20)
-            end,
-            set = function(_, value)
-              cfg.gap = Clamp(value, 0, 20)
-              Addon:ApplyOptionsChange("PRD", { secondaryLayout = true })
-            end,
-          },
-          texture = {
-            type = "select",
-            dialogControl = "LSM30_Statusbar",
-            name = "Texture",
-            order = 5,
-            hidden = function()
-              return s.appearance.unified ~= false
-            end,
-            values = function()
-              return OptionsUtil.BuildStatusbarValues(false)
-            end,
-            get = function()
-              return cfg.texture
-            end,
-            set = function(_, key)
-              cfg.texture = key
-              Addon:ApplyOptionsChange("PRD", { secondaryAppearance = true })
-            end,
-          },
-        },
-      },
-      textGroup = {
-        type = "group",
-        name = "Secondary resource text",
-        order = 15,
-        inline = true,
-        args = {
-          textMode = {
-            type = "select",
-            name = "Resource number",
-            desc = "Controls the current resource number shown on class-resource bars, including Essence. Choose Hide to disable it.",
-            order = 1,
-            values = {
-              CUR = "Show current #",
-              BOTH = "Show current # / max #",
-              CURP = "Show current # / %",
-              PCT = "Show %",
-              HIDE = "Hide",
-            },
-            get = function()
-              return text.mode or "CUR"
-            end,
-            set = function(_, key)
-              text.mode = key or "CUR"
-              text.showNumber = key ~= "HIDE"
-              Addon:ApplyOptionsChange("PRD", { secondaryText = true })
-            end,
-          },
-          useGlobalFont = {
-            type = "toggle",
-            name = "Use global font",
-            order = 2,
-            hidden = function()
-              return s.appearance.unified ~= false
-            end,
-            get = function()
-              return PRD_UseGlobalFont(text)
-            end,
-            set = function(_, value)
-              text.useGlobalFont = value and true or false
-              Addon:ApplyOptionsChange("PRD", { secondaryText = true })
-            end,
-          },
-          font = {
-            type = "select",
-            dialogControl = "LSM30_Font",
-            name = "Font",
-            order = 3,
-            hidden = function()
-              return s.appearance.unified ~= false
-            end,
-            values = OptionsUtil.BuildFontValues,
-            disabled = function()
-              return PRD_UseGlobalFont(text)
-            end,
-            get = function()
-              return OptionsUtil.ResolveFontKey(text.font, text.useGlobalFont)
-            end,
-            set = function(_, key)
-              text.font = key
-              text.useGlobalFont = false
-              Addon:ApplyOptionsChange("PRD", { secondaryText = true })
-            end,
-          },
-          fontSize = {
-            type = "range",
-            name = "Font size",
-            order = 4,
-            hidden = function()
-              return s.appearance.unified ~= false
-            end,
-            min = 8,
-            max = 32,
-            step = 1,
-            get = function()
-              return Clamp(text.size or 14, 8, 32)
-            end,
-            set = function(_, value)
-              text.size = Clamp(value, 8, 32)
-              Addon:ApplyOptionsChange("PRD", { secondaryText = true })
-            end,
-          },
-          fontFlags = {
-            type = "select",
-            name = "Font outline",
-            order = 5,
-            hidden = function()
-              return s.appearance.unified ~= false
-            end,
-            values = function()
-              return OptionsUtil.BuildOutlineValues(true, "Use global outline", ns.Theme.STANDARD_OUTLINE_KEY)
-            end,
-            get = function()
-              return OptionsUtil.GetStoredOutlineValue(text.flags, ns.Theme.STANDARD_OUTLINE_KEY)
-            end,
-            set = function(_, key)
-              text.flags = OptionsUtil.SetStoredOutlineValue(key, ns.Theme.STANDARD_OUTLINE_KEY)
-              Addon:ApplyOptionsChange("PRD", { secondaryText = true })
-            end,
-          },
-        },
-      },
-      colorGroup = {
-        type = "group",
-        name = "Bar color",
-        order = 60,
-        inline = true,
-        args = {
-          colorMode = {
-            type = "select",
-            name = "Status bar color",
-            order = 1,
-            values = RESOURCE_COLOR_VALUES,
-            get = function()
-              return PRD_GetResourceColorMode(cfg)
-            end,
-            set = function(_, value)
-              PRD_SetResourceColorMode(cfg, value or "DEFAULT")
-              Addon:ApplyOptionsChange("PRD", { secondaryUpdate = true })
-            end,
-          },
-          customColor = {
-            type = "color",
-            name = "Custom color",
-            order = 2,
-            hasAlpha = true,
-            disabled = function()
-              return PRD_GetResourceColorMode(cfg) ~= "CUSTOM"
-            end,
-            get = function()
-              local color = cfg.customColor or { 1, 1, 1, 1 }
-              return color[1] or 1, color[2] or 1, color[3] or 1, color[4] or 1
-            end,
-            set = function(_, r, g, b, a)
-              cfg.customColor = { r, g, b, a }
-              PRD_SetResourceColorMode(cfg, "CUSTOM")
-              Addon:ApplyOptionsChange("PRD", { secondaryUpdate = true })
-            end,
-          },
-        },
-      },
-      styleGroup = {
-        type = "group",
-        name = "Frame style",
-        order = 70,
-        inline = true,
-        hidden = function()
-          return s.appearance.unified ~= false
-        end,
-        args = {
-          borderSize = {
-            type = "range",
-            name = "Border size",
-            order = 1,
-            min = 0,
-            max = 12,
-            step = 1,
-            get = function()
-              return Clamp(cfg.style.borderSize or 1, 0, 12)
-            end,
-            set = function(_, value)
-              cfg.style.borderSize = Clamp(value, 0, 12)
-              Addon:ApplyOptionsChange("PRD", { secondaryAppearance = true })
-            end,
-          },
-          borderColor = {
-            type = "color",
-            name = "Border color",
-            order = 2,
-            hasAlpha = true,
-            get = function()
-              local color = cfg.style.borderColor or { 0.20, 0.20, 0.24, 1.00 }
-              return color[1] or 0.20, color[2] or 0.20, color[3] or 0.24, color[4] or 1
-            end,
-            set = function(_, r, g, b, a)
-              cfg.style.borderColor = { r, g, b, a }
-              Addon:ApplyOptionsChange("PRD", { secondaryAppearance = true })
-            end,
-          },
-          bgColor = {
-            type = "color",
-            name = "Background color",
-            order = 3,
-            hasAlpha = true,
-            get = function()
-              local color = cfg.style.bgColor or { 0, 0, 0, 0.65 }
-              return color[1] or 0, color[2] or 0, color[3] or 0, color[4] or 0.65
-            end,
-            set = function(_, r, g, b, a)
-              cfg.style.bgColor = { r, g, b, a }
-              Addon:ApplyOptionsChange("PRD", { secondaryAppearance = true })
-            end,
-          },
-        },
-      },
-    }
-
-    if not useResourceTabs then
+      local args = PRD_BuildResourceLayoutArgs(state, resources[1])
+      args.header = { type = "header", name = resources[1].name, order = 0 }
       return args
     end
-
-    args.visibilityGroup.order = 0
-    args.layoutGroup.order = 70
-    args.textGroup.order = 80
-    args.textGroup.name = "Shared secondary text"
-    args.colorGroup.order = 90
-    args.colorGroup.name = "Shared bar color"
-    args.styleGroup.order = 100
-    args.styleGroup.name = "Shared frame style"
-
-    local tabArgs = {}
-
-    for i = 1, #resourceOptions do
-      local resource = resourceOptions[i]
-      local sourceGroup = resource.category == "TRACKED_EFFECT"
-        and trackedEffectArgs[resource.key]
-        or classResourceArgs[resource.key]
-      local resourceArgs = sourceGroup.args
-
-      resourceArgs.secondaryOverviewGroup = args.visibilityGroup
-      resourceArgs.sharedSecondaryLayoutGroup = args.layoutGroup
-      resourceArgs.sharedSecondaryTextGroup = args.textGroup
-      resourceArgs.sharedSecondaryStyleGroup = args.styleGroup
-
-      if resource.category ~= "TRACKED_EFFECT" then
-        resourceArgs.sharedSecondaryColorGroup = args.colorGroup
-      end
-
-      tabArgs[resource.key] = {
-        type = "group",
-        name = resource.name,
-        order = i,
-        args = resourceArgs,
+    local args = {}
+    for index, resource in ipairs(resources) do
+      args[resource.key] = {
+        type = "group", name = resource.name, order = index,
+        desc = resource.category == "TRACKED_EFFECT" and "Tracked effect" or "Class resource",
+        args = PRD_BuildResourceLayoutArgs(state, resource),
       }
     end
-
-    return tabArgs
+    return args
   end
 
   local function PRDRootProvider()
@@ -5180,7 +4901,7 @@ do
         args = {
           general = {
             type = "group",
-            name = "General",
+            name = "Overview",
             order = 1,
             args = PRD_BuildGeneralArgs(),
           },
@@ -5192,13 +4913,13 @@ do
           },
           primary = {
             type = "group",
-            name = "Primary",
+            name = "Primary Power",
             order = 3,
             args = PRD_BuildPrimaryArgs(),
           },
           secondary = {
             type = "group",
-            name = "Secondary",
+            name = "Resources & tracked effects",
             order = 4,
             childGroups = PRD_UsesSecondaryResourceTabs() and "tab" or nil,
             hidden = function()
@@ -5221,7 +4942,7 @@ do
   end, 40, "Personal Resource Display", nil, {
     navDescription = "Health, power, class resources, and text.",
     pageTitle = "Personal Resource Display",
-    pageDescription = "Configure your personal resource display, including health, primary power, and class-specific resources.",
+    pageDescription = "Configure health, primary power, class resources, and tracked effects.",
     pageHelp = "Tune the layout first, then refine resource behavior and text.",
     page = {
       previewWidth = 360,
