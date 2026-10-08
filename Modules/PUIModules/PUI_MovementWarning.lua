@@ -159,7 +159,7 @@ local function EnsureDisplay()
   MovementWarning:RefreshFonts()
 
   FrameUtil:RegisterMover("movement_warning", anchor, {
-    label = "Movement Warning",
+    label = "Movement Reminder",
     optionsString = "MovementWarning",
     smartSnap = {
       family = "positionOnly",
@@ -283,10 +283,10 @@ end
 function MovementWarning:GetOptions()
   return {
     type = "group",
-    name = "Movement Warning",
+    name = "Movement Reminder",
     args = {
       enabled = {
-        type = "toggle", name = "Show movement warning", order = 1,
+        type = "toggle", name = "Show movement reminder", order = 1,
         get = function() return Addon.db.profile.movementWarning.enabled end,
         set = function(_, value)
           Addon.db.profile.movementWarning.enabled = value
@@ -294,7 +294,7 @@ function MovementWarning:GetOptions()
         end,
       },
       settings = {
-        type = "group", name = "Warning", inline = true, order = 2,
+        type = "group", name = "Reminder", inline = true, order = 2,
         disabled = function() return not Addon.db.profile.movementWarning.enabled end,
         args = {
           spell = {
@@ -337,7 +337,7 @@ function MovementWarning:GetOptions()
           },
           preview = {
             type = "toggle", name = "Show preview", order = 5,
-            desc = "Show a sample warning. Use /pe to move it.",
+            desc = "Show a sample reminder. Use /pe to move it.",
             get = function() return previewEnabled end,
             set = function(_, value)
               previewEnabled = value
@@ -350,18 +350,36 @@ function MovementWarning:GetOptions()
   }
 end
 
+function MovementWarning:ShowEnablePrompt(onClosed)
+  local function SaveChoice(enabled)
+    Addon.db.global.onboarding.movementReminderPromptPending = false
+    Addon.db.profile.movementWarning.enabled = enabled
+    self:ApplySettings()
+    onClosed()
+  end
+
+  Addon:PUI_ConfirmAction({
+    title = "Movement Reminder",
+    text = "Do you want to enable the movement reminder?\n\nShows a countdown in the middle of your screen while your main movement spell is unavailable.",
+    yesText = "Enable",
+    noText = "No thanks",
+    onYes = function() SaveChoice(true) end,
+    onNo = function() SaveChoice(false) end,
+  })
+end
+
 function MovementWarning:OnInitialize()
   _G.PleebUIAPI:RegisterPlugin("PleebUI_MovementWarning", {
-    name = "Movement Warning",
+    name = "Movement Reminder",
   }):RegisterEditModeParticipant("runtime", {
     order = 31,
     onChanged = function() self:RefreshWarning() end,
   })
-  Addon:RegisterOptionsSection("MovementWarning", function() return self end, 80,
-    "Movement Warning", nil, {
+  Addon:RegisterOptionsSection("MovementWarning", function() return self end, 3,
+    "Movement Reminder", "Quality", {
       preview = false,
       pageDescription = "Show a countdown while your movement spell is unavailable.",
-      pageHelp = "Use /pe to move the warning.",
+      pageHelp = "Use /pe to move the reminder.",
     })
 end
 
@@ -384,6 +402,7 @@ MovementWarning.RefreshFonts = P:Def("MovementWarning:RefreshFonts", MovementWar
 MovementWarning.RefreshWarning = P:Def("MovementWarning:RefreshWarning", MovementWarning.RefreshWarning)
 MovementWarning.OnMovementEvent = P:Def("MovementWarning:OnMovementEvent", MovementWarning.OnMovementEvent)
 MovementWarning.ApplySettings = P:Def("MovementWarning:ApplySettings", MovementWarning.ApplySettings)
+MovementWarning.ShowEnablePrompt = P:Def("MovementWarning:ShowEnablePrompt", MovementWarning.ShowEnablePrompt)
 MovementWarning.OnInitialize = P:Def("MovementWarning:OnInitialize", MovementWarning.OnInitialize)
 MovementWarning.OnEnable = P:Def("MovementWarning:OnEnable", MovementWarning.OnEnable)
 MovementWarning.OnDisable = P:Def("MovementWarning:OnDisable", MovementWarning.OnDisable)
