@@ -10,6 +10,7 @@ local PCMPresentation = ns.PCMPresentation
 local IconSettings = ns.PCMIconSettings
 local PCMKeybinds = ns.PCMKeybinds
 local AuraSlotDriver = ns.AuraSlotDriver
+local TotemTracker = ns.PCMTotemTracker
 
 local CreateFrame = CreateFrame
 local UIParent = UIParent
@@ -20,9 +21,6 @@ local C_Spell = C_Spell
 local C_SpellActivationOverlay = C_SpellActivationOverlay
 local GetInventoryItemCooldown = GetInventoryItemCooldown
 local GetInventoryItemID = GetInventoryItemID
-local GetNumTotemSlots = GetNumTotemSlots
-local GetTotemInfo = GetTotemInfo
-local GetTotemDuration = GetTotemDuration
 local issecretvalue = issecretvalue
 local pairs = pairs
 local ipairs = ipairs
@@ -72,7 +70,7 @@ local groupLayoutEnabled = false
 local groupLayoutReady = false
 local activeByCooldownID = {}
 local retiredByCooldownID = {}
-local verifiedTotemSlots = {}
+local totemBindings = {}
 local rangeSpellRefCounts = {}
 
 local viewers = {
@@ -150,7 +148,6 @@ local RUNTIME_EVENTS = {
   "SPELL_RANGE_CHECK_UPDATE",
   "SPELL_ACTIVATION_OVERLAY_GLOW_SHOW",
   "SPELL_ACTIVATION_OVERLAY_GLOW_HIDE",
-  "PLAYER_TOTEM_UPDATE",
   "BAG_UPDATE_COOLDOWN",
   "ITEM_LOCK_CHANGED",
   "ITEM_PUSH",
@@ -472,7 +469,7 @@ local function ConfigureAuraSlots(record)
 
   if not enabled
     or not presentationActive
-    or verifiedTotemSlots[record.cooldownID]
+    or totemBindings[record.cooldownID]
     or entry.hideAura == true
     or not style.useDurationDisplay
   then
@@ -674,51 +671,37 @@ local function ConfigureRecordBuckets(record)
     AddBucketRecord(buckets.keybind, record)
   end
 
-  if verifiedTotemSlots[record.cooldownID] then
+  if totemBindings[record.cooldownID] then
     AddBucketRecord(buckets.totem, record)
   end
 end
 
 local function RefreshTotemBindings()
   local bestByCooldownID = {}
-  local slotCount = GetNumTotemSlots()
-  if IsSecret(slotCount) or type(slotCount) ~= "number" then
-    return
-  end
-
-  for slot = 1, slotCount do
-    if GetTotemDuration(slot) ~= nil then
-      local spellID = select(7, GetTotemInfo(slot))
-      if IsSecret(spellID) then
-        return
-      end
-
-      if type(spellID) == "number" then
-        local record, ambiguous = GetUniqueActiveRecordForSpellID(spellID)
-        if record and not ambiguous then
-          bestByCooldownID[record.cooldownID] = {
-            slot = slot,
-            spellID = spellID,
-          }
-        end
+  for spellID, binding in pairs(TotemTracker.bindingsBySpellID) do
+    local record, ambiguous = GetUniqueActiveRecordForSpellID(spellID)
+    if record and not ambiguous then
+      local previous = bestByCooldownID[record.cooldownID]
+      if not previous or binding.sequence > previous.binding.sequence then
+        bestByCooldownID[record.cooldownID] = {
+          binding = binding,
+          spellID = binding.slot and spellID or binding.spellID,
+        }
       end
     end
   end
 
-  for cooldownID, slot in pairs(verifiedTotemSlots) do
+  for cooldownID in pairs(totemBindings) do
     local best = bestByCooldownID[cooldownID]
-    if not best or best.slot ~= slot then
-      verifiedTotemSlots[cooldownID] = nil
+    if not best then
+      totemBindings[cooldownID] = nil
       local record = activeByCooldownID[cooldownID]
       if record then
         RemoveBucketRecord(buckets.totem, record)
         record.totemActive = nil
         PCMPresentation.SetTotemDuration(record.parts, nil)
-        local hadTotemSpell = record.runtimeTotemSpellID ~= nil
         record.runtimeTotemSpellID = nil
-        if hadTotemSpell then
-          RefreshRuntimeSpellIdentity(record)
-        else
+        if not RefreshRuntimeSpellIdentity(record) then
           ConfigureAuraSlots(record)
         end
         MarkRecordDirty(
@@ -731,7 +714,7 @@ local function RefreshTotemBindings()
   end
 
   for cooldownID, best in pairs(bestByCooldownID) do
-    verifiedTotemSlots[cooldownID] = best.slot
+    totemBindings[cooldownID] = best.binding
     local record = activeByCooldownID[cooldownID]
     if record then
       SetTotemSpellIdentity(record, best.spellID)
@@ -913,8 +896,8 @@ local function ApplyStateAppearance(record, stateName, atMaxCharges)
 end
 
 local function RefreshTotemState(record)
-  local slot = verifiedTotemSlots[record.cooldownID]
-  if not slot then
+  local binding = totemBindings[record.cooldownID]
+  if not binding then
     record.totemActive = nil
     PCMPresentation.SetTotemDuration(record.parts, nil)
     return false
@@ -925,7 +908,7 @@ local function RefreshTotemState(record)
     return false
   end
 
-  local duration = GetTotemDuration(slot)
+  local duration = binding.duration
   PCMPresentation.SetTotemDuration(record.parts, duration)
   record.totemActive = duration ~= nil
   return record.totemActive
@@ -1142,7 +1125,7 @@ local function RefreshRecordState(record, stateMask)
   if HasMask(stateMask, STATE_KEYBIND) then
     RefreshKeybind(record)
   end
-  if verifiedTotemSlots[record.cooldownID]
+  if totemBindings[record.cooldownID]
     and HasMask(stateMask, bit_bor(STATE_COOLDOWN, STATE_CHARGE, STATE_TOTEM))
   then
     RefreshTotemState(record)
@@ -1370,7 +1353,7 @@ local function AcquireRecord(viewer, entry, generation)
 
     -- A newer cooldown event already owns the pending timer update.
     if cooldown == parts.cooldown
-      and not verifiedTotemSlots[record.cooldownID]
+      and not totemBindings[record.cooldownID]
       and record.hasEventCooldownState
       and HasMask(record.stateDirtyMask, STATE_COOLDOWN_UPDATE)
     then
@@ -1379,7 +1362,7 @@ local function AcquireRecord(viewer, entry, generation)
 
     record.hasEventCooldownState = nil
     local stateMask = STATE_COOLDOWN
-    if verifiedTotemSlots[record.cooldownID] then
+    if totemBindings[record.cooldownID] then
       RefreshTotemBindings()
       stateMask = bit_bor(STATE_COOLDOWN, STATE_CHARGE, STATE_TOTEM)
     elseif cooldown == parts.chargeCooldown then
@@ -1536,8 +1519,6 @@ local function WantsEvent(event)
     or event == "SPELL_ACTIVATION_OVERLAY_GLOW_HIDE"
   then
     return buckets.proc.count > 0
-  elseif event == "PLAYER_TOTEM_UPDATE" then
-    return next(activeByCooldownID) ~= nil
   elseif event == "BAG_UPDATE_COOLDOWN"
     or event == "ITEM_LOCK_CHANGED"
     or event == "ITEM_PUSH"
@@ -1586,7 +1567,7 @@ local function MarkCooldownEventBucket(bucketName, stateMask, spellID, baseSpell
       end
 
       local recordStateMask = stateMask
-      if canRefreshGCDOnly and not directMatch and not verifiedTotemSlots[record.cooldownID] then
+      if canRefreshGCDOnly and not directMatch and not totemBindings[record.cooldownID] then
         recordStateMask = STATE_GCD_ONLY
       end
       MarkRecordDirty(record, DIRTY_STATE, recordStateMask)
@@ -1747,6 +1728,11 @@ end
 
 function AbilityRuntime:SetPresentationActive(active)
   presentationActive = active == true and enabled
+  if presentationActive then
+    TotemTracker:RegisterListener(self, RefreshTotemBindings)
+  else
+    TotemTracker:UnregisterListener(self)
+  end
   for _, viewer in pairs(viewers) do
     if viewer.frame then
       viewer.frame:SetShown(presentationActive)
@@ -1907,6 +1893,7 @@ function AbilityRuntime:Disable()
   readyNotified = false
   presentationActive = false
   AbilityCatalog:UnregisterListener(self)
+  TotemTracker:UnregisterListener(self)
 
   eventFrame:UnregisterAllEvents()
   for event in pairs(registeredEvents) do
@@ -1942,7 +1929,7 @@ function AbilityRuntime:Disable()
   end
   dirtyHead = 1
   dirtyTail = 0
-  wipe(verifiedTotemSlots)
+  wipe(totemBindings)
   wipe(rangeSpellRefCounts)
 end
 
@@ -1982,9 +1969,6 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1, arg2, arg3, arg4, arg5)
     or event == "SPELL_ACTIVATION_OVERLAY_GLOW_HIDE"
   then
     MarkProcRecordsForSpell(arg1)
-  elseif event == "PLAYER_TOTEM_UPDATE" then
-    RefreshTotemBindings()
-    RefreshEventRegistrations()
   elseif event == "BAG_UPDATE_COOLDOWN"
     or event == "ITEM_LOCK_CHANGED"
     or event == "ITEM_PUSH"
