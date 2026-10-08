@@ -136,6 +136,7 @@ local DB_DEFAULTS = {
       enabled = false,
       combatOnly = false,
       displayMode = "text",
+      showDecimals = true,
       fontSize = 24,
       color = { r = 1, g = 1, b = 1, a = 1 },
       x = 0,

@@ -49,17 +49,15 @@ local function RefreshSpellText()
   if not anchor then return end
 
   local db = Addon.db.profile.movementWarning
-  local size = ns.Theme.ResolveFontSize(db.fontSize, "qualityOfLife")
+  local previewDuration = db.showDecimals ~= false and "8.0" or "8"
   for index = 1, trackedCount do
     local row = rows[index]
-    local display = row.spellName
-    if db.displayMode == "icon" then
-      display = string.format("|T%s:%d:%d:0:0:64:64:5:59:5:59|t",
-        row.spellIcon, size, size)
-    end
-    local text = "No " .. display .. " for"
+    local text = "No " .. row.spellName .. " for"
     row.label:SetText(text)
-    row.previewText:SetText(text .. " 8.0")
+    row.icon:SetTexture(row.spellIcon)
+    row.previewText:SetText(text .. " " .. previewDuration)
+    row.previewCountdown:SetText(previewDuration)
+    row.countdown:SetCountdownMillisecondsThreshold(db.showDecimals ~= false and 86400 or 0)
   end
 end
 
@@ -104,12 +102,16 @@ local function EnsureRow(index)
   if row then return row end
 
   row = {}
-  rows[index] = row
   row.frame = CreateFrame("Frame", nil, anchor)
   row.runtime = CreateFrame("Frame", nil, row.frame)
   row.runtime:SetAllPoints(row.frame)
   row.runtime:Hide()
   row.label = row.runtime:CreateFontString(nil, "OVERLAY")
+  row.icon = row.runtime:CreateTexture(nil, "ARTWORK")
+  row.icon:SetTexCoord(0.07, 0.93, 0.07, 0.93)
+  row.unavailable = row.runtime:CreateFontString(nil, "OVERLAY")
+  row.unavailable:SetShadowColor(0, 0, 0, 1)
+  row.unavailable:SetShadowOffset(1, -1)
 
   local countdown = CreateFrame("Cooldown", nil, row.runtime, "CooldownFrameTemplate")
   row.countdown = countdown
@@ -125,13 +127,31 @@ local function EnsureRow(index)
   row.countdownText = countdown:GetCountdownFontString()
   row.countdownText:SetJustifyH("LEFT")
   countdown:SetScript("OnCooldownDone", function()
-    row.runtime:Hide()
+    if not previewEnabled and not ns.Flags.IsEditing then
+      row.runtime:Hide()
+    end
   end)
 
-  row.previewText = row.frame:CreateFontString(nil, "OVERLAY")
-  row.previewText:SetPoint("CENTER", row.frame, "CENTER")
+  row.previewText = row.runtime:CreateFontString(nil, "OVERLAY")
+  row.previewText:SetPoint("CENTER", row.runtime, "CENTER")
   row.previewText:Hide()
+
+  row.previewCountdown = row.runtime:CreateFontString(nil, "OVERLAY")
+  row.previewCountdown:SetJustifyH("LEFT")
+  row.previewCountdown:Hide()
+
+  rows[index] = row
   return row
+end
+
+local function GetSelectedSpells()
+  local spells = Addon.db.profile.movementWarning.spells
+  local selected = spells[specializationID]
+  if type(selected) == "number" then
+    selected = selected ~= 0 and { [selected] = true } or nil
+    spells[specializationID] = selected
+  end
+  return selected
 end
 
 local function RefreshSelectedSpells()
@@ -140,11 +160,12 @@ local function RefreshSelectedSpells()
     row.runtime:Hide()
     row.countdown:Clear()
     row.previewText:Hide()
+    row.previewCountdown:Hide()
     row.frame:Hide()
   end
 
   trackedCount = 0
-  local selected = Addon.db.profile.movementWarning.spells[specializationID]
+  local selected = GetSelectedSpells()
   for index = 1, #knownSpells do
     local spellID = knownSpells[index]
     if not selected or selected[spellID] == true then
@@ -180,13 +201,25 @@ function MovementWarning:RefreshFonts()
     row.label:SetTextColor(color.r, color.g, color.b, color.a)
     row.previewText:SetFont(font, size, flags)
     row.previewText:SetTextColor(color.r, color.g, color.b, color.a)
+    row.previewCountdown:SetFont(font, size, flags)
+    row.previewCountdown:SetTextColor(color.r, color.g, color.b, color.a)
+    row.unavailable:SetFont(font, math.max(11, size * 0.55), "OUTLINE")
+    row.unavailable:SetText("×")
+    row.unavailable:SetTextColor(1, 0.2, 0.2, 1)
+    row.icon:SetSize(size, size)
+    row.icon:ClearAllPoints()
+    row.icon:SetPoint("RIGHT", row.runtime, "CENTER", -size * 0.9, 0)
+    row.unavailable:ClearAllPoints()
+    row.unavailable:SetPoint("TOPRIGHT", row.icon, "TOPRIGHT", size * 0.12, size * 0.12)
     row.countdown:SetSize(size * 3, height)
     row.countdownText:SetFontObject(countdownFont)
     row.countdownText:SetTextColor(color.r, color.g, color.b, color.a)
     row.label:ClearAllPoints()
     row.label:SetPoint("CENTER", row.runtime, "CENTER", -size * 1.3, 0)
     row.countdownText:ClearAllPoints()
-    row.countdownText:SetPoint("LEFT", row.label, "RIGHT", size * 0.2, 0)
+    row.countdownText:SetPoint("LEFT", db.displayMode == "icon" and row.icon or row.label, "RIGHT", size * 0.2, 0)
+    row.previewCountdown:ClearAllPoints()
+    row.previewCountdown:SetPoint("LEFT", row.icon, "RIGHT", size * 0.2, 0)
   end
   RefreshSpellText()
 end
@@ -273,12 +306,22 @@ function MovementWarning:RefreshWarning()
   local db = Addon.db.profile.movementWarning
   local enabled = self:IsEnabled() and db.enabled
   local preview = enabled and (previewEnabled or ns.Flags.IsEditing)
+  local iconMode = db.displayMode == "icon"
   for index = 1, trackedCount do
     local row = rows[index]
-    row.previewText:SetShown(preview)
-    if not enabled or preview or (db.combatOnly and not InCombatLockdown()) then
+    row.previewText:SetShown(preview and not iconMode)
+    row.previewCountdown:SetShown(preview and iconMode)
+    row.label:SetShown(not preview and not iconMode)
+    row.icon:SetShown(iconMode)
+    row.unavailable:SetShown(iconMode)
+    if not enabled or (db.combatOnly and not InCombatLockdown() and not preview) then
       row.runtime:Hide()
       row.countdown:Clear()
+    elseif preview then
+      row.countdown:Clear()
+      row.countdown:Hide()
+      row.runtime:SetAlpha(1)
+      row.runtime:Show()
     else
       RefreshRowCooldown(row)
     end
@@ -306,11 +349,6 @@ end
 function MovementWarning:ApplySettings()
   self:UnregisterAllEvents()
   local db = Addon.db.profile.movementWarning
-  for specID, selected in pairs(db.spells) do
-    if type(selected) == "number" then
-      db.spells[specID] = selected ~= 0 and { [selected] = true } or nil
-    end
-  end
   if self:IsEnabled() and db.enabled then
     EnsureDisplay()
     ApplyAnchor()
@@ -354,12 +392,12 @@ function MovementWarning:GetOptions()
             desc = "Select the spells to track for this specialization. Each unavailable spell has its own reminder.",
             values = function() return spellOptions end,
             get = function(_, spellID)
-              local selected = Addon.db.profile.movementWarning.spells[specializationID]
+              local selected = GetSelectedSpells()
               return not selected or selected[spellID] == true
             end,
             set = function(_, spellID, value)
               local spells = Addon.db.profile.movementWarning.spells
-              local selected = spells[specializationID]
+              local selected = GetSelectedSpells()
               if not selected then
                 selected = {}
                 for index = 1, #knownSpells do
@@ -382,11 +420,21 @@ function MovementWarning:GetOptions()
           },
           displayMode = {
             type = "select", name = "Spell display", order = 2.5,
-            values = { text = "Text", icon = "Icon" },
+            values = { text = "Text", icon = "Icon only" },
             get = function() return Addon.db.profile.movementWarning.displayMode end,
             set = function(_, value)
               Addon.db.profile.movementWarning.displayMode = value
-              RefreshSpellText()
+              self:RefreshFonts()
+              self:RefreshWarning()
+            end,
+          },
+          showDecimals = {
+            type = "toggle", name = "Show decimals", order = 2.75,
+            get = function() return Addon.db.profile.movementWarning.showDecimals ~= false end,
+            set = function(_, value)
+              Addon.db.profile.movementWarning.showDecimals = value
+              self:RefreshFonts()
+              self:RefreshWarning()
             end,
           },
           fontSize = {
