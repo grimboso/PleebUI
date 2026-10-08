@@ -915,54 +915,7 @@ Addon:RegisterEvent("PLAYER_ENTERING_WORLD", function()
 end)
 
 
-local UI_Hider = _G.PleebUI_Hider
-if not UI_Hider then
-  UI_Hider = CreateFrame("Frame", "PleebUI_Hider", nil, "SecureFrameTemplate")
-  UI_Hider:Hide()
-  UI_Hider:SetAlpha(0)
-end
 
--- Expose on the namespace so all modules can reuse it.
-ns.UIHider = UI_Hider
-
--- Generic helper: move arbitrary regions/frames to the hider and clear visuals.
-function ns.HideToHider(...)
-  local h = ns.UIHider
-
-  for i = 1, select("#", ...) do
-    local region = select(i, ...)
-    if region then
-      local forbidden = (region.IsForbidden and region:IsForbidden()) and true or false
-      if not forbidden then
-        local protected = (region.IsProtected and region:IsProtected()) and true or false
-        local inCombat = InCombatLockdown() and true or false
-
-        -- If protected (or in combat), DO NOT reparent or Hide().
-        -- Those are common taint triggers for UIParent-managed frames.
-        if protected or inCombat then
-          if region.SetAlpha then region:SetAlpha(0) end
-          if region.EnableMouse then region:EnableMouse(false) end
-          if region.EnableMouseWheel then region:EnableMouseWheel(false) end
-          if region.SetMouseMotionEnabled then region:SetMouseMotionEnabled(false) end
-          if region.SetMouseClickEnabled then region:SetMouseClickEnabled(false) end
-        else
-          region:SetParent(h)
-          region:SetAlpha(0)
-          region:Hide()
-
-          local objType = region.GetObjectType and region:GetObjectType()
-          if objType == "Texture" or objType == "MaskTexture" then
-            region:SetTexture(nil)
-          elseif objType == "StatusBar" then
-            region:SetStatusBarTexture("")
-          elseif objType == "FontString" then
-            region:SetText("")
-          end
-        end
-      end
-    end
-  end
-end
 
 Addon._puiUpdateBus = Addon._puiUpdateBus or {
   targets = {},

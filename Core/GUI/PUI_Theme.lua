@@ -2030,8 +2030,6 @@ function Theme.SkinStatusBar(bar, opts)
   opts = opts or {}
   local role = opts.role or "primary"
 
-  local theme = ns.Theme.GetColors()
-
   local texPath = ns.Theme.GetBarTexture()
 
   StripStatusBarMasks(bar)
