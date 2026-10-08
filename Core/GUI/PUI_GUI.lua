@@ -3397,7 +3397,7 @@ _PUI_RefreshCustomPageShell = function(frame, path)
   local wantsPreview = info.pageSupportsPreview and previewEnabled
 
   if info.pageSupportsPreview and not previewAlwaysShown then
-    local host = shell.headerActions
+    local host = shell.body
     local btn = frame.__puiPreviewToggleButton
 
     if not btn then
@@ -3408,15 +3408,32 @@ _PUI_RefreshCustomPageShell = function(frame, path)
       btn.text:SetPoint("RIGHT", btn, "RIGHT", -10, 0)
       btn.text:SetJustifyH("CENTER")
       btn.text:SetJustifyV("MIDDLE")
+      btn.text:SetWordWrap(false)
       ns.Theme.ApplyFont(btn.text, "button", 11)
       frame.__puiPreviewToggleButton = btn
     end
 
     btn:SetParent(host)
-    btn:ClearAllPoints()
-    btn:SetPoint("TOPRIGHT", host, "TOPRIGHT", 0, 0)
-    btn:SetSize(118, 22)
     btn.text:SetText(previewEnabled and "Hide Preview" or "Show Preview")
+
+    local buttonWidth = math.max(
+      150,
+      math.ceil(btn.text:GetUnboundedStringWidth() + 24)
+    )
+    local buttonHeight = math.max(
+      32,
+      math.ceil(btn.text:GetStringHeight() + 14)
+    )
+
+    btn:SetSize(buttonWidth, buttonHeight)
+    btn:SetFrameLevel(shell:GetFrameLevel() + 80)
+    btn:ClearAllPoints()
+
+    if wantsPreview then
+      btn:SetPoint("TOPRIGHT", shell.previewDock, "TOPRIGHT", -12, -8)
+    else
+      btn:SetPoint("BOTTOMRIGHT", shell.contentHost, "TOPRIGHT", -12, 8)
+    end
 
     do
       local colors = ns.Theme.GetColors()
@@ -3436,7 +3453,6 @@ _PUI_RefreshCustomPageShell = function(frame, path)
     end)
 
     btn:Show()
-    shell:SetHeaderActionsShown(true)
   elseif frame.__puiPreviewToggleButton then
     frame.__puiPreviewToggleButton:Hide()
   end
@@ -3645,35 +3661,7 @@ _PUI_RefreshShellNavigationContext = function(_, shell, path)
     end
   end
 
-  if #path > 2 then
-    local parentPath = _PUI_CopyOptionsPath(path)
-    parentPath[#parentPath] = nil
 
-    local upButton = shell.__puiUpButton
-    if not upButton then
-      upButton = CreateFrame("Button", nil, shell.headerActions, "UIPanelButtonTemplate")
-      upButton:SetText("Up")
-      upButton.__puiHeaderAction = true
-      upButton:SetScript("OnClick", function(self)
-        local targetPath = self.__puiTargetPath
-        if targetPath and #targetPath > 0 then
-          Addon:OpenOptions(targetPath, false, true)
-        end
-      end)
-      _PUI_StyleHeaderActionButton(upButton)
-      shell.__puiUpButton = upButton
-    end
-
-    upButton:SetParent(shell.headerActions)
-    upButton.__puiTargetPath = parentPath
-    upButton:ClearAllPoints()
-    upButton:SetPoint("TOPLEFT", shell.headerActions, "TOPLEFT", 0, 0)
-    upButton:SetSize(36, 22)
-    upButton:Show()
-    shell:SetHeaderActionsShown(true)
-  elseif shell.__puiUpButton then
-    shell.__puiUpButton:Hide()
-  end
 
   shell:SetStickyShown(false)
   return false
@@ -3709,6 +3697,34 @@ local function _PUI_GetRenderableOptionsPath(path)
   return path
 end
 
+local function _PUI_SelectEmbeddedOptionsPath(AceConfigDialog, appName, path)
+  local option = _PUI_GetOptionsRoot().args[path[1]]
+  local statusPath = { path[1] }
+  local treeValue
+  local treeStatus
+
+  for index = 2, #path do
+    local key = path[index]
+    local status = AceConfigDialog:GetStatusTable(appName, statusPath)
+    status.groups = status.groups or {}
+
+    if option.childGroups == "tab" or option.childGroups == "select" then
+      status.groups.selected = key
+      treeValue = nil
+      treeStatus = nil
+    else
+      treeValue = treeValue and (treeValue .. "\001" .. key) or key
+      treeStatus = treeStatus or status.groups
+      treeStatus.selected = treeValue
+      treeStatus.groups = treeStatus.groups or {}
+      treeStatus.groups[treeValue] = true
+    end
+
+    statusPath[#statusPath + 1] = key
+    option = option.args[key]
+  end
+end
+
 local function _PUI_RenderCustomOptionsPath(frame, AceConfigDialog, APP, path)
   local requestedPath = _PUI_GetValidatedOptionsPath(path)
     or _PUI_GetStoredOptionsPath()
@@ -3725,7 +3741,6 @@ local function _PUI_RenderCustomOptionsPath(frame, AceConfigDialog, APP, path)
   frame.__puiQueuedOptionsPath = nil
 
   local pathKey = table.concat(requestedPath, "\031")
-  local selectionChanged = frame.__puiSelectedOptionsPathKey ~= pathKey
   local previousOptionsRootPathKey = _PUI_GetOptionsRootPathKey(State.currentOptionsPath)
   local nextOptionsRootPathKey = _PUI_GetOptionsRootPathKey(requestedPath)
 
@@ -3777,8 +3792,8 @@ local function _PUI_RenderCustomOptionsPath(frame, AceConfigDialog, APP, path)
   else
     local container = _PUI_GetShellACDContainer(frame, shell)
 
-    if #requestedPath > 1 and selectionChanged then
-      AceConfigDialog:SelectGroup(APP, unpack(requestedPath))
+    if #requestedPath > 1 then
+      _PUI_SelectEmbeddedOptionsPath(AceConfigDialog, APP, requestedPath)
     end
 
     ns.Theme.ResetWidgetRowBackgrounds()

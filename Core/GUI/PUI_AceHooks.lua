@@ -92,6 +92,9 @@ local function _PUI_InstallAceGUIHooks()
     widget.__puiLSMDropdownGeometryApplied = nil
     widget.__puiCheckboxControlType = nil
     widget.__puiGroupHeaderOffset = nil
+    widget.__puiLastTreeResizeWidth = nil
+    widget.__puiLastTreeNativeRows = nil
+    widget.__puiLastTreePCMRows = nil
   end
 
   local function IsPleebUIOwner(owner)

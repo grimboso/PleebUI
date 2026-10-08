@@ -239,6 +239,13 @@ local function SliderOnValueChanged(frame, newValue)
     self.value = newValue
 
     if ShouldCommitOnRelease(self) then
+      local option = self:GetUserData("option")
+      local optionArg = option and option.arg
+      local preview = type(optionArg) == "table" and optionArg.puiLivePreview
+      if type(preview) == "function" then
+        self.livePreview = preview
+        preview(newValue)
+      end
       self:Fire("OnValueChanging", newValue)
     else
       self:Fire("OnValueChanged", newValue)
@@ -347,6 +354,10 @@ local methods = {
   end,
 
   OnRelease = function(self)
+    if self.livePreview then
+      self.livePreview(nil)
+      self.livePreview = nil
+    end
     self.editbox:ClearFocus()
     self.editbox.__puiHovered = nil
     self.slider:EnableMouseWheel(false)

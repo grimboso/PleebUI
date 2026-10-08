@@ -4,7 +4,6 @@ local PageShell = {}
 ns.PageShell = PageShell
 
 local CreateFrame = CreateFrame
-local C_Timer = C_Timer
 local math_floor = math.floor
 local math_max = math.max
 local math_min = math.min
@@ -254,10 +253,6 @@ local function PUI_PageShell_RebuildLayout(self)
     self.previewDock:Hide()
   end
 
-  local bodyHeight = PUI_PageShell_GetBodyHeight(self)
-  local contentHeight = math_max(120, bodyHeight - contentTopOffset)
-
-  self.contentHost.__puiMinimumHeight = contentHeight
   Pixel.Point(self.contentHost, "TOPLEFT", self.body, "TOPLEFT", 0, -contentTopOffset)
   Pixel.Point(self.contentHost, "TOPRIGHT", self.body, "TOPRIGHT", 0, -contentTopOffset)
   Pixel.Point(self.contentHost, "BOTTOMRIGHT", self.body, "BOTTOMRIGHT", 0, 0)
@@ -290,26 +285,6 @@ local function PUI_PageShell_RequestLayout(self)
   PUI_PageShell_RebuildLayout(self)
 end
 
-local function PUI_PageShell_QueueResizeLayout(self)
-  self.__puiLayoutDirty = true
-
-  if self.__puiLayoutQueued then
-    return
-  end
-
-  self.__puiLayoutQueued = true
-
-  C_Timer.After(0, function()
-    self.__puiLayoutQueued = nil
-
-    if not self.__puiLayoutDirty or self.__puiLayoutSuspended then
-      return
-    end
-
-    self.__puiLayoutDirty = nil
-    PUI_PageShell_RebuildLayout(self)
-  end)
-end
 
 local function PUI_PageShell_RefreshTheme(self)
   local colors = Theme.GetColors()
@@ -334,23 +309,6 @@ end
 function PageShell.Create(parent)
   local shell = CreateFrame("Frame", nil, parent)
   Pixel.AllPoints(shell, parent)
-  shell:SetScript("OnSizeChanged", function(self, width, height)
-    local roundedWidth = math.floor(width + 0.5)
-    local roundedHeight = math.floor(height + 0.5)
-    local widthChanged = self.__puiLastLayoutWidth ~= roundedWidth
-    local heightChanged = self.__puiLastLayoutHeight ~= roundedHeight
-
-    if not widthChanged and not heightChanged then
-      return
-    end
-
-    self.__puiLastLayoutWidth = roundedWidth
-    self.__puiLastLayoutHeight = roundedHeight
-
-    if widthChanged or heightChanged then
-      PUI_PageShell_QueueResizeLayout(self)
-    end
-  end)
 
   shell.body = CreateFrame("Frame", nil, shell)
 

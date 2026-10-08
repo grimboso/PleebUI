@@ -181,7 +181,7 @@ _PUI_UpdateTabGroupSelection = function(widget)
   end
 end
 
-local function _PUI_LayoutCustomTabStrip(widget)
+local function _PUI_LayoutCustomTabStrip(widget, geometryOnly)
   if widget.__puiAceGUIOwnedByPleebUI ~= true
     or AceGUI:IsReleasing(widget)
     or widget.__puiTabLayoutInProgress
@@ -218,33 +218,49 @@ local function _PUI_LayoutCustomTabStrip(widget)
   available = math.floor(available + 0.5)
   widget.__puiLastTabLayoutWidth = available
 
-  host:SetParent(widget.frame)
-  host:SetFrameStrata(widget.frame:GetFrameStrata())
-  host:SetFrameLevel(widget.frame:GetFrameLevel() + 20)
-  host:ClearAllPoints()
-  Pixel.Point(host, "TOPLEFT", widget.frame, "TOPLEFT", 0, -2)
-  Pixel.Point(host, "TOPRIGHT", widget.frame, "TOPRIGHT", 0, -2)
+  local sizingOnly = geometryOnly
+    and widget.__puiTabDesiredWidths ~= nil
+    and widget.__puiTabTotalDesiredWidth ~= nil
+    and widget.__puiTabDesiredCount == #tablist
 
-  local desiredWidths = {}
-  local totalDesiredWidth = 0
+  if not sizingOnly then
+    host:SetParent(widget.frame)
+    host:SetFrameStrata(widget.frame:GetFrameStrata())
+    host:SetFrameLevel(widget.frame:GetFrameLevel() + 20)
+    host:ClearAllPoints()
+    Pixel.Point(host, "TOPLEFT", widget.frame, "TOPLEFT", 0, -2)
+    Pixel.Point(host, "TOPRIGHT", widget.frame, "TOPRIGHT", 0, -2)
+  end
 
-  for i = 1, #tablist do
-    local entry = tablist[i]
-    local tab = tabs[i]
+  local desiredWidths = widget.__puiTabDesiredWidths
+  local totalDesiredWidth = widget.__puiTabTotalDesiredWidth
 
-    Theme.CaptureCreatedWidgetFrameTree(widget, tab)
-    _PUI_HideNativeTab(tab)
+  if not sizingOnly then
+    desiredWidths = {}
+    totalDesiredWidth = 0
 
-    local btn = _PUI_EnsureCustomTabButton(host, i)
-    btn.__puiWidget = widget
-    btn.__puiNativeTab = tab
-    btn.__puiValue = entry.value
-    btn.__puiDisabled = entry.disabled == true
-    btn.__puiLabel:SetText(entry.text)
+    for i = 1, #tablist do
+      local entry = tablist[i]
+      local tab = tabs[i]
 
-    local desiredWidth = math.ceil(btn.__puiLabel:GetUnboundedStringWidth() + 24)
-    desiredWidths[i] = desiredWidth
-    totalDesiredWidth = totalDesiredWidth + desiredWidth
+      Theme.CaptureCreatedWidgetFrameTree(widget, tab)
+      _PUI_HideNativeTab(tab)
+
+      local btn = _PUI_EnsureCustomTabButton(host, i)
+      btn.__puiWidget = widget
+      btn.__puiNativeTab = tab
+      btn.__puiValue = entry.value
+      btn.__puiDisabled = entry.disabled == true
+      btn.__puiLabel:SetText(entry.text)
+
+      local desiredWidth = math.ceil(btn.__puiLabel:GetUnboundedStringWidth() + 24)
+      desiredWidths[i] = desiredWidth
+      totalDesiredWidth = totalDesiredWidth + desiredWidth
+    end
+
+    widget.__puiTabDesiredWidths = desiredWidths
+    widget.__puiTabTotalDesiredWidth = totalDesiredWidth
+    widget.__puiTabDesiredCount = #tablist
   end
 
   local tabCount = #tablist
@@ -279,42 +295,54 @@ local function _PUI_LayoutCustomTabStrip(widget)
 
     assignedWidth = assignedWidth + tabWidth
 
-    btn:SetParent(host)
-    btn:SetFrameStrata(host:GetFrameStrata())
-    btn:SetFrameLevel(host:GetFrameLevel() + 1)
+    if not sizingOnly then
+      btn:SetParent(host)
+      btn:SetFrameStrata(host:GetFrameStrata())
+      btn:SetFrameLevel(host:GetFrameLevel() + 1)
+    end
     Pixel.Size(btn, tabWidth, tabHeight)
     btn:ClearAllPoints()
     Pixel.Point(btn, "TOPLEFT", host, "TOPLEFT", x, -y)
-    btn:SetAlpha(btn.__puiDisabled and 0.45 or 1)
-    btn:EnableMouse(not btn.__puiDisabled)
-    btn:Show()
+    if not sizingOnly then
+      btn:SetAlpha(btn.__puiDisabled and 0.45 or 1)
+      btn:EnableMouse(not btn.__puiDisabled)
+      btn:Show()
+    end
 
     x = x + tabWidth + gap
   end
 
-  for i = tabCount + 1, #host.__puiButtons do
-    local btn = host.__puiButtons[i]
-    btn:Hide()
-    btn:ClearAllPoints()
-    btn.__puiNativeTab = nil
-    btn.__puiValue = nil
-    btn.__puiWidget = nil
-    btn.__puiDisabled = nil
+  if not sizingOnly then
+    for i = tabCount + 1, #host.__puiButtons do
+      local btn = host.__puiButtons[i]
+      btn:Hide()
+      btn:ClearAllPoints()
+      btn.__puiNativeTab = nil
+      btn.__puiValue = nil
+      btn.__puiWidget = nil
+      btn.__puiDisabled = nil
+    end
   end
 
   local hostHeight = y + tabHeight + 4
-  Pixel.Height(host, hostHeight)
-  host:Show()
+  if not sizingOnly or widget.__puiTabHostHeight ~= hostHeight then
+    widget.__puiTabHostHeight = hostHeight
+    Pixel.Height(host, hostHeight)
+    widget.borderoffset = hostHeight + 8
+    widget.border:SetBackdrop(nil)
+    widget.border:SetBackdropColor(0, 0, 0, 0)
+    widget.border:SetBackdropBorderColor(0, 0, 0, 0)
+    widget.border:ClearAllPoints()
+    Pixel.Point(widget.border, "TOPLEFT", widget.frame, "TOPLEFT", 0, -widget.borderoffset)
+    Pixel.Point(widget.border, "BOTTOMRIGHT", widget.frame, "BOTTOMRIGHT", 0, 0)
+  end
+  if not sizingOnly then
+    host:Show()
+  end
 
-  widget.borderoffset = hostHeight + 8
-  widget.border:SetBackdrop(nil)
-  widget.border:SetBackdropColor(0, 0, 0, 0)
-  widget.border:SetBackdropBorderColor(0, 0, 0, 0)
-  widget.border:ClearAllPoints()
-  Pixel.Point(widget.border, "TOPLEFT", widget.frame, "TOPLEFT", 0, -widget.borderoffset)
-  Pixel.Point(widget.border, "BOTTOMRIGHT", widget.frame, "BOTTOMRIGHT", 0, 0)
-
-  _PUI_UpdateTabGroupSelection(widget)
+  if not geometryOnly then
+    _PUI_UpdateTabGroupSelection(widget)
+  end
   widget.__puiTabLayoutInProgress = nil
 end
 
@@ -325,6 +353,22 @@ function WidgetSkins.TabGroup(widget, forceLayout)
 
   if not widget.__puiTabLayoutHooksInstalled then
     widget.__puiTabLayoutHooksInstalled = true
+
+    local nativeOnWidthSet = widget.OnWidthSet
+    widget.OnWidthSet = function(self, width)
+      local user = self:GetUserDataTable()
+      if self.__puiAceGUIOwnedByPleebUI == true
+        and user.appName == "PleebUI"
+        and user.path
+        and user.path[1] == "CooldownManager"
+      then
+        local contentWidth = math.max(0, width - 60)
+        self.content:SetWidth(contentWidth)
+        self.content.width = contentWidth
+      else
+        nativeOnWidthSet(self, width)
+      end
+    end
 
     hooksecurefunc(widget, "BuildTabs", function(self)
       if not self.__puiTabLayoutInProgress then
@@ -346,7 +390,7 @@ function WidgetSkins.TabGroup(widget, forceLayout)
       end
 
       widget.__puiLastTabLayoutWidth = roundedWidth
-      _PUI_LayoutCustomTabStrip(widget)
+      _PUI_LayoutCustomTabStrip(widget, true)
     end)
   end
 

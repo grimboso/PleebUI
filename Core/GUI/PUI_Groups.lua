@@ -898,6 +898,34 @@ function WidgetSkins.TreeGroup(widget)
   end
 
   local treeframe = widget.treeframe
+  if not widget.__puiTreeResizeHooked then
+    widget.__puiTreeResizeHooked = true
+    treeframe:SetScript("OnSizeChanged", function(_, width, height)
+      local user = widget:GetUserDataTable()
+      if user.appName ~= "PleebUI" or not user.path or user.path[1] ~= "CooldownManager" then
+        widget:RefreshTree()
+        return
+      end
+
+      local roundedWidth = math.floor(width + 0.5)
+      local nativeRows = math.max(0, math.floor((height - 20) / 18))
+      local pcmRows = widget.__puiPCMManagerTree == true
+        and _PUI_GetPCMTreeVisibleRows(widget) or nil
+
+      if widget.__puiLastTreeResizeWidth == roundedWidth
+        and widget.__puiLastTreeNativeRows == nativeRows
+        and widget.__puiLastTreePCMRows == pcmRows
+      then
+        return
+      end
+
+      widget.__puiLastTreeResizeWidth = roundedWidth
+      widget.__puiLastTreeNativeRows = nativeRows
+      widget.__puiLastTreePCMRows = pcmRows
+      widget:RefreshTree()
+    end)
+  end
+
   local border = widget.border
   local metrics = Theme.GetControlMetrics()
   local status = widget.status or widget.localstatus
