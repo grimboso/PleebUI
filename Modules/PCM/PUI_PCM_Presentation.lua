@@ -1107,8 +1107,13 @@ function PCMPresentation.ConfigureOwnedAuraLayer(parts, button, unit, style)
   local auraParts = AuraWidget.BindApplicationDurationButton(button)
   local isTotem = unit == "totem"
   button:ClearAllPoints()
-  button:SetPoint("TOPLEFT", parts.frame, "TOPLEFT")
-  button:SetSize(style.size, style.size)
+  if parts.cooldown then
+    button:SetScale(parts.frame:GetEffectiveScale() / button:GetParent():GetEffectiveScale())
+    button:SetAllPoints(parts.frame)
+  else
+    button:SetPoint("TOPLEFT", parts.frame, "TOPLEFT")
+    button:SetSize(style.size, style.size)
+  end
   button:SetFrameStrata(parts.frame:GetFrameStrata())
   button:SetFrameLevel(parts.frame:GetFrameLevel() + (unit == "player" and 7 or 6))
 
@@ -1136,7 +1141,8 @@ function PCMPresentation.ConfigureOwnedAuraLayer(parts, button, unit, style)
   else
     AuraWidget.ConfigureDurationCooldown(auraParts)
   end
-  auraParts.durationCooldown:SetAllPoints(button)
+  IconSkin.SquareCooldown(auraParts.durationCooldown)
+  auraParts.durationCooldown:SetFrameLevel(button:GetFrameLevel() + 3)
   local swipe = style.resolvedSwipe
   auraParts.durationCooldown:SetReverse(swipe.durationReverse)
   auraParts.durationCooldown:SetDrawEdge(swipe.showDuration and swipe.durationEdge)
