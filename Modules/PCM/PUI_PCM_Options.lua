@@ -41,6 +41,43 @@ AssignFields("text", "cooldownShow showText showDuration showName countCharge co
 AssignFields("glow", "glowDuringDurationSwipe readyGlowStyle readyGlowColor cooldownGlowStyle cooldownGlowColor auraGlowStyle auraGlowColor activeAuraGlowStyle activeAuraGlowColor glow glowColor activeGlowStyle")
 AssignFields("advanced", "delete deleteBar resetIcon resetGroups customTexture rotateTexture dynamicTextOnSlot")
 
+local QUICK_SETTINGS = {
+  forceCooldown = { 1, "Enable duration timer" },
+  timerDisplay = { 1, "Enable duration timer" },
+  swipeSource = { 1, "Duration timer" },
+  swipeCooldown = { 10, "Show cooldown swipe" },
+  swipeDuration = { 11, "Show duration swipe" },
+  showDurationSwipe = { 11, "Show duration swipe" },
+  durationSwipe = { 11, "Duration swipe" },
+  swipeGCD = { 12, "GCD swipe" },
+  showCountdown = { 20, "Show countdown" },
+  cooldownShow = { 20, "Show countdown" },
+  showDuration = { 20, "Show countdown" },
+  countCharge = { 21, "Show charges" },
+  countBuff = { 21, "Show stacks" },
+  chargeShow = { 21 },
+  showCount = { 21 },
+  keybindToggle = { 22, "Show keybinds" },
+  keybindShow = { 22, "Show keybinds" },
+  showKeybinds = { 22, "Show keybinds" },
+  cooldownFontSize = { 30, "Countdown font size" },
+  DurationSize = { 30, "Countdown font size" },
+  fontSize = { 30 },
+  chargeFontSize = { 31, "Charges / stacks font size" },
+  StackSize = { 31, "Stacks font size" },
+  countFontSize = { 31, "Charges / stacks font size" },
+  keybindFontSize = { 32, "Keybind font size" },
+  enabled = { 40, "Enable custom glow" },
+  size = { 50, "Icon size" },
+  iconSize = { 50, "Icon size" },
+  fixedWidth = { 51, "Width" },
+  width = { 51 },
+  height = { 52 },
+  spacing = { 53 },
+  iconSpacing = { 53, "Icon spacing" },
+  columns = { 54, "Icons per row" },
+}
+
 local LABELS = {
   ["Use viewer setting"] = "Use inherited setting",
   ["Button size"] = "Icon size",
@@ -162,6 +199,24 @@ function Options:BuildSections(source)
             :gsub("^Show duration countdown$", "Show countdown")
         end
         option.hidden = CombineHidden(hidden, option.hidden)
+        local quickSetting = QUICK_SETTINGS[key]
+        if quickSetting and destination ~= "general" and option.hidden ~= true
+          and (key ~= "enabled" or destination == "glow")
+          and (key ~= "showDuration" or destination == "text")
+        then
+          local quickSettings = sections.general.args.quickSettings
+          if not quickSettings then
+            quickSettings = { type = "group", name = "Quick settings", inline = true, order = 2, args = {} }
+            sections.general.args.quickSettings = quickSettings
+          end
+          local shortcut = {}
+          for field, value in pairs(option) do
+            shortcut[field] = value
+          end
+          shortcut.name = quickSetting[2] or option.name
+          shortcut.order = quickSetting[1]
+          quickSettings.args[optionKey] = shortcut
+        end
         local sectionArgs = sections[destination].args
         if bucketPrefix ~= "" and bucketLabel ~= sections[destination].name and bucketLabel ~= "General"
           and bucketLabel ~= "Icon settings" and bucketLabel ~= "Group settings"
@@ -259,7 +314,7 @@ function Options.GetSearchEntries()
     results[#results + 1] = { label = label, path = path, keywords = keywords or "" }
   end
   local settingKeywords = {
-    general = "general enabled visibility opacity tooltip spell specialization assignment",
+    general = "general quick settings enabled visibility opacity tooltip spell specialization assignment timer swipe countdown charges stacks keybind font size glow",
     layout = "layout size width height spacing rows columns orientation growth icon position",
     timer = "timer display duration active aura buff cooldown gcd swipe countdown recharge fill drain",
     appearance = "appearance color saturation desaturate texture",
