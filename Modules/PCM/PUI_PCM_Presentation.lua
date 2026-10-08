@@ -993,22 +993,28 @@ end
 local function ApplyOwnedCooldownDisplay(parts, isOnGCD, isTotem)
   local swipe = parts.resolvedSwipe
   local show, edge, color = swipe.showCooldown, swipe.cooldownEdge, swipe.cooldownColor
+  local edgeColor = swipe.cooldownEdgeColor
   local reverse = swipe.reverse
   local showText = parts.showCooldownText
   if isTotem then
     show, edge, color = swipe.showDuration, swipe.durationEdge, swipe.durationColor
+    edgeColor = swipe.durationEdgeColor
     reverse = swipe.durationReverse
     showText = parts.showDurationText
   elseif isOnGCD then
     show, edge, color = swipe.showGCD, swipe.gcdEdge, swipe.gcdColor
+    edgeColor = swipe.gcdEdgeColor
   end
   parts.cooldown:SetDrawSwipe(show)
   parts.cooldown:SetDrawEdge(show and edge)
+  parts.cooldown:SetEdgeColor(edgeColor[1], edgeColor[2], edgeColor[3], edgeColor[4])
   parts.cooldown:SetReverse(reverse)
   parts.cooldown:SetSwipeColor(color[1] or color.r, color[2] or color.g, color[3] or color.b, color[4] or color.a or 1)
   parts.cooldown:SetHideCountdownNumbers(not showText)
   parts.chargeCooldown:SetDrawSwipe(not isTotem and swipe.showCooldown)
   parts.chargeCooldown:SetDrawEdge(not isTotem and swipe.showCooldown and swipe.rechargeEdge)
+  local rechargeEdgeColor = swipe.cooldownEdgeColor
+  parts.chargeCooldown:SetEdgeColor(rechargeEdgeColor[1], rechargeEdgeColor[2], rechargeEdgeColor[3], rechargeEdgeColor[4])
   parts.chargeCooldown:SetHideCountdownNumbers(isTotem or not parts.showRechargeText)
 end
 
@@ -1050,7 +1056,7 @@ function PCMPresentation.ApplyOwnedIconStyle(parts, style, isOnGCD)
   if cooldownCount == nil then
     cooldownCount = counts == nil or counts.cooldown ~= false
   end
-  parts.showCooldownText = cooldownCount == true
+  parts.showCooldownText = swipe.cooldownEnabled and cooldownCount == true
 
   local rechargeCount = cooldownCount
   if style.hasCharges
@@ -1059,7 +1065,7 @@ function PCMPresentation.ApplyOwnedIconStyle(parts, style, isOnGCD)
   then
     rechargeCount = style.cooldown.rechargeShow == true
   end
-  parts.showRechargeText = rechargeCount == true
+  parts.showRechargeText = swipe.cooldownEnabled and rechargeCount == true
   ApplyOwnedCooldownDisplay(parts, isOnGCD == true, parts.totemDisplayActive == true)
   local appearance = style.appearance or {}
   parts.readyDesaturation = 1 - math.max(0, math.min(1, tonumber(appearance.readySaturation) or 1))
@@ -1146,6 +1152,8 @@ function PCMPresentation.ConfigureOwnedAuraLayer(parts, button, unit, style)
   local swipe = style.resolvedSwipe
   auraParts.durationCooldown:SetReverse(swipe.durationReverse)
   auraParts.durationCooldown:SetDrawEdge(swipe.showDuration and swipe.durationEdge)
+  local edgeColor = swipe.durationEdgeColor
+  auraParts.durationCooldown:SetEdgeColor(edgeColor[1], edgeColor[2], edgeColor[3], edgeColor[4])
   auraParts.durationCooldown:SetDrawSwipe(swipe.showDuration)
   auraParts.durationCooldown:SetHideCountdownNumbers(style.showDurationText ~= true)
   IconSkin.StyleCooldownText(auraParts.durationCooldown, style.cooldownFont)
