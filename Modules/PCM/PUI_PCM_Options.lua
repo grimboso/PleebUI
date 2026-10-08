@@ -35,7 +35,7 @@ end
 
 AssignFields("general", "enabled name group auraTrackMode maxStacks powerInfusion bloodlust customBuffSpellIDs onlyOnUseTrinkets nativeTracking showSwipe swipeShow showTooltips showTooltip hideWhenInactive visibility combatOnly hideOutOfCombat outOfCombatAlpha missingAlpha readyAlpha readyAlphaOverride cooldownAlpha cooldownAlphaOverride onCooldownAlpha activeAlpha activeAuraAlpha auraAlpha auraAlphaOverride alpha opacity showOnlyWhenActive hideViewerIcon activeAuraHideViewerIcon")
 AssignFields("layout", "size iconSize width height fixedWidth widthMode iconSpacing spacing columns iconsPerRow growUp growth rowGrowth growthDirection orientation rowSpacing wrap showIcon showSpellIconNextToBar iconPlacement iconAnchor durationHideIconFrame durationHideSpellIcon durationAnchor durationGap durationHeight durationIconSize borderThickness borderColor borderSize viewerBorderSize viewerBorderColor durationIconBorderSize durationIconBorderColor showSlotBorder slotBorderThickness slotBorderColor")
-AssignFields("timer", "forceCooldown timerDisplay swipeSource durationSwipe durationText swipeGCD swipeCooldown swipeDuration countCooldown countDuration showCooldownText showDurationSwipe showDurationText rechargeCountdown barMode durationBarFillMode drainDirection fillDirection activeAuraSource activeAuraCDM activeAuraCustom source cdmBuff customBuff showActive hideDurationWhenMissing inheritedTimer swipeEdge swipeReverse swipeColorOverride swipeColor cooldownSwipeColor cooldownSwipeEdge durationSwipeColor durationSwipeEdge gcdSwipeColor gcdSwipeEdge rechargeEdge")
+AssignFields("timer", "forceCooldown cooldownTimerEnabled timerDisplay swipeSource durationSwipe durationText swipeGCD swipeCooldown swipeDuration countCooldown countDuration showCooldownText showDurationSwipe showDurationText rechargeCountdown barMode durationBarFillMode drainDirection fillDirection activeAuraSource activeAuraCDM activeAuraCustom source cdmBuff customBuff showActive hideDurationWhenMissing inheritedTimer swipeEdge swipeReverse swipeColorOverride swipeColor cooldownSwipeColor cooldownSwipeEdge cooldownSwipeEdgeColor durationSwipeColor durationSwipeEdge durationSwipeEdgeColor gcdSwipeColor gcdSwipeEdge gcdSwipeEdgeColor rechargeEdge")
 AssignFields("appearance", "texture barTexture stackTexture durationTexture useClassColor buffBarColor buffBarBgColor backgroundColor durationBarColor desaturateCooldown desaturateReady activeAuraDesaturate customTextureOverride chromeStyle readySaturationOverride readySaturation cooldownSaturationOverride cooldownSaturation auraSaturationOverride auraSaturation")
 AssignFields("text", "cooldownShow showText showDuration showName countCharge countBuff countVisibility showItemQuality keybindToggle showKeybinds chargeShow keybindShow showCount showPips showStackStrip font fontSize fontColor fontOutline outline countFontSize cooldownFontSize keybindFontSize durationFont durationOutline durationCountFontSize countTextColor durationTextColor showCountdown durationTextScale durationTextAnchor durationTextX durationTextY countTextScale countTextAnchor countTextX countTextY")
 AssignFields("glow", "glowDuringDurationSwipe readyGlowStyle readyGlowColor cooldownGlowStyle cooldownGlowColor auraGlowStyle auraGlowColor activeAuraGlowStyle activeAuraGlowColor glow glowColor activeGlowStyle")
@@ -43,6 +43,7 @@ AssignFields("advanced", "delete deleteBar resetIcon resetGroups customTexture r
 
 local QUICK_SETTINGS = {
   forceCooldown = { 1, "Enable duration timer" },
+  cooldownTimerEnabled = { 2, "Enable cooldown timer" },
   timerDisplay = { 1, "Enable duration timer" },
   swipeSource = { 1, "Duration timer" },
   swipeCooldown = { 10, "Show cooldown swipe" },
@@ -76,6 +77,21 @@ local QUICK_SETTINGS = {
   spacing = { 53 },
   iconSpacing = { 53, "Icon spacing" },
   columns = { 54, "Icons per row" },
+}
+
+local TIMER_ROWS = {
+  forceCooldown = { 1, 0.5, "Enable duration timer" },
+  cooldownTimerEnabled = { 1, 0.5, "Enable cooldown timer" },
+  countDuration = { 2, 0.5, "Show countdown" },
+  countCooldown = { 2, 0.5, "Show countdown" },
+  swipeDuration = { 3, 0.25, "Show swipe" },
+  swipeCooldown = { 3, 0.25, "Show swipe" },
+  durationSwipeColor = { 4, 0.25, "Swipe color" },
+  cooldownSwipeColor = { 4, 0.25, "Swipe color" },
+  durationSwipeEdge = { 5, 0.25, "Swipe edge" },
+  cooldownSwipeEdge = { 5, 0.25, "Swipe edge" },
+  durationSwipeEdgeColor = { 6, 0.25, "Swipe edge color" },
+  cooldownSwipeEdgeColor = { 6, 0.25, "Swipe edge color" },
 }
 
 local LABELS = {
@@ -216,6 +232,11 @@ function Options:BuildSections(source)
           shortcut.name = quickSetting[2] or option.name
           shortcut.order = quickSetting[1]
           quickSettings.args[optionKey] = shortcut
+        end
+        local timerRow = destination == "timer" and TIMER_ROWS[key]
+        if timerRow then
+          option.order, option.relWidth, option.name = timerRow[1], timerRow[2], timerRow[3]
+          option.width = "relative"
         end
         local sectionArgs = sections[destination].args
         if bucketPrefix ~= "" and bucketLabel ~= sections[destination].name and bucketLabel ~= "General"
