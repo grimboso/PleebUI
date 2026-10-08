@@ -1231,9 +1231,26 @@ local function _PCM_BuildCooldownViewerArgs(cm, viewerKey, opts)
     end,
   }
 
+  args.cooldownTimerEnabled = {
+    type = "toggle",
+    name = "Enable cooldown timer",
+    desc = "Show the cooldown timer when a cooldown exists. An enabled duration timer takes priority while an aura, totem or similar effect is active.",
+    order = 1,
+    get = function()
+      local _, v = GetViewerSwipeDB(cm, viewerKey)
+      return v.cooldownTimerEnabled ~= false
+    end,
+    set = function(_, enabled)
+      local _, v = GetViewerSwipeDB(cm, viewerKey)
+      v.cooldownTimerEnabled = enabled == true
+      _PCM_ConfigRefreshViewers(viewerKey, opts)
+    end,
+  }
+
   args.swipeCooldown = {
     type = "toggle",
     name = "Show cooldown swipe",
+    disabled = function() return DB.GetViewerSwipeDB(viewerKey).cooldownTimerEnabled == false end,
     order = 41,
 
     get = function()
@@ -1250,7 +1267,7 @@ local function _PCM_BuildCooldownViewerArgs(cm, viewerKey, opts)
   args.swipeDuration = {
     type = "toggle",
     name = "Show duration swipe",
-    desc = "Draw a swipe for the active aura or ground effect when the duration timer is enabled.",
+    desc = "Draw a swipe for active auras, totems and similar effects when the duration timer is enabled.",
     disabled = function() return DB.GetViewerSwipeDB(viewerKey).forceCooldownSwipe == true end,
     order = 42,
 
@@ -1285,6 +1302,7 @@ local function _PCM_BuildCooldownViewerArgs(cm, viewerKey, opts)
     local label = kind == "gcd" and "GCD" or kind == "duration" and "Duration" or "Cooldown"
     local colorField = kind .. "Color"
     local edgeField = kind .. "Edge"
+    local edgeColorField = kind .. "EdgeColor"
     args[kind .. "SwipeColor"] = {
       type = "color",
       name = label .. " swipe color",
@@ -1316,11 +1334,29 @@ local function _PCM_BuildCooldownViewerArgs(cm, viewerKey, opts)
         _PCM_ConfigRefreshViewers(viewerKey, opts)
       end,
     }
+    args[kind .. "SwipeEdgeColor"] = {
+      type = "color",
+      name = label .. " swipe edge color",
+      order = 49 + index * 2,
+      hasAlpha = true,
+      get = function()
+        local _, v = GetViewerSwipeDB(cm, viewerKey)
+        local c = v[edgeColorField]
+        if not c then return 1, 1, 1, 1 end
+        return c[1], c[2], c[3], c[4]
+      end,
+      set = function(_, r, g, b, a)
+        local _, v = GetViewerSwipeDB(cm, viewerKey)
+        v[edgeColorField] = { r, g, b, a }
+        _PCM_ConfigRefreshViewers(viewerKey, opts)
+      end,
+    }
   end
 
   args.countCooldown = {
     type = "toggle",
     name = "Show cooldown text",
+    disabled = function() return DB.GetViewerSwipeDB(viewerKey).cooldownTimerEnabled == false end,
     order = 44,
 
     get = function()
@@ -1336,6 +1372,7 @@ local function _PCM_BuildCooldownViewerArgs(cm, viewerKey, opts)
   args.countDuration = {
     type = "toggle",
     name = "Show duration text",
+    disabled = function() return DB.GetViewerSwipeDB(viewerKey).forceCooldownSwipe == true end,
     order = 45,
 
     get = function()
@@ -1362,7 +1399,7 @@ local function _PCM_BuildCooldownViewerArgs(cm, viewerKey, opts)
   args.forceCooldown = {
     type = "toggle",
     name = "Enable duration timer",
-    desc = "Show the active aura or ground-effect timer over the cooldown. Choose its swipe and countdown below. Individual icon settings take priority.",
+    desc = "Show the duration of active auras, totems and similar effects. While an effect is active, its duration takes priority. When it ends, show the cooldown timer if enabled and a cooldown exists.",
     order = 1,
     get = function()
       local _, v = GetViewerSwipeDB(cm, viewerKey)
@@ -2579,7 +2616,7 @@ _PCM_BuildIconOverrideArgs = function(viewerKey, entry)
   args.durationSwipe = {
     type = "select",
     name = "Duration swipe",
-    desc = "Draw the active aura or ground-effect swipe when the duration timer is enabled.",
+    desc = "Draw the swipe for active auras, totems and similar effects when the duration timer is enabled.",
     order = 71.1,
     values = { [ICON_INHERIT] = "Use viewer setting", SHOW = "Show", HIDE = "Hide" },
     get = function()
@@ -3099,13 +3136,17 @@ local function _PCM_BuildCooldownViewerTreeArgs(cm, viewerKey, viewerLabel, opts
     "swipeCooldown",
     "swipeDuration",
     "forceCooldown",
+    "cooldownTimerEnabled",
     "desaturateCooldown",
     "cooldownSwipeColor",
     "cooldownSwipeEdge",
+    "cooldownSwipeEdgeColor",
     "durationSwipeColor",
     "durationSwipeEdge",
+    "durationSwipeEdgeColor",
     "gcdSwipeColor",
     "gcdSwipeEdge",
+    "gcdSwipeEdgeColor",
   })
 
   local textArgs = {
@@ -4598,7 +4639,7 @@ local function _PCM_BuildCustomIconGroup(GetCfg, RebuildRuntime, kind, order)
     timerDisplay = {
       type = "toggle",
       name = "Enable duration timer",
-      desc = "Show the selected buff's timer while active, then return to the cooldown.",
+      desc = "Show the duration of active auras, totems and similar effects. While an effect is active, its duration takes priority. When it ends, show the cooldown timer if enabled and a cooldown exists.",
       order = 1,
       hidden = function() return auraKind or HiddenWhenIconOff() end,
       get = function()
@@ -9266,7 +9307,7 @@ _PCM_BuildConsumablesTabArgs = function()
         timerDisplay = {
           type = "toggle",
           name = "Enable duration timer",
-          desc = "Show the active effect's timer over the cooldown.",
+          desc = "Show the duration of active auras, totems and similar effects. While an effect is active, its duration takes priority. When it ends, show the cooldown timer if enabled and a cooldown exists.",
           order = 1,
           get = function() return GetCfg().timerSource ~= "COOLDOWN" end,
           set = function(_, value) GetCfg().timerSource = value == true and "AUTOMATIC" or "COOLDOWN" Rebuild() end,
