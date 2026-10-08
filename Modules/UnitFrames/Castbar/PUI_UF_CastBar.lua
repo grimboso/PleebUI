@@ -14,7 +14,6 @@ local UnitChannelDuration = UnitChannelDuration
 local UnitEmpoweredChannelDuration = UnitEmpoweredChannelDuration
 local C_DurationUtil = C_DurationUtil
 local C_StringUtil = C_StringUtil
-local issecretvalue = issecretvalue
 local tonumber = tonumber
 local type = type
 local pairs = pairs
@@ -48,6 +47,10 @@ local CB_REMAINING_TOTAL_TIME_COMPONENTS = {
     property = Enum.DurationTextBindingProperty.TotalDuration,
     formatter = CB_TIME_TEXT_FORMATTER,
   },
+}
+
+local CB_TOTAL_TIME_COMPONENTS = {
+  CB_REMAINING_TOTAL_TIME_COMPONENTS[2],
 }
 
 function CastBar:GetBar(unit)
@@ -192,59 +195,28 @@ local function CB_ShouldShowCastTime(cfg)
   return cfg.__puiShowCastTime ~= false
 end
 
-local function CB_GetDisplayName(displayName, bar)
-  if issecretvalue(displayName) then
-    return displayName
+local function CB_UpdateCastTarget(bar, cfg, unit)
+  if cfg.displayTarget ~= true then
+    bar.targetText:SetText("")
+    bar.targetText:Hide()
+    return
   end
 
-  if type(displayName) == "string" and displayName ~= "" then
-    return displayName
+  if bar.__puiTestPresentation then
+    bar.targetText:SetText(bar.__puiTestTargetName)
+  else
+    bar.targetText:SetText(UnitSpellTargetName(unit))
   end
 
-  return bar.spellName:GetText() or ""
-end
-
-local function CB_SetCastText(bar, cfg, unit, displayName)
-  local spellName = bar.__puiTestPresentation
-    and bar.__puiTestSpellName
-    or CB_GetDisplayName(displayName, bar)
-
-  if cfg.displayTarget == true then
-    local targetName
-
-    if bar.__puiTestPresentation then
-      targetName = bar.__puiTestTargetName
-    else
-      targetName = UnitSpellTargetName(unit)
-    end
-
-    if issecretvalue(targetName) then
-      bar.spellName:SetFormattedText("%s: %s", spellName, targetName)
-      return
-    end
-
-    if type(targetName) == "string" and targetName ~= "" then
-      bar.spellName:SetFormattedText("%s: %s", spellName, targetName)
-      return
-    end
-  end
-
-  bar.spellName:SetText(spellName)
+  bar.targetText:Show()
 end
 
 local function CB_SetTestCastVisuals(bar, cfg, spellName)
   spellName = spellName or ""
   bar.__puiTestSpellName = spellName
 
-  if bar.__puiTestPresentation
-    and cfg.displayTarget == true
-    and type(bar.__puiTestTargetName) == "string"
-    and bar.__puiTestTargetName ~= ""
-  then
-    bar.spellName:SetFormattedText("%s: %s", spellName, bar.__puiTestTargetName)
-  else
-    bar.spellName:SetText(spellName)
-  end
+  bar.spellName:SetText(spellName)
+  CB_UpdateCastTarget(bar, cfg, bar.__puiUnit)
 
   if CB_ShouldShowSpellName(cfg) then
     bar.spellName:Show()
@@ -260,33 +232,41 @@ local function CB_SetTestCastVisuals(bar, cfg, spellName)
 end
 
 local function CB_SetTestTimeText(bar, cfg, remaining, total)
-  if cfg.__puiShowCastTime ~= false then
+  local showRemaining = cfg.showRemainingTime ~= false
+  local showTotal = cfg.showTotal ~= false
+
+  if cfg.__puiShowCastTime ~= false and (showRemaining or showTotal) then
     bar.timeText:Show()
 
-    remaining = remaining or 0
-    total = total or 0
+    local remainingTenths = showRemaining
+      and math_floor(((remaining or 0) * 10) + 0.5)
+      or nil
+    local totalTenths = showTotal
+      and math_floor(((total or 0) * 10) + 0.5)
+      or nil
 
-    local showTotal = cfg.__puiShowTotal ~= false
-    local remainingTenths = math_floor((remaining * 10) + 0.5)
-    local totalTenths = math_floor((total * 10) + 0.5)
-
-    if bar.__puiTestTimeShowTotal == showTotal
+    if bar.__puiTestTimeShowRemaining == showRemaining
+      and bar.__puiTestTimeShowTotal == showTotal
       and bar.__puiTestTimeRemainingTenths == remainingTenths
       and bar.__puiTestTimeTotalTenths == totalTenths
     then
       return
     end
 
+    bar.__puiTestTimeShowRemaining = showRemaining
     bar.__puiTestTimeShowTotal = showTotal
     bar.__puiTestTimeRemainingTenths = remainingTenths
     bar.__puiTestTimeTotalTenths = totalTenths
 
-    if showTotal then
+    if showRemaining and showTotal then
       bar.timeText:SetFormattedText("%.1f / %.1f", remainingTenths * 0.1, totalTenths * 0.1)
-    else
+    elseif showRemaining then
       bar.timeText:SetFormattedText("%.1f", remainingTenths * 0.1)
+    else
+      bar.timeText:SetFormattedText("%.1f", totalTenths * 0.1)
     end
   else
+    bar.__puiTestTimeShowRemaining = nil
     bar.__puiTestTimeShowTotal = nil
     bar.__puiTestTimeRemainingTenths = nil
     bar.__puiTestTimeTotalTenths = nil
@@ -332,6 +312,8 @@ end
 
 local function CB_HideHolderAfterOUFHide(bar)
   bar.timeTextBinding:Disable()
+  bar.targetText:SetText("")
+  bar.targetText:Hide()
 
   if bar.__puiInstantCast then
     return
@@ -348,6 +330,7 @@ local function CB_HideHolderAfterOUFHide(bar)
   bar.icon:Hide()
   bar.spellName:SetText("")
   bar.spellName:Hide()
+  bar.__puiTestTimeShowRemaining = nil
   bar.__puiTestTimeShowTotal = nil
   bar.__puiTestTimeRemainingTenths = nil
   bar.__puiTestTimeTotalTenths = nil
@@ -411,7 +394,9 @@ local function CB_StartTimeText(bar)
   local element = bar.status
   local cfg = bar.__puiState.cfg
 
-  if cfg.__puiShowCastTime == false then
+  if cfg.__puiShowCastTime == false
+    or (cfg.showRemainingTime == false and cfg.showTotal == false)
+  then
     CB_StopTimeText(bar)
     return
   end
@@ -426,20 +411,27 @@ local function CB_StartTimeText(bar)
   local format
   local components
 
-  if cfg.__puiShowDelayText ~= false and delay > 0 then
+  if cfg.__puiShowDelayText ~= false
+    and cfg.showRemainingTime ~= false
+    and delay > 0
+  then
     local sign = bar.__puiChanneling and "-" or "+"
     format = string_format("{} (%s%.1f)", sign, delay)
     components = CB_REMAINING_TIME_COMPONENTS
-  elseif cfg.__puiShowTotal ~= false then
+  elseif cfg.showRemainingTime ~= false and cfg.showTotal ~= false then
     format = "{} / {}"
     components = CB_REMAINING_TOTAL_TIME_COMPONENTS
-  else
+  elseif cfg.showRemainingTime ~= false then
     format = "{}"
     components = CB_REMAINING_TIME_COMPONENTS
+  else
+    format = "{}"
+    components = CB_TOTAL_TIME_COMPONENTS
   end
 
-  if bar.__puiTimeTextFormat ~= format then
+  if bar.__puiTimeTextFormat ~= format or bar.__puiTimeTextComponents ~= components then
     bar.__puiTimeTextFormat = format
+    bar.__puiTimeTextComponents = components
     bar.timeTextBinding:SetTextFormat(format, components)
   end
 
@@ -487,14 +479,13 @@ local function CB_OUF_PostCastStart(element, unit, spellID, notInterruptible, di
   end
 
   if CB_ShouldShowSpellName(cfg) then
-    if cfg.displayTarget == true then
-      CB_SetCastText(bar, cfg, resolvedUnit, displayName)
-    end
     bar.spellName:Show()
   else
     bar.spellName:SetText("")
     bar.spellName:Hide()
   end
+
+  CB_UpdateCastTarget(bar, cfg, resolvedUnit)
 
   if not bar.__puiTestState then
     CB_StartTimeText(bar)
@@ -524,6 +515,8 @@ local function CB_OUF_PostCastStop(element, unit, spellID, empowerComplete)
   local bar, cfg, resolvedUnit = CB_GetBarState(element, unit)
 
   CB_StopTimeText(bar)
+  bar.targetText:SetText("")
+  bar.targetText:Hide()
 
   element.__puiActiveUnit = nil
   element.__puiMissingCastSince = nil
@@ -549,6 +542,8 @@ local function CB_OUF_PostCastFail(element, unit, spellID)
   local bar = element.__puiOwnerBar
 
   CB_StopTimeText(bar)
+  bar.targetText:SetText("")
+  bar.targetText:Hide()
 
   element.__puiActiveUnit = nil
   element.__puiMissingCastSince = nil
@@ -622,6 +617,8 @@ function CastBar:OnDisable()
       end
 
       CB_StopTimeText(bar)
+      bar.targetText:SetText("")
+      bar.targetText:Hide()
       if bar.clipWarningText then
         bar.clipWarningText:Hide()
       end
@@ -665,6 +662,7 @@ end
   CastBar.ShouldShowCastTime = CB_ShouldShowCastTime
   CastBar.SetTestCastVisuals = CB_SetTestCastVisuals
   CastBar.SetTestTimeText = CB_SetTestTimeText
+  CastBar.UpdateCastTarget = CB_UpdateCastTarget
   CastBar.ApplyUninterruptTextureMode = CB_ApplyUninterruptTextureMode
   CastBar.SetIdleVisuals = CB_SetIdleVisuals
   CastBar.CreateTimeTextBinding = CB_CreateTimeTextBinding
