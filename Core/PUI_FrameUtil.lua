@@ -583,14 +583,17 @@ function FrameUtil.EnsureGhostMovers(owner, opts)
       liveFrame = function()
         return opts.liveFrame(moverKey, owner)
       end,
-      getSize = function()
-        return opts.getSize(moverKey, owner)
+      getConfig = type(opts.getConfig) == "function" and function()
+        return opts.getConfig(moverKey, owner)
+      end or nil,
+      getSize = function(_, _, config)
+        return opts.getSize(moverKey, owner, config)
       end,
-      getPoint = function()
-        return opts.getPoint(moverKey, owner)
+      getPoint = function(_, _, config)
+        return opts.getPoint(moverKey, owner, config)
       end,
-      shouldShow = function()
-        return opts.shouldShow(moverKey, owner)
+      shouldShow = function(_, _, config)
+        return opts.shouldShow(moverKey, owner, config)
       end,
       savePosition = type(opts.onGhostSavePosition) == "function" and function(mover)
         opts.onGhostSavePosition(moverKey, owner, mover)
@@ -615,7 +618,9 @@ function FrameUtil.SetGhostMoversVisible(owner, show, opts)
   end
 
   FrameUtil.SetMoverFramesVisible(owner.ghosts, show and true or false)
-  FrameUtil:RefreshAllGhostMovers()
+  for unitKey in pairs(owner.ghosts) do
+    FrameUtil:RefreshGhostMover(opts.keyPrefix .. unitKey)
+  end
 end
 
 function FrameUtil.SetFrameGhosted(frame, enabled, opts)
@@ -1598,27 +1603,11 @@ local function IsSmartSnapRuntimeEntryActive(entry)
     return false
   end
 
-  local helper = GhostMoverHelpers and GhostMoverHelpers[entry.key]
-  if not helper then
-    return true
+  if GhostMoverHelpers[entry.key] then
+    return entry._smartSnapRuntimeActive == true
   end
 
-  local opts = helper.opts or {}
-  local ghost = helper.frame
-  local liveFrame = opts.liveFrame
-  if type(liveFrame) == "function" then
-    liveFrame = liveFrame(ghost, entry.key, helper)
-  end
-
-  if type(opts.getSize) == "function" then
-    local width, height = opts.getSize(ghost, liveFrame)
-    return tonumber(width) ~= nil
-      and tonumber(height) ~= nil
-      and width > 0
-      and height > 0
-  end
-
-  return liveFrame ~= nil
+  return true
 end
 
 function FrameUtil.GetSmartSnapWidthSyncAllowed(key)
@@ -5863,9 +5852,11 @@ function FrameUtil:RefreshGhostMover(key)
     return nil
   end
 
+  local config = type(opts.getConfig) == "function" and opts.getConfig(ghost, liveFrame) or nil
+
   local width, height
   if type(opts.getSize) == "function" then
-    width, height = opts.getSize(ghost, liveFrame)
+    width, height = opts.getSize(ghost, liveFrame, config)
   elseif liveFrame and liveFrame.GetSize then
     width, height = liveFrame:GetSize()
   end
@@ -5878,7 +5869,7 @@ function FrameUtil:RefreshGhostMover(key)
 
   local point, relativeTo, relativePoint, x, y
   if type(opts.getPoint) == "function" then
-    point, relativeTo, relativePoint, x, y = opts.getPoint(ghost, liveFrame)
+    point, relativeTo, relativePoint, x, y = opts.getPoint(ghost, liveFrame, config)
   elseif liveFrame and liveFrame.GetPoint then
     point, relativeTo, relativePoint, x, y = liveFrame:GetPoint(1)
   end
@@ -5915,7 +5906,7 @@ function FrameUtil:RefreshGhostMover(key)
 
   local shouldShow = false
   if type(opts.shouldShow) == "function" then
-    shouldShow = opts.shouldShow(ghost, liveFrame) and true or false
+    shouldShow = opts.shouldShow(ghost, liveFrame, config) and true or false
   elseif opts.show ~= nil then
     shouldShow = opts.show and true or false
   end
