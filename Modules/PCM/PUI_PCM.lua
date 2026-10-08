@@ -308,11 +308,10 @@ local function _PCM_InitializeOwnedViewers(owner)
   end
 end
 
-local function _PCM_RefreshOwnedViewer(owner, viewerKey, mask)
+local function _PCM_RefreshOwnedViewer(owner, viewerKey)
   if viewerKey == "EssentialCooldownViewer" or viewerKey == "UtilityCooldownViewer" then
     local runtime = ns.PCMAbilityRuntime
     runtime:ApplyViewerStyle(viewerKey, owner:_ResolveOwnedViewerStyle(viewerKey))
-    runtime:RefreshLayout(viewerKey)
   elseif viewerKey == "BuffIconCooldownViewer" then
     ns.Modules.PCM_Buffs:RefreshSettings()
   elseif viewerKey == "BuffBarCooldownViewer" then
@@ -1379,19 +1378,11 @@ local function _RefreshViewerBordersOnly(viewerKey)
   end
 end
 
-local function _RefreshViewerFontsOnly(viewerKey)
-  _RefreshViewerBordersOnly(viewerKey)
-end
-
-local function _RefreshIconViewers(viewerKey)
-  _RefreshViewerBordersOnly(viewerKey)
-end
-
 Cooldowns._RefreshViewerBordersOnly = _RefreshViewerBordersOnly
-Cooldowns._RefreshViewerFontsOnly = _RefreshViewerFontsOnly
+Cooldowns._RefreshViewerFontsOnly = _RefreshViewerBordersOnly
 
 function Cooldowns:RefreshIconFonts()
-  _RefreshViewerFontsOnly(nil)
+  _RefreshViewerBordersOnly(nil)
   self:ConsumableTracker_RefreshFonts()
 end
 
@@ -1506,35 +1497,7 @@ local function _ApplyPCMProfile(self)
   FrameUtil.RelayoutSmartSnapCluster("PCM_EssentialCooldownViewer")
   FrameUtil.RelayoutSmartSnapCluster("PCM_UtilityCooldownViewer")
 
-  ns.Modules.PCM_Buffs:RefreshSettings()
-  ns.Modules.PCM_BuffBars:RefreshSettings()
-  _RefreshIconViewers()
-end
-
-local function _EnsurePCMViewerMoverForKey(key)
-  if not key then
-    return
-  end
-
-  for _, info in Cooldowns:IterateViewers() do
-    if info and info.key == key then
-      _RegisterViewerMover(info)
-      return
-    end
-  end
-end
-
-local function _EnsureViewerMovers()
-  if not _PCM_IsModuleEnabledFast() then
-    return
-  end
-
-  for _, info in Cooldowns:IterateViewers() do
-    local key = info.key
-    if key then
-      _EnsurePCMViewerMoverForKey(key)
-    end
-  end
+  _RefreshViewerBordersOnly(nil)
 end
 
 function Cooldowns:_FlushViewerRefreshImmediate(mode, viewerKey)
@@ -2060,26 +2023,16 @@ function Cooldowns:ApplySettings(flags)
     return
   end
 
-  local needsIconRefresh = false
-  local needsFontRefresh = false
+  local needsAbilityRefresh = flags.profile == true or flags.theme == true or flags.fonts == true
 
   if flags.profile == true then
     _PCM_MigrateOwnedViewerTooltips()
     ns.PCMGroupManager:RefreshProfile()
     IconSettings:InvalidateCatalog()
     IconSettings:InvalidateSettings()
-    needsIconRefresh = true
 
     _PCM_InvalidateViewerRuleSettingCache()
     _PCM_PrimeViewerCountCache()
-  end
-
-  if flags.theme == true then
-    needsIconRefresh = true
-  end
-
-  if flags.fonts == true then
-    needsFontRefresh = true
   end
 
   ns.Modules.PCM_Buffs:ApplySettings(flags)
@@ -2090,10 +2043,12 @@ function Cooldowns:ApplySettings(flags)
   self:_CooldownStackBars_ApplySettings(flags)
   self:_ConsumableTracker_ApplySettings(flags)
 
-  if needsIconRefresh then
-    _RefreshIconViewers(nil)
-  elseif needsFontRefresh then
-    _RefreshViewerFontsOnly(nil)
+  if needsAbilityRefresh then
+    for _, info in self:IterateViewers() do
+      if _PCM_IsAbilityViewerKey(info.key) then
+        _PCM_RefreshOwnedViewer(self, info.key)
+      end
+    end
   end
 
   if flags.profile == true then
@@ -2117,12 +2072,7 @@ function Cooldowns:SoftRebuild(flags)
   end
 
   _ApplyPCMProfile(self)
-  _EnsureViewerMovers()
-  self:_RequestViewerRefresh("layout")
-  ns.PCMGroupManager:RequestLayout()
 
-  ns.Modules.PCM_Buffs:SoftRebuild(flags)
-  ns.Modules.PCM_BuffBars:SoftRebuild(flags)
   ns.Modules.PCM_BB:SoftRebuild(flags)
 
   self:_SpellBars_SoftRebuild(flags)
@@ -2300,8 +2250,6 @@ end
   _RegisterViewerMover = P:Def('_RegisterViewerMover', _RegisterViewerMover)
   _InitAllViewerMovers = P:Def('_InitAllViewerMovers', _InitAllViewerMovers)
   _RefreshViewerBordersOnly = P:Def('_RefreshViewerBordersOnly', _RefreshViewerBordersOnly)
-  _RefreshViewerFontsOnly = P:Def('_RefreshViewerFontsOnly', _RefreshViewerFontsOnly)
-  _RefreshIconViewers = P:Def('_RefreshIconViewers', _RefreshIconViewers)
   Cooldowns.RefreshIndividualIconSettings = P:Def('Cooldowns:RefreshIndividualIconSettings', Cooldowns.RefreshIndividualIconSettings)
   Cooldowns.RefreshIconFonts = P:Def('Cooldowns:RefreshIconFonts', Cooldowns.RefreshIconFonts)
   _RefreshViewerOwnershipAfterBlizzardEditMode = P:Def(
@@ -2311,8 +2259,6 @@ end
   Cooldowns._OnEditModeChanged = P:Def('Cooldowns:_OnEditModeChanged', Cooldowns._OnEditModeChanged)
   Cooldowns._OnBlizzardEditModeChanged = P:Def('Cooldowns:_OnBlizzardEditModeChanged', Cooldowns._OnBlizzardEditModeChanged)
   _ApplyPCMProfile = P:Def('_ApplyPCMProfile', _ApplyPCMProfile)
-  _EnsurePCMViewerMoverForKey = P:Def('_EnsurePCMViewerMoverForKey', _EnsurePCMViewerMoverForKey)
-  _EnsureViewerMovers = P:Def('_EnsureViewerMovers', _EnsureViewerMovers)
   Cooldowns._RequestViewerRefresh = P:Def('Cooldowns:_RequestViewerRefresh', Cooldowns._RequestViewerRefresh)
   Cooldowns.RefreshAbilityCatalog = P:Def('Cooldowns:RefreshAbilityCatalog', Cooldowns.RefreshAbilityCatalog)
   Cooldowns._FlushViewerRefreshImmediate = P:Def('Cooldowns:_FlushViewerRefreshImmediate', Cooldowns._FlushViewerRefreshImmediate)
