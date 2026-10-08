@@ -761,7 +761,6 @@ function AuraRuntime:PrepareRecordLayout(record, width, height, horizontalPaddin
     record.horizontalPadding = appliedPadding
     frame:ClearAllPoints()
     frame:SetPoint("TOPLEFT", layoutFrame, "TOPLEFT", appliedPadding / 2, 0)
-    self:RefreshRecordLayoutBounds(record)
   else
     frame:ClearAllPoints()
     frame:SetPoint("CENTER", layoutFrame, "CENTER")
