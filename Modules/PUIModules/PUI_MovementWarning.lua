@@ -224,8 +224,9 @@ end
 local function RefreshRowCooldown(row)
   local spellID = row.spellID
   local charges = C_Spell.GetSpellCharges(spellID)
+  local isChargeSpell = charges and charges.maxCharges > 1
   local duration
-  if charges then
+  if isChargeSpell then
     if charges.isActive ~= true then
       row.runtime:Hide()
       row.countdown:Clear()
@@ -250,7 +251,7 @@ local function RefreshRowCooldown(row)
 
   row.countdown:SetCooldownFromDurationObject(duration)
   row.countdown:Show()
-  if charges then
+  if isChargeSpell then
     -- A banked charge reports only a brief cooldown. The engine classifies
     -- its secret duration and passes the result directly to the alpha sink.
     local availabilityDuration = C_Spell.GetSpellCooldownDuration(spellID)
