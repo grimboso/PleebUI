@@ -495,9 +495,9 @@ local function ConfigureAuraButton(runtime, button)
   button:SetCancelAuraButtons(runtime.kind == "buffs" and "RightButtonUp" or nil)
 
   button:SetIcon(parts.icon)
-  button:SetApplicationCount(parts.applicationText, {})
+  button:SetApplicationCount(parts.applicationText)
   button:SetDurationCooldown(parts.durationCooldown)
-  button:SetDurationText(parts.durationText, {})
+  button:SetDurationText(parts.durationText)
 end
 
 
@@ -587,6 +587,7 @@ local function DisableAuraRuntime(runtime)
 
   runtime.container:SetEnabled(false)
   runtime.container:Hide()
+  runtime.enabled = false
 end
 
 local function ActivateAuraRuntime(kind)
@@ -612,13 +613,16 @@ local function ActivateAuraRuntime(kind)
   end
 
   local root = GetRoot(kind)
+  root:SetScale(1)
   root:SetSize(activeRuntime.width, activeRuntime.height)
 
   if PlayerBuffs.runtimeEnabled then
-    local unit = GetActiveUnit()
-    activeRuntime.container:SetUnit(unit)
-    activeRuntime.container:Show()
-    activeRuntime.container:SetEnabled(true)
+    if not activeRuntime.enabled then
+      activeRuntime.container:SetUnit(GetActiveUnit())
+      activeRuntime.container:Show()
+      activeRuntime.container:SetEnabled(true)
+      activeRuntime.enabled = true
+    end
     root:Show()
   end
 
@@ -769,6 +773,27 @@ local function SetRuntimeEnabled(enabled)
   DisableAuraRuntime(PlayerBuffs.activeRuntimes.debuffs)
   PlayerBuffs.buffRoot:Hide()
   PlayerBuffs.debuffRoot:Hide()
+end
+
+local function PreviewAuraIconSize(kind, value)
+  local runtimes = PlayerBuffs.activeRuntimes
+  local runtime = runtimes and runtimes[kind]
+  if not runtime or not PlayerBuffs.runtimeEnabled or InCombatLockdown() then
+    return
+  end
+
+  local iconSize = value and Round(Clamp(value, 24, 64)) or runtime.iconSize
+  GetRoot(kind):SetScale(iconSize / runtime.iconSize)
+end
+
+local function PreviewAuraTextSize(value)
+  if not PlayerBuffs.runtimeEnabled or InCombatLockdown() then
+    return
+  end
+
+  local size = value and Theme.ResolveFontSize(Clamp(value, 8, 32), "playerBuffs")
+    or puiStyleCache.fontSize
+  playerAuraFont:SetFont(puiStyleCache.fontPath, size, puiStyleCache.fontFlags)
 end
 
 local function ResolveApplyFlags(flags)
@@ -934,6 +959,10 @@ function PlayerBuffs:EnsureMovers()
               min = 24,
               max = 64,
               step = 1,
+              commitOnRelease = true,
+              liveSet = function(value)
+                PreviewAuraIconSize(kind, value)
+              end,
               get = function() return frameDB.iconSize end,
               set = function(value)
                 frameDB.iconSize = Round(Clamp(value, 24, 64))
@@ -946,9 +975,11 @@ function PlayerBuffs:EnsureMovers()
             {
               type = "slider",
               label = "Text size",
-              min = 6,
-              max = 24,
+              min = 8,
+              max = 32,
               step = 1,
+              commitOnRelease = true,
+              liveSet = PreviewAuraTextSize,
               get = function() return db.textSize end,
               set = function(value)
                 db.textSize = Round(Clamp(value, 8, 32))
@@ -1154,7 +1185,12 @@ function PlayerBuffs:GetOptions()
             min = 24,
             max = 64,
             step = 1,
-            arg = { puiRefreshOnRelease = true },
+            arg = {
+              puiRefreshOnRelease = true,
+              puiLivePreview = function(value)
+                PreviewAuraIconSize("buffs", value)
+              end,
+            },
             get = function()
               return GetAuraFrameDB(GetProfileDB(), "buffs").iconSize
             end,
@@ -1170,7 +1206,12 @@ function PlayerBuffs:GetOptions()
             min = 24,
             max = 64,
             step = 1,
-            arg = { puiRefreshOnRelease = true },
+            arg = {
+              puiRefreshOnRelease = true,
+              puiLivePreview = function(value)
+                PreviewAuraIconSize("debuffs", value)
+              end,
+            },
             get = function()
               return GetAuraFrameDB(GetProfileDB(), "debuffs").iconSize
             end,
@@ -1194,7 +1235,10 @@ function PlayerBuffs:GetOptions()
             min = 8,
             max = 32,
             step = 1,
-            arg = { puiRefreshOnRelease = true },
+            arg = {
+              puiRefreshOnRelease = true,
+              puiLivePreview = PreviewAuraTextSize,
+            },
             get = GetValue,
             set = SetValue,
           },
@@ -1295,6 +1339,8 @@ end
   RestoreBlizzardAuraFrames = P:Def("RestoreBlizzardAuraFrames", RestoreBlizzardAuraFrames)
   EnsureRuntime = P:Def("EnsureRuntime", EnsureRuntime)
   SetRuntimeEnabled = P:Def("SetRuntimeEnabled", SetRuntimeEnabled)
+  PreviewAuraIconSize = P:Def("PreviewAuraIconSize", PreviewAuraIconSize)
+  PreviewAuraTextSize = P:Def("PreviewAuraTextSize", PreviewAuraTextSize)
   ResolveApplyFlags = P:Def("ResolveApplyFlags", ResolveApplyFlags)
   MergePendingApplyFlags = P:Def("MergePendingApplyFlags", MergePendingApplyFlags)
   PlayerBuffs.ApplyAnchorPosition = P:Def("PlayerBuffs.ApplyAnchorPosition", PlayerBuffs.ApplyAnchorPosition)
