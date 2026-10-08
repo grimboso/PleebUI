@@ -13,6 +13,7 @@
   <Script file="PUI_PlayerBuffs.lua"/>
   <Script file="PUI_RaidUtility.lua"/>
   <Script file="PUI_HunterTools.lua"/>
+  <Script file="PUI_MovementWarning.lua"/>
   <Script file="DamageMeter/PUI_DamageMeters.lua"/>
   <Script file="DamageMeter/PUI_DamageMeterConfig.lua"/>
   <Script file="DamageMeter/PUI_DamageMeterSessions.lua"/>
