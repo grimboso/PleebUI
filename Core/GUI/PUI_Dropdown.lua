@@ -845,6 +845,17 @@ local function SkinDropdown(widget, isLSM)
   local text = isLSM and frame.text or widget.text
   local clickTarget = isLSM and frame.dropButton or widget.button_cover
   local geom = Theme.GetWidgetRowGeometry(widget)
+  local group = widget.parentgroup
+  if group and group.__puiAceGUIOwnedByPleebUI == true then
+    local user = group:GetUserDataTable()
+    if user.appName == "PleebUI" and user.path and user.path[1] == "CooldownManager" and user.path[4] == "entries" then
+      local selectorGeometry = {}
+      for key, value in pairs(geom) do selectorGeometry[key] = value end
+      selectorGeometry.controlHeight = 28
+      selectorGeometry.rowHeight = geom.controlTop + selectorGeometry.controlHeight + geom.controlBottom
+      geom = selectorGeometry
+    end
+  end
 
   if not isLSM then
     OwnStandardDropdownChildren(widget)
