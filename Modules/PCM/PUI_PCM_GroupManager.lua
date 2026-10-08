@@ -447,9 +447,7 @@ local function ApplyCollapsedAuraIconRows(group, records)
 end
 
 local function RefreshDynamicBounds()
-  for index = 1, #dynamicBoundsRecords do
-    AuraRuntime:RefreshRecordLayoutBounds(dynamicBoundsRecords[index])
-  end
+  AuraRuntime:RefreshLayoutBounds(dynamicBoundsRecords)
   for index = 1, #dynamicBoundsRows do
     local row = dynamicBoundsRows[index]
     row:SetIgnoringChildrenForBounds(false)
