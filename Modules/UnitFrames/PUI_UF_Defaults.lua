@@ -775,7 +775,6 @@ function UFDefaults.GetRaidDefaults()
     growthDirection = "RIGHT_DOWN",
     groupSortOrientation = "HORIZONTAL",
     lockMembersToGroup = true,
-    moveGroupsSeparately = false,
     showGroupNumbers = true,
     groupBy = "GROUP",
     sortOrder = "INDEX",

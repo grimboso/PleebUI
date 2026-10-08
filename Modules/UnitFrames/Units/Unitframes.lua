@@ -1549,8 +1549,10 @@ function UF:EnsureMovers()
 
       return owner.frames and owner.frames[unitKey]
     end,
-    getSize = function(unitKey, owner)
-      local cfg = owner:ResolveUnitConfig(unitKey)
+    getConfig = function(unitKey, owner)
+      return owner:ResolveUnitConfig(unitKey)
+    end,
+    getSize = function(unitKey, owner, cfg)
       if not cfg or cfg.enabled == false then
         return nil, nil
       end
@@ -1562,8 +1564,7 @@ function UF:EnsureMovers()
 
       return UFStyle.ResolveFrameSize(cfg)
     end,
-    getPoint = function(unitKey, owner)
-      local cfg = owner:ResolveUnitConfig(unitKey)
+    getPoint = function(unitKey, owner, cfg)
       if not cfg then
         return nil
       end
@@ -1572,9 +1573,8 @@ function UF:EnsureMovers()
       local relTo = ResolveSingleUnitHolderParent(cfg, frame, unitKey)
       return cfg.point or "CENTER", relTo, cfg.relativePoint or cfg.point or "CENTER", Round(cfg.x or 0), Round(cfg.y or 0)
     end,
-    shouldShow = function(unitKey, owner)
+    shouldShow = function(unitKey, owner, cfg)
       local db = owner.db and owner.db.profile
-      local cfg = owner:ResolveUnitConfig(unitKey)
       return db
         and db.enabled ~= false
         and cfg
@@ -1621,6 +1621,7 @@ function UF:SetMoversVisible(show)
   end
 
   FrameUtil.SetGhostMoversVisible(self, show, {
+    keyPrefix = "UF_",
     isEnabled = function(owner)
       return owner and owner.db and owner.db.profile and owner.db.profile.enabled ~= false
     end,

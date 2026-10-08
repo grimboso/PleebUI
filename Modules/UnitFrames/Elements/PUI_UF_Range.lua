@@ -280,8 +280,12 @@ local function UpdateIndividualRangeDriverRegistration()
 end
 
 local function RegisterIndividualRangeFrame(frame)
-  local firstFrame = not next(individualRangeFrames)
+  if individualRangeFrames[frame] then
+    UpdateIndividualRangeFrame(frame)
+    return
+  end
 
+  local firstFrame = not next(individualRangeFrames)
   individualRangeFrames[frame] = true
 
   if firstFrame then
@@ -294,6 +298,10 @@ local function RegisterIndividualRangeFrame(frame)
 end
 
 local function UnregisterIndividualRangeFrame(frame)
+  if not individualRangeFrames[frame] then
+    return
+  end
+
   individualRangeFrames[frame] = nil
   UpdateIndividualRangeDriverRegistration()
   RefreshIndividualRangeTicker()

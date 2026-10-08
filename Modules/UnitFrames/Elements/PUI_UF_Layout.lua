@@ -30,8 +30,6 @@ function Layout.EnsureRaidLayoutConfig(db)
     db.lockMembersToGroup = db.lockMembersToGroup == true
   end
 
-  db.moveGroupsSeparately = false
-
   if db.showGroupNumbers == nil then
     db.showGroupNumbers = true
   else
@@ -124,8 +122,6 @@ function Layout.GetRaidConfiguredHeaderBounds(db, opts)
       groupsPerRowCol = numGroups
     end
 
-    local x = (xDir == "LEFT") and -1 or 1
-    local y = (yDir == "UP") and 1 or -1
     local point
 
     if orientation == "VERTICAL" then

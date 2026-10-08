@@ -66,8 +66,6 @@ local TEXT_MODE_VALUES = {
 }
 ns.UnitFrameHealthTextModeValues = TEXT_MODE_VALUES
 
-local FONT_OUTLINE_VALUES = ns.Theme.GetOutlineList()
-
 local TEXT_ANCHOR_VALUES = {
   LEFT         = "Left",
   RIGHT        = "Right",
@@ -5633,7 +5631,6 @@ local function UFCB_BuildPartyTextArgs(kind, groupKind)
         or key == "columnSpacing"
         or key == "lockMembersToGroup"
         or key == "groupSortOrientation"
-        or key == "moveGroupsSeparately"
       then
         refreshFlags = { layout = true }
       end

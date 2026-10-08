@@ -9,7 +9,6 @@ local P = select(1, ns.Pleebug:DropIn(AuraContainers, { name = "UnitFrames.AuraC
 local AnchorUtil = _G.AnchorUtil
 local AuraContainerSortDirection = _G.AuraContainerSortDirection
 local AuraContainerSortMethod = _G.AuraContainerSortMethod
-local C_Timer = _G.C_Timer
 local CreateFrame = _G.CreateFrame
 local InCombatLockdown = _G.InCombatLockdown
 local UnitExists = _G.UnitExists
@@ -18,7 +17,6 @@ local UnitIsVisible = _G.UnitIsVisible
 local UnitPhaseReason = _G.UnitPhaseReason
 local issecretvalue = _G.issecretvalue
 local ipairs = _G.ipairs
-local next = _G.next
 local pairs = _G.pairs
 local setmetatable = _G.setmetatable
 local table_concat = _G.table.concat
@@ -49,8 +47,6 @@ local SORT_DIRECTIONS = {
 }
 
 local PendingFrameRequests = setmetatable({}, { __mode = "k" })
-local AvailabilityFrames = setmetatable({}, { __mode = "k" })
-local AvailabilityTicker
 local RefreshDriver = CreateFrame("Frame")
 RefreshDriver:RegisterEvent("PLAYER_ENTERING_WORLD")
 
@@ -775,45 +771,8 @@ local function AuditAvailabilityFrame(frame, refreshAvailable)
   end
 end
 
-local function StopAvailabilityTicker()
-  if AvailabilityTicker then
-    AvailabilityTicker:Cancel()
-    AvailabilityTicker = nil
-  end
-end
-
-local function AuditAvailabilityFrames()
-  for frame in pairs(AvailabilityFrames) do
-    if frame:IsVisible() then
-      AuditAvailabilityFrame(frame)
-    else
-      AvailabilityFrames[frame] = nil
-    end
-  end
-
-  if not next(AvailabilityFrames) then
-    StopAvailabilityTicker()
-  end
-end
-
-local function StartAvailabilityTicker()
-  if not AvailabilityTicker then
-    AvailabilityTicker = C_Timer.NewTicker(1, AuditAvailabilityFrames)
-  end
-end
-
 local function AvailabilityFrame_OnShow(frame)
-  AvailabilityFrames[frame] = true
   AuditAvailabilityFrame(frame)
-  StartAvailabilityTicker()
-end
-
-local function AvailabilityFrame_OnHide(frame)
-  AvailabilityFrames[frame] = nil
-
-  if not next(AvailabilityFrames) then
-    StopAvailabilityTicker()
-  end
 end
 
 local function RegisterAvailabilityFrame(frame)
@@ -825,7 +784,6 @@ local function RegisterAvailabilityFrame(frame)
 
   frame.__puiAuraAvailabilityRegistered = true
   frame:HookScript("OnShow", AvailabilityFrame_OnShow)
-  frame:HookScript("OnHide", AvailabilityFrame_OnHide)
 
   if frame:IsVisible() then
     AvailabilityFrame_OnShow(frame)
@@ -1129,11 +1087,7 @@ SyncUnknownRuntimeElementState = P:Def("SyncUnknownRuntimeElementState", SyncUnk
 IsGroupAuraUnitAvailable = P:Def("IsGroupAuraUnitAvailable", IsGroupAuraUnitAvailable, nil, nil, false)
 ReconcileDisplayState = P:Def("ReconcileDisplayState", ReconcileDisplayState, nil, nil, false)
 AuditAvailabilityFrame = P:Def("AuditAvailabilityFrame", AuditAvailabilityFrame, nil, nil, false)
-StopAvailabilityTicker = P:Def("StopAvailabilityTicker", StopAvailabilityTicker, nil, nil, false)
-AuditAvailabilityFrames = P:Def("AuditAvailabilityFrames", AuditAvailabilityFrames)
-StartAvailabilityTicker = P:Def("StartAvailabilityTicker", StartAvailabilityTicker)
 AvailabilityFrame_OnShow = P:Def("AvailabilityFrame_OnShow", AvailabilityFrame_OnShow)
-AvailabilityFrame_OnHide = P:Def("AvailabilityFrame_OnHide", AvailabilityFrame_OnHide)
 RegisterAvailabilityFrame = P:Def("RegisterAvailabilityFrame", RegisterAvailabilityFrame)
 RefreshAurasElementLifecycle = P:Def("RefreshAurasElementLifecycle", RefreshAurasElementLifecycle)
 ConfigureDisplays = P:Def("ConfigureDisplays", ConfigureDisplays)
