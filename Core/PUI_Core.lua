@@ -132,6 +132,15 @@ local DB_DEFAULTS = {
     debug          = false,
 
     blizzardFonts = {},
+    movementWarning = {
+      enabled = true,
+      combatOnly = false,
+      fontSize = 24,
+      color = { r = 1, g = 1, b = 1, a = 1 },
+      x = 0,
+      y = 50,
+      spells = {},
+    },
     pui = {
       schemaVersion = 6,
 
@@ -906,6 +915,7 @@ function Addon:RefreshIconFonts(atWorldEntry)
   end
   ns.Modules.PlayerBuffs:RefreshFonts()
   ns.Modules.HunterTools:RefreshFonts()
+  ns.Modules.MovementWarning:RefreshFonts()
   ns.Registry.Minimap:RefreshFonts()
   ns.Modules.Quality:RefreshFonts()
 end
@@ -935,6 +945,7 @@ local PUI_PROFILE_UPDATE_TARGETS = {
   "CooldownManager",
   "PlayerBuffs",
   "HunterTools",
+  "MovementWarning",
   "PRD",
   "DamageMeters",
   "CharacterSheet",
@@ -1187,6 +1198,11 @@ function Addon:_FlushUpdateBus()
   flags = targets.HunterTools
   if flags then
     hunterTools:ApplySettings(flags)
+  end
+
+  flags = targets.MovementWarning
+  if flags then
+    ns.Modules.MovementWarning:ApplySettings()
   end
 
   local prd = ns.Modules.PRD
