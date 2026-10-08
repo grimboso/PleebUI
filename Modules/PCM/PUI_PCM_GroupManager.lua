@@ -743,9 +743,10 @@ end
 
 local STATIC_OPTIONS_NODES = {
   overview = true,
+  groups = true,
   customTrackers = true,
   consumables = true,
-  developer = true,
+  advanced = true,
 }
 
 local function GroupContainsRecord(groupID, recordKey)
@@ -767,25 +768,29 @@ local function GetOptionsRefreshPath(groupID)
   local activePath = ns._PUIActiveOptionsPath
   local activeGroupID = type(activePath) == "table"
     and activePath[1] == "CooldownManager"
-    and activePath[2]
+    and (activePath[2] == "groups" and activePath[3] or activePath[2])
     or nil
 
   if groupID and db.byID[groupID] then
     if activeGroupID == groupID then
-      local childKey = activePath[3]
-      if type(childKey) == "string" and GroupContainsRecord(groupID, childKey) then
+      local childKey = activePath[2] == "groups" and activePath[4] == "entries" and activePath[5] or activePath[3]
+      if activePath[2] == "groups" and activePath[4] ~= "entries"
+        or type(childKey) == "string" and GroupContainsRecord(groupID, childKey)
+      then
         return activePath
       end
     end
-    return { "CooldownManager", groupID }
+    return { "CooldownManager", "groups", groupID }
   end
 
   if activeGroupID and db.byID[activeGroupID] then
-    local childKey = activePath[3]
-    if type(childKey) == "string" and GroupContainsRecord(activeGroupID, childKey) then
+    local childKey = activePath[2] == "groups" and activePath[4] == "entries" and activePath[5] or activePath[3]
+    if activePath[2] == "groups" and activePath[4] ~= "entries"
+      or type(childKey) == "string" and GroupContainsRecord(activeGroupID, childKey)
+    then
       return activePath
     end
-    return { "CooldownManager", activeGroupID }
+    return { "CooldownManager", "groups", activeGroupID }
   end
 
   if activeGroupID and STATIC_OPTIONS_NODES[activeGroupID] then
