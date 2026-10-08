@@ -62,11 +62,23 @@ local function RefreshSpellText()
 end
 
 local function ResolveTrackedSpells()
+  local tracksCharges = false
   for index = 1, trackedCount do
     local row = rows[index]
     row.spellID = C_Spell.GetOverrideSpell(row.baseSpellID)
     row.spellName = C_Spell.GetSpellName(row.spellID)
     row.spellIcon = C_Spell.GetSpellTexture(row.spellID)
+
+    local charges = C_Spell.GetSpellCharges(row.spellID)
+    if charges and charges.maxCharges > 1 then
+      tracksCharges = true
+    end
+  end
+
+  if tracksCharges then
+    MovementWarning:RegisterEvent("SPELL_UPDATE_CHARGES", "OnMovementEvent")
+  else
+    MovementWarning:UnregisterEvent("SPELL_UPDATE_CHARGES")
   end
 end
 
@@ -331,8 +343,40 @@ function MovementWarning:RefreshWarning()
   end
 end
 
-function MovementWarning:OnMovementEvent(event, unit)
-  if event == "PLAYER_SPECIALIZATION_CHANGED" and unit ~= "player" then return end
+function MovementWarning:OnMovementEvent(event, eventSpellID, baseSpellID, spellCategory)
+  if event == "PLAYER_SPECIALIZATION_CHANGED" and eventSpellID ~= "player" then return end
+
+  if event == "SPELL_UPDATE_COOLDOWN" or event == "SPELL_UPDATE_CHARGES" then
+    local db = Addon.db.profile.movementWarning
+    if trackedCount == 0 or previewEnabled or ns.Flags.IsEditing
+      or (db.combatOnly and not InCombatLockdown())
+    then
+      return
+    end
+
+    if event == "SPELL_UPDATE_COOLDOWN"
+      and not issecretvalue(eventSpellID)
+      and not issecretvalue(baseSpellID)
+      and not issecretvalue(spellCategory)
+      and eventSpellID ~= nil and spellCategory == nil
+    then
+      for index = 1, trackedCount do
+        local row = rows[index]
+        if eventSpellID == row.spellID
+          or eventSpellID == row.baseSpellID
+          or baseSpellID == row.baseSpellID
+        then
+          RefreshRowCooldown(row)
+        end
+      end
+      return
+    end
+
+    for index = 1, trackedCount do
+      RefreshRowCooldown(rows[index])
+    end
+    return
+  end
 
   if event == "PLAYER_ENTERING_WORLD" or event == "SPELLS_CHANGED"
     or event == "PLAYER_SPECIALIZATION_CHANGED" or event == "TRAIT_CONFIG_UPDATED"
@@ -360,7 +404,7 @@ function MovementWarning:ApplySettings()
     for _, event in ipairs({
       "PLAYER_ENTERING_WORLD", "SPELLS_CHANGED", "PLAYER_SPECIALIZATION_CHANGED",
       "TRAIT_CONFIG_UPDATED", "UPDATE_SHAPESHIFT_FORM", "PLAYER_REGEN_ENABLED",
-      "PLAYER_REGEN_DISABLED", "SPELL_UPDATE_COOLDOWN", "SPELL_UPDATE_CHARGES",
+      "PLAYER_REGEN_DISABLED", "SPELL_UPDATE_COOLDOWN",
     }) do
       self:RegisterEvent(event, "OnMovementEvent")
     end
