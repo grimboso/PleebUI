@@ -975,6 +975,7 @@ local function PCMPreview_ConfigureViewerPanel(box, panel, definition, root)
     end
     local showChargeText = chargeShown == nil and counts.charge or chargeShown
     local showKeybindText = keybindShown == nil and counts.keybind or keybindShown
+    showCooldownText = effectiveSwipe.cooldownEnabled and showCooldownText
     icon.__puiPCMPreviewCooldownTextEnabled = showCooldownText
     icon.__puiPCMPreviewDurationTextEnabled = showDurationText
     icon.cooldownText:SetShown(showCooldownText)
@@ -1073,6 +1074,8 @@ local function PCMPreview_ConfigureBuffIconPanel(box, panel, root, pcmRoot)
     icon.__puiPCMPreviewCooldownSaturation = nil
     icon.__puiPCMPreviewResolvedSwipe = nil
     icon.cooldown:SetDrawEdge(swipe.showDuration and swipe.durationEdge)
+    local er, eg, eb, ea = PCMPreview_ColorComponents(swipe.durationEdgeColor, { 1, 1, 1, 1 })
+    icon.cooldown:SetEdgeColor(er, eg, eb, ea)
     icon.cooldown:SetReverse(swipe.durationReverse)
     local sr, sg, sb, sa = PCMPreview_ColorComponents(swipe.durationColor, { 0, 0, 0, 0.8 })
     icon.cooldown:SetSwipeColor(sr, sg, sb, sa)
@@ -3210,19 +3213,24 @@ local function PCMPreview_UpdateIcon(icon, phase)
   if swipe then
     local color = auraActive and swipe.durationColor or swipe.cooldownColor
     local edge = swipe.cooldownEdge
+    local edgeColor = swipe.cooldownEdgeColor
     local reverse = swipe.reverse
     if auraActive then
       edge = swipe.durationEdge
+      edgeColor = swipe.durationEdgeColor
       reverse = swipe.durationReverse
     elseif gcdActive then
       color = swipe.gcdColor
       edge = swipe.gcdEdge
+      edgeColor = swipe.gcdEdgeColor
     elseif icon.__puiPCMPreviewAbilityCapability == "CHARGE" then
       edge = swipe.rechargeEdge
     end
     local r, g, b, a = PCMPreview_ColorComponents(color, { 0, 0, 0, 0.8 })
     icon.cooldown:SetSwipeColor(r, g, b, a)
     icon.cooldown:SetDrawEdge(edge)
+    local er, eg, eb, ea = PCMPreview_ColorComponents(edgeColor, { 1, 1, 1, 1 })
+    icon.cooldown:SetEdgeColor(er, eg, eb, ea)
     icon.cooldown:SetReverse(reverse)
   end
 
