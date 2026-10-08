@@ -1675,9 +1675,7 @@ function AbilityRuntime:SetGroupLayoutEnabled(active)
     end
   end
 
-  if groupLayoutEnabled then
-    ns.PCMGroupManager:RequestLayout()
-  else
+  if not groupLayoutEnabled then
     ScheduleFlush()
   end
 end
