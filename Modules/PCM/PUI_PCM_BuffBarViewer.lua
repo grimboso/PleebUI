@@ -158,12 +158,6 @@ function BuffBars:ApplySettings(flags)
   end
 end
 
-function BuffBars:SoftRebuild(flags)
-  if flags and (flags.profile == true or flags.layout == true or flags.movers == true) then
-    self:RefreshSettings()
-  end
-end
-
 function BuffBars:OnInitialize()
   self:SetEnabledState(ns.PCM_DBExports.IsPCMEnabled() == true)
 end
@@ -179,7 +173,6 @@ local P = select(1, ns.Pleebug:DropIn(BuffBars, { name = "PCM", bucket = "BuffBa
 BuffBars.GetLayoutGeometry = P:Def("BuffBars.GetLayoutGeometry", BuffBars.GetLayoutGeometry)
 BuffBars.RefreshSettings = P:Def("BuffBars:RefreshSettings", BuffBars.RefreshSettings)
 BuffBars.ApplySettings = P:Def("BuffBars:ApplySettings", BuffBars.ApplySettings)
-BuffBars.SoftRebuild = P:Def("BuffBars:SoftRebuild", BuffBars.SoftRebuild)
 BuffBars.OnInitialize = P:Def("BuffBars:OnInitialize", BuffBars.OnInitialize)
 BuffBars.OnEnable = P:Def("BuffBars:OnEnable", BuffBars.OnEnable)
 BuffBars.OnDisable = P:Def("BuffBars:OnDisable", BuffBars.OnDisable)
