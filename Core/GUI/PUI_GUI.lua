@@ -3505,10 +3505,10 @@ local PUI_SHELL_TOP_TAB_UX = {
     special = { name = "Special bars", desc = "Pet, stance, possess, and other special bars." },
   },
   PRD = {
-    general = { name = "Overview", desc = "Enable, visibility, mover, Blizzard text integration, and shared PRD behavior." },
+    general = { name = "Overview", desc = "Visibility, stack layout, outer border, and copying appearance between PRD bars." },
     health = { name = "Health", desc = "Health bar layout, color, text, texture, and frame style." },
     primary = { name = "Primary Power", desc = "Mana, energy, rage, focus, runic power, and primary resource display." },
-    secondary = { name = "Secondary Power", desc = "Additional resource bars, class-specific secondary resources, and related text." },
+    secondary = { name = "Resources & tracked effects", desc = "Class resources and tracked effects, with layout, appearance, text, and cues." },
   },
   CooldownManager = {
     overview = { name = "Overview", desc = "Your groups and trackers, with shortcuts to setup and layout." },
