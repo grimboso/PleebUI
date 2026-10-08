@@ -10,6 +10,7 @@
   <Script file="PUI_PCM_AuraLayout.lua"/>
   <Script file="PUI_PCM.lua"/>
   <Script file="PUI_PCM_Keybinds.lua"/>
+  <Script file="PUI_PCM_TotemTracker.lua"/>
   <Script file="PUI_PCM_AbilityRuntime.lua"/>
   <Script file="PUI_PCM_AuraRuntime.lua"/>
   <Script file="PUI_PCM_NativeBridge.lua"/>
