@@ -620,9 +620,7 @@ function AuraRuntime:SetGroupLayoutEnabled(active)
     end
   end
 
-  if groupLayoutEnabled then
-    ns.PCMGroupManager:RequestLayout()
-  else
+  if not groupLayoutEnabled then
     for _, viewer in pairs(viewers) do
       AuraLayout:RequestLayout(viewer.key)
     end
