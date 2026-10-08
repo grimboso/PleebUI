@@ -8,8 +8,6 @@ local LSM   = ns.LSM
 local Pixel = ns.Pixel
 local Theme = ns.Theme
 
-local CooldownViewerRegions = setmetatable({}, { __mode = "k" })
-local CooldownManagerOverlayStripped = setmetatable({}, { __mode = "k" })
 local IconObjectState = setmetatable({}, { __mode = "k" })
 
 local function GetIconObjectState(object)
@@ -45,23 +43,6 @@ local function ResolveIconTarget(target)
 end
 
 
-function IconSkin.ResolveCooldownViewerRegions(itemFrame)
-  local regions = CooldownViewerRegions[itemFrame]
-  if not regions then
-    regions = {}
-    CooldownViewerRegions[itemFrame] = regions
-  end
-
-  local icon = itemFrame:GetIconTexture()
-
-  regions.itemFrame = itemFrame
-  regions.iconContainer = itemFrame.Icon == icon and itemFrame or itemFrame.Icon
-  regions.icon = icon
-  regions.cd = itemFrame:GetCooldownFrame()
-  regions.outOfRange = itemFrame.OutOfRange
-
-  return regions
-end
 
 local function HideTextureRegion(tex)
   if not tex then return end
@@ -168,195 +149,8 @@ function IconSkin.StripNineSliceAndBackdrop(frame, opts)
   end
 end
 
-local HideRegionToHider = ns.HideToHider
-
-local function StripButtonTextures_Internal(frame, opts)
-  opts = opts or {}
-
-  local keepHighlight = opts.keepHighlight
-  local keepChecked = opts.keepChecked
-  local keepNormal = opts.keepNormal
-  local keepPushed = opts.keepPushed
-
-  if frame.GetNormalTexture and not keepNormal then
-    HideTextureRegion(frame:GetNormalTexture())
-    frame:SetNormalTexture("")
-  end
-
-  if frame.GetPushedTexture and not keepPushed then
-    HideTextureRegion(frame:GetPushedTexture())
-    frame:SetPushedTexture("")
-  end
-
-  if frame.GetHighlightTexture and not keepHighlight then
-    HideTextureRegion(frame:GetHighlightTexture())
-    frame:SetHighlightTexture("")
-  end
-
-  if frame.GetCheckedTexture and not keepChecked then
-    HideTextureRegion(frame:GetCheckedTexture())
-    frame:SetCheckedTexture("")
-  end
-
-  if frame.GetDisabledTexture and not opts.keepDisabled then
-    HideTextureRegion(frame:GetDisabledTexture())
-    frame:SetDisabledTexture("")
-  end
-
-  if frame.Flash and not opts.keepFlash then
-    HideTextureRegion(frame.Flash)
-  end
-
-  if frame.IconBorder and not opts.keepIconBorder then
-    HideTextureRegion(frame.IconBorder)
-  end
-
-  if frame.IconBorderGlow and not opts.keepIconBorder then
-    HideTextureRegion(frame.IconBorderGlow)
-  end
-
-  if frame.DebuffBorder and not opts.keepDebuffBorder and opts.cooldownViewer ~= true then
-    local border = frame.DebuffBorder
-    border:Hide()
-    border:SetAlpha(0)
-
-    local borderState = GetIconObjectState(border)
-    if not borderState.hideHookShow then
-      borderState.hideHookShow = true
-      hooksecurefunc(border, "Show", function(self)
-        self:Hide()
-        self:SetAlpha(0)
-      end)
-    end
-
-    if border.Texture then
-      local texture = border.Texture
-      texture:Hide()
-      texture:SetAlpha(0)
-
-      local textureState = GetIconObjectState(texture)
-      if not textureState.hideHookShow then
-        textureState.hideHookShow = true
-        hooksecurefunc(texture, "Show", function(self)
-          self:Hide()
-          self:SetAlpha(0)
-        end)
-      end
-    end
-  end
-
-  if frame.PandemicIcon and not opts.keepPandemicIcon and opts.cooldownViewer ~= true then
-    HideRegionToHider(frame.PandemicIcon)
-    if frame.PandemicIcon.Texture then
-      HideRegionToHider(frame.PandemicIcon.Texture)
-    end
-  end
-
-  if frame.Border and not opts.keepGenericBorder then
-    HideTextureRegion(frame.Border)
-  end
-
-  if frame.BorderArt and not opts.keepGenericBorder then
-    HideTextureRegion(frame.BorderArt)
-  end
-
-  if frame.Overlay and not opts.keepOverlay then
-    HideTextureRegion(frame.Overlay)
-  end
-
-  if frame.FrameGlow and not opts.keepFrameGlow then
-    HideTextureRegion(frame.FrameGlow)
-  end
-
-  if frame.AutoCastable and not opts.keepAutoCast then
-    HideTextureRegion(frame.AutoCastable)
-  end
-
-  if frame.AutoCastShine and not opts.keepAutoCast then
-    HideFrameRegion(frame.AutoCastShine)
-  end
-
-  if frame.SlotBackground and not opts.keepSlotBackground then
-    HideRegionToHider(frame.SlotBackground)
-  end
-
-  if frame.SlotArt and not opts.keepSlotBackground then
-    HideRegionToHider(frame.SlotArt)
-  end
-end
-
-local CDM_ICON_OVERLAY_ATLAS = "UI-HUD-CoolDownManager-IconOverlay"
-
-local function FindCooldownManagerIconOverlay(frame)
-  if not frame then
-    return nil
-  end
-
-  for _, region in ipairs({ frame:GetRegions() }) do
-    if region:IsObjectType("Texture") and region:GetAtlas() == CDM_ICON_OVERLAY_ATLAS then
-      return region
-    end
-  end
-
-  return nil
-end
-
-local function StripCooldownManagerDirectRegions(frame)
-  if not frame or CooldownManagerOverlayStripped[frame] == true then
-    return
-  end
-
-  if frame.OutOfRange then
-    frame.OutOfRange:SetAlpha(0)
-    frame.OutOfRange:Hide()
-  end
-
-  local overlay = FindCooldownManagerIconOverlay(frame)
-  if overlay then
-    overlay:SetAlpha(0)
-    overlay:Hide()
-  end
-
-  for _, region in ipairs({ frame:GetRegions() }) do
-    if region:IsObjectType("MaskTexture") then
-      region:SetAlpha(0)
-      region:Hide()
-    end
-  end
-
-  CooldownManagerOverlayStripped[frame] = true
-end
-
-function IconSkin.StripCooldownManagerOverlay(itemFrame)
-  if not itemFrame then
-    return
-  end
-
-  local regions = IconSkin.ResolveCooldownViewerRegions(itemFrame)
-  StripCooldownManagerDirectRegions(regions.itemFrame)
-
-  if regions.iconContainer ~= regions.itemFrame then
-    StripCooldownManagerDirectRegions(regions.iconContainer)
-  end
-end
 
 
-
-function IconSkin.StripAllVisualLayers(target, opts)
-  opts = opts or {}
-
-  local tex, parent = ResolveIconTarget(target)
-  local frame = parent or target
-
-  -- 1) Masks (rounded corners, IconMask etc.)
-  IconSkin.StripIconMasks(tex, frame)
-
-  -- 2) 9-slice + backdrop
-  IconSkin.StripNineSliceAndBackdrop(frame, opts)
-
-  -- 3) Button textures and common overlays
-  StripButtonTextures_Internal(frame, opts)
-end
 
 function IconSkin.MakeIconSquare(target, opts)
   local tex, parent = ResolveIconTarget(target)
@@ -984,50 +778,6 @@ function IconSkin.StyleCooldownText(cd, opts)
   end
 end
 
-function IconSkin.StyleChargeText(itemFrame, opts)
-  if not itemFrame or (itemFrame.IsForbidden and itemFrame:IsForbidden()) then return end
-  opts = opts or {}
-  opts.role = opts.role or "charge"
-
-  local offsetX  = opts.offsetX
-  local offsetY  = opts.offsetY
-  local point, anchorX, anchorY = IconSkin.ResolveTextAnchor(
-    opts.role,
-    opts.point,
-    offsetX,
-    offsetY
-  )
-
-  local fs =
-        (itemFrame.ChargeCount and itemFrame.ChargeCount.Current)
-     or (itemFrame.Applications and itemFrame.Applications.Applications)
-     or itemFrame.Applications
-     or itemFrame.Count
-     or itemFrame.count
-     or nil
-
-  if fs and fs.GetObjectType and fs:GetObjectType() == "FontString" then
-    ApplyFontStringStyle(fs, opts)
-
-    if offsetX ~= nil or offsetY ~= nil or opts.point ~= nil then
-      local fontState = GetIconObjectState(fs)
-      if fontState.offsetAnchorParent ~= itemFrame
-        or fontState.offsetAnchorPoint ~= point
-        or fontState.offsetAnchorRelativePoint ~= point
-        or fontState.offsetAnchorX ~= anchorX
-        or fontState.offsetAnchorY ~= anchorY
-      then
-        fontState.offsetAnchorParent = itemFrame
-        fontState.offsetAnchorPoint = point
-        fontState.offsetAnchorRelativePoint = point
-        fontState.offsetAnchorX = anchorX
-        fontState.offsetAnchorY = anchorY
-        fs:ClearAllPoints()
-        fs:SetPoint(point, itemFrame, point, anchorX, anchorY)
-      end
-    end
-  end
-end
 
 -- Safe queued font engine
 
@@ -1070,14 +820,7 @@ end
 
 -- CooldownFrame_Set is a secure refresh path and must not be hooked for fonts.
 
-local ICON_DEFAULT_SIZE     = 32
-local ICON_DEFAULT_SPACING  = 2
 local COOLDOWN_FONT_DEFAULT_SIZE = 12
-
-
-function IconSkin:GetGlobalIconSize()
-  return self.db.profile.globalIconSize or ICON_DEFAULT_SIZE
-end
 
 function IconSkin:GetGlobalCooldownFontSize()
   return self.db.profile.globalCooldownFontSize or COOLDOWN_FONT_DEFAULT_SIZE
@@ -1086,8 +829,6 @@ end
 function IconSkin:OnInitialize()
   self.db = Addon.db:RegisterNamespace("IconSkin", {
     profile = {
-      globalIconSize    = ICON_DEFAULT_SIZE,
-      globalIconSpacing = ICON_DEFAULT_SPACING,
       globalCooldownFontSize = COOLDOWN_FONT_DEFAULT_SIZE,
     },
   })
@@ -1105,66 +846,5 @@ function IconSkin:HandleSafeFontPulse()
   IconSkin.ProcessBorderQueue()
 end
 
-function IconSkin.SkinCooldownViewerItem(itemFrame)
-  if not itemFrame then return end
-  if itemFrame.IsForbidden and itemFrame:IsForbidden() then return end
-  local itemState = GetIconObjectState(itemFrame)
-  if itemState.cooldownViewerSkinned then return end
 
-  local em = _G.EditModeManagerFrame
-  if em and em.IsEditModeActive and em:IsEditModeActive() then
-    return
-  end
-
-  local r = IconSkin.ResolveCooldownViewerRegions(itemFrame)
-  local iconTex = r and r.icon or nil
-  local cooldownFrame = r and r.cd or nil
-  if not iconTex then return end
-
-  local size = tonumber(IconSkin:GetGlobalIconSize()) or 32
-  if size < 8 then size = 8 end
-  if size > 128 then size = 128 end
-  size = Pixel.Round(size)
-
-  if itemFrame.SetSize then
-    itemFrame:SetSize(size, size)
-  end
-
-  IconSkin.StripAllVisualLayers(itemFrame, {
-    cooldownViewer = true,
-    skipBackdropFrame = true,
-  })
-  IconSkin.StripCooldownManagerOverlay(itemFrame)
-
-  local iconParent = r.iconContainer or itemFrame
-  if iconTex.ClearAllPoints then
-    iconTex:ClearAllPoints()
-  end
-  if iconTex.SetAllPoints then
-    iconTex:SetAllPoints(iconParent)
-  end
-  if iconTex.SetTexCoord then
-    iconTex:SetTexCoord(0.08, 0.92, 0.08, 0.92)
-  end
-  IconSkin.StripIconMasks(iconTex)
-
-  if cooldownFrame then
-    IconSkin.SquareCooldown(cooldownFrame)
-    IconSkin.StyleCooldownText(cooldownFrame, { role = "cooldown" })
-  end
-
-  local chargeFS = itemFrame.ChargeCount and itemFrame.ChargeCount.Current
-  if chargeFS then
-    ApplyFontStringStyle(chargeFS, { role = "charge" })
-  end
-
-  local stackFS = itemFrame.Applications and (itemFrame.Applications.Applications or itemFrame.Applications) or nil
-  if stackFS and stackFS.SetText then
-    ApplyFontStringStyle(stackFS, { role = "stack" })
-  end
-
-  IconSkin.HideCooldownViewerDebuffAndPandemic(itemFrame)
-  IconSkin.ApplyBorder(itemFrame)
-  itemState.cooldownViewerSkinned = true
-end
 
