@@ -11,6 +11,7 @@ local AuraWidget = ns.AuraWidget
 local IconSkin = ns.IconSkin
 local IconSettings = ns.PCMIconSettings
 local DB = ns.PCM_DBExports
+local Options = ns.PCMOptions
 local P, TrackThis = ns.Pleebug:DropIn(Addon, { name = "PCM", bucket = "Config" })
 local function _PCM_RefreshPreview()
   ns.PCMPreview.Refresh()
@@ -646,7 +647,6 @@ local function _PCM_BuildBuffIconFontArgs(cm, viewerKey, prefix, fontKey, orderB
 end
 
 local _PCM_BuildIconOverrideArgs
-local _PCM_BuildIconOverrideTreeArgs
 
 local function _PCM_ParseCustomBuffSpellIDs(value)
   local spellIDs = {}
@@ -668,7 +668,7 @@ local function _PCM_RefreshCustomBuffTracking()
   Cooldowns:RefreshAbilityCatalog()
 end
 
-local function _PCM_BuildBuffIconsTabArgs(includeIconOverrides)
+local function _PCM_BuildBuffIconsTabArgs()
   local cm = GetPCMBuffsRoot()
   local viewerCM = GetPCMRoot()
   local args = {}
@@ -882,11 +882,6 @@ local function _PCM_BuildBuffIconsTabArgs(includeIconOverrides)
     args[k] = v
   end
 
-  local iconOverrideArgs
-  if includeIconOverrides ~= false then
-    iconOverrideArgs = _PCM_BuildIconOverrideTreeArgs(viewerKey)
-  end
-
   return {
     tracking = {
       type = "group",
@@ -973,13 +968,6 @@ local function _PCM_BuildBuffIconsTabArgs(includeIconOverrides)
           },
         },
       },
-    },
-    iconOverrides = {
-      type = "group",
-      name = "Individual icons",
-      order = 100,
-      childGroups = "select",
-      args = iconOverrideArgs,
     },
   }
 end
@@ -2073,7 +2061,9 @@ local function _PCM_BuildIconTextSettingsArgs(args, viewerKey, entry, role, labe
 
   args[prefix .. "Show"] = {
     type = "select",
-    name = "Visibility",
+    name = role == "cooldown" and (entry.settingsFamily == "buff" and "Show duration countdown" or "Show cooldown countdown")
+      or role == "charge" and (entry.settingsFamily == "buff" and "Show stacks" or "Show charges")
+      or "Show keybinds",
     order = orderBase + 1,
     values = {
       [ICON_INHERIT] = "Use viewer setting",
@@ -3034,36 +3024,6 @@ _PCM_BuildIconOverrideArgs = function(viewerKey, entry)
   return args
 end
 
-_PCM_BuildIconOverrideTreeArgs = function(viewerKey)
-  local args = {}
-  local entries = IconSettings:GetViewerEntries(viewerKey)
-
-  for index = 1, #entries do
-    local entry = entries[index]
-    local optionKey = IconSettings:GetOptionKey(entry)
-    if optionKey then
-      args[optionKey] = {
-        type = "group",
-        name = "|T" .. tostring(entry.texture or 134400) .. ":16:16:0:0|t " .. entry.name,
-        order = index,
-        args = _PCM_BuildIconOverrideArgs(viewerKey, entry),
-      }
-    end
-  end
-
-  if #entries == 0 then
-    args.__empty = {
-      type = "description",
-      name = InCombatLockdown()
-        and "Per-icon overrides become available after combat."
-        or "Add a spell to this Cooldown Manager viewer to configure its overrides.",
-      order = 1,
-    }
-  end
-
-  return args
-end
-
 local function _PCM_BuildCooldownViewerTreeArgs(cm, viewerKey, viewerLabel, opts, extraGroups)
   opts = opts or {}
   local args = {}
@@ -3200,20 +3160,10 @@ local function _PCM_BuildCooldownViewerTreeArgs(cm, viewerKey, viewerLabel, opts
     end
   end
 
-  if opts.includeIconOverrides ~= false then
-    args.iconOverrides = {
-      type = "group",
-      name = "Individual icons",
-      order = 1000,
-      childGroups = "select",
-      args = _PCM_BuildIconOverrideTreeArgs(viewerKey),
-    }
-  end
-
   return args
 end
 
-local function _PCM_BuildEssentialTabArgs(includeIconOverrides)
+local function _PCM_BuildEssentialTabArgs()
   local cm = GetPCMRoot()
 
   if not cm then
@@ -3232,7 +3182,6 @@ local function _PCM_BuildEssentialTabArgs(includeIconOverrides)
     fontLabelPrefix = "Essential",
     splitFonts = true,
     showIconBorder = true,
-    includeIconOverrides = includeIconOverrides,
   }, {
     {
       key = "glow",
@@ -3240,30 +3189,6 @@ local function _PCM_BuildEssentialTabArgs(includeIconOverrides)
       args = _PCM_BuildEssentialGlowArgs(cm),
     },
   })
-
-  args.general.args.enabled = {
-    type = "toggle",
-    name = "Enable Cooldown Manager",
-    order = 1,
-    disabled = function()
-      return _G.InCombatLockdown()
-    end,
-    get = function()
-      return Cooldowns:IsModuleEnabledByUser()
-    end,
-    set = function(_, v)
-      if Cooldowns:SetModuleEnabled(v == true) then
-        ns.PCMHooks.RefreshRuntimeState()
-        LibStub("AceConfigRegistry-3.0"):NotifyChange(ADDON_NAME)
-      end
-    end,
-  }
-
-  args.general.args.reloadNote = {
-    type = "description",
-    name = "Changes apply immediately.",
-    order = 2,
-  }
 
   return args
 end
@@ -3930,7 +3855,7 @@ local _PCM_BuildCustomBarsTreeNodes
 
 local function _PCM_GetCustomBarsTargetPath(targetKey)
   if type(targetKey) == "string" and targetKey ~= "" then
-    local nodes = _PCM_BuildCustomBarsTreeNodes()
+    local nodes = _PCM_BuildCustomBarsTreeNodes(false)
     if type(nodes) == "table" then
       if type(nodes[targetKey]) == "table" then
         return { "CooldownManager", "customTrackers", targetKey }
@@ -8473,11 +8398,15 @@ _PCM_BuildCustomBarsTreeNodes = function(buildLeaves)
       name = "|cff808080" .. name .. "|r"
     end
 
-    local nodeArgs = buildLeaves == false and {} or buildArgs(id)
+    local activePath = ns._PUIActiveOptionsPath or {}
+    local selectedKey = activePath[3] == "__disabledNotLoaded" and activePath[4] or activePath[3]
+    local nodeArgs = buildLeaves ~= false and selectedKey == key
+      and Options:BuildSections(buildArgs(id)) or {}
 
     local node = {
       type = "group",
       name = name,
+      childGroups = "tab",
       args = nodeArgs,
     }
 
@@ -8716,7 +8645,29 @@ local function _PCM_BuildGroupEntryArgs(groupID, record, order)
     },
   }
 
-  if kind == "ICON" then
+  if record.viewerKey == "ConsumableTracker" then
+    args.description = {
+      type = "description",
+      name = "Timer and appearance use Items & racials settings. Layout uses this group.",
+      order = 10,
+    }
+    args.editItem = {
+      type = "execute",
+      name = "Edit item settings",
+      order = 11,
+      func = function()
+        local definitions = Cooldowns:GetConsumableTrackerDefinitions()
+        for index = 1, #definitions do
+          local definition = definitions[index]
+          if Cooldowns:GetConsumableTrackerRecordKey(definition.key) == recordKey then
+            Options.itemReturnPath = { "CooldownManager", "groups", groupID, "entries", recordKey }
+            Addon:OpenOptions({ "CooldownManager", "consumables", "slots", definition.key }, false, true)
+            return
+          end
+        end
+      end,
+    }
+  elseif kind == "ICON" then
     local appearanceArgs = _PCM_BuildIconOverrideArgs(record.viewerKey, entry)
     for key, option in pairs(appearanceArgs) do
       option.order = (tonumber(option.order) or 0) + 10
@@ -8729,7 +8680,95 @@ local function _PCM_BuildGroupEntryArgs(groupID, record, order)
       order = 10,
     }
   end
-  return args
+  if kind == "ICON" and record.viewerKey ~= "ConsumableTracker" then
+    local inheritedNames = {
+      EssentialCooldownViewer = "Essential", UtilityCooldownViewer = "Utility",
+      BuffIconCooldownViewer = "Buff Icons",
+    }
+    local inheritedValues = {
+      swipeSource = function()
+        local _, swipe = GetViewerSwipeDB(GetPCMRoot(), record.viewerKey)
+        return swipe.forceCooldownSwipe == true and "Cooldown only" or "Duration while active"
+      end,
+      swipeShow = function()
+        local _, swipe = GetViewerSwipeDB(GetPCMRoot(), record.viewerKey)
+        return swipe[entry.settingsFamily == "buff" and "duration" or "cooldown"] ~= false
+      end,
+      durationSwipe = function()
+        local _, swipe = GetViewerSwipeDB(GetPCMRoot(), record.viewerKey)
+        return swipe.duration ~= false
+      end,
+      swipeGCD = function()
+        local _, swipe = GetViewerSwipeDB(GetPCMRoot(), record.viewerKey)
+        return swipe.gcd ~= false
+      end,
+      cooldownShow = function()
+        if entry.settingsFamily == "buff" then return Cooldowns:GetDurationCountEnabled(record.viewerKey) end
+        return Cooldowns:GetCooldownCountEnabled(record.viewerKey)
+      end,
+      durationText = function() return Cooldowns:GetDurationCountEnabled(record.viewerKey) end,
+      chargeShow = function()
+        if entry.settingsFamily == "buff" then return Cooldowns:GetBuffCountEnabled(record.viewerKey) end
+        return Cooldowns:GetChargeCountEnabled(record.viewerKey)
+      end,
+      keybindShow = function() return Cooldowns:GetKeybindTextEnabled(record.viewerKey) end,
+    }
+    for key, resolveValue in pairs(inheritedValues) do
+      local option = args[key]
+      if option then
+        local values = option.values
+        option.values = function()
+          local effective = resolveValue()
+          values[ICON_INHERIT] = "Use " .. inheritedNames[record.viewerKey] .. " settings ("
+            .. (type(effective) == "boolean" and (effective and "Show" or "Hide") or effective) .. ")"
+          return values
+        end
+      end
+    end
+    args.inheritance = {
+      type = "description",
+      order = 4,
+      name = function()
+        local names = {
+          EssentialCooldownViewer = "Essential", UtilityCooldownViewer = "Utility",
+          BuffIconCooldownViewer = "Buff Icons",
+        }
+        local source = IconSettings:GetField(entry, "swipe", "source")
+        local _, swipe = GetViewerSwipeDB(GetPCMRoot(), record.viewerKey)
+        local effective = source or (swipe.forceCooldownSwipe == true and "COOLDOWN" or "AUTOMATIC")
+        local owner = source and "This icon" or names[record.viewerKey] .. " settings"
+        return "Timer display: " .. (effective == "COOLDOWN" and "Cooldown only" or "Duration while active")
+          .. " (" .. owner .. "). Other inherited settings use " .. names[record.viewerKey] .. ". Layout uses this group."
+      end,
+    }
+    args.inheritedTimer = {
+      type = "execute",
+      name = "Use inherited timer settings",
+      order = 70,
+      func = function()
+        for _, field in ipairs({ "source", "show", "showDuration", "showGCD" }) do
+          IconSettings:SetField(entry, "swipe", field, nil)
+        end
+        for _, field in ipairs({ "show", "durationShow", "rechargeShow" }) do
+          IconSettings:SetField(entry, "cooldown", field, nil)
+        end
+        Cooldowns:RefreshIndividualIconSettings(record.viewerKey)
+      end,
+    }
+    args.editInherited = {
+      type = "execute",
+      name = "Edit inherited settings",
+      order = 5,
+      func = function()
+        local groupIDs = {
+          EssentialCooldownViewer = "essential", UtilityCooldownViewer = "utility",
+          BuffIconCooldownViewer = "buff-icons",
+        }
+        Addon:OpenOptions({ "CooldownManager", "groups", groupIDs[record.viewerKey], "timer" }, false, true)
+      end,
+    }
+  end
+  return Options:BuildSections(args)
 end
 
 local function _PCM_BuildCustomGroupSettings(groupID, group)
@@ -8849,26 +8888,50 @@ end
 
 local function _PCM_BuildDefaultGroupSettings(group)
   local viewerKey = group.defaultViewerKey
+  local args
   if viewerKey == "EssentialCooldownViewer" then
-    return _PCM_BuildEssentialTabArgs(false)
+    args = _PCM_BuildEssentialTabArgs()
   elseif viewerKey == "UtilityCooldownViewer" then
-    return _PCM_BuildCooldownViewerTreeArgs(GetPCMRoot(), viewerKey, "Utility", {
+    args = _PCM_BuildCooldownViewerTreeArgs(GetPCMRoot(), viewerKey, "Utility", {
       effectsKey = "utility",
       fontLabelPrefix = "Utility",
       splitFonts = true,
       showIconBorder = true,
-      includeIconOverrides = false,
     })
   elseif viewerKey == "BuffIconCooldownViewer" then
-    local args = _PCM_BuildBuffIconsTabArgs(false)
-    args.iconOverrides = nil
-    return args
+    args = _PCM_BuildBuffIconsTabArgs()
+    args.timer = {
+      type = "group", name = "Timer", order = 15,
+      args = {
+        swipeDuration = {
+          type = "toggle", name = "Show duration swipe", order = 1,
+          get = function() return DB.GetViewerSwipeDB(viewerKey).duration ~= false end,
+          set = function(_, value)
+            DB.GetViewerSwipeDB(viewerKey).duration = value == true
+            _PCM_RefreshBuffIconViewer(viewerKey)
+          end,
+        },
+        countDuration = {
+          type = "toggle", name = "Show duration countdown", order = 2,
+          get = function() return Cooldowns:GetDurationCountEnabled(viewerKey) end,
+          set = function(_, value) Cooldowns:SetDurationCountEnabled(viewerKey, value == true) end,
+        },
+      },
+    }
+  else
+    args = _PCM_BuildBuffBarsTabArgs()
   end
-
-  return _PCM_BuildBuffBarsTabArgs()
+  args.tracking = args.tracking or { type = "group", name = "Tracking", order = 1, args = {} }
+  args.tracking.args.nativeTracking = {
+    type = "execute", name = "Edit tracked spells", order = 10,
+    desc = "Open Blizzard's tracking and reminder sound settings.",
+    disabled = InCombatLockdown,
+    func = function() _G.CooldownViewerSettings:ShowUIPanel(false) end,
+  }
+  return args
 end
 
-local function _PCM_BuildGroupNode(groupID, group, order, buildContent)
+local function _PCM_BuildGroupNode(groupID, group, order, buildContent, activePath)
   local settingsArgs = {}
   if buildContent then
     settingsArgs = group.isDefault
@@ -8876,69 +8939,139 @@ local function _PCM_BuildGroupNode(groupID, group, order, buildContent)
       or _PCM_BuildCustomGroupSettings(groupID, group)
   end
 
-  local args = {
-    settings = {
-      type = "group",
-      name = "Group settings",
-      order = 1,
-      inline = true,
-      args = settingsArgs,
-    },
-  }
+  local args = Options:BuildSections(settingsArgs)
 
   local activeGroup = ns.PCMGroupManager:GetActiveGroup(groupID)
   local records = activeGroup and activeGroup.records or {}
+  local entryArgs = {}
+  local selectedKey = activePath and activePath[5]
+  local firstKey
   for index = 1, #records do
     local record = records[index]
     local entry = record.entry
-    args[entry.catalogKey] = {
-      type = "group",
-      name = "|T" .. tostring(entry.texture or 134400) .. ":16:16:0:0|t " .. tostring(entry.name),
-      order = index + 10,
-      args = buildContent and _PCM_BuildGroupEntryArgs(groupID, record, index) or {},
+    if Options:MatchesEntry(groupID, entry) then
+      firstKey = firstKey or entry.catalogKey
+      entryArgs[entry.catalogKey] = {
+        type = "group",
+        name = "|T" .. tostring(entry.texture or 134400) .. ":16:16:0:0|t " .. tostring(entry.name),
+        order = index + 10,
+        childGroups = "tab",
+        args = buildContent and activePath[4] == "entries"
+          and (selectedKey == entry.catalogKey or not selectedKey and firstKey == entry.catalogKey)
+          and _PCM_BuildGroupEntryArgs(groupID, record, index) or {},
+      }
+    end
+  end
+  if buildContent then
+    entryArgs.search = {
+      type = "input", name = "Search entries", desc = "Find a spell or item by name or spell ID.", order = 1,
+      get = function() return Options.entryFilters[groupID] or "" end,
+      set = function(_, value)
+        Options.entryFilters[groupID] = string.lower(value:match("^%s*(.-)%s*$"))
+        Addon:NotifyOptionsTreeChanged("CooldownManager", { "CooldownManager", "groups", groupID, "entries" })
+      end,
+    }
+    entryArgs.summary = {
+      type = "description", order = 2,
+      name = firstKey and "Select an entry to edit its settings."
+        or #records == 0 and "This group has no entries. Add tracking in /cdm or move an entry into this group."
+        or "No entries match your search.",
     }
   end
+  args.entries = {
+    type = "group", name = "Entries", order = 80, childGroups = "select", args = entryArgs,
+  }
 
   return {
     type = "group",
     name = group.name,
     order = order,
-    childGroups = "tree",
+    childGroups = "tab",
     args = args,
   }
 end
 
-local function _PCM_BuildUnifiedManagerArgs(activeKey)
+local function _PCM_BuildUnifiedManagerArgs(activeKey, activePath)
   local overviewArgs = {}
-  if activeKey == "overview" then
-    overviewArgs = {
-      information = {
-        type = "description",
-        name = "Default groups follow Blizzard's category and order from /cdm. Use /pe or Group to move entries into PleebUI custom groups. Custom groups use PleebUI order. Blizzard reminder sounds stay configured in /cdm.",
-        order = 1,
-      },
+  local groups = ns.PCMGroupManager:GetGroups()
+  local function CreateGroupArgs()
+    return {
       createIconGroup = {
-        type = "execute",
-        name = "Create icon group",
-        order = 2,
+        type = "execute", name = "Create icon group", order = 2,
         disabled = _PCM_IsGroupStructureLocked,
         func = function() ns.PCMGroupManager:CreateGroup("ICON") end,
       },
       createBarGroup = {
-        type = "execute",
-        name = "Create bar group",
-        order = 3,
+        type = "execute", name = "Create bar group", order = 3,
         disabled = _PCM_IsGroupStructureLocked,
         func = function() ns.PCMGroupManager:CreateGroup("BAR") end,
       },
-      resetGroups = {
-        type = "execute",
-        name = "Reset groups",
-        order = 4,
-        confirm = true,
-        disabled = _PCM_IsGroupStructureLocked,
-        func = function() ns.PCMGroupManager:ResetGroups() end,
-      },
+    }
+  end
+  if activeKey == "overview" then
+    overviewArgs = CreateGroupArgs()
+    overviewArgs.enabled = {
+      type = "toggle", name = "Enable Cooldown Manager", order = 1,
+      disabled = InCombatLockdown,
+      get = function() return Cooldowns:IsModuleEnabledByUser() end,
+      set = function(_, value)
+        if Cooldowns:SetModuleEnabled(value == true) then
+          ns.PCMHooks.RefreshRuntimeState()
+          LibStub("AceConfigRegistry-3.0"):NotifyChange(ADDON_NAME)
+        end
+      end,
+    }
+    overviewArgs.addTracker = {
+      type = "execute", name = "Add tracker", order = 4,
+      func = function() ns.PCMCustomTrackerInstaller:Open() end,
+    }
+    overviewArgs.editLayout = {
+      type = "execute", name = "Open layout", order = 5,
+      disabled = InCombatLockdown,
+      func = function() Addon:SetEditMode(true) end,
+    }
+    overviewArgs.summary = {
+      type = "description", order = 6,
+      name = function()
+        local _, _, spellRoot, chargeRoot, auraRoot = _PCM_GetCustomBarsRootLists()
+        local trackers, enabledTrackers = 0, 0
+        for _, root in ipairs({ spellRoot, chargeRoot, auraRoot }) do
+          for _, config in pairs(root) do
+            if type(config) == "table" then
+              trackers = trackers + 1
+              if config.enabled ~= false then enabledTrackers = enabledTrackers + 1 end
+            end
+          end
+        end
+        return tostring(#groups.order) .. " groups · " .. tostring(trackers) .. " custom trackers ("
+          .. tostring(enabledTrackers) .. " enabled) · Items & racials "
+          .. (DB.GetConsumableTrackerDB().enabled == true and "enabled" or "disabled")
+      end,
+    }
+    overviewArgs.groups = {
+      type = "group", name = "Your groups", inline = true, order = 10, args = {},
+    }
+    for index = 1, #groups.order do
+      local groupID = groups.order[index]
+      local group = groups.byID[groupID]
+      local activeGroup = ns.PCMGroupManager:GetActiveGroup(groupID)
+      overviewArgs.groups.args[groupID] = {
+        type = "execute", order = index,
+        name = group.name .. " (" .. tostring(activeGroup and #activeGroup.records or 0) .. " entries)",
+        func = function() Addon:OpenOptions({ "CooldownManager", "groups", groupID }, false, true) end,
+      }
+    end
+    overviewArgs.items = {
+      type = "execute", name = "Edit items & racials", order = 11,
+      func = function() Addon:OpenOptions({ "CooldownManager", "consumables" }, false, true) end,
+    }
+    overviewArgs.trackers = {
+      type = "execute", name = "Edit custom trackers", order = 12,
+      func = function() Addon:OpenOptions({ "CooldownManager", "customTrackers" }, false, true) end,
+    }
+    overviewArgs.information = {
+      type = "description", order = 20,
+      name = "Default groups follow the tracking and order in /cdm. Custom groups use their own order. Use Groups to arrange entries and /cdm to change native tracking or reminder sounds.",
     }
   end
 
@@ -8951,19 +9084,23 @@ local function _PCM_BuildUnifiedManagerArgs(activeKey)
     },
   }
 
-  local groups = ns.PCMGroupManager:GetGroups()
+  local groupArgs = activeKey == "groups" and CreateGroupArgs() or {}
   for index = 1, #groups.order do
     local groupID = groups.order[index]
     local group = groups.byID[groupID]
     if group then
-      args[groupID] = _PCM_BuildGroupNode(
+      groupArgs[groupID] = _PCM_BuildGroupNode(
         groupID,
         group,
         index + 10,
-        activeKey == groupID
+        activeKey == "groups" and activePath[3] == groupID,
+        activePath
       )
     end
   end
+  args.groups = {
+    type = "group", name = "Groups", order = 10, childGroups = "tree", args = groupArgs,
+  }
 
   args.customTrackers = {
     type = "group",
@@ -8974,16 +9111,25 @@ local function _PCM_BuildUnifiedManagerArgs(activeKey)
   }
   args.consumables = {
     type = "group",
-    name = "Consumables",
+    name = "Items & racials",
     order = 1010,
+    childGroups = "tab",
     args = activeKey == "consumables" and _PCM_BuildConsumablesTabArgs() or {},
   }
-  args.developer = {
+  args.advanced = {
     type = "group",
-    name = "Developer",
+    name = "Advanced",
     order = 1020,
-    args = activeKey == "developer" and _PCM_BuildDeveloperTabArgs() or {},
+    args = activeKey == "advanced" and _PCM_BuildDeveloperTabArgs() or {},
   }
+  if activeKey == "advanced" then
+    args.advanced.args.resetGroups = {
+      type = "execute", name = "Reset groups", order = 100, confirm = true,
+      confirmText = "Delete custom groups and restore default group assignments?",
+      disabled = _PCM_IsGroupStructureLocked,
+      func = function() ns.PCMGroupManager:ResetGroups() end,
+    }
+  end
   return args
 end
 
@@ -9339,8 +9485,23 @@ _PCM_BuildConsumablesTabArgs = function()
     local definition = definitions[index]
     args.slots.args[definition.key] = BuildSlotArgs(definition, index)
   end
-
-  return args
+  local slots = args.slots
+  args.slots = nil
+  slots.name = "Items"
+  slots.inline = false
+  slots.childGroups = "select"
+  slots.order = 80
+  for _, slot in pairs(slots.args) do
+    slot.inline = false
+  end
+  local sections = Options:BuildSections(args)
+  sections.slots = slots
+  sections.returnToGroup = {
+    type = "execute", name = "Back to group entry", order = 0,
+    hidden = function() return Options.itemReturnPath == nil end,
+    func = function() Addon:OpenOptions(Options.itemReturnPath, false, true) end,
+  }
+  return sections
 end
 
 _PCM_BuildDeveloperTabArgs = function()
@@ -9454,7 +9615,7 @@ local function PCMOptionsProvider(Addon)
       type = "group",
       name = "Pleeb Cooldown Manager",
       childGroups = "tree",
-      args = _PCM_BuildUnifiedManagerArgs(activeKey),
+      args = _PCM_BuildUnifiedManagerArgs(activeKey, activePath or {}),
     }
 
     _PCM_WrapPreviewRefresh(options)
@@ -9478,6 +9639,9 @@ Addon:RegisterOptionsSection("CooldownManager", PCMOptionsProvider, 50, "Pleeb C
 })
 
 ns.Registry.Options.CooldownManager.dynamicOptions = true
+ns.Registry.Options.CooldownManager.optionsCacheKey = Options.CacheKey
+ns.Registry.Options.CooldownManager.resolveOptionsPath = Options.ResolvePath
+ns.Registry.Options.CooldownManager.getSearchEntries = Options.GetSearchEntries
 
 
 
@@ -9515,7 +9679,6 @@ ns.Registry.Options.CooldownManager.dynamicOptions = true
   _PCM_GetColorComponents = P:Def('_PCM_GetColorComponents', _PCM_GetColorComponents)
   _PCM_BuildIconTextSettingsArgs = P:Def('_PCM_BuildIconTextSettingsArgs', _PCM_BuildIconTextSettingsArgs)
   _PCM_BuildIconOverrideArgs = P:Def('_PCM_BuildIconOverrideArgs', _PCM_BuildIconOverrideArgs)
-  _PCM_BuildIconOverrideTreeArgs = P:Def('_PCM_BuildIconOverrideTreeArgs', _PCM_BuildIconOverrideTreeArgs)
   _PCM_BuildCooldownViewerTreeArgs = P:Def('_PCM_BuildCooldownViewerTreeArgs', _PCM_BuildCooldownViewerTreeArgs)
   _PCM_BuildEssentialTabArgs = P:Def('_PCM_BuildEssentialTabArgs', _PCM_BuildEssentialTabArgs)
   _PCM_BuildBuffBarsTabArgs = P:Def('_PCM_BuildBuffBarsTabArgs', _PCM_BuildBuffBarsTabArgs)
