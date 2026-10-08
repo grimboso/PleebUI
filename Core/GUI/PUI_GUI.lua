@@ -1020,6 +1020,14 @@ end
 _PUI_GetValidatedOptionsPath = function(path)
   path = _PUI_CopyOptionsPath(path)
   local record = path and optionsRegistry[path[1]]
+  if record and record.parentKey and record.parentKey ~= "" then
+    local sectionPath = _PUI_GetSectionPath(path[1])
+    for index = 2, #path do
+      sectionPath[#sectionPath + 1] = path[index]
+    end
+    path = sectionPath
+    record = optionsRegistry[path[1]]
+  end
   if record and record.resolveOptionsPath then
     path = record.resolveOptionsPath(path)
   end
