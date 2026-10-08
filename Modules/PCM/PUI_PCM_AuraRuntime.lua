@@ -10,13 +10,11 @@ local AuraSlotDriver = ns.AuraSlotDriver
 local AuraWidget = ns.AuraWidget
 local IconSettings = ns.PCMIconSettings
 local PCMPresentation = ns.PCMPresentation
+local TotemTracker = ns.PCMTotemTracker
 
 local CreateFrame = CreateFrame
 local UIParent = UIParent
 local C_Spell = C_Spell
-local GetNumTotemSlots = GetNumTotemSlots
-local GetTotemInfo = GetTotemInfo
-local GetTotemDuration = GetTotemDuration
 local ipairs = ipairs
 local pairs = pairs
 local type = type
@@ -66,9 +64,8 @@ local pendingAppearance = false
 local pendingVisibility = false
 local pendingSlotConfiguration = false
 local pendingTotems = false
-local totemSpellIDs = {}
-local totemDurations = {}
 local SetSlotActive
+local SetRecordTotem
 
 local AURA_RESTRICTION_TYPES = {
   [Enum.AddOnRestrictionType.Combat] = true,
@@ -204,14 +201,14 @@ SetSlotActive = function(record, active)
     if handle then
       AuraSlotDriver:SetSlotActive(
         handle,
-        active and record.totemSlot == nil
+        active and record.totemDuration == nil
           and (record.entry.playerAuraOnly ~= true or unit == "player")
       )
     end
   end
   local button = record.buttons.totem
   if button then
-    local shown = active and record.totemSlot ~= nil
+    local shown = active and record.totemDuration ~= nil
     if record.totemShown ~= shown then
       record.totemShown = shown
       button:SetShown(shown)
@@ -282,7 +279,37 @@ local function ConfigureRecordSlots(record)
   SetSlotActive(record, enabled and presentationActive and RecordOccupiesLayout(record))
 end
 
+local function PrepareTotemButton(record)
+  if record.buttons.totem then
+    return
+  end
+  local button = CreateFrame(
+    "Frame", nil, viewers[record.viewerKey].frame, "PUI_AuraApplicationDurationTemplate"
+  )
+  button:Hide()
+  InitializeAuraButton(record, button, "totem")
+  if record.viewerKey == BUFF_ICON_VIEWER then
+    button.PUIDurationCooldown:SetScript("OnCooldownDone", function()
+      SetRecordTotem(record, nil)
+    end)
+  end
+  button:SetScript("OnEnter", function()
+    GameTooltip:SetOwner(button, "ANCHOR_RIGHT")
+    GameTooltip:SetSpellByID(record.totemSpellID)
+    GameTooltip:Show()
+  end)
+  button:SetScript("OnLeave", function()
+    GameTooltip:Hide()
+  end)
+end
+
 local function ApplyRecordAppearance(record)
+  for spellID in pairs(record.candidateSpellIDs) do
+    if TotemTracker.knownSpellIDs[spellID] then
+      PrepareTotemButton(record)
+      break
+    end
+  end
   if record.viewerKey == BUFF_ICON_VIEWER then
     local style = GetIconStyle(record)
     record.collapseWhenInactive = style.hideWhenInactive == true
@@ -314,31 +341,13 @@ local function ApplyRecordAppearance(record)
   record.appearancePending = nil
 end
 
-local function SetRecordTotem(record, slot, duration)
-  local wasActive = record.totemSlot ~= nil
-  record.totemSlot = slot
-  record.totemDuration = duration
-  if slot and not record.buttons.totem then
-    local button = CreateFrame(
-      "Frame", nil, viewers[record.viewerKey].frame, "PUI_AuraApplicationDurationTemplate"
-    )
-    button:Hide()
-    InitializeAuraButton(record, button, "totem")
-    if record.viewerKey == BUFF_ICON_VIEWER then
-      button.PUIDurationCooldown:SetScript("OnCooldownDone", function()
-        SetRecordTotem(record, nil, nil)
-      end)
-    end
-    button:SetScript("OnEnter", function()
-      GameTooltip:SetOwner(button, "ANCHOR_RIGHT")
-      GameTooltip:SetSpellByID(record.totemSpellID)
-      GameTooltip:Show()
-    end)
-    button:SetScript("OnLeave", function()
-      GameTooltip:Hide()
-    end)
-  end
-  if slot then
+SetRecordTotem = function(record, binding)
+  local wasActive = record.totemDuration ~= nil
+  record.totemSlot = binding and binding.slot or nil
+  record.totemDuration = binding and binding.duration or nil
+  record.totemSpellID = binding and binding.spellID or nil
+  if binding then
+    PrepareTotemButton(record)
     local auraParts = record.buttons.totem.__puiAuraApplicationDurationParts
     auraParts.icon:SetTexture(record.runtimeTexture or record.entry.texture)
     if auraParts.ownedName then
@@ -347,7 +356,7 @@ local function SetRecordTotem(record, slot, duration)
   end
   record.totemShown = nil
   SetSlotActive(record, record.presentationShown == true)
-  if wasActive ~= (slot ~= nil) then
+  if wasActive ~= (binding ~= nil) then
     if groupLayoutEnabled then
       ns.PCMGroupManager:RequestLayout()
     else
@@ -356,45 +365,22 @@ local function SetRecordTotem(record, slot, duration)
   end
 end
 
-local function RefreshTotemBindings(preferredSlot)
+local function RefreshTotemBindings()
   if not presentationActive then
     return
   end
-  wipe(totemSpellIDs)
-  wipe(totemDurations)
-  local slotCount = GetNumTotemSlots()
-  for slot = 1, slotCount do
-    local spellID = select(7, GetTotemInfo(slot))
-    if issecretvalue(spellID) then
-      totemSpellIDs[slot] = false
-      totemDurations[slot] = GetTotemDuration(slot)
-    elseif type(spellID) == "number" and spellID > 0 then
-      totemSpellIDs[slot] = spellID
-      totemDurations[slot] = GetTotemDuration(slot)
-    end
-  end
+  local bindings = TotemTracker.bindingsBySpellID
   for _, viewer in pairs(viewers) do
     for _, record in ipairs(viewer.orderedRecords) do
-      local selectedSlot
-      local candidates = record.candidateSpellIDs
-      for slot = 1, slotCount do
-        local spellID = totemSpellIDs[slot]
-        if spellID and candidates[spellID] and totemDurations[slot] then
-          if not selectedSlot or slot == record.totemSlot or slot == preferredSlot then
-            selectedSlot = slot
-          end
-          if slot == preferredSlot then
-            break
-          end
+      local selected
+      for spellID in pairs(record.candidateSpellIDs) do
+        local binding = bindings[spellID]
+        if binding and (not selected or binding.sequence > selected.sequence) then
+          selected = binding
         end
       end
-      -- A secret identity cannot invalidate an already verified slot binding.
-      if not selectedSlot and record.totemSlot and totemSpellIDs[record.totemSlot] == false then
-        local duration = totemDurations[record.totemSlot]
-        SetRecordTotem(record, duration and record.totemSlot or nil, duration)
-      elseif selectedSlot or record.totemSlot then
-        record.totemSpellID = selectedSlot and totemSpellIDs[selectedSlot] or nil
-        SetRecordTotem(record, selectedSlot, selectedSlot and totemDurations[selectedSlot] or nil)
+      if selected or record.totemDuration then
+        SetRecordTotem(record, selected)
       end
     end
   end
@@ -669,11 +655,9 @@ end
 function AuraRuntime:SetPresentationActive(active)
   presentationActive = active == true and enabled
   if presentationActive then
-    restrictionFrame:RegisterEvent("PLAYER_TOTEM_UPDATE")
-    restrictionFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
+    TotemTracker:RegisterListener(self, RefreshTotemBindings)
   else
-    restrictionFrame:UnregisterEvent("PLAYER_TOTEM_UPDATE")
-    restrictionFrame:UnregisterEvent("PLAYER_ENTERING_WORLD")
+    TotemTracker:UnregisterListener(self)
   end
   for _, viewer in pairs(viewers) do
     if viewer.frame then
@@ -950,6 +934,7 @@ function AuraRuntime:Disable()
   readyNotified = false
   presentationActive = false
   Catalog:UnregisterListener(self)
+  TotemTracker:UnregisterListener(self)
   restrictionFrame:UnregisterAllEvents()
   flushFrame:Hide()
   pendingCatalog = false
@@ -957,8 +942,6 @@ function AuraRuntime:Disable()
   pendingVisibility = false
   pendingSlotConfiguration = false
   pendingTotems = false
-  wipe(totemSpellIDs)
-  wipe(totemDurations)
   for _, viewer in pairs(viewers) do
     AuraLayout:UnregisterViewer(viewer.key)
     for _, record in ipairs(viewer.orderedRecords) do
@@ -990,13 +973,6 @@ function AuraRuntime:IsReady()
 end
 
 restrictionFrame:SetScript("OnEvent", function(_, event, restrictionType, state)
-  if event == "PLAYER_TOTEM_UPDATE" then
-    RefreshTotemBindings(restrictionType)
-    return
-  elseif event == "PLAYER_ENTERING_WORLD" then
-    RefreshTotemBindings()
-    return
-  end
   if event == "ADDON_RESTRICTION_STATE_CHANGED"
     and state == Enum.AddOnRestrictionState.Activating
     and AURA_RESTRICTION_TYPES[restrictionType] == true
