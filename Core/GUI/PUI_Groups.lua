@@ -33,7 +33,10 @@ local PUI_TREE_BUTTON_DESCRIPTIONS = {
   ["Utility Cooldowns"] = "Utility cooldown viewer styling.",
   ["Buff Icons"] = "Buff icon viewer layout and text.",
   ["Buff Bars"] = "Tracked buff bar layout and style.",
-  ["Custom trackers"] = "Create and tune custom tracked buttons and bars.",
+  ["Groups"] = "Choose a group to edit its layout and entries.",
+  ["Custom trackers"] = "Create and edit custom tracked icons and bars.",
+  ["Items & racials"] = "Tracked items, racials, and their display settings.",
+  ["Advanced"] = "Diagnostics and reset controls.",
 
   ["Size and rows"] = "Width, icon size, rows, and spacing.",
   ["Borders"] = "Icon border and frame border styling.",
@@ -98,20 +101,16 @@ end
 
 local function _PUI_IsPCMManagerTree(widget)
   local hasOverview = false
-  local hasDefaultGroup = false
+  local hasGroups = false
   for index = 1, #(widget.lines or {}) do
     local value = widget.lines[index].value
     if value == "overview" then
       hasOverview = true
-    elseif value == "essential"
-      or value == "utility"
-      or value == "buff-icons"
-      or value == "buff-bars"
-    then
-      hasDefaultGroup = true
+    elseif value == "groups" then
+      hasGroups = true
     end
   end
-  return hasOverview and hasDefaultGroup
+  return hasOverview and hasGroups
 end
 
 local PCM_TREE_ROW_HEIGHT = 54
