@@ -1669,6 +1669,7 @@ local function _PUI_CleanCopyText(text)
   text = text:gsub("|T.-|t", "")
   text = text:gsub("|A.-|a", "")
   text = text:gsub("|c%x%x%x%x%x%x%x%x", "")
+  text = text:gsub("|cn[%w_]+:", "")
   text = text:gsub("|r", "")
   return text
 end
