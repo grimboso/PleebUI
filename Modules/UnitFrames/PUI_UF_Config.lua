@@ -1583,6 +1583,8 @@ local function UFCB_BuildUnitGeneralArgs(unitKey, extraNote)
 
             if unitKey == "player" then
               cfg.showRestingIndicator = unitDefaults.showRestingIndicator ~= false
+              cfg.showPvPIndicator = unitDefaults.showPvPIndicator ~= false
+              cfg.showCombatIndicator = unitDefaults.showCombatIndicator ~= false
             end
 
             for key in pairs(media) do
@@ -1725,6 +1727,32 @@ local function UFCB_BuildUnitGeneralArgs(unitKey, extraNote)
         set = function(_, v)
           if UFCB_BlockCombat() then return end
           cfg.showRestingIndicator = v and true or false
+          Addon:ApplyOptionsChange("UnitFrames", { mode = "indicators", unit = "player" })
+        end,
+      },
+      showPvPIndicator = {
+        type = "toggle",
+        name = "Show faction / PvP indicator",
+        order = 9,
+        get = function()
+          return cfg.showPvPIndicator ~= false
+        end,
+        set = function(_, v)
+          if UFCB_BlockCombat() then return end
+          cfg.showPvPIndicator = v and true or false
+          Addon:ApplyOptionsChange("UnitFrames", { mode = "indicators", unit = "player" })
+        end,
+      },
+      showCombatIndicator = {
+        type = "toggle",
+        name = "Show combat indicator",
+        order = 10,
+        get = function()
+          return cfg.showCombatIndicator ~= false
+        end,
+        set = function(_, v)
+          if UFCB_BlockCombat() then return end
+          cfg.showCombatIndicator = v and true or false
           Addon:ApplyOptionsChange("UnitFrames", { mode = "indicators", unit = "player" })
         end,
       },
