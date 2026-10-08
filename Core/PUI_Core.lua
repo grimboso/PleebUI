@@ -139,6 +139,7 @@ local DB_DEFAULTS = {
       showDecimals = true,
       fontSize = 24,
       color = { r = 1, g = 1, b = 1, a = 1 },
+      countdownColor = { r = 1, g = 0.2, b = 0.2, a = 1 },
       x = 0,
       y = 50,
       spells = {},

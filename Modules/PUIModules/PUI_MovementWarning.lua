@@ -55,7 +55,7 @@ local function RefreshSpellText()
     local text = "No " .. row.spellName .. " for"
     row.label:SetText(text)
     row.icon:SetTexture(row.spellIcon)
-    row.previewText:SetText(text .. " " .. previewDuration)
+    row.previewText:SetText(text)
     row.previewCountdown:SetText(previewDuration)
     row.countdown:SetCountdownMillisecondsThreshold(db.showDecimals ~= false and 86400 or 0)
   end
@@ -188,8 +188,9 @@ function MovementWarning:RefreshFonts()
   local size = ns.Theme.ResolveFontSize(db.fontSize, "qualityOfLife")
   local height = size * 1.6
   local color = db.color
+  local countdownColor = db.countdownColor
   countdownFont:SetFont(font, size, flags)
-  countdownFont:SetTextColor(color.r, color.g, color.b, color.a)
+  countdownFont:SetTextColor(countdownColor.r, countdownColor.g, countdownColor.b, countdownColor.a)
   anchor:SetSize(600, height * math.max(1, trackedCount))
 
   for index = 1, #rows do
@@ -202,8 +203,8 @@ function MovementWarning:RefreshFonts()
     row.previewText:SetFont(font, size, flags)
     row.previewText:SetTextColor(color.r, color.g, color.b, color.a)
     row.previewCountdown:SetFont(font, size, flags)
-    row.previewCountdown:SetTextColor(color.r, color.g, color.b, color.a)
-    row.unavailable:SetFont(font, math.max(11, size * 0.55), "OUTLINE")
+    row.previewCountdown:SetTextColor(countdownColor.r, countdownColor.g, countdownColor.b, countdownColor.a)
+    row.unavailable:SetFont(font, math.max(20, size * 0.975), "OUTLINE")
     row.unavailable:SetText("×")
     row.unavailable:SetTextColor(1, 0.2, 0.2, 1)
     row.icon:SetSize(size, size)
@@ -213,13 +214,15 @@ function MovementWarning:RefreshFonts()
     row.unavailable:SetPoint("TOPRIGHT", row.icon, "TOPRIGHT", size * 0.12, size * 0.12)
     row.countdown:SetSize(size * 3, height)
     row.countdownText:SetFontObject(countdownFont)
-    row.countdownText:SetTextColor(color.r, color.g, color.b, color.a)
+    row.countdownText:SetTextColor(countdownColor.r, countdownColor.g, countdownColor.b, countdownColor.a)
     row.label:ClearAllPoints()
     row.label:SetPoint("CENTER", row.runtime, "CENTER", -size * 1.3, 0)
     row.countdownText:ClearAllPoints()
     row.countdownText:SetPoint("LEFT", db.displayMode == "icon" and row.icon or row.label, "RIGHT", size * 0.2, 0)
+    row.previewText:ClearAllPoints()
+    row.previewText:SetPoint("CENTER", row.runtime, "CENTER", -size * 1.3, 0)
     row.previewCountdown:ClearAllPoints()
-    row.previewCountdown:SetPoint("LEFT", row.icon, "RIGHT", size * 0.2, 0)
+    row.previewCountdown:SetPoint("LEFT", db.displayMode == "icon" and row.icon or row.previewText, "RIGHT", size * 0.2, 0)
   end
   RefreshSpellText()
 end
@@ -310,7 +313,7 @@ function MovementWarning:RefreshWarning()
   for index = 1, trackedCount do
     local row = rows[index]
     row.previewText:SetShown(preview and not iconMode)
-    row.previewCountdown:SetShown(preview and iconMode)
+    row.previewCountdown:SetShown(preview)
     row.label:SetShown(not preview and not iconMode)
     row.icon:SetShown(iconMode)
     row.unavailable:SetShown(iconMode)
@@ -446,13 +449,25 @@ function MovementWarning:GetOptions()
             end,
           },
           color = {
-            type = "color", name = "Text color", order = 4, hasAlpha = true,
+            type = "color", name = "Label color", order = 4, hasAlpha = true,
             get = function()
               local color = Addon.db.profile.movementWarning.color
               return color.r, color.g, color.b, color.a
             end,
             set = function(_, r, g, b, a)
               local color = Addon.db.profile.movementWarning.color
+              color.r, color.g, color.b, color.a = r, g, b, a
+              self:RefreshFonts()
+            end,
+          },
+          countdownColor = {
+            type = "color", name = "Countdown color", order = 4.5, hasAlpha = true,
+            get = function()
+              local color = Addon.db.profile.movementWarning.countdownColor
+              return color.r, color.g, color.b, color.a
+            end,
+            set = function(_, r, g, b, a)
+              local color = Addon.db.profile.movementWarning.countdownColor
               color.r, color.g, color.b, color.a = r, g, b, a
               self:RefreshFonts()
             end,
