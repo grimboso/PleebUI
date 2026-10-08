@@ -42,6 +42,7 @@ local specializationID = 0
 local baseSpellID
 local trackedSpellID
 local spellName
+local spellIcon
 local spellbookDirty = true
 local previewEnabled = false
 
@@ -51,15 +52,34 @@ local function ApplyAnchor()
   anchor:SetPoint("CENTER", UIParent, "CENTER", db.x, db.y)
 end
 
+local function RefreshSpellText()
+  if not anchor then return end
+
+  local db = Addon.db.profile.movementWarning
+  local display = spellName or "movement"
+  if db.displayMode == "icon" then
+    local size = ns.Theme.ResolveFontSize(db.fontSize, "qualityOfLife")
+    display = string.format("|T%s:%d:%d:0:0:64:64:5:59:5:59|t",
+      spellIcon or "Interface\\Icons\\INV_Misc_QuestionMark", size, size)
+  end
+  local text = "No " .. display .. " for"
+  label:SetText(text)
+  previewText:SetText(text .. " 8.0")
+end
+
 local function ResolveTrackedSpell()
   if not baseSpellID then
     trackedSpellID = nil
     spellName = nil
+    spellIcon = nil
+    RefreshSpellText()
     return
   end
 
   trackedSpellID = C_Spell.GetOverrideSpell(baseSpellID)
   spellName = C_Spell.GetSpellName(trackedSpellID)
+  spellIcon = C_Spell.GetSpellTexture(trackedSpellID)
+  RefreshSpellText()
 end
 
 local function RefreshSpellbook()
@@ -120,6 +140,7 @@ function MovementWarning:RefreshFonts()
   label:SetPoint("CENTER", runtime, "CENTER", -size * 1.3, 0)
   countdownText:ClearAllPoints()
   countdownText:SetPoint("LEFT", label, "RIGHT", size * 0.2, 0)
+  RefreshSpellText()
 end
 
 local function EnsureDisplay()
@@ -186,9 +207,6 @@ function MovementWarning:RefreshWarning()
   local enabled = self:IsEnabled() and db.enabled
   local preview = enabled and (previewEnabled or ns.Flags.IsEditing)
   previewText:SetShown(preview)
-  if preview then
-    previewText:SetText("No " .. (spellName or "movement") .. " for 8.0")
-  end
 
   if not enabled or preview or not trackedSpellID
     or (db.combatOnly and not InCombatLockdown())
@@ -223,7 +241,6 @@ function MovementWarning:RefreshWarning()
     return
   end
 
-  label:SetText("No " .. spellName .. " for")
   countdown:SetCooldownFromDurationObject(duration)
   if charges then
     -- The spell's own duration is GCD-length while a charge is available.
@@ -313,6 +330,15 @@ function MovementWarning:GetOptions()
             set = function(_, value)
               Addon.db.profile.movementWarning.combatOnly = value
               self:RefreshWarning()
+            end,
+          },
+          displayMode = {
+            type = "select", name = "Spell display", order = 2.5,
+            values = { text = "Text", icon = "Icon" },
+            get = function() return Addon.db.profile.movementWarning.displayMode end,
+            set = function(_, value)
+              Addon.db.profile.movementWarning.displayMode = value
+              RefreshSpellText()
             end,
           },
           fontSize = {
