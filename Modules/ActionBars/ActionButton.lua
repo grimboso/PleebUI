@@ -440,7 +440,11 @@ local function UpdateButtonEquipped(button)
 
   local isEquipped = C_ActionBar.IsEquippedAction(button.action)
   if not issecretvalue(isEquipped) then
-    button.Border:SetShown(isEquipped == true)
+    if isEquipped == true then
+      button.Border:Show()
+    else
+      button.Border:Hide()
+    end
   end
 end
 
