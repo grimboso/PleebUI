@@ -52,6 +52,8 @@ function CastBar:CreatePlayerCastbarExtras(frame, holder, element, unit)
   frame.instantStatus = holder.instantStatus
 
   holder.instantSpellName = holder.instantStatus:CreateFontString(nil, "OVERLAY")
+  holder.instantSpellName:SetWordWrap(false)
+  holder.instantSpellName:SetMaxLines(1)
   holder.instantSpellName:SetJustifyH("LEFT")
   self.SetFont(holder.instantSpellName, nil, 14, "OUTLINE")
   holder.instantSpellName:Hide()
