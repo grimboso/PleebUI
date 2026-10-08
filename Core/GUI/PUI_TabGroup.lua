@@ -254,12 +254,22 @@ local function _PUI_LayoutCustomTabStrip(widget)
   local extraRemainder = extraWidth > 0 and (extraWidth - (extraPerTab * tabCount)) or 0
   local assignedWidth = 0
   local x = 0
+  local y = 0
+  local user = widget:GetUserDataTable()
+  local wrapTabs = user.appName == "PleebUI" and user.path and user.path[1] == "CooldownManager"
+    and totalDesiredWidth + (tabCount - 1) * gap > available
 
   for i = 1, tabCount do
     local btn = host.__puiButtons[i]
     local tabWidth
 
-    if i == tabCount then
+    if wrapTabs then
+      tabWidth = math.min(available, desiredWidths[i])
+      if x > 0 and x + tabWidth > available then
+        x = 0
+        y = y + tabHeight + gap
+      end
+    elseif i == tabCount then
       tabWidth = usableWidth - assignedWidth
     elseif extraWidth >= 0 then
       tabWidth = desiredWidths[i] + extraPerTab + (i <= extraRemainder and 1 or 0)
@@ -274,7 +284,7 @@ local function _PUI_LayoutCustomTabStrip(widget)
     btn:SetFrameLevel(host:GetFrameLevel() + 1)
     Pixel.Size(btn, tabWidth, tabHeight)
     btn:ClearAllPoints()
-    Pixel.Point(btn, "TOPLEFT", host, "TOPLEFT", x, 0)
+    Pixel.Point(btn, "TOPLEFT", host, "TOPLEFT", x, -y)
     btn:SetAlpha(btn.__puiDisabled and 0.45 or 1)
     btn:EnableMouse(not btn.__puiDisabled)
     btn:Show()
@@ -292,7 +302,7 @@ local function _PUI_LayoutCustomTabStrip(widget)
     btn.__puiDisabled = nil
   end
 
-  local hostHeight = tabHeight + 4
+  local hostHeight = y + tabHeight + 4
   Pixel.Height(host, hostHeight)
   host:Show()
 
