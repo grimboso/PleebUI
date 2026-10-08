@@ -460,6 +460,9 @@ local function _PUI_GetProviderOptionsCacheKey(rec, activePath)
   end
 
   activePath = activePath or State.currentOptionsPath or ns._PUIActiveOptionsPath
+  if rec.optionsCacheKey then
+    return rec.optionsCacheKey(activePath)
+  end
   return tostring(type(activePath) == "table" and activePath[2] or "")
 end
 
@@ -835,7 +838,7 @@ local function _PUI_GetOptionsRootPathKey(path)
 
   local rec = optionsRegistry[rootKey]
   if rec and rec.dynamicOptions == true then
-    return rootKey .. "\031" .. tostring(path[2] or "")
+    return rootKey .. "\031" .. _PUI_GetProviderOptionsCacheKey(rec, path)
   end
 
   return rootKey
@@ -935,13 +938,10 @@ local function _PUI_DoesOptionsPathExist(path)
     },
     CooldownManager = {
       overview = true,
-      essential = true,
-      utility = true,
-      ["buff-icons"] = true,
-      ["buff-bars"] = true,
+      groups = true,
       customTrackers = true,
       consumables = true,
-      developer = true,
+      advanced = true,
     },
   }
 
@@ -1019,6 +1019,10 @@ end
 
 _PUI_GetValidatedOptionsPath = function(path)
   path = _PUI_CopyOptionsPath(path)
+  local record = path and optionsRegistry[path[1]]
+  if record and record.resolveOptionsPath then
+    path = record.resolveOptionsPath(path)
+  end
   if not path or not _PUI_DoesOptionsPathExist(path) then
     return nil
   end
@@ -1633,15 +1637,36 @@ local function _PUI_GetRootRegistryNavNodes(searchText)
   end
 
   for _, node in ipairs(roots) do
-    local option = _PUI_CreateProviderOption(node)
-    if type(option.args) == "table" then
-      local rootName = node.label
-      local rootPath = { node.key }
-      local rootLabels = { rootName }
+    if node.rec.getSearchEntries then
+      for _, entry in ipairs(node.rec.getSearchEntries()) do
+        local searchBlob = string.lower(node.label .. " " .. entry.label .. " " .. entry.keywords)
+        if _PUI_SearchTextMatches(searchBlob, searchText) then
+          local resultKey = "__pui_search_index_" .. table.concat(entry.path, "\031")
+          if not seen[resultKey] then
+            local label = node.label .. " / " .. entry.label
+            results[#results + 1] = {
+              key = resultKey, name = label, label = label, order = 1000 + #results,
+              meta = {
+                navDescription = entry.label, pageDescription = entry.label,
+                pageHelp = "Open these settings.", navHeight = 62, navGap = 5, searchResult = true,
+              },
+              __puiTargetPath = entry.path,
+            }
+            seen[resultKey] = true
+          end
+        end
+      end
+    else
+      local option = _PUI_CreateProviderOption(node)
+      if type(option.args) == "table" then
+        local rootName = node.label
+        local rootPath = { node.key }
+        local rootLabels = { rootName }
 
-      for childKey, childOpt in pairs(option.args) do
-        if type(childKey) == "string" and type(childOpt) == "table" then
-          _PUI_AddDeepOptionsSearchResults(results, seen, node, childOpt, childKey, rootPath, rootLabels, rootPath, rootLabels, searchText, 1)
+        for childKey, childOpt in pairs(option.args) do
+          if type(childKey) == "string" and type(childOpt) == "table" then
+            _PUI_AddDeepOptionsSearchResults(results, seen, node, childOpt, childKey, rootPath, rootLabels, rootPath, rootLabels, searchText, 1)
+          end
         end
       end
     end
@@ -3024,7 +3049,9 @@ local function _PUI_GetOptionsPagePathKey(path)
     return ""
   end
 
-  return tostring(path[1] or "") .. "\031" .. tostring(path[2] or "")
+  local record = optionsRegistry[path[1]]
+  return tostring(path[1] or "") .. "\031"
+    .. (record and record.optionsCacheKey and record.optionsCacheKey(path) or tostring(path[2] or ""))
 end
 
 local function _PUI_ApplySelectedOptionsPath(path)
@@ -3472,14 +3499,11 @@ local PUI_SHELL_TOP_TAB_UX = {
     secondary = { name = "Secondary Power", desc = "Additional resource bars, class-specific secondary resources, and related text." },
   },
   CooldownManager = {
-    overview = { name = "Overview", desc = "Create groups and learn how PleebUI and Blizzard reminder sounds work together." },
-    essential = { name = "Essential", desc = "Essential cooldown group layout, text, charges, and glow." },
-    utility = { name = "Utility", desc = "Utility cooldown group layout, text, charges, and appearance." },
-    ["buff-icons"] = { name = "Buff Icons", desc = "Tracked buff icon group layout, text, and appearance." },
-    ["buff-bars"] = { name = "Buff Bars", desc = "Tracked buff bar group layout, text, and appearance." },
+    overview = { name = "Overview", desc = "Your groups and trackers, with shortcuts to setup and layout." },
+    groups = { name = "Groups", desc = "Arrange groups and edit their spells, items, timers, and appearance." },
     customTrackers = { name = "Custom trackers", desc = "Create and edit duration, cooldown, charge, and stack trackers." },
-    consumables = { name = "Consumables", desc = "Configure the consumable tracker." },
-    developer = { name = "Developer", desc = "Compare PleebUI-owned and native Blizzard cooldown viewers." },
+    consumables = { name = "Items & racials", desc = "Track consumables, trinkets, and racial abilities." },
+    advanced = { name = "Advanced", desc = "Native viewer diagnostics and group resets." },
   },
   Chat = {
     status = { name = "Status", desc = "Shows which addon currently controls chat." },
