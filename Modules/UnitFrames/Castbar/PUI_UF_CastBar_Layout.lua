@@ -203,18 +203,17 @@ function CastBar:UpdateUnitLayout(unit, resolvedConfig, overrideBar, presentatio
 
     bar.spellName:ClearAllPoints()
     local anchor = cfg.text.anchor or "LEFT"
-    local textHost = bar.status
-    bar.spellName:SetPoint(
-      anchor,
-      textHost,
-      anchor,
-      Round(cfg.text.offX or 6),
-      Round(cfg.text.offY or 0)
-    )
+    local maxNameWidth = math_max(Round(1), Round(cfg.nameMaxWidth or 180))
+    bar.spellName:SetWidth(maxNameWidth)
+    bar.spellName:SetPoint(anchor, bar.spellNameClip, anchor, 0, 0)
+
+    CastBar.SetFont(bar.targetText, fontKey, cfg.text.size, cfg.text.flags)
+    bar.targetText:SetTextColor(r, g, b, a)
 
     if unit == "player" then
       CastBar.SetFont(bar.instantSpellName, fontKey, cfg.text.size, cfg.text.flags)
       bar.instantSpellName:SetTextColor(r, g, b, a)
+      bar.instantSpellName:SetWidth(maxNameWidth)
       bar.instantSpellName:ClearAllPoints()
       bar.instantSpellName:SetPoint(
         anchor,
@@ -260,7 +259,9 @@ function CastBar:UpdateUnitLayout(unit, resolvedConfig, overrideBar, presentatio
     local textHost = bar.status
     bar.timeText:SetPoint(anchor, textHost, anchor, Round(cfg.timeText.offX or -6), Round(cfg.timeText.offY or 0))
 
-    if not CastBar.ShouldShowCastTime(cfg) then
+    if not CastBar.ShouldShowCastTime(cfg)
+      or (cfg.showRemainingTime == false and cfg.showTotal == false)
+    then
       CastBar.StopTimeText(bar)
     elseif bar.__puiInstantCast then
       CastBar.StopTimeText(bar)
@@ -275,6 +276,65 @@ function CastBar:UpdateUnitLayout(unit, resolvedConfig, overrideBar, presentatio
     else
       bar.timeText:SetJustifyH("RIGHT")
     end
+  end
+
+  local nameConfig = cfg.text
+  local nameAnchor = nameConfig.anchor or "LEFT"
+  local nameX = Round(nameConfig.offX or 6)
+  local nameY = Round(nameConfig.offY or 0)
+  local nameClip = bar.spellNameClip
+
+  nameClip:ClearAllPoints()
+  nameClip:SetHeight(math_max(Round(1), Round((nameConfig.size or 14) * 1.6)))
+
+  local showTime = CastBar.ShouldShowCastTime(cfg)
+    and (cfg.showRemainingTime ~= false or cfg.showTotal ~= false)
+
+  if nameAnchor == "LEFT"
+    and (cfg.timeText.anchor or "RIGHT") == "RIGHT"
+    and showTime
+  then
+    nameClip:SetPoint("LEFT", statusHost, "LEFT", nameX, nameY)
+    nameClip:SetPoint(
+      "RIGHT",
+      bar.timeText,
+      "LEFT",
+      -Round(8),
+      nameY - Round(cfg.timeText.offY or 0)
+    )
+  else
+    nameClip:SetWidth(math_max(Round(1), Round(cfg.nameMaxWidth or 180)))
+    nameClip:SetPoint(nameAnchor, statusHost, nameAnchor, nameX, nameY)
+  end
+
+  local targetConfig = cfg.targetText
+  local targetAnchor = targetConfig.anchor or "RIGHT"
+  local targetX = Round(targetConfig.offX or 0)
+  local targetY = Round(targetConfig.offY or 0)
+  local targetText = bar.targetText
+
+  targetText:ClearAllPoints()
+  targetText:SetWidth(math_max(Round(1), Round(targetConfig.maxWidth or 160)))
+
+  if targetAnchor == "LEFT" then
+    targetText:SetPoint("RIGHT", bar, "LEFT", targetX - Round(6), targetY)
+    targetText:SetJustifyH("RIGHT")
+  elseif targetAnchor == "TOP" then
+    targetText:SetPoint("BOTTOM", bar, "TOP", targetX, targetY + Round(6))
+    targetText:SetJustifyH("CENTER")
+  elseif targetAnchor == "BOTTOM" then
+    targetText:SetPoint("TOP", bar, "BOTTOM", targetX, targetY - Round(6))
+    targetText:SetJustifyH("CENTER")
+  else
+    targetText:SetPoint("LEFT", bar, "RIGHT", targetX + Round(6), targetY)
+    targetText:SetJustifyH("LEFT")
+  end
+
+  if presentation == true or (bar.status.__puiActiveUnit and not bar.__puiInstantCast) then
+    CastBar.UpdateCastTarget(bar, cfg, unit)
+  else
+    targetText:SetText("")
+    targetText:Hide()
   end
 
   if unit == "player" then
