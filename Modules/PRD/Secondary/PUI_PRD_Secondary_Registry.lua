@@ -614,7 +614,7 @@ local function EnsureResourceSettings(profile, resourceKey, resourceIndex)
   end
 
   if settings.detached == nil then settings.detached = secondary.detached == true end
-  settings.useSharedAppearance = false
+  settings.useSharedAppearance = nil
   if settings.height == nil then settings.height = secondary.height or profile.appearance.height or 15 end
   if settings.width == nil then settings.width = secondary.width or profile.size.width or 240 end
   if settings.perSegment == nil then settings.perSegment = secondary.perSegment == true end
@@ -695,6 +695,9 @@ local function EnsureResourceSettings(profile, resourceKey, resourceIndex)
     else
       cues.buffGlowSpellID = 0
     end
+  end
+  if cues.buffGlowEnabled == nil then
+    cues.buffGlowEnabled = (tonumber(cues.buffGlowSpellID) or 0) > 0
   end
   cues.buffGlowType = nil
   if cues.buffGlowColor == nil then cues.buffGlowColor = { 0.25, 0.75, 1, 1 } end
@@ -940,7 +943,7 @@ local function ResolveResourceConfig(profile, definition)
       glowThreshold = tonumber(sourceCues.glowThreshold) or 0,
       glowType = sourceCues.glowType or "PIXEL",
       glowColor = CopyColor(sourceCues.glowColor, 1, 0.82, 0, 1),
-      buffGlowSpellID = tonumber(sourceCues.buffGlowSpellID) or 0,
+      buffGlowSpellID = sourceCues.buffGlowEnabled == true and (tonumber(sourceCues.buffGlowSpellID) or 0) or 0,
       buffGlowColor = CopyColor(sourceCues.buffGlowColor, 0.25, 0.75, 1, 1),
     },
     supportsNumericCues = NUMERIC_CUE_RESOURCES[definition.resourceKey] == true,
