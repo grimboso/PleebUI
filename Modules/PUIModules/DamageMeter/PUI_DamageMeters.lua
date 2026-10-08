@@ -78,19 +78,7 @@ Constants.RUNTIME_EVENTS = {
   "DAMAGE_METER_RESET",
 }
 
-Constants.METER_KEYS = {
-  "DAMAGE_DONE",
-  "DPS",
-  "HEALING_DONE",
-  "HPS",
-  "ABSORBS",
-  "INTERRUPTS",
-  "DISPELS",
-  "DAMAGE_TAKEN",
-  "AVOIDABLE_DAMAGE_TAKEN",
-  "DEATHS",
-  "ENEMY_DAMAGE_TAKEN",
-}
+
 
 Constants.METER_NAMES = {
   DAMAGE_DONE = "Damage Done",
@@ -257,7 +245,6 @@ function DamageMeters:CancelCombatRefresh()
     self.combatRefreshGroup:Stop()
   end
   self.combatRefreshPending = nil
-  self.combatRefreshCycleStartIndex = nil
   self.combatRefreshWindowIndex = nil
   self.combatRefreshSlotsRemaining = nil
 
@@ -294,7 +281,7 @@ local function GetFirstDirtyCombatRefreshWindowIndex()
   return nil
 end
 
-local function StartCombatRefreshCycle(startIndex)
+local function StartCombatRefreshCycle()
   local windows = DamageMeters.combatRefreshWindows
   local windowCount = windows and #windows or 0
 
@@ -308,18 +295,12 @@ local function StartCombatRefreshCycle(startIndex)
 
   if not dirtyIndex then
     DamageMeters.combatRefreshPending = nil
-    DamageMeters.combatRefreshCycleStartIndex = nil
     DamageMeters.combatRefreshWindowIndex = nil
     DamageMeters.combatRefreshSlotsRemaining = nil
     return false
   end
 
-  if not startIndex or startIndex < 1 or startIndex > windowCount then
-    startIndex = dirtyIndex
-  end
-
-  DamageMeters.combatRefreshCycleStartIndex = startIndex
-  DamageMeters.combatRefreshWindowIndex = startIndex
+  DamageMeters.combatRefreshWindowIndex = dirtyIndex
   DamageMeters.combatRefreshSlotsRemaining = windowCount
   DamageMeters.combatRefreshAnimation:SetDuration(
     DamageMeters.runtimeRefreshRate / windowCount
@@ -332,7 +313,6 @@ end
 local function RunScheduledCombatRefresh()
   if not DamageMeters.runtimeEnabled or not DamageMeters.runtimeVisible then
     DamageMeters.combatRefreshPending = nil
-    DamageMeters.combatRefreshCycleStartIndex = nil
     DamageMeters.combatRefreshWindowIndex = nil
     DamageMeters.combatRefreshSlotsRemaining = nil
     return
@@ -342,7 +322,6 @@ local function RunScheduledCombatRefresh()
   local windowCount = windows and #windows or 0
   if windowCount == 0 then
     DamageMeters.combatRefreshPending = nil
-    DamageMeters.combatRefreshCycleStartIndex = nil
     DamageMeters.combatRefreshWindowIndex = nil
     DamageMeters.combatRefreshSlotsRemaining = nil
     return
@@ -362,22 +341,45 @@ local function RunScheduledCombatRefresh()
   slotsRemaining = slotsRemaining - 1
 
   if slotsRemaining <= 0 then
-    local cycleStartIndex = DamageMeters.combatRefreshCycleStartIndex
     DamageMeters.combatRefreshWindowIndex = nil
     DamageMeters.combatRefreshSlotsRemaining = nil
-    StartCombatRefreshCycle(cycleStartIndex)
+    StartCombatRefreshCycle()
     return
   end
 
-  index = index + 1
-  if index > windowCount then
-    index = 1
+  local selection = DamageMeters.breakdownSelection
+  local breakdownOwner = DamageMeters.breakdownNeedsCombatRefresh
+    and selection
+    and selection.ownerWindow
+    or nil
+
+  local nextIndex
+  local slotDistance = slotsRemaining
+  for distance = 1, slotsRemaining do
+    local candidateIndex = index + distance
+    if candidateIndex > windowCount then
+      candidateIndex = candidateIndex - windowCount
+    end
+
+    local candidate = windows[candidateIndex]
+    if candidate.needsCombatRefresh or candidate == breakdownOwner then
+      nextIndex = candidateIndex
+      slotDistance = distance
+      break
+    end
   end
 
-  DamageMeters.combatRefreshWindowIndex = index
-  DamageMeters.combatRefreshSlotsRemaining = slotsRemaining
+  if not nextIndex then
+    nextIndex = index + slotsRemaining
+    if nextIndex > windowCount then
+      nextIndex = nextIndex - windowCount
+    end
+  end
+
+  DamageMeters.combatRefreshWindowIndex = nextIndex
+  DamageMeters.combatRefreshSlotsRemaining = slotsRemaining - slotDistance + 1
   DamageMeters.combatRefreshAnimation:SetDuration(
-    DamageMeters.runtimeRefreshRate / windowCount
+    DamageMeters.runtimeRefreshRate * slotDistance / windowCount
   )
   DamageMeters.combatRefreshGroup:Play()
 end
@@ -896,28 +898,6 @@ function DamageMeters:DAMAGE_METER_COMBAT_SESSION_UPDATED(_, meterType, sessionI
 
     if not meterWindows and not breakdownMatchesMeter then
       return
-    end
-
-    if self.combatRefreshPending then
-      local allWindowsDirty = true
-      if meterWindows then
-        for index = 1, #meterWindows do
-          local window = meterWindows[index]
-          if window.frame:IsShown()
-            and not window.navigationMode
-            and not window.needsCombatRefresh
-          then
-            allWindowsDirty = false
-            break
-          end
-        end
-      end
-
-      local breakdownAlreadyDirty = not breakdownMatchesMeter
-        or self.breakdownNeedsCombatRefresh
-      if allWindowsDirty and breakdownAlreadyDirty then
-        return
-      end
     end
 
     if self:MarkWindowsDirtyForMeterEvent(meterType, sessionID)

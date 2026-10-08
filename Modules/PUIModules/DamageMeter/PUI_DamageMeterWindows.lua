@@ -7,7 +7,6 @@ local DamageMeters = ns.Modules.DamageMeters
 local Windows = ns.DamageMeterWindows
 local Config = ns.DamageMeterConfig
 local Sessions = ns.DamageMeterSessions
-local History = ns.DamageMeterHistory
 local Breakdown = ns.DamageMeterBreakdown
 local SegmentPicker = ns.DamageMeterSegmentPicker
 local Constants = ns.DamageMeterConstants
@@ -62,6 +61,9 @@ local RANK_TEXT = {}
 for index = 1, ROW_POOL_SIZE do
   RANK_TEXT[index] = index .. "."
 end
+
+local CLASS_ATLAS_CACHE = {}
+
 local function SetHeaderButtonTooltip(button, title, description)
   button.__puiTooltipTitle = title
   button.__puiTooltipDescription = description
@@ -1039,7 +1041,12 @@ local function SetRowSource(
       iconValue = specIconID
     elseif type(classFilename) == "string" and classFilename ~= "" then
       iconKind = "CLASS"
-      iconValue = GetClassAtlas(classFilename)
+      local atlas = CLASS_ATLAS_CACHE[classFilename]
+      if atlas == nil then
+        atlas = GetClassAtlas(classFilename) or false
+        CLASS_ATLAS_CACHE[classFilename] = atlas
+      end
+      iconValue = atlas ~= false and atlas or nil
     end
   end
 
