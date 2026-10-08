@@ -242,7 +242,8 @@ function IconSettings:ResolveSwipeSettings(override, viewer, isBuff, destination
   override = override or {}
   viewer = viewer or {}
   local swipe = destination or {}
-  swipe.showCooldown = ResolveOverride(override.show, viewer.cooldown ~= false)
+  swipe.cooldownEnabled = viewer.cooldownTimerEnabled ~= false
+  swipe.showCooldown = swipe.cooldownEnabled and ResolveOverride(override.show, viewer.cooldown ~= false)
   swipe.showGCD = ResolveOverride(override.showGCD, viewer.gcd ~= false)
   swipe.showDuration = ResolveOverride(
     override[isBuff and "show" or "showDuration"],
@@ -257,6 +258,9 @@ function IconSettings:ResolveSwipeSettings(override, viewer, isBuff, destination
   swipe.cooldownColor = override.color or viewer.cooldownColor or color
   swipe.durationColor = override.color or viewer.durationColor or color
   swipe.gcdColor = override.color or viewer.gcdColor or color
+  swipe.cooldownEdgeColor = viewer.cooldownEdgeColor or { 1, 1, 1, 1 }
+  swipe.durationEdgeColor = viewer.durationEdgeColor or { 1, 1, 1, 1 }
+  swipe.gcdEdgeColor = viewer.gcdEdgeColor or { 1, 1, 1, 1 }
   swipe.reverse = override.reverse == true
   swipe.durationReverse = ResolveOverride(override.reverse, true)
   swipe.source = override.source
