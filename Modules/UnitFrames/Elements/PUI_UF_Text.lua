@@ -13,6 +13,7 @@ local Pixel = ns.Pixel
 local _G = _G
 local CreateFrame = _G.CreateFrame
 local math_abs = _G.math.abs
+local math_ceil = _G.math.ceil
 local math_floor = _G.math.floor
 local math_max = _G.math.max
 local math_min = _G.math.min
@@ -431,14 +432,26 @@ function Text.ApplyUnitTextLayout(frame, unit, cfg, useConfigText, groupKind)
     frame.__puiNameAnchor = anchor or "LEFT"
     local justifyH = ResolveHorizontalJustification(frame.__puiNameAnchor, "LEFT")
 
+    local nameAnchor = frame.__puiNameAnchor
+    if groupKind == "raid" then
+      local onePixel = Pixel.GetOnePixel()
+      local nameHeight = math_ceil(frame.NameText:GetLineHeight() / onePixel) * onePixel
+      frame.NameText:SetHeight(nameHeight)
+      frame.NameText:SetJustifyV("TOP")
+
+      -- Round the text box's top edge, not an odd-height health bar's half-pixel centre.
+      if nameAnchor == "LEFT" or nameAnchor == "RIGHT" or nameAnchor == "CENTER" then
+        dy = (dy or 0) + (nameHeight - Round(healthBar:GetHeight())) * 0.5
+        nameAnchor = justifyH == "CENTER" and "TOP" or ("TOP" .. justifyH)
+      end
+    end
+
     frame.NameText:ClearAllPoints()
     frame.NameText:SetJustifyH(justifyH)
-    Pixel.Point(frame.NameText, frame.__puiNameAnchor, healthBar, frame.__puiNameAnchor, dx or 0, dy or 0)
+    Pixel.Point(frame.NameText, nameAnchor, healthBar, nameAnchor, dx or 0, dy or 0)
     if groupKind == "raid" and justifyH == "LEFT" then
-      local rightAnchor = "RIGHT"
-      if frame.__puiNameAnchor == "TOPLEFT" then
-        rightAnchor = "TOPRIGHT"
-      elseif frame.__puiNameAnchor == "BOTTOMLEFT" then
+      local rightAnchor = "TOPRIGHT"
+      if nameAnchor == "BOTTOMLEFT" then
         rightAnchor = "BOTTOMRIGHT"
       end
 
@@ -744,7 +757,8 @@ function Text.ApplyFrame(frame, unit, cfg, fontRev, opts)
   local powerWidth = powerBar and Round(powerBar:GetWidth()) or 0
   local powerHeight = powerBar and Round(powerBar:GetHeight()) or 0
 
-  if frame.__puiTextLayoutUnit ~= unit
+  if frame.__puiTextLayoutFontRev ~= curRev
+    or frame.__puiTextLayoutUnit ~= unit
     or frame.__puiTextLayoutGroupKind ~= groupKind
     or frame.__puiTextLayoutUseConfigText ~= useConfigText
     or frame.__puiTextLayoutConfigKey ~= textKey
@@ -758,6 +772,7 @@ function Text.ApplyFrame(frame, unit, cfg, fontRev, opts)
     or frame.__puiTextLayoutPowerWidth ~= powerWidth
     or frame.__puiTextLayoutPowerHeight ~= powerHeight
   then
+    frame.__puiTextLayoutFontRev = curRev
     frame.__puiTextLayoutUnit = unit
     frame.__puiTextLayoutGroupKind = groupKind
     frame.__puiTextLayoutUseConfigText = useConfigText
