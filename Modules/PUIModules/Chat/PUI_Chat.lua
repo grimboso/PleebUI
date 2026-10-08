@@ -196,9 +196,6 @@ function ChatLinks:OnInitialize()
       enableCopyFrame = true,   -- chat copy button + window
       enableChatTools = true,
 
-      -- Copy behavior
-      copyClean = false,       -- "Clean chat" inside copy window (strip colors/textures/links)
-
       -- Chat tweaks
       chatTweaks = {
         persistHistory = true,   -- persist chat history between sessions
@@ -282,6 +279,7 @@ function ChatLinks:OnInitialize()
     },
   })
   self.db.profile.chatTweaks.maxLines = nil
+  self.db.profile.copyClean = nil
 
   _G.PleebUIAPI:RegisterPlugin("PleebUI_Chat", {
     name = "Chat",
@@ -706,27 +704,10 @@ local function ChatProvider(AddonObj)
           name = "Copy window",
           order = 3,
           args = {
-            behavior = {
-              type = "group",
-              name = "Behavior",
-              inline = true,
+            copyHint = {
+              type = "description",
+              name = "Preview messages with their chat colors. Copy text removes colors, icons, and link codes while keeping readable names.",
               order = 1,
-              args = {
-                clean = {
-                  type = "toggle",
-                  name = "Clean copied text",
-                  desc = "Remove colors, textures, and link payloads while keeping readable link text.",
-                  order = 1,
-                  disabled = IsLocked,
-                  get = function()
-                    return db.copyClean == true
-                  end,
-                  set = function(_, value)
-                    db.copyClean = value == true
-                    ChatLinks:RefreshCopyWindow()
-                  end,
-                },
-              },
             },
             appearance = {
               type = "group",
@@ -1638,9 +1619,11 @@ end
 
 local CopyFrame
 local CopyEditBox
+local CopyPreview
+local CopyTextFrame
 local CopySearchBox
 local CopyCountText
-local CopyCleanButton
+local CopyTextButton
 local CopySourceLines = {}
 
 local function GetChatFrameLines(chatFrame)
@@ -1655,9 +1638,9 @@ local function GetChatFrameLines(chatFrame)
   end
 
   for i = 1, num do
-    local msg = chatFrame:GetMessageInfo(i)
-    if canaccessvalue(msg) and type(msg) == "string" and not msg:find("|K", 1, true) then
-      out[#out + 1] = msg
+    local msg, r, g, b = chatFrame:GetMessageInfo(i)
+    if canaccessallvalues(msg, r, g, b) and type(msg) == "string" and not msg:find("|K", 1, true) then
+      out[#out + 1] = { text = msg, r = r, g = g, b = b }
     end
   end
 
@@ -1675,34 +1658,33 @@ local function _PUI_CleanCopyText(text)
 end
 
 function ChatLinks:RefreshCopyWindow()
-  if not CopyEditBox then
+  if not CopyPreview then
     return
   end
 
-  local query = CopySearchBox and CopySearchBox:GetText() or ""
-  query = query:lower()
-
-  local clean = ChatLinks.db.profile.copyClean == true
+  local query = CopySearchBox:GetText():lower()
   local filtered = {}
+  local copied = {}
   for i = 1, #CopySourceLines do
     local line = CopySourceLines[i]
-    if query == "" or line:lower():find(query, 1, true) then
-      if clean then
-        filtered[#filtered + 1] = _PUI_CleanCopyText(line)
-      else
-        filtered[#filtered + 1] = line:gsub("|", "||")
-      end
+    local cleanText = _PUI_CleanCopyText(line.text)
+    if query == "" or cleanText:lower():find(query, 1, true) then
+      filtered[#filtered + 1] = line
+      copied[#copied + 1] = cleanText
     end
   end
 
-  CopyEditBox:SetText(table.concat(filtered, "\n"))
-  if CopyCountText then
-    CopyCountText:SetFormattedText("%d of %d lines", #filtered, #CopySourceLines)
+  CopyPreview:Clear()
+  CopyPreview:SetMaxLines(math.max(1, #filtered))
+  -- Top insertion displays the newest buffer entry first, so add oldest last.
+  for i = #filtered, 1, -1 do
+    local line = filtered[i]
+    CopyPreview:AddMessage(line.text, line.r, line.g, line.b)
   end
-  if CopyCleanButton then
-    CopyCleanButton:SetText(clean and "Clean: On" or "Clean: Off")
-    ns.Theme.WidgetSkins.UIButton(CopyCleanButton)
-  end
+  CopyPreview:ScrollToBottom()
+  CopyEditBox:SetText(table.concat(copied, "\n"))
+  CopyCountText:SetFormattedText("%d of %d lines", #filtered, #CopySourceLines)
+  CopyTextButton:SetEnabled(#filtered > 0)
 end
 
 local function _GetCopyStyle()
@@ -1918,6 +1900,7 @@ end
 function ChatLinks:ApplyCopyWindowStyle()
   local style = _GetCopyStyle()
   _ApplyBackdropStyle(CopyFrame, style)
+  _ApplyBackdropStyle(CopyTextFrame, style)
   _ApplyBackdropStyle(CopyEditBox, style)
   _ApplyBackdropStyle(CopySearchBox, style)
 end
@@ -2105,14 +2088,17 @@ end
     self:ClearFocus()
   end)
 
-  CopyCleanButton = CreateFrame("Button", nil, CopyFrame, "UIPanelButtonTemplate")
-  CopyCleanButton:SetSize(100, 24)
-  CopyCleanButton:SetPoint("TOPRIGHT", -140, -34)
-  CopyCleanButton:SetScript("OnClick", function()
-    ChatLinks.db.profile.copyClean = ChatLinks.db.profile.copyClean ~= true
-    ChatLinks:RefreshCopyWindow()
+  CopyTextButton = CreateFrame("Button", nil, CopyFrame, "UIPanelButtonTemplate")
+  CopyTextButton:SetSize(100, 24)
+  CopyTextButton:SetPoint("TOPRIGHT", -140, -34)
+  CopyTextButton:SetText("Copy text")
+  CopyTextButton:SetScript("OnClick", function()
+    CopySearchBox:ClearFocus()
+    CopyTextFrame:Show()
+    CopyEditBox:SetFocus()
+    CopyEditBox:HighlightText()
   end)
-  ns.Theme.WidgetSkins.UIButton(CopyCleanButton)
+  ns.Theme.WidgetSkins.UIButton(CopyTextButton)
 
   local clearHistory = CreateFrame("Button", nil, CopyFrame, "UIPanelButtonTemplate")
   clearHistory:SetSize(116, 24)
@@ -2136,11 +2122,87 @@ end
   CopyCountText:SetText("0 of 0 lines")
   Theme.ApplyFont(CopyCountText, "body", 11)
 
-  -- ScrollFrame + EditBox
-  local scroll = CreateFrame("ScrollFrame", "PleebUIChatCopyScrollFrame", CopyFrame, "UIPanelScrollFrameTemplate")
-  scroll:SetPoint("TOPLEFT", 16, -78)
-  scroll:SetPoint("BOTTOMRIGHT", -30, 16)
+  CopyPreview = CreateFrame("ScrollingMessageFrame", "PleebUIChatCopyPreview", CopyFrame)
+  CopyPreview:SetPoint("TOPLEFT", 16, -78)
+  CopyPreview:SetPoint("BOTTOMRIGHT", -34, 16)
+  CopyPreview:SetFontObject(ChatFontNormal)
+  CopyPreview:SetJustifyH("LEFT")
+  CopyPreview:SetInsertMode(SCROLLING_MESSAGE_FRAME_INSERT_MODE_TOP)
+  CopyPreview:SetFading(false)
+  CopyPreview:EnableMouseWheel(true)
+  CopyPreview:SetScript("OnMouseWheel", function(self, delta)
+    self:ScrollByAmount(-delta * 3)
+  end)
 
+  local previewBar = CreateFrame("Slider", nil, CopyFrame)
+  previewBar:SetOrientation("VERTICAL")
+  previewBar:SetPoint("TOPLEFT", CopyPreview, "TOPRIGHT", 6, -18)
+  previewBar:SetPoint("BOTTOMLEFT", CopyPreview, "BOTTOMRIGHT", 6, 18)
+  previewBar:SetWidth(18)
+  previewBar:SetThumbTexture("Interface\\Buttons\\WHITE8x8")
+  previewBar:SetMinMaxValues(0, 0)
+  previewBar:SetValueStep(1)
+  previewBar:SetValue(0)
+  previewBar:SetScript("OnValueChanged", function(_, value)
+    CopyPreview:SetScrollOffset(math.floor(value + 0.5))
+  end)
+
+  local up = CreateFrame("Button", nil, previewBar)
+  up:SetSize(18, 18)
+  up:SetPoint("BOTTOM", previewBar, "TOP")
+  up:SetScript("OnClick", function()
+    CopyPreview:ScrollByAmount(-1)
+  end)
+  previewBar.ScrollUpButton = up
+
+  local down = CreateFrame("Button", nil, previewBar)
+  down:SetSize(18, 18)
+  down:SetPoint("TOP", previewBar, "BOTTOM")
+  down:SetScript("OnClick", function()
+    CopyPreview:ScrollByAmount(1)
+  end)
+  previewBar.ScrollDownButton = down
+  ns.Theme.WidgetSkins.Scrollbar(previewBar)
+
+  CopyPreview:SetOnScrollChangedCallback(function(_, offset)
+    previewBar:SetValue(offset)
+  end)
+  CopyPreview:AddOnDisplayRefreshedCallback(function(self)
+    local maximum = self:GetMaxScrollRange()
+    local offset = self:GetScrollOffset()
+    previewBar:SetMinMaxValues(0, maximum)
+    previewBar:SetValue(offset)
+    previewBar:SetEnabled(maximum > 0)
+    up:SetEnabled(offset > 0)
+    down:SetEnabled(offset < maximum)
+  end)
+
+  CopyTextFrame = CreateFrame("Frame", "PleebUIChatCopyTextFrame", CopyFrame, "BackdropTemplate")
+  CopyTextFrame:SetPoint("TOPLEFT", 8, -30)
+  CopyTextFrame:SetPoint("BOTTOMRIGHT", -8, 8)
+  CopyTextFrame:SetFrameLevel(CopyFrame:GetFrameLevel() + 100)
+  CopyTextFrame:EnableMouse(true)
+  _RegisterAsSpecialFrame("PleebUIChatCopyTextFrame")
+  ns.Theme.WidgetSkins.Frame(CopyTextFrame)
+
+  local copyHint = CopyTextFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+  copyHint:SetPoint("TOPLEFT", 12, -12)
+  copyHint:SetPoint("RIGHT", -130, 0)
+  copyHint:SetJustifyH("LEFT")
+  copyHint:SetText("Press Ctrl+C to copy the selected text.")
+
+  local back = CreateFrame("Button", nil, CopyTextFrame, "UIPanelButtonTemplate")
+  back:SetSize(108, 24)
+  back:SetPoint("TOPRIGHT", -12, -8)
+  back:SetText("Back to preview")
+  back:SetScript("OnClick", function()
+    CopyTextFrame:Hide()
+  end)
+  ns.Theme.WidgetSkins.UIButton(back)
+
+  local scroll = CreateFrame("ScrollFrame", "PleebUIChatCopyScrollFrame", CopyTextFrame, "UIPanelScrollFrameTemplate")
+  scroll:SetPoint("TOPLEFT", 12, -40)
+  scroll:SetPoint("BOTTOMRIGHT", -30, 12)
   ns.Theme.WidgetSkins.Scrollbar(scroll)
 
   CopyEditBox = CreateFrame("EditBox", "PleebUIChatCopyEditBox", scroll, "BackdropTemplate")
@@ -2148,18 +2210,24 @@ end
   CopyEditBox:SetMaxLetters(0)
   CopyEditBox:EnableMouse(true)
   CopyEditBox:SetAutoFocus(false)
-  CopyEditBox:SetFontObject(ChatFontNormal or GameFontHighlightSmall)
+  CopyEditBox:SetFontObject(ChatFontNormal)
+  CopyEditBox:SetTextColor(1, 1, 1)
   CopyEditBox:SetWidth(540)
 
   scroll:HookScript("OnSizeChanged", function(self)
     CopyEditBox:SetWidth(math.max(1, self:GetWidth() - 4))
   end)
-
   CopyEditBox:SetScript("OnEscapePressed", function()
-    CopyFrame:Hide()
+    CopyTextFrame:Hide()
   end)
-
+  CopyTextFrame:SetScript("OnHide", function()
+    CopyEditBox:ClearFocus()
+  end)
+  CopyFrame:SetScript("OnHide", function()
+    CopyTextFrame:Hide()
+  end)
   scroll:SetScrollChild(CopyEditBox)
+  CopyTextFrame:Hide()
 
   -- Apply custom Copy window style (bg/border/borderSize)
   ChatLinks:ApplyCopyWindowStyle()
@@ -2561,11 +2629,13 @@ function ChatLinks:OpenCopyWindow(chatFrame)
 
   local frame = chatFrame or _G.DEFAULT_CHAT_FRAME
   CopySourceLines = GetChatFrameLines(frame)
+  local font, size, flags = frame:GetFont()
+  if canaccessallvalues(font, size, flags) and font and size then
+    CopyPreview:SetFont(font, size, flags)
+  end
+  CopyTextFrame:Hide()
   CopySearchBox:SetText("")
   ChatLinks:RefreshCopyWindow()
-  CopyEditBox:HighlightText()
-  CopyEditBox:SetFocus()
-
   CopyFrame:Show()
 end
 
