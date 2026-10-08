@@ -991,6 +991,11 @@ local function ApplyOwnedTextStyle(fontString, parent, config, role, fallbackSiz
 end
 
 local function ApplyOwnedCooldownDisplay(parts, isOnGCD, isTotem)
+  local mode = isTotem and "totem" or isOnGCD and "gcd" or "cooldown"
+  if parts.appliedCooldownDisplayMode == mode then
+    return
+  end
+
   local swipe = parts.resolvedSwipe
   local show, edge, color = swipe.showCooldown, swipe.cooldownEdge, swipe.cooldownColor
   local edgeColor = swipe.cooldownEdgeColor
@@ -1016,6 +1021,8 @@ local function ApplyOwnedCooldownDisplay(parts, isOnGCD, isTotem)
   local rechargeEdgeColor = swipe.cooldownEdgeColor
   parts.chargeCooldown:SetEdgeColor(rechargeEdgeColor[1], rechargeEdgeColor[2], rechargeEdgeColor[3], rechargeEdgeColor[4])
   parts.chargeCooldown:SetHideCountdownNumbers(isTotem or not parts.showRechargeText)
+
+  parts.appliedCooldownDisplayMode = mode
 end
 
 function PCMPresentation.ApplyOwnedIconStyle(parts, style, isOnGCD)
@@ -1066,6 +1073,7 @@ function PCMPresentation.ApplyOwnedIconStyle(parts, style, isOnGCD)
     rechargeCount = style.cooldown.rechargeShow == true
   end
   parts.showRechargeText = swipe.cooldownEnabled and rechargeCount == true
+  parts.appliedCooldownDisplayMode = nil
   ApplyOwnedCooldownDisplay(parts, isOnGCD == true, parts.totemDisplayActive == true)
   local appearance = style.appearance or {}
   parts.readyDesaturation = 1 - math.max(0, math.min(1, tonumber(appearance.readySaturation) or 1))
@@ -1535,6 +1543,7 @@ function PCMPresentation.DeactivateOwnedIcon(parts)
     PCMPresentation.ApplyCustomTrackerStateGlow(parts.ownedStateGlowKey, nil)
   end
   parts.totemDisplayActive = false
+  parts.appliedCooldownDisplayMode = nil
   parts.cooldown:Clear()
   parts.chargeCooldown:Clear()
   parts.cooldownText:SetText(nil)
