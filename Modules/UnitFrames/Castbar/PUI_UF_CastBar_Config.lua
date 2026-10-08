@@ -63,7 +63,6 @@ function CastBar:NormalizeConfigProfile()
 
     cfg.__puiShowSpellName = cfg.text.showName ~= false
     cfg.__puiShowCastTime = cfg.timeText.showCast ~= false
-    cfg.__puiShowTotal = cfg.showTotal ~= false
     cfg.__puiShowDelayText = cfg.showDelayText ~= false
   end
 
