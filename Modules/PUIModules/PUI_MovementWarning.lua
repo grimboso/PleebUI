@@ -25,11 +25,8 @@ local MOBILITY_SPELLS = {
 }
 
 local anchor
-local runtime
-local label
-local countdown
-local countdownText
-local previewText
+local rows = {}
+local trackedCount = 0
 local countdownFont = CreateFont("PleebUI_MovementWarningCountdownFont")
 local cooldownAlpha = C_CurveUtil.CreateCurve()
 cooldownAlpha:SetType(Enum.LuaCurveType.Step)
@@ -37,12 +34,8 @@ cooldownAlpha:AddPoint(0, 0)
 cooldownAlpha:AddPoint(3, 1)
 
 local knownSpells = {}
-local spellOptions = { [0] = "Automatic" }
+local spellOptions = {}
 local specializationID = 0
-local baseSpellID
-local trackedSpellID
-local spellName
-local spellIcon
 local spellbookDirty = true
 local previewEnabled = false
 
@@ -56,30 +49,27 @@ local function RefreshSpellText()
   if not anchor then return end
 
   local db = Addon.db.profile.movementWarning
-  local display = spellName or "movement"
-  if db.displayMode == "icon" then
-    local size = ns.Theme.ResolveFontSize(db.fontSize, "qualityOfLife")
-    display = string.format("|T%s:%d:%d:0:0:64:64:5:59:5:59|t",
-      spellIcon or "Interface\\Icons\\INV_Misc_QuestionMark", size, size)
+  local size = ns.Theme.ResolveFontSize(db.fontSize, "qualityOfLife")
+  for index = 1, trackedCount do
+    local row = rows[index]
+    local display = row.spellName
+    if db.displayMode == "icon" then
+      display = string.format("|T%s:%d:%d:0:0:64:64:5:59:5:59|t",
+        row.spellIcon, size, size)
+    end
+    local text = "No " .. display .. " for"
+    row.label:SetText(text)
+    row.previewText:SetText(text .. " 8.0")
   end
-  local text = "No " .. display .. " for"
-  label:SetText(text)
-  previewText:SetText(text .. " 8.0")
 end
 
-local function ResolveTrackedSpell()
-  if not baseSpellID then
-    trackedSpellID = nil
-    spellName = nil
-    spellIcon = nil
-    RefreshSpellText()
-    return
+local function ResolveTrackedSpells()
+  for index = 1, trackedCount do
+    local row = rows[index]
+    row.spellID = C_Spell.GetOverrideSpell(row.baseSpellID)
+    row.spellName = C_Spell.GetSpellName(row.spellID)
+    row.spellIcon = C_Spell.GetSpellTexture(row.spellID)
   end
-
-  trackedSpellID = C_Spell.GetOverrideSpell(baseSpellID)
-  spellName = C_Spell.GetSpellName(trackedSpellID)
-  spellIcon = C_Spell.GetSpellTexture(trackedSpellID)
-  RefreshSpellText()
 end
 
 local function RefreshSpellbook()
@@ -90,7 +80,6 @@ local function RefreshSpellbook()
 
   wipe(knownSpells)
   wipe(spellOptions)
-  spellOptions[0] = "Automatic"
   local specialization = C_SpecializationInfo.GetSpecialization()
   specializationID = specialization and C_SpecializationInfo.GetSpecializationInfo(specialization) or 0
   local candidates = MOBILITY_SPELLS[playerClass]
@@ -107,15 +96,66 @@ local function RefreshSpellbook()
       end
     end
   end
-
-  local selected = Addon.db.profile.movementWarning.spells[specializationID] or 0
-  if selected == 0 then
-    baseSpellID = knownSpells[1]
-  else
-    baseSpellID = spellOptions[selected] and selected or nil
-  end
-  ResolveTrackedSpell()
   spellbookDirty = false
+end
+
+local function EnsureRow(index)
+  local row = rows[index]
+  if row then return row end
+
+  row = {}
+  rows[index] = row
+  row.frame = CreateFrame("Frame", nil, anchor)
+  row.runtime = CreateFrame("Frame", nil, row.frame)
+  row.runtime:SetAllPoints(row.frame)
+  row.runtime:Hide()
+  row.label = row.runtime:CreateFontString(nil, "OVERLAY")
+
+  local countdown = CreateFrame("Cooldown", nil, row.runtime, "CooldownFrameTemplate")
+  row.countdown = countdown
+  countdown:SetPoint("CENTER", row.runtime, "CENTER")
+  countdown:SetDrawSwipe(false)
+  countdown:SetDrawEdge(false)
+  countdown:SetDrawBling(false)
+  countdown:SetHideCountdownNumbers(false)
+  countdown:SetMinimumCountdownDuration(0)
+  countdown:SetCountdownAbbrevThreshold(0)
+  countdown:SetCountdownMillisecondsThreshold(86400)
+  countdown:SetCountdownFont("PleebUI_MovementWarningCountdownFont")
+  row.countdownText = countdown:GetCountdownFontString()
+  row.countdownText:SetJustifyH("LEFT")
+  countdown:SetScript("OnCooldownDone", function()
+    row.runtime:Hide()
+  end)
+
+  row.previewText = row.frame:CreateFontString(nil, "OVERLAY")
+  row.previewText:SetPoint("CENTER", row.frame, "CENTER")
+  row.previewText:Hide()
+  return row
+end
+
+local function RefreshSelectedSpells()
+  for index = 1, #rows do
+    local row = rows[index]
+    row.runtime:Hide()
+    row.countdown:Clear()
+    row.previewText:Hide()
+    row.frame:Hide()
+  end
+
+  trackedCount = 0
+  local selected = Addon.db.profile.movementWarning.spells[specializationID]
+  for index = 1, #knownSpells do
+    local spellID = knownSpells[index]
+    if not selected or selected[spellID] == true then
+      trackedCount = trackedCount + 1
+      local row = EnsureRow(trackedCount)
+      row.baseSpellID = spellID
+      row.frame:Show()
+    end
+  end
+  ResolveTrackedSpells()
+  MovementWarning:RefreshFonts()
 end
 
 function MovementWarning:RefreshFonts()
@@ -125,21 +165,29 @@ function MovementWarning:RefreshFonts()
   local fontKey, flags = ns.Theme.GetIconTextGlobal()
   local font = ns.LSM:Fetch("font", fontKey)
   local size = ns.Theme.ResolveFontSize(db.fontSize, "qualityOfLife")
+  local height = size * 1.6
   local color = db.color
   countdownFont:SetFont(font, size, flags)
   countdownFont:SetTextColor(color.r, color.g, color.b, color.a)
-  label:SetFont(font, size, flags)
-  label:SetTextColor(color.r, color.g, color.b, color.a)
-  previewText:SetFont(font, size, flags)
-  previewText:SetTextColor(color.r, color.g, color.b, color.a)
-  countdownText:SetFontObject(countdownFont)
-  countdownText:SetTextColor(color.r, color.g, color.b, color.a)
+  anchor:SetSize(600, height * math.max(1, trackedCount))
 
-  anchor:SetSize(600, size * 1.6)
-  label:ClearAllPoints()
-  label:SetPoint("CENTER", runtime, "CENTER", -size * 1.3, 0)
-  countdownText:ClearAllPoints()
-  countdownText:SetPoint("LEFT", label, "RIGHT", size * 0.2, 0)
+  for index = 1, #rows do
+    local row = rows[index]
+    row.frame:SetSize(600, height)
+    row.frame:ClearAllPoints()
+    row.frame:SetPoint("TOP", anchor, "TOP", 0, -(index - 1) * height)
+    row.label:SetFont(font, size, flags)
+    row.label:SetTextColor(color.r, color.g, color.b, color.a)
+    row.previewText:SetFont(font, size, flags)
+    row.previewText:SetTextColor(color.r, color.g, color.b, color.a)
+    row.countdown:SetSize(size * 3, height)
+    row.countdownText:SetFontObject(countdownFont)
+    row.countdownText:SetTextColor(color.r, color.g, color.b, color.a)
+    row.label:ClearAllPoints()
+    row.label:SetPoint("CENTER", row.runtime, "CENTER", -size * 1.3, 0)
+    row.countdownText:ClearAllPoints()
+    row.countdownText:SetPoint("LEFT", row.label, "RIGHT", size * 0.2, 0)
+  end
   RefreshSpellText()
 end
 
@@ -150,34 +198,7 @@ local function EnsureDisplay()
   anchor:SetFrameStrata("HIGH")
   anchor:EnableMouse(false)
   ApplyAnchor()
-
-  runtime = CreateFrame("Frame", nil, anchor)
-  runtime:SetAllPoints(anchor)
-  runtime:Hide()
-  label = runtime:CreateFontString(nil, "OVERLAY")
-
-  countdown = CreateFrame("Cooldown", nil, runtime, "CooldownFrameTemplate")
-  countdown:SetSize(1, 1)
-  countdown:SetPoint("CENTER", runtime, "CENTER")
-  countdown:SetDrawSwipe(false)
-  countdown:SetDrawEdge(false)
-  countdown:SetDrawBling(false)
-  countdown:SetHideCountdownNumbers(false)
-  countdown:SetMinimumCountdownDuration(0)
-  countdown:SetCountdownAbbrevThreshold(0)
-  countdown:SetCountdownMillisecondsThreshold(86400)
   countdownFont:SetFont(STANDARD_TEXT_FONT, 24, "OUTLINE")
-  countdown:SetCountdownFont("PleebUI_MovementWarningCountdownFont")
-  countdownText = countdown:GetCountdownFontString()
-  countdownText:SetJustifyH("LEFT")
-  countdown:SetScript("OnCooldownDone", function()
-    runtime:Hide()
-  end)
-
-  previewText = anchor:CreateFontString(nil, "OVERLAY")
-  previewText:SetPoint("CENTER", anchor, "CENTER")
-  previewText:Hide()
-  MovementWarning:RefreshFonts()
 
   FrameUtil:RegisterMover("movement_warning", anchor, {
     label = "Movement Reminder",
@@ -200,62 +221,67 @@ local function EnsureDisplay()
   })
 end
 
+local function RefreshRowCooldown(row)
+  local spellID = row.spellID
+  local charges = C_Spell.GetSpellCharges(spellID)
+  local duration
+  if charges then
+    if charges.isActive ~= true then
+      row.runtime:Hide()
+      row.countdown:Clear()
+      return
+    end
+    duration = C_Spell.GetSpellChargeDuration(spellID)
+  else
+    local cooldown = C_Spell.GetSpellCooldown(spellID)
+    if not cooldown or cooldown.isActive ~= true then
+      row.runtime:Hide()
+      row.countdown:Clear()
+      return
+    end
+    duration = C_Spell.GetSpellCooldownDuration(spellID, true)
+  end
+
+  if not duration then
+    row.runtime:Hide()
+    row.countdown:Clear()
+    return
+  end
+
+  row.countdown:SetCooldownFromDurationObject(duration)
+  row.countdown:Show()
+  if charges then
+    -- A banked charge reports only a brief cooldown. The engine classifies
+    -- its secret duration and passes the result directly to the alpha sink.
+    local availabilityDuration = C_Spell.GetSpellCooldownDuration(spellID)
+    if not availabilityDuration then
+      row.runtime:Hide()
+      row.countdown:Clear()
+      return
+    end
+    row.runtime:SetAlpha(availabilityDuration:EvaluateTotalDuration(cooldownAlpha))
+  else
+    row.runtime:SetAlpha(duration:EvaluateTotalDuration(cooldownAlpha))
+  end
+  row.runtime:Show()
+end
+
 function MovementWarning:RefreshWarning()
   if not anchor then return end
 
   local db = Addon.db.profile.movementWarning
   local enabled = self:IsEnabled() and db.enabled
   local preview = enabled and (previewEnabled or ns.Flags.IsEditing)
-  previewText:SetShown(preview)
-
-  if not enabled or preview or not trackedSpellID
-    or (db.combatOnly and not InCombatLockdown())
-  then
-    runtime:Hide()
-    countdown:Clear()
-    return
-  end
-
-  local charges = C_Spell.GetSpellCharges(baseSpellID)
-  local duration
-  if charges then
-    if charges.isActive ~= true then
-      runtime:Hide()
-      countdown:Clear()
-      return
+  for index = 1, trackedCount do
+    local row = rows[index]
+    row.previewText:SetShown(preview)
+    if not enabled or preview or (db.combatOnly and not InCombatLockdown()) then
+      row.runtime:Hide()
+      row.countdown:Clear()
+    else
+      RefreshRowCooldown(row)
     end
-    duration = C_Spell.GetSpellChargeDuration(baseSpellID)
-  else
-    local cooldown = C_Spell.GetSpellCooldown(baseSpellID)
-    if not cooldown or cooldown.isActive ~= true then
-      runtime:Hide()
-      countdown:Clear()
-      return
-    end
-    duration = C_Spell.GetSpellCooldownDuration(baseSpellID, true)
   end
-
-  if not duration then
-    runtime:Hide()
-    countdown:Clear()
-    return
-  end
-
-  countdown:SetCooldownFromDurationObject(duration)
-  if charges then
-    -- The spell's own duration is GCD-length while a charge is available.
-    -- Keep the classification in the engine; currentCharges is secret.
-    local availabilityDuration = C_Spell.GetSpellCooldownDuration(baseSpellID)
-    if not availabilityDuration then
-      runtime:Hide()
-      return
-    end
-    runtime:SetAlpha(availabilityDuration:EvaluateTotalDuration(cooldownAlpha))
-  else
-    -- Ignore brief shared lockouts without inspecting secret timing fields.
-    runtime:SetAlpha(duration:EvaluateTotalDuration(cooldownAlpha))
-  end
-  runtime:Show()
 end
 
 function MovementWarning:OnMovementEvent(event, unit)
@@ -265,10 +291,13 @@ function MovementWarning:OnMovementEvent(event, unit)
     or event == "PLAYER_SPECIALIZATION_CHANGED" or event == "TRAIT_CONFIG_UPDATED"
   then
     RefreshSpellbook()
+    RefreshSelectedSpells()
   elseif event == "UPDATE_SHAPESHIFT_FORM" then
-    ResolveTrackedSpell()
+    ResolveTrackedSpells()
+    RefreshSpellText()
   elseif event == "PLAYER_REGEN_ENABLED" and spellbookDirty then
     RefreshSpellbook()
+    RefreshSelectedSpells()
   end
   self:RefreshWarning()
 end
@@ -276,11 +305,16 @@ end
 function MovementWarning:ApplySettings()
   self:UnregisterAllEvents()
   local db = Addon.db.profile.movementWarning
+  for specID, selected in pairs(db.spells) do
+    if type(selected) == "number" then
+      db.spells[specID] = selected ~= 0 and { [selected] = true } or nil
+    end
+  end
   if self:IsEnabled() and db.enabled then
     EnsureDisplay()
     ApplyAnchor()
-    self:RefreshFonts()
     RefreshSpellbook()
+    RefreshSelectedSpells()
     for _, event in ipairs({
       "PLAYER_ENTERING_WORLD", "SPELLS_CHANGED", "PLAYER_SPECIALIZATION_CHANGED",
       "TRAIT_CONFIG_UPDATED", "UPDATE_SHAPESHIFT_FORM", "PLAYER_REGEN_ENABLED",
@@ -314,14 +348,27 @@ function MovementWarning:GetOptions()
         type = "group", name = "Reminder", inline = true, order = 2,
         disabled = function() return not Addon.db.profile.movementWarning.enabled end,
         args = {
-          spell = {
-            type = "select", name = "Movement spell", order = 1,
-            desc = "Choose a movement spell for this specialization. Automatic selects your first known mobility spell.",
+          spells = {
+            type = "multiselect", name = "Movement spells", order = 1,
+            desc = "Select the spells to track for this specialization. Each unavailable spell has its own reminder.",
             values = function() return spellOptions end,
-            get = function() return Addon.db.profile.movementWarning.spells[specializationID] or 0 end,
-            set = function(_, value)
-              Addon.db.profile.movementWarning.spells[specializationID] = value
-              self:ApplySettings()
+            get = function(_, spellID)
+              local selected = Addon.db.profile.movementWarning.spells[specializationID]
+              return not selected or selected[spellID] == true
+            end,
+            set = function(_, spellID, value)
+              local spells = Addon.db.profile.movementWarning.spells
+              local selected = spells[specializationID]
+              if not selected then
+                selected = {}
+                for index = 1, #knownSpells do
+                  selected[knownSpells[index]] = true
+                end
+                spells[specializationID] = selected
+              end
+              selected[spellID] = value
+              RefreshSelectedSpells()
+              self:RefreshWarning()
             end,
           },
           combatOnly = {
@@ -386,7 +433,7 @@ function MovementWarning:ShowEnablePrompt(onClosed)
 
   Addon:PUI_ConfirmAction({
     title = "Movement Reminder",
-    text = "Do you want to enable the movement reminder?\n\nShows a countdown in the middle of your screen while your main movement spell is unavailable.",
+    text = "Do you want to enable the movement reminder?\n\nShows a countdown in the middle of your screen while your selected movement spells are unavailable.",
     yesText = "Enable",
     noText = "No thanks",
     onYes = function() SaveChoice(true) end,
@@ -404,7 +451,7 @@ function MovementWarning:OnInitialize()
   Addon:RegisterOptionsSection("MovementWarning", function() return self end, 3,
     "Movement Reminder", "Quality", {
       preview = false,
-      pageDescription = "Show a countdown while your movement spell is unavailable.",
+      pageDescription = "Show a countdown for each unavailable movement spell.",
       pageHelp = "Use /pe to move the reminder.",
     })
 end
@@ -417,9 +464,12 @@ function MovementWarning:OnDisable()
   self:UnregisterAllEvents()
   previewEnabled = false
   if anchor then
-    runtime:Hide()
-    countdown:Clear()
-    previewText:Hide()
+    for index = 1, #rows do
+      local row = rows[index]
+      row.runtime:Hide()
+      row.countdown:Clear()
+      row.previewText:Hide()
+    end
     FrameUtil.SetMoverSuppressed("movement_warning", true)
   end
 end
