@@ -6,14 +6,6 @@ ns.PCMRuntime = Runtime
 local C_Secrets = C_Secrets
 local CreateFrame = CreateFrame
 local InCombatLockdown = InCombatLockdown
-local bit_band = bit.band
-
-Runtime.Dirty = {
-  LAYOUT = 1,
-  FONT = 2,
-  SKIN = 4,
-}
-
 local enabled = false
 local initializing = true
 local subscribers = {}
@@ -81,10 +73,6 @@ function Runtime:SetSubscriberEnabled(name, active)
   end
 end
 
-function Runtime:MaskHas(mask, flag)
-  return bit_band(mask or 0, flag or 0) ~= 0
-end
-
 function Runtime:IsDataRestricted()
   return IsDataRestricted()
 end
@@ -149,7 +137,6 @@ local P = select(1, ns.Pleebug:DropIn(Runtime, { name = "PCM", bucket = "Runtime
 DispatchLifecycleEvent = P:Def("Runtime.DispatchLifecycleEvent", DispatchLifecycleEvent)
 Runtime.RegisterSubscriber = P:Def("Runtime:RegisterSubscriber", Runtime.RegisterSubscriber)
 Runtime.SetSubscriberEnabled = P:Def("Runtime:SetSubscriberEnabled", Runtime.SetSubscriberEnabled)
-Runtime.MaskHas = P:Def("Runtime:MaskHas", Runtime.MaskHas)
 Runtime.IsDataRestricted = P:Def("Runtime:IsDataRestricted", Runtime.IsDataRestricted)
 Runtime.IsAuraRestricted = P:Def("Runtime:IsAuraRestricted", Runtime.IsAuraRestricted)
 Runtime.IsInitializing = P:Def("Runtime:IsInitializing", Runtime.IsInitializing)
