@@ -91,6 +91,7 @@ local function _PUI_InstallAceGUIHooks()
     widget.__puiRegularDropdownGeometryApplied = nil
     widget.__puiLSMDropdownGeometryApplied = nil
     widget.__puiCheckboxControlType = nil
+    widget.__puiGroupHeaderOffset = nil
   end
 
   local function IsPleebUIOwner(owner)
@@ -128,17 +129,39 @@ local function _PUI_InstallAceGUIHooks()
     if widget.type == "DropdownGroup" and not widget.__puiGroupSelectionHooked then
       widget.__puiGroupSelectionHooked = true
       local originalOnWidthSet = widget.OnWidthSet
+      local originalOnHeightSet = widget.OnHeightSet
+      local originalLayoutFinished = widget.LayoutFinished
+      local originalSetTitle = widget.SetTitle
       widget.OnWidthSet = function(self, width)
         originalOnWidthSet(self, width)
         local user = self:GetUserDataTable()
+        local headerHeight = 26
         if self.__puiAceGUIOwnedByPleebUI == true and user.appName == "PleebUI"
           and user.path and user.path[1] == "CooldownManager" and user.path[4] == "entries"
         then
           self.titletext:SetText("")
+          self.dropdown:SetLabel("Spell or item")
+          ns.Theme.WidgetSkins.Dropdown(self.dropdown)
           self.dropdown.frame:ClearAllPoints()
           self.dropdown.frame:SetPoint("TOPLEFT", self.frame, "TOPLEFT", 0, 0)
-          self:SetDropdownWidth(math.max(1, width - 2))
+          self:SetDropdownWidth(math.min(420, math.max(1, (width - 26) * 0.65)))
+          headerHeight = self.dropdown.frame:GetHeight() + 8
         end
+        self.__puiGroupHeaderOffset = headerHeight - 26
+        self.border:ClearAllPoints()
+        self.border:SetPoint("TOPLEFT", self.frame, "TOPLEFT", 0, -headerHeight)
+        self.border:SetPoint("BOTTOMRIGHT", self.frame, "BOTTOMRIGHT", 0, 3)
+        self:OnHeightSet(self.frame:GetHeight())
+      end
+      widget.OnHeightSet = function(self, height)
+        originalOnHeightSet(self, height - (self.__puiGroupHeaderOffset or 0))
+      end
+      widget.LayoutFinished = function(self, width, height)
+        originalLayoutFinished(self, width, (height or 0) + (self.__puiGroupHeaderOffset or 0))
+      end
+      widget.SetTitle = function(self, title)
+        originalSetTitle(self, title)
+        self:OnWidthSet(self.frame:GetWidth())
       end
       local dropdown = widget.dropdown
       local selectedGroup = dropdown.events.OnValueChanged
