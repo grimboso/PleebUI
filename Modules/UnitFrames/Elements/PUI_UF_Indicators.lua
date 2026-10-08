@@ -340,7 +340,7 @@ function UFIndicators.ConstructNativeStatusElements(frame, unit, cfg)
   local isPlayer = unit == "player"
   local isGroupFrame = frame.__puiGroupKind == "party" or frame.__puiGroupKind == "raid"
 
-  if (isPlayer or isGroupFrame) and not frame.CombatIndicator then
+  if ((isPlayer and IsIndicatorEnabled(cfg, "showCombatIndicator")) or isGroupFrame) and not frame.CombatIndicator then
     frame.CombatIndicator = parent:CreateTexture(nil, "OVERLAY", nil, 6)
     frame.CombatIndicator:Hide()
   end
@@ -355,6 +355,19 @@ function UFIndicators.ConstructNativeStatusElements(frame, unit, cfg)
       -Round(1),
       -Round(1)
     )
+
+    if isPlayer and frame.__puiUF_oUFInitialized == true then
+      if IsIndicatorEnabled(cfg, "showCombatIndicator") then
+        local wasEnabled = IsElementEnabled(frame, "CombatIndicator")
+        EnableElement(frame, "CombatIndicator", unit)
+        if not wasEnabled then
+          -- oUF's CombatIndicator ForceUpdate does not supply its required unit.
+          frame:UpdateAllElements("PUI_UNITFRAME_INDICATORS")
+        end
+      else
+        DisableElement(frame, "CombatIndicator")
+      end
+    end
   end
 
   if isPlayer and (not cfg or cfg.showRestingIndicator ~= false) and not frame.RestingIndicator then
@@ -367,10 +380,10 @@ function UFIndicators.ConstructNativeStatusElements(frame, unit, cfg)
     frame.RestingIndicator:SetSize(size, size)
     frame.RestingIndicator:SetPoint(
       "TOPRIGHT",
-      frame.CombatIndicator,
-      "TOPLEFT",
-      -Round(2),
-      0
+      health,
+      "TOPRIGHT",
+      -Round(17),
+      -Round(1)
     )
 
     if frame.__puiUF_oUFInitialized == true then
@@ -388,15 +401,27 @@ function UFIndicators.ConstructNativeStatusElements(frame, unit, cfg)
     end
   end
 
-  if isPlayer then
-    if not frame.PvPIndicator then
-      frame.PvPIndicator = parent:CreateTexture(nil, "OVERLAY", nil, 6)
-      frame.PvPIndicator:Hide()
-    end
+  if isPlayer and IsIndicatorEnabled(cfg, "showPvPIndicator") and not frame.PvPIndicator then
+    frame.PvPIndicator = parent:CreateTexture(nil, "OVERLAY", nil, 6)
+    frame.PvPIndicator:Hide()
+  end
 
+  if frame.PvPIndicator then
     frame.PvPIndicator:ClearAllPoints()
     frame.PvPIndicator:SetSize(size, size)
     frame.PvPIndicator:SetPoint("TOPLEFT", health, "TOPLEFT", Round(1), -Round(1))
+
+    if frame.__puiUF_oUFInitialized == true then
+      if IsIndicatorEnabled(cfg, "showPvPIndicator") then
+        local wasEnabled = IsElementEnabled(frame, "PvPIndicator")
+        EnableElement(frame, "PvPIndicator", unit)
+        if not wasEnabled then
+          frame.PvPIndicator:ForceUpdate()
+        end
+      else
+        DisableElement(frame, "PvPIndicator")
+      end
+    end
   end
 
   if unit == "target" and not frame.QuestIndicator then
