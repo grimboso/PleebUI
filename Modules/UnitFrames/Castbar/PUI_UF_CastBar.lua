@@ -325,8 +325,6 @@ local function CB_UpdateInterruptShield(bar, unit, cfg)
   local shieldMode = cfg.uninterruptShieldMode or "LEFT"
   local showShield = CB_IsEnemyCastUnit(unit) and shieldMode ~= "NONE"
 
-  CB_ApplyUninterruptTextureMode(bar, cfg)
-
   bar.uninterrupt:SetShown(showShield)
   bar.uninterruptLeft:SetShown(showShield and (shieldMode == "LEFT" or shieldMode == "BOTH"))
   bar.uninterruptRight:SetShown(showShield and (shieldMode == "RIGHT" or shieldMode == "BOTH"))
@@ -405,7 +403,6 @@ end
 
 local function CB_StopTimeText(bar)
   bar.timeTextBinding:Disable()
-  bar.__puiTimeTextFormat = nil
   bar.timeText:SetText("")
   bar.timeText:Hide()
 end
@@ -479,14 +476,6 @@ local function CB_OUF_PostCastStart(element, unit, spellID, notInterruptible, di
     local channelDuration = UnitChannelDuration(resolvedUnit)
     bar.__puiChanneling = channelDuration ~= nil
       and UnitEmpoweredChannelDuration(resolvedUnit) == nil
-
-    if bar.__puiChanneling then
-      element:SetTimerDuration(
-        channelDuration,
-        element.smoothing,
-        Enum.StatusBarTimerDirection.RemainingTime
-      )
-    end
   else
     bar.__puiChanneling = element.__puiTestChanneling == true
   end
@@ -498,7 +487,9 @@ local function CB_OUF_PostCastStart(element, unit, spellID, notInterruptible, di
   end
 
   if CB_ShouldShowSpellName(cfg) then
-    CB_SetCastText(bar, cfg, resolvedUnit, displayName)
+    if cfg.displayTarget == true then
+      CB_SetCastText(bar, cfg, resolvedUnit, displayName)
+    end
     bar.spellName:Show()
   else
     bar.spellName:SetText("")

@@ -32,6 +32,7 @@ function CastBar:CreatePlayerCastbarExtras(frame, holder, element, unit)
   }
   holder.safeZoneBorder:SetBackdrop(holder.__puiSafeZoneBorderBackdrop)
   holder.safeZoneBorder:SetBackdropBorderColor(1, 0.15, 0.15, 0.90)
+  holder.safeZoneBorder:SetAllPoints(holder.safeZone)
   holder.safeZoneBorder:Hide()
   frame.safeZoneBorder = holder.safeZoneBorder
 
@@ -99,8 +100,6 @@ function CastBar:PlayerPostCastStart(element, unit, bar, cfg, spellID, isChannel
 
   if cfg.showPingOverlay ~= false then
     bar.safeZone:Show()
-    bar.safeZoneBorder:ClearAllPoints()
-    bar.safeZoneBorder:SetAllPoints(bar.safeZone)
     bar.safeZoneBorder:Show()
 
     local _, _, home, world = GetNetStats()
