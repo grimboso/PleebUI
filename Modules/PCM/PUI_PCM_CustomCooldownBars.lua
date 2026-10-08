@@ -17,7 +17,6 @@ local PCMPresentation = ns.PCMPresentation
 local CustomIcons = ns.PCMCustomIcons
 local Pixel = ns.Pixel
 local Round = Pixel.Round
-local _SB_InstallOnce
 local _SB_RebuildAll
 local _SB_ApplyVisibility
 local _SB_PlayerInCombat = InCombatLockdown()
@@ -189,6 +188,11 @@ local function _SB_RegisterMover(id, f, cfg)
     _SB_ApplyAnchor(f, cfg, 0)
   end
 
+  local function CopyColor(color)
+    if type(color) ~= "table" then return nil end
+    return { color[1] or color.r, color[2] or color.g, color[3] or color.b, color[4] or color.a }
+  end
+
   local moverOpts = {
     label = Cooldowns:GetCustomBarDisplayName(cfg),
     optionsString = "CooldownManager,customTrackers,spell:" .. tostring(id),
@@ -296,10 +300,6 @@ local function _SB_RegisterMover(id, f, cfg)
         FrameUtil:RefreshGhostMover(key)
       end,
       getDesign = function()
-        local function CopyColor(color)
-          if type(color) ~= "table" then return nil end
-          return { color[1] or color.r, color[2] or color.g, color[3] or color.b, color[4] or color.a }
-        end
         return {
           texture = cfg.texture,
           borderSize = cfg.borderSize or 2,
@@ -309,10 +309,6 @@ local function _SB_RegisterMover(id, f, cfg)
       end,
       applyDesign = function(design)
         if type(design) ~= "table" then return end
-        local function CopyColor(color)
-          if type(color) ~= "table" then return nil end
-          return { color[1] or color.r, color[2] or color.g, color[3] or color.b, color[4] or color.a }
-        end
         if design.texture ~= nil then
           cfg.texture = design.texture
         end
@@ -1284,7 +1280,6 @@ function Cooldowns:SpellBars_Enable()
     return
   end
 
-  _SB_InstallOnce()
   _SB_RuntimeEnabled = true
   PCMRuntime:SetSubscriberEnabled("SpellBars", true)
   self:SpellBars_Rebuild()
@@ -1322,15 +1317,6 @@ function Cooldowns:SpellBars_Disable()
       end
     end
   end
-end
-
--- SpellBars self-install: events + integration hooks live here (not in PCM).
-_SB_InstallOnce = function()
-  if Cooldowns.__puiSB_Installed then
-    return
-  end
-
-  Cooldowns.__puiSB_Installed = true
 end
 
 function Cooldowns:_SpellBars_ApplySettings(flags)
@@ -1395,4 +1381,3 @@ end
   Cooldowns._SpellBars_SoftRebuild = P:Def('Cooldowns:_SpellBars_SoftRebuild', Cooldowns._SpellBars_SoftRebuild)
   _SB_ApplyVisibility = P:Def('_SB_ApplyVisibility', _SB_ApplyVisibility)
   _SB_RebuildAll = P:Def('_SB_RebuildAll', _SB_RebuildAll)
-  _SB_InstallOnce = P:Def('_SB_InstallOnce', _SB_InstallOnce)
