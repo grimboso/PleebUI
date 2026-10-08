@@ -50,7 +50,9 @@ local STATE_TOTEM = 0x020
 local STATE_EQUIPMENT = 0x040
 local STATE_ITEM = 0x080
 local STATE_KEYBIND = 0x100
+local STATE_GCD_ONLY = 0x200
 local STATE_ALL = 0x1FF
+local STATE_COOLDOWN_UPDATE = bit_bor(STATE_COOLDOWN, STATE_GCD_ONLY)
 
 local APPEARANCE_STYLE = 0x01
 local APPEARANCE_ICON = 0x02
@@ -277,6 +279,9 @@ local function AssignRuntimeSpellIDs(record)
   if entry.entryKind ~= "spell" then
     record.runtimeSpellID = nil
     record.runtimeChargeSpellID = nil
+    record.cooldownIsOnGCD = false
+    record.displayedCooldownIsOnGCD = false
+    record.hasEventCooldownState = nil
     return false
   end
 
@@ -298,6 +303,8 @@ local function AssignRuntimeSpellIDs(record)
   end
   if changed then
     record.cooldownIsOnGCD = false
+    record.displayedCooldownIsOnGCD = false
+    record.hasEventCooldownState = nil
   end
   record.runtimeSpellID = runtimeSpellID
   record.runtimeChargeSpellID = runtimeChargeSpellID
@@ -801,6 +808,7 @@ end
 
 local function RefreshSpellCooldown(record)
   local spellID = record.runtimeSpellID
+  record.displayedCooldownIsOnGCD = record.cooldownIsOnGCD == true
   if not spellID then
     PCMPresentation.SetSpellCooldownDuration(record.parts, nil)
     return
@@ -1082,14 +1090,20 @@ local function RefreshStateAppearance(record)
     end
   end
 
-  local cooldownInfo = C_Spell.GetSpellCooldown(record.runtimeSpellID)
-  if not cooldownInfo
-    or IsSecret(cooldownInfo.isActive)
-    or IsSecret(cooldownInfo.isOnGCD)
-  then
-    return
+  local cooldownIsActive = record.cooldownIsActive
+  local cooldownIsOnGCD = record.cooldownIsOnGCD
+  if not record.hasEventCooldownState then
+    local cooldownInfo = C_Spell.GetSpellCooldown(record.runtimeSpellID)
+    if not cooldownInfo
+      or IsSecret(cooldownInfo.isActive)
+      or IsSecret(cooldownInfo.isOnGCD)
+    then
+      return
+    end
+    cooldownIsActive = cooldownInfo.isActive == true
+    cooldownIsOnGCD = cooldownInfo.isOnGCD == true
   end
-  stateName = cooldownInfo.isActive == true and cooldownInfo.isOnGCD ~= true
+  stateName = cooldownIsActive and not cooldownIsOnGCD
     and "COOLDOWN"
     or "READY"
 
@@ -1099,7 +1113,7 @@ end
 local function RefreshRecordState(record, stateMask)
   local entry = record.entry
 
-  if HasMask(stateMask, STATE_COOLDOWN) and entry.entryKind == "spell" then
+  if HasMask(stateMask, STATE_COOLDOWN_UPDATE) and entry.entryKind == "spell" then
     RefreshSpellCooldown(record)
   end
   if HasMask(stateMask, STATE_CHARGE) and entry.charges == true then
@@ -1245,6 +1259,7 @@ local function ReleaseRecord(record)
   record.dirtyMask = 0
   record.stateDirtyMask = 0
   record.appearanceDirtyMask = 0
+  record.hasEventCooldownState = nil
   record.auraStylePending = nil
   record.parts.frame:SetScript("OnEnter", nil)
   record.parts.frame:SetScript("OnLeave", nil)
@@ -1338,15 +1353,32 @@ local function AcquireRecord(viewer, entry, generation)
     }
   end
 
-  local function OnCooldownDone()
+  local function OnCooldownDone(cooldown)
     if activeByCooldownID[record.cooldownID] ~= record then
       return
     end
 
-    local stateMask = bit_bor(STATE_COOLDOWN, STATE_CHARGE)
+    -- A newer cooldown event already owns the pending timer update.
+    if cooldown == parts.cooldown
+      and not verifiedTotemSlots[record.cooldownID]
+      and record.hasEventCooldownState
+      and HasMask(record.stateDirtyMask, STATE_COOLDOWN_UPDATE)
+    then
+      return
+    end
+
+    record.hasEventCooldownState = nil
+    local stateMask = STATE_COOLDOWN
     if verifiedTotemSlots[record.cooldownID] then
       RefreshTotemBindings()
-      stateMask = bit_bor(stateMask, STATE_TOTEM)
+      stateMask = bit_bor(STATE_COOLDOWN, STATE_CHARGE, STATE_TOTEM)
+    elseif cooldown == parts.chargeCooldown then
+      -- A returned charge can also make the base cooldown ready.
+      stateMask = bit_bor(STATE_COOLDOWN, STATE_CHARGE)
+    elseif record.displayedCooldownIsOnGCD then
+      record.cooldownIsOnGCD = false
+      record.displayedCooldownIsOnGCD = false
+      stateMask = STATE_GCD_ONLY
     end
 
     MarkRecordDirty(record, DIRTY_STATE, stateMask)
@@ -1518,28 +1550,40 @@ end
 local function MarkCooldownEventBucket(bucketName, stateMask, spellID, baseSpellID, startRecoveryCategory)
   local bucket = buckets[bucketName]
   local hasSpecificSpell = not IsSecret(spellID) and type(spellID) == "number"
-  local hasSpecificBase = not IsSecret(baseSpellID) and type(baseSpellID) == "number"
-  local refreshAll = not hasSpecificSpell
-  if bucketName == "cooldown" then
-    refreshAll = refreshAll
-      or IsSecret(startRecoveryCategory)
-      or startRecoveryCategory == Constants.SpellCooldownConsts.GLOBAL_RECOVERY_CATEGORY
-  end
+  local baseSpellIsSecret = IsSecret(baseSpellID)
+  local hasSpecificBase = not baseSpellIsSecret and type(baseSpellID) == "number"
+  local recoveryCategoryIsSecret = bucketName == "cooldown" and IsSecret(startRecoveryCategory)
+  local isGlobalCooldown = bucketName == "cooldown"
+    and not recoveryCategoryIsSecret
+    and startRecoveryCategory == Constants.SpellCooldownConsts.GLOBAL_RECOVERY_CATEGORY
+  local refreshAll = not hasSpecificSpell or recoveryCategoryIsSecret or isGlobalCooldown
+  local canRefreshGCDOnly = isGlobalCooldown and hasSpecificSpell and not baseSpellIsSecret
 
   for _, record in pairs(bucket.records) do
-    if refreshAll
-      or RecordMatchesSpellIdentity(
+    local directMatch = false
+    if not refreshAll or canRefreshGCDOnly then
+      directMatch = RecordMatchesSpellIdentity(
         record,
         spellID,
         hasSpecificBase and baseSpellID or spellID
       )
-    then
+    end
+
+    if refreshAll or directMatch then
       if bucketName == "cooldown" then
         local cooldownInfo = C_Spell.GetSpellCooldown(record.runtimeSpellID)
         -- isOnGCD is never secret and is only reliable during SPELL_UPDATE_COOLDOWN.
         record.cooldownIsOnGCD = cooldownInfo and cooldownInfo.isOnGCD == true or false
+        -- Retain only public booleans until this record is flushed.
+        record.cooldownIsActive = cooldownInfo and cooldownInfo.isActive == true or false
+        record.hasEventCooldownState = cooldownInfo ~= nil
       end
-      MarkRecordDirty(record, DIRTY_STATE, stateMask)
+
+      local recordStateMask = stateMask
+      if canRefreshGCDOnly and not directMatch and not verifiedTotemSlots[record.cooldownID] then
+        recordStateMask = STATE_GCD_ONLY
+      end
+      MarkRecordDirty(record, DIRTY_STATE, recordStateMask)
     end
   end
 end
@@ -1589,8 +1633,15 @@ local function FlushDirtyRecords()
         RefreshRecordVisibility(record)
       end
       if HasMask(dirtyMask, DIRTY_STATE) then
-        RefreshRecordState(record, stateMask)
+        if stateMask == STATE_USABLE then
+          RefreshUsableState(record)
+        elseif stateMask == STATE_GCD_ONLY then
+          RefreshSpellCooldown(record)
+        else
+          RefreshRecordState(record, stateMask)
+        end
       end
+      record.hasEventCooldownState = nil
     end
   end
 
@@ -1961,6 +2012,28 @@ flushFrame:SetScript("OnUpdate", function()
 end)
 
 local P = select(1, ns.Pleebug:DropIn(AbilityRuntime, { name = "PCM", bucket = "AbilityRuntime" }))
+P.ApplyPendingCatalog = ApplyPendingCatalog
+ApplyPendingCatalog = P:SecDef("AbilityRuntime.ApplyPendingCatalog", P, "ApplyPendingCatalog")
+P.RefreshTotemBindings = RefreshTotemBindings
+RefreshTotemBindings = P:SecDef("AbilityRuntime.RefreshTotemBindings", P, "RefreshTotemBindings")
+P.RefreshEventRegistrations = RefreshEventRegistrations
+RefreshEventRegistrations = P:SecDef("AbilityRuntime.RefreshEventRegistrations", P, "RefreshEventRegistrations")
+P.FlushDirtyRecords = FlushDirtyRecords
+FlushDirtyRecords = P:SecDef("AbilityRuntime.FlushDirtyRecords", P, "FlushDirtyRecords")
+P.RefreshRecordState = RefreshRecordState
+RefreshRecordState = P:SecDef("AbilityRuntime.RefreshRecordState", P, "RefreshRecordState")
+P.RefreshSpellCooldown = RefreshSpellCooldown
+RefreshSpellCooldown = P:SecDef("AbilityRuntime.RefreshSpellCooldown", P, "RefreshSpellCooldown")
+P.RefreshChargeState = RefreshChargeState
+RefreshChargeState = P:SecDef("AbilityRuntime.RefreshChargeState", P, "RefreshChargeState")
+P.RefreshUsableState = RefreshUsableState
+RefreshUsableState = P:SecDef("AbilityRuntime.RefreshUsableState", P, "RefreshUsableState")
+P.RefreshRangeState = RefreshRangeState
+RefreshRangeState = P:SecDef("AbilityRuntime.RefreshRangeState", P, "RefreshRangeState")
+P.RefreshStateAppearance = RefreshStateAppearance
+RefreshStateAppearance = P:SecDef("AbilityRuntime.RefreshStateAppearance", P, "RefreshStateAppearance")
+P.RefreshRecordAppearance = RefreshRecordAppearance
+RefreshRecordAppearance = P:SecDef("AbilityRuntime.RefreshRecordAppearance", P, "RefreshRecordAppearance")
 AbilityRuntime.InitializeViewer = P:Def("AbilityRuntime:InitializeViewer", AbilityRuntime.InitializeViewer)
 AbilityRuntime.GetViewerFrame = P:Def("AbilityRuntime:GetViewerFrame", AbilityRuntime.GetViewerFrame)
 AbilityRuntime.GetViewerStyle = P:Def("AbilityRuntime:GetViewerStyle", AbilityRuntime.GetViewerStyle)
