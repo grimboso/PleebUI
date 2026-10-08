@@ -609,14 +609,7 @@ local function _PCM_DB_Attach(Cooldowns)
     end
   end
 
-  local function _PCM_GetCurrentSpecializationID()
-    local specIndex = GetSpecialization()
-    if not specIndex then
-      return nil
-    end
-
-    return GetSpecializationInfo(specIndex)
-  end
+  local _PCM_GetCurrentSpecializationID = ns.PCMIconSettings.GetCurrentSpecializationID
 
   local function _PCM_EnsureSpecAssignments(selfOrEntry, maybeEntry)
     local entry = maybeEntry or selfOrEntry
@@ -780,22 +773,6 @@ local function _PCM_DB_Attach(Cooldowns)
     return _PCM_AllowsCurrentSpec(entry) == true
   end
 
-  local function SpellBars_SetEffectiveEnabled(key, enabled)
-    local prof = _SpellBars_GetProfileBars()
-    if prof and prof[key] and type(prof[key]) == "table" then
-      prof[key].enabled = (enabled == true) and true or false
-    end
-  end
-
-  local function SpellBars_DeleteEntry(key)
-    local prof = _SpellBars_GetProfileBars()
-    if prof and key ~= nil then
-      prof[key] = nil
-      return true
-    end
-    return false
-  end
-
   local function _CooldownStackBars_GetProfileBars()
     local cm = _SpellBars_GetProfileRoot()
     if not cm then
@@ -806,15 +783,6 @@ local function _PCM_DB_Attach(Cooldowns)
   end
 
 
-
-  local function CooldownStackBars_DeleteEntry(key)
-    local prof = _CooldownStackBars_GetProfileBars()
-    if prof and key ~= nil then
-      prof[key] = nil
-      return true
-    end
-    return false
-  end
 
   local function NormalizeCustomBarBuffGlow(selfOrEntry, maybeEntry)
     local entry = maybeEntry or selfOrEntry
@@ -1086,18 +1054,6 @@ local function _PCM_DB_Attach(Cooldowns)
       entry.useClassColor = not not entry.useClassColor
     end
 
-    if entry.orientation ~= "horizontal" and entry.orientation ~= "vertical" then
-      entry.orientation = "horizontal"
-    end
-
-    if entry.fillDirection ~= "LEFT"
-      and entry.fillDirection ~= "RIGHT"
-      and entry.fillDirection ~= "UP"
-      and entry.fillDirection ~= "DOWN"
-    then
-      entry.fillDirection = entry.orientation == "vertical" and "UP" or "RIGHT"
-    end
-
     if entry.durationBarFillMode ~= "fill" and entry.durationBarFillMode ~= "drain" then
       entry.durationBarFillMode = "fill"
     end
@@ -1226,23 +1182,6 @@ local function _PCM_DB_Attach(Cooldowns)
 
     _PCM_EnsureSpecAssignments(entry)
 
-    -- direction: "fill" (ready = full) or "drain" (ready = empty)
-    if entry.direction ~= "fill" and entry.direction ~= "drain" then
-      entry.direction = "fill"
-    end
-
-    if entry.orientation ~= "horizontal" and entry.orientation ~= "vertical" then
-      entry.orientation = "horizontal"
-    end
-
-    if entry.fillDirection ~= "LEFT"
-      and entry.fillDirection ~= "RIGHT"
-      and entry.fillDirection ~= "UP"
-      and entry.fillDirection ~= "DOWN"
-    then
-      entry.fillDirection = entry.orientation == "vertical" and "UP" or "RIGHT"
-    end
-
     entry.width  = tonumber(entry.width)  or 250
     entry.height = tonumber(entry.height) or 25
     if entry.width < 80 then entry.width = 80 end
@@ -1358,9 +1297,6 @@ local function _PCM_DB_Attach(Cooldowns)
   end
 
   -- Export helpers onto the module table.
-  Cooldowns.GetViewerSwipeDB = GetViewerSwipeDB
-  Cooldowns.GetViewerSwipeEntry = GetViewerSwipeEntry
-  Cooldowns.NormalizeSwipeEntry = NormalizeSwipeEntry
   Cooldowns._ResolveFontOpts = _ResolveFontOpts
   Cooldowns._GetBorderDB = _GetBorderDB
   Cooldowns.GetBorderConfig = GetBorderConfig
@@ -1387,15 +1323,10 @@ local function _PCM_DB_Attach(Cooldowns)
   Cooldowns.GetTrackedSpellIDForCurrentSpec = _PCM_GetTrackedSpellIDForCurrentSpec
   Cooldowns.GetCustomBarDisplayName = _PCM_GetCustomBarDisplayName
   Cooldowns.AllowsCurrentSpecialization = _PCM_AllowsCurrentSpec
-  Cooldowns.ShouldShowSpellBarForCurrentSpec = _PCM_AllowsCurrentSpec
-  Cooldowns.ShouldShowCooldownStackBarForCurrentSpec = _PCM_AllowsCurrentSpec
   Cooldowns.DoesPlayerKnowSavedSpell = _PCM_DoesPlayerKnowSavedSpell
   Cooldowns.ClearSavedSpellKnownCache = _PCM_ClearSavedSpellKnownCache
-  Cooldowns.SpellBars_SetEffectiveEnabled = SpellBars_SetEffectiveEnabled
-  Cooldowns.SpellBars_DeleteEntry = SpellBars_DeleteEntry
   Cooldowns.GetCooldownStackBarsDB = _CooldownStackBars_GetProfileBars
   Cooldowns.NormalizeCooldownStackBarEntry = NormalizeCooldownStackBarEntry
-  Cooldowns.CooldownStackBars_DeleteEntry = CooldownStackBars_DeleteEntry
   Cooldowns._GetWidthModeForViewer = _GetWidthModeForViewer
   Cooldowns._HasAnyFontField = _HasAnyFontField
   Cooldowns._SavePosition = _SavePosition
