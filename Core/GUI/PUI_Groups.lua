@@ -140,9 +140,7 @@ local function _PUI_RefreshPCMManagerTree(widget, originalRefreshTree, ...)
     math.floor(((tonumber(widget.treeframe:GetHeight()) or 0) - 20) / 18)
   )
   local pcmVisibleRows = _PUI_GetPCMTreeVisibleRows(widget)
-  local desiredScroll = tonumber(status.__puiPCMScrollValue)
-    or tonumber(status.scrollvalue)
-    or 0
+  local desiredScroll = tonumber(status.scrollvalue) or 0
 
   desiredScroll = math.max(
     0,
@@ -184,7 +182,6 @@ local function _PUI_RefreshPCMManagerTree(widget, originalRefreshTree, ...)
   end
 
   status.scrollvalue = desiredScroll
-  status.__puiPCMScrollValue = desiredScroll
 
   widget.noupdate = true
   if lineCount > pcmVisibleRows then
@@ -850,8 +847,6 @@ function WidgetSkins.TreeGroup(widget)
   widget.__puiPCMManagerTree = pcmManagerTree
   if not pcmManagerTree then
     widget.__puiPCMTreeRefreshPrimed = nil
-    local status = widget.status or widget.localstatus
-    status.__puiPCMScrollValue = nil
   end
 
   if not widget.__puiTreeShowScrollHooked then
