@@ -1,29 +1,29 @@
 local _, ns = ...
 
-local Options = { entryFilters = {} }
+local Options = {}
 ns.PCMOptions = Options
 
 local SECTIONS = {
-  { "tracking", "Tracking" },
+  { "general", "General Settings" },
   { "layout", "Layout" },
-  { "timer", "Timer" },
+  { "timer", "Timers & Swipes" },
   { "appearance", "Appearance" },
   { "text", "Text" },
-  { "visibility", "Visibility" },
+  { "glow", "Glow" },
   { "advanced", "Advanced" },
 }
 
 local GROUP_SECTIONS = {
-  general = "tracking", tracking = "tracking", placement = "tracking",
+  general = "general", tracking = "general", placement = "general",
   layout = "layout", barLayout = "layout", icons = "layout",
   swipe = "timer", timer = "timer", duration = "timer",
   appearance = "appearance", design = "appearance", barDesign = "appearance",
-  border = "appearance", glow = "appearance", stackColors = "appearance",
+  border = "layout", glow = "glow", stackColors = "appearance",
   slotColors = "appearance", ready = "appearance", cooldown = "appearance",
   active = "appearance", whenReady = "appearance", whenCooldown = "appearance",
   whenActive = "appearance", aura = "appearance",
   text = "text", textsFonts = "text", fonts = "text", fontSettings = "text",
-  visibility = "visibility", behavior = "visibility", advanced = "advanced",
+  visibility = "general", behavior = "general", advanced = "advanced",
 }
 
 local FIELD_SECTIONS = {}
@@ -33,13 +33,13 @@ local function AssignFields(section, fields)
   end
 end
 
-AssignFields("tracking", "enabled name group auraTrackMode maxStacks powerInfusion bloodlust customBuffSpellIDs onlyOnUseTrinkets")
-AssignFields("layout", "size iconSize width height fixedWidth widthMode iconSpacing spacing columns iconsPerRow growUp growth rowGrowth growthDirection orientation rowSpacing wrap showIcon showSpellIconNextToBar iconPlacement iconAnchor durationHideIconFrame durationHideSpellIcon durationAnchor durationGap durationHeight durationIconSize")
-AssignFields("timer", "forceCooldown timerDisplay swipeSource swipeShow durationSwipe durationText swipeGCD swipeCooldown swipeDuration countCooldown countDuration cooldownShow showSwipe showDuration showCooldownText showDurationSwipe showDurationText rechargeCountdown showText barMode durationBarFillMode drainDirection fillDirection activeAuraSource activeAuraCDM activeAuraCustom source cdmBuff customBuff showActive hideDurationWhenMissing inheritedTimer")
-AssignFields("appearance", "borderThickness borderColor borderSize viewerBorderSize viewerBorderColor texture barTexture stackTexture durationTexture useClassColor buffBarColor buffBarBgColor backgroundColor durationBarColor durationIconBorderSize durationIconBorderColor glowDuringDurationSwipe desaturateCooldown desaturateReady activeAuraDesaturate customTextureOverride chromeStyle readySaturationOverride readySaturation cooldownSaturationOverride cooldownSaturation auraSaturationOverride auraSaturation readyGlowStyle readyGlowColor cooldownGlowStyle cooldownGlowColor auraGlowStyle auraGlowColor activeAuraGlowStyle activeAuraGlowColor")
-AssignFields("text", "showName countCharge countBuff countVisibility showItemQuality keybindToggle showKeybinds chargeShow keybindShow showCount showPips showStackStrip font fontSize fontColor fontOutline outline countFontSize cooldownFontSize keybindFontSize durationFont durationOutline durationCountFontSize countTextColor durationTextColor")
-AssignFields("visibility", "showTooltips showTooltip hideWhenInactive visibility combatOnly hideOutOfCombat outOfCombatAlpha missingAlpha readyAlpha readyAlphaOverride cooldownAlpha cooldownAlphaOverride onCooldownAlpha activeAlpha activeAuraAlpha auraAlpha auraAlphaOverride alpha opacity showOnlyWhenActive hideViewerIcon activeAuraHideViewerIcon")
-AssignFields("advanced", "delete deleteBar resetIcon resetGroups customTexture swipeEdge swipeReverse swipeColorOverride swipeColor cooldownSwipeColor cooldownSwipeEdge durationSwipeColor durationSwipeEdge gcdSwipeColor gcdSwipeEdge rechargeEdge rotateTexture dynamicTextOnSlot")
+AssignFields("general", "enabled name group auraTrackMode maxStacks powerInfusion bloodlust customBuffSpellIDs onlyOnUseTrinkets nativeTracking showSwipe swipeShow showTooltips showTooltip hideWhenInactive visibility combatOnly hideOutOfCombat outOfCombatAlpha missingAlpha readyAlpha readyAlphaOverride cooldownAlpha cooldownAlphaOverride onCooldownAlpha activeAlpha activeAuraAlpha auraAlpha auraAlphaOverride alpha opacity showOnlyWhenActive hideViewerIcon activeAuraHideViewerIcon")
+AssignFields("layout", "size iconSize width height fixedWidth widthMode iconSpacing spacing columns iconsPerRow growUp growth rowGrowth growthDirection orientation rowSpacing wrap showIcon showSpellIconNextToBar iconPlacement iconAnchor durationHideIconFrame durationHideSpellIcon durationAnchor durationGap durationHeight durationIconSize borderThickness borderColor borderSize viewerBorderSize viewerBorderColor durationIconBorderSize durationIconBorderColor showSlotBorder slotBorderThickness slotBorderColor")
+AssignFields("timer", "forceCooldown timerDisplay swipeSource durationSwipe durationText swipeGCD swipeCooldown swipeDuration countCooldown countDuration showCooldownText showDurationSwipe showDurationText rechargeCountdown barMode durationBarFillMode drainDirection fillDirection activeAuraSource activeAuraCDM activeAuraCustom source cdmBuff customBuff showActive hideDurationWhenMissing inheritedTimer swipeEdge swipeReverse swipeColorOverride swipeColor cooldownSwipeColor cooldownSwipeEdge durationSwipeColor durationSwipeEdge gcdSwipeColor gcdSwipeEdge rechargeEdge")
+AssignFields("appearance", "texture barTexture stackTexture durationTexture useClassColor buffBarColor buffBarBgColor backgroundColor durationBarColor desaturateCooldown desaturateReady activeAuraDesaturate customTextureOverride chromeStyle readySaturationOverride readySaturation cooldownSaturationOverride cooldownSaturation auraSaturationOverride auraSaturation")
+AssignFields("text", "cooldownShow showText showDuration showName countCharge countBuff countVisibility showItemQuality keybindToggle showKeybinds chargeShow keybindShow showCount showPips showStackStrip font fontSize fontColor fontOutline outline countFontSize cooldownFontSize keybindFontSize durationFont durationOutline durationCountFontSize countTextColor durationTextColor showCountdown durationTextScale durationTextAnchor durationTextX durationTextY countTextScale countTextAnchor countTextX countTextY")
+AssignFields("glow", "glowDuringDurationSwipe readyGlowStyle readyGlowColor cooldownGlowStyle cooldownGlowColor auraGlowStyle auraGlowColor activeAuraGlowStyle activeAuraGlowColor glow glowColor activeGlowStyle")
+AssignFields("advanced", "delete deleteBar resetIcon resetGroups customTexture rotateTexture dynamicTextOnSlot")
 
 local LABELS = {
   ["Use viewer setting"] = "Use inherited setting",
@@ -103,33 +103,63 @@ function Options:BuildSections(source)
         end
       end
       if option.type == "group" then
-        local nextCategory = GROUP_SECTIONS[key] or category
+        local nextCategory = GROUP_SECTIONS[key] or (key:lower():find("glow", 1, true) and "glow") or category
         if key == "specializationSpells" then
           option.name = "Spell assignments"
           option.order = 20
-          sections.tracking.args[optionKey] = option
+          sections.general.args[optionKey] = option
         else
           Collect(option.args or {}, nextCategory, optionKey, option.name, CombineHidden(hidden, option.hidden))
         end
       elseif option.type ~= "header" then
         local destination = FIELD_SECTIONS[key] or category
         local bucketPrefix, bucketLabel = prefix, label
-        if FIELD_SECTIONS[key] ~= "layout" and (key:match("Anchor$") or key:match("Offset[XY]$")
+        local role = key:match("^(cooldown)") or key:match("^(charge)") or key:match("^(keybind)")
+          or key:match("^Duration") and "cooldown" or key:match("^Stack") and "charge"
+        if category == "glow" or prefix:match("whenActive$") and (key == "thickness" or key == "color") then
+          destination = "glow"
+        elseif key == "showDuration" and prefix == "duration" then
+          destination = "timer"
+        elseif not FIELD_SECTIONS[key] and role then
+          destination = "text"
+        elseif not FIELD_SECTIONS[key] and (key:match("Anchor$") or key:match("Offset[XY]$")
           or key:match("PositionOverride$") or key:match("Text[XY]$")
           or key:match("TextScale$") or key:match("fontOffset[XY]$"))
         then
-          destination = "advanced"
-        elseif key:match("^cooldown") or key:match("^charge") or key:match("^keybind")
-          or key:match("^Duration") or key:match("^Stack")
-        then
-          destination = FIELD_SECTIONS[key] or "text"
+          destination = "text"
         end
-        if prefix == "" and (destination == "text" or destination == "advanced") then
-          local role = key:match("^(cooldown)") or key:match("^(charge)") or key:match("^(keybind)")
+        if destination == "text" then
+          if key == "showCountdown" or key == "showDuration" or key:match("^durationText")
+            or key == "fontSize" and prefix == "icon_fonts" then
+            role = "cooldown"
+          elseif key == "countCharge" or key == "countBuff" or key == "showCount" or key == "countFontSize" or key:match("^countText") then
+            role = "charge"
+          elseif key == "keybindToggle" or key == "showKeybinds" then
+            role = "keybind"
+          end
           if role then
             bucketPrefix = role
             bucketLabel = role == "cooldown" and "Countdown" or role == "charge" and "Charges / stacks" or "Keybinds"
           end
+        elseif destination == "timer" then
+          if key:lower():find("gcd", 1, true) then
+            bucketPrefix, bucketLabel = "gcdTimer", "Global cooldown"
+          elseif key:lower():find("duration", 1, true) or key:match("^activeAura")
+            or key == "forceCooldown" or key == "timerDisplay" or key == "swipeSource"
+            or key == "showActive" or key == "source" or key == "cdmBuff" or key == "customBuff"
+          then
+            bucketPrefix, bucketLabel = "durationTimer", "Duration timer"
+          elseif key:lower():find("cooldown", 1, true) or key:match("^recharge") then
+            bucketPrefix, bucketLabel = "cooldownTimer", "Cooldown timer"
+          else
+            bucketPrefix, bucketLabel = "swipeSettings", "Swipe settings"
+          end
+        end
+        if destination == "timer" then
+          option.name = option.name:gsub("[Gg]lobal cooldown swipe", "Swipe"):gsub("GCD swipe", "Swipe")
+            :gsub("[Cc]ooldown swipe", "Swipe"):gsub("[Dd]uration swipe", "Swipe")
+            :gsub("Show Swipe", "Show swipe"):gsub("^Show cooldown countdown$", "Show countdown")
+            :gsub("^Show duration countdown$", "Show countdown")
         end
         option.hidden = CombineHidden(hidden, option.hidden)
         local sectionArgs = sections[destination].args
@@ -138,12 +168,18 @@ function Options:BuildSections(source)
         then
           local bucket = sectionArgs[bucketPrefix]
           if not bucket then
-            bucket = { type = "group", name = bucketLabel, inline = true, order = option.order, args = {} }
+            local order = destination == "timer" and (bucketPrefix == "durationTimer" and 10
+              or bucketPrefix == "cooldownTimer" and 20 or bucketPrefix == "gcdTimer" and 30 or 40)
+              or destination == "text" and (bucketPrefix == "cooldown" and 10
+                or bucketPrefix == "charge" and 20 or bucketPrefix == "keybind" and 30)
+              or option.order
+            bucket = { type = "group", name = bucketLabel, inline = true, order = order, args = {} }
             sectionArgs[bucketPrefix] = bucket
-          elseif (tonumber(option.order) or 50) < (tonumber(bucket.order) or 50) then
+          elseif destination ~= "timer" and destination ~= "text"
+            and (tonumber(option.order) or 50) < (tonumber(bucket.order) or 50) then
             bucket.order = option.order
           end
-          bucket.args[key] = option
+          bucket.args[optionKey] = option
         else
           sectionArgs[optionKey] = option
         end
@@ -151,7 +187,7 @@ function Options:BuildSections(source)
     end
   end
 
-  Collect(source, "tracking", "", "", nil)
+  Collect(source, "general", "", "", nil)
   for key, section in pairs(sections) do
     if next(section.args) == nil then sections[key] = nil end
   end
@@ -201,12 +237,6 @@ function Options.ResolvePath(path)
       else path[3], path[4] = "__disabledNotLoaded", first.key end
     end
   end
-  if path[2] == "groups" and path[4] == "entries" and path[5] then
-    local record = ns.PCMGroupManager:GetActiveRecord(path[5])
-    if record and not Options:MatchesEntry(path[3], record.entry) then
-      Options.entryFilters[path[3]] = nil
-    end
-  end
   return path
 end
 
@@ -223,29 +253,19 @@ function Options.CacheKey(path)
   return path[2] or "overview"
 end
 
-function Options:MatchesEntry(groupID, entry)
-  local query = self.entryFilters[groupID]
-  if not query or query == "" then return true end
-  local text = string.lower(tostring(entry.name) .. " " .. tostring(entry.spellID or "") .. " " .. tostring(entry.catalogKey))
-  for token in query:gmatch("%S+") do
-    if not text:find(token, 1, true) then return false end
-  end
-  return true
-end
-
 function Options.GetSearchEntries()
   local results = {}
   local function Add(label, path, keywords)
     results[#results + 1] = { label = label, path = path, keywords = keywords or "" }
   end
   local settingKeywords = {
-    tracking = "tracking enabled tooltip spell specialization assignment",
+    general = "general enabled visibility opacity tooltip spell specialization assignment",
     layout = "layout size width height spacing rows columns orientation growth icon position",
     timer = "timer display duration active aura buff cooldown gcd swipe countdown recharge fill drain",
-    appearance = "appearance border color saturation desaturate texture glow",
-    text = "text font size outline countdown charges stacks keybinds name",
-    visibility = "visibility opacity alpha hide combat inactive ready tooltip",
-    advanced = "advanced font anchor offset swipe color edge direction reset delete",
+    appearance = "appearance color saturation desaturate texture",
+    text = "text font size outline anchor offset countdown charges stacks keybinds name",
+    glow = "glow style color speed scale lines thickness aura ready cooldown",
+    advanced = "advanced reset delete custom texture",
   }
   local groups = ns.PCMGroupManager:GetGroups()
   for index = 1, #groups.order do
@@ -257,9 +277,15 @@ function Options.GetSearchEntries()
       local section = SECTIONS[sectionIndex]
       local available
       if group.isDefault then
-        available = groupID ~= "buff-bars" or section[1] ~= "advanced"
+        if group.defaultViewerKey == "BuffIconCooldownViewer" then
+          available = section[1] == "general" or section[1] == "layout" or section[1] == "timer" or section[1] == "text"
+        elseif group.defaultViewerKey == "BuffBarCooldownViewer" then
+          available = section[1] ~= "glow" and section[1] ~= "advanced"
+        else
+          available = section[1] ~= "advanced"
+        end
       else
-        available = section[1] == "tracking" or section[1] == "layout" or section[1] == "advanced"
+        available = section[1] == "general" or section[1] == "layout" or section[1] == "advanced"
       end
       if available then
         Add("Groups / " .. group.name .. " / " .. section[2],
