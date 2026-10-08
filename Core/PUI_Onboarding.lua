@@ -3030,9 +3030,21 @@ local loginFrame = CreateFrame("Frame")
 loginFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
 loginFrame:SetScript("OnEvent", function(self)
   self:UnregisterEvent("PLAYER_ENTERING_WORLD")
+  self:UnregisterEvent("PLAYER_REGEN_ENABLED")
 
   C_Timer.After(1, function()
-    if Addon:IsInstallWizardPending() then
+    if Addon.db.global.onboarding.movementReminderPromptPending then
+      if InCombatLockdown() then
+        self:RegisterEvent("PLAYER_REGEN_ENABLED")
+        return
+      end
+
+      ns.Modules.MovementWarning:ShowEnablePrompt(function()
+        if Addon:IsInstallWizardPending() then
+          Addon:ShowInstallWizard(false)
+        end
+      end)
+    elseif Addon:IsInstallWizardPending() then
       Addon:ShowInstallWizard(false)
     end
   end)
