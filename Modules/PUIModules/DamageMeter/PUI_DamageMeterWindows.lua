@@ -817,6 +817,16 @@ local function ConfigureWindowRowDisplay(window, meterKey)
   local countOnly = meterKey == "INTERRUPTS" or meterKey == "DISPELS" or meterKey == "DEATHS"
   local ratePrimary = meterKey == "DPS" or meterKey == "HPS"
 
+  if meterKey == "DEATHS" then
+    window.rowDisplayKind = "DEATH"
+  elseif countOnly then
+    window.rowDisplayKind = "COUNT"
+  elseif ratePrimary then
+    window.rowDisplayKind = "RATE"
+  else
+    window.rowDisplayKind = "AMOUNT"
+  end
+
   for index = 1, window.activeRowCount do
     local row = window.rows[index]
     row.primarySuffix:SetText("")
@@ -886,8 +896,7 @@ local function SetRowSource(
   source,
   rank,
   maxAmount,
-  maxAmountIsSecret,
-  meterKey
+  maxAmountIsSecret
 )
   local classFilename = source.classFilename
 
@@ -907,7 +916,8 @@ local function SetRowSource(
   end
 
   local totalAmount = source.totalAmount
-  local usesAmountFill = meterKey ~= "DEATHS"
+  local displayKind = window.rowDisplayKind
+  local usesAmountFill = displayKind ~= "DEATH"
     or source.__puiSummaryDeathCount == true
   local totalAmountIsSecret
 
@@ -948,7 +958,7 @@ local function SetRowSource(
     row.name:SetText(sourceName)
     row.rawSourceName = nil
     row.plainSourceName = nil
-    if meterKey == "DEATHS" then
+    if displayKind == "DEATH" then
       row.sourceDisplayName = nil
     end
   else
@@ -965,12 +975,12 @@ local function SetRowSource(
       row.name:SetText(displayName)
     end
 
-    if meterKey == "DEATHS" then
+    if displayKind == "DEATH" then
       row.sourceDisplayName = row.plainSourceName
     end
   end
 
-  if meterKey == "DEATHS" then
+  if displayKind == "DEATH" then
     if source.__puiSummaryDeathCount == true then
       SetAbbreviatedRowValue(
         row,
@@ -984,7 +994,7 @@ local function SetRowSource(
     else
       SetDeathTimeRowValue(row, source.deathTimeSeconds)
     end
-  elseif meterKey == "INTERRUPTS" or meterKey == "DISPELS" then
+  elseif displayKind == "COUNT" then
     SetAbbreviatedRowValue(
       row,
       "primaryAmountMode",
@@ -994,7 +1004,7 @@ local function SetRowSource(
       totalAmount,
       totalAmountIsSecret
     )
-  elseif meterKey == "DPS" or meterKey == "HPS" then
+  elseif displayKind == "RATE" then
     SetAbbreviatedRowValue(
       row,
       "primaryAmountMode",
@@ -1071,9 +1081,9 @@ local function SetRowSource(
     row.localPlayerMarker:SetShown(isLocalPlayer)
   end
 
-  row.window = window
   row.deathRecapID = source.deathRecapID
-  if not row:IsShown() then
+  if row.window ~= window then
+    row.window = window
     row:Show()
   end
 end
@@ -1203,8 +1213,7 @@ local function RefreshWindow(window, session, windowDB)
       sources[localPlayerIndex],
       localPlayerIndex,
       maxAmount,
-      maxAmountIsSecret,
-      windowDB.meter
+      maxAmountIsSecret
     )
   end
 
@@ -1222,8 +1231,7 @@ local function RefreshWindow(window, session, windowDB)
       sources[sourceIndex],
       sourceIndex,
       maxAmount,
-      maxAmountIsSecret,
-      windowDB.meter
+      maxAmountIsSecret
     )
   end
 
@@ -1235,8 +1243,7 @@ local function RefreshWindow(window, session, windowDB)
       sources[localPlayerIndex],
       localPlayerIndex,
       maxAmount,
-      maxAmountIsSecret,
-      windowDB.meter
+      maxAmountIsSecret
     )
   end
 
