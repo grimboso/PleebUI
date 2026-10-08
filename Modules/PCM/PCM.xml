@@ -22,5 +22,6 @@
   <Script file="PUI_PCM_ConsumableTracker.lua"/>
   <Script file="PUI_PCM_CustomTrackerInstaller.lua"/>
   <Script file="PUI_PCM_Preview.lua"/>
+  <Script file="PUI_PCM_Options.lua"/>
   <Script file="PUI_PCM_Config.lua"/>
 </Ui>
