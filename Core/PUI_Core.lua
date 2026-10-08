@@ -135,6 +135,7 @@ local DB_DEFAULTS = {
     movementWarning = {
       enabled = false,
       combatOnly = false,
+      displayMode = "text",
       fontSize = 24,
       color = { r = 1, g = 1, b = 1, a = 1 },
       x = 0,
