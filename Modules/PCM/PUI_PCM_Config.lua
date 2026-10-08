@@ -2643,7 +2643,7 @@ _PCM_BuildIconOverrideArgs = function(viewerKey, entry)
 
   args.swipeSource = {
     type = "select",
-    name = "Duration timer",
+    name = "Enable duration timer",
     desc = "Enable the active aura timer, disable it, or use the inherited setting. Swipe and countdown controls apply to this timer.",
     order = 70.5,
     values = {
