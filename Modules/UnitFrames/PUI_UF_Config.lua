@@ -1847,28 +1847,13 @@ local function UFCB_BuildUnitTextArgs(unitKey, kind)
         elseif kind == "health" then
           text.hideHealthText = defaultText.hideHealthText
           text.healthMode = defaultText.healthMode
-          cfg.height = unitDefaults.height
-
-          if unitKey == "player" then
-            cfg.useClassColor = unitDefaults.useClassColor
-            cfg.colors = cfg.colors or {}
-
-            local defaultColors = unitDefaults.colors
-            local defaultHealthColor = defaultColors and defaultColors.healthBar
-
-            cfg.colors.healthBar = type(defaultHealthColor) == "table"
-              and UFCB_CopyTable(defaultHealthColor)
-              or defaultHealthColor
-          end
 
         elseif kind == "power" then
           text.powerMode = defaultText.powerMode
-          cfg.showPower = unitDefaults.showPower
-          cfg.powerHeight = unitDefaults.powerHeight
         end
 
         Addon:ApplyOptionsChange("UnitFrames", {
-          mode = kind == "name" and "text" or "resize",
+          mode = "text",
           unit = unitKey,
         })
 
@@ -1956,22 +1941,6 @@ local function UFCB_BuildUnitTextArgs(unitKey, kind)
         Addon:ApplyOptionsChange("UnitFrames", { mode = "text", unit = unitKey })
       end,
     }
-    prefixArgs.frameHeight = {
-      type = "range",
-      name = "Unit frame height",
-      order = 0.6,
-      min = 12,
-      max = 60,
-      step = 1,
-      get = function()
-        return tonumber(cfg.height or unitDefaults.height)
-      end,
-      set = function(_, v)
-        if UFCB_BlockCombat() then return end
-        cfg.height = v
-        Addon:ApplyOptionsChange("UnitFrames", { mode = "resize", unit = unitKey })
-      end,
-    }
 
     if unitKey == "player" then
       prefixArgs.useClassColor = {
@@ -2025,22 +1994,7 @@ local function UFCB_BuildUnitTextArgs(unitKey, kind)
         Addon:ApplyOptionsChange("UnitFrames", { mode = "resize", unit = unitKey })
       end,
     }
-    prefixArgs.powerHeight = {
-      type = "range",
-      name = "Power height",
-      order = 0.6,
-      min = 0,
-      max = 20,
-      step = 1,
-      get = function()
-        return tonumber(cfg.powerHeight or unitDefaults.powerHeight)
-      end,
-      set = function(_, v)
-        if UFCB_BlockCombat() then return end
-        cfg.powerHeight = v
-        Addon:ApplyOptionsChange("UnitFrames", { mode = "resize", unit = unitKey })
-      end,
-    }
+
   end
 
   if kind == "health" or kind == "power" then
@@ -5742,26 +5696,6 @@ local function UFCB_BuildPartyTextArgs(kind, groupKind)
     }
   end
 
-  local function BuildGroupedFrameHeightArg()
-    return {
-      type = "range",
-      name = "Unit frame height",
-      order = 0.5,
-      min = 12,
-      max = 80,
-      step = 1,
-      get = function()
-        local db = GetDB()
-        return db and tonumber(db.height) or nil
-      end,
-      set = function(_, v)
-        UFCB_MutateGrouped(groupedKind, false, { resize = true }, function(db)
-          db.height = v
-        end)
-      end,
-    }
-  end
-
   local function BuildGroupedHidePowerArg()
     return {
       type = "toggle",
@@ -5775,26 +5709,6 @@ local function UFCB_BuildPartyTextArgs(kind, groupKind)
       set = function(_, v)
         UFCB_MutateGrouped(groupedKind, false, { power = true }, function(db)
           db.showPower = v ~= true
-        end)
-      end,
-    }
-  end
-
-  local function BuildGroupedPowerHeightArg()
-    return {
-      type = "range",
-      name = "Power height",
-      order = 0.6,
-      min = 0,
-      max = 20,
-      step = 1,
-      get = function()
-        local db = GetDB()
-        return db and tonumber(db.powerHeight) or nil
-      end,
-      set = function(_, v)
-        UFCB_MutateGrouped(groupedKind, false, { power = true }, function(db)
-          db.powerHeight = v
         end)
       end,
     }
@@ -5830,20 +5744,7 @@ local function UFCB_BuildPartyTextArgs(kind, groupKind)
       keys[#keys + 1] = cfg.modeKey
     end
 
-    local refreshFlags
-
-    if kind == "name" then
-      refreshFlags = { text = true }
-    elseif kind == "health" then
-      refreshFlags = { resize = true }
-    else
-      refreshFlags = {
-        power = true,
-        textures = true,
-        text = true,
-        powerMissingColor = true,
-      }
-    end
+    local refreshFlags = { text = true }
 
     UFCB_MutateGrouped(groupedKind, false, refreshFlags, function(db)
       db.text = db.text or {}
@@ -5859,25 +5760,14 @@ local function UFCB_BuildPartyTextArgs(kind, groupKind)
 
       for _, colorDef in ipairs(cfg.colors or {}) do
         local key = colorDef.colorKey
-        local value = defaultColors[key]
-
-        db.colors[key] = type(value) == "table"
-          and UFCB_CopyTable(value)
-          or value
+        if key == "nameText" or key == "healthText" or key == "powerText" then
+          local value = defaultColors[key]
+          db.colors[key] = type(value) == "table" and UFCB_CopyTable(value) or value
+        end
       end
 
       if kind == "name" then
         db.colors.useClassForNames = defaultColors.useClassForNames
-
-      elseif kind == "health" then
-        db.height = defaults.height
-        db.healthTexture = defaults.healthTexture
-        db.absorbTexture = defaults.absorbTexture
-
-      elseif kind == "power" then
-        db.showPower = defaults.showPower
-        db.powerHeight = defaults.powerHeight
-        db.powerTexture = defaults.powerTexture
       end
     end)
 
@@ -5999,105 +5889,19 @@ local function UFCB_BuildPartyTextArgs(kind, groupKind)
     end,
   })
 
-  local BuildInlineArgsGroup = UFCB_BuildInlineArgsGroup
-
-  if flatArgs.fontSize then
-    flatArgs.fontSize.name = (kind == "name") and "Text size" or cfg.sizeName
-  end
-  if flatArgs.mode then
-    flatArgs.mode.name = "Display mode"
-  end
-  if flatArgs.anchor then
-    flatArgs.anchor.name = "Text anchor"
-  end
-  if flatArgs.offsetX then
-    flatArgs.offsetX.name = "Text X offset"
-  end
-  if flatArgs.offsetY then
-    flatArgs.offsetY.name = "Text Y offset"
-  end
-
   if kind == "name" then
-    return {
-      appearance = BuildInlineArgsGroup("Text", 1, {
-        resetSection = flatArgs.resetSection,
-        classColoredNames = {
-          type = "toggle",
-          name = "Class colored names",
-          order = 0.5,
-          get = function()
-            local db = GetDB()
-            return db and db.colors and db.colors.useClassForNames == true or false
-          end,
-          set = function(_, v)
-            SetColorValue("useClassForNames", v and true or false)
-          end,
-        },
-        nameTextColor = flatArgs.nameTextColor,
-        fontSize = flatArgs.fontSize,
-        useGlobalFont = flatArgs.useGlobalFont,
-        font = flatArgs.font,
-        outline = flatArgs.outline,
-      }),
-      position = BuildInlineArgsGroup("Position", 2, {
-        anchor = flatArgs.anchor,
-        offsetX = flatArgs.offsetX,
-        offsetY = flatArgs.offsetY,
-      }),
+    flatArgs.classColoredNames = {
+      type = "toggle", name = "Use class color", order = 65,
+      get = function()
+        local db = GetDB()
+        return db and db.colors and db.colors.useClassForNames == true or false
+      end,
+      set = function(_, value) SetColorValue("useClassForNames", value == true) end,
     }
+  elseif kind == "power" then
+    flatArgs.hidePower = BuildGroupedHidePowerArg()
   end
-
-  if kind == "health" then
-    return {
-      display = BuildInlineArgsGroup("Health and text", 1, {
-        resetSection = flatArgs.resetSection,
-        frameHeight = BuildGroupedFrameHeightArg(),
-        mode = flatArgs.mode,
-        fontSize = flatArgs.fontSize,
-        useGlobalFont = flatArgs.useGlobalFont,
-        font = flatArgs.font,
-        outline = flatArgs.outline,
-      }),
-      colors = BuildInlineArgsGroup("Colors", 2, {
-        missingHPColor = flatArgs.missingHPColor,
-        healthTextColor = flatArgs.healthTextColor,
-      }),
-      position = BuildInlineArgsGroup("Position", 3, {
-        anchor = flatArgs.anchor,
-        offsetX = flatArgs.offsetX,
-        offsetY = flatArgs.offsetY,
-      }),
-      textures = BuildInlineArgsGroup("Textures", 4, {
-        healthTexture = flatArgs.healthTexture,
-        absorbTexture = flatArgs.absorbTexture,
-      }),
-    }
-  end
-
-  return {
-    display = BuildInlineArgsGroup("Power and text", 1, {
-      resetSection = flatArgs.resetSection,
-      hidePower = BuildGroupedHidePowerArg(),
-      powerHeight = BuildGroupedPowerHeightArg(),
-      mode = flatArgs.mode,
-      fontSize = flatArgs.fontSize,
-      useGlobalFont = flatArgs.useGlobalFont,
-      font = flatArgs.font,
-      outline = flatArgs.outline,
-    }),
-    colors = BuildInlineArgsGroup("Colors", 2, {
-      powerMissingColor = flatArgs.powerMissingColor,
-      powerTextColor = flatArgs.powerTextColor,
-    }),
-    position = BuildInlineArgsGroup("Position", 3, {
-      anchor = flatArgs.anchor,
-      offsetX = flatArgs.offsetX,
-      offsetY = flatArgs.offsetY,
-    }),
-    textures = BuildInlineArgsGroup("Textures", 4, {
-      powerTexture = flatArgs.powerTexture,
-    }),
-  }
+  return flatArgs
 end
 
 local function UFCB_BuildPartyDispelArgs(groupKind)
@@ -7418,61 +7222,150 @@ end
 
 
 
+local function UFCB_BuildFrameLeafSpecs(general, name, health, power, indicators, grouped)
+  local layout = {}
+  local size = grouped and general.frameLayout.args or general
+  local textures = grouped and general.textures.args or general
+  local colors = grouped and general.colors.args or health
+
+  layout.size = UFCB_BuildInlineArgsGroup("Size", 10, { width = size.width, height = size.height })
+  layout.size.args.width.name = "Width"
+  layout.size.args.height.name = "Height"
+  layout.power = UFCB_BuildInlineArgsGroup("Power bar", 30, {
+    hidePower = power.hidePower, height = size.powerHeight,
+    texture = textures.powerTexture, backgroundColor = power.powerMissingColor,
+  })
+  layout.power.args.height.name = "Height"
+  layout.power.args.texture.name = "Texture"
+  if layout.power.args.backgroundColor then layout.power.args.backgroundColor.name = "Background color" end
+  layout.health = UFCB_BuildInlineArgsGroup("Health bar", 20, {
+    useClassColor = colors.useClassColor,
+    color = grouped and colors.unitFrameColor or health.healthColor,
+    backgroundColor = grouped and colors.missingHealthColor or health.missingHPColor,
+    texture = textures.healthTexture,
+  })
+  layout.health.args.texture.name = "Texture"
+  if layout.health.args.color then layout.health.args.color.name = "Color" end
+  if layout.health.args.backgroundColor then layout.health.args.backgroundColor.name = "Background color" end
+  layout.absorb = UFCB_BuildInlineArgsGroup("Absorb bar", 40, { texture = textures.absorbTexture })
+  layout.absorb.args.texture.name = "Texture"
+  if not grouped then
+    layout.textures = UFCB_BuildInlineArgsGroup("Texture source", 15, { useCustomTexture = general.useCustomTexture })
+    general.useCustomTexture = nil
+    local arrangement = { growthDirection = general.growthDirection, spacing = general.spacing }
+    if next(arrangement) then layout.arrangement = UFCB_BuildInlineArgsGroup("Arrangement", 50, arrangement) end
+    general.growthDirection, general.spacing = nil, nil
+    general.width, general.height, general.powerHeight = nil, nil, nil
+    general.healthTexture, general.powerTexture, general.absorbTexture = nil, nil, nil
+    general.showRestingIndicator, general.showPvPIndicator, general.showCombatIndicator = nil, nil, nil
+  else
+    local arrangement = {}
+    for key, option in pairs(size) do
+      if key ~= "width" and key ~= "height" and key ~= "powerHeight" and key ~= "borderSize" then arrangement[key] = option end
+    end
+    layout.arrangement = UFCB_BuildInlineArgsGroup("Arrangement", 50, arrangement)
+    size.borderSize.name = "Thickness"
+    layout.border = UFCB_BuildInlineArgsGroup("Border", 45, { thickness = size.borderSize })
+    for index, key in ipairs({ "sorting", "groupLayout", "layout" }) do
+      local option = general[key]
+      if option then
+        option.name = key == "groupLayout" and "Raid groups" or "Sorting"
+        option.order = 50 + index
+        layout[key] = option
+        general[key] = nil
+      end
+    end
+    general.frameLayout, general.textures, general.colors = nil, nil, nil
+  end
+  health.healthColor, health.useClassColor, health.healthTexture, health.absorbTexture, health.missingHPColor = nil, nil, nil, nil, nil
+  power.hidePower, power.powerTexture, power.powerMissingColor = nil, nil, nil
+
+  local visibility = {}
+  local range
+  if grouped then
+    range = UFCB_BuildInlineArgsGroup("Range", 20, {
+      opacity = {
+        type = "range", name = "Out-of-range opacity", order = 10,
+        min = 0, max = 1, step = 0.05,
+        get = function() return UFCB_GetGroupedDB(grouped).range.outOfRangeAlpha end,
+        set = function(_, value)
+          UFCB_MutateGrouped(grouped, false, { range = true }, function(db)
+            db.range.outOfRangeAlpha = value
+          end)
+        end,
+      },
+    })
+  else
+    range = UFCB_BuildGeneralTexturesArgs().range
+    range.name = "Shared range opacity"
+    range.args.note = { type = "description", name = "This range opacity is shared by individual unit frames.", order = 0 }
+  end
+  if grouped then
+    for _, key in ipairs({ "showSolo", "hideInRaid" }) do
+      visibility[key] = general.core.args[key]
+      general.core.args[key] = nil
+    end
+    general.core.name = "Feature"
+  end
+  local reset = general.core.args.reset
+  reset.name, reset.order = "Reset frame settings", 900
+  reset.desc = "Restore frame layout, appearance, and behavior to defaults."
+  if not grouped then
+    general.shared = { type = "description", name = "Feature activation and shared settings are configured in General settings.", order = 1 }
+  end
+  for _, group in pairs(layout) do group.arg = { puiExplicit = true } end
+  local specs = {
+    { key = "general", name = "General", order = 1, args = general },
+    { key = "layout", name = "Layout and appearance", order = 2, args = layout },
+    { key = "visibility", name = "Visibility", order = 3, args = {
+      conditions = next(visibility) and UFCB_BuildInlineArgsGroup("Conditions", 10, visibility) or nil,
+      range = range,
+    } },
+    { key = "text", name = "Text", order = 4, args = {
+      name = ns.OptionsSchema.BuildTextGroup("Name", 10, name),
+      health = ns.OptionsSchema.BuildTextGroup("Health", 20, health),
+      power = ns.OptionsSchema.BuildTextGroup("Power", 30, power),
+    } },
+    { key = "indicators", name = "Indicators", order = 5, args = indicators },
+  }
+  return specs
+end
+
 local function UFCB_BuildUnitBaseLeafSpecs(unitKey, opts)
   opts = opts or {}
-
-  local specs = {
-    {
-      key = "general",
-      name = "General",
-      order = 1,
-      args = UFCB_BuildUnitGeneralArgs(unitKey),
-    },
-    {
-      key = "name",
-      name = "Name",
-      order = 2,
-      args = UFCB_BuildUnitTextArgs(unitKey, "name"),
-    },
-    {
-      key = "health",
-      name = "Health",
-      order = 3,
-      args = UFCB_BuildUnitTextArgs(unitKey, "health"),
-    },
-    {
-      key = "power",
-      name = "Power",
-      order = 4,
-      args = UFCB_BuildUnitTextArgs(unitKey, "power"),
-    },
-    {
-      key = "auras",
-      name = "Auras",
-      order = 5,
-      childGroups = "tab",
-      args = UFCB_BuildUnitAurasArgs(unitKey),
-    },
+  local general = UFCB_BuildUnitGeneralArgs(unitKey)
+  local shared = UFCB_BuildGeneralAppearanceArgs()
+  local indicators = {
+    sharedMouseover = UFCB_BuildInlineArgsGroup("Shared mouseover highlight", 20, {
+      description = { type = "description", name = "These settings apply to all unit frames, including party and raid.", order = 0 },
+      enabled = shared.enableUnitMouseoverHighlight,
+      style = shared.unitMouseoverHighlightMode,
+      opacity = shared.unitMouseoverHighlightStrength,
+      thickness = shared.unitMouseoverHighlightBorderSize,
+    }),
   }
-
+  indicators.sharedMouseover.arg = { puiExplicit = true }
+  indicators.sharedMouseover.args.enabled.name = "Show highlight"
+  indicators.sharedMouseover.args.style.name = "Style"
+  indicators.sharedMouseover.args.opacity.name = "Opacity"
+  indicators.sharedMouseover.args.thickness.name = "Border thickness"
+  if unitKey == "player" then
+    indicators.status = UFCB_BuildInlineArgsGroup("Status", 10, {
+      showRestingIndicator = general.showRestingIndicator,
+      showPvPIndicator = general.showPvPIndicator,
+      showCombatIndicator = general.showCombatIndicator,
+    })
+  end
+  local specs = UFCB_BuildFrameLeafSpecs(general,
+    UFCB_BuildUnitTextArgs(unitKey, "name"), UFCB_BuildUnitTextArgs(unitKey, "health"),
+    UFCB_BuildUnitTextArgs(unitKey, "power"), indicators, false)
+  specs[#specs + 1] = { key = "auras", name = "Auras", order = 6, childGroups = "tab", args = UFCB_BuildUnitAurasArgs(unitKey) }
   if unitKey == "player" or unitKey == "target" or unitKey == "focus" or unitKey == "boss" then
-    specs[#specs + 1] = {
-      key = "portrait",
-      name = "Portrait",
-      order = 6,
-      args = UFCB_BuildUnitPortraitArgs(unitKey),
-    }
+    specs[#specs + 1] = { key = "portrait", name = "Portrait", order = 7, args = UFCB_BuildUnitPortraitArgs(unitKey) }
   end
-
   if opts.includeCastbar ~= false then
-    specs[#specs + 1] = {
-      key = "castbar",
-      name = "Castbar",
-      order = 7,
-      args = UFCB_BuildCastbarArgs(opts.castbarUnit or unitKey),
-    }
+    specs[#specs + 1] = { key = "castbar", name = "Castbar", order = 8, args = UFCB_BuildCastbarArgs(opts.castbarUnit or unitKey) }
   end
-
   return specs
 end
 
@@ -7643,52 +7536,11 @@ end
 local function UFCB_BuildGroupedRootLeafSpecs(groupKind)
   local kind = UFCB_GetGroupedKind(groupKind)
 
-  local specs = {
-    {
-      key = "general",
-      name = "General",
-      order = 1,
-      args = UFCB_BuildPartyGeneralArgs(kind),
-    },
-    {
-      key = "name",
-      name = "Name",
-      order = 2,
-      args = UFCB_BuildPartyTextArgs("name", kind),
-    },
-    {
-      key = "health",
-      name = "Health",
-      order = 3,
-      args = UFCB_BuildPartyTextArgs("health", kind),
-    },
-    {
-      key = "power",
-      name = "Power",
-      order = 4,
-      args = UFCB_BuildPartyTextArgs("power", kind),
-    },
-    {
-      key = "dispels",
-      name = "Dispels",
-      order = 5,
-      args = UFCB_BuildPartyDispelArgs(kind),
-    },
-    {
-      key = "auras",
-      name = "Auras",
-      order = 6,
-      childGroups = "tab",
-      args = UFCB_BuildPartyAuraArgs(kind),
-    },
-  }
-
-  specs[#specs + 1] = {
-    key = "indicators",
-    name = "Indicators",
-    order = 7,
-    args = UFCB_BuildGroupedIndicatorArgs(kind),
-  }
+  local specs = UFCB_BuildFrameLeafSpecs(UFCB_BuildPartyGeneralArgs(kind),
+    UFCB_BuildPartyTextArgs("name", kind), UFCB_BuildPartyTextArgs("health", kind),
+    UFCB_BuildPartyTextArgs("power", kind), UFCB_BuildGroupedIndicatorArgs(kind), kind)
+  specs[#specs + 1] = { key = "auras", name = "Auras", order = 6, childGroups = "tab", args = UFCB_BuildPartyAuraArgs(kind) }
+  specs[#specs + 1] = { key = "dispels", name = "Dispels", order = 7, args = UFCB_BuildPartyDispelArgs(kind) }
 
   if kind == "party" then
     specs[#specs + 1] = {
@@ -7713,37 +7565,37 @@ local function UFCB_BuildGroupedRootArgs(groupKind)
 end
 
 local function UFCB_BuildGeneralRootLeafSpecs()
+  local appearance = UFCB_BuildGeneralAppearanceArgs()
+  local media = UFCB_BuildGeneralTexturesArgs()
+  local typography = UFCB_BuildGeneralTextFontsArgs()
+  local anchors = UFCB_BuildGeneralAnchorsArgs()
+  for index, role in ipairs({ "name", "health", "power" }) do
+    local key = role .. "TextSize"
+    anchors[role].args.fontSize = typography[key]
+    typography[key] = nil
+    if role == "name" then
+      anchors[role].args.useNSRTNicknames = typography.useNSRTNicknames
+      typography.useNSRTNicknames = nil
+    end
+    anchors[role] = ns.OptionsSchema.BuildTextGroup(role == "name" and "Name" or role == "health" and "Health" or "Power", index * 10, anchors[role].args)
+  end
+  typography.defaultFont.name = "Font"
+  anchors.shared = ns.OptionsSchema.BuildTextGroup("Shared typography", 5, typography)
+  local indicators = {}
+  for _, key in ipairs({ "enableUnitMouseoverHighlight", "unitMouseoverHighlightMode", "unitMouseoverHighlightStrength", "unitMouseoverHighlightBorderSize", "unitTargetHighlightBorderSize" }) do
+    indicators[key] = appearance[key]
+    appearance[key] = nil
+  end
+  local general = UFCB_BuildGeneralAurasArgs()
+  general.enableUnitMouseoverTooltips = appearance.enableUnitMouseoverTooltips
+  general.portraitsEnabled = appearance.portraitsEnabled
+  appearance.enableUnitMouseoverTooltips, appearance.portraitsEnabled = nil, nil
   return {
-    {
-      key = "auras",
-      name = "Features",
-      order = 1,
-      args = UFCB_BuildGeneralAurasArgs(),
-    },
-    {
-      key = "appearance",
-      name = "Appearance",
-      order = 2,
-      args = UFCB_BuildGeneralAppearanceArgs(),
-    },
-    {
-      key = "textures",
-      name = "Textures and range",
-      order = 3,
-      args = UFCB_BuildGeneralTexturesArgs(),
-    },
-    {
-      key = "textfonts",
-      name = "Text and fonts",
-      order = 4,
-      args = UFCB_BuildGeneralTextFontsArgs(),
-    },
-    {
-      key = "anchors",
-      name = "Anchors",
-      order = 5,
-      args = UFCB_BuildGeneralAnchorsArgs(),
-    },
+    { key = "auras", name = "General", order = 1, args = general },
+    { key = "appearance", name = "Layout and appearance", order = 2, args = UFCB_MergeOptionArgs(appearance, { textures = media.textures }) },
+    { key = "visibility", name = "Visibility", order = 3, args = { range = media.range } },
+    { key = "textfonts", name = "Text", order = 4, args = anchors },
+    { key = "indicators", name = "Indicators", order = 5, args = indicators },
   }
 end
 
@@ -7797,7 +7649,7 @@ local function UFCB_BuildTopLevelUnitArgs(activeKey)
       castbarUnit = "target",
       extraLeavesBuilder = function()
         return {
-          UFCB_BuildExtraLeaf("targettarget", "Target of Target", 8, UFCB_BuildUnitGeneralArgs("targettarget")),
+          UFCB_BuildExtraLeaf("targettarget", "Target of Target", 9, UFCB_BuildUnitTree("targettarget", { rootName = "Target of Target", includeCastbar = false }).args, "tree"),
         }
       end,
     },
@@ -7810,7 +7662,7 @@ local function UFCB_BuildTopLevelUnitArgs(activeKey)
       castbarUnit = "focus",
       extraLeavesBuilder = function()
         return {
-          UFCB_BuildExtraLeaf("focustarget", "Focus Target", 8, UFCB_BuildUnitGeneralArgs("focustarget")),
+          UFCB_BuildExtraLeaf("focustarget", "Focus Target", 9, UFCB_BuildUnitTree("focustarget", { rootName = "Focus Target", includeCastbar = false }).args, "tree"),
         }
       end,
     },
