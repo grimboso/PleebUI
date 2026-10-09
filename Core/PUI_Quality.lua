@@ -3225,6 +3225,62 @@ local function QualityProvider(AddonObj)
 
     options.args.qualityTab = nil
 
+    -- Feature groups own their behavior, appearance, visibility, and text together.
+    local message = combatStatus.args.combatMessage
+    message.name = "Show text"
+    local timer = combatStatus.args.combatTimer
+    timer.name = "Show text"
+    combatStatus.args = {
+      message = ns.OptionsSchema.BuildTextGroup("Message", 10, {
+        showText = message, fontSize = combatStatus.args.combatMessageFontSize,
+      }),
+      timer = ns.OptionsSchema.BuildTextGroup("Timer", 20, {
+        showText = timer, fontSize = combatStatus.args.combatTimerFontSize,
+      }),
+      editMode = combatStatus.args.editMode,
+    }
+    warnings.args.combatWarningFontSize.name = "Font size"
+    warnings.args.combatWarningFontSize.order = 50
+    warnings.args.text = ns.OptionsSchema.BuildTextGroup("Warning", 30, {
+      fontSize = warnings.args.combatWarningFontSize,
+    })
+    warnings.args.combatWarningFontSize = nil
+
+    local pets = visual.petWarnings.args
+    local missing = pets.missingPet.args
+    pets.missingPet.args = {
+      enabled = missing.enabled,
+      missing = ns.OptionsSchema.BuildTextGroup("Missing pet", 10, {
+        fontSize = missing.missingSize, textColor = missing.missingColor,
+      }),
+      dead = ns.OptionsSchema.BuildTextGroup("Dead pet", 20, {
+        fontSize = missing.deadSize, textColor = missing.deadColor,
+      }),
+    }
+    for _, key in ipairs({ "idlePet", "lowHealth" }) do
+      local args = pets[key].args
+      args.text = ns.OptionsSchema.BuildTextGroup("Warning", 30, { fontSize = args.size, textColor = args.color })
+      args.size, args.color = nil, nil
+    end
+    ring.args = {
+      inner = { type = "group", name = "Inner ring", inline = true, order = 10, arg = { puiExplicit = true }, args = {
+        shown = ring.args.cursorRingShowInner, size = ring.args.cursorRingSize, color = ring.args.cursorRingColor,
+      } },
+      click = { type = "group", name = "Click ring", inline = true, order = 20, arg = { puiExplicit = true }, args = {
+        shown = ring.args.cursorRingShowOutline, size = ring.args.cursorRingOutlineSize, color = ring.args.cursorRingOutlineColor,
+      } },
+    }
+    for _, group in pairs(ring.args) do
+      group.args.shown.name, group.args.shown.order = "Show ring", 10
+      group.args.size.name, group.args.size.order = "Size", 20
+      group.args.color.name, group.args.color.order = "Color", 30
+    end
+    options.args.combatTab.arg = { puiExplicit = true }
+    local _, playerClass = UnitClass("player")
+    if playerClass == "HUNTER" then
+      options.args.combatTab.args.emergencySalve = ns.Modules.HunterTools:GetOptions()
+    end
+
     return options
   end
 
