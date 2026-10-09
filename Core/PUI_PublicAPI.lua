@@ -5,7 +5,7 @@ local FrameUtil = ns.FrameUtil
 
 local API = {
   VERSION = 1,
-  MINOR_VERSION = 3,
+  MINOR_VERSION = 4,
 }
 
 local PluginMixin = {}
@@ -13,6 +13,9 @@ local plugins = ns.Registry.Plugins
 local unitFrameDisplayNameListeners = {}
 
 local MOVER_OPTION_KEYS = {
+  "isAvailable",
+  "onPreviewVisibilityChanged",
+  "snapGroup",
   "label",
   "defaultVisibility",
   "ghost",
@@ -29,6 +32,9 @@ local MOVER_OPTION_KEYS = {
 }
 
 local GHOST_MOVER_OPTION_KEYS = {
+  "isAvailable",
+  "onPreviewVisibilityChanged",
+  "snapGroup",
   "frameName",
   "label",
   "defaultVisibility",
@@ -424,6 +430,7 @@ function PluginMixin:RegisterMover(moverKey, frame, options)
 
   local ownedKey = BuildOwnedKey(self, "Mover", moverKey)
   local moverOptions = CopyMoverOptions(options, MOVER_OPTION_KEYS)
+  moverOptions.snapGroup = moverOptions.snapGroup or self.metadata.moverSnapGroup
   moverOptions.moduleKey = "external"
   moverOptions.moduleLabel = "External Modules"
   moverOptions.groupKey = "plugin:" .. self.key
@@ -450,6 +457,7 @@ function PluginMixin:RegisterGhostMover(moverKey, options)
 
   local ownedKey = BuildOwnedKey(self, "Mover", moverKey)
   local moverOptions = CopyMoverOptions(options, GHOST_MOVER_OPTION_KEYS)
+  moverOptions.snapGroup = moverOptions.snapGroup or self.metadata.moverSnapGroup
   moverOptions.moduleKey = "external"
   moverOptions.moduleLabel = "External Modules"
   moverOptions.groupKey = "plugin:" .. self.key
@@ -539,6 +547,10 @@ function PluginMixin:UnregisterEditModeParticipant(participantKey)
   FrameUtil.UnregisterEditModeParticipant(ownedKey)
   self.editModeParticipants[participantKey] = nil
   return true
+end
+
+function PluginMixin:IsMoverPreviewVisible(moverKey)
+  return FrameUtil.IsMoverPreviewVisible(BuildOwnedKey(self, "Mover", moverKey))
 end
 
 function PluginMixin:IsEditModeActive()
