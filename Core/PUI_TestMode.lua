@@ -4,6 +4,7 @@ local Addon = ns.Addon
 local TestMode = ns.TestMode or {}
 ns.TestMode = TestMode
 
+local AceGUI = _G.LibStub("AceGUI-3.0")
 local CreateFrame = _G.CreateFrame
 local InCombatLockdown = _G.InCombatLockdown
 local UIParent = _G.UIParent
@@ -17,15 +18,18 @@ local sort = _G.table.sort
 local tostring = _G.tostring
 local type = _G.type
 
-local TOOLBAR_WIDTH = 420
+local TOOLBAR_WIDTH = 390
+local TOOLBAR_DEFAULT_HEIGHT = 650
+local TOOLBAR_MIN_WIDTH = 360
+local TOOLBAR_MIN_HEIGHT = 320
 local TOOLBAR_PADDING = 12
-local TOOLBAR_TITLE_HEIGHT = 160
+local TOOLBAR_TITLE_HEIGHT = 40
 local TOOLBAR_COLLAPSED_HEIGHT = 38
 local SECTION_GAP = 10
-local TOGGLE_WIDTH = 72
-local TOGGLE_HEIGHT = 23
+local TOGGLE_WIDTH = 136
+local TOGGLE_HEIGHT = 30
 local TOGGLE_GAP = 6
-local RANGE_HEIGHT = 34
+local RANGE_HEIGHT = 66
 local WHITE8 = "Interface\\Buttons\\WHITE8x8"
 
 TestMode.participants = TestMode.participants or ns.Registry.TestModeParticipants
@@ -275,6 +279,9 @@ function TestMode:StartParticipant(key, reason)
   if not IsParticipantAvailable(key, participant) then
     return false
   end
+  if participant.moverKey and not ns.FrameUtil.IsMoverPreviewVisible(participant.moverKey) then
+    return true
+  end
 
   local started = true
   if type(participant.Start) == "function" then
@@ -459,84 +466,21 @@ local function CreateToolbarButton(parent, text, width, onClick)
   return button
 end
 
-local function StyleRangeControl(row)
-  local Theme = ns.Theme
-  if not row then
-    return
-  end
-
-  local colors = Theme.GetColors()
-  StyleText(row.label, "body", 11)
-  StyleText(row.valueText, "body", 11)
-  row.track:SetVertexColor(colors.border[1], colors.border[2], colors.border[3], 0.8)
-  row.thumb:SetVertexColor(colors.accent[1], colors.accent[2], colors.accent[3], 1)
-end
-
 local function CreateRangeControl(parent)
   local row = CreateFrame("Frame", nil, parent)
   row:SetHeight(RANGE_HEIGHT)
-
-  local label = row:CreateFontString(nil, "OVERLAY")
-  label:SetPoint("TOPLEFT", row, "TOPLEFT", 0, 0)
-  StyleText(label, "body", 11)
-  row.label = label
-
-  local valueText = row:CreateFontString(nil, "OVERLAY")
-  valueText:SetPoint("TOPRIGHT", row, "TOPRIGHT", 0, 0)
-  StyleText(valueText, "body", 11)
-  row.valueText = valueText
-
-  local slider = CreateFrame("Slider", nil, row)
-  slider:SetOrientation("HORIZONTAL")
-  slider:SetPoint("BOTTOMLEFT", row, "BOTTOMLEFT", 2, 1)
-  slider:SetPoint("BOTTOMRIGHT", row, "BOTTOMRIGHT", -2, 1)
-  slider:SetHeight(16)
-  slider:SetObeyStepOnDrag(true)
-
-  local track = slider:CreateTexture(nil, "BACKGROUND")
-  track:SetTexture(WHITE8)
-  track:SetPoint("LEFT", slider, "LEFT", 0, 0)
-  track:SetPoint("RIGHT", slider, "RIGHT", 0, 0)
-  track:SetHeight(4)
-
-  local thumb = slider:CreateTexture(nil, "ARTWORK")
-  thumb:SetTexture(WHITE8)
-  thumb:SetSize(10, 16)
-  slider:SetThumbTexture(thumb)
-
-  row.track = track
-  row.thumb = thumb
-  StyleRangeControl(row)
-
-  slider:SetScript("OnValueChanged", function(self, newValue)
-    if self.__puiSettingUp then
-      return
+  local widget = AceGUI:Create("PUI_Slider")
+  ns.AceHooks.TakeOwnership(widget)
+  widget.frame:SetParent(row)
+  widget.frame:SetPoint("TOPLEFT", row, "TOPLEFT", 0, 0)
+  widget.frame:Show()
+  widget:SetCallback("OnValueChanged", function(_, _, value)
+    local control = row.control
+    if control then
+      TestMode:SetValue(control.key, value, "toolbar")
     end
-
-    local control = self.__puiControl
-    if not control then
-      return
-    end
-
-    local minimum = tonumber(control.min) or 0
-    local step = tonumber(control.step) or 1
-    newValue = minimum + math_floor(((newValue - minimum) / step) + 0.5) * step
-    row.valueText:SetText(tostring(newValue))
-    TestMode:SetValue(control.key, newValue, "toolbar")
   end)
-
-  slider:EnableMouseWheel(true)
-  slider:SetScript("OnMouseWheel", function(self, delta)
-    local control = self.__puiControl
-    if not control then
-      return
-    end
-
-    local step = tonumber(control.step) or 1
-    self:SetValue(self:GetValue() + (delta > 0 and step or -step))
-  end)
-
-  row.slider = slider
+  row.widget = widget
   row:Hide()
   return row
 end
@@ -545,85 +489,49 @@ local function ConfigureRangeControl(row, control, value, yOffset)
   row:ClearAllPoints()
   row:SetPoint("TOPLEFT", row:GetParent(), "TOPLEFT", TOOLBAR_PADDING, yOffset)
   row:SetPoint("TOPRIGHT", row:GetParent(), "TOPRIGHT", -TOOLBAR_PADDING, yOffset)
-  row.label:SetText(control.label or control.key)
-  row.valueText:SetText(tostring(value))
-
-  local slider = row.slider
-  slider.__puiSettingUp = true
-  slider.__puiControl = control
-  slider:SetMinMaxValues(tonumber(control.min) or 0, tonumber(control.max) or 100)
-  slider:SetValueStep(tonumber(control.step) or 1)
-  slider:SetValue(value)
-  slider.__puiSettingUp = nil
-  StyleRangeControl(row)
+  row.control = control
+  row.widget:SetLabel(control.label or control.key)
+  row.widget:SetSliderValues(tonumber(control.min) or 0, tonumber(control.max) or 100, tonumber(control.step) or 1)
+  row.widget:SetValue(value)
+  row.widget:SetWidth(math_max(160, row:GetParent():GetWidth() - TOOLBAR_PADDING * 2))
   row:Show()
 end
 
 local function CreateChoiceControl(parent)
   local row = CreateFrame("Frame", nil, parent)
-  row:SetHeight(TOGGLE_HEIGHT)
-  row.buttons = {}
-
-  local label = row:CreateFontString(nil, "OVERLAY")
-  label:SetPoint("LEFT", row, "LEFT", 0, 0)
-  label:SetWidth(74)
-  label:SetJustifyH("RIGHT")
-  StyleText(label, "body", 11)
-  row.label = label
-
+  row:SetHeight(58)
+  local widget = AceGUI:Create("PUI_Dropdown")
+  ns.AceHooks.TakeOwnership(widget)
+  widget.frame:SetParent(row)
+  widget.frame:SetPoint("TOPLEFT", row, "TOPLEFT", 0, 0)
+  widget.frame:Show()
+  widget:SetCallback("OnValueChanged", function(_, _, value)
+    local control = row.control
+    if control then
+      TestMode:SetValue(control.key, value, "toolbar")
+      TestMode:QueueToolbarRefresh()
+    end
+  end)
+  row.widget = widget
   row:Hide()
   return row
-end
-
-local function AcquireChoiceButton(row, index)
-  local button = row.buttons[index]
-  if button then
-    return button
-  end
-
-  button = CreateToolbarButton(row, "", TOGGLE_WIDTH, function(self)
-    local control = self.__puiControl
-    if not control then
-      return
-    end
-
-    TestMode:SetValue(control.key, self.__puiChoiceValue, "toolbar")
-    TestMode:RebuildToolbar()
-  end)
-  row.buttons[index] = button
-  return button
 end
 
 local function ConfigureChoiceControl(row, control, value, yOffset)
   row:ClearAllPoints()
   row:SetPoint("TOPLEFT", row:GetParent(), "TOPLEFT", TOOLBAR_PADDING, yOffset)
   row:SetPoint("TOPRIGHT", row:GetParent(), "TOPRIGHT", -TOOLBAR_PADDING, yOffset)
-  row.label:SetText(control.label or control.key)
-
-  for _, button in ipairs(row.buttons) do
-    button:Hide()
-    button:ClearAllPoints()
+  row.control = control
+  local choices = {}
+  for _, choice in ipairs(control.values or {}) do
+    choices[choice.value] = choice.label or tostring(choice.value)
   end
-
-  local choices = control.values or {}
-  local rowsUsed = math_max(1, math_floor((#choices + 2) / 3))
-  local rowHeight = rowsUsed * (TOGGLE_HEIGHT + TOGGLE_GAP) - TOGGLE_GAP
-  row:SetHeight(rowHeight)
-  for index, choice in ipairs(choices) do
-    local button = AcquireChoiceButton(row, index)
-    button.__puiControl = control
-    button.__puiChoiceValue = choice.value
-    button:SetText(choice.label or tostring(choice.value))
-    button:ClearAllPoints()
-    button:SetPoint("TOPLEFT", row, "TOPLEFT",
-      82 + ((index - 1) % 3) * (TOGGLE_WIDTH + TOGGLE_GAP),
-      -math_floor((index - 1) / 3) * (TOGGLE_HEIGHT + TOGGLE_GAP))
-    StyleButton(button, value == choice.value)
-    button:Show()
-  end
-
+  row.widget:SetLabel(control.label or control.key)
+  row.widget:SetList(choices)
+  row.widget:SetValue(value)
+  row.widget:SetWidth(math_max(160, row:GetParent():GetWidth() - TOOLBAR_PADDING * 2))
   row:Show()
-  return rowHeight
+  return 58
 end
 
 local function CreateToolbarSection(parent)
@@ -650,26 +558,23 @@ local function CreateToolbarSection(parent)
 end
 
 local function AcquireToggleButton(section, index)
-  local button = section.toggleButtons[index]
-  if button then
-    return button
+  local widget = section.toggleButtons[index]
+  if widget then
+    return widget
   end
-
-  button = CreateToolbarButton(section, "", TOGGLE_WIDTH, function(self)
+  widget = AceGUI:Create("PUI_Checkbox")
+  ns.AceHooks.TakeOwnership(widget)
+  widget.frame:SetParent(section)
+  widget.frame:Show()
+  widget:SetCallback("OnValueChanged", function(self, _, checked)
     local control = self.__puiControl
-    if not control then
-      return
+    if control then
+      TestMode:SetValue(control.key, checked == true, "toolbar")
+      TestMode:QueueToolbarRefresh()
     end
-
-    TestMode:SetValue(
-      control.key,
-      not (TestMode:GetValue(control.key) == true),
-      "toolbar"
-    )
-    TestMode:RebuildToolbar()
   end)
-  section.toggleButtons[index] = button
-  return button
+  section.toggleButtons[index] = widget
+  return widget
 end
 
 local function AcquireChoiceControl(section, index)
@@ -691,25 +596,58 @@ local function AcquireRangeControl(section, index)
 end
 
 local function StyleVisibilityCheckbox(check, state)
-  local colors = ns.Theme.GetColors()
-  ns.Theme.SetSquareBackdrop(check, {
-    bg = colors.control,
-    border = colors.border,
-  }, math_max(1, ns.Theme.GetEdgeSize()))
-  check:SetChecked(state == "on")
-  ns.Theme.ApplyFont(check.indicator, "body", 13)
-  check.indicator:SetText(state == "mixed" and "-" or "X")
-  check.indicator:SetShown(state ~= "off")
-  check.indicator:SetTextColor(colors.accent[1], colors.accent[2], colors.accent[3], 1)
+  if state == "mixed" then
+    check.widget:SetValue(nil)
+  else
+    check.widget:SetValue(state == "on")
+  end
 end
 
 local function CreateVisibilityCheckbox(parent, onClick)
-  local check = CreateFrame("CheckButton", nil, parent, "BackdropTemplate")
-  check:SetSize(20, 20)
-  check.indicator = check:CreateFontString(nil, "OVERLAY")
-  check.indicator:SetPoint("CENTER")
-  check:SetScript("OnClick", onClick)
+  local check = CreateFrame("Frame", nil, parent)
+  check:SetSize(24, 24)
+  local widget = AceGUI:Create("PUI_Checkbox")
+  widget:SetLabel("")
+  widget:SetWidth(28)
+  widget:SetTriState(true)
+  widget.frame:SetParent(check)
+  widget.frame:ClearAllPoints()
+  widget.frame:SetPoint("TOPLEFT", check, "TOPLEFT", 0, 0)
+  widget.frame:Show()
+  ns.AceHooks.TakeOwnership(widget)
+  check.widget = widget
+  check.GetChecked = function() return widget:GetValue() == true end
+  widget:SetCallback("OnValueChanged", function()
+    onClick(check)
+  end)
   return check
+end
+
+function TestMode:QueuePreviewRefresh()
+  if not self.active or self.previewRefreshPending then
+    return
+  end
+  self.previewRefreshPending = true
+  _G.C_Timer.After(0, function()
+    self.previewRefreshPending = nil
+    if not self.active or InCombatLockdown() then
+      return
+    end
+    for _, entry in ipairs(SortedRecords(self.participants)) do
+      local key, participant = entry.key, entry.record
+      local state = self.participantState[key]
+      local visible = not participant.moverKey or ns.FrameUtil.IsMoverPreviewVisible(participant.moverKey)
+      if state.enabled and visible and IsParticipantAvailable(key, participant) then
+        if state.started then
+          self:Refresh(key, "mover-visibility")
+        else
+          self:StartParticipant(key, "mover-visibility")
+        end
+      else
+        self:StopParticipant(key, "mover-visibility")
+      end
+    end
+  end)
 end
 
 function TestMode:QueueToolbarRefresh()
@@ -725,20 +663,210 @@ function TestMode:QueueToolbarRefresh()
   end)
 end
 
+local function BuildEditControls(panel)
+  local host = CreateFrame("Frame", nil, panel.content)
+  panel.editControls = host
+  panel.editWidgets = {}
+  local widgets = panel.editWidgets
+
+  local function Checkbox(key, label, value, setter)
+    local widget = AceGUI:Create("PUI_Checkbox")
+    widget:SetLabel(label)
+    widget:SetCallback("OnValueChanged", function(_, _, checked)
+      setter(checked == true)
+      TestMode:QueueToolbarRefresh()
+    end)
+    widget.frame:SetParent(host)
+    widget.frame:Show()
+    ns.AceHooks.TakeOwnership(widget)
+    widgets[key] = { widget = widget, value = value, height = 30 }
+  end
+
+  local function Slider(key, label, minimum, maximum, step, value, setter)
+    local widget = AceGUI:Create("PUI_Slider")
+    widget:SetLabel(label)
+    widget:SetSliderValues(minimum, maximum, step)
+    widget:SetCallback("OnValueChanged", function(_, _, newValue)
+      setter(newValue)
+    end)
+    widget.frame:SetParent(host)
+    widget.frame:Show()
+    ns.AceHooks.TakeOwnership(widget)
+    widgets[key] = { widget = widget, value = value, height = 66 }
+  end
+
+  local function Dropdown(key, label, choices, value, setter)
+    local widget = AceGUI:Create("PUI_Dropdown")
+    widget:SetLabel(label)
+    widget:SetList(choices)
+    widget:SetCallback("OnValueChanged", function(_, _, choice)
+      setter(choice)
+      TestMode:QueueToolbarRefresh()
+    end)
+    widget.frame:SetParent(host)
+    widget.frame:Show()
+    ns.AceHooks.TakeOwnership(widget)
+    widgets[key] = { widget = widget, value = value, height = 58 }
+  end
+
+  local util = ns.FrameUtil
+  Checkbox("keyboard", "Keyboard movement", function() return util._keyboardMoveEnabled end,
+    function(v) util.SetKeyboardMovementEnabled(v) end)
+  Checkbox("dim", "Disable screen dimming", function() return util._disableDimming end,
+    util.SetEditDimmingDisabled)
+  Checkbox("snap", "Snap to frames", function() return util._snapToFrame end,
+    util.SetEditFrameSnap)
+  Checkbox("smart", "Smart Snap", function() return util._smartSnapEnabled end,
+    util.SetSmartSnapEnabled)
+  Checkbox("snapGrid", "Snap to grid", function() return util._snapToGrid end,
+    util.SetEditGridSnap)
+  Dropdown("grid", "Show grid", { off = "Off", [8] = "8 px", [16] = "16 px", [32] = "32 px", [64] = "64 px" },
+    function() return util._showGrid and util._gridSize or "off" end,
+    function(value)
+      if value == "off" then
+        util.ShowGrid(false)
+      else
+        util.SetGridSize(value)
+        util.ShowGrid(true)
+      end
+    end)
+  Slider("nudge", "Nudge step", 1, 10, 1,
+    function() return util._nudgeStep end, util._SetNudgeStepFromSlider)
+  Slider("tolerance", "Snap distance", 2, 20, 1,
+    function() return util._snapTolerance end, util.SetSnapTolerance)
+  Slider("fade", "Screen dimming", 0, 1, 0.05,
+    function() return util._dimAlpha end, util.SetEditDimAlpha)
+
+  panel.positionUnit = "target"
+  panel.editGroupPositionsOpen = false
+  panel.groupPositionButton = CreateToolbarButton(host, "Group positions  [+]", 230, function()
+    panel.editGroupPositionsOpen = not panel.editGroupPositionsOpen
+    TestMode:RebuildToolbar()
+  end)
+  StyleButton(panel.groupPositionButton, false)
+  Dropdown("positionUnit", "Frame positions", { target = "Target", focus = "Focus", boss1 = "Boss" },
+    function() return panel.positionUnit end,
+    function(value) panel.positionUnit = value end)
+  Dropdown("switchMode", "On group change", {
+    Never = "Never switch", Prompt = "Ask before switching", Auto = "Switch automatically",
+  }, function()
+    return ns.Modules.UnitFrames:GetPositionSettings().switchMode
+  end, function(value)
+    ns.Modules.UnitFrames:SetPositionSwitchMode(value)
+  end)
+  Dropdown("activeContext", "Active position layout", {
+    Shared = "Shared", Solo = "Solo", Party = "Party", Raid = "Raid",
+  }, function()
+    return ns.Modules.UnitFrames:GetPositionSettings().active
+  end, function(value)
+    ns.Modules.UnitFrames:ActivatePositionContext(value)
+  end)
+  Checkbox("separate", "Use different positions by group", function()
+    local config = ns.Modules.UnitFrames.db.profile.units[panel.positionUnit]
+    return config.contextPositions and config.contextPositions.enabled == true
+  end, function(value)
+    ns.Modules.UnitFrames:SetSeparatePosition(panel.positionUnit, value)
+  end)
+  Dropdown("positionEdit", "Position to edit", {
+    Shared = "Shared", Solo = "Solo", Party = "Party", Raid = "Raid",
+  }, function()
+    return ns.Modules.UnitFrames:GetPositionEditContext(panel.positionUnit)
+  end, function(value)
+    ns.Modules.UnitFrames:SetPositionEditContext(panel.positionUnit, value)
+  end)
+  Checkbox("positionOverride", "Use a separate position", function()
+    local unit = panel.positionUnit
+    local selected = ns.Modules.UnitFrames:GetPositionEditContext(unit)
+    local context = ns.Modules.UnitFrames.db.profile.units[unit].contextPositions
+    return context and context[selected] and context[selected].enabled == true
+  end, function(value)
+    local uf = ns.Modules.UnitFrames
+    uf:SetContextPositionEnabled(panel.positionUnit, uf:GetPositionEditContext(panel.positionUnit), value)
+  end)
+  panel.removePositionButton = CreateToolbarButton(host, "Remove separate position", 230, function()
+    local uf = ns.Modules.UnitFrames
+    uf:RemoveContextPosition(panel.positionUnit, uf:GetPositionEditContext(panel.positionUnit))
+    TestMode:RebuildToolbar()
+  end)
+  StyleButton(panel.removePositionButton, false)
+
+  panel.blizzardSettingsButton = CreateToolbarButton(host, "Blizzard Cooldown Settings", 230, function()
+    _G.CooldownViewerSettings:ShowUIPanel(false)
+  end)
+  StyleButton(panel.blizzardSettingsButton, false)
+
+  panel.sessionButtons = {}
+  for _, spec in ipairs({
+    { "Hide selected", util.HideSelectedMoversForEditSession },
+    { "Hide others", util.HideUnselectedMoversForEditSession },
+    { "Show all", util.ShowAllMoversForEditSession },
+  }) do
+    local action = spec[2]
+    local button = CreateToolbarButton(host, spec[1], 108, function()
+      action()
+      TestMode:RefreshEditControlButtons()
+    end)
+    StyleButton(button, false)
+    panel.sessionButtons[#panel.sessionButtons + 1] = button
+  end
+end
+
+function TestMode:RefreshEditControlButtons()
+  local panel = self.toolbar
+  if not panel or not panel.sessionButtons then return end
+  local selected = ns.FrameUtil._GetSelectedMoverCount() > 0
+  panel.sessionButtons[1]:SetEnabled(selected)
+  panel.sessionButtons[2]:SetEnabled(selected)
+  panel.sessionButtons[3]:SetEnabled(ns.FrameUtil.GetEditSessionHiddenMoverCount() > 0)
+end
+
+local EDIT_HELP = {
+  "Select a mover with left-click. Ctrl+click selects multiple movers.",
+  "Drag empty space to box-select. Drag a selected mover to move the selection.",
+  "Right-click opens module settings; Ctrl+right-click resets a mover.",
+  "Shift+right-click temporarily hides a mover; Show all restores it.",
+  "Alt+right-click disconnects Smart Snap. Shift+left-drag detaches and moves freely.",
+  "Use the arrows or the movable X/Y popup for precise positioning.",
+  "Enable keyboard movement for Tab, Shift+Tab, arrow keys and steps 1–9.",
+  "Esc closes Edit Mode. Presets only control editing handles, not live layouts.",
+}
+
 function TestMode:EnsureToolbar()
   if self.toolbar then
     return self.toolbar
   end
 
   local panel = CreateFrame("Frame", "PleebUI_TestModeToolbar", UIParent, "BackdropTemplate")
-  panel:SetSize(TOOLBAR_WIDTH, 520)
-  panel:SetPoint("TOP", UIParent, "TOP", 0, -55)
+  local window = ns.FrameUtil._GetEditModeDB().window or {}
+  local maxWidth = math_max(TOOLBAR_MIN_WIDTH, UIParent:GetWidth() - 30)
+  local maxHeight = math_max(TOOLBAR_MIN_HEIGHT, UIParent:GetHeight() - 60)
+  local width = math_min(maxWidth, math_max(TOOLBAR_MIN_WIDTH, window.width or TOOLBAR_WIDTH))
+  local height = math_min(maxHeight, math_max(TOOLBAR_MIN_HEIGHT, window.height or TOOLBAR_DEFAULT_HEIGHT))
+  panel:SetSize(width, height)
+  panel:SetPoint("TOPLEFT", UIParent, "TOPLEFT", window.x or 16, window.y or -32)
   panel:SetFrameStrata("DIALOG")
   panel:SetFrameLevel(180)
   panel:SetClampedToScreen(true)
   panel:SetMovable(true)
+  panel:SetResizable(true)
+  panel:SetResizeBounds(TOOLBAR_MIN_WIDTH, TOOLBAR_MIN_HEIGHT, maxWidth, maxHeight)
   panel:EnableMouse(true)
   panel:RegisterForDrag("LeftButton")
+
+  local function SaveWindow(self)
+    local db = ns.FrameUtil._GetEditModeDB()
+    db.window = db.window or {}
+    local left, top = self:GetLeft(), self:GetTop()
+    if left and top then
+      db.window.x = left - UIParent:GetLeft()
+      db.window.y = top - UIParent:GetTop()
+    end
+    db.window.width = self:GetWidth()
+    if not TestMode.toolbarCollapsed then
+      db.window.height = self:GetHeight()
+    end
+  end
+
   panel:SetScript("OnDragStart", function(self)
     if not InCombatLockdown() then
       self:StartMoving()
@@ -746,7 +874,9 @@ function TestMode:EnsureToolbar()
   end)
   panel:SetScript("OnDragStop", function(self)
     self:StopMovingOrSizing()
+    SaveWindow(self)
   end)
+  panel.SaveWindow = SaveWindow
 
   local title = panel:CreateFontString(nil, "OVERLAY")
   title:SetPoint("TOPLEFT", panel, "TOPLEFT", TOOLBAR_PADDING, -10)
@@ -777,7 +907,7 @@ function TestMode:EnsureToolbar()
   panel.setButtons = {}
   local previous
   for _, setName in ipairs(ns.FrameUtil.GetMoverVisibilitySetNames()) do
-    local button = CreateToolbarButton(panel, setName, 91, function()
+    local button = CreateToolbarButton(panel, setName, 84, function()
       ns.FrameUtil.SelectMoverVisibilitySet(setName)
       TestMode:RebuildToolbar()
     end)
@@ -790,6 +920,7 @@ function TestMode:EnsureToolbar()
     ns.FrameUtil.GetMoverVisibilityConfig().followGroup = self:GetChecked() == true
     StyleVisibilityCheckbox(self, self:GetChecked() and "on" or "off")
   end)
+  panel.followCheck.widget:SetTriState(false)
   panel.followCheck:SetPoint("TOPLEFT", panel, "TOPLEFT", TOOLBAR_PADDING, -99)
   StyleVisibilityCheckbox(panel.followCheck, visibility.followGroup and "on" or "off")
 
@@ -805,8 +936,10 @@ function TestMode:EnsureToolbar()
     TestMode:RebuildToolbar()
   end)
   panel.resetButton:SetPoint("TOPRIGHT", panel, "TOPRIGHT", -TOOLBAR_PADDING, -96)
+  StyleButton(panel.resetButton, false)
 
   panel.search = CreateFrame("EditBox", nil, panel, "InputBoxTemplate")
+  ns.Theme.WidgetSkins.UIEditBox(panel.search)
   panel.search:SetAutoFocus(false)
   panel.search:SetHeight(24)
   panel.search:SetPoint("TOPLEFT", panel, "TOPLEFT", TOOLBAR_PADDING + 6, -132)
@@ -830,15 +963,74 @@ function TestMode:EnsureToolbar()
   ns.Theme.WidgetSkins.Scrollbar(panel.scroll.ScrollBar)
 
   panel.content = CreateFrame("Frame", nil, panel.scroll)
-  panel.content:SetWidth(TOOLBAR_WIDTH - 30)
+  panel.content:SetWidth(width - 30)
   panel.content:SetHeight(100)
   panel.scroll:SetScrollChild(panel.content)
+
+  for _, button in pairs(panel.setButtons) do
+    button:SetParent(panel.content)
+    button:ClearAllPoints()
+  end
+  for _, region in ipairs({ panel.setLabel, panel.followCheck, panel.followLabel,
+    panel.resetButton, panel.search }) do
+    region:SetParent(panel.content)
+    region:ClearAllPoints()
+  end
+
+  panel.sectionButtons = {}
+  for _, definition in ipairs({
+    { key = "movers", label = "Movers" },
+    { key = "controls", label = "Edit controls" },
+    { key = "help", label = "Help & shortcuts" },
+  }) do
+    local key = definition.key
+    panel.sectionButtons[key] = CreateToolbarButton(panel.content, definition.label, 190, function()
+      local db = ns.FrameUtil._GetEditModeDB()
+      db.editSections = db.editSections or { movers = true }
+      db.editSections[key] = db.editSections[key] ~= true
+      TestMode:RebuildToolbar()
+    end)
+  end
+
+  panel.resizeGrip = CreateFrame("Button", nil, panel)
+  panel.resizeGrip:SetSize(18, 18)
+  panel.resizeGrip:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", -2, 2)
+  local gripTexture = panel.resizeGrip:CreateTexture(nil, "ARTWORK")
+  gripTexture:SetAllPoints()
+  gripTexture:SetTexture("Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Up")
+  panel.resizeGrip:SetScript("OnMouseDown", function(_, button)
+    if button == "LeftButton" and not InCombatLockdown() then
+      panel:StartSizing("BOTTOMRIGHT")
+    end
+  end)
+  panel.resizeGrip:SetScript("OnMouseUp", function(_, button)
+    if button == "LeftButton" then
+      panel:StopMovingOrSizing()
+      panel.SaveWindow(panel)
+      TestMode:RebuildToolbar()
+    end
+  end)
+  panel:SetScript("OnSizeChanged", function(self, newWidth)
+    panel.content:SetWidth(math_max(1, newWidth - 30))
+  end)
+  panel:SetPropagateKeyboardInput(true)
+  panel:SetScript("OnKeyDown", function(_, key)
+    ns.FrameUtil.HandleEditModeKeyDown(key)
+  end)
+  panel:SetScript("OnHide", function()
+    if ns.Flags.IsEditing and TestMode.active then
+      Addon:SetEditMode(false)
+    end
+  end)
+  _G.table.insert(_G.UISpecialFrames, panel:GetName())
 
   panel.moverRows = {}
   panel.searchCollapsed = {}
   panel.__puiSections = {}
+  panel.profileEditMode = ns.FrameUtil._GetEditModeDB()
   panel:Hide()
   self.toolbar = panel
+  BuildEditControls(panel)
   StylePanel(panel)
   return panel
 end
@@ -848,19 +1040,14 @@ local function HideToolbarSections(panel)
     section:Hide()
     section:ClearAllPoints()
 
-    for _, button in ipairs(section.toggleButtons or {}) do
-      button:Hide()
-      button:ClearAllPoints()
+    for _, widget in ipairs(section.toggleButtons or {}) do
+      widget.frame:Hide()
+      widget.frame:ClearAllPoints()
     end
 
     for _, row in ipairs(section.choiceRows or {}) do
       row:Hide()
       row:ClearAllPoints()
-
-      for _, button in ipairs(row.buttons or {}) do
-        button:Hide()
-        button:ClearAllPoints()
-      end
     end
 
     for _, row in ipairs(section.rangeRows or {}) do
@@ -888,7 +1075,7 @@ local function BuildMoverTree()
 
   for _, entry in ipairs(ns.FrameUtil.GetRegisteredMoverEntries()) do
     local opts = entry.opts
-    if opts.moduleKey then
+    if opts.moduleKey and ns.FrameUtil.IsMoverAvailable(entry) then
       local module = keyed[opts.moduleKey]
       if not module then
         module = {
@@ -972,6 +1159,7 @@ local function AcquireMoverRow(panel, index)
     end
     TestMode:RebuildToolbar()
   end)
+  expand:SetHeight(22)
   row.expand = expand
 
   local check = CreateVisibilityCheckbox(row, function(self)
@@ -1033,31 +1221,83 @@ end
 
 function TestMode:RebuildToolbar()
   local panel = self:EnsureToolbar()
+  local profile = ns.FrameUtil._GetEditModeDB()
+  if panel.profileEditMode ~= profile then
+    panel.profileEditMode = profile
+    panel.expandedHeight = nil
+    local window = profile.window or {}
+    local maxWidth = math_max(TOOLBAR_MIN_WIDTH, UIParent:GetWidth() - 30)
+    local maxHeight = math_max(TOOLBAR_MIN_HEIGHT, UIParent:GetHeight() - 60)
+    panel:SetSize(
+      math_min(maxWidth, math_max(TOOLBAR_MIN_WIDTH, window.width or TOOLBAR_WIDTH)),
+      math_min(maxHeight, math_max(TOOLBAR_MIN_HEIGHT, window.height or TOOLBAR_DEFAULT_HEIGHT))
+    )
+    panel:ClearAllPoints()
+    panel:SetPoint("TOPLEFT", UIParent, "TOPLEFT", window.x or 16, window.y or -32)
+    panel.content:SetWidth(panel:GetWidth() - 30)
+  end
   local content = panel.content
   local config = ns.FrameUtil.GetMoverVisibilityConfig()
   HideToolbarSections(panel)
   for _, row in ipairs(panel.moverRows) do row:Hide() end
 
-  panel.setLabel:SetText("Editing: " .. config.selectedSet)
-  panel.setLabel:SetShown(not self.toolbarCollapsed)
-  for name, button in pairs(panel.setButtons) do
-    StyleButton(button, name == config.selectedSet)
+  local windowSections = profile.editSections
+  if not windowSections then
+    windowSections = { movers = true }
+    profile.editSections = windowSections
   end
-  StyleVisibilityCheckbox(panel.followCheck, config.followGroup and "on" or "off")
+  local y = -2
+  local function AddSectionHeader(key, title)
+    local open = windowSections[key] == true
+    local button = panel.sectionButtons[key]
+    button:ClearAllPoints()
+    button:SetPoint("TOPLEFT", content, "TOPLEFT", TOOLBAR_PADDING, y)
+    button:SetPoint("TOPRIGHT", content, "TOPRIGHT", -TOOLBAR_PADDING, y)
+    button:SetText((open and "-  " or "+  ") .. title)
+    StyleButton(button, false)
+    button:Show()
+    y = y - 34
+    return open
+  end
+  local moversOpen = AddSectionHeader("movers", "Movers")
+  panel.setLabel:SetShown(moversOpen)
+  panel.followCheck:SetShown(moversOpen)
+  panel.followLabel:SetShown(moversOpen)
+  panel.resetButton:SetShown(moversOpen)
+  panel.search:SetShown(moversOpen)
   for _, button in pairs(panel.setButtons) do
-    button:SetShown(not self.toolbarCollapsed)
+    button:SetShown(moversOpen)
   end
-  panel.followCheck:SetShown(not self.toolbarCollapsed)
-  panel.followLabel:SetShown(not self.toolbarCollapsed)
-  panel.resetButton:SetShown(not self.toolbarCollapsed)
-  panel.search:SetShown(not self.toolbarCollapsed)
+  if moversOpen then
+    panel.setLabel:SetText("Editing: " .. config.selectedSet)
+    panel.setLabel:SetPoint("TOPLEFT", content, "TOPLEFT", TOOLBAR_PADDING, y)
+    y = y - 24
+    local previous
+    local tabWidth = math_floor((content:GetWidth() - TOOLBAR_PADDING * 2 - 18) / 4)
+    for _, name in ipairs(ns.FrameUtil.GetMoverVisibilitySetNames()) do
+      local button = panel.setButtons[name]
+      button:SetWidth(tabWidth)
+      button:SetPoint("TOPLEFT", previous or content, previous and "TOPRIGHT" or "TOPLEFT",
+        previous and 6 or TOOLBAR_PADDING, previous and 0 or y)
+      StyleButton(button, name == config.selectedSet)
+      previous = button
+    end
+    y = y - 35
+    StyleVisibilityCheckbox(panel.followCheck, config.followGroup and "on" or "off")
+    panel.followCheck:SetPoint("TOPLEFT", content, "TOPLEFT", TOOLBAR_PADDING, y)
+    panel.followLabel:SetPoint("LEFT", panel.followCheck, "RIGHT", 3, 0)
+    panel.resetButton:SetPoint("TOPRIGHT", content, "TOPRIGHT", -TOOLBAR_PADDING, y + 2)
+    y = y - 34
+    panel.search:SetPoint("TOPLEFT", content, "TOPLEFT", TOOLBAR_PADDING + 6, y)
+    panel.search:SetPoint("TOPRIGHT", content, "TOPRIGHT", -TOOLBAR_PADDING - 6, y)
+    y = y - 38
+  end
 
   local search = (panel.search:GetText() or ""):lower()
   local function Matches(value)
     return search == "" or (tostring(value):lower():find(search, 1, true) ~= nil)
   end
 
-  local y = -2
   local rowIndex = 0
   local function AddRow(kind, key, label, depth, state, expansionKey, expanded)
     rowIndex = rowIndex + 1
@@ -1065,6 +1305,7 @@ function TestMode:RebuildToolbar()
     y = y - 26
   end
 
+  if moversOpen then
   for _, module in ipairs(BuildMoverTree()) do
     local moduleMatch = Matches(module.label)
     local matching = {}
@@ -1182,12 +1423,14 @@ function TestMode:RebuildToolbar()
             toggleY = toggleY - (TOGGLE_HEIGHT + TOGGLE_GAP)
           end
 
-          local button = AcquireToggleButton(section, index)
-          button.__puiControl = control
-          button:SetText(control.label or control.key)
-          button:SetPoint("TOPLEFT", section, "TOPLEFT", toggleX, toggleY)
-          StyleButton(button, self:GetValue(control.key) == true)
-          button:Show()
+          local widget = AcquireToggleButton(section, index)
+          widget.__puiControl = control
+          widget:SetLabel(control.label or control.key)
+          widget:SetWidth(TOGGLE_WIDTH)
+          widget.frame:ClearAllPoints()
+          widget.frame:SetPoint("TOPLEFT", section, "TOPLEFT", toggleX, toggleY)
+          widget:SetValue(self:GetValue(control.key) == true)
+          widget.frame:Show()
           toggleX = toggleX + TOGGLE_WIDTH + TOGGLE_GAP
         end
 
@@ -1226,15 +1469,130 @@ function TestMode:RebuildToolbar()
     end
 
   end
+  end
+
+  local controlsOpen = AddSectionHeader("controls", "Edit controls")
+  panel.editControls:SetShown(controlsOpen)
+  if controlsOpen then
+    local host = panel.editControls
+    host:ClearAllPoints()
+    host:SetPoint("TOPLEFT", content, "TOPLEFT", TOOLBAR_PADDING, y)
+    host:SetPoint("TOPRIGHT", content, "TOPRIGHT", -TOOLBAR_PADDING, y)
+    local controlY = -4
+    local available = math_max(220, content:GetWidth() - TOOLBAR_PADDING * 2 - 12)
+    local order = { "keyboard", "dim", "snap", "smart", "snapGrid", "grid",
+      "nudge", "tolerance", "fade", "positionUnit", "switchMode", "activeContext",
+      "separate", "positionEdit", "positionOverride" }
+    local uf = ns.Modules.UnitFrames
+    local groupAvailable = uf ~= nil and uf.db ~= nil
+    local groupOpen = groupAvailable and panel.editGroupPositionsOpen == true
+    for _, key in ipairs(order) do
+      local spec = panel.editWidgets[key]
+      local frame = spec.widget.frame
+      frame:ClearAllPoints()
+      frame:SetPoint("TOPLEFT", host, "TOPLEFT", 4, controlY)
+      spec.widget:SetWidth(available)
+      frame:SetHeight(spec.height)
+      local show = true
+      if key == "separate" or key == "switchMode" or key == "activeContext"
+        or key == "positionUnit" or key == "positionEdit" or key == "positionOverride"
+      then
+        show = groupOpen
+        if key == "positionEdit" or key == "positionOverride" then
+          local cfg = groupAvailable and uf.db.profile.units[panel.positionUnit]
+          show = groupOpen and cfg ~= nil and cfg.contextPositions ~= nil and cfg.contextPositions.enabled == true
+          if key == "positionOverride" then
+            show = show and uf:GetPositionEditContext(panel.positionUnit) ~= "Shared"
+          end
+        end
+      end
+      frame:SetShown(show)
+      if key == "positionUnit" then
+        panel.groupPositionButton:ClearAllPoints()
+        panel.groupPositionButton:SetPoint("TOPLEFT", host, "TOPLEFT", 4, controlY)
+        panel.groupPositionButton:SetWidth(available)
+        panel.groupPositionButton:SetText(groupOpen and "Group positions  [-]" or "Group positions  [+]")
+        panel.groupPositionButton:SetShown(groupAvailable)
+        if groupAvailable then
+          controlY = controlY - 36
+        end
+      end
+      if show then
+        frame:ClearAllPoints()
+        frame:SetPoint("TOPLEFT", host, "TOPLEFT", 4, controlY)
+        if key == "positionOverride" then
+          spec.widget:SetLabel("Use a separate " .. uf:GetPositionEditContext(panel.positionUnit) .. " position")
+        end
+        spec.widget:SetValue(spec.value())
+        if key == "separate" then
+          spec.widget:SetDisabled(ns.FrameUtil.HasSmartSnapLinks("UF_" .. panel.positionUnit)
+            and not spec.value())
+        end
+        controlY = controlY - spec.height - 4
+      end
+    end
+    local editUnit = groupAvailable and uf:GetPositionEditContext(panel.positionUnit)
+    local positions = groupAvailable and uf.db.profile.units[panel.positionUnit].contextPositions
+    local existing = positions and positions[editUnit]
+    panel.removePositionButton:ClearAllPoints()
+    panel.removePositionButton:SetPoint("TOPLEFT", host, "TOPLEFT", 4, controlY)
+    panel.removePositionButton:SetWidth(available)
+    panel.removePositionButton:SetShown(groupOpen and editUnit ~= "Shared" and existing ~= nil)
+    if panel.removePositionButton:IsShown() then
+      controlY = controlY - 34
+    end
+    for index, button in ipairs(panel.sessionButtons) do
+      button:ClearAllPoints()
+      button:SetPoint("TOPLEFT", host, "TOPLEFT", 4 + (index - 1) * (available - 8) / 3, controlY)
+      button:SetWidth((available - 14) / 3)
+      button:Show()
+    end
+    TestMode:RefreshEditControlButtons()
+    controlY = controlY - 38
+    panel.blizzardSettingsButton:ClearAllPoints()
+    panel.blizzardSettingsButton:SetPoint("TOPLEFT", host, "TOPLEFT", 4, controlY)
+    panel.blizzardSettingsButton:SetWidth(available)
+    panel.blizzardSettingsButton:Show()
+    controlY = controlY - 32
+    host:SetHeight(-controlY)
+    y = y + controlY - 6
+  end
+
+  local helpOpen = AddSectionHeader("help", "Help & shortcuts")
+  panel.helpRows = panel.helpRows or {}
+  for _, label in ipairs(panel.helpRows) do label:Hide() end
+  if helpOpen then
+    for index, line in ipairs(EDIT_HELP) do
+      local label = panel.helpRows[index]
+      if not label then
+        label = content:CreateFontString(nil, "OVERLAY")
+        label:SetJustifyH("LEFT")
+        label:SetJustifyV("TOP")
+        label:SetWordWrap(true)
+        panel.helpRows[index] = label
+      end
+      StyleText(label, "body", 12)
+      label:SetWidth(math_max(230, content:GetWidth() - TOOLBAR_PADDING * 2 - 15))
+      label:ClearAllPoints()
+      label:SetPoint("TOPLEFT", content, "TOPLEFT", TOOLBAR_PADDING + 5, y)
+      label:SetText(line)
+      label:Show()
+      y = y - math_max(36, label:GetStringHeight() + 12)
+    end
+  end
 
   local contentHeight = math_max(60, -y + 2)
   content:SetHeight(contentHeight)
-  local availableHeight = math_max(200, UIParent:GetHeight() - 110)
-  panel:SetHeight(
-    self.toolbarCollapsed
-      and TOOLBAR_COLLAPSED_HEIGHT
-      or math_min(availableHeight, math_max(350, TOOLBAR_TITLE_HEIGHT + contentHeight + TOOLBAR_PADDING))
-  )
+  if self.toolbarCollapsed then
+    if panel:GetHeight() ~= TOOLBAR_COLLAPSED_HEIGHT then
+      panel.expandedHeight = panel:GetHeight()
+      panel:SetHeight(TOOLBAR_COLLAPSED_HEIGHT)
+    end
+  elseif panel.expandedHeight then
+    panel:SetHeight(panel.expandedHeight)
+    panel.expandedHeight = nil
+  end
+  panel.resizeGrip:SetShown(not self.toolbarCollapsed)
   panel.scroll:SetShown(not self.toolbarCollapsed)
   panel.scroll:SetVerticalScroll(math_min(panel.scroll:GetVerticalScroll(),
     math_max(0, contentHeight - (panel:GetHeight() - TOOLBAR_TITLE_HEIGHT - 8))))
@@ -1266,6 +1624,20 @@ local function RefreshToolbarTheme()
       StyleButton(row.expand, false)
     end
   end
+  for _, button in pairs(panel.sectionButtons) do
+    StyleButton(button, false)
+  end
+  for _, button in ipairs(panel.sessionButtons) do
+    StyleButton(button, false)
+  end
+  StyleButton(panel.blizzardSettingsButton, false)
+  StyleButton(panel.groupPositionButton, false)
+  StyleButton(panel.removePositionButton, false)
+  for _, label in ipairs(panel.helpRows or {}) do
+    if label:IsShown() then
+      StyleText(label, "body", 12)
+    end
+  end
   StyleButton(panel.exitButton, false)
   StyleButton(panel.minimizeButton, false)
   ns.Theme.ApplyExpandCollapseButton(panel.minimizeButton, not TestMode.toolbarCollapsed)
@@ -1278,32 +1650,9 @@ local function RefreshToolbarTheme()
       local participantKey = section.enabledButton.__puiParticipantKey
       StyleButton(section.enabledButton, participantKey and TestMode:IsParticipantEnabled(participantKey))
 
-      for _, button in ipairs(section.toggleButtons or {}) do
-        if button:IsShown() then
-          local control = button.__puiControl
-          StyleButton(button, control and TestMode:GetValue(control.key) == true)
-        end
-      end
-
-      for _, row in ipairs(section.choiceRows or {}) do
-        if row:IsShown() then
-          StyleText(row.label, "body", 11)
-
-          for _, button in ipairs(row.buttons or {}) do
-            if button:IsShown() then
-              local control = button.__puiControl
-              StyleButton(
-                button,
-                control and TestMode:GetValue(control.key) == button.__puiChoiceValue
-              )
-            end
-          end
-        end
-      end
-
-      for _, row in ipairs(section.rangeRows or {}) do
-        if row:IsShown() then
-          StyleRangeControl(row)
+      for _, widget in ipairs(section.toggleButtons or {}) do
+        if widget.frame:IsShown() then
+          widget:SetValue(TestMode:GetValue(widget.__puiControl.key) == true)
         end
       end
     end
@@ -1324,6 +1673,7 @@ end
 function TestMode:ShowToolbar()
   local panel = self:EnsureToolbar()
   panel:Show()
+  ns.FrameUtil._UpdateEditDialogKeyboardState()
   self:RebuildToolbar()
 end
 
@@ -1337,7 +1687,18 @@ local eventFrame = TestMode.eventFrame or CreateFrame("Frame")
 TestMode.eventFrame = eventFrame
 eventFrame:RegisterEvent("PLAYER_REGEN_DISABLED")
 eventFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
-eventFrame:SetScript("OnEvent", function(_, event)
+eventFrame:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED")
+eventFrame:RegisterEvent("SPELLS_CHANGED")
+eventFrame:SetScript("OnEvent", function(_, event, unit)
+  if event == "PLAYER_SPECIALIZATION_CHANGED" or event == "SPELLS_CHANGED" then
+    if event == "PLAYER_SPECIALIZATION_CHANGED" and unit ~= "player" then
+      return
+    end
+    if ns.Flags.IsEditing and not InCombatLockdown() then
+      ns.FrameUtil.ApplyMoverVisibilityPreset()
+    end
+    return
+  end
   if event == "PLAYER_REGEN_DISABLED" then
     if TestMode:IsActive() then
       TestMode:SetActive(false, "combat")
