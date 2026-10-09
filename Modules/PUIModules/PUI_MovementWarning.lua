@@ -250,6 +250,8 @@ local function EnsureDisplay()
 
   FrameUtil:RegisterMover("movement_warning", anchor, {
     label = "Movement Reminder",
+    moduleKey = "movementWarning",
+    moduleLabel = "Movement Reminder",
     optionsString = "MovementWarning",
     smartSnap = {
       family = "positionOnly",
