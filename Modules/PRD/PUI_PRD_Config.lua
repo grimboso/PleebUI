@@ -169,7 +169,7 @@ local function PRDPreview_ConfigureStackColorSegments(bar, maximum, config)
   )
 end
 
-local function PRD_UsesSecondaryResourceTabs(resourceOptions)
+local function PRD_HasMultipleSecondaryResources(resourceOptions)
   resourceOptions = resourceOptions or ns.PRDSecondary:GetResourceOptionsForClass(PLAYER_CLASS)
   return #resourceOptions > 1
 end
@@ -343,7 +343,7 @@ local function PRDPreview_GetResourcePath(definition)
   if definition.isAlternatePower == true then
     return { "PRD", "primary" }
   end
-  if PRD_UsesSecondaryResourceTabs() then
+  if PRD_HasMultipleSecondaryResources() then
     return { "PRD", "secondary", definition.resourceKey }
   end
   return { "PRD", "secondary" }
@@ -371,24 +371,24 @@ local function PRDPreview_ConfigureBarInteractions(
 
   if role == "health" then
     title = "Health"
-    bodyPath = { "PRD", "health", "layoutAppearance" }
+    bodyPath = { "PRD", "health" }
     bodySection = "layoutGroup"
     bodyOption = "height"
-    textPath = { "PRD", role, "textGroup" }
-    textSection = "percent"
-    textOption = "visibility"
+    textPath = { "PRD", role }
+    textSection = "textGroup"
+    textOption = "percentVisibility"
 
     borderPath = bodyPath
     borderSection = "border"
     borderOption = "borderSize"
   elseif role == "primary" then
     title = "Primary power"
-    bodyPath = { "PRD", "primary", "layoutAppearance" }
+    bodyPath = { "PRD", "primary" }
     bodySection = "layoutGroup"
     bodyOption = "height"
-    textPath = { "PRD", role, "textGroup" }
-    textSection = "percent"
-    textOption = "visibility"
+    textPath = { "PRD", role }
+    textSection = "textGroup"
+    textOption = "percentVisibility"
 
     borderPath = bodyPath
     borderSection = "border"
@@ -399,20 +399,18 @@ local function PRDPreview_ConfigureBarInteractions(
       or "Secondary resource"
 
     bodyPath = PRDPreview_GetResourcePath(definition)
-    bodyPath[#bodyPath + 1] = definition.isAlternatePower == true and "visibilityGroup" or "layoutAppearance"
-    bodySection = "layout"
+    bodySection = definition.isAlternatePower == true and "feature" or "layout"
     bodyOption = definition.isAlternatePower == true and "hideAlternateMana" or "detached"
     textPath = PRDPreview_GetResourcePath(definition)
-    textPath[#textPath + 1] = "textGroup"
-    textSection = "value"
+    textSection = "textGroup"
     textOption = "textMode"
     borderPath = bodyPath
     borderSection = "border"
     borderOption = "borderSize"
     if definition.isAlternatePower == true then
       textPath = bodyPath
-      bodySection = nil
-      textSection = nil
+      bodySection = "feature"
+      textSection = "feature"
       textOption = "hideAlternateMana"
       borderSection = textSection
       borderOption = textOption
@@ -1851,7 +1849,7 @@ local function PRDPreview_EnsureContents(box)
     onClick = function()
       PRDPreview_Navigate(
         box,
-        { "PRD", "general" },
+        { "PRD", "health" },
         "outerBorderGroup",
         "size"
       )
@@ -2181,7 +2179,7 @@ do
     PRD_NormalizeBarColorConfig(cfg, role)
 
     local flags = role == "health" and { health = true } or { primary = true }
-    local defaultLabel = role == "health" and "Health (Default)" or "Primary resource (Default)"
+    local defaultLabel = role == "health" and "Health color" or "Power color"
 
     return {
       type = "group",
@@ -2780,46 +2778,70 @@ do
   local function PRD_ArrangePresentationArgs(args, layoutKey)
     local layout, appearance = args[layoutKey], args.appearanceGroup
     layout.name, layout.order = "Size and placement", 10
+    layout.arg = { puiExplicit = true }
+    for index, key in ipairs({ "height", "detached", "width" }) do
+      local option = layout.args[key]
+      option.name = key == "width" and "Detached width" or key == "detached" and "Detach" or "Height"
+      option.order, option.width, option.relWidth = index * 10, "relative", 0.333
+    end
+    for _, key in ipairs({ "point", "x", "y" }) do
+      local option = layout.args[key]
+      if option then option.width, option.relWidth = "relative", 0.333 end
+    end
     appearance.name, appearance.order = "Bar", 20
+    appearance.arg = { puiExplicit = true }
     local style = appearance.args
-    local border = { type = "group", name = "Border", order = 30, inline = true, arg = { puiExplicit = true },
-      hidden = appearance.hidden, disabled = appearance.disabled,
+    args.border = {
+      type = "group", name = "Border", order = 30, inline = true,
+      arg = { puiExplicit = true }, hidden = appearance.hidden, disabled = appearance.disabled,
       args = { borderSize = style.borderSize, borderColor = style.borderColor },
     }
-    border.args.borderSize.name, border.args.borderSize.order = "Thickness", 10
-    border.args.borderColor.name, border.args.borderColor.order = "Color", 20
+    args.border.args.borderSize.name, args.border.args.borderSize.order = "Thickness", 10
+    args.border.args.borderColor.name, args.border.args.borderColor.order = "Color", 20
+    for _, option in pairs(args.border.args) do option.width, option.relWidth = "relative", 0.5 end
     style.borderSize, style.borderColor = nil, nil
-    args.layoutAppearance = {
-      type = "group", name = "Layout and appearance", order = 20, args = {
-        [layoutKey] = layout, bar = appearance, border = border,
-      },
-    }
-    args[layoutKey], args.appearanceGroup = nil, nil
-    layout.args.width.name = "Width"
-    layout.args.width.order, layout.args.height.order = 10, 20
+    for index, key in ipairs({ "texture", "colorMode", "customColor", "bgColor", "squareTexture" }) do
+      local option = style[key]
+      if option then
+        option.order, option.width, option.relWidth = index * 10, "relative", index <= 3 and 0.333 or 0.5
+      end
+    end
+    style.colorMode.name = "Color mode"
+    if not style.squareTexture then
+      for _, key in ipairs({ "texture", "colorMode", "customColor", "bgColor" }) do style[key].relWidth = 0.25 end
+    end
+    args.bar, args.appearanceGroup = appearance, nil
     local text = args.textGroup
-    text.inline, text.order = nil, 40
     if text.args.leftFont then
-      text.args.leftFont.name = "Shared typography"
-      text.args.leftFont.args.fontFlags.name = "Outline"
-      text.args.leftFont.args.fontFlags.order = 60
-      text.args.leftFont = ns.OptionsSchema.BuildTextGroup("Shared typography", 30, text.args.leftFont.args)
-      text.args.leftVisibility.name, text.args.rightVisibility.name = "Percent visibility", "Value visibility"
-      text.args.centerText.name = "Center text"
-      text.args.content = { type = "group", name = "Content", inline = true, order = 10,
-        arg = { puiExplicit = true }, args = {
+      args.textAppearance = ns.OptionsSchema.BuildTextGroup("Text appearance", 50, text.args.leftFont.args)
+      args.textAppearance.args.fontFlags.name, args.textAppearance.args.fontFlags.order = "Outline", 60
+      args.textGroup = {
+        type = "group", name = "Text", inline = true, order = 40,
+        arg = { puiExplicit = true }, hidden = text.hidden, disabled = text.disabled,
+        args = {
           percentVisibility = text.args.leftVisibility, valueVisibility = text.args.rightVisibility,
           centerText = text.args.centerText,
-        } }
-      text.args.leftVisibility, text.args.rightVisibility, text.args.centerText = nil, nil, nil
+        },
+      }
+      args.textGroup.args.percentVisibility.name = "Percent visibility"
+      args.textGroup.args.valueVisibility.name = "Value visibility"
+      args.textGroup.args.centerText.name = "Center text"
+      for index, key in ipairs({ "percentVisibility", "valueVisibility", "centerText" }) do
+        local option = args.textGroup.args[key]
+        option.order, option.width, option.relWidth = index * 10, "relative", 0.333
+      end
+      for _, option in pairs(args.textAppearance.args) do option.width, option.relWidth = "relative", 0.5 end
     else
       text.args.fontFlags.name, text.args.fontFlags.order = "Outline", 60
       text.args.textMode.name, text.args.textMode.order = "Format", 20
-      text.args = { value = ns.OptionsSchema.BuildTextGroup("Value", 10, text.args) }
+      args.textGroup = ns.OptionsSchema.BuildTextGroup("Text", 40, text.args)
+      for _, option in pairs(args.textGroup.args) do option.width, option.relWidth = "relative", 0.5 end
+      args.textGroup.args.textMode.order, args.textGroup.args.useGlobalFont.order = 10, 20
+      for index, key in ipairs({ "font", "fontSize", "fontFlags" }) do
+        args.textGroup.args[key].order, args.textGroup.args[key].relWidth = 20 + index * 10, 0.333
+      end
     end
-    if args.visibilityGroup then
-      args.visibilityGroup.inline, args.visibilityGroup.order = nil, 30
-    end
+    if args.visibilityGroup then args.visibilityGroup.inline, args.visibilityGroup.order = true, 60 end
     return args
   end
 
@@ -2830,11 +2852,6 @@ do
       type = "group", name = "Visibility", order = 5, inline = true, args = {},
     }
     args.visibilityGroup.hidden = nil
-    args.visibilityGroup.args.showBar = {
-      type = "toggle", name = role == "health" and "Show health" or "Show primary power", order = 0,
-      get = function() return PRD:GetQuickSetupValue(role == "health" and "showHealth" or "showPrimary") end,
-      set = function(_, value) PRD:SetQuickSetupValue(role == "health" and "showHealth" or "showPrimary", value) end,
-    }
     if args.visibilityGroup.args.hideAlternateMana then
       args.visibilityGroup.args.hideAlternateMana.hidden = not ns.PRDSecondary.PlayerClassHasAlternatePower
     end
@@ -2874,17 +2891,46 @@ do
     args.appearanceGroup = appearance
     args.colorGroup = nil
     args.styleGroup = nil
-    layout.showBar = args.visibilityGroup.args.showBar
-    layout.showBar.name = "Show bar"
-    args.visibilityGroup.args.showBar = nil
+    args.feature = {
+      type = "group", name = "Feature", inline = true, order = 0,
+      arg = { puiExplicit = true }, args = {
+        enabled = {
+          type = "toggle", name = "Enable", order = 0, width = "relative", relWidth = 0.5,
+          get = function() return PRD:GetQuickSetupValue(role == "health" and "showHealth" or "showPrimary") end,
+          set = function(_, value) PRD:SetQuickSetupValue(role == "health" and "showHealth" or "showPrimary", value) end,
+        },
+      },
+    }
+    if role == "health" then
+      args.feature.args.usePlayerHealth = {
+        type = "toggle", name = "Use Player health", order = 10, width = "relative", relWidth = 0.5,
+        desc = "Uses the Player unit frame in the PRD health position.",
+        disabled = InCombatLockdown,
+        get = function() return state.db.usePlayerHealth == true end,
+        set = function(_, value) state.M:SetUsePlayerHealth(value) end,
+      }
+    elseif args.visibilityGroup.args.hideAlternateMana then
+      args.feature.args.hideAlternateMana = args.visibilityGroup.args.hideAlternateMana
+      args.feature.args.hideAlternateMana.order = 10
+      args.feature.args.hideAlternateMana.width, args.feature.args.hideAlternateMana.relWidth = "relative", 0.5
+      args.visibilityGroup.args.hideAlternateMana = nil
+    end
     args.textGroup.order = 30
-    if args.ticksGroup then args.ticksGroup.order = 50 end
+    if args.ticksGroup then args.ticksGroup.order = 60 end
     PRD_ArrangePresentationArgs(args, "layoutGroup")
     if next(args.visibilityGroup.args) then
       args.visibilityGroup.inline, args.visibilityGroup.order = true, 40
-      args.layoutAppearance.args.visibility = args.visibilityGroup
+      args.visibility = args.visibilityGroup
     end
     args.visibilityGroup = nil
+    if args.formOverridesGroup then
+      for key, group in pairs(args.formOverridesGroup.args) do
+        group.name, group.inline, group.order = group.name .. " color override", true, 70 + group.order
+        group.arg = { puiExplicit = true }
+        args["form" .. key] = group
+      end
+      args.formOverridesGroup = nil
+    end
     return args
   end
 
@@ -2952,126 +2998,22 @@ do
               health = true, primary = true, healthText = true, primaryText = true,
               secondaryAppearance = true, secondaryText = true, layout = true,
             })
-            Addon:NotifyOptionsTreeChanged("PRD", { "PRD", "general" })
+            Addon:NotifyOptionsTreeChanged("PRD", { "PRD", "health" })
           end,
         },
       },
     }
   end
 
-  local function PRD_BuildGeneralArgs()
-    local s = GetPRDState()
-    if not s then
-      return {
-        unavailable = {
-          type = "description",
-          name = "Personal Resource Display module is not loaded or has no profile data yet.",
-          order = 1,
-          fontSize = "medium",
-        },
-      }
-    end
-
-    local db = s.db
-    local size = s.size
-    local outerBorder = s.outerBorder
-    local primaryCfg = s.primaryCfg
-    local secondaryCfg = s.secondaryCfg
-
-    return {
-      generalHeader = {
-        type = "header",
-        name = "Personal Resource Display",
-        order = 1,
-      },
-      generalIntro = {
-        type = "description",
-        name = "Control which PRD bars are shown, how the shared stack is arranged, and whether individual bars should break out into their own movers.",
-        order = 2,
-        fontSize = "medium",
-      },
-      visibilityGroup = {
+  local function PRD_BuildSharedStackArgs(state)
+    local size, outerBorder = state.size, state.outerBorder
+    local args = {
+      sharedStack = {
         type = "group",
-        name = "What is shown",
-        order = 10,
+        name = "Shared stack",
+        order = 80,
         inline = true,
-        args = {
-          visibilityIntro = {
-            type = "description",
-            name = "These toggles decide which bars participate in the main PRD setup.",
-            order = 0,
-            fontSize = "medium",
-          },
-          hideHealth = {
-            type = "toggle",
-            name = "Show health",
-            desc = "Shows health in the PRD.",
-            order = 1,
-            get = function()
-              return PRD:GetQuickSetupValue("showHealth")
-            end,
-            set = function(_, val)
-              PRD:SetQuickSetupValue("showHealth", val)
-            end,
-          },
-          hidePrimary = {
-            type = "toggle",
-            name = "Show primary power",
-            desc = "Shows your current primary power in the PRD.",
-            order = 2,
-            get = function()
-              return PRD:GetQuickSetupValue("showPrimary")
-            end,
-            set = function(_, val)
-              PRD:SetQuickSetupValue("showPrimary", val)
-            end,
-          },
-          hideSecondary = {
-            type = "toggle",
-            name = "Show class resources and tracked effects",
-            desc = "Shows enabled class resources and tracked effects. Alternate Mana is controlled separately.",
-            order = 3,
-            get = function()
-              return PRD:GetQuickSetupValue("showSecondary")
-            end,
-            set = function(_, val)
-              PRD:SetQuickSetupValue("showSecondary", val)
-            end,
-          },
-          secondaryVisibility = {
-            type = "select", name = "Show resources and tracked effects", order = 3.5,
-            values = {
-              ALWAYS = "Always", COMBAT = "In combat", TARGET = "With a target",
-              COMBAT_OR_TARGET = "In combat or with a target",
-            },
-            disabled = function() return secondaryCfg.enabled == false end,
-            get = function() return secondaryCfg.visibilityMode or "ALWAYS" end,
-            set = function(_, value)
-              secondaryCfg.visibilityMode = value
-              Addon:ApplyOptionsChange("PRD", { secondaryVisibility = true })
-            end,
-          },
-          hideAlternateMana = {
-            type = "toggle",
-            name = "Show alternate Mana",
-            desc = "Shows Mana when your specialization or form uses another primary power.",
-            order = 4,
-            hidden = PLAYER_CLASS ~= "PRIEST" and PLAYER_CLASS ~= "DRUID" and PLAYER_CLASS ~= "SHAMAN",
-            get = function()
-              return primaryCfg.hideAlternateMana ~= true
-            end,
-            set = function(_, val)
-              primaryCfg.hideAlternateMana = not val
-              Addon:ApplyOptionsChange("PRD", { secondaryRebuild = true, secondaryText = true, layout = true })
-            end,
-          },
-        },
-      },
-      layoutGroup = {
-        type = "group",
-        name = "Stack layout",
-        order = 20,
-        inline = true,
+        arg = { puiExplicit = true },
         args = {
           layoutIntro = {
             type = "description",
@@ -3094,16 +3036,6 @@ do
               PRD:SetQuickSetupValue("width", val)
             end,
           },
-          resourceGap = {
-            type = "range", name = "Gap between resource bars", order = 3,
-            desc = "Used between adjacent class-resource or tracked-effect bars. Other gaps use the stacked-bar setting.",
-            min = 0, max = 20, step = 1,
-            get = function() return Clamp(secondaryCfg.gap or 2, 0, 20) end,
-            set = function(_, value)
-              secondaryCfg.gap = Clamp(value, 0, 20)
-              Addon:ApplyOptionsChange("PRD", { secondaryLayout = true })
-            end,
-          },
           stackGap = {
             type = "range",
             name = "Gap between stacked bars",
@@ -3123,35 +3055,12 @@ do
 
         },
       },
-      playerHealthGroup = {
-        type = "group",
-        name = "Player health",
-        order = 22,
-        inline = true,
-        args = {
-          usePlayerHealth = {
-            type = "toggle",
-            name = "Use Player health",
-            desc = "Uses the actual Player unit frame in the PRD health position and hides the native PRD health bar.",
-            order = 1,
-            disabled = function()
-              return InCombatLockdown()
-            end,
-            get = function()
-              return ns.Modules.PRD.db.profile.usePlayerHealth == true
-            end,
-            set = function(_, value)
-              ns.Modules.PRD:SetUsePlayerHealth(value)
-            end,
-          },
-        },
-      },
-
       outerBorderGroup = {
         type = "group",
-        name = "Box border",
-        order = 27,
+        name = "Shared stack border",
+        order = 90,
         inline = true,
+        arg = { puiExplicit = true },
         args = {
           enabled = {
             type = "toggle",
@@ -3203,8 +3112,18 @@ do
           },
         },
       },
-      appearanceCopyGroup = PRD_BuildAppearanceCopyGroup(s),
+      appearanceCopyGroup = PRD_BuildAppearanceCopyGroup(state),
     }
+    for _, group in pairs(args) do
+      group.arg = { puiExplicit = true }
+      for _, option in pairs(group.args) do
+        if option.type ~= "description" then option.width, option.relWidth = "relative", 0.333 end
+      end
+    end
+    args.sharedStack.args.width.relWidth = 0.5
+    args.sharedStack.args.stackGap.relWidth = 0.5
+    args.appearanceCopyGroup.order = 100
+    return args
   end
 
   local function PRD_BuildHealthArgs()
@@ -3354,7 +3273,9 @@ do
         },
       },
     }
-    return PRD_ArrangeNativeBarArgs(args, s, "health")
+    PRD_ArrangeNativeBarArgs(args, s, "health")
+    for key, group in pairs(PRD_BuildSharedStackArgs(s)) do args[key] = group end
+    return args
   end
 
   local DRUID_FORM_COLOR_VALUES = {
@@ -4921,20 +4842,16 @@ do
     args.display.order = 40
     if args.behaviorGroup then args.behaviorGroup.order = 50 end
     args.cueGroup.name = "Cues"
-    local general = { enabled = args.enabled }
+    args.feature = {
+      type = "group", name = "Feature", inline = true, order = 0,
+      arg = { puiExplicit = true }, args = { enabled = args.enabled },
+    }
+    args.feature.args.enabled.name = "Enable"
+    args.feature.args.enabled.width, args.feature.args.enabled.relWidth = "relative", 0.5
     args.enabled = nil
-    if args.behaviorGroup then
-      general.behavior = args.behaviorGroup
-      args.behaviorGroup = nil
-    end
-    if general.behavior then
-      args.general = { type = "group", name = "General", order = 10, args = general }
-    else
-      args.layout.args.enabled = general.enabled
-    end
     local arranged = PRD_ArrangePresentationArgs(args, "layout")
-    arranged.cueGroup.inline = nil
-    arranged.display.inline = nil
+    arranged.cueGroup.inline = true
+    arranged.display.inline = true
     return arranged
   end
 
@@ -4948,7 +4865,37 @@ do
       }
     end
     local resources = ns.PRDSecondary:GetResourceOptionsForClass(PLAYER_CLASS)
-    if not PRD_UsesSecondaryResourceTabs(resources) then
+    local config = state.secondaryCfg
+    local shared = {
+      type = "group", name = "Resources and tracked effects", inline = true, order = -10,
+      arg = { puiExplicit = true }, args = {
+        enabled = {
+          type = "toggle", name = "Enable resources and tracked effects", order = 0, width = "relative", relWidth = 0.333,
+          get = function() return PRD:GetQuickSetupValue("showSecondary") end,
+          set = function(_, value) PRD:SetQuickSetupValue("showSecondary", value) end,
+        },
+        visibility = {
+          type = "select", name = "Show", order = 10, width = "relative", relWidth = 0.333,
+          values = { ALWAYS = "Always", COMBAT = "In combat", TARGET = "With a target", COMBAT_OR_TARGET = "In combat or with a target" },
+          disabled = function() return config.enabled == false end,
+          get = function() return config.visibilityMode or "ALWAYS" end,
+          set = function(_, value)
+            config.visibilityMode = value
+            Addon:ApplyOptionsChange("PRD", { secondaryVisibility = true })
+          end,
+        },
+        spacing = {
+          type = "range", name = "Resource spacing", order = 20, width = "relative", relWidth = 0.333,
+          min = 0, max = 20, step = 1,
+          get = function() return Clamp(config.gap or 2, 0, 20) end,
+          set = function(_, value)
+            config.gap = Clamp(value, 0, 20)
+            Addon:ApplyOptionsChange("PRD", { secondaryLayout = true })
+          end,
+        },
+      },
+    }
+    if not PRD_HasMultipleSecondaryResources(resources) then
       if #resources == 0 then
         return {
           unavailable = { type = "description", name = "No class resources or tracked effects for this specialization.", order = 1 },
@@ -4956,12 +4903,13 @@ do
       end
       local args = PRD_BuildResourceLayoutArgs(state, resources[1])
       args.header = { type = "header", name = resources[1].name, order = 0 }
+      args.shared = shared
       return args
     end
-    local args = {}
+    local args = { shared = shared }
     for index, resource in ipairs(resources) do
       args[resource.key] = {
-        type = "group", name = resource.name, order = index, childGroups = "tab",
+        type = "group", name = resource.name, order = index,
         desc = resource.category == "TRACKED_EFFECT" and "Tracked effect" or "Class resource",
         args = PRD_BuildResourceLayoutArgs(state, resource),
       }
@@ -4978,31 +4926,23 @@ do
         name = "Personal Resource Display",
         childGroups = "tab",
         args = {
-          general = {
-            type = "group",
-            name = "Overview",
-            order = 1,
-            args = PRD_BuildGeneralArgs(),
-          },
           health = {
             type = "group",
             name = "Health",
-            order = 2,
-            childGroups = "tab",
+            order = 1,
             args = PRD_BuildHealthArgs(),
           },
           primary = {
             type = "group",
             name = "Primary power",
-            order = 3,
-            childGroups = "tab",
+            order = 2,
             args = PRD_BuildPrimaryArgs(),
           },
           secondary = {
             type = "group",
             name = "Resources & tracked effects",
-            order = 4,
-            childGroups = "tab",
+            order = 3,
+            childGroups = "tree",
             hidden = function()
               return not ns.PRDSecondary:HasResourceForCurrentSpec()
             end,
