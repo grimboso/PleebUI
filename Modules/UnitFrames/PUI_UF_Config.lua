@@ -168,6 +168,7 @@ local function CB_RefreshUnit(unit, extraFlags)
   end
 
   Addon:ApplyOptionsChange("CastBar", flags)
+  ns.UFPreview.RefreshAuraManagerPreview()
 end
 
 local function UFCB_BlockCombat()
@@ -1970,11 +1971,82 @@ local function UFCB_BuildUnitTextArgs(unitKey, kind)
   end
 
   local prefixArgs = {
+    resetSection = {
+      type = "execute",
+      name = "Reset " .. kind .. " to defaults",
+      desc = "Restore this frame's " .. kind .. " settings without resetting other sections.",
+      order = 0.1,
+      width = "full",
+      func = function()
+        if UFCB_BlockCombat() then return end
+
+        local keys = {
+          customTypographyKey,
+          fontKey,
+          outlineKey,
+          GetSizeKey(),
+          customPositionKey,
+          anchorKey,
+          offXKey,
+          offYKey,
+        }
+
+        for _, key in ipairs(keys) do
+          text[key] = defaultText[key]
+        end
+
+        if kind == "name" then
+          text.hideNameText = defaultText.hideNameText
+
+        elseif kind == "health" then
+          text.hideHealthText = defaultText.hideHealthText
+          text.healthMode = defaultText.healthMode
+          cfg.height = unitDefaults.height
+
+          if unitKey == "player" then
+            cfg.useClassColor = unitDefaults.useClassColor
+            cfg.colors = cfg.colors or {}
+
+            local defaultColors = unitDefaults.colors
+            local defaultHealthColor = defaultColors and defaultColors.healthBar
+
+            cfg.colors.healthBar = type(defaultHealthColor) == "table"
+              and UFCB_CopyTable(defaultHealthColor)
+              or defaultHealthColor
+          end
+
+        elseif kind == "power" then
+          text.powerMode = defaultText.powerMode
+          cfg.showPower = unitDefaults.showPower
+          cfg.powerHeight = unitDefaults.powerHeight
+        end
+
+        Addon:ApplyOptionsChange("UnitFrames", {
+          mode = kind == "name" and "text" or "resize",
+          unit = unitKey,
+        })
+
+        Addon:NotifyOptionsTreeChanged(
+          "unitframes",
+          ns._PUIActiveOptionsPath
+        )
+      end,
+    },
     useCustomFont = {
       type = "toggle",
-      name = "Use custom font",
+      name = "Override shared font settings",
       order = 1,
-      desc = "Use a custom font, size, and outline for this text.",
+      desc = function()
+        local sharedFont = OptionsUtil.ResolveFontKey(globalT.font, globalT.useGlobalFont)
+        local sharedSize = tonumber(globalT[GetSizeKey()]) or baseSize
+        local sharedOutline = UFCB_GetGlobalOutlineValue(globalT.outline)
+
+        return "Shared settings: "
+          .. tostring(sharedFont)
+          .. ", size " .. tostring(sharedSize)
+          .. ", " .. tostring(sharedOutline)
+          .. ". Enable this override to customize the font, size, and outline."
+      end,
       get = function()
         return UsesCustomTypography()
       end,
@@ -1986,9 +2058,19 @@ local function UFCB_BuildUnitTextArgs(unitKey, kind)
     },
     useCustomPosition = {
       type = "toggle",
-      name = "Use custom position",
+      name = "Override shared position",
       order = 4.5,
-      desc = "Use a custom anchor and offsets for this text.",
+      desc = function()
+        local anchor = globalT[anchorKey] or defaultAnchor
+        local x = tonumber(globalT[offXKey]) or 0
+        local y = tonumber(globalT[offYKey]) or 0
+
+        return "Shared position: "
+          .. (TEXT_ANCHOR_VALUES[anchor] or anchor)
+          .. ", X " .. tostring(x)
+          .. ", Y " .. tostring(y)
+          .. ". Enable this override to set a separate position."
+      end,
       get = function()
         return UsesCustomPosition()
       end,
@@ -2572,6 +2654,16 @@ local function UFCB_CreateCustomAuraEditor(getAuras, refresh, fixedDisplayID, un
       return nil
     end
 
+    if resolvedUnitKey == "pet" then
+      return {
+        "unitframes",
+        "player",
+        "pet",
+        "auras",
+        "customDisplays",
+      }
+    end
+
     return {
       "unitframes",
       resolvedUnitKey,
@@ -2693,6 +2785,13 @@ local function UFCB_CreateCustomAuraEditor(getAuras, refresh, fixedDisplayID, un
     self:SyncSelection()
 
     local targetPath = rebuildOptions and self:GetDisplayPath(display.id, display.auraType) or nil
+    local activePath = ns._PUIActiveOptionsPath
+    local activeTab = type(activePath) == "table" and activePath[#activePath]
+
+    if targetPath and (activeTab == "overview" or activeTab == "advanced") then
+      targetPath[#targetPath + 1] = activeTab
+    end
+
     self:Refresh(rebuildOptions, targetPath, nil, changeType, display.id)
   end
 
@@ -2705,9 +2804,11 @@ local function UFCB_CreateCustomAuraEditor(getAuras, refresh, fixedDisplayID, un
     callback(display)
     ns.UFAuraFilters.NormalizeDisplay(display, display.id)
     self:SyncSelection()
+    local targetPath = self:GetDisplayPath(display.id, display.auraType)
+    targetPath[#targetPath + 1] = "advanced"
     self:Refresh(
       true,
-      self:GetDisplayPath(display.id, display.auraType),
+      targetPath,
       nil,
       "filter",
       display.id
@@ -2764,7 +2865,13 @@ local function UFCB_CreateCustomAuraEditor(getAuras, refresh, fixedDisplayID, un
       end
     end
 
-    self:Refresh(true, self:GetDisplayPath(id, auraType), afterSelect, "topology", id)
+    local targetPath = self:GetDisplayPath(id, auraType)
+
+    if displayType == "slot" then
+      targetPath[#targetPath + 1] = "advanced"
+    end
+
+    self:Refresh(true, targetPath, afterSelect, "topology", id)
   end
 
   function editor:DeleteSelectedDisplay()
@@ -3088,7 +3195,7 @@ local function UFCB_BuildCustomAuraDisplaysArgs(getAuras, refresh, displayID, de
     return FieldsDisabled() or (mode ~= "BLACKLIST" and mode ~= "BOTH")
   end
 
-  return {
+  local sections = {
     display = {
       type = "group",
       name = "General",
@@ -3098,6 +3205,23 @@ local function UFCB_BuildCustomAuraDisplaysArgs(getAuras, refresh, displayID, de
       inline = true,
       disabled = FieldsDisabled,
       args = {
+        rename = {
+          type = "input",
+          name = "Display name",
+          desc = "Give this Aura Group or Aura Slot a recognizable name.",
+          order = 0.5,
+          width = "full",
+          hidden = function()
+            return editor:IsSelectedProtected()
+          end,
+          get = function()
+            return GetValue("name", "")
+          end,
+          set = function(_, value)
+            local name = tostring(value or ""):match("^%s*(.-)%s*$")
+            SetValue("name", name, true)
+          end,
+        },
         enabled = {
           type = "toggle",
           name = "Enabled",
@@ -4052,6 +4176,45 @@ local function UFCB_BuildCustomAuraDisplaysArgs(getAuras, refresh, displayID, de
       },
     },
   }
+
+  local advanced = {
+    spellIDs = sections.spellIDs,
+    regularFilters = sections.regularFilters,
+    blacklist = sections.blacklist,
+    appearance = sections.appearance,
+    sorting = UFCB_BuildInlineArgsGroup("Sorting", 50, {
+      sortMethod = sections.layout.args.sortMethod,
+      sortDirection = sections.layout.args.sortDirection,
+    }),
+  }
+
+  sections.spellIDs = nil
+  sections.regularFilters = nil
+  sections.blacklist = nil
+  sections.iconSize = UFCB_BuildInlineArgsGroup("Size", 5, {
+    iconSize = sections.appearance.args.iconSize,
+  })
+  sections.iconSize.hidden = IsDefensivesDisplay
+  sections.iconSize.disabled = FieldsDisabled
+  sections.appearance.args.iconSize = nil
+  sections.appearance = nil
+  sections.layout.args.sortMethod = nil
+  sections.layout.args.sortDirection = nil
+
+  return {
+    overview = {
+      type = "group",
+      name = "Overview",
+      order = 1,
+      args = sections,
+    },
+    advanced = {
+      type = "group",
+      name = "Advanced",
+      order = 2,
+      args = advanced,
+    },
+  }
 end
 
 local function UFCB_GetAuraManagerTreeLabel(display)
@@ -4120,6 +4283,10 @@ local function UFCB_BuildAuraManagerTreeArgs(getAuras, refresh, defaultAuras, un
         args = UFCB_BuildCustomAuraDisplaysArgs(getAuras, refresh, displayID, defaultAuras, unitKey),
       }
     end
+  end
+
+  for _, page in pairs(tree) do
+    page.childGroups = "tab"
   end
 
   return tree
@@ -4897,7 +5064,8 @@ local function UFCB_BuildPartyGeneralArgs(groupKind, opts)
         width = 0.8,
         func = ResetGeneralDefaults,
       },
-      enabled = BuildGroupedToggle("enabled", isRaid and "Enable raid frames" or "Enable party frames", 1, {
+      enabled = BuildGroupedToggle("enabled", isRaid and "Enable raid frames (reload required)" or "Enable party frames (reload required)", 1, {
+        desc = "Changing this setting requires a UI reload.",
         get = function()
           local db = GetDB()
           return db and db.enabled or false
@@ -4906,7 +5074,7 @@ local function UFCB_BuildPartyGeneralArgs(groupKind, opts)
           UFCB_SetGroupedModuleEnabled(groupedKind, v and true or false)
         end,
       }),
-      hideBlizzard = isRaid and BuildGroupedToggle("hideBlizzard", "Hide Blizzard raid frames", 2, {
+      hideBlizzard = isRaid and BuildGroupedToggle("hideBlizzard", "Hide Blizzard raid frames (reload required)", 2, {
         desc = "Fully disables Blizzard raid frames. Requires a UI reload.",
         set = SetBlizzardRaidFramesHidden,
       }) or nil,
@@ -5263,7 +5431,7 @@ local function UFCB_BuildPartyGeneralArgs(groupKind, opts)
   }
 
   if not isRaid then
-    args.core.args.showSelfInParty = BuildGroupedToggle("showPlayer", "Show self in party", 5, {
+    args.core.args.showSelfInParty = BuildGroupedToggle("showPlayer", "Show self in party (reload required)", 5, {
       desc = "Requires a UI reload.",
       set = SetPartyPlayerShown,
     })
@@ -5487,7 +5655,7 @@ local function UFCB_BuildPartyGeneralArgs(groupKind, opts)
     })
   end
 
-  if isRaid and opts.keepIndicators ~= true then
+  if opts.keepIndicators ~= true then
     args.indicators = nil
   end
 
@@ -5495,14 +5663,15 @@ local function UFCB_BuildPartyGeneralArgs(groupKind, opts)
 end
 
 
-local function UFCB_BuildRaidIndicatorArgs()
-  local general = UFCB_BuildPartyGeneralArgs("raid", { keepIndicators = true })
-  local indicators = general and general.indicators and general.indicators.args or {}
+local function UFCB_BuildGroupedIndicatorArgs(groupKind)
+  local groupedKind = UFCB_GetGroupedKind(groupKind)
+  local general = UFCB_BuildPartyGeneralArgs(groupedKind, { keepIndicators = true })
+  local indicators = general.indicators.args
 
   return UFCB_MergeOptionArgs({
     helper = {
       type = "description",
-      name = "Raid frame indicators such as ready check, role, tank, in combat etc",
+      name = "Configure aggro, role, raid target, ready check, combat, resurrection, and phase indicators.",
       order = 0,
       fontSize = "medium",
     },
@@ -5788,6 +5957,99 @@ local function UFCB_BuildPartyTextArgs(kind, groupKind)
   local prefixArgs = {}
   local suffixArgs = {}
 
+  local function ResetGroupedTextSection()
+    if UFCB_BlockCombat() then return end
+
+    local defaults = (
+      groupedKind == "raid"
+        and ns.UFDefaults.GetRaidDefaults()
+        or ns.UFDefaults.GetPartyDefaults()
+    ).profile
+
+    local defaultText = defaults.text or {}
+    local defaultColors = defaults.colors or {}
+    local useGlobalKey = cfg.fontKey:gsub("Font$", "UseGlobalFont")
+
+    local keys = {
+      cfg.sizeKey,
+      cfg.fontKey,
+      cfg.outlineKey,
+      cfg.anchorKey,
+      cfg.offsetXKey,
+      cfg.offsetYKey,
+      useGlobalKey,
+    }
+
+    if cfg.modeKey then
+      keys[#keys + 1] = cfg.modeKey
+    end
+
+    local refreshFlags
+
+    if kind == "name" then
+      refreshFlags = { text = true }
+    elseif kind == "health" then
+      refreshFlags = { resize = true }
+    else
+      refreshFlags = {
+        power = true,
+        textures = true,
+        text = true,
+        powerMissingColor = true,
+      }
+    end
+
+    UFCB_MutateGrouped(groupedKind, false, refreshFlags, function(db)
+      db.text = db.text or {}
+      db.colors = db.colors or {}
+
+      for _, key in ipairs(keys) do
+        local value = defaultText[key]
+
+        db.text[key] = type(value) == "table"
+          and UFCB_CopyTable(value)
+          or value
+      end
+
+      for _, colorDef in ipairs(cfg.colors or {}) do
+        local key = colorDef.colorKey
+        local value = defaultColors[key]
+
+        db.colors[key] = type(value) == "table"
+          and UFCB_CopyTable(value)
+          or value
+      end
+
+      if kind == "name" then
+        db.colors.useClassForNames = defaultColors.useClassForNames
+
+      elseif kind == "health" then
+        db.height = defaults.height
+        db.healthTexture = defaults.healthTexture
+        db.absorbTexture = defaults.absorbTexture
+
+      elseif kind == "power" then
+        db.showPower = defaults.showPower
+        db.powerHeight = defaults.powerHeight
+        db.powerTexture = defaults.powerTexture
+      end
+    end)
+
+    Addon:NotifyOptionsTreeChanged(
+      "unitframes",
+      ns._PUIActiveOptionsPath
+    )
+  end
+
+  prefixArgs.resetSection = {
+    type = "execute",
+    name = "Reset " .. kind .. " to defaults",
+    desc = "Restore only this " .. kind .. " section.",
+    order = 0.1,
+    width = "full",
+    func = ResetGroupedTextSection,
+  }
+
   if cfg.modeKey then
     prefixArgs.mode = BuildGroupedTextModeArg()
   end
@@ -5912,6 +6174,7 @@ local function UFCB_BuildPartyTextArgs(kind, groupKind)
   if kind == "name" then
     return {
       appearance = BuildInlineArgsGroup("Text", 1, {
+        resetSection = flatArgs.resetSection,
         classColoredNames = {
           type = "toggle",
           name = "Class colored names",
@@ -5941,6 +6204,7 @@ local function UFCB_BuildPartyTextArgs(kind, groupKind)
   if kind == "health" then
     return {
       display = BuildInlineArgsGroup("Health and text", 1, {
+        resetSection = flatArgs.resetSection,
         frameHeight = BuildGroupedFrameHeightArg(),
         mode = flatArgs.mode,
         fontSize = flatArgs.fontSize,
@@ -5966,6 +6230,7 @@ local function UFCB_BuildPartyTextArgs(kind, groupKind)
 
   return {
     display = BuildInlineArgsGroup("Power and text", 1, {
+      resetSection = flatArgs.resetSection,
       hidePower = BuildGroupedHidePowerArg(),
       powerHeight = BuildGroupedPowerHeightArg(),
       mode = flatArgs.mode,
@@ -6521,9 +6786,15 @@ local function UFCB_BuildCastbarArgs(unitKey)
       type = "color",
       name = name,
       order = order,
+      desc = opts.desc,
+      disabled = opts.disabled,
       hasAlpha = opts.hasAlpha,
       get = function()
         local c = store[key]
+        if key == "customColor" and not c then
+          c = store.color
+        end
+
         if opts.hasAlpha then
           return c[1], c[2], c[3], c[4]
         end
@@ -6610,7 +6881,7 @@ local function UFCB_BuildCastbarArgs(unitKey)
         font = BuildCastbarSelect(text, "fontKey", "Font type", 2, OptionsUtil.BuildFontValues, {
           dialogControl = "LSM30_Font",
           disabled = function()
-            return UFCB_IsUsingGlobalFont(text.fontKey, text.useGlobalFont)
+            return InCombatLockdown() or UFCB_IsUsingGlobalFont(text.fontKey, text.useGlobalFont)
           end,
           get = function()
             return OptionsUtil.ResolveFontKey(text.fontKey, text.useGlobalFont)
@@ -6658,25 +6929,25 @@ local function UFCB_BuildCastbarArgs(unitKey)
         }, {
           default = "RIGHT",
           disabled = function()
-            return cfg.displayTarget ~= true
+            return InCombatLockdown() or cfg.displayTarget ~= true
           end,
         }),
         offX = BuildCastbarRange(targetText, "offX", "X offset", 2, -200, 200, {
           default = 0,
           disabled = function()
-            return cfg.displayTarget ~= true
+            return InCombatLockdown() or cfg.displayTarget ~= true
           end,
         }),
         offY = BuildCastbarRange(targetText, "offY", "Y offset", 3, -200, 200, {
           default = 0,
           disabled = function()
-            return cfg.displayTarget ~= true
+            return InCombatLockdown() or cfg.displayTarget ~= true
           end,
         }),
         maxWidth = BuildCastbarRange(targetText, "maxWidth", "Max target width", 4, 40, 400, {
           default = 160,
           disabled = function()
-            return cfg.displayTarget ~= true
+            return InCombatLockdown() or cfg.displayTarget ~= true
           end,
         }),
       },
@@ -6712,13 +6983,13 @@ local function UFCB_BuildCastbarArgs(unitKey)
         showRemainingTime = BuildCastbarToggle(cfg, "showRemainingTime", "Show remaining time", 5, {
           defaultTrue = true,
           disabled = function()
-            return time.showCast == false
+            return InCombatLockdown() or time.showCast == false
           end,
         }),
         showTotal = BuildCastbarToggle(cfg, "showTotal", "Show total duration", 6, {
           defaultTrue = true,
           disabled = function()
-            return time.showCast == false
+            return InCombatLockdown() or time.showCast == false
           end,
         }),
         displayTarget = BuildCastbarToggle(cfg, "displayTarget", "Show cast target", 7),
@@ -6735,7 +7006,7 @@ local function UFCB_BuildCastbarArgs(unitKey)
       hasAlpha = true,
       alphaDefault = 1,
       disabled = function()
-        return cfg.showEmpowerHold == false
+        return InCombatLockdown() or cfg.showEmpowerHold == false
       end,
     })
 
@@ -6745,7 +7016,7 @@ local function UFCB_BuildCastbarArgs(unitKey)
       default = 2,
       numberDefault = 2,
       disabled = function()
-        return cfg.showChannelTicks == false
+        return InCombatLockdown() or cfg.showChannelTicks == false
       end,
     })
 
@@ -6755,7 +7026,7 @@ local function UFCB_BuildCastbarArgs(unitKey)
       
       default = "DON'T CLIP",
       disabled = function()
-        return cfg.showDisintegrateClipWarning ~= true
+        return InCombatLockdown() or cfg.showDisintegrateClipWarning ~= true
       end,
     })
 
@@ -6789,7 +7060,7 @@ local function UFCB_BuildCastbarArgs(unitKey)
           default = "DRAIN",
           fallback = "DRAIN",
           disabled = function()
-            return cfg.showInstantCasts == false
+            return InCombatLockdown() or cfg.showInstantCasts == false
           end,
         }),
 
@@ -6799,7 +7070,7 @@ local function UFCB_BuildCastbarArgs(unitKey)
           default = 0.65,
           numberDefault = 0.65,
           disabled = function()
-            return cfg.showInstantCasts == false
+            return InCombatLockdown() or cfg.showInstantCasts == false
           end,
         }),
 
@@ -6813,7 +7084,7 @@ local function UFCB_BuildCastbarArgs(unitKey)
             return cfg.instantCastTexture or cfg.texture or "Pleebar"
           end,
           disabled = function()
-            return cfg.showInstantCasts == false
+            return InCombatLockdown() or cfg.showInstantCasts == false
           end,
         }),
 
@@ -6821,7 +7092,7 @@ local function UFCB_BuildCastbarArgs(unitKey)
           
           defaultTrue = true,
           disabled = function()
-            return cfg.showInstantCasts == false
+            return InCombatLockdown() or cfg.showInstantCasts == false
           end,
         }),
 
@@ -6833,7 +7104,7 @@ local function UFCB_BuildCastbarArgs(unitKey)
           default = "PUI Stripes",
           fallback = "PUI Stripes",
           disabled = function()
-            return cfg.showInstantCasts == false or cfg.instantCastUseOverlay == false
+            return InCombatLockdown() or cfg.showInstantCasts == false or cfg.instantCastUseOverlay == false
           end,
         }),
 
@@ -6843,7 +7114,7 @@ local function UFCB_BuildCastbarArgs(unitKey)
           default = 0.35,
           numberDefault = 0.35,
           disabled = function()
-            return cfg.showInstantCasts == false or cfg.instantCastUseOverlay == false
+            return InCombatLockdown() or cfg.showInstantCasts == false or cfg.instantCastUseOverlay == false
           end,
         }),
       },
@@ -6869,6 +7140,285 @@ local function UFCB_BuildCastbarArgs(unitKey)
     }
   end
 
+  local fonts = args.fonts.args
+  local toggles = args.toggles.args
+
+  args.spellName = UFCB_BuildInlineArgsGroup("Spell name", 1, {
+    showName = toggles.showName,
+    useGlobalFont = fonts.useGlobalFont,
+    font = fonts.font,
+    outline = fonts.outline,
+    fontColor = fonts.fontColor,
+    fontSize = fonts.nameFontSize,
+    anchor = fonts.nameAnchor,
+    offsetX = fonts.nameXOffset,
+    offsetY = fonts.nameYOffset,
+    maxWidth = fonts.nameMaxWidth,
+  })
+
+  args.spellName.args.useGlobalFont.name = "Use shared font"
+  args.spellName.args.showName.name = "Show spell name"
+  args.spellName.args.showName.order = 0
+  args.spellName.args.outline.order = 3
+  args.spellName.args.fontColor.order = 4
+  args.spellName.args.fontSize.order = 5
+  args.spellName.args.anchor.order = 6
+  args.spellName.args.offsetX.order = 7
+  args.spellName.args.offsetY.order = 8
+  args.spellName.args.maxWidth.order = 9
+
+  args.spellName.args.sharedFontInfo = {
+    type = "description",
+    name = function()
+      local shared = OptionsUtil.ResolveFontKey(nil, true)
+      return "Shared font: " .. tostring(shared)
+        .. ". Spell name size and position are configured below."
+    end,
+    order = 1.5,
+    fontSize = "medium",
+  }
+
+  args.castTime = UFCB_BuildInlineArgsGroup("Cast time", 2, {
+    showCast = toggles.showCast,
+    showRemainingTime = toggles.showRemainingTime,
+    showTotal = toggles.showTotal,
+    useGlobalFont = BuildCastbarToggle(time, "useGlobalFont", "Use shared font", 2, {
+      get = function()
+        return UFCB_IsUsingGlobalFont(time.fontKey, time.useGlobalFont)
+      end,
+    }),
+    font = BuildCastbarSelect(time, "fontKey", "Font", 3, OptionsUtil.BuildFontValues, {
+      dialogControl = "LSM30_Font",
+      disabled = function()
+        return InCombatLockdown() or UFCB_IsUsingGlobalFont(time.fontKey, time.useGlobalFont)
+      end,
+      get = function()
+        return OptionsUtil.ResolveFontKey(time.fontKey, time.useGlobalFont)
+      end,
+      set = function(_, value)
+        if UFCB_BlockCombat() then return end
+        time.fontKey = value
+        time.useGlobalFont = false
+        refresh()
+      end,
+    }),
+    outline = BuildCastbarSelect(time, "flags", "Outline", 4, outlineValues, {
+      get = function()
+        return UFCB_GetGlobalOutlineValue(time.flags)
+      end,
+      set = function(_, value)
+        if UFCB_BlockCombat() then return end
+        time.flags = UFCB_SetStoredOutline(value)
+        refresh()
+      end,
+    }),
+    color = BuildCastbarColor(time, "color", "Text color", 5),
+    fontSize = fonts.timeFontSize,
+    anchor = fonts.timeAnchor,
+    offsetX = fonts.timeXOffset,
+    offsetY = fonts.timeYOffset,
+  })
+
+  args.castTime.args.showCast.name = "Show cast time"
+  args.castTime.args.showCast.order = 0
+  args.castTime.args.showRemainingTime.order = 1
+  args.castTime.args.showTotal.order = 2
+  args.castTime.args.useGlobalFont.order = 3
+  args.castTime.args.font.order = 4
+  args.castTime.args.outline.order = 5
+  args.castTime.args.color.order = 6
+  args.castTime.args.fontSize.order = 7
+  args.castTime.args.anchor.order = 8
+  args.castTime.args.offsetX.order = 9
+  args.castTime.args.offsetY.order = 10
+  args.castTime.args.showRemainingTime.desc = "Enable Show cast time to display remaining time."
+  args.castTime.args.showTotal.desc = "Enable Show cast time to display total duration."
+
+  args.castTime.args.font.desc = function()
+    if UFCB_IsUsingGlobalFont(time.fontKey, time.useGlobalFont) then
+      return "Using shared settings. Turn off Use shared font to select a font here."
+    end
+    return "Font used for the cast time."
+  end
+
+  args.castTarget = UFCB_BuildInlineArgsGroup("Cast target", 3, {
+    displayTarget = toggles.displayTarget,
+    anchor = args.targetLabel.args.anchor,
+    offX = args.targetLabel.args.offX,
+    offY = args.targetLabel.args.offY,
+    maxWidth = args.targetLabel.args.maxWidth,
+    help = {
+      type = "description",
+      name = "The cast target uses the spell name's font. Choose its position around the bar below.",
+      order = 0.5,
+      fontSize = "medium",
+    },
+  })
+
+  args.castTarget.args.displayTarget.order = 0
+  for key, option in pairs(args.castTarget.args) do
+    if key ~= "displayTarget" and key ~= "help" then
+      option.desc = "Enable Show cast target to change its position and width."
+    end
+  end
+
+  args.appearance = UFCB_BuildInlineArgsGroup("Appearance", 4, {
+    enabled = args.enabled,
+    width = args.width,
+    height = args.height,
+    borderSize = args.borderSize,
+    texture = args.texture,
+    uninterruptShieldMode = args.uninterruptShieldMode,
+    uninterruptTextureMode = args.uninterruptTextureMode,
+    useCustomColor = args.useCustomColor,
+    barColor = args.barColor,
+    backgroundColor = args.backgroundColor,
+    empowerStageColors = args.empowerStageColors,
+    showIcon = toggles.showIcon,
+    showPingOverlay = toggles.showPingOverlay,
+    showEmpowerPips = toggles.showEmpowerPips,
+    showEmpowerHold = toggles.showEmpowerHold,
+    empowerHoldColor = toggles.empowerHoldColor,
+    showChannelTicks = toggles.showChannelTicks,
+    channelTickThickness = toggles.channelTickThickness,
+    showDisintegrateClipWarning = toggles.showDisintegrateClipWarning,
+    disintegrateClipWarningText = toggles.disintegrateClipWarningText,
+    testMode = args.testMode,
+  })
+
+  local appearanceOrder = {
+    "enabled", "width", "height", "borderSize", "texture",
+    "showIcon", "showPingOverlay", "uninterruptShieldMode", "uninterruptTextureMode",
+    "useCustomColor", "barColor", "backgroundColor", "empowerStageColors",
+    "showEmpowerPips", "showEmpowerHold", "empowerHoldColor",
+    "showChannelTicks", "channelTickThickness", "showDisintegrateClipWarning",
+    "disintegrateClipWarningText", "testMode",
+  }
+
+  for order, key in ipairs(appearanceOrder) do
+    local option = args.appearance.args[key]
+    if option then
+      option.order = order
+    end
+  end
+
+  args.appearance.args.barColor.disabled = function()
+    return InCombatLockdown() or cfg.useCustomColor ~= true
+  end
+  args.appearance.args.barColor.desc = "Enable Use custom color to choose a bar color."
+
+  if unitKey == "player" then
+    args.appearance.args.empowerHoldColor.desc = "Enable Show empower hold area to choose its color."
+    args.appearance.args.channelTickThickness.desc = "Enable Show channel tick markers to change their thickness."
+    args.appearance.args.disintegrateClipWarningText.desc = "Enable Disintegrate clip warning to change its text."
+  end
+
+  for _, key in ipairs({
+    "fonts",
+    "toggles",
+    "targetLabel",
+    "enabled",
+    "width",
+    "height",
+    "borderSize",
+    "texture",
+    "uninterruptShieldMode",
+    "uninterruptTextureMode",
+    "useCustomColor",
+    "barColor",
+    "backgroundColor",
+    "empowerStageColors",
+    "testMode",
+  }) do
+    args[key] = nil
+  end
+
+  args.appearance.args.reset = {
+    type = "execute",
+    name = "Reset castbar to defaults",
+    desc = "Restore this castbar's appearance, text, behavior, and position.",
+    order = 0.1,
+    width = "full",
+    func = function()
+      if UFCB_BlockCombat() then return end
+
+      local defaults = CastBar.defaults.profile[unitKey]
+
+      for key in pairs(cfg) do
+        if key ~= "text" and key ~= "timeText" and key ~= "targetText" then
+          cfg[key] = nil
+        end
+      end
+
+      for key, value in pairs(defaults) do
+        if key ~= "text" and key ~= "timeText" and key ~= "targetText" then
+          cfg[key] = type(value) == "table"
+            and UFCB_CopyTable(value)
+            or value
+        end
+      end
+
+      for key in pairs(text) do
+        text[key] = nil
+      end
+
+      for key, value in pairs(defaults.text) do
+        text[key] = type(value) == "table"
+          and UFCB_CopyTable(value)
+          or value
+      end
+
+      for key in pairs(time) do
+        time[key] = nil
+      end
+
+      for key, value in pairs(defaults.timeText) do
+        time[key] = type(value) == "table"
+          and UFCB_CopyTable(value)
+          or value
+      end
+
+      for key in pairs(targetText) do
+        targetText[key] = nil
+      end
+
+      for key, value in pairs(defaults.targetText) do
+        targetText[key] = type(value) == "table"
+          and UFCB_CopyTable(value)
+          or value
+      end
+
+      cfg.targetText = targetText
+      cfg.text = text
+      cfg.timeText = time
+      cfg.useCustomColor = cfg.useCustomColor == true
+
+      if text.showName == nil then
+        text.showName = true
+      end
+
+      if time.showCast == nil then
+        time.showCast = true
+      end
+
+      cfg.__puiShowSpellName = text.showName ~= false
+      cfg.__puiShowCastTime = time.showCast ~= false
+      cfg.__puiShowDelayText = cfg.showDelayText ~= false
+
+      if castbarUnit == "player" then
+        CastBar:RefreshPlayerSpellcastEvents()
+      end
+
+      refresh()
+      FrameUtil.RefreshSmartSnapState("CastBar_" .. tostring(castbarUnit))
+
+      Addon:NotifyOptionsTreeChanged(
+        "unitframes",
+        ns._PUIActiveOptionsPath
+      )
+    end,
+  }
+
   return args
 end
 
@@ -6883,8 +7433,18 @@ local function UFCB_BuildTreeGroupLeaf(name, order, args, childGroups)
     args = UFCB_BuildCategorizedInlineArgs(args)
   end
 
+  args.combatNotice = {
+    type = "description",
+    name = "Unit frame and cast-bar settings cannot be changed in combat.",
+    order = -10,
+    hidden = function()
+      return not InCombatLockdown()
+    end,
+  }
+
   local leaf = {
     type = "group",
+    disabled = InCombatLockdown,
     name = name,
     order = order,
     args = args,
@@ -7287,25 +7847,25 @@ local function UFCB_BuildGroupedRootLeafSpecs(groupKind)
     },
   }
 
+  specs[#specs + 1] = {
+    key = "indicators",
+    name = "Indicators",
+    order = 7,
+    args = UFCB_BuildGroupedIndicatorArgs(kind),
+  }
+
   if kind == "party" then
     specs[#specs + 1] = {
       key = "portrait",
       name = "Portrait",
-      order = 7,
+      order = 8,
       args = UFCB_BuildPartyPortraitArgs(),
     }
     specs[#specs + 1] = {
       key = "partypets",
       name = "Party Pets",
-      order = 8,
+      order = 9,
       args = UFCB_BuildPartyPetsArgs(),
-    }
-  else
-    specs[#specs + 1] = {
-      key = "indicators",
-      name = "Indicators",
-      order = 7,
-      args = UFCB_BuildRaidIndicatorArgs(),
     }
   end
 
@@ -7382,7 +7942,13 @@ local function UFCB_BuildTopLevelUnitArgs(activeKey)
       castbarUnit = "player",
       extraLeavesBuilder = function()
         return {
-          UFCB_BuildExtraLeaf("pet", "Pet", 8, UFCB_BuildUnitGeneralArgs("pet")),
+          UFCB_BuildExtraLeaf(
+            "pet",
+            "Pet",
+            8,
+            UFCB_BuildUnitTree("pet", { rootName = "Pet" }).args,
+            "tree"
+          ),
         }
       end,
     },
@@ -7773,7 +8339,7 @@ ns.UFPreview.RegisterAuraManagerPositionCommitter(UFCB_CommitAuraManagerPreviewP
   UFCB_RunGroupedRefreshNow = P:Def("UFCB_RunGroupedRefreshNow", UFCB_RunGroupedRefreshNow)
   MergeGroupedRefreshFlags = P:Def("MergeGroupedRefreshFlags", MergeGroupedRefreshFlags)
   UFCB_RequestGroupedRefresh = P:Def("UFCB_RequestGroupedRefresh", UFCB_RequestGroupedRefresh)
-  UFCB_BuildRaidIndicatorArgs = P:Def("UFCB_BuildRaidIndicatorArgs", UFCB_BuildRaidIndicatorArgs)
+  UFCB_BuildGroupedIndicatorArgs = P:Def("UFCB_BuildGroupedIndicatorArgs", UFCB_BuildGroupedIndicatorArgs)
   UFCB_GetEmpowerColorSet = P:Def("UFCB_GetEmpowerColorSet", UFCB_GetEmpowerColorSet)
   UFCB_GetEmpowerStageColor = P:Def("UFCB_GetEmpowerStageColor", UFCB_GetEmpowerStageColor)
   UFCB_EnsureEmpowerColorTable = P:Def("UFCB_EnsureEmpowerColorTable", UFCB_EnsureEmpowerColorTable)
