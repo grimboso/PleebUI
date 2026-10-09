@@ -115,10 +115,7 @@ local function ActionBarsOptionsProvider(Addon)
       args = {
         showText = {
           type = "toggle",
-          name = visibilityKey == "showHotkeyText" and "Show keybinds"
-            or visibilityKey == "showMacroText" and "Show macro name"
-            or visibilityKey == "showChargeText" and "Show counts"
-            or "Show cooldown text",
+          name = "Show text",
           desc = not barKey and prefix == "cooldown"
             and "Show cooldown numbers on action buttons and turn on WoW's cooldown numbers."
             or nil,
@@ -1583,6 +1580,35 @@ local function ActionBarsOptionsProvider(Addon)
         end
       end
     end
+
+    local function ArrangeBarPage(page)
+      local layout, appearance = page.layout, page.appearance
+      layout.name, layout.order, layout.inline = "Size and arrangement", 10, true
+      appearance.name, appearance.order, appearance.inline = "Style", 20, true
+      page.layout = {
+        type = "group", name = "Layout and appearance", order = 20,
+        args = { arrangement = layout, style = appearance },
+      }
+      page.appearance = nil
+      if page.behavior then
+        page.general = page.behavior
+        page.general.name, page.general.order = "General", 10
+        page.behavior = nil
+      end
+      if page.text then
+        page.text.name, page.text.order = "Text", 40
+        for key, group in pairs(page.text.args) do
+          if group.type == "group" then
+            group.name = key == "hotkey" and "Keybinds" or key == "cooldown" and "Countdown"
+              or key == "charge" and "Counts" or key == "macro" and "Macro name" or group.name
+          end
+        end
+      end
+    end
+    ArrangeBarPage(tabs.general.args)
+    for index = 1, 12 do ArrangeBarPage(tabs[tostring(index)].args) end
+    ArrangeBarPage(tabs.special.args.pet.args)
+    ArrangeBarPage(tabs.special.args.stance.args)
 
     return {
       type = "group",
