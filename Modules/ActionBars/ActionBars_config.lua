@@ -1248,7 +1248,8 @@ local function ActionBarsOptionsProvider(Addon)
       args.resetShared = {
         type = "execute",
         name = "Reset to shared settings",
-        confirm = "Discard this bar's custom settings and use the shared settings?",
+        confirm = true,
+        confirmText = "Discard this bar's custom settings and use the shared settings?",
         desc = "Discard this bar's saved appearance overrides and use shared settings.",
         order = 16,
         disabled = function()
@@ -1587,7 +1588,14 @@ local function ActionBarsOptionsProvider(Addon)
         args = { arrangement = layout },
       }
       for key, group in pairs(appearance.args) do
-        if group.type == "group" then page.layout.args[key] = group end
+        if group.type == "group" then
+          if key == "buttonAppearance" then
+            group.name = "Button border"
+            group.args.borderSize.name = "Thickness"
+            group.args.borderColor.name = "Color"
+          end
+          page.layout.args[key] = group
+        end
       end
       page.appearance = nil
       if page.behavior then
