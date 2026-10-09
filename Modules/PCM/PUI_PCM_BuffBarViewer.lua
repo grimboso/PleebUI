@@ -130,6 +130,8 @@ end
 local function RegisterMover(frame)
   ns.FrameUtil:RegisterMover(VIEWER_KEY, frame, {
     label = "Tracked Buff Bars",
+    moduleKey = "pcm",
+    moduleLabel = "Cooldown Manager",
     optionsString = "CooldownManager,buff-bars",
     smartSnap = {
       family = "combatBars",
