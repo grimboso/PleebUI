@@ -115,25 +115,51 @@ local function ApplyThemeColorPreset(key)
   SetStatus("Theme preset applied: " .. (Theme.GetColorPresetLabel(key) or key))
 end
 
-local function ApplyCombatReadabilityTextConfig(text, nameSize, healthSize, powerSize)
+local CombatReadabilityChanges
+
+local function SetCombatReadabilityValue(target, key, value, owner)
+  if target[key] == value then
+    return
+  end
+
+  CombatReadabilityChanges[#CombatReadabilityChanges + 1] = {
+    target = target,
+    key = key,
+    previous = rawget(target, key),
+    applied = value,
+    owner = owner,
+  }
+
+  target[key] = value
+end
+
+local function ApplyCombatReadabilityTextConfig(text, nameSize, healthSize, powerSize, owner)
   if type(text) ~= "table" then
     return
   end
 
   if nameSize then
-    text.sizeName = math_max(tonumber(text.sizeName) or 0, nameSize)
-  end
-  if healthSize then
-    text.sizeHealth = math_max(tonumber(text.sizeHealth) or 0, healthSize)
-  end
-  if powerSize then
-    text.sizePower = math_max(tonumber(text.sizePower) or 0, powerSize)
+    SetCombatReadabilityValue(
+      text, "sizeName", math_max(tonumber(text.sizeName) or 0, nameSize), owner
+    )
   end
 
-  text.outline = "THICKOUTLINE"
-  text.nameOutline = "THICKOUTLINE"
-  text.healthOutline = "THICKOUTLINE"
-  text.powerOutline = "THICKOUTLINE"
+  if healthSize then
+    SetCombatReadabilityValue(
+      text, "sizeHealth", math_max(tonumber(text.sizeHealth) or 0, healthSize), owner
+    )
+  end
+
+  if powerSize then
+    SetCombatReadabilityValue(
+      text, "sizePower", math_max(tonumber(text.sizePower) or 0, powerSize), owner
+    )
+  end
+
+  SetCombatReadabilityValue(text, "outline", "THICKOUTLINE", owner)
+  SetCombatReadabilityValue(text, "nameOutline", "THICKOUTLINE", owner)
+  SetCombatReadabilityValue(text, "healthOutline", "THICKOUTLINE", owner)
+  SetCombatReadabilityValue(text, "powerOutline", "THICKOUTLINE", owner)
 end
 
 local function ApplyCombatReadabilityPRDText(text, size)
@@ -141,8 +167,10 @@ local function ApplyCombatReadabilityPRDText(text, size)
     return
   end
 
-  text.size = math_max(tonumber(text.size) or 0, size)
-  text.flags = "THICKOUTLINE"
+  SetCombatReadabilityValue(
+    text, "size", math_max(tonumber(text.size) or 0, size), "prd"
+  )
+  SetCombatReadabilityValue(text, "flags", "THICKOUTLINE", "prd")
 end
 
 local function ApplyCombatReadabilityPRDStyle(style)
@@ -150,11 +178,136 @@ local function ApplyCombatReadabilityPRDStyle(style)
     return
   end
 
-  style.borderSize = math_max(tonumber(style.borderSize) or 0, 2)
+  SetCombatReadabilityValue(
+    style, "borderSize", math_max(tonumber(style.borderSize) or 0, 2), "prd"
+  )
 
   if type(style.bgColor) == "table" then
-    style.bgColor[4] = math_max(tonumber(style.bgColor[4]) or 0, 0.85)
+    SetCombatReadabilityValue(
+      style.bgColor,
+      4,
+      math_max(tonumber(style.bgColor[4]) or 0, 0.85),
+      "prd"
+    )
   end
+end
+
+local function CaptureCombatReadabilityProfiles()
+  local profiles = {}
+  local modules = {
+    unitFrames = ns.Modules.UnitFrames,
+    partyFrames = ns.Modules.PartyFrames,
+    raidFrames = ns.Modules.RaidFrames,
+    resourceDisplay = ns.Modules.PRD,
+  }
+
+  for _, module in pairs(modules) do
+    profiles[module] = module.db.profile
+  end
+
+  return profiles
+end
+
+function Addon:CanUndoCombatReadabilityPreset()
+  local undo = self.__puiCombatReadabilityUndo
+  if not undo then
+    return false
+  end
+
+  if undo.profile ~= self.db.profile then
+    self.__puiCombatReadabilityUndo = nil
+    return false
+  end
+
+  for module, profile in pairs(undo.moduleProfiles) do
+    if module.db.profile ~= profile then
+      self.__puiCombatReadabilityUndo = nil
+      return false
+    end
+  end
+
+  return #undo.changes > 0
+end
+
+function Addon:UndoCombatReadabilityPreset()
+  if InCombatLockdown() or not self:CanUndoCombatReadabilityPreset() then
+    return false
+  end
+
+  local changes = self.__puiCombatReadabilityUndo.changes
+  self.__puiCombatReadabilityUndo = nil
+
+  local affected = {}
+
+  for i = #changes, 1, -1 do
+    local change = changes[i]
+
+    if rawget(change.target, change.key) == change.applied then
+      change.target[change.key] = change.previous
+      affected[change.owner] = true
+    end
+  end
+
+  if affected.unitFrames then
+    ns.Modules.UnitFrames:SafeRefresh("text")
+  end
+
+  local groupedModules = {
+    {
+      module = ns.Modules.PartyFrames,
+      textOwner = "partyText",
+      auraOwner = "partyAuras",
+    },
+    {
+      module = ns.Modules.RaidFrames,
+      textOwner = "raidText",
+      auraOwner = "raidAuras",
+    },
+  }
+
+  for i = 1, #groupedModules do
+    local group = groupedModules[i]
+
+    if affected[group.textOwner] then
+      group.module:SafeRefresh("text")
+    end
+
+    if affected[group.auraOwner] then
+      group.module:RefreshAuraDisplay()
+    end
+  end
+
+  if affected.prd then
+    local PRD = ns.Modules.PRD
+    PRD:InvalidateRuntimeConfig()
+    PRD:RequestRefresh({
+      health = true,
+      primary = true,
+      secondaryAppearance = true,
+      text = true,
+      secondaryText = true,
+      layout = true,
+      outerBorder = true,
+    })
+  end
+
+  local Cooldowns = ns.Modules.CooldownManager
+
+  if affected.spellBars then
+    Cooldowns:SpellBars_Rebuild()
+  end
+
+  if affected.chargeBars then
+    Cooldowns:CooldownStackBars_Rebuild()
+  end
+
+  if affected.buffBars then
+    ns.Modules.PCM_BB.RebuildCustomBars()
+  end
+
+  LibStub("AceConfigRegistry-3.0"):NotifyChange("PleebUI")
+  SetStatus("Combat readability settings restored.")
+  return true
 end
 
 function Addon:ApplyCombatReadabilityPreset()
@@ -163,34 +316,61 @@ function Addon:ApplyCombatReadabilityPreset()
     return false
   end
 
+  self.__puiCombatReadabilityUndo = nil
+  CombatReadabilityChanges = {}
+
+  local moduleProfiles = CaptureCombatReadabilityProfiles()
   local UF = ns.Modules.UnitFrames
   local ufDB = UF.db.profile
 
-  ufDB.text.shortenValues = true
-  ApplyCombatReadabilityTextConfig(ufDB.text, 16, 16, 14)
+  SetCombatReadabilityValue(ufDB.text, "shortenValues", true, "unitFrames")
+  ApplyCombatReadabilityTextConfig(ufDB.text, 16, 16, 14, "unitFrames")
 
   for _, cfg in pairs(ufDB.units or {}) do
     if type(cfg) == "table" then
-      ApplyCombatReadabilityTextConfig(cfg.text, 16, 16, 14)
+      ApplyCombatReadabilityTextConfig(cfg.text, 16, 16, 14, "unitFrames")
     end
   end
 
   UF:SafeRefresh("text")
 
   local groupedModules = {
-    ns.Modules.PartyFrames,
-    ns.Modules.RaidFrames,
+    {
+      module = ns.Modules.PartyFrames,
+      textOwner = "partyText",
+      auraOwner = "partyAuras",
+    },
+    {
+      module = ns.Modules.RaidFrames,
+      textOwner = "raidText",
+      auraOwner = "raidAuras",
+    },
   }
 
   for i = 1, #groupedModules do
-    local module = groupedModules[i]
+    local group = groupedModules[i]
+    local module = group.module
+
     if module and module.db and module.db.profile then
       local profile = module.db.profile
-      ApplyCombatReadabilityTextConfig(profile.text, 14, 14, 12)
+
+      ApplyCombatReadabilityTextConfig(
+        profile.text, 14, 14, 12, group.textOwner
+      )
 
       if type(profile.auras) == "table" then
-        profile.auras.buffIconSize = math_max(tonumber(profile.auras.buffIconSize) or 0, 20)
-        profile.auras.debuffIconSize = math_max(tonumber(profile.auras.debuffIconSize) or 0, 20)
+        SetCombatReadabilityValue(
+          profile.auras,
+          "buffIconSize",
+          math_max(tonumber(profile.auras.buffIconSize) or 0, 20),
+          group.auraOwner
+        )
+        SetCombatReadabilityValue(
+          profile.auras,
+          "debuffIconSize",
+          math_max(tonumber(profile.auras.debuffIconSize) or 0, 20),
+          group.auraOwner
+        )
       end
 
       module:SafeRefresh("text")
@@ -248,12 +428,30 @@ function Addon:ApplyCombatReadabilityPreset()
   local spellBars = Cooldowns:GetSpellBarsDB() or {}
   for _, cfg in pairs(spellBars) do
     if type(cfg) == "table" then
-      cfg.fontSize = math_max(tonumber(cfg.fontSize) or 0, 16)
-      cfg.fontOutline = "THICKOUTLINE"
+      SetCombatReadabilityValue(
+        cfg, "fontSize", math_max(tonumber(cfg.fontSize) or 0, 16), "spellBars"
+      )
+      SetCombatReadabilityValue(
+        cfg, "fontOutline", "THICKOUTLINE", "spellBars"
+      )
+
       Cooldowns:NormalizeCustomTrackerPresentation(cfg, "cooldown")
-      cfg.icon.fontSize = math_max(tonumber(cfg.icon.fontSize) or 0, 16)
-      cfg.icon.countFontSize = math_max(tonumber(cfg.icon.countFontSize) or 0, 16)
-      cfg.icon.outline = "THICKOUTLINE"
+
+      if cfg.presentation == "BUTTON" then
+        SetCombatReadabilityValue(
+          cfg.icon, "fontSize",
+          math_max(tonumber(cfg.icon.fontSize) or 0, 16),
+          "spellBars"
+        )
+        SetCombatReadabilityValue(
+          cfg.icon, "countFontSize",
+          math_max(tonumber(cfg.icon.countFontSize) or 0, 16),
+          "spellBars"
+        )
+        SetCombatReadabilityValue(
+          cfg.icon, "outline", "THICKOUTLINE", "spellBars"
+        )
+      end
     end
   end
   Cooldowns:SpellBars_Rebuild()
@@ -261,12 +459,30 @@ function Addon:ApplyCombatReadabilityPreset()
   local chargeBars = Cooldowns:GetCooldownStackBarsDB() or {}
   for _, cfg in pairs(chargeBars) do
     if type(cfg) == "table" then
-      cfg.fontSize = math_max(tonumber(cfg.fontSize) or 0, 16)
-      cfg.fontOutline = "THICKOUTLINE"
+      SetCombatReadabilityValue(
+        cfg, "fontSize", math_max(tonumber(cfg.fontSize) or 0, 16), "chargeBars"
+      )
+      SetCombatReadabilityValue(
+        cfg, "fontOutline", "THICKOUTLINE", "chargeBars"
+      )
+
       Cooldowns:NormalizeCustomTrackerPresentation(cfg, "charge")
-      cfg.icon.fontSize = math_max(tonumber(cfg.icon.fontSize) or 0, 16)
-      cfg.icon.countFontSize = math_max(tonumber(cfg.icon.countFontSize) or 0, 16)
-      cfg.icon.outline = "THICKOUTLINE"
+
+      if cfg.presentation == "BUTTON" then
+        SetCombatReadabilityValue(
+          cfg.icon, "fontSize",
+          math_max(tonumber(cfg.icon.fontSize) or 0, 16),
+          "chargeBars"
+        )
+        SetCombatReadabilityValue(
+          cfg.icon, "countFontSize",
+          math_max(tonumber(cfg.icon.countFontSize) or 0, 16),
+          "chargeBars"
+        )
+        SetCombatReadabilityValue(
+          cfg.icon, "outline", "THICKOUTLINE", "chargeBars"
+        )
+      end
     end
   end
   Cooldowns:CooldownStackBars_Rebuild()
@@ -274,19 +490,57 @@ function Addon:ApplyCombatReadabilityPreset()
   local buffBars = BuffBars.GetStackBarsDB() or {}
   for _, cfg in pairs(buffBars) do
     if type(cfg) == "table" then
-      cfg.fontSize = math_max(tonumber(cfg.fontSize) or 0, 16)
-      cfg.outline = "THICKOUTLINE"
-      cfg.durationCountFontSize = math_max(tonumber(cfg.durationCountFontSize) or 0, 16)
-      cfg.durationOutline = "THICKOUTLINE"
+      SetCombatReadabilityValue(
+        cfg, "fontSize", math_max(tonumber(cfg.fontSize) or 0, 16), "buffBars"
+      )
+      SetCombatReadabilityValue(
+        cfg, "outline", "THICKOUTLINE", "buffBars"
+      )
+      SetCombatReadabilityValue(
+        cfg, "durationCountFontSize",
+        math_max(tonumber(cfg.durationCountFontSize) or 0, 16),
+        "buffBars"
+      )
+      SetCombatReadabilityValue(
+        cfg, "durationOutline", "THICKOUTLINE", "buffBars"
+      )
+
       Cooldowns:NormalizeCustomTrackerPresentation(cfg, cfg.kind)
-      cfg.icon.fontSize = math_max(tonumber(cfg.icon.fontSize) or 0, 16)
-      cfg.icon.countFontSize = math_max(tonumber(cfg.icon.countFontSize) or 0, 16)
-      cfg.icon.outline = "THICKOUTLINE"
+
+      if cfg.presentation == "BUTTON" then
+        SetCombatReadabilityValue(
+          cfg.icon, "fontSize",
+          math_max(tonumber(cfg.icon.fontSize) or 0, 16),
+          "buffBars"
+        )
+        SetCombatReadabilityValue(
+          cfg.icon, "countFontSize",
+          math_max(tonumber(cfg.icon.countFontSize) or 0, 16),
+          "buffBars"
+        )
+        SetCombatReadabilityValue(
+          cfg.icon, "outline", "THICKOUTLINE", "buffBars"
+        )
+      end
     end
   end
   BuffBars.RebuildCustomBars()
 
-  SetStatus("Combat readability applied. You can adjust every changed setting normally.")
+  local changes = CombatReadabilityChanges
+  CombatReadabilityChanges = nil
+
+  if #changes > 0 then
+    self.__puiCombatReadabilityUndo = {
+      profile = self.db.profile,
+      moduleProfiles = moduleProfiles,
+      changes = changes,
+    }
+
+    SetStatus("Combat readability applied. Undo is available in UI Theme.")
+  else
+    SetStatus("Combat readability settings are already applied.")
+  end
+
   return true
 end
 
