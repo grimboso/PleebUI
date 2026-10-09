@@ -8,11 +8,11 @@ local math_max = _G.math.max
 
 local CURRENT_RELEASE_VERSION = _G.C_AddOns.GetAddOnMetadata(ns.Name, "Version")
 if CURRENT_RELEASE_VERSION == "@project-version@" then
-  CURRENT_RELEASE_VERSION = "v1.2.3"
+  CURRENT_RELEASE_VERSION = "1.5-beta"
 end
 
-local CURRENT_RELEASE = {
-  version = CURRENT_RELEASE_VERSION,
+local RELEASE_1_4 = {
+  version = "1.4.4",
   intro = "This release brings together the current feature set with additional usability improvements, fixes, cleanup, and Midnight 12.1 stability work.",
   items = {
     {
@@ -89,6 +89,58 @@ local CURRENT_RELEASE = {
       title = "Release fixes and polish",
       description = "This release also includes fixes and cleanup across Action Bars, Unit Frames, the Character Sheet, the Consumable Tracker, Cooldown Manager, settings navigation, and other Midnight-sensitive lifecycle and restricted-execution paths.",
       location = "Applies automatically",
+    },
+  },
+}
+
+local CURRENT_RELEASE = {
+  version = CURRENT_RELEASE_VERSION,
+  intro = "Version 1.5 beta makes PleebUI easier to edit: cleaner settings, better previews, and more control over your combat HUD.",
+  items = {
+    {
+      title = "A clearer Edit Mode and settings workflow",
+      description = "Enter PleebUI Edit Mode with /pe, select a frame to move it or change quick settings, and jump straight to its full options when you need more control. The reorganized settings pages group related controls and use clearer labels, so you spend less time hunting for an option.",
+      location = "PleebUI Edit Mode (/pe) / PleebUI options",
+    },
+    {
+      title = "Action Bar previews and simpler setup",
+      description = "Shared settings and individual bars are easier to navigate, with live icon previews for Action Bars and dedicated settings for Bars 1-12, Pet, and Stance. Visibility and text controls are grouped where you need them.",
+      location = "PleebUI > Action Bars",
+    },
+    {
+      title = "Unit Frame options and previews",
+      description = "Unit Frame settings are organized by purpose, with clearer layout, text, aura, and indicator controls. Improved castbar and aura previews make it easier to see changes, and section resets help without resetting the whole profile.",
+      location = "PleebUI > Combat frames > Unit Frames",
+    },
+    {
+      title = "More Cast Bar text control",
+      description = "Place cast target text independently, limit spell-name width, and choose how cast time is displayed. Spell and target text stay easier to read on narrow bars.",
+      location = "PleebUI > Combat frames > Unit Frames > Castbar",
+    },
+    {
+      title = "Clearer Resource Display setup",
+      description = "The Resource Display now separates class resources and tracked effects more clearly, with improved navigation, control labels, and previews for individual bars.",
+      location = "PleebUI > Combat frames > Personal Resource Display",
+    },
+    {
+      title = "Growing or fixed Buff Bar groups",
+      description = "Cooldown Manager Buff Bars can keep fixed slots or pack active bars together, growing in your chosen direction instead of leaving gaps when buffs disappear.",
+      location = "PleebUI > Combat frames > Cooldown Manager > Buff Bars",
+    },
+    {
+      title = "Quality of Life settings, organized",
+      description = "Find tools under Combat, Cursor, Group tools, Automation, and Interface. Pet warnings now have independent controls and improved previews.",
+      location = "PleebUI > Quality of Life",
+    },
+    {
+      title = "Accessibility presets with Undo",
+      description = "New appearance presets and a combat readability option help improve text and visual contrast. Undo can restore changes from the readability option during the current session if those values have not been edited since.",
+      location = "PleebUI > General > UI Theme",
+    },
+    {
+      title = "Responsive settings and preview polish",
+      description = "Options columns adapt to available space, and improved preview scaling keeps Unit Frames, auras, and bars easier to inspect at different UI sizes.",
+      location = "PleebUI options",
     },
   },
 }
@@ -229,6 +281,7 @@ local RELEASE_1_2 = {
 
 local RELEASES = {
   CURRENT_RELEASE,
+  RELEASE_1_4,
   RELEASE_1_3,
   RELEASE_1_2,
 }

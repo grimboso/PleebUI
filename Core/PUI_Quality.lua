@@ -326,7 +326,7 @@ local function NormalizeDB()
   q.noTargetWarning = NormalizeBool(q.noTargetWarning, true)
   q.notAttackingWarning = NormalizeBool(q.notAttackingWarning, false)
 
-  q.autoLoot = nil
+  if q.autoLoot == nil then q.autoLoot = true end
   if q.fasterLooting == nil then q.fasterLooting = true end
 
   q.autoRepair = NormalizeBool(q.autoRepair, true)
@@ -2463,9 +2463,7 @@ function Quality:ApplyAll()
   ApplyCrosshair(not not q.crosshair)
   ApplyCursorRing((not not q.cursorRingShowInner) or (not not q.cursorRingShowOutline))
 
-  if q.fasterLooting then
-    C_CVar.SetCVar("autoLootDefault", "1")
-  end
+  C_CVar.SetCVar("autoLootDefault", q.autoLoot and "1" or "0")
 end
 
 local QualityPreviewRoot
@@ -3099,6 +3097,7 @@ local function QualityProvider(AddonObj)
               order = 15,
               inline = true,
               args = {
+                autoLoot = ToggleOption("Auto loot", "autoLoot", 1),
                 fasterLooting = ToggleOption("Faster looting", "fasterLooting", 2),
               },
             },
@@ -3277,7 +3276,7 @@ local function QualityProvider(AddonObj)
       end
     )
     automation.loot.args.fasterLooting.desc =
-      "Enables automatic looting, takes items as soon as loot is ready, and confirms loot-binding prompts."
+      "Takes items as soon as loot is ready and confirms loot-binding prompts. Auto loot is configured separately."
     automation.merchant.args.autoRepair.desc =
       "Automatically repairs at merchants. Hold Shift when opening a merchant to skip automatic repair and junk selling."
     automation.merchant.args.autoSellJunk.desc =
