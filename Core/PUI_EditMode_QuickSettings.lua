@@ -200,6 +200,53 @@ function QuickSettings:EnsurePanel()
   return panel
 end
 
+local function ShowControlTooltip(widget)
+  local control = widget:GetUserData("puiControlTooltip")
+  if not control or not ns.Flags.IsEditing or InCombatLockdown() then
+    return
+  end
+  local text = control.tooltip
+  if control.disabled and control.disabled() and control.disabledReason then
+    text = control.disabledReason()
+  end
+  if not text or text == "" then return end
+
+  local panel = widget:GetUserData("puiControlTooltipPanel")
+  if panel.fadeDirection == "out" then return end
+  panel.tooltipOwner = widget.frame
+  GameTooltip:SetOwner(widget.frame, "ANCHOR_RIGHT")
+  GameTooltip:SetText(control.label or "")
+  GameTooltip:AddLine(text, 1, 1, 1, true)
+  GameTooltip:Show()
+end
+
+local function HideWidgetTooltip(widget)
+  local panel = widget:GetUserData("puiControlTooltipPanel")
+  if panel and panel.tooltipOwner == widget.frame then
+    HideControlTooltip(panel)
+  end
+end
+
+function QuickSettings:BindControlTooltip(widget, control, panel)
+  HideWidgetTooltip(widget)
+  widget:SetUserData("puiControlTooltip", control)
+  widget:SetUserData("puiControlTooltipPanel", panel)
+  widget:SetCallback("OnEnter", function() ShowControlTooltip(widget) end)
+  widget:SetCallback("OnLeave", function() HideWidgetTooltip(widget) end)
+  if not widget.__puiControlTooltipHooks then
+    widget.__puiControlTooltipHooks = true
+    if not widget.frame:GetScript("OnEnter") then
+      widget.frame:HookScript("OnEnter", function() ShowControlTooltip(widget) end)
+      widget.frame:HookScript("OnLeave", function() HideWidgetTooltip(widget) end)
+    end
+    widget.frame:HookScript("OnHide", function() HideWidgetTooltip(widget) end)
+    if widget.type == "PUI_Slider" then
+      widget.editbox:HookScript("OnEnter", function() ShowControlTooltip(widget) end)
+      widget.editbox:HookScript("OnLeave", function() HideWidgetTooltip(widget) end)
+    end
+  end
+end
+
 local function AddControl(panel, control)
   local widgetType
   if control.type == "toggle" then
@@ -293,32 +340,13 @@ local function AddControl(panel, control)
         control.action()
       end
     end)
-
-    if control.tooltip and control.tooltip ~= "" then
-      local tooltipOwner = widget.button or widget.frame
-
-      widget:SetCallback("OnEnter", function()
-        panel.tooltipOwner = tooltipOwner
-        GameTooltip:SetOwner(tooltipOwner, "ANCHOR_RIGHT")
-        GameTooltip:SetText(control.label or "")
-        GameTooltip:AddLine(control.tooltip, 1, 1, 1, true)
-        GameTooltip:Show()
-      end)
-
-      widget:SetCallback("OnLeave", function()
-        if GameTooltip:GetOwner() == tooltipOwner then
-          GameTooltip:Hide()
-        end
-        if panel.tooltipOwner == tooltipOwner then
-          panel.tooltipOwner = nil
-        end
-      end)
-    end
   end
 
   if control.disabled then
     widget:SetDisabled(control.disabled() == true)
   end
+
+  QuickSettings:BindControlTooltip(widget, control, panel)
 
   local height = widget.frame:GetHeight()
   if not height or height <= 0 then
@@ -447,6 +475,7 @@ function QuickSettings:Hide(immediate)
   end
 
   panel:StopMovingOrSizing()
+  HideControlTooltip(panel)
   panel:EnableMouse(false)
   local startingAlpha = panel:GetAlpha()
   if panel.fadeGroup:IsPlaying() then
@@ -481,6 +510,7 @@ end
 
 local P = select(1, ns.Pleebug:DropIn(QuickSettings, { name = "Core.EditModeQuickSettings" }))
 QuickSettings.EnsurePanel = P:Def("QuickSettings:EnsurePanel", QuickSettings.EnsurePanel)
+QuickSettings.BindControlTooltip = P:Def("QuickSettings:BindControlTooltip", QuickSettings.BindControlTooltip)
 QuickSettings.Open = P:Def("QuickSettings:Open", QuickSettings.Open)
 QuickSettings.Refresh = P:Def("QuickSettings:Refresh", QuickSettings.Refresh)
 QuickSettings.Hide = P:Def("QuickSettings:Hide", QuickSettings.Hide)
