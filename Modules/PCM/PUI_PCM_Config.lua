@@ -8517,7 +8517,7 @@ _PCM_BuildCustomBarsTreeNodes = function(buildLeaves)
     local activePath = ns._PUIActiveOptionsPath or {}
     local selectedKey = activePath[3] == "__disabledNotLoaded" and activePath[4] or activePath[3]
     local nodeArgs = buildLeaves ~= false and selectedKey == key
-      and Options:BuildSections(buildArgs(id)) or {}
+      and Options:BuildSections(buildArgs(id), { customTracker = true, auraTracker = cfg.kind == "duration" or cfg.kind == "stack" }) or {}
 
     local node = {
       type = "group",
@@ -9120,7 +9120,7 @@ local function _PCM_BuildGroupNode(groupID, group, order, buildContent, activePa
       or _PCM_BuildCustomGroupSettings(groupID, group)
   end
 
-  local args = Options:BuildSections(settingsArgs)
+  local args = Options:BuildSections(settingsArgs, { buffBars = group.defaultViewerKey == "BuffBarCooldownViewer" })
 
   local activeGroup = ns.PCMGroupManager:GetActiveGroup(groupID)
   local records = activeGroup and activeGroup.records or {}
@@ -9696,7 +9696,7 @@ _PCM_BuildConsumablesTabArgs = function()
   for _, slot in pairs(slots.args) do
     slot.inline = false
   end
-  local sections = Options:BuildSections(args)
+  local sections = Options:BuildSections(args, { items = true })
   sections.slots = slots
   sections.returnToGroup = {
     type = "execute", name = "Back to group entry", order = 0,
