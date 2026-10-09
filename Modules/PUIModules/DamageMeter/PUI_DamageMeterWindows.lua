@@ -1671,6 +1671,8 @@ local function CreateDamageMeterWindow(index)
 
   window.moverOptions = {
     label = "Damage Meter " .. index,
+    moduleKey = "damageMeter",
+    moduleLabel = "Damage Meter",
     useOverlayDrag = true,
     savePosition = function()
       SaveWindowPosition(window)
