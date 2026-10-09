@@ -117,7 +117,7 @@ local function SanitizeProfile()
 
   db.visible = db.visible ~= false
   db.windowCount = Clamp(math_floor(db.windowCount or 1), 0, MAX_WINDOWS)
-  db.refreshRate = Clamp(db.refreshRate or 1, 0.25, 2)
+  db.refreshRate = Clamp(db.refreshRate or 1, 0.05, 2)
   db.headerHeight = Clamp(math_floor(db.headerHeight or 30), 24, 40)
   db.barHeight = Clamp(math_floor(db.barHeight or 20), 14, 32)
   db.barSpacing = Clamp(math_floor(db.barSpacing or 2), 0, 8)
@@ -178,14 +178,6 @@ local function SanitizeProfile()
 end
 
 function DamageMeters:GetOptions()
-  local refreshValues = {
-    [0.25] = "0.25 seconds",
-    [0.5] = "0.5 seconds",
-    [1] = "1 second",
-    [1.5] = "1.5 seconds",
-    [2] = "2 seconds",
-  }
-
   local breakdownPositionValues = {
     AUTO = "Automatic side",
     FLOATING = "Floating",
@@ -219,31 +211,19 @@ function DamageMeters:GetOptions()
               self:ApplySettings()
             end,
           },
-          visible = {
-            type = "toggle",
-            name = "Show windows",
-            order = 20,
-            disabled = function()
-              return self.db.profile.enabled == false
-            end,
-            get = function()
-              return self.db.profile.visible
-            end,
-            set = function(_, value)
-              self:SetWindowsVisible(value)
-            end,
-          },
-
           refreshRate = {
-            type = "select",
-            name = "Combat refresh",
+            type = "range",
+            name = "Combat update interval (seconds)",
+            desc = "Time between scheduled bar updates during combat. 0.05 seconds allows up to 20 updates per second when new data is available. Visible windows update in turn.",
             order = 30,
-            values = refreshValues,
+            min = 0.05,
+            max = 2,
+            step = 0.05,
             get = function()
               return self.db.profile.refreshRate
             end,
             set = function(_, value)
-              self.db.profile.refreshRate = value
+              self.db.profile.refreshRate = Clamp(value, 0.05, 2)
               self:CompileRuntimeConfig()
               self:CancelCombatRefresh()
               self:RefreshWindows()
@@ -439,6 +419,7 @@ function DamageMeters:GetOptions()
           position = {
             type = "select",
             name = "Position",
+            desc = "Automatic side opens the breakdown beside its meter window. Floating uses a separate position that you can move.",
             order = 10,
             values = breakdownPositionValues,
             get = function()
@@ -486,6 +467,7 @@ function DamageMeters:GetOptions()
           targetHeight = {
             type = "range",
             name = "Target list height",
+            desc = "Height of the Targets panel below the spell breakdown. It shows who received the selected spell's damage or healing.",
             order = 40,
             min = 90,
             max = 400,
@@ -514,6 +496,7 @@ function DamageMeters:GetOptions()
           amounts = {
             type = "select",
             name = "Amounts",
+            desc = "Show the spell's total amount, its amount per second, or both.",
             order = 60,
             values = breakdownAmountValues,
             get = function()
@@ -540,6 +523,7 @@ function DamageMeters:GetOptions()
           maxSpells = {
             type = "range",
             name = "Maximum spells",
+            desc = "Maximum spell rows visible at once in the breakdown. Scroll to see additional spells.",
             order = 80,
             min = 5,
             max = BREAKDOWN_ROW_POOL_SIZE,
@@ -619,8 +603,6 @@ function DamageMeters:GetOptions()
   local general = source.general
   general.inline = nil
   general.args = { feature = { type = "group", name = "Feature", inline = true, order = 10, args = general.args } }
-  local visible = general.args.feature.args.visible
-  general.args.feature.args.visible = nil
   appearance.headerHeight.name = "Height"
   appearance.barHeight.name = "Height"
   appearance.barSpacing.name = "Spacing"
@@ -628,22 +610,9 @@ function DamageMeters:GetOptions()
   local breakdown = source.breakdown
   local details = breakdown.args
   breakdown.inline = nil
-  breakdown.childGroups = "tab"
   breakdown.args = {
-    general = { type = "group", name = "General", order = 10, args = {
-      content = { type = "group", name = "Content", inline = true, order = 10, args = {
-        showIcons = details.showIcons, amounts = details.amounts, showPercent = details.showPercent,
-        maxSpells = details.maxSpells, showSpellTooltips = details.showSpellTooltips,
-      } },
-    } },
-    layout = { type = "group", name = "Layout and appearance", order = 20, args = {
-      size = { type = "group", name = "Size", inline = true, order = 10, arg = { puiExplicit = true }, args = {
-        width = details.width, height = details.height, position = details.position,
-      } },
-      targets = { type = "group", name = "Target list", inline = true, order = 20, arg = { puiExplicit = true }, args = { height = details.targetHeight } },
-    } },
+    details = { type = "group", name = "Spell breakdown", inline = true, order = 10, args = details },
   }
-  details.targetHeight.name = "Height"
   local windows = { type = "group", name = "Windows", order = 50, childGroups = "tree", args = {} }
   for index = 1, MAX_WINDOWS do
     local key = "window" .. index
@@ -652,26 +621,25 @@ function DamageMeters:GetOptions()
     window.args.delete.name = "Delete window"
     windows.args[key] = window
   end
-  source.history.inline, source.history.order = nil, 60
+  source.history.inline, source.history.order = true, 10
+  windows.args.breakdown = breakdown
+  breakdown.order = 100
+  windows.args.history = { type = "group", name = "Saved history", order = 110, args = { history = source.history } }
   options.childGroups = "tab"
+  options.arg = { puiExplicit = true }
   options.args = {
     general = general,
     layout = { type = "group", name = "Layout and appearance", order = 20, args = {
-      header = { type = "group", name = "Header", order = 10, inline = true, arg = { puiExplicit = true }, args = { height = appearance.headerHeight } },
       bar = { type = "group", name = "Bars", order = 20, inline = true, arg = { puiExplicit = true }, args = {
         showSpecIcons = appearance.showSpecIcons, height = appearance.barHeight, spacing = appearance.barSpacing,
+        headerHeight = appearance.headerHeight, opacity = appearance.barAlpha, fontSize = appearance.fontSize,
       } },
     } },
-    visibility = { type = "group", name = "Visibility", order = 30, args = {
-      windows = { type = "group", name = "Windows", order = 10, inline = true, args = { visible = visible } },
-      bars = { type = "group", name = "Bars", order = 20, inline = true, arg = { puiExplicit = true }, args = { opacity = appearance.barAlpha } },
-    } },
-    text = { type = "group", name = "Text", order = 40, args = {
-      rows = ns.OptionsSchema.BuildTextGroup("Meter text", 10, { fontSize = appearance.fontSize }),
-    } },
-    windows = windows, breakdown = breakdown, history = source.history,
+    windows = windows,
   }
-  breakdown.order = 55
+  appearance.headerHeight.name = "Header height"
+  appearance.fontSize.name = "Font size"
+  appearance.fontSize.order = 60
   return options
 end
 
