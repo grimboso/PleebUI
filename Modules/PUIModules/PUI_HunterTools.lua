@@ -146,7 +146,7 @@ local function EnsureSalveAnchor()
 
   FrameUtil:RegisterMover("hunter_emergency_salve", frame, {
     label = "Emergency Salve",
-    optionsString = "HunterTools",
+    optionsString = "Quality,combatTab",
     smartSnap = {
       family = "positionOnly",
       isRuntimeActive = function()
@@ -391,6 +391,7 @@ local function RefreshEventRegistration()
 end
 
 function HunterTools:ApplySettings()
+  if not IsHunter() then return end
   NormalizeDB()
   RefreshEmergencySalveKnown()
   RefreshEmergencySalve()
@@ -414,6 +415,7 @@ function HunterTools:RefreshFonts()
 end
 
 function HunterTools:OnEditModeChanged(enable)
+  if not IsHunter() then return end
   local db = NormalizeDB()
   local showSalvePreview = enable == true
     and db.enabled == true
@@ -471,10 +473,6 @@ function HunterTools:OnHunterEvent(event)
 end
 
 function HunterTools:GetOptions()
-  local function MasterDisabled()
-    return NormalizeDB().enabled ~= true
-  end
-
   local function ToggleOption(name, key, order)
     return {
       type = "toggle",
@@ -554,51 +552,37 @@ function HunterTools:GetOptions()
     }
   end
 
+  local function MasterDisabled()
+    return NormalizeDB().enabled ~= true
+  end
+  local showWarning = ToggleOption("Show Feign warning", "emergencySalveEnabled", 20)
+  showWarning.disabled = MasterDisabled
+  local warning = ns.OptionsSchema.BuildTextGroup("Warning", 20, {
+    fontSize = RangeOption("Font size", "emergencySalveFontSize", 16, 80, 50),
+    textColor = ColorOption("Text color", "emergencySalveColor", 70),
+  })
+  warning.disabled = MasterDisabled
+
   return {
-    type = "group",
-    name = "Hunter Tools",
-
+    type = "group", name = "Emergency Salve", inline = true, order = 40, arg = { puiExplicit = true },
     args = {
-      enabled = ToggleOption(
-        "Enable Hunter Tools",
-        "enabled",
-        10
-      ),
-
-      emergencySalve = {
-        type = "group",
-        name = "Emergency Salve",
-        order = 20,
-        inline = true,
-        disabled = MasterDisabled,
-
+      feature = {
+        type = "group", name = "Feature", inline = true, order = 10,
         args = {
-          emergencySalveEnabled = ToggleOption(
-            "Show Feign warning",
-            "emergencySalveEnabled",
-            10
-          ),
-
-          emergencySalveFontSize = RangeOption(
-            "Warning size",
-            "emergencySalveFontSize",
-            16,
-            80,
-            20
-          ),
-
-          emergencySalveColor = ColorOption(
-            "Warning color",
-            "emergencySalveColor",
-            30
-          ),
+          enabled = ToggleOption("Enable", "enabled", 10),
+          showWarning = showWarning,
         },
       },
+      warning = warning,
     },
   }
 end
 
 function HunterTools:OnInitialize()
+  if not IsHunter() then
+    self:SetEnabledState(false)
+    return
+  end
   NormalizeDB()
   _G.PleebUIAPI:RegisterPlugin("PleebUI_HunterTools", {
     name = "Hunter Tools",
@@ -609,18 +593,6 @@ function HunterTools:OnInitialize()
     end,
   })
 
-  Addon:RegisterOptionsSection(
-    "HunterTools",
-    function()
-      return HunterTools
-    end,
-    75,
-    "Hunter Tools",
-    nil,
-    {
-      preview = false,
-    }
-  )
 end
 
 function HunterTools:OnEnable()
