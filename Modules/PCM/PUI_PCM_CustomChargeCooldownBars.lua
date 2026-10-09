@@ -200,6 +200,10 @@ local function _CSB_RegisterMover(barData, cfg)
   end
 
   local moverOpts = {
+    moduleKey = "pcm",
+    moduleLabel = "Cooldown Manager",
+    groupKey = "chargeBars",
+    groupLabel = "Custom Charge Bars",
     label = label,
     optionsString = "CooldownManager,customTrackers,chargeSpell:" .. tostring(barData.id),
     useOverlayDrag = true,
