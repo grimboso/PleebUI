@@ -858,7 +858,7 @@ function M:SetUsePlayerHealth(enabled)
     ns.TestMode:Refresh("unitframes", "player-health-replacement", "uf.singleSettings")
   end
 
-  Addon:NotifyOptionsTreeChanged("PRD", { "PRD", "general" })
+  Addon:NotifyOptionsTreeChanged("PRD", { "PRD", "health" })
   return true
 end
 
@@ -2140,7 +2140,7 @@ function M:AttachMover()
         frame:SetPoint(a.point, UIParent, a.relPoint, a.x, a.y)
       end,
 
-      optionsString = "PRD,general",
+      optionsString = "PRD,health",
       quickSettings = BuildQuickSettings,
       smartSnap = PRD_BuildCombatBarSmartSnap(self, function()
         local p = GetProfile()
