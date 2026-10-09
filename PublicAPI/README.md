@@ -2,7 +2,7 @@
 
 PleebUI exposes `PleebUIAPI` for addons that want to use PleebUI Edit Mode movers or add configuration pages to the PleebUI options window.
 
-The current API version is `1.3`.
+The current API version is `1.4`.
 
 ## Loading PleebUI first
 
@@ -46,7 +46,7 @@ Plugin keys must be stable and unique. PleebUI prefixes mover, page, and Edit Mo
 
 The plugin owns its frames, SavedVariables, configuration values, and runtime behavior. PleebUI owns only registration, Edit Mode presentation, and options navigation.
 
-In Edit Mode, movers registered through `plugin:RegisterMover` or `plugin:RegisterGhostMover` automatically appear beneath **External Modules > plugin name**. The plugin must unregister movers it no longer owns. The mover tree controls only the Edit Mode handles, never the plugin's runtime visibility, layout, or saved position.
+In Edit Mode, movers registered through `plugin:RegisterMover` or `plugin:RegisterGhostMover` automatically appear beneath **External Modules > plugin name**. The plugin must unregister movers it no longer owns. The mover tree filters Edit Mode handles and linked previews. The plugin retains ownership of runtime visibility, layout, and saved positions.
 
 ## API version
 
@@ -194,6 +194,9 @@ Supported direct-mover fields:
 
 - `label`
 - `defaultVisibility`: optional starting choices for `Custom`, `Solo`, `Party`, and `Raid`; omitted contexts default to shown. Users can override these choices in /pe.
+- `isAvailable(frame, key)`: optional context filter; return false to omit the mover for the current class or specialization. Return ordinary accessible values. Saved visibility choices remain intact.
+- `onPreviewVisibilityChanged(visible, frame, key)`: called when Edit Mode preview visibility changes. Pause or resume only the preview, preserving its saved settings and normal runtime behavior. Initial registrations outside Edit Mode do not invoke it.
+- `snapGroup`: optional isolation group. Movers with a group can snap only to movers with the same group, for both frame snapping and Smart Snap. Set `moverSnapGroup` in plugin metadata to apply a shared group to all plugin movers.
 - `savePosition`
 - `resetPosition`
 - `onDragStop`
@@ -271,6 +274,7 @@ The current state is available through:
 
 ```lua
 local editing = plugin:IsEditModeActive()
+local previewVisible = plugin:IsMoverPreviewVisible("reminders")
 ```
 
 ## Removing all registrations
