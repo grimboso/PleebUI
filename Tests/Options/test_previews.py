@@ -14,10 +14,11 @@ function methods:SetShown(v) self.shown=v end
 function methods:SetFont(_,size,flags) self.fontSize=size;self.fontFlags=flags end
 function methods:SetFontObject(font) self.fontObject=font end
 function methods:SetText(t) self.text=t end
-function methods:GetStringWidth() return #(self.text or '')*(self.fontSize or 12)/2 end
-function methods:GetStringHeight() return rawget(self,'stringHeight') or 12 end
+function methods:GetStringWidth() return #(rawget(self,'text') or '')*(rawget(self,'fontSize') or 12)/2 end
+function methods:GetStringHeight() return rawget(self,'stringHeight') or rawget(self,'fontSize') or 12 end
 function methods:SetTextColor(...) self.color={...} end
 function methods:SetSize(w,h) self.width=w;self.height=h end
+function methods:SetScale(scale) self.scale=scale end
 function methods:GetWidth() return rawget(self,'width') or 340 end
 function methods:GetHeight() return rawget(self,'height') or 190 end
 function methods:SetPoint(...) self.point={...} end
@@ -32,7 +33,7 @@ function object() return setmetatable({},meta) end
 function methods:CreateFontString() return object() end
 function methods:CreateTexture() return object() end
 function methods:GetCountdownFontString() self.counter=rawget(self,'counter') or object();return self.counter end
-function CreateFrame(kind,name,parent) local f=object();frames[#frames+1]=f;if name then frames[name]=f end;return f end
+function CreateFrame(kind,name,parent) local f=object();f.parent=parent;frames[#frames+1]=f;if name then frames[name]=f end;return f end
 function CreateFont(name) local f=object();fonts[name]=f;return f end
 UIParent=object()
 function UnitClass() return 'Hunter','HUNTER' end
@@ -65,6 +66,7 @@ lua.eval('function(s) return assert(loadstring(s))("PleebUI",ns) end')(Path('Mod
 lua.execute('''
 local owner=ns.Modules.MovementWarning;local db=ns.Addon.db.profile.movementWarning
 local opts=owner:GetOptions();local a=db.reminders[781];local b=db.reminders[186257]
+assert(not opts.args.general.args.preview and not opts.args.general.args.onScreenPreview)
 assert(a.fontSize==30 and b.fontSize==30 and a.showDecimals==false and db.fontSize==nil)
 assert(a.color~=b.color and a.countdownColor~=b.countdownColor)
 local ga=opts.args.reminder781.args;local gb=opts.args.reminder186257.args
@@ -90,6 +92,23 @@ assert(cooldowns[1].hideNumbers==true and cooldowns[2].hideNumbers==false)
 owner:OnInitialize();assert(pageMeta.previewAlwaysShown and pageMeta.tabsBeforeHeader)
 previewBuilder(nil,nil,{previewHost=object()})
 assert(#frames>0)
+local root
+for _,f in ipairs(frames) do if rawget(f,'samples') then root=f end end
+assert(root and #root.samples==2 and root.samples[1]:IsShown() and root.samples[2]:IsShown())
+assert(root.samples[1].label.text=='Spell 781 unavailable')
+assert(root.samples[2].countdown.text=='8' and root.samples[2].countdown:IsShown())
+assert(root.samples[1].label.color[1]==1 and root.samples[2].label.color[1]==.3)
+local frameCount=#frames
+owner:RefreshOptionsPreview();assert(#frames==frameCount)
+ns.Flags.IsEditing=true;owner:RefreshWarning()
+assert(rawget(cooldowns[1],'duration')==nil and rawget(cooldowns[2],'duration')==nil)
+ns.Flags.IsEditing=false;owner:RefreshWarning();assert(rawget(cooldowns[1],'duration')~=nil)
+C_SpellBook.IsSpellKnownOrInSpellBook=function(id) return id==781 end
+combat=false;owner:OnMovementEvent('SPELLS_CHANGED')
+assert(root.samples[1]:IsShown() and not root.samples[2]:IsShown())
+C_SpellBook.IsSpellKnownOrInSpellBook=function() return false end
+owner:OnMovementEvent('SPELLS_CHANGED')
+assert(not root.samples[1]:IsShown() and not root.samples[2]:IsShown())
 opts.args.general.args.enabled.set(nil,false);assert(next(events)==nil)
 owner:OnDisable();assert(next(events)==nil)
 print('Movement reminder: legacy migration, independent colors/styles/countdowns, disabled lifecycle, combat-only events, row fonts, and preview construction passed.')
@@ -107,4 +126,133 @@ shell.__puiLayoutBuilding=false;PUI_PageShell_RebuildLayout(shell);local y=shell
 shell.description.stringHeight=100;shell.__puiLayoutBuilding=false;PUI_PageShell_RebuildLayout(shell);assert(shell.stickyStrip.point[5]==y)
 shell.__puiTabsBeforeHeader=false;shell.__puiLayoutBuilding=false;PUI_PageShell_RebuildLayout(shell);assert(shell.stickyStrip.point[5]<0)
 print('QoL tab strip: fixed position with changing header height; default page layout retained.')
+''')
+
+for name in ['NormalizeBool','SeedAnchorDefaults','QUALITY_POSITION_DEFAULTS','NormalizeDB',
+             'Quality_GetPreviewWarnings','Quality_RefreshPreview','Quality_BuildPreview',
+             'EnsureInviteDriver','EnsureLootFrame','Quality:ApplyAll']:
+    if name == 'Quality:ApplyAll': lua.execute('Quality={}')
+    lua.execute(b[name])
+lua.execute('''
+Addon=ns.Addon
+local profile={quality={autoLoot=false,acceptInviteFriends=true}}
+function GetProfile() return profile end
+function Clamp(v,a,b) return math.min(b,math.max(a,tonumber(v))) end
+ns.RaidUtilityModule={NormalizeDB=function() end,ApplyAll=function() end}
+local q=NormalizeDB()
+assert(q.autoLoot==nil and q.acceptInviteEveryone==false and q.acceptInviteFriends==true)
+function GetQ() return q end
+function RefreshQ() return q end
+previewMelee=true;previewPet=true
+function CombatWarning_RefreshMeleeSpec() CombatWarningMeleeSpec=previewMelee end
+function IsPetClass() return previewPet end
+function IsHealPetClass() return previewPet,'HUNTER' end
+function GetHealPetSpellID() return 123 end
+function FormatPetWarningText(text) return text end
+STANDARD_TEXT_FONT='font.ttf'
+ns.Theme._AppliedFonts={}
+ns.Theme.GetColors=function() return {background={0,0,0,1},border={1,1,1,1},text={1,1,1,1}} end
+ns.Theme.GetEdgeSize=function() return 1 end
+ns.Theme.ApplyFont=function(text,role,size) text:SetFont('font.ttf',size or 12,'OUTLINE') end
+ns.Theme.SetSquareBackdrop=function() end
+ns.Theme.WidgetSkins={UIButton=function() end}
+ns.IconSkin={MakeIconSquare=function() end,ApplyBorder=function() end}
+QualityPreviewTab='combatTab'
+Quality_BuildPreview(nil,nil,{previewHost=object()},{'Quality','combatTab'})
+local root=QualityPreviewRoot
+assert(root and #root.samples==#Quality_GetPreviewWarnings() and #root.samples==7)
+assert(rawget(root,'Next')==nil and rawget(root,'Warning')==nil)
+for _,sample in ipairs(root.samples) do assert(sample:IsShown() and sample.text.text~='') end
+local created=#frames
+Quality_RefreshPreview();assert(#frames==created)
+q.petDeadWarningFontSize=100;q.petDeadWarningColor={r=.4,g=.5,b=.6,a=1}
+root:SetSize(240,190);root.scripts.OnSizeChanged()
+assert(root.samples[4].text.fontSize==100 and root.samples[4].text.color[1]==.4)
+for _,sample in ipairs(root.samples) do
+ assert(sample.content.scale>0 and sample.content.width*sample.content.scale<=sample.width)
+ assert(sample.content.height*sample.content.scale<=sample.height)
+end
+previewPet=false;previewMelee=false;Quality_RefreshPreview()
+assert(#Quality_GetPreviewWarnings()==3)
+for i=1,3 do assert(root.samples[i]:IsShown()) end
+for i=4,7 do assert(not root.samples[i]:IsShown()) end
+QualityPreviewTab='cursorTab';Quality_RefreshPreview()
+assert(not root.CombatSamples:IsShown() and root.CursorLabel:IsShown())
+QualityPreviewTab='groupTab';Quality_RefreshPreview()
+assert(root.GroupSamples:IsShown() and not root.CombatSamples:IsShown())
+print('Combat previews: simultaneous class/spec samples, frame reuse, stale-sample hiding, live fonts/colors and narrow-grid bounds passed.')
+
+accepted=0;trustChecks=0;trusted=false;grouped=false;lfg=false;queued=false
+function IsInGroup() return grouped end
+function IsPartyLFG() return lfg end
+function IsQueueStatusActive() return queued end
+function TrustedUnits_IsTrusted() trustChecks=trustChecks+1;return trusted end
+function AcceptGroup() accepted=accepted+1 end
+function StaticPopup_Hide() end
+local invites=EnsureInviteDriver()
+q.autoAcceptInvites=true;q.acceptInviteEveryone=false
+invites.scripts.OnEvent(invites,'PARTY_INVITE_REQUEST','Unknown')
+assert(accepted==0 and trustChecks==1)
+q.acceptInviteEveryone=true
+invites.scripts.OnEvent(invites,'PARTY_INVITE_REQUEST','Unknown')
+assert(accepted==1 and trustChecks==1)
+q.autoAcceptInvites=false;invites.scripts.OnEvent(invites,'PARTY_INVITE_REQUEST','Unknown');assert(accepted==1)
+q.autoAcceptInvites=true;grouped=true
+invites.scripts.OnEvent(invites,'PARTY_INVITE_REQUEST','Unknown');assert(accepted==1)
+grouped=false;lfg=true;invites.scripts.OnEvent(invites,'PARTY_INVITE_REQUEST','Unknown');assert(accepted==1)
+lfg=false;queued=true;invites.scripts.OnEvent(invites,'PARTY_INVITE_REQUEST','Unknown');assert(accepted==1)
+queued=false;q.acceptInviteEveryone=false;trusted=true
+invites.scripts.OnEvent(invites,'PARTY_INVITE_REQUEST','Friend');assert(accepted==2)
+print('Auto accept invites: Everyone bypasses only the trust filter; master, group, LFG and queue restrictions remain effective.')
+
+local driver={RefreshState=function() end}
+function EnsureCombatMsgFrame() return driver end
+function EnsureCombatTimerEvents() return driver end
+function EnsureCombatWarningEvents() return driver end
+function EnsureMerchantDriver() return driver end
+function EnsureKeystoneDriver() return driver end
+function EnsureRoleCheckDriver() return driver end
+function EnsureDestroyDriver() return driver end
+function EnsureInviteDriver() return driver end
+function ApplyMovieSkip() end
+function ApplyHideTalkingHead() end
+function ApplyHideRestedZzz() end
+function ApplyMaxCameraZoom() end
+function ApplySuppressGuildAchievementToasts() end
+function ApplyHideElements() end
+function ApplyPetWarnings() end
+function ApplyAuctionHouseCurrentExpansionOnly() end
+function ApplyCrosshair() end
+function ApplyCursorRing() end
+ns.UFAuraFilters={ApplyAuraSpellIDTooltipPreference=function() end}
+CombatMsgText=object();CombatTimerText=object()
+cvarWrites={};C_CVar={SetCVar=function(name,value) cvarWrites[#cvarWrites+1]={name,value} end}
+q.fasterLooting=true;Quality:ApplyAll()
+assert(#cvarWrites==1 and cvarWrites[1][1]=='autoLootDefault' and cvarWrites[1][2]=='1')
+q.fasterLooting=false;Quality:ApplyAll();assert(#cvarWrites==1)
+print('Faster looting enables Blizzard auto loot; disabling it leaves Blizzard preference under the user control.')
+''')
+
+lua.execute('''
+function UnitClass() return 'Druid','DRUID' end
+C_SpellBook.IsSpellKnownOrInSpellBook=function() return true end
+ns.Addon.db.profile.movementWarning={enabled=false,x=0,y=50,spells={}}
+''')
+lua.eval('function(s) return assert(loadstring(s))("PleebUI",ns) end')(Path('Modules/PUIModules/PUI_MovementWarning.lua').read_text())
+lua.execute('''
+local owner=ns.Modules.MovementWarning
+local opts=owner:GetOptions();owner:OnInitialize()
+previewBuilder(nil,nil,{previewHost=object()})
+local root
+for _,f in ipairs(frames) do if rawget(f,'samples') and rawget(f,'title') then root=f end end
+assert(root and #root.samples==4)
+for _,preview in ipairs(root.samples) do
+ assert(preview:IsShown() and preview.sample.scale>0)
+ assert(preview.sample.width*preview.sample.scale<=preview.width)
+ assert(preview.sample.height*preview.sample.scale<=preview.height-20)
+end
+C_SpellBook.IsSpellKnownOrInSpellBook=function(id) return id~=106898 end
+owner:GetOptions();owner:RefreshOptionsPreview()
+assert(root.samples[3]:IsShown() and not root.samples[4]:IsShown())
+print('Movement preview fits three and four known reminders without assuming a two-spell class limit.')
 ''')
