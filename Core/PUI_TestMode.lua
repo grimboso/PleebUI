@@ -689,26 +689,42 @@ local function BuildEditControls(panel)
     local widget = AceGUI:Create("PUI_Checkbox")
     widget:SetLabel(label)
     widget:SetCallback("OnValueChanged", function(_, _, checked)
+      local history = ns.FrameUtil.BeginEditHistory(label)
       setter(checked == true)
+      ns.FrameUtil.CommitEditHistory(history)
       TestMode:QueueToolbarRefresh()
     end)
     widget.frame:SetParent(host)
     widget.frame:Show()
     ns.AceHooks.TakeOwnership(widget)
-    widgets[key] = { widget = widget, label = label, value = value, height = 30 }
+    widgets[key] = { widget = widget, label = label, value = value, setter = setter, height = 30 }
   end
 
   local function Slider(key, label, minimum, maximum, step, value, setter)
     local widget = AceGUI:Create("PUI_Slider")
     widget:SetLabel(label)
     widget:SetSliderValues(minimum, maximum, step)
-    widget:SetCallback("OnValueChanged", function(_, _, newValue)
+    widget:SetCommitOnRelease(true)
+    local history
+    widget:SetCallback("OnValueChanging", function(_, _, newValue)
+      history = history or ns.FrameUtil.BeginEditHistory(label)
       setter(newValue)
+    end)
+    widget:SetCallback("OnMouseUp", function(_, _, newValue)
+      local transaction = history or ns.FrameUtil.BeginEditHistory(label)
+      history = nil
+      setter(newValue)
+      ns.FrameUtil.CommitEditHistory(transaction)
+    end)
+    widget.frame:HookScript("OnHide", function()
+      local transaction = history
+      history = nil
+      ns.FrameUtil.CommitEditHistory(transaction)
     end)
     widget.frame:SetParent(host)
     widget.frame:Show()
     ns.AceHooks.TakeOwnership(widget)
-    widgets[key] = { widget = widget, label = label, value = value, height = 66 }
+    widgets[key] = { widget = widget, label = label, value = value, setter = setter, height = 66 }
   end
 
   local function Dropdown(key, label, choices, value, setter)
@@ -716,13 +732,16 @@ local function BuildEditControls(panel)
     widget:SetLabel(label)
     widget:SetList(choices)
     widget:SetCallback("OnValueChanged", function(_, _, choice)
+      local navigation = key == "positionUnit"
+      local history = not navigation and ns.FrameUtil.BeginEditHistory(label)
       setter(choice)
+      ns.FrameUtil.CommitEditHistory(history)
       TestMode:QueueToolbarRefresh()
     end)
     widget.frame:SetParent(host)
     widget.frame:Show()
     ns.AceHooks.TakeOwnership(widget)
-    widgets[key] = { widget = widget, label = label, value = value, height = 58 }
+    widgets[key] = { widget = widget, label = label, value = value, setter = setter, height = 58 }
   end
 
   local util = ns.FrameUtil
@@ -823,7 +842,9 @@ local function BuildEditControls(panel)
   end)
   panel.removePositionButton = CreateToolbarButton(host, "Remove separate position", 230, function()
     local uf = ns.Modules.UnitFrames
+    local history = ns.FrameUtil.BeginEditHistory("Remove separate position")
     uf:RemoveContextPosition(panel.positionUnit, uf:GetPositionEditContext(panel.positionUnit))
+    ns.FrameUtil.CommitEditHistory(history)
     TestMode:RebuildToolbar()
   end)
   StyleButton(panel.removePositionButton, false)
@@ -850,9 +871,24 @@ local function BuildEditControls(panel)
   end
 end
 
+function TestMode:GetEditHistoryControls()
+  local controls = {}
+  local panel = self.toolbar
+  if not panel or not panel.editWidgets then return controls end
+  for _, key in ipairs({ "keyboard", "compact", "dim", "snap", "smart", "snapGrid",
+    "grid", "nudge", "tolerance", "fade" }) do
+    local spec = panel.editWidgets[key]
+    controls[#controls + 1] = { get = spec.value, set = spec.setter }
+  end
+  return controls
+end
+
 function TestMode:RefreshEditControlButtons()
   local panel = self.toolbar
   if not panel or not panel.sessionButtons then return end
+  local history = ns.FrameUtil._editHistory
+  panel.undoButton:SetEnabled(#history.undo > 0 and not history.pending)
+  panel.redoButton:SetEnabled(#history.redo > 0 and not history.pending)
   local selected = ns.FrameUtil._GetSelectedMoverCount() > 0
   local widgets = panel.editWidgets
   widgets.fade.widget:SetDisabled(ns.FrameUtil._disableDimming)
@@ -870,6 +906,8 @@ local EDIT_HELP = {
   "Alt+right-click disconnects Smart Snap. Shift+left-drag detaches and moves freely.",
   "Use the arrows or the movable X/Y popup for precise positioning.",
   "Enable keyboard movement for Tab, Shift+Tab, arrow keys and steps 1–9.",
+  "Undo reverses the last edit; Redo reapplies it. Ctrl+Z / Ctrl+Y also work outside text fields.",
+  "History belongs to this session and clears when you exit or switch profiles.",
   "Esc closes Edit Mode. Presets only control editing handles, not live layouts.",
 }
 
@@ -943,6 +981,17 @@ function TestMode:EnsureToolbar()
   ns.Theme.ApplyExpandCollapseButton(minimize, not TestMode.toolbarCollapsed)
   panel.minimizeButton = minimize
 
+  panel.undoButton = CreateToolbarButton(panel, "Undo", 90, function()
+    ns.FrameUtil.ReplayEditHistory(false)
+  end)
+  panel.redoButton = CreateToolbarButton(panel, "Redo", 90, function()
+    ns.FrameUtil.ReplayEditHistory(true)
+  end)
+  panel.undoButton:SetPoint("BOTTOMLEFT", panel, "BOTTOMLEFT", TOOLBAR_PADDING, 7)
+  panel.redoButton:SetPoint("LEFT", panel.undoButton, "RIGHT", 6, 0)
+  StyleButton(panel.undoButton, false)
+  StyleButton(panel.redoButton, false)
+
   local visibility = ns.FrameUtil.GetMoverVisibilityConfig()
   panel.setLabel = panel:CreateFontString(nil, "OVERLAY")
   panel.setLabel:SetPoint("TOPLEFT", panel, "TOPLEFT", TOOLBAR_PADDING, -38)
@@ -960,7 +1009,9 @@ function TestMode:EnsureToolbar()
   end
 
   panel.followCheck = CreateVisibilityCheckbox(panel, function(self)
+    local history = ns.FrameUtil.BeginEditHistory("Follow current group")
     ns.FrameUtil.GetMoverVisibilityConfig().followGroup = self:GetChecked() == true
+    ns.FrameUtil.CommitEditHistory(history)
     StyleVisibilityCheckbox(self, self:GetChecked() and "on" or "off")
   end)
   panel.followCheck.widget:SetTriState(false)
@@ -1002,7 +1053,7 @@ function TestMode:EnsureToolbar()
 
   panel.scroll = CreateFrame("ScrollFrame", nil, panel, "UIPanelScrollFrameTemplate")
   panel.scroll:SetPoint("TOPLEFT", panel, "TOPLEFT", 0, -TOOLBAR_TITLE_HEIGHT)
-  panel.scroll:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", -27, 8)
+  panel.scroll:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", -27, 42)
   panel.scroll.ScrollBar.scrollStep = 26
   ns.Theme.WidgetSkins.Scrollbar(panel.scroll.ScrollBar)
 
@@ -1059,8 +1110,8 @@ function TestMode:EnsureToolbar()
     panel.content:SetWidth(math_max(1, newWidth - 30))
   end)
   panel:SetPropagateKeyboardInput(true)
-  panel:SetScript("OnKeyDown", function(_, key)
-    ns.FrameUtil.HandleEditModeKeyDown(key)
+  panel:SetScript("OnKeyDown", function(self, key)
+    self:SetPropagateKeyboardInput(not ns.FrameUtil.HandleEditModeKeyDown(key))
   end)
   panel:SetScript("OnHide", function()
     if ns.Flags.IsEditing and TestMode.active then
@@ -1680,8 +1731,10 @@ function TestMode:RebuildToolbar()
   end
   panel.resizeGrip:SetShown(not self.toolbarCollapsed)
   panel.scroll:SetShown(not self.toolbarCollapsed)
+  panel.undoButton:SetShown(not self.toolbarCollapsed)
+  panel.redoButton:SetShown(not self.toolbarCollapsed)
   panel.scroll:SetVerticalScroll(math_min(panel.scroll:GetVerticalScroll(),
-    math_max(0, contentHeight - (panel:GetHeight() - TOOLBAR_TITLE_HEIGHT - 8))))
+    math_max(0, contentHeight - (panel:GetHeight() - TOOLBAR_TITLE_HEIGHT - 42))))
   ns.Theme.ApplyExpandCollapseButton(panel.minimizeButton, not self.toolbarCollapsed)
   StylePanel(panel)
 end
@@ -1729,6 +1782,8 @@ local function RefreshToolbarTheme()
     end
   end
   StyleButton(panel.exitButton, false)
+  StyleButton(panel.undoButton, false)
+  StyleButton(panel.redoButton, false)
   StyleButton(panel.minimizeButton, false)
   ns.Theme.ApplyExpandCollapseButton(panel.minimizeButton, not TestMode.toolbarCollapsed)
 
