@@ -4445,7 +4445,7 @@ do
           },
           iconGap = {
             type = "range",
-            name = "Icon gap",
+            name = "Spacing between icon and bar",
             order = 7,
             min = 0,
             max = 20,
