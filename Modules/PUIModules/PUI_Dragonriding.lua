@@ -1508,6 +1508,36 @@ local function DragonridingProvider(AddonObj)
       },
     }
 
+    local source = options.args
+    local behavior = source.general.args
+    behavior.swEnabled = source.secondWind.args.swEnabled
+    behavior.wsEnabled = source.whirlingSurge.args.wsEnabled
+    behavior.swEnabled.order, behavior.wsEnabled.order = 20, 30
+    behavior.showVigorText, behavior.showSpeedText = source.text.args.showVigorText, source.text.args.showSpeedText
+    behavior.showVigorText.order, behavior.showSpeedText.order = 40, 50
+    local vigor = source.layout.args
+    for key, option in pairs(source.appearance.args) do vigor[key] = option end
+    vigor.texture.name, vigor.barColor.name = "Texture", "Color"
+    vigor.width.order, vigor.height.order = 10, 20
+    vigor.texture.order, vigor.barColor.order = 30, 40
+    vigor.showSegments.order, vigor.segmentThickness.order = 50, 60
+    local secondWind = source.secondWind
+    secondWind.args.swEnabled = nil
+    secondWind.args.swGap.name = "Spacing"
+    secondWind.args.swColor.name = "Color"
+    local surgeColor = source.whirlingSurge.args.wsColor
+    surgeColor.name, surgeColor.order = "Whirling Surge color", 70
+    secondWind.args.wsColor = surgeColor
+    secondWind.name = "Secondary bars"
+    secondWind.args.swHeight.name = "Second Wind height"
+    secondWind.args.swGap.name = "Second Wind spacing"
+    secondWind.args.swColor.name = "Second Wind color"
+    options.arg = { puiExplicit = true }
+    options.args = {
+      general = { type = "group", name = "Behavior", inline = true, order = 10, args = behavior },
+      vigor = { type = "group", name = "Vigor bar", inline = true, order = 20, args = vigor },
+      secondary = secondWind,
+    }
     return options
   end
 
