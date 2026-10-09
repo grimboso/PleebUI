@@ -223,7 +223,7 @@ local function AddControl(panel, control)
   elseif control.type == "button" then
     widget:SetText(control.label or "Apply")
   elseif control.label then
-    widget:SetLabel(control.label)
+    widget:SetLabel(ns.OptionsSchema.GetCompactLabel(control.label))
   end
 
   if control.type == "toggle" then
