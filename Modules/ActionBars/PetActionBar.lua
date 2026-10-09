@@ -145,6 +145,7 @@ local function UpdatePetAction(button, petActionsUsable)
   ApplyPetActionContent(button, name, texture, isToken)
   ApplyPetActionState(button, isActive, autoCastAllowed, autoCastEnabled)
   ApplyPetActionUsability(button, petActionsUsable)
+  ns.ActionBarsPreview.QueueIconRefresh("pet")
 end
 
 local function UpdatePetActionState(button, petActionsUsable)
