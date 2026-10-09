@@ -3067,26 +3067,27 @@ local function UIThemeOptionsProvider()
     sections.optionsLayout.args.puiOptionsFontSize = nil
     optionsText.name = "Font size"
     sections.fonts.args = {
-      global = ns.OptionsSchema.BuildTextGroup("Global typography", 10, {
-        font = fonts.iconTextGlobalFont, outline = fonts.iconTextGlobalFlags,
-      }),
-      sizeAdjustment = { type = "group", name = "Font size adjustment", inline = true, order = 20, args = {
-        fontSizeOffset = fonts.fontSizeOffset, applyTo = fonts.fontSizeScopes,
-      } },
+      font = fonts.iconTextGlobalFont,
+      outline = fonts.iconTextGlobalFlags,
+      fontSizeOffset = fonts.fontSizeOffset,
+      applyTo = fonts.fontSizeScopes,
     }
-    sections.fonts.args.global.args.font.name = "Font"
-    sections.fonts.args.global.args.outline.name = "Outline"
-    sections.fonts.args.sizeAdjustment.args.fontSizeOffset.name = "Adjustment"
+    sections.fonts.args.font.name, sections.fonts.args.font.order = "Font", 10
+    sections.fonts.args.outline.name, sections.fonts.args.outline.order = "Outline", 20
+    sections.fonts.args.fontSizeOffset.name, sections.fonts.args.fontSizeOffset.order = "Font size adjustment", 70
+    sections.fonts.args.applyTo.order = 80
     sections.optionsLayout.name = "Layout and appearance"
     sections.optionsLayout.order = 20
     local window = sections.optionsLayout.args
     sections.optionsLayout.args = {
       window = { type = "group", name = "Options window", order = 10, inline = true, arg = { puiExplicit = true }, args = window },
+      colors = sections.themeColors,
+      text = sections.fonts,
     }
     window.fontSize = optionsText
     window.optionsUIScale.name = "Scale"
-    sections.themeColors.name, sections.themeColors.order = "Colors", 30
-    sections.fonts.name, sections.fonts.order = "Text", 40
+    sections.themeColors.name, sections.themeColors.order = "Colors", 20
+    sections.fonts.name, sections.fonts.order = "Text", 30
     sections.accessibilityPresets.name = "Color presets"
     sections.accessibilityPresets.order, sections.combatReadability.order = 10, 20
     options.childGroups = "tab"
@@ -3095,9 +3096,9 @@ local function UIThemeOptionsProvider()
         accessibilityPresets = sections.accessibilityPresets,
         combatReadability = sections.combatReadability,
       } },
-      layout = sections.optionsLayout, colors = sections.themeColors, text = sections.fonts,
+      layout = sections.optionsLayout,
     }
-    options.args.layout.inline, options.args.colors.inline, options.args.text.inline = nil, nil, nil
+    options.args.layout.inline = nil
     return options
   end
 
