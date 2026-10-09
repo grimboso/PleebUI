@@ -2599,7 +2599,7 @@ _PCM_BuildIconOverrideArgs = function(viewerKey, entry)
     }
     args.resetIcon = {
       type = "execute",
-      name = "Reset icon settings",
+      name = "Reset to group settings",
       confirm = true,
       confirmText = "Discard this icon's overrides and use its group settings?",
       order = 80,
@@ -3107,7 +3107,7 @@ _PCM_BuildIconOverrideArgs = function(viewerKey, entry)
 
   args.resetIcon = {
     type = "execute",
-    name = "Reset icon settings",
+    name = "Reset to group settings",
       confirm = true,
       confirmText = "Discard this icon's overrides and use its group settings?",
     order = 110,
