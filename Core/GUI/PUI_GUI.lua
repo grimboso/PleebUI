@@ -934,6 +934,10 @@ local function _PUI_DoesOptionsPathExist(path)
       ["6"] = true,
       ["7"] = true,
       ["8"] = true,
+      ["9"] = true,
+      ["10"] = true,
+      ["11"] = true,
+      ["12"] = true,
       special = true,
     },
     CooldownManager = {
@@ -3493,7 +3497,7 @@ local PUI_SHELL_TOP_TAB_UX = {
     raid = { name = "Raid", desc = "Raid frame layout, role indicators, aura display, test mode, and group behavior." },
   },
   ACTIONBARS = {
-    general = { name = "Overview", desc = "Shared layout, appearance, text, and visibility." },
+    general = { name = "Shared settings", desc = "Default behavior, layout, appearance, visibility, and text for your action bars." },
     ["1"] = { name = "Bar 1", desc = "Layout, visibility, and text overrides for bar 1." },
     ["2"] = { name = "Bar 2", desc = "Layout, visibility, and text overrides for bar 2." },
     ["3"] = { name = "Bar 3", desc = "Layout, visibility, and text overrides for bar 3." },
@@ -3502,7 +3506,11 @@ local PUI_SHELL_TOP_TAB_UX = {
     ["6"] = { name = "Bar 6", desc = "Layout, visibility, and text overrides for bar 6." },
     ["7"] = { name = "Bar 7", desc = "Layout, visibility, and text overrides for bar 7." },
     ["8"] = { name = "Bar 8", desc = "Layout, visibility, and text overrides for bar 8." },
-    special = { name = "Special bars", desc = "Pet, stance, possess, and other special bars." },
+    ["9"] = { name = "Bar 9", desc = "Layout, visibility, and text overrides for bar 9." },
+    ["10"] = { name = "Bar 10", desc = "Layout, visibility, and text overrides for bar 10." },
+    ["11"] = { name = "Bar 11", desc = "Layout, visibility, and text overrides for bar 11." },
+    ["12"] = { name = "Bar 12", desc = "Layout, visibility, and text overrides for bar 12." },
+    special = { name = "Special bars", desc = "Layout, appearance, visibility, and text for pet and stance bars." },
   },
   PRD = {
     general = { name = "Overview", desc = "Visibility, stack layout, outer border, and copying appearance between PRD bars." },
