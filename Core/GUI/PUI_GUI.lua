@@ -401,7 +401,7 @@ local PUI_DEFAULT_OPTIONS_CHILD = {
   ACTIONBARS = "general",
   CooldownManager = "overview",
   PRD = "general",
-  Quality = "qualityTab",
+  Quality = "combatTab",
 }
 
 local function _PUI_IsRootRegistryKey(sectionKey)
@@ -692,7 +692,11 @@ local PUI_COLUMN_WIDTH_OPTION_TYPES = {
 local PUI_COLUMN_WIDTH_OWNED = setmetatable({}, { __mode = "k" })
 
 local function _PUI_GetOptionsColumnRelWidth()
-  return 1 / ns.Theme.GetOptionsWidgetColumns()
+  local frame = Addon._OptionsWindow
+  local content = frame and frame.__puiContentShell
+  local availableWidth = content and content:GetWidth()
+
+  return 1 / ns.Theme.GetOptionsWidgetColumns(availableWidth)
 end
 
 local function _PUI_ApplyColumnWidthMetadata(option, relWidth, seen)
@@ -921,8 +925,11 @@ local function _PUI_DoesOptionsPathExist(path)
       secondary = true,
     },
     Quality = {
-      qualityTab = true,
+      combatTab = true,
+      cursorTab = true,
+      groupTab = true,
       automationTab = true,
+      interfaceTab = true,
     },
     ACTIONBARS = {
       general = true,
@@ -2662,6 +2669,11 @@ local function _PUI_EnsurePleebUIOptionsChrome(frame)
     grip:SetScript("OnMouseUp", function()
       frame:StopMovingOrSizing()
       _PUI_SaveOptionsWindowState(frame)
+
+      local path = ns._PUIActiveOptionsPath
+      if frame:IsShown() and type(path) == "table" then
+        Addon:NotifyOptionsTreeChanged(path[1], path)
+      end
     end)
 
     frame.__puiResizeGrip = grip
@@ -3535,8 +3547,11 @@ local PUI_SHELL_TOP_TAB_UX = {
     tweaks = { name = "Tweaks", desc = "History, buttons, sticky channels, and edit box behavior." },
   },
   Quality = {
-    qualityTab = { name = "Helpers", desc = "Cursor, pet, crosshair, and visual helpers." },
-    automationTab = { name = "Automation", desc = "Loot, merchants, dialogs, invites, and camera." },
+    combatTab = { name = "Combat", desc = "Combat status, target warnings, pet warnings, and positioning." },
+    cursorTab = { name = "Cursor", desc = "Cursor ring, click ring, and crosshair appearance." },
+    groupTab = { name = "Group tools", desc = "Battle resurrection, Bloodlust, and raid utilities." },
+    automationTab = { name = "Automation", desc = "Looting, merchants, invites, role checks, and dialogs." },
+    interfaceTab = { name = "Interface", desc = "Camera, visibility, and interface helpers." },
   },
 }
 
