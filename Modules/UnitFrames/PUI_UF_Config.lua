@@ -7073,6 +7073,22 @@ local function UFCB_BuildCastbarArgs(unitKey)
 end
 
 local function UFCB_BuildTreeGroupLeaf(name, order, args, childGroups)
+  local function LockControls(controls, inheritedDisabled)
+    for _, option in pairs(controls) do
+      local disabled = option.disabled
+      if disabled == nil then disabled = inheritedDisabled end
+      if option.type == "group" then
+        LockControls(option.args, disabled)
+      elseif option.type ~= "description" and option.type ~= "header" then
+        option.disabled = function(info)
+          if InCombatLockdown() then return true end
+          if type(disabled) == "function" then return disabled(info) end
+          return disabled == true
+        end
+      end
+    end
+  end
+  LockControls(args)
   args.combatNotice = {
     type = "description",
     name = "Unit frame and cast-bar settings cannot be changed in combat.",
@@ -7084,7 +7100,6 @@ local function UFCB_BuildTreeGroupLeaf(name, order, args, childGroups)
 
   local leaf = {
     type = "group",
-    disabled = InCombatLockdown,
     name = name,
     order = order,
     args = args,
