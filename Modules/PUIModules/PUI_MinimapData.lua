@@ -526,7 +526,9 @@ local function RestoreCapturedButton(btn)
       end
     end
 
-    if btn == _G.ExpansionLandingPageMinimapButton then
+    if btn == MinimapData.IconButton then
+      btn:SetShown(_GetMinimapProfile().hide ~= true)
+    elseif btn == _G.ExpansionLandingPageMinimapButton then
       if wasShown then
         btn:Show()
       else
@@ -750,6 +752,14 @@ function MinimapData.SetLauncherOnMinimap(enabled)
   return true
 end
 
+function MinimapData.SetLauncherHidden(hidden)
+  local profile = _GetMinimapProfile()
+  profile.hide = hidden == true
+  local icon = LibStub("LibDBIcon-1.0")
+  if profile.hide then icon:Hide("PleebUI") else icon:Show("PleebUI") end
+  if _bucketEnabled then LayoutButtons() end
+end
+
 InstallExpansionLandingButtonHook = function()
   local btn = _G.ExpansionLandingPageMinimapButton
   if btn.__puiBucketHooked then
@@ -916,7 +926,9 @@ LayoutButtons = function()
 
   for i = 1, #buttons do
     local btn = buttons[i]
-    if btn and (btn ~= expansionButton or btn:IsShown()) then
+    if btn and (btn ~= expansionButton or btn:IsShown())
+      and (btn ~= MinimapData.IconButton or _GetMinimapProfile().hide ~= true)
+    then
       visibleButtons[#visibleButtons + 1] = btn
     end
   end
@@ -1101,6 +1113,7 @@ end
   MinimapData.SetBucketEnabled = P:Def("MinimapData.SetBucketEnabled", MinimapData.SetBucketEnabled)
   MinimapData.InitializeLauncher = P:Def("MinimapData.InitializeLauncher", MinimapData.InitializeLauncher)
   MinimapData.SetLauncherOnMinimap = P:Def("MinimapData.SetLauncherOnMinimap", MinimapData.SetLauncherOnMinimap)
+  MinimapData.SetLauncherHidden = P:Def("MinimapData.SetLauncherHidden", MinimapData.SetLauncherHidden)
   _BucketCancelAutoCollapse = P:Def("_BucketCancelAutoCollapse", _BucketCancelAutoCollapse)
   _BucketScheduleAutoCollapse = P:Def("_BucketScheduleAutoCollapse", _BucketScheduleAutoCollapse)
   _BucketSetExpanded = P:Def("_BucketSetExpanded", _BucketSetExpanded)
