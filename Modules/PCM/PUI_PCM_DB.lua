@@ -1694,6 +1694,7 @@ do
           width = 250,
           rowSpacing = 1,
           orientation = "HORIZONTAL",
+          layoutMode = "FIXED",
           growthDirection = "DOWN",
           drainDirection = "RIGHT_TO_LEFT",
           texture = "Pleebar",
@@ -1741,6 +1742,7 @@ do
     if bb.height == nil then bb.height = 20 end
     if bb.width == nil then bb.width = 250 end
     if bb.rowSpacing == nil then bb.rowSpacing = 1 end
+    if bb.layoutMode ~= "GROW" then bb.layoutMode = "FIXED" end
     if bb.orientation ~= "VERTICAL" then bb.orientation = "HORIZONTAL" end
 
     if bb.orientation == "VERTICAL" then
