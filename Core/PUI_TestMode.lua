@@ -801,7 +801,7 @@ local function BuildEditControls(panel)
   panel.positionUnit = "target"
   host = CreateFrame("Frame", nil, panel.content)
   panel.positionControls = host
-  Dropdown("positionUnit", "Frame positions", { target = "Target", focus = "Focus", boss1 = "Boss" },
+  Dropdown("positionUnit", "Frame to configure", { target = "Target", focus = "Focus", boss1 = "Boss" },
     function() return panel.positionUnit end,
     function(value) panel.positionUnit = value end)
   Dropdown("switchMode", "On group change", {
