@@ -47,17 +47,9 @@ local SelectedEntry
 local SelectedEntries = {}
 
 FrameUtil._nudgeStep           = FrameUtil._nudgeStep or NUDGE_DEFAULT
-FrameUtil._nudgePanel          = FrameUtil._nudgePanel or nil
-FrameUtil._nudgeSlider         = FrameUtil._nudgeSlider or nil
 FrameUtil._nudgeXInput         = FrameUtil._nudgeXInput or nil
 FrameUtil._nudgeYInput         = FrameUtil._nudgeYInput or nil
 FrameUtil._keyboardMoveEnabled = FrameUtil._keyboardMoveEnabled or false
-FrameUtil._keyboardMoveCheck   = FrameUtil._keyboardMoveCheck or nil
-
--- New: collapsible settings panel state
-FrameUtil._settingsCollapsed   = FrameUtil._settingsCollapsed or false
-FrameUtil._instructionsCollapsed = FrameUtil._instructionsCollapsed or false
-FrameUtil._keybindsCollapsed   = FrameUtil._keybindsCollapsed or false
 
 function FrameUtil._GetEditModeDB()
   Addon.db.profile.EditMode = Addon.db.profile.EditMode or {}
@@ -120,7 +112,30 @@ function FrameUtil.GetMoverVisibilityChoice(entry, setName)
   return not (defaults and defaults[setName or config.selectedSet] == false)
 end
 
+function FrameUtil.IsMoverAvailable(entry)
+  local available = entry.opts.isAvailable
+  return type(available) ~= "function" or available(entry.frame, entry.key) ~= false
+end
+
+function FrameUtil.IsMoverPreviewVisible(key)
+  if not ns.Flags.IsEditing then
+    return true
+  end
+
+  local entry = MoversByKey[key]
+  if not entry then
+    return true
+  end
+  if entry._editSessionHidden then
+    return false
+  end
+  return FrameUtil.IsMoverVisibleInPreset(entry)
+end
+
 function FrameUtil.IsMoverVisibleInPreset(entry)
+  if not FrameUtil.IsMoverAvailable(entry) then
+    return false
+  end
   local config = FrameUtil.GetMoverVisibilityConfig()
   local set = config.sets[config.selectedSet]
   local opts = entry.opts
@@ -192,9 +207,6 @@ function FrameUtil._InitEditModeConfig()
   FrameUtil._showGrid = db.showGrid == true
   FrameUtil._dimAlpha = db.dimAlpha or 0.7
   FrameUtil._disableDimming = db.disableDimming == true
-  FrameUtil._settingsCollapsed = db.settingsCollapsed == true
-  FrameUtil._instructionsCollapsed = db.instructionsCollapsed == true
-  FrameUtil._keybindsCollapsed = db.keybindsCollapsed == true
 end
 
 function FrameUtil.ApplyGlobalEditFont(fs, sizeOverride, flagsOverride)
@@ -663,6 +675,9 @@ function FrameUtil.EnsureHeaderMover(owner, key, frameName, anchor, db, opts)
     groupKey = opts.groupKey,
     groupLabel = opts.groupLabel,
     defaultVisibility = opts.defaultVisibility,
+    isAvailable = opts.isAvailable,
+    onPreviewVisibilityChanged = opts.onPreviewVisibilityChanged,
+    snapGroup = opts.snapGroup,
     optionsString = opts.optionsString,
     quickSettings = opts.quickSettings,
     overlayBelowFrame = opts.overlayBelowFrame,
@@ -825,117 +840,76 @@ end
 
 
 local overlayFrame
-local overlayFadeIn
-local overlayFadeOut
-local overlayFadeInAlpha
-local overlayFadeOutAlpha
+local overlayFade
+local overlayFadeAlpha
 
 local function EnsureDimmer()
   if overlayFrame then
     return overlayFrame
   end
 
-  local f = CreateFrame("Frame", "PUI_EditModeDimmer", UIParent)
-  overlayFrame = f
-  FrameUtil._dimmer = f  -- keep a reference on FrameUtil for later if needed
+  local frame = CreateFrame("Frame", "PUI_EditModeDimmer", UIParent)
+  overlayFrame = frame
+  FrameUtil._dimmer = frame
+  frame:SetFrameStrata("BACKGROUND")
+  frame:SetFrameLevel(0)
+  frame:SetAllPoints(UIParent)
+  frame:EnableMouse(false)
+  frame:SetAlpha(0)
+  frame:Hide()
 
-  -- Dim the world behind the UI without washing out Edit Mode widgets.
-  f:SetFrameStrata("BACKGROUND")
-  f:SetFrameLevel(0)
-  f:SetAllPoints(UIParent)
-  f:EnableMouse(false)
-  f:Hide()
-  f:SetAlpha(0)
+  local texture = frame:CreateTexture(nil, "BACKGROUND")
+  texture:SetAllPoints()
+  texture:SetColorTexture(0, 0, 0, 1)
 
-  local tex = f:CreateTexture(nil, "BACKGROUND")
-  tex:SetAllPoints()
-  tex:SetColorTexture(0, 0, 0, 1) -- full black; frame alpha controls final opacity
-  f._tex = tex
-
-  local targetAlpha = FrameUtil._dimAlpha or 0.7
-
-  -- Fade-in group: 0 -> targetAlpha, then stay
-  local agIn = f:CreateAnimationGroup()
-  overlayFadeIn = agIn
-  local fadeIn = agIn:CreateAnimation("Alpha")
-  overlayFadeInAlpha = fadeIn
-  fadeIn:SetFromAlpha(0)
-  fadeIn:SetToAlpha(targetAlpha)
-  fadeIn:SetDuration(1.5)
-  fadeIn:SetSmoothing("IN_OUT")
-
-  agIn:SetScript("OnPlay", function()
-    f:SetAlpha(0)
-    f:Show()
+  overlayFade = frame:CreateAnimationGroup()
+  overlayFadeAlpha = overlayFade:CreateAnimation("Alpha")
+  overlayFadeAlpha:SetDuration(0.35)
+  overlayFadeAlpha:SetSmoothing("IN_OUT")
+  overlayFade:SetScript("OnFinished", function()
+    frame:SetAlpha(frame._puiTargetAlpha)
+    if frame._puiTargetAlpha == 0 then
+      frame:Hide()
+    end
   end)
-
-  agIn:SetScript("OnFinished", function()
-    -- Stay at target alpha while Edit Mode is active
-    f:SetAlpha(FrameUtil._dimAlpha or 0.7)
-    f:Show()
-  end)
-
-  -- Fade-out group: targetAlpha -> 0, then hide
-  local agOut = f:CreateAnimationGroup()
-  overlayFadeOut = agOut
-  local fadeOut = agOut:CreateAnimation("Alpha")
-  overlayFadeOutAlpha = fadeOut
-  fadeOut:SetFromAlpha(targetAlpha)
-  fadeOut:SetToAlpha(0)
-  fadeOut:SetDuration(1.5)
-  fadeOut:SetSmoothing("IN_OUT")
-
-  agOut:SetScript("OnPlay", function()
-    -- Ensure we start from the target alpha
-    f:SetAlpha(FrameUtil._dimAlpha or 0.7)
-    f:Show()
-  end)
-
-  agOut:SetScript("OnFinished", function()
-    f:SetAlpha(0)
-    f:Hide()
-  end)
-
-  return f
+  return frame
 end
 
 function FrameUtil._RefreshDimmerAlpha()
-  local alpha = FrameUtil._dimAlpha or 0.7
-
-  if overlayFadeInAlpha then
-    overlayFadeInAlpha:SetToAlpha(alpha)
-  end
-  if overlayFadeOutAlpha then
-    overlayFadeOutAlpha:SetFromAlpha(alpha)
-  end
-
   if overlayFrame and overlayFrame:IsShown() then
+    if overlayFade:IsPlaying() then
+      overlayFade:Stop()
+    end
+    local alpha = FrameUtil._disableDimming and 0 or (FrameUtil._dimAlpha or 0.7)
+    overlayFrame._puiTargetAlpha = alpha
     overlayFrame:SetAlpha(alpha)
+    if alpha == 0 then
+      overlayFrame:Hide()
+    end
   end
 end
 
 local function PlayDimmerFade(show)
-  local f = EnsureDimmer()
-
-  FrameUtil._RefreshDimmerAlpha()
-
-  if show then
-    if overlayFadeOut and overlayFadeOut:IsPlaying() then
-      overlayFadeOut:Stop()
-    end
-    if overlayFadeIn then
-      overlayFadeIn:Play()
-    end
-  else
-    if overlayFadeIn and overlayFadeIn:IsPlaying() then
-      overlayFadeIn:Stop()
-    end
-    if overlayFadeOut then
-      overlayFadeOut:Play()
-    end
+  local frame = EnsureDimmer()
+  local startingAlpha = frame:IsShown() and frame:GetAlpha() or 0
+  if overlayFade:IsPlaying() then
+    overlayFade:Stop()
   end
-end
 
+  local targetAlpha = show and (FrameUtil._dimAlpha or 0.7) or 0
+  frame._puiTargetAlpha = targetAlpha
+  if startingAlpha == targetAlpha then
+    frame:SetAlpha(targetAlpha)
+    frame:SetShown(targetAlpha > 0)
+    return
+  end
+
+  frame:SetAlpha(startingAlpha)
+  frame:Show()
+  overlayFadeAlpha:SetFromAlpha(startingAlpha)
+  overlayFadeAlpha:SetToAlpha(targetAlpha)
+  overlayFade:Play()
+end
 
 FrameUtil._gridSize      = FrameUtil._gridSize or 16
 FrameUtil._showGrid      = FrameUtil._showGrid or false
@@ -1199,7 +1173,8 @@ function FrameUtil._ApplyFrameSnap(entry, live, ignoreEntries)
        and other.frame
        and other.frame:IsShown()
        and not other._editSessionHidden
-       and not other._presetHidden then
+       and not other._presetHidden
+       and FrameUtil.CanMoversShareSnapGroup(entry, other) then
       local ol, orr, ot, ob = GetFrameEdges(other.frame)
       if ol then
         local nearVert  = IsVerticallyNear(ft, fb, ot, ob, tol)
@@ -1455,6 +1430,11 @@ local function PersistSmartSnapLinks()
       end
     end
   end
+end
+
+function FrameUtil.HasSmartSnapLinks(key)
+  EnsureSmartSnapLoaded()
+  return SmartSnapLinks[key] ~= nil and next(SmartSnapLinks[key]) ~= nil
 end
 
 local function GetSmartSnapTopologyKeys(startKey)
@@ -1766,11 +1746,23 @@ local function IsSmartSnapMoverVisible(entry)
     and entry.overlay:IsShown()
 end
 
+function FrameUtil.CanMoversShareSnapGroup(first, second)
+  if first.opts.snapGroup ~= second.opts.snapGroup then
+    return false
+  end
+
+  local uf = ns.Modules.UnitFrames
+  return not (uf and uf.HasSeparatePosition and (
+    uf:HasSeparatePosition(first.key) or uf:HasSeparatePosition(second.key)
+  ))
+end
+
 local function CanSmartSnap(first, second)
   if first == second or not first or not second then
     return false
   end
-  if first._suppressed
+  if not FrameUtil.CanMoversShareSnapGroup(first, second)
+    or first._suppressed
     or second._suppressed
     or first._editSessionHidden
     or second._editSessionHidden
@@ -1842,7 +1834,9 @@ function FrameUtil.SeedSmartSnapLink(firstKey, secondKey, relation, syncSize, sy
 
   local firstEntry = MoversByKey[firstKey]
   local secondEntry = MoversByKey[secondKey]
-  if not firstEntry or not secondEntry then
+  if not firstEntry or not secondEntry
+    or not FrameUtil.CanMoversShareSnapGroup(firstEntry, secondEntry)
+  then
     return false
   end
 
@@ -3537,6 +3531,8 @@ function FrameUtil.CancelExternalSmartSnapDrag(state)
   return true
 end
 
+local SmartSnapQuickSettingsExpanded = {}
+
 function FrameUtil.AugmentSmartSnapQuickSettings(entry, spec)
   EnsureSmartSnapLoaded()
   if not entry then
@@ -3565,10 +3561,23 @@ function FrameUtil.AugmentSmartSnapQuickSettings(entry, spec)
   local widthSync = supportsSize and SmartSnapGroupUsesWidthSync(entry)
   local designLabel = smartSnap and smartSnap.syncDesignLabel or "Sync visuals"
 
+  local expanded = SmartSnapQuickSettingsExpanded[entry.key] == true
   spec.controls[#spec.controls + 1] = {
-    type = "heading",
-    label = "Smart Snap",
+    type = "button",
+    label = expanded and "Smart Snap  [-]" or "Smart Snap  [+]",
+    action = function()
+      SmartSnapQuickSettingsExpanded[entry.key] = not expanded
+      local panel = ns.EditModeQuickSettings.panel
+      if panel and panel:IsShown() then
+        ns.EditModeQuickSettings:Refresh(panel.ownerKey, panel.anchor, function()
+          return FrameUtil.GetMoverQuickSettingsSpec(entry, entry.frame)
+        end)
+      end
+    end,
   }
+  if not expanded then
+    return spec
+  end
 
   if hasLinks then
     spec.controls[#spec.controls + 1] = {
@@ -3738,6 +3747,19 @@ local function RefreshMoverEditSessionVisibility(entry)
     entry.nudgeGroup:Hide()
   end
 
+  local previewVisible = ns.Flags.IsEditing == true and FrameUtil.IsMoverPreviewVisible(entry.key)
+  if entry._previewVisible ~= previewVisible then
+    local wasInitialized = entry._previewVisible ~= nil
+    entry._previewVisible = previewVisible
+    local callback = entry.opts.onPreviewVisibilityChanged
+    if type(callback) == "function" and (wasInitialized or ns.Flags.IsEditing) then
+      callback(previewVisible, entry.frame, entry.key)
+    end
+    if ns.TestMode:IsActive() then
+      ns.TestMode:QueuePreviewRefresh()
+    end
+  end
+
   return visible
 end
 
@@ -3756,19 +3778,9 @@ function FrameUtil.ApplyMoverVisibilityPreset()
   if ns.Flags.IsEditing then
     ns.EditModeQuickSettings:Hide()
     FrameUtil._RefreshSelectionVisuals()
+    ns.TestMode:QueuePreviewRefresh()
+    ns.TestMode:QueueToolbarRefresh()
   end
-end
-
-local function GetEditSessionHiddenMoverCount()
-  local count = 0
-
-  for _, entry in ipairs(MoversList) do
-    if entry._editSessionHidden then
-      count = count + 1
-    end
-  end
-
-  return count
 end
 
 function FrameUtil.HideMoverForEditSession(key)
@@ -3788,10 +3800,7 @@ function FrameUtil.HideMoverForEditSession(key)
     FrameUtil._RemoveMoverSelection(entry)
   end
 
-  if FrameUtil._UpdateMoverVisibilityControls then
-    FrameUtil._UpdateMoverVisibilityControls()
-  end
-
+  ns.TestMode:RefreshEditControlButtons()
   ns.EditModeQuickSettings:Hide()
 end
 
@@ -3937,9 +3946,7 @@ function FrameUtil._RefreshSelectionVisuals()
 
   FrameUtil._UpdateNudgeUI(SelectedEntry)
 
-  if FrameUtil._UpdateMoverVisibilityControls then
-    FrameUtil._UpdateMoverVisibilityControls()
-  end
+  ns.TestMode:RefreshEditControlButtons()
 end
 
 local function AddEntryToMoveGroup(group, entry, includeSmartSnap)
@@ -4041,14 +4048,6 @@ function FrameUtil.RefreshTheme()
 
   if FrameUtil._selectionBox then
     SetEditModeVisualColors(FrameUtil._selectionBox, 0.18, 0.95)
-  end
-
-  local editDialog = FrameUtil._editDialog
-  if editDialog and editDialog.minimizeBtn then
-    ns.Theme.ApplyExpandCollapseButton(
-      editDialog.minimizeBtn,
-      not FrameUtil._instructionsCollapsed
-    )
   end
 
   FrameUtil._RefreshSelectionVisuals()
@@ -4213,608 +4212,157 @@ end
 
 
 function FrameUtil._UpdateEditDialogKeyboardState()
-  local dlg = FrameUtil._editDialog
-  if not dlg or InCombatLockdown() then
+  local panel = ns.TestMode.toolbar
+  if panel and not InCombatLockdown() then
+    panel:EnableKeyboard(FrameUtil._keyboardMoveEnabled == true)
+  end
+end
+
+function FrameUtil.HandleEditModeKeyDown(key)
+  if not ns.Flags.IsEditing or not FrameUtil._keyboardMoveEnabled then
     return
   end
-
-  dlg:EnableKeyboard(FrameUtil._keyboardMoveEnabled and true or false)
-end
-
-local function CreatePleebCheckbox(parent, label, initial, onClick)
-  local wrap = CreateFrame("Frame", nil, parent)
-  wrap:SetSize(Round(220), Round(20))
-  wrap:EnableMouse(true)
-
-  local cb = _G.LibStub("AceGUI-3.0"):Create("CheckBox")
-  cb:SetFullWidth(true)
-  cb:SetLabel(label or "")
-  cb:SetValue(initial and true or false)
-
-  local cbFrame = cb.frame
-  cbFrame:SetParent(wrap)
-  cbFrame:ClearAllPoints()
-  cbFrame:SetPoint("LEFT", wrap, "LEFT", 0, 0)
-  cbFrame:Show()
-
-  wrap:SetScript("OnMouseDown", function(_, button)
-    if button ~= "LeftButton" then
-      return
+  if key == "1" or key == "2" or key == "3"
+    or key == "4" or key == "5" or key == "6"
+    or key == "7" or key == "8" or key == "9"
+  then
+    FrameUtil._SetNudgeStepFromSlider(tonumber(key))
+  elseif key == "TAB" then
+    FrameUtil._SelectNextMover(not IsShiftKeyDown())
+  elseif key == "UP" or key == "DOWN" or key == "LEFT" or key == "RIGHT" then
+    local step = FrameUtil._nudgeStep or NUDGE_DEFAULT
+    if not SelectedEntry then
+      FrameUtil._SelectNextMover(true)
     end
-
-    cb:SetValue(not cb:GetValue())
-    onClick(wrap)
-  end)
-
-  cb:SetCallback("OnValueChanged", function()
-    onClick(wrap)
-  end)
-
-  wrap._checkbox = cb
-  wrap.SetChecked = function(_, value)
-    cb:SetValue(value and true or false)
+    if key == "UP" then
+      FrameUtil._NudgeSelected(0, step)
+    elseif key == "DOWN" then
+      FrameUtil._NudgeSelected(0, -step)
+    elseif key == "LEFT" then
+      FrameUtil._NudgeSelected(-step, 0)
+    else
+      FrameUtil._NudgeSelected(step, 0)
+    end
   end
-  wrap.GetChecked = function()
-    return cb:GetValue() and true or false
-  end
-
-  return wrap
 end
 
-
-local function EnsureEditDialog()
-  if FrameUtil._editDialog and FrameUtil._editDialog:IsObjectType("Frame") then
-    return FrameUtil._editDialog
+function FrameUtil.EnsureEditCoordinates()
+  if FrameUtil._coordinatePanel then
+    return FrameUtil._coordinatePanel
   end
 
   local AceGUI = _G.LibStub("AceGUI-3.0")
-
-  FrameUtil._InitEditModeConfig()
-
-  local f = CreateFrame("Frame", "PUI_EditModeFrame", UIParent, "BackdropTemplate")
-  FrameUtil._editDialog = f
-
-  f:SetFrameStrata("FULLSCREEN_DIALOG")
-  f:SetSize(Round(440), Round(300))
-  f:SetPoint("TOP", UIParent, "TOP", 0, -40)
-  f:SetMovable(true)
-  f:EnableMouse(true)
-  f:RegisterForDrag("LeftButton")
-  f:SetScript("OnDragStart", f.StartMoving)
-  f:SetScript("OnDragStop",  f.StopMovingOrSizing)
-
-  _G.table.insert(_G.UISpecialFrames, f:GetName())
-
-  ns.Theme.WidgetSkins.Frame(f)
-
-
-  local title = f:CreateFontString(nil, "OVERLAY", "GameFontHighlightLarge")
-  f.title = title
-  title:SetPoint("TOPLEFT", f, "TOPLEFT", 16, -14)
-  title:SetText("Edit Mode")
-
-  FrameUtil.ApplyGlobalEditFont(title, 18, nil)
-
-  local hint = f:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-  f.hint = hint
-  hint:SetPoint("TOPLEFT", f, "TOPLEFT", 16, -40)
-  hint:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -16, 56)
-  hint:SetJustifyH("LEFT")
-  hint:SetJustifyV("TOP")
-  hint:SetText(
-    "Tips:\n" ..
-    "• Left-click a mover to select it and open quick settings; click it again to close them.\n" ..
-    "• Ctrl+Left-click adds or removes movers from the selection.\n" ..
-    "• Left-drag empty space to box-select multiple movers.\n" ..
-    "• Drag any selected mover to move the full selection.\n" ..
-    "• Right-click opens that mover's settings.\n" ..
-    "• Ctrl+Right-click resets the mover to its default position.\n" ..
-    "• Shift+Right-click temporarily hides that mover; use Show all to restore hidden movers.\n" ..
-    "• Alt+Right-click detaches Smart Snap links for that mover.\n" ..
-    "• Shift+Left-drag detaches Smart Snap links and disables snapping for that drag.\n" ..
-    "• Use the nudge arrows and X/Y boxes for precise positioning.\n" ..
-    "• (Optional) Enable keyboard movement for Tab / Shift-Tab and arrow keys."
-  )
-
-  FrameUtil.ApplyGlobalEditFont(hint, 13, nil)
-
-  local selFrame = CreateFrame("Frame", "PUI_EditModeSelectionFrame", f, "BackdropTemplate")
-  selFrame:SetPoint("TOPLEFT", f, "BOTTOMLEFT", 0, -4)
-  selFrame:SetPoint("TOPRIGHT", f, "BOTTOMRIGHT", 0, -4)
-  selFrame:SetHeight(84)
-
-  ns.Theme.WidgetSkins.Frame(selFrame)
-
-
-  local selLabel = selFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-  selLabel:SetPoint("TOPLEFT", selFrame, "TOPLEFT", 12, -10)
-  selLabel:SetJustifyH("LEFT")
-  selLabel:SetText("Selected: none")
-  FrameUtil._selectedLabel = selLabel
-
-  FrameUtil.ApplyGlobalEditFont(selLabel, 12, nil)
-
-  local xBox = AceGUI:Create("EditBox")
-  FrameUtil._nudgeXInput = xBox
-  xBox:SetLabel("") -- label drawn manually next to box
-  xBox:SetWidth(100)
-  xBox:SetCallback("OnEnterPressed", function()
-    FrameUtil._ApplyNudgeFromInputs()
+  local popup = CreateFrame("Frame", "PUI_EditModeSelectionFrame", UIParent, "BackdropTemplate")
+  FrameUtil._coordinatePanel = popup
+  popup:SetSize(Round(300), 84)
+  popup:SetPoint("CENTER", UIParent, "CENTER", 0, 160)
+  popup:SetFrameStrata("FULLSCREEN_DIALOG")
+  popup:SetClampedToScreen(true)
+  popup:SetMovable(true)
+  popup:EnableMouse(true)
+  popup:RegisterForDrag("LeftButton")
+  popup:SetScript("OnDragStart", function(self)
+    if not InCombatLockdown() then
+      self:StartMoving()
+    end
   end)
-
-  local xbFrame = xBox.frame
-  xbFrame:SetParent(selFrame)
-  xbFrame:ClearAllPoints()
-  xbFrame:SetPoint("TOPRIGHT", selFrame, "TOPRIGHT", -140, -4)
-  xbFrame:Show()
-  ns.AceHooks.TakeOwnership(xBox)
-
-  local xLabel = selFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-  xLabel:SetPoint("RIGHT", xbFrame, "LEFT", -6, 0)
-  xLabel:SetJustifyH("RIGHT")
-  xLabel:SetText("X")
-  FrameUtil.ApplyGlobalEditFont(xLabel, 12, nil)
-
-  local yBox = AceGUI:Create("EditBox")
-  FrameUtil._nudgeYInput = yBox
-  yBox:SetLabel("") -- label drawn manually next to box
-  yBox:SetWidth(100)
-  yBox:SetCallback("OnEnterPressed", function()
-    FrameUtil._ApplyNudgeFromInputs()
+  popup:SetScript("OnDragStop", function(self)
+    self:StopMovingOrSizing()
+    local x, y = self:GetCenter()
+    local cx, cy = UIParent:GetCenter()
+    if x and y and cx and cy then
+      local db = FrameUtil._GetEditModeDB()
+      db.coordinates = { x = x - cx, y = y - cy }
+      self:ClearAllPoints()
+      self:SetPoint("CENTER", UIParent, "CENTER", db.coordinates.x, db.coordinates.y)
+    end
   end)
+  ns.Theme.WidgetSkins.Frame(popup)
 
-  local ybFrame = yBox.frame
-  ybFrame:SetParent(selFrame)
-  ybFrame:ClearAllPoints()
-  ybFrame:SetPoint("TOPRIGHT", selFrame, "TOPRIGHT", -16, -4)
-  ybFrame:Show()
-  ns.AceHooks.TakeOwnership(yBox)
+  local label = popup:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+  label:SetPoint("TOPLEFT", popup, "TOPLEFT", 12, -10)
+  label:SetJustifyH("LEFT")
+  label:SetText("Selected: none")
+  FrameUtil.ApplyGlobalEditFont(label, 12, nil)
+  FrameUtil._selectedLabel = label
 
-  local yLabel = selFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-  yLabel:SetPoint("RIGHT", ybFrame, "LEFT", -6, 0)
-  yLabel:SetJustifyH("RIGHT")
-  yLabel:SetText("Y")
-  FrameUtil.ApplyGlobalEditFont(yLabel, 12, nil)
-
-  local hideSelectedBtn = CreateFrame("Button", nil, selFrame, "UIPanelButtonTemplate")
-  hideSelectedBtn:SetSize(Round(126), Round(24))
-  hideSelectedBtn:SetPoint("BOTTOMLEFT", selFrame, "BOTTOMLEFT", 12, 8)
-  hideSelectedBtn:SetText("Hide selected")
-  hideSelectedBtn:SetScript("OnClick", function()
-    FrameUtil.HideSelectedMoversForEditSession()
-  end)
-
-  local hideOthersBtn = CreateFrame("Button", nil, selFrame, "UIPanelButtonTemplate")
-  hideOthersBtn:SetSize(Round(126), Round(24))
-  hideOthersBtn:SetPoint("LEFT", hideSelectedBtn, "RIGHT", 6, 0)
-  hideOthersBtn:SetText("Hide others")
-  hideOthersBtn:SetScript("OnClick", function()
-    FrameUtil.HideUnselectedMoversForEditSession()
-  end)
-
-  local showAllBtn = CreateFrame("Button", nil, selFrame, "UIPanelButtonTemplate")
-  showAllBtn:SetSize(Round(126), Round(24))
-  showAllBtn:SetPoint("LEFT", hideOthersBtn, "RIGHT", 6, 0)
-  showAllBtn:SetText("Show all")
-  showAllBtn:SetScript("OnClick", function()
-    FrameUtil.ShowAllMoversForEditSession()
-  end)
-
-  ns.Theme.WidgetSkins.UIButton(hideSelectedBtn)
-  ns.Theme.WidgetSkins.UIButton(hideOthersBtn)
-  ns.Theme.WidgetSkins.UIButton(showAllBtn)
-
-  FrameUtil._UpdateMoverVisibilityControls = function()
-    local selectedCount = FrameUtil._GetSelectedMoverCount and FrameUtil._GetSelectedMoverCount() or 0
-    local hiddenCount = GetEditSessionHiddenMoverCount()
-
-    hideSelectedBtn:SetEnabled(selectedCount > 0)
-    hideOthersBtn:SetEnabled(selectedCount > 0)
-    showAllBtn:SetEnabled(hiddenCount > 0)
-    showAllBtn:SetText(hiddenCount > 0 and ("Show all (" .. tostring(hiddenCount) .. ")") or "Show all")
+  local function AddCoordinate(labelText, xOffset)
+    local box = AceGUI:Create("PUI_EditBox")
+    box:SetLabel("")
+    box:SetWidth(100)
+    box:SetCallback("OnEnterPressed", FrameUtil._ApplyNudgeFromInputs)
+    box.frame:SetParent(popup)
+    box.frame:ClearAllPoints()
+    box.frame:SetPoint("TOPRIGHT", popup, "TOPRIGHT", xOffset, -32)
+    box.frame:Show()
+    ns.AceHooks.TakeOwnership(box)
+    local caption = popup:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    caption:SetPoint("RIGHT", box.frame, "LEFT", -6, 0)
+    caption:SetText(labelText)
+    FrameUtil.ApplyGlobalEditFont(caption, 12, nil)
+    return box
   end
-  FrameUtil._UpdateMoverVisibilityControls()
-
-
-  local panel = CreateFrame("Frame", nil, UIParent, "BackdropTemplate")
-  FrameUtil._nudgePanel = panel
-  panel:SetSize(Round(330), Round(250))
-  panel:ClearAllPoints()
-  panel:SetPoint("TOPLEFT", f, "TOPRIGHT", 8, 0)
-
-  panel:SetFrameStrata("FULLSCREEN_DIALOG")
-  panel:SetFrameLevel(f:GetFrameLevel() + 1)
-
-  ns.Theme.WidgetSkins.Frame(panel)
-
-
-  local snapHint = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-  panel.snapHint = snapHint
-  snapHint:SetPoint("TOPLEFT", panel, "TOPLEFT", 16, -6)
-  snapHint:SetPoint("TOPRIGHT", panel, "TOPRIGHT", -16, -6)
-  snapHint:SetJustifyH("CENTER")
-  snapHint:SetText("Shift+Left-drag detaches a Smart Snap frame and disables snapping for that drag.")
-  snapHint:SetShown(FrameUtil._smartSnapEnabled and true or false)
-
-  FrameUtil.ApplyGlobalEditFont(snapHint, 11, nil)
-
-  local colLeftX  = 16
-  local colRightX = 170
-  local rowTopY   = -24
-
-  local dbGetter = FrameUtil._GetEditModeDB
-
-  local kb = CreatePleebCheckbox(panel, "Keyboard movement", FrameUtil._keyboardMoveEnabled, function(self)
-    FrameUtil._keyboardMoveEnabled = self:GetChecked() and true or false
-    dbGetter().keyboardMoveEnabled = FrameUtil._keyboardMoveEnabled
-    FrameUtil._UpdateEditDialogKeyboardState()
-  end)
-  FrameUtil._keyboardMoveCheck = kb
-  kb:SetPoint("TOPLEFT", panel, "TOPLEFT", colLeftX, rowTopY + 2)
-
-  local dimmingCheckbox = CreatePleebCheckbox(panel, "Disable screen dimming", FrameUtil._disableDimming, function(self)
-    FrameUtil._disableDimming = self:GetChecked() and true or false
-    dbGetter().disableDimming = FrameUtil._disableDimming
-
-    if ns.Flags.IsEditing then
-      if FrameUtil._disableDimming then
-        PlayDimmerFade(false)
-        if FrameUtil._dimmer then
-          FrameUtil._dimmer:Hide()
-        end
-      else
-        PlayDimmerFade(true)
-      end
-    end
-  end)
-  dimmingCheckbox:SetPoint("TOPLEFT", kb, "BOTTOMLEFT", 0, -10)
-
-  local snapFrames = CreatePleebCheckbox(panel, "Snap to frames", FrameUtil._snapToFrame, function(self)
-    FrameUtil._snapToFrame = self:GetChecked() and true or false
-    dbGetter().snapToFrame = FrameUtil._snapToFrame
-  end)
-  snapFrames:SetPoint("TOPLEFT", dimmingCheckbox, "BOTTOMLEFT", 0, -10)
-  snapFrames:SetChecked(FrameUtil._snapToFrame and true or false)
-
-  local smartSnap = CreatePleebCheckbox(panel, "Smart Snap", FrameUtil._smartSnapEnabled, function(self)
-    FrameUtil.SetSmartSnapEnabled(self:GetChecked())
-    panel.snapHint:SetShown(FrameUtil._smartSnapEnabled)
-  end)
-  smartSnap:SetPoint("TOPLEFT", snapFrames, "BOTTOMLEFT", 0, -10)
-  smartSnap:SetChecked(FrameUtil._smartSnapEnabled and true or false)
-
-  local snapGrid = CreatePleebCheckbox(panel, "Snap to grid", FrameUtil._snapToGrid, function(self)
-    FrameUtil._snapToGrid = self:GetChecked() and true or false
-    dbGetter().snapToGrid = FrameUtil._snapToGrid
-  end)
-  snapGrid:SetPoint("TOPLEFT", smartSnap, "BOTTOMLEFT", 0, -10)
-
-
-
-  panel.snapHint:SetShown(FrameUtil._smartSnapEnabled and true or false)
-
-  local nudgeSlider = AceGUI:Create("PUI_Slider")
-  FrameUtil._nudgeSlider = nudgeSlider
-  nudgeSlider:SetLabel("Nudge step (pixels)")
-  nudgeSlider:SetSliderValues(NUDGE_MIN, NUDGE_MAX, 1)
-  nudgeSlider:SetValue(FrameUtil._nudgeStep or NUDGE_DEFAULT)
-  nudgeSlider:SetCallback("OnValueChanged", function(_, _, value)
-    FrameUtil._SetNudgeStepFromSlider(value)
-  end)
-
-  local nsFrame = nudgeSlider.frame
-  nsFrame:SetParent(panel)
-  nsFrame:ClearAllPoints()
-  nsFrame:SetPoint("TOPLEFT", panel, "TOPLEFT", colRightX, rowTopY)
-  nsFrame:SetWidth(140)
-  nsFrame:Show()
-  ns.AceHooks.TakeOwnership(nudgeSlider)
-
-  local tolSlider = AceGUI:Create("PUI_Slider")
-  tolSlider:SetLabel("Snap distance (pixels)")
-  tolSlider:SetSliderValues(2, 20, 1)
-  tolSlider:SetValue(FrameUtil._snapTolerance or 8)
-  tolSlider:SetCallback("OnValueChanged", function(_, _, value)
-    FrameUtil.SetSnapTolerance(value)
-  end)
-
-  local tsFrame = tolSlider.frame
-  tsFrame:SetParent(panel)
-  tsFrame:ClearAllPoints()
-  tsFrame:SetPoint("TOPLEFT", nsFrame, "BOTTOMLEFT", 0, -18)
-  tsFrame:SetWidth(140)
-  tsFrame:Show()
-  ns.AceHooks.TakeOwnership(tolSlider)
-
-  local fadeSlider = AceGUI:Create("PUI_Slider")
-  fadeSlider:SetLabel("Fade to black alpha")
-  fadeSlider:SetSliderValues(0, 1, 0.05)
-  fadeSlider:SetValue(FrameUtil._dimAlpha or 0.7)
-  fadeSlider:SetCallback("OnValueChanged", function(_, _, value)
-    local v = tonumber(value) or 0.7
-    if v < 0 then v = 0 elseif v > 1 then v = 1 end
-
-    FrameUtil._dimAlpha = v
-    dbGetter().dimAlpha = v
-    FrameUtil._RefreshDimmerAlpha()
-  end)
-
-  local fsFrame = fadeSlider.frame
-  fsFrame:SetParent(panel)
-  fsFrame:ClearAllPoints()
-  fsFrame:SetPoint("TOPLEFT", tsFrame, "BOTTOMLEFT", 0, -18)
-  fsFrame:SetWidth(140)
-  fsFrame:Show()
-  ns.AceHooks.TakeOwnership(fadeSlider)
-
-  local gridLabel = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-  gridLabel:SetPoint("TOPLEFT", snapGrid, "BOTTOMLEFT", 2, -6)
-  gridLabel:SetText("Grid:")
-  FrameUtil.ApplyGlobalEditFont(gridLabel, 11, nil)
-
-  local gridDropdown = AceGUI:Create("Dropdown")
-  gridDropdown:SetFullWidth(false)
-  gridDropdown:SetWidth(90)
-  local sizeList = {}
-  for _, s in ipairs({ 8, 16, 32, 64 }) do
-    sizeList[s] = tostring(s)
-  end
-  sizeList["off"] = "Off"
-
-  gridDropdown:SetList(sizeList)
-  gridDropdown:SetLabel("")
-  gridDropdown:SetCallback("OnValueChanged", function(_, _, key)
-    if key == "off" then
-      FrameUtil.ShowGrid(false)
-    else
-      local val = tonumber(key)
-      if val then
-        FrameUtil.SetGridSize(val)
-        FrameUtil.ShowGrid(true)
-      end
-    end
-
-    local db = dbGetter()
-    db.gridSize = FrameUtil._gridSize
-    db.showGrid = FrameUtil._showGrid
-  end)
-
-  local gdFrame = gridDropdown.frame
-  gdFrame:SetParent(panel)
-  gdFrame:ClearAllPoints()
-  gdFrame:SetPoint("TOPLEFT", gridLabel, "TOPRIGHT", 4, -2)
-  gdFrame:SetWidth(90)
-  gdFrame:Show()
-  ns.AceHooks.TakeOwnership(gridDropdown)
-
-  if FrameUtil._showGrid and FrameUtil._gridSize then
-    gridDropdown:SetValue(FrameUtil._gridSize)
-  else
-    gridDropdown:SetValue("off")
-  end
-
-  local buttonRow = CreateFrame("Frame", nil, f)
-  buttonRow:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -16, 14)
-  buttonRow:SetSize(Round(280), Round(32))
-
-  -- IMPORTANT: CreateFrame wants "Button" as a STRING.
-  local exitBtn = CreateFrame("Button", nil, buttonRow, "UIPanelButtonTemplate")
-  f.exitBtn = exitBtn
-  exitBtn:SetText("Exit Edit Mode")
-  exitBtn:SetSize(Round(130), Round(28))
-  exitBtn:SetPoint("RIGHT", buttonRow, "RIGHT", 0, 0)
-  exitBtn:SetScript("OnClick", function()
-    Addon:SetEditMode(false)
-  end)
-
-  local openBtn = CreateFrame("Button", nil, buttonRow, "UIPanelButtonTemplate")
-  f.openBtn = openBtn
-  openBtn:SetText("Open Blizzard Settings")
-  openBtn:SetSize(Round(150), Round(28))
-  openBtn:SetPoint("RIGHT", exitBtn, "LEFT", -8, 0)
-  openBtn:SetScript("OnClick", function()
-    _G.CooldownViewerSettings:ShowUIPanel(false)
-  end)
-
-  ns.Theme.WidgetSkins.UIButton(openBtn)
-  ns.Theme.WidgetSkins.UIButton(exitBtn)
-
-  local toggleBtn = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
-  toggleBtn:SetSize(140, 22)
-  toggleBtn:SetPoint("TOPRIGHT", f, "TOPRIGHT", -16, -10)
-  toggleBtn:SetText("Edit Mode Settings")
-
-  ns.Theme.WidgetSkins.UIButton(toggleBtn)
-
-  local keybindsBtn = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
-  f.keybindsBtn = keybindsBtn
-  keybindsBtn:SetSize(80, 22)
-  keybindsBtn:SetPoint("RIGHT", toggleBtn, "LEFT", -8, 0)
-  keybindsBtn:SetText("Keybinds")
-
-  ns.Theme.WidgetSkins.UIButton(keybindsBtn)
-
-  local minimizeBtn = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
-  f.minimizeBtn = minimizeBtn
-  minimizeBtn:SetSize(24, 22)
-  minimizeBtn:SetPoint("RIGHT", keybindsBtn, "LEFT", -8, 0)
-
-  ns.Theme.WidgetSkins.UIButton(minimizeBtn)
-  minimizeBtn:SetText("")
-
-  local function UpdateInstructionsVisibility()
-    local collapsed = FrameUtil._instructionsCollapsed and true or false
-    hint:SetShown(not collapsed)
-    buttonRow:SetShown(not collapsed)
-    f:SetHeight(Round(collapsed and 44 or 300))
-    ns.Theme.ApplyExpandCollapseButton(minimizeBtn, not collapsed)
-  end
-
-  minimizeBtn:SetScript("OnClick", function()
-    FrameUtil._instructionsCollapsed = not FrameUtil._instructionsCollapsed
-    local db = FrameUtil._GetEditModeDB()
-    db.instructionsCollapsed = FrameUtil._instructionsCollapsed and true or false
-
-    if FrameUtil._instructionsCollapsed then
-      FrameUtil._settingsCollapsed = true
-      FrameUtil._keybindsCollapsed = true
-      db.settingsCollapsed = true
-      db.keybindsCollapsed = true
-    end
-
-    UpdateInstructionsVisibility()
-    FrameUtil._UpdateSettingsPanelVisibility()
-    FrameUtil._UpdateKeyboardHelpPanelVisibility()
-  end)
-
-  UpdateInstructionsVisibility()
-
-
-  local function UpdateSettingsPanelVisibility()
-    local collapsed = FrameUtil._settingsCollapsed and true or false
-    if panel then
-      panel:SetShown(not collapsed)
-    end
-  end
-  FrameUtil._UpdateSettingsPanelVisibility = UpdateSettingsPanelVisibility
-
-  toggleBtn:SetScript("OnClick", function()
-    FrameUtil._settingsCollapsed = not FrameUtil._settingsCollapsed
-    local db = FrameUtil._GetEditModeDB()
-    db.settingsCollapsed = FrameUtil._settingsCollapsed and true or false
-    UpdateSettingsPanelVisibility()
-  end)
-
-  keybindsBtn:SetScript("OnClick", function()
-    FrameUtil._keybindsCollapsed = not FrameUtil._keybindsCollapsed
-    local db = FrameUtil._GetEditModeDB()
-    db.keybindsCollapsed = FrameUtil._keybindsCollapsed and true or false
-    FrameUtil._UpdateKeyboardHelpPanelVisibility()
-  end)
-
-  UpdateSettingsPanelVisibility()
-
-  f:EnableKeyboard(FrameUtil._keyboardMoveEnabled and true or false)
-  f:SetPropagateKeyboardInput(true)
-
-  f:HookScript("OnKeyDown", function(self, key)
-    if not FrameUtil._keyboardMoveEnabled then
-      return
-    end
-
-    if key == "1" or key == "2" or key == "3"
-       or key == "4" or key == "5" or key == "6"
-       or key == "7" or key == "8" or key == "9" then
-      FrameUtil._SetNudgeStepFromSlider(tonumber(key))
-      return
-    end
-
-    if key == "TAB" then
-      FrameUtil._SelectNextMover(not IsShiftKeyDown())
-      return
-    end
-
-    if key == "UP" or key == "DOWN" or key == "LEFT" or key == "RIGHT" then
-      local step = FrameUtil._nudgeStep or NUDGE_DEFAULT
-      if not SelectedEntry then
-        FrameUtil._SelectNextMover(true)
-      end
-
-      if key == "UP" then
-        FrameUtil._NudgeSelected(0, step)
-      elseif key == "DOWN" then
-        FrameUtil._NudgeSelected(0, -step)
-      elseif key == "LEFT" then
-        FrameUtil._NudgeSelected(-step, 0)
-      else
-        FrameUtil._NudgeSelected(step, 0)
-      end
-    end
-  end)
-
-  f:HookScript("OnHide", function()
-    if ns.Flags.IsEditing then
-      Addon:SetEditMode(false)
-    end
-  end)
-
-  return f
+  FrameUtil._nudgeXInput = AddCoordinate("X", -164)
+  FrameUtil._nudgeYInput = AddCoordinate("Y", -16)
+  popup:Hide()
+  return popup
 end
 
-
-function FrameUtil.EnsureKeyboardHelpPanel()
-  if FrameUtil._kbHelpPanel and FrameUtil._kbHelpPanel:IsObjectType("Frame") then
-    return FrameUtil._kbHelpPanel
-  end
-
-  local f = FrameUtil._editDialog
-  if not f or not f.IsObjectType or not f:IsObjectType("Frame") then
-    return nil
-  end
-
-  local panel = CreateFrame("Frame", nil, UIParent, "BackdropTemplate")
-  FrameUtil._kbHelpPanel = panel
-
-  panel:SetSize(Round(260), Round(210))
-  panel:ClearAllPoints()
-  panel:SetPoint("TOPRIGHT", f, "TOPLEFT", -8, 0)
-
-  panel:SetFrameStrata("FULLSCREEN_DIALOG")
-  panel:SetFrameLevel(f:GetFrameLevel() + 1)
-
-  ns.Theme.WidgetSkins.Frame(panel)
-
-
-  local title = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-  title:SetPoint("TOPLEFT", panel, "TOPLEFT", 16, -10)
-  title:SetJustifyH("LEFT")
-  title:SetText("Keyboard shortcuts")
-
-  FrameUtil.ApplyGlobalEditFont(title, 14, nil)
-
-  local text = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-  text:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -6)
-  text:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", -16, 12)
-  text:SetJustifyH("LEFT")
-  text:SetJustifyV("TOP")
-  text:SetText(
-    "• /pek: Enter Edit Mode with keyboard movement.\n" ..
-    "• ESC: Exit Edit Mode.\n" ..
-    "• Tab / Shift-Tab: Cycle movers.\n" ..
-    "• Arrow keys: Nudge selected frame.\n" ..
-    "• 1–9: Set nudge step (pixels)."
-  )
-
-  FrameUtil.ApplyGlobalEditFont(text, 11, nil)
-
-  return panel
-end
-
-function FrameUtil._UpdateKeyboardHelpPanelVisibility()
-  local panel = FrameUtil.EnsureKeyboardHelpPanel()
-  if not panel then
-    return
-  end
-
-  panel:SetShown(
-    ns.Flags.IsEditing
-      and not FrameUtil._keybindsCollapsed
-  )
-end
-
--- Edit dialog
 local function ShowEditDialog(show)
   if not show then
-    local dlg = FrameUtil._editDialog
-    if dlg then
-      dlg:Hide()
+    if FrameUtil._coordinatePanel then
+      FrameUtil._coordinatePanel:Hide()
     end
     return
   end
+  local popup = FrameUtil.EnsureEditCoordinates()
+  local db = FrameUtil._GetEditModeDB()
+  if FrameUtil._coordinateProfile ~= db then
+    FrameUtil._coordinateProfile = db
+    local saved = db.coordinates or {}
+    popup:ClearAllPoints()
+    popup:SetPoint("CENTER", UIParent, "CENTER", saved.x or 0, saved.y or 160)
+  end
+  FrameUtil._UpdateNudgeUI(SelectedEntry)
+end
 
-  local dlg = EnsureEditDialog()
-  FrameUtil._UpdateEditDialogKeyboardState()
-  dlg:Show()
+function FrameUtil.SetEditDimmingDisabled(disabled)
+  FrameUtil._disableDimming = disabled == true
+  FrameUtil._GetEditModeDB().disableDimming = FrameUtil._disableDimming
+  if ns.Flags.IsEditing then
+    if FrameUtil._disableDimming then
+      PlayDimmerFade(false)
+    else
+      PlayDimmerFade(true)
+    end
+  end
+end
+
+function FrameUtil.SetEditDimAlpha(value)
+  local alpha = tonumber(value) or 0.7
+  FrameUtil._dimAlpha = math_min(1, math_max(0, alpha))
+  FrameUtil._GetEditModeDB().dimAlpha = FrameUtil._dimAlpha
+  FrameUtil._RefreshDimmerAlpha()
+end
+
+function FrameUtil.SetEditFrameSnap(enabled)
+  FrameUtil._snapToFrame = enabled == true
+  FrameUtil._GetEditModeDB().snapToFrame = FrameUtil._snapToFrame
+end
+
+function FrameUtil.SetEditGridSnap(enabled)
+  FrameUtil._snapToGrid = enabled == true
+  FrameUtil._GetEditModeDB().snapToGrid = FrameUtil._snapToGrid
+end
+
+function FrameUtil.GetEditSessionHiddenMoverCount()
+  local count = 0
+  for _, entry in ipairs(MoversList) do
+    if entry._editSessionHidden then
+      count = count + 1
+    end
+  end
+  return count
 end
 
 local function ResolveOverlayLabel(entry)
@@ -5691,16 +5239,9 @@ function FrameUtil._SetNudgeStepFromSlider(value)
   v = math_floor(v + 0.5)
   FrameUtil._nudgeStep = v
 
-  local slider = FrameUtil._nudgeSlider
-  if slider and slider.GetValue then
-    local sliderValue = tonumber(slider:GetValue()) or NUDGE_DEFAULT
-    if math_floor(sliderValue + 0.5) ~= v then
-      slider:SetValue(v)
-    end
-  end
-
   local db = FrameUtil._GetEditModeDB()
   db.nudgeStep = v
+  ns.TestMode:QueueToolbarRefresh()
 end
 
 function FrameUtil._ApplyNudgeFromInputs()
@@ -5749,6 +5290,10 @@ function FrameUtil._UpdateNudgeUI(entry)
 
   local xFrame = xBox.frame
   local yFrame = yBox.frame
+
+  if FrameUtil._coordinatePanel then
+    FrameUtil._coordinatePanel:SetShown(ns.Flags.IsEditing and IsSelectableEntry(entry))
+  end
 
   if not IsSelectableEntry(entry) then
     if labelFS.__puiLastText ~= "Selected: none" then
@@ -5800,9 +5345,6 @@ function FrameUtil._UpdateNudgeUI(entry)
   if xFrame then xFrame:Show() end
   if yFrame then yFrame:Show() end
 
-  if FrameUtil._nudgeSlider then
-    FrameUtil._nudgeSlider:SetValue(FrameUtil._nudgeStep or NUDGE_DEFAULT)
-  end
 end
 
 function FrameUtil._ClearSelection()
@@ -6157,6 +5699,9 @@ function FrameUtil:EnsureGhostMover(key, opts)
     groupKey = opts.groupKey,
     groupLabel = opts.groupLabel,
     defaultVisibility = opts.defaultVisibility,
+    isAvailable = opts.isAvailable,
+    onPreviewVisibilityChanged = opts.onPreviewVisibilityChanged,
+    snapGroup = opts.snapGroup,
     ghost = opts.ghost and true or false,
     useOverlayDrag = opts.useOverlayDrag ~= false,
     savePosition = opts.savePosition,
@@ -6482,16 +6027,12 @@ function FrameUtil.SetKeyboardMovementEnabled(enable, noPersist)
 
   FrameUtil._keyboardMoveEnabled = enable
 
-  local check = FrameUtil._keyboardMoveCheck
-  if check then
-    check:SetChecked(enable)
-  end
-
   if not noPersist then
     FrameUtil._GetEditModeDB().keyboardMoveEnabled = enable
   end
 
   FrameUtil._UpdateEditDialogKeyboardState()
+  ns.TestMode:QueueToolbarRefresh()
 end
 
 local function ApplyObjectiveTrackerMoverPosition(mover, tracker)
@@ -6616,6 +6157,10 @@ function FrameUtil.OnEditModeChanged(enable)
     ns.TestMode:SetActive(false, "edit-mode")
   end
 
+  if enable then
+    FrameUtil.SelectGroupMoverVisibilitySet()
+  end
+
   local participants = GetSortedEditModeParticipants()
   for index = 1, #participants do
     participants[index].participant:OnEditModeChanged(enable)
@@ -6623,7 +6168,6 @@ function FrameUtil.OnEditModeChanged(enable)
 
   FrameUtil._InitEditModeConfig()
   if enable then
-    FrameUtil.SelectGroupMoverVisibilitySet()
     FrameUtil._EnsureObjectiveTrackerMover()
   end
   FrameUtil:RefreshAllGhostMovers()
@@ -6639,6 +6183,7 @@ function FrameUtil.OnEditModeChanged(enable)
   end
 
   if not enable then
+    _G.wipe(SmartSnapQuickSettingsExpanded)
     ns.EditModeQuickSettings:Hide()
     EnsureSelectionSurface():SetShown(false)
     FrameUtil._ClearSelection()
@@ -6647,31 +6192,17 @@ function FrameUtil.OnEditModeChanged(enable)
   end
 
   if enable then
-    if not FrameUtil._disableDimming then
-      PlayDimmerFade(true)
-    elseif FrameUtil._dimmer then
-      FrameUtil._dimmer:Hide()
-    end
+    PlayDimmerFade(not FrameUtil._disableDimming)
 
     ShowEditDialog(true)
     EnsureSelectionSurface():SetShown(true)
-    FrameUtil._UpdateSettingsPanelVisibility()
-    FrameUtil._UpdateKeyboardHelpPanelVisibility()
     FrameUtil._UpdateEditDialogKeyboardState()
   else
-    if not FrameUtil._disableDimming then
-      PlayDimmerFade(false)
-    elseif FrameUtil._dimmer then
-      FrameUtil._dimmer:Hide()
-    end
+    PlayDimmerFade(false)
 
     ShowEditDialog(false)
-
-    if FrameUtil._nudgePanel then
-      FrameUtil._nudgePanel:Hide()
-    end
-    if FrameUtil._kbHelpPanel then
-      FrameUtil._kbHelpPanel:Hide()
+    if FrameUtil._coordinatePanel then
+      FrameUtil._coordinatePanel:Hide()
     end
 
     if FrameUtil._keyboardMoveTempSession then
