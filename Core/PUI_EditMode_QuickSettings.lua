@@ -327,7 +327,7 @@ local function AddControl(panel, control)
   panel.cursorY = panel.cursorY + height + CONTROL_GAP
 end
 
-function QuickSettings:Open(anchor, spec)
+function QuickSettings:Open(anchor, spec, preserveScroll)
   if InCombatLockdown() or type(spec) ~= "table" then
     return false
   end
@@ -341,6 +341,8 @@ function QuickSettings:Open(anchor, spec)
   local sameSession = panel:IsShown()
     and panel.ownerKey == spec.ownerKey
     and panel.anchor == anchor
+  local currentAlpha = panel:IsShown() and panel:GetAlpha() or 0
+  local previousScroll = preserveScroll and sameSession and panel.scroll:GetVerticalScroll() or 0
   local openAllSettings = spec.openAllSettings
 
   if not sameSession then
@@ -351,14 +353,13 @@ function QuickSettings:Open(anchor, spec)
     openAllSettings = panel.openAllSettings
   end
 
-  local startingAlpha = sameSession and panel:GetAlpha() or 0
-  local showFade = not sameSession or panel.fadeGroup:IsPlaying()
   if panel.fadeGroup:IsPlaying() then
     panel.fadeGroup:Stop()
   end
+  local showFade = currentAlpha < 1
   panel.fadeDirection = "in"
   panel:EnableMouse(true)
-  panel:SetAlpha(showFade and startingAlpha or 1)
+  panel:SetAlpha(currentAlpha)
   ReleaseControls(panel)
 
   panel.title:SetText(spec.title or "Quick settings")
@@ -414,15 +415,16 @@ function QuickSettings:Open(anchor, spec)
   for _, widget in ipairs(panel.controls) do
     widget:SetWidth(contentWidth)
   end
-  panel.scroll:SetVerticalScroll(0)
+  panel.scroll:SetVerticalScroll(math_min(previousScroll, math_max(0, contentHeight - viewportHeight)))
   panel.scroll:UpdateScrollChildRect()
   panel.scroll.ScrollBar:SetShown(hasScroll)
   panel.ownerKey = spec.ownerKey
   panel.anchor = anchor
   AnchorPanel(panel, anchor)
   if showFade then
-    panel.fadeAlpha:SetFromAlpha(startingAlpha)
+    panel.fadeAlpha:SetFromAlpha(currentAlpha)
     panel.fadeAlpha:SetToAlpha(1)
+    panel.fadeAlpha:SetSmoothing("OUT")
     panel.fadeGroup:Play()
   end
   return true
@@ -435,7 +437,7 @@ function QuickSettings:Refresh(ownerKey, anchor, provider)
   end
 
   local spec = type(provider) == "function" and provider(anchor) or provider
-  return self:Open(anchor, spec)
+  return self:Open(anchor, spec, true)
 end
 
 function QuickSettings:Hide(immediate)
@@ -445,6 +447,7 @@ function QuickSettings:Hide(immediate)
   end
 
   panel:StopMovingOrSizing()
+  panel:EnableMouse(false)
   local startingAlpha = panel:GetAlpha()
   if panel.fadeGroup:IsPlaying() then
     panel.fadeGroup:Stop()
@@ -466,6 +469,7 @@ function QuickSettings:Hide(immediate)
   panel:SetAlpha(startingAlpha)
   panel.fadeAlpha:SetFromAlpha(startingAlpha)
   panel.fadeAlpha:SetToAlpha(0)
+  panel.fadeAlpha:SetSmoothing("IN")
   panel.fadeGroup:Play()
 end
 
