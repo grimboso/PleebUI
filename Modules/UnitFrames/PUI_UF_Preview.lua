@@ -36,6 +36,7 @@ local AuraLayout = ns.UFAuraLayout
 
 local AURA_MANAGER_UNITS = {
   player = true,
+  pet = true,
   target = true,
   focus = true,
   boss = true,
@@ -640,17 +641,28 @@ local function IsDispelPreviewOptionsPath(path)
 end
 
 function Preview.IsAuraManagerOptionsPath(path)
-  return type(path) == "table"
-    and path[1] == "unitframes"
-    and AURA_MANAGER_UNITS[path[2]] == true
+  if type(path) ~= "table" or path[1] ~= "unitframes" then
+    return false
+  end
+
+  if path[2] == "player" and path[3] == "pet" then
+    return path[4] == "auras" and path[5] == "customDisplays"
+  end
+
+  return AURA_MANAGER_UNITS[path[2]] == true
     and path[3] == "auras"
     and path[4] == "customDisplays"
 end
 
 local function GetAuraManagerPathSelection(path)
-  local leafKey = type(path) == "table" and path[#path] or nil
-  local selectedID = type(leafKey) == "string" and tonumber(leafKey:match("^display_(%d+)$")) or nil
-  local categoryKey = type(path) == "table" and path[5] or nil
+  local categoryIndex = type(path) == "table"
+    and path[2] == "player"
+    and path[3] == "pet"
+    and 6
+    or 5
+  local categoryKey = type(path) == "table" and path[categoryIndex] or nil
+  local selectedID = type(categoryKey) == "string"
+    and tonumber(categoryKey:match("^display_(%d+)$")) or nil
   local auraType
   local builtInIDs = ns.UFAuraFilters.BUILT_IN_DISPLAY_IDS
 
@@ -744,7 +756,13 @@ local function GetAuraManagerPreviewContext(path)
     nestedPreview = NESTED_UNIT_FRAME_PREVIEW_UNITS[
       type(path) == "table" and path[3] or nil
     ] == true,
-    managerPath = {
+    managerPath = unitKey == "pet" and {
+      "unitframes",
+      "player",
+      "pet",
+      "auras",
+      "customDisplays",
+    } or {
       "unitframes",
       unitKey,
       "auras",
@@ -834,6 +852,10 @@ local function BuildUnitFramePreviewOptionsPath(context, leafKey)
       context.optionsPath[2],
       context.optionsPath[3],
     }
+
+    if context.unitKey == "pet" and leafKey then
+      path[#path + 1] = leafKey
+    end
   else
     path = {
       "unitframes",
@@ -1005,7 +1027,7 @@ local function ConfigureUnitFramePreviewInteractions(context)
   local frame = context.frame
   local interactions = frame.__puiAuraPreviewInteractions
   local grouped = context.grouped == true
-  local textNavigation = not context.nestedPreview
+  local textNavigation = (not context.nestedPreview or context.unitKey == "pet")
     and not context.partyPetPreview
 
   local healthLeaf = grouped and "health" or "general"
@@ -1016,10 +1038,10 @@ local function ConfigureUnitFramePreviewInteractions(context)
   local powerTextureOption = "powerTexture"
 
   if context.nestedPreview then
-    healthLeaf = nil
-    powerLeaf = nil
-    healthTextureSection = context.optionsPath[3]
-    powerTextureSection = context.optionsPath[3]
+    healthLeaf = context.unitKey == "pet" and "general" or nil
+    powerLeaf = context.unitKey == "pet" and "general" or nil
+    healthTextureSection = context.unitKey == "pet" and "general" or context.optionsPath[3]
+    powerTextureSection = context.unitKey == "pet" and "general" or context.optionsPath[3]
   elseif context.partyPetPreview then
     healthLeaf = nil
     powerLeaf = nil
@@ -1104,7 +1126,7 @@ local function ConfigureUnitFramePreviewInteractions(context)
     end
   )
 
-  local indicatorLeaf = context.unitKey == "raid"
+  local indicatorLeaf = context.grouped
     and "indicators"
     or "general"
 
@@ -1920,9 +1942,20 @@ end
 
 NavigateAuraPreviewElement = function(previewDisplay, sectionKey, optionKey)
   local context = previewDisplay.context
+  local path = BuildAuraManagerDisplayPath(context, previewDisplay.display)
+
+  local advancedSections = {
+    spellIDs = true,
+    regularFilters = true,
+    blacklist = true,
+    appearance = true,
+    sorting = true,
+  }
+
+  path[#path + 1] = advancedSections[sectionKey] and "advanced" or "overview"
 
   DismissAuraPreviewHint(context)
-  context.addon:SelectOptionsPath(BuildAuraManagerDisplayPath(context, previewDisplay.display))
+  context.addon:SelectOptionsPath(path)
   FocusAuraManagerOption(sectionKey, optionKey)
 end
 
@@ -2662,9 +2695,139 @@ local function StartDispelPreviewCycle(box)
   end)
 end
 
+local CASTBAR_PREVIEW_SPELL = "An Exceptionally Long Spell Name"
+local CASTBAR_PREVIEW_TARGET = "Training Target"
+local CASTBAR_PREVIEW_ICON = "Interface\\Icons\\Spell_Fire_Fireball02"
+local CASTBAR_PREVIEW_COLORS = {
+  player = { 1.0, 0.7, 0.0, 1.0 },
+  pet = { 0.7, 0.9, 1.0, 1.0 },
+  target = { 0.2, 0.8, 1.0, 1.0 },
+  focus = { 0.6, 1.0, 0.4, 1.0 },
+  boss = { 1.0, 0.6, 0.2, 1.0 },
+}
+
+local function RenderCastbarSettingsPreview(box, context)
+  local path = context.optionsPath
+  local nestedPet = path[2] == "player" and path[3] == "pet"
+  local castbarPage = nestedPet and path[4] == "castbar"
+    or (not nestedPet and path[3] == "castbar")
+  local bars = box.__puiSettingsCastbarSamples
+
+  if bars then
+    for _, bar in pairs(bars) do
+      bar:Hide()
+    end
+  end
+
+  if not castbarPage then
+    return false
+  end
+
+  local CastBar = ns.Modules.CastBar
+  local unit = context.unitKey == "boss" and "boss1" or context.unitKey
+  local cfg = CastBar:GetUnitConfig(unit)
+
+  if not cfg or CastBar.db.profile.enabled == false or cfg.enabled == false then
+    return true
+  end
+
+  if not bars then
+    bars = {}
+    box.__puiSettingsCastbarSamples = bars
+  end
+
+  local bar = bars[unit]
+
+  if not bar then
+    local owner = CreateFrame("Frame", nil, box:GetCanvas())
+    owner:SetAllPoints(box:GetCanvas())
+    owner:SetFrameLevel(box:GetCanvas():GetFrameLevel() + 100)
+
+    bar = CastBar.CreateCastBarFrame(owner, unit, { skipMover = true })
+    bar.__puiTestPresentation = true
+    bar.__puiTestState = {}
+    bars[unit] = bar
+  end
+
+  bar.__puiTestTargetName = CASTBAR_PREVIEW_TARGET
+  if cfg.useClassColor == true then
+    local color = RAID_CLASS_COLORS[context.previewClassToken or "MAGE"]
+    bar.__puiTestColor = { color.r, color.g, color.b, 1 }
+  elseif cfg.useCustomColor == true then
+    bar.__puiTestColor = cfg.customColor
+  else
+    bar.__puiTestColor = cfg.color or CASTBAR_PREVIEW_COLORS[context.unitKey]
+  end
+
+  CastBar:UpdateUnitLayout(unit, cfg, bar, true)
+
+  local width = bar:GetWidth()
+  local left = -width * 0.5
+  local right = width * 0.5
+  local bottom = -bar:GetHeight() * 0.5
+  local top = bar:GetHeight() * 0.5
+
+  if cfg.displayTarget == true then
+    local target = cfg.targetText
+    local x = tonumber(target.offX) or 0
+    local y = tonumber(target.offY) or 0
+    local targetWidth = bar.targetText:GetWidth()
+    local targetHeight = bar.targetText:GetHeight()
+
+    if target.anchor == "LEFT" then
+      left = math_min(left, -width * 0.5 + x - 6 - targetWidth)
+      right = math_max(right, -width * 0.5 + x - 6)
+      bottom = math_min(bottom, y - targetHeight * 0.5)
+      top = math_max(top, y + targetHeight * 0.5)
+    elseif target.anchor == "TOP" then
+      left = math_min(left, x - targetWidth * 0.5)
+      right = math_max(right, x + targetWidth * 0.5)
+      top = math_max(top, bar:GetHeight() * 0.5 + y + 6 + targetHeight)
+      bottom = math_min(bottom, bar:GetHeight() * 0.5 + y + 6)
+    elseif target.anchor == "BOTTOM" then
+      left = math_min(left, x - targetWidth * 0.5)
+      right = math_max(right, x + targetWidth * 0.5)
+      bottom = math_min(bottom, -bar:GetHeight() * 0.5 + y - 6 - targetHeight)
+      top = math_max(top, -bar:GetHeight() * 0.5 + y - 6)
+    else
+      right = math_max(right, width * 0.5 + x + 6 + targetWidth)
+      left = math_min(left, width * 0.5 + x + 6)
+      bottom = math_min(bottom, y - targetHeight * 0.5)
+      top = math_max(top, y + targetHeight * 0.5)
+    end
+  end
+
+  local canvas = box:GetCanvas()
+  local scale = math_max(0.01, math_min(
+    (tonumber(context.previewZoom) or 1) / Theme.GetOptionsUIScale(),
+    (canvas:GetWidth() - 32) / (right - left),
+    (canvas:GetHeight() - 32) / (top - bottom)
+  ))
+  bar:SetScale(scale)
+  bar:ClearAllPoints()
+  bar:SetPoint("CENTER", canvas, "CENTER", -(left + right) * 0.5, -(bottom + top) * 0.5)
+
+  bar.icon:SetTexture(CASTBAR_PREVIEW_ICON)
+  bar.status:SetMinMaxValues(0, 1)
+  bar.status:SetValue(0.62)
+
+  CastBar.SetTestCastVisuals(bar, cfg, CASTBAR_PREVIEW_SPELL)
+  CastBar.SetTestTimeText(bar, cfg, 1.8, 3.0)
+
+  bar:Show()
+  return true
+end
+
 RenderAuraManagerPreview = function(box, addon, path)
   StopDispelPreviewCycle(box)
   box.__puiDispelPreviewEntries = nil
+
+  local samples = box.__puiSettingsCastbarSamples
+  if samples then
+    for _, bar in pairs(samples) do
+      bar:Hide()
+    end
+  end
 
   BeginAuraPreviewFramePool(box)
   BeginAuraPreviewIconPool(box)
@@ -2694,6 +2857,13 @@ RenderAuraManagerPreview = function(box, addon, path)
 
   box.__puiAuraPreviewContext = context
   box.__puiAuraPreviewSelectedID = context.selectedID
+
+  if RenderCastbarSettingsPreview(box, context) then
+    box:SetTitle("Cast-bar preview")
+    box:SetDescription("A static cast sample with a long spell name and target. Enable the cast bar to see it here.")
+    HideAuraManagerPreviewControls(box)
+    return
+  end
 
   SyncAuraPreviewControls(box, context)
 
@@ -3049,7 +3219,8 @@ end
 
 local function StyleAuraPreviewButton(button)
   Theme.WidgetSkins.UIButton(button)
-  Theme.ApplyFont(button:GetFontString(), "tiny", 8)
+  button:GetFontString().__puiOptionsFontOwned = true
+  Theme.ApplyFont(button:GetFontString(), "body", 11)
 end
 
 local function SetAuraPreviewButtonTooltip(button, title, description)
@@ -3070,17 +3241,20 @@ local function LayoutAuraPreviewCreateButtons(box)
   local buttons = box.__puiAuraCreateButtons or {}
   local availableWidth = math_max(80, box:GetCanvas():GetWidth() - 16)
 
-  for index, button in ipairs(buttons) do
-    local textWidth = math_ceil(button:GetFontString():GetStringWidth())
-    local width = math_min(availableWidth, math_max(66, textWidth + 20))
+  local offsetY = 0
+
+  for _, button in ipairs(buttons) do
+    local text = button:GetFontString()
+    local width = math_min(availableWidth, math_max(66, math_ceil(text:GetStringWidth()) + 20))
+    local height = math_max(22, math_ceil(text:GetStringHeight()) + 8)
 
     button:ClearAllPoints()
-    button:SetPoint("TOPLEFT", toolbar, "TOPLEFT", 0, -((index - 1) * 26))
-    button:SetSize(width, 22)
+    button:SetPoint("TOPLEFT", toolbar, "TOPLEFT", 0, -offsetY)
+    button:SetSize(width, height)
+    offsetY = offsetY + height + 4
   end
 
-  local buttonCount = #buttons
-  local height = buttonCount > 0 and ((buttonCount * 22) + ((buttonCount - 1) * 4)) or 0
+  local height = math_max(0, offsetY - 4)
   toolbar:SetHeight(height)
   box.__puiAuraCreateToolbarHeight = height
 end
@@ -3141,13 +3315,15 @@ UpdateAuraPreviewHint = function(box, context, dragDisplay)
     hint:Show()
   elseif context.supportsAuraManager and not context.previewHintSeen then
     hint:SetText("Click an aura to edit it. Click duration, stacks, or a border for exact settings. Drag to reposition.")
-    hint:SetTextColor(1, 1, 1, 0.52)
+    hint:SetTextColor(1, 1, 1, 0.90)
     hint:Show()
   else
     hint:Hide()
   end
 
-  box.__puiAuraInteractionHintHeight = hint:IsShown() and 16 or 0
+  local height = hint:IsShown() and math_max(16, math_ceil(hint:GetStringHeight()) + 2) or 0
+  hint:SetHeight(math_max(1, height))
+  box.__puiAuraInteractionHintHeight = height
 end
 
 UpdateAuraPreviewSelectionUI = function(box, context)
@@ -3426,7 +3602,8 @@ local function EnsureAuraManagerPreviewControls(box)
     selectionLabel:SetPoint("RIGHT", canvas, "RIGHT", -38, 0)
     selectionLabel:SetJustifyH("LEFT")
     selectionLabel:SetWordWrap(false)
-    Theme.ApplyFont(selectionLabel, "tiny", 9)
+    selectionLabel.__puiOptionsFontOwned = true
+    Theme.ApplyFont(selectionLabel, "body", 11)
     box.__puiAuraSelectionLabel = selectionLabel
 
     local visibilityButton = CreateFrame("Button", nil, canvas)
@@ -3458,10 +3635,11 @@ local function EnsureAuraManagerPreviewControls(box)
 
     local interactionHint = canvas:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     interactionHint:SetPoint("TOPLEFT", selectionLabel, "BOTTOMLEFT", 0, -3)
-    interactionHint:SetPoint("TOPRIGHT", canvas, "TOPRIGHT", -8, 0)
+    interactionHint:SetPoint("TOPRIGHT", selectionLabel, "BOTTOMRIGHT", 30, -3)
     interactionHint:SetJustifyH("LEFT")
-    interactionHint:SetWordWrap(false)
-    Theme.ApplyFont(interactionHint, "tiny", 8)
+    interactionHint:SetWordWrap(true)
+    interactionHint.__puiOptionsFontOwned = true
+    Theme.ApplyFont(interactionHint, "body", 11)
     interactionHint:Hide()
     box.__puiAuraInteractionHint = interactionHint
 
@@ -3643,6 +3821,7 @@ StopAuraPreviewDrag = P:Def("StopAuraPreviewDrag", StopAuraPreviewDrag)
 BuildAuraPreviewDisplay = P:Def("BuildAuraPreviewDisplay", BuildAuraPreviewDisplay)
 ApplyAuraManagerPreviewSelection = P:Def("ApplyAuraManagerPreviewSelection", ApplyAuraManagerPreviewSelection)
 UpdateUnitFramePreviewMode = P:Def("UpdateUnitFramePreviewMode", UpdateUnitFramePreviewMode)
+RenderCastbarSettingsPreview = P:Def("RenderCastbarSettingsPreview", RenderCastbarSettingsPreview)
 RenderAuraManagerPreview = P:Def("RenderAuraManagerPreview", RenderAuraManagerPreview)
 Preview.HandleUnitFrameOptionsPathChanged = P:Def("Preview:HandleUnitFrameOptionsPathChanged", Preview.HandleUnitFrameOptionsPathChanged)
 Preview.RefreshAuraManagerPreview = P:Def("Preview:RefreshAuraManagerPreview", Preview.RefreshAuraManagerPreview)
