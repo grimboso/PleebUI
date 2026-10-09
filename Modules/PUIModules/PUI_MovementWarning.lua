@@ -641,8 +641,11 @@ function MovementWarning:GetOptions()
           set = function(_, value) config.displayMode = value; RefreshReminder() end,
         },
         fontSize = {
-          type = "range", name = "Font size", order = 40, min = 12, max = 64, step = 1,
-          desc = "Size of this reminder's label or icon.",
+          type = "range", order = 40, min = 12, max = 64, step = 1,
+          name = function() return config.displayMode == "icon" and "Icon size" or "Font size" end,
+          desc = function()
+            return config.displayMode == "icon" and "Size of this reminder's icon." or "Size of this reminder's text."
+          end,
           get = function() return config.fontSize end,
           set = function(_, value) config.fontSize = value; RefreshReminder() end,
         },
