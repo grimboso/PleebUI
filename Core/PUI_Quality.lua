@@ -561,6 +561,8 @@ local function EnsureCombatMsgFrame()
 
   ns.FrameUtil:RegisterMover("quality_combat_message", f, {
     label = "Combat Message",
+    moduleKey = "quality",
+    moduleLabel = "Quality of Life",
     optionsString = "Quality,combatTab",
     savePosition = function()
       SaveMoverPosition(f, "combatMessageAnchor")
@@ -671,6 +673,8 @@ local function EnsureCombatTimer()
 
   ns.FrameUtil:RegisterMover("quality_combat_timer", f, {
     label = "Combat Timer",
+    moduleKey = "quality",
+    moduleLabel = "Quality of Life",
     optionsString = "Quality,combatTab",
     smartSnap = {
       family = "positionOnly",
@@ -910,6 +914,8 @@ local function EnsureCombatWarningFrame()
 
   ns.FrameUtil:RegisterMover("quality_combat_warning", f, {
     label = "Combat Warning",
+    moduleKey = "quality",
+    moduleLabel = "Quality of Life",
     optionsString = "Quality,combatTab",
     smartSnap = {
       family = "positionOnly",
@@ -1938,6 +1944,8 @@ local function EnsurePetWarnFrame()
 
   ns.FrameUtil:RegisterMover("quality_pet_warning", f, {
     label = "Pet Warning",
+    moduleKey = "quality",
+    moduleLabel = "Quality of Life",
     optionsString = "Quality,combatTab",
     savePosition = function()
       SaveMoverPosition(f, "petWarningAnchor")
