@@ -1534,7 +1534,7 @@ local function DragonridingProvider(AddonObj)
     secondWind.args.swColor.name = "Second Wind color"
     options.arg = { puiExplicit = true }
     options.args = {
-      general = { type = "group", name = "Behavior", inline = true, order = 10, args = behavior },
+      general = { type = "group", name = "Behaviour", inline = true, order = 10, args = behavior },
       vigor = { type = "group", name = "Vigor bar", inline = true, order = 20, args = vigor },
       secondary = secondWind,
     }
