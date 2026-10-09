@@ -913,6 +913,8 @@ function PlayerBuffs:EnsureMovers()
       frameName = frameName,
       label = label,
       ghost = false,
+      moduleKey = "playerBuffs",
+      moduleLabel = "Player Buffs",
       useOverlayDrag = true,
       smartSnap = {
         family = "positionOnly",
