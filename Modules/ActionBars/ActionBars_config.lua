@@ -637,7 +637,7 @@ local function ActionBarsOptionsProvider(Addon)
                   },
                   buttonOffset = {
                     type = "range",
-                    name = "Button offset",
+                    name = "Slot offset",
                     desc = "Shift the action slots shown by this bar. An offset of 0 starts with slot 1; an offset of 6 starts with slot 7.",
                     min = 0, max = 11, step = 1,
                     order = 60,
@@ -1359,7 +1359,7 @@ local function ActionBarsOptionsProvider(Addon)
         args = {
           explanation = {
             type = "description",
-            name = "Button offset changes which action slots each button uses. This changes actions, not just their appearance.",
+            name = "Slot offset changes which action slots each button uses. This changes actions, not just their appearance.",
             order = 5,
           },
           buttonOffset = offset,
