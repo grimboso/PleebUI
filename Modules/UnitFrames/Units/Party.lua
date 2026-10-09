@@ -232,6 +232,9 @@ local function ApplyAnchor(self)
       return GetPartyMoverAnchorPoint(current)
     end,
     label = "Party Frames",
+    moduleKey = "unitFrames",
+    moduleLabel = "Unit Frames",
+    defaultVisibility = { Solo = false, Raid = false },
     optionsString = "unitframes,party",
     overlayBelowFrame = false,
     getDB = function()
