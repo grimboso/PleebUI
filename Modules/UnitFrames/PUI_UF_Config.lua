@@ -1310,24 +1310,29 @@ local function UFCB_BuildGeneralTexturesArgs()
         end,
       },
     }),
-    range = UFCB_BuildInlineArgsGroup("Range", 2, {
-      outOfRangeAlpha = {
-        type = "range",
-        name = "Out of range alpha",
-        order = 1,
-        min = 0,
-        max = 1,
-        step = 0.05,
-        get = function()
-          return UFCB_GetClampedNumber(range.outOfRangeAlpha, tonumber(rangeDefaults.outOfRangeAlpha) or 0.5, 0, 1)
-        end,
-        set = function(_, v)
-          if UFCB_BlockCombat() then return end
-          range.outOfRangeAlpha = UFCB_GetClampedNumber(v, 0.5, 0, 1)
-          Addon:ApplyOptionsChange("UnitFrames", { mode = "range" })
-        end,
+    range = {
+      type = "group", name = "Range", inline = true, order = 2,
+      arg = { puiExplicit = true },
+      args = {
+        outOfRangeAlpha = {
+          type = "range",
+          name = "Out-of-range opacity",
+          order = 1,
+          min = 0,
+          max = 1,
+          step = 0.05,
+          isPercent = true,
+          get = function()
+            return UFCB_GetClampedNumber(range.outOfRangeAlpha, tonumber(rangeDefaults.outOfRangeAlpha) or 0.5, 0, 1)
+          end,
+          set = function(_, v)
+            if UFCB_BlockCombat() then return end
+            range.outOfRangeAlpha = UFCB_GetClampedNumber(v, 0.5, 0, 1)
+            Addon:ApplyOptionsChange("UnitFrames", { mode = "range" })
+          end,
+        },
       },
-    }),
+    },
   }
 end
 
@@ -7254,24 +7259,28 @@ local function UFCB_BuildFrameLeafSpecs(general, name, health, power, indicators
   layout.size.args.height.name = "Height"
   layout.power = UFCB_BuildInlineArgsGroup("Power bar", 30, {
     hidePower = power.hidePower, height = size.powerHeight,
-    texture = textures.powerTexture, backgroundColor = power.powerMissingColor,
+    backgroundColor = power.powerMissingColor,
   })
   layout.power.args.height.name = "Height"
-  layout.power.args.texture.name = "Texture"
   if layout.power.args.backgroundColor then layout.power.args.backgroundColor.name = "Background color" end
   layout.health = UFCB_BuildInlineArgsGroup("Health bar", 20, {
     useClassColor = colors.useClassColor,
     color = grouped and colors.unitFrameColor or health.healthColor,
     backgroundColor = grouped and colors.missingHealthColor or health.missingHPColor,
-    texture = textures.healthTexture,
   })
-  layout.health.args.texture.name = "Texture"
   if layout.health.args.color then layout.health.args.color.name = "Color" end
   if layout.health.args.backgroundColor then layout.health.args.backgroundColor.name = "Background color" end
-  layout.absorb = UFCB_BuildInlineArgsGroup("Absorb bar", 40, { texture = textures.absorbTexture })
-  layout.absorb.args.texture.name = "Texture"
+  layout.textures = UFCB_BuildInlineArgsGroup("Textures", 40, {
+    useCustomTexture = not grouped and general.useCustomTexture or nil,
+    healthTexture = textures.healthTexture,
+    powerTexture = textures.powerTexture,
+    absorbTexture = textures.absorbTexture,
+  })
+  if layout.textures.args.useCustomTexture then layout.textures.args.useCustomTexture.order = 5 end
+  layout.textures.args.healthTexture.name, layout.textures.args.healthTexture.order = "Health texture", 10
+  layout.textures.args.powerTexture.name, layout.textures.args.powerTexture.order = "Power texture", 20
+  layout.textures.args.absorbTexture.name, layout.textures.args.absorbTexture.order = "Absorb texture", 30
   if not grouped then
-    layout.textures = UFCB_BuildInlineArgsGroup("Texture source", 15, { useCustomTexture = general.useCustomTexture })
     general.useCustomTexture = nil
     local arrangement = { growthDirection = general.growthDirection, spacing = general.spacing }
     if next(arrangement) then layout.arrangement = UFCB_BuildInlineArgsGroup("Arrangement", 50, arrangement) end
