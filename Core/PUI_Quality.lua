@@ -2509,7 +2509,7 @@ local function Quality_RefreshPreview()
   root.CrosshairLabel:SetShown(isCursor)
   root.GroupSamples:SetShown(isGroup)
   root.Next:SetShown(not isCursor and not isGroup)
-  root.PreviewHelp:SetShown(not isCursor and not isGroup)
+  root.PreviewHelp:SetShown(not isCursor)
   root.Ring:SetShown(isCursor and q.cursorRingShowInner ~= false)
   root.ClickRing:SetShown(isCursor and q.cursorRingShowOutline ~= false)
   root.Horizontal:SetShown(isCursor and q.crosshair)
@@ -2517,6 +2517,7 @@ local function Quality_RefreshPreview()
 
   if isGroup then
     root.Title:SetText("Group tools — sample displays")
+    root.PreviewHelp:SetText("Disabled tools are dimmed")
     local size = Clamp(q.bresLustWidgetIconSize or 32, 16, 64)
     root.Bres:SetSize(size, size)
     root.Lust:SetSize(size, size)
@@ -2668,7 +2669,7 @@ local function Quality_BuildPreview(_, _, shell, path)
     root.GroupSamples = CreateFrame("Frame", nil, root)
     root.GroupSamples:SetAllPoints(root)
     for _, sample in ipairs({
-      { key = "Bres", texture = 136080, text = "Battle resurrection", time = "1 · 04:30", x = -100 },
+      { key = "Bres", texture = 136080, text = "Battle resurrection", time = "04:30", count = "1", x = -100 },
       { key = "Lust", texture = 136012, text = "Bloodlust", time = "00:32", x = 100 },
     }) do
       local icon = CreateFrame("Frame", nil, root.GroupSamples)
@@ -2676,13 +2677,23 @@ local function Quality_BuildPreview(_, _, shell, path)
       local texture = icon:CreateTexture(nil, "ARTWORK")
       texture:SetAllPoints(icon)
       texture:SetTexture(sample.texture)
-      texture:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+      icon.icon = texture
+      ns.IconSkin.MakeIconSquare(icon, { crop = 0.08 })
+      ns.IconSkin.ApplyBorder(icon, { enabled = true, thickness = 2, useThemeColor = true })
       local timer = icon:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
       timer:SetPoint("TOP", icon, "BOTTOM", 0, -4)
       timer:SetText(sample.time)
+      ns.Theme.ApplyFont(timer, "body")
+      if sample.count then
+        local count = icon:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+        count:SetPoint("TOPRIGHT", icon, "TOPRIGHT", -2, -2)
+        count:SetText(sample.count)
+        ns.Theme.ApplyFont(count, "body")
+      end
       local label = icon:CreateFontString(nil, "OVERLAY", "GameFontNormal")
       label:SetPoint("BOTTOM", icon, "TOP", 0, 6)
       label:SetText(sample.text)
+      ns.Theme.ApplyFont(label, "header")
       root[sample.key] = icon
     end
     for index, sample in ipairs({ { key = "Ready", text = "Ready check" }, { key = "Pull", text = "Pull 10" } }) do
