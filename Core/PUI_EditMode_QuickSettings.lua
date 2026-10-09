@@ -20,6 +20,7 @@ local FOOTER_GAP = 10
 local SCROLLBAR_WIDTH = 24
 local PANEL_SCREEN_MARGIN = 60
 local PANEL_ANCHOR_GAP = 32
+local PANEL_FADE_DURATION = 0.25
 
 local function HideControlTooltip(panel)
   local owner = panel and panel.tooltipOwner
@@ -123,6 +124,25 @@ function QuickSettings:EnsurePanel()
     LockPanelPosition(self)
   end)
   panel:Hide()
+  panel:SetAlpha(0)
+  panel.fadeGroup = panel:CreateAnimationGroup()
+  panel.fadeAlpha = panel.fadeGroup:CreateAnimation("Alpha")
+  panel.fadeAlpha:SetDuration(PANEL_FADE_DURATION)
+  panel.fadeAlpha:SetSmoothing("IN_OUT")
+  panel.fadeGroup:SetScript("OnFinished", function()
+    if panel.fadeDirection == "out" then
+      ReleaseControls(panel)
+      panel.ownerKey = nil
+      panel.anchor = nil
+      panel.openAllSettings = nil
+      panel.positionLocked = nil
+      panel.allSettingsButton:Hide()
+      panel:SetAlpha(0)
+      panel:Hide()
+    else
+      panel:SetAlpha(1)
+    end
+  end)
 
   panel.title = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
   panel.title:SetPoint("TOPLEFT", panel, "TOPLEFT", PANEL_PADDING, -12)
@@ -167,7 +187,7 @@ function QuickSettings:EnsurePanel()
   panel.allSettingsButton:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", -PANEL_PADDING, PANEL_PADDING)
   panel.allSettingsButton:SetScript("OnClick", function()
     local callback = panel.openAllSettings
-    QuickSettings:Hide()
+    QuickSettings:Hide(true)
 
     if callback then
       callback()
@@ -331,6 +351,14 @@ function QuickSettings:Open(anchor, spec)
     openAllSettings = panel.openAllSettings
   end
 
+  local startingAlpha = sameSession and panel:GetAlpha() or 0
+  local showFade = not sameSession or panel.fadeGroup:IsPlaying()
+  if panel.fadeGroup:IsPlaying() then
+    panel.fadeGroup:Stop()
+  end
+  panel.fadeDirection = "in"
+  panel:EnableMouse(true)
+  panel:SetAlpha(showFade and startingAlpha or 1)
   ReleaseControls(panel)
 
   panel.title:SetText(spec.title or "Quick settings")
@@ -392,12 +420,17 @@ function QuickSettings:Open(anchor, spec)
   panel.ownerKey = spec.ownerKey
   panel.anchor = anchor
   AnchorPanel(panel, anchor)
+  if showFade then
+    panel.fadeAlpha:SetFromAlpha(startingAlpha)
+    panel.fadeAlpha:SetToAlpha(1)
+    panel.fadeGroup:Play()
+  end
   return true
 end
 
 function QuickSettings:Refresh(ownerKey, anchor, provider)
   local panel = self.panel
-  if not panel or not panel:IsShown() or panel.ownerKey ~= ownerKey then
+  if not panel or not panel:IsShown() or panel.fadeDirection == "out" or panel.ownerKey ~= ownerKey then
     return false
   end
 
@@ -405,19 +438,35 @@ function QuickSettings:Refresh(ownerKey, anchor, provider)
   return self:Open(anchor, spec)
 end
 
-function QuickSettings:Hide()
-  if not self.panel then
+function QuickSettings:Hide(immediate)
+  local panel = self.panel
+  if not panel then
     return
   end
 
-  self.panel:StopMovingOrSizing()
-  ReleaseControls(self.panel)
-  self.panel.ownerKey = nil
-  self.panel.anchor = nil
-  self.panel.openAllSettings = nil
-  self.panel.positionLocked = nil
-  self.panel.allSettingsButton:Hide()
-  self.panel:Hide()
+  panel:StopMovingOrSizing()
+  local startingAlpha = panel:GetAlpha()
+  if panel.fadeGroup:IsPlaying() then
+    panel.fadeGroup:Stop()
+  end
+
+  if immediate == true or not ns.Flags.IsEditing or InCombatLockdown() or not panel:IsShown() then
+    ReleaseControls(panel)
+    panel.ownerKey = nil
+    panel.anchor = nil
+    panel.openAllSettings = nil
+    panel.positionLocked = nil
+    panel.allSettingsButton:Hide()
+    panel:SetAlpha(0)
+    panel:Hide()
+    return
+  end
+
+  panel.fadeDirection = "out"
+  panel:SetAlpha(startingAlpha)
+  panel.fadeAlpha:SetFromAlpha(startingAlpha)
+  panel.fadeAlpha:SetToAlpha(0)
+  panel.fadeGroup:Play()
 end
 
 function QuickSettings:RefreshTheme()
