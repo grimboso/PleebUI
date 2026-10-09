@@ -1833,7 +1833,8 @@ local function UFCB_BuildUnitTextArgs(unitKey, kind)
     resetSection = {
       type = "execute",
       name = "Reset " .. kind .. " to defaults",
-      confirm = "Restore this frame's " .. kind .. " settings to defaults?",
+      confirm = true,
+      confirmText = "Restore this frame's " .. kind .. " settings to defaults?",
       desc = "Restore this frame's " .. kind .. " settings without resetting other sections.",
       order = 0.1,
       width = "full",
@@ -3112,7 +3113,8 @@ local function UFCB_BuildCustomAuraDisplaysArgs(getAuras, refresh, displayID, de
         reset = {
           type = "execute",
           name = "Reset to default",
-          confirm = "Restore this section to its default settings?",
+          confirm = true,
+          confirmText = "Restore this section to its default settings?",
           desc = "Restore this built-in aura display to the current PleebUI defaults for this frame type.",
           order = 2,
           width = 0.8,
@@ -5485,6 +5487,18 @@ local function UFCB_BuildGroupedIndicatorArgs(groupKind)
   local general = UFCB_BuildPartyGeneralArgs(groupedKind, { keepIndicators = true })
   local indicators = general.indicators.args
 
+  local aggro = UFCB_BuildInlineArgsGroup("Aggro indicator", 0.5, {
+    enabled = indicators.enableThreatIndicator,
+    style = indicators.threatIndicatorStyle,
+    thickness = indicators.threatIndicatorBorderSize,
+  })
+  aggro.arg = { puiExplicit = true }
+  aggro.args.enabled.name = "Enable"
+  aggro.args.style.name = "Style"
+  aggro.args.thickness.name = "Border thickness"
+  indicators.enableThreatIndicator, indicators.threatIndicatorStyle, indicators.threatIndicatorBorderSize = nil, nil, nil
+  indicators.aggro = aggro
+
   return UFCB_MergeOptionArgs({
     helper = {
       type = "description",
@@ -5797,7 +5811,8 @@ local function UFCB_BuildPartyTextArgs(kind, groupKind)
   prefixArgs.resetSection = {
     type = "execute",
     name = "Reset " .. kind .. " to defaults",
-    confirm = "Restore this frame's " .. kind .. " settings to defaults?",
+    confirm = true,
+    confirmText = "Restore this frame's " .. kind .. " settings to defaults?",
     desc = "Restore only this " .. kind .. " section.",
     order = 0.1,
     width = "full",
@@ -5929,7 +5944,7 @@ local function UFCB_BuildPartyDispelArgs(groupKind)
     return UFCB_GetGroupedDB(groupedKind)
   end
 
-  return {
+  local args = {
     healthColor = {
       type = "toggle",
       name = "Health bar color",
@@ -6110,6 +6125,13 @@ local function UFCB_BuildPartyDispelArgs(groupKind)
       },
     }),
   }
+  local highlighting = UFCB_BuildInlineArgsGroup("Dispel highlighting", 1, {
+    healthColor = args.healthColor, border = args.border, borderSize = args.borderSize,
+  })
+  highlighting.arg = { puiExplicit = true }
+  highlighting.args.healthColor.name = "Color health bar"
+  highlighting.args.border.name = "Show border"
+  return { highlighting = highlighting, blizzardIndicatorSettings = args.blizzardIndicatorSettings }
 end
 
 local function UFCB_BuildPartyAuraArgs(groupKind)
@@ -7004,7 +7026,8 @@ local function UFCB_BuildCastbarArgs(unitKey)
   args.appearance.args.reset = {
     type = "execute",
     name = "Reset castbar to defaults",
-    confirm = "Restore this castbar to its default settings?",
+    confirm = true,
+    confirmText = "Restore this castbar to its default settings?",
     desc = "Restore this castbar's appearance, text, behavior, and position.",
     order = 0.1,
     width = "full",
@@ -7622,9 +7645,21 @@ local function UFCB_BuildGeneralRootLeafSpecs()
   end
   typography.defaultFont.name = "Font"
   anchors.shared = ns.OptionsSchema.BuildTextGroup("Shared typography", 5, typography)
-  local indicators = {}
+  local highlights = UFCB_BuildInlineArgsGroup("Frame highlights", 10, {
+    enabled = appearance.enableUnitMouseoverHighlight,
+    style = appearance.unitMouseoverHighlightMode,
+    opacity = appearance.unitMouseoverHighlightStrength,
+    mouseoverThickness = appearance.unitMouseoverHighlightBorderSize,
+    targetThickness = appearance.unitTargetHighlightBorderSize,
+  })
+  highlights.arg = { puiExplicit = true }
+  highlights.args.enabled.name = "Show mouseover highlight"
+  highlights.args.style.name = "Mouseover style"
+  highlights.args.opacity.name = "Mouseover opacity"
+  highlights.args.mouseoverThickness.name = "Mouseover border thickness"
+  highlights.args.targetThickness.name = "Target border thickness"
+  local indicators = { highlights = highlights }
   for _, key in ipairs({ "enableUnitMouseoverHighlight", "unitMouseoverHighlightMode", "unitMouseoverHighlightStrength", "unitMouseoverHighlightBorderSize", "unitTargetHighlightBorderSize" }) do
-    indicators[key] = appearance[key]
     appearance[key] = nil
   end
   local general = UFCB_BuildGeneralAurasArgs()
