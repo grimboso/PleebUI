@@ -27,7 +27,6 @@ local MOBILITY_SPELLS = {
 local anchor
 local rows = {}
 local trackedCount = 0
-local countdownFont = CreateFont("PleebUI_MovementWarningCountdownFont")
 local cooldownAlpha = C_CurveUtil.CreateCurve()
 cooldownAlpha:SetType(Enum.LuaCurveType.Step)
 cooldownAlpha:AddPoint(0, 0)
@@ -38,6 +37,30 @@ local spellOptions = {}
 local specializationID = 0
 local spellbookDirty = true
 local previewEnabled = false
+local optionsPreview
+local previewSpellID
+
+local function NormalizeReminderSettings()
+  local db = Addon.db.profile.movementWarning
+  db.reminders = db.reminders or {}
+  for _, spellID in ipairs(MOBILITY_SPELLS[playerClass]) do
+    if not db.reminders[spellID] then
+      local color = db.color or { r = 1, g = 1, b = 1, a = 1 }
+      local countdownColor = db.countdownColor or { r = 1, g = 0.2, b = 0.2, a = 1 }
+      db.reminders[spellID] = {
+        combatOnly = db.combatOnly == true,
+        displayMode = db.displayMode or "text",
+        showCountdown = true,
+        showDecimals = db.showDecimals ~= false,
+        fontSize = db.fontSize or 24,
+        countdownFontSize = db.fontSize or 24,
+        color = { r = color.r, g = color.g, b = color.b, a = color.a },
+        countdownColor = { r = countdownColor.r, g = countdownColor.g, b = countdownColor.b, a = countdownColor.a },
+      }
+    end
+  end
+  db.combatOnly, db.displayMode, db.showDecimals, db.fontSize, db.color, db.countdownColor = nil, nil, nil, nil, nil, nil
+end
 
 local function ApplyAnchor()
   local db = Addon.db.profile.movementWarning
@@ -49,15 +72,16 @@ local function RefreshSpellText()
   if not anchor then return end
 
   local db = Addon.db.profile.movementWarning
-  local previewDuration = db.showDecimals ~= false and "8.0" or "8"
   for index = 1, trackedCount do
     local row = rows[index]
-    local text = "No " .. row.spellName .. " for"
+    local config = db.reminders[row.baseSpellID]
+    local text = config.showCountdown and ("No " .. row.spellName .. " for") or (row.spellName .. " unavailable")
     row.label:SetText(text)
     row.icon:SetTexture(row.spellIcon)
     row.previewText:SetText(text)
-    row.previewCountdown:SetText(previewDuration)
-    row.countdown:SetCountdownMillisecondsThreshold(db.showDecimals ~= false and 86400 or 0)
+    row.previewCountdown:SetText(config.showDecimals and "8.0" or "8")
+    row.countdown:SetCountdownMillisecondsThreshold(config.showDecimals and 86400 or 0)
+    row.countdown:SetHideCountdownNumbers(not config.showCountdown)
   end
 end
 
@@ -114,6 +138,7 @@ local function EnsureRow(index)
   if row then return row end
 
   row = {}
+  row.countdownFont = CreateFont("PleebUI_MovementWarningCountdownFont" .. index)
   row.frame = CreateFrame("Frame", nil, anchor)
   row.runtime = CreateFrame("Frame", nil, row.frame)
   row.runtime:SetAllPoints(row.frame)
@@ -135,7 +160,7 @@ local function EnsureRow(index)
   countdown:SetMinimumCountdownDuration(0)
   countdown:SetCountdownAbbrevThreshold(0)
   countdown:SetCountdownMillisecondsThreshold(86400)
-  countdown:SetCountdownFont("PleebUI_MovementWarningCountdownFont")
+  countdown:SetCountdownFont("PleebUI_MovementWarningCountdownFont" .. index)
   row.countdownText = countdown:GetCountdownFontString()
   row.countdownText:SetJustifyH("LEFT")
   countdown:SetScript("OnCooldownDone", function()
@@ -192,29 +217,32 @@ local function RefreshSelectedSpells()
 end
 
 function MovementWarning:RefreshFonts()
+  self:RefreshOptionsPreview()
   if not anchor then return end
 
   local db = Addon.db.profile.movementWarning
   local fontKey, flags = ns.Theme.GetIconTextGlobal()
   local font = ns.LSM:Fetch("font", fontKey)
-  local size = ns.Theme.ResolveFontSize(db.fontSize, "qualityOfLife")
-  local height = size * 1.6
-  local color = db.color
-  local countdownColor = db.countdownColor
-  countdownFont:SetFont(font, size, flags)
-  countdownFont:SetTextColor(countdownColor.r, countdownColor.g, countdownColor.b, countdownColor.a)
-  anchor:SetSize(600, height * math.max(1, trackedCount))
-
-  for index = 1, #rows do
+  local offset = 0
+  for index = 1, trackedCount do
     local row = rows[index]
+    local config = db.reminders[row.baseSpellID]
+    local size = ns.Theme.ResolveFontSize(config.fontSize, "qualityOfLife")
+    local countdownSize = ns.Theme.ResolveFontSize(config.countdownFontSize, "qualityOfLife")
+    local height = math.max(size, config.showCountdown and countdownSize or 0) * 1.6
+    local color = config.color
+    local countdownColor = config.countdownColor
+    row.countdownFont:SetFont(font, countdownSize, flags)
+    row.countdownFont:SetTextColor(countdownColor.r, countdownColor.g, countdownColor.b, countdownColor.a)
     row.frame:SetSize(600, height)
     row.frame:ClearAllPoints()
-    row.frame:SetPoint("TOP", anchor, "TOP", 0, -(index - 1) * height)
+    row.frame:SetPoint("TOP", anchor, "TOP", 0, -offset)
+    offset = offset + height
     row.label:SetFont(font, size, flags)
     row.label:SetTextColor(color.r, color.g, color.b, color.a)
     row.previewText:SetFont(font, size, flags)
     row.previewText:SetTextColor(color.r, color.g, color.b, color.a)
-    row.previewCountdown:SetFont(font, size, flags)
+    row.previewCountdown:SetFont(font, countdownSize, flags)
     row.previewCountdown:SetTextColor(countdownColor.r, countdownColor.g, countdownColor.b, countdownColor.a)
     row.unavailable:SetFont(font, math.max(20, size * 0.975), "OUTLINE")
     row.unavailable:SetText("×")
@@ -224,18 +252,19 @@ function MovementWarning:RefreshFonts()
     row.icon:SetPoint("RIGHT", row.runtime, "CENTER", -size * 0.9, 0)
     row.unavailable:ClearAllPoints()
     row.unavailable:SetPoint("TOPRIGHT", row.icon, "TOPRIGHT", size * 0.12, size * 0.12)
-    row.countdown:SetSize(size * 3, height)
-    row.countdownText:SetFontObject(countdownFont)
+    row.countdown:SetSize(countdownSize * 3, height)
+    row.countdownText:SetFontObject(row.countdownFont)
     row.countdownText:SetTextColor(countdownColor.r, countdownColor.g, countdownColor.b, countdownColor.a)
     row.label:ClearAllPoints()
     row.label:SetPoint("CENTER", row.runtime, "CENTER", -size * 1.3, 0)
     row.countdownText:ClearAllPoints()
-    row.countdownText:SetPoint("LEFT", db.displayMode == "icon" and row.icon or row.label, "RIGHT", size * 0.2, 0)
+    row.countdownText:SetPoint("LEFT", config.displayMode == "icon" and row.icon or row.label, "RIGHT", size * 0.2, 0)
     row.previewText:ClearAllPoints()
     row.previewText:SetPoint("CENTER", row.runtime, "CENTER", -size * 1.3, 0)
     row.previewCountdown:ClearAllPoints()
-    row.previewCountdown:SetPoint("LEFT", db.displayMode == "icon" and row.icon or row.previewText, "RIGHT", size * 0.2, 0)
+    row.previewCountdown:SetPoint("LEFT", config.displayMode == "icon" and row.icon or row.previewText, "RIGHT", size * 0.2, 0)
   end
+  anchor:SetSize(600, math.max(24, offset))
   RefreshSpellText()
 end
 
@@ -246,7 +275,6 @@ local function EnsureDisplay()
   anchor:SetFrameStrata("HIGH")
   anchor:EnableMouse(false)
   ApplyAnchor()
-  countdownFont:SetFont(STANDARD_TEXT_FONT, 24, "OUTLINE")
 
   FrameUtil:RegisterMover("movement_warning", anchor, {
     label = "Movement Reminder",
@@ -275,6 +303,12 @@ local function EnsureDisplay()
 end
 
 local function RefreshRowCooldown(row)
+  local config = Addon.db.profile.movementWarning.reminders[row.baseSpellID]
+  if config.combatOnly and not InCombatLockdown() then
+    row.runtime:Hide()
+    row.countdown:Clear()
+    return
+  end
   local spellID = row.spellID
   local charges = C_Spell.GetSpellCharges(spellID)
   local isChargeSpell = charges and charges.maxCharges > 1
@@ -328,17 +362,18 @@ function MovementWarning:RefreshWarning()
   local previewVisible = FrameUtil.IsMoverPreviewVisible("movement_warning")
   local preview = enabled and (previewEnabled or ns.Flags.IsEditing)
     and previewVisible
-  local iconMode = db.displayMode == "icon"
   for index = 1, trackedCount do
     local row = rows[index]
+    local config = db.reminders[row.baseSpellID]
+    local iconMode = config.displayMode == "icon"
     row.previewText:SetShown(preview and not iconMode)
-    row.previewCountdown:SetShown(preview)
+    row.previewCountdown:SetShown(preview and config.showCountdown)
     row.label:SetShown(not preview and not iconMode)
     row.icon:SetShown(iconMode)
     row.unavailable:SetShown(iconMode)
     if not enabled
       or (ns.Flags.IsEditing and not previewVisible)
-      or (db.combatOnly and not InCombatLockdown() and not preview)
+      or (config.combatOnly and not InCombatLockdown() and not preview)
     then
       row.runtime:Hide()
       row.countdown:Clear()
@@ -357,9 +392,7 @@ function MovementWarning:OnMovementEvent(event, eventSpellID, baseSpellID, spell
   if event == "PLAYER_SPECIALIZATION_CHANGED" and eventSpellID ~= "player" then return end
 
   if event == "SPELL_UPDATE_COOLDOWN" or event == "SPELL_UPDATE_CHARGES" then
-    local db = Addon.db.profile.movementWarning
     if trackedCount == 0 or previewEnabled or ns.Flags.IsEditing
-      or (db.combatOnly and not InCombatLockdown())
     then
       return
     end
@@ -408,10 +441,12 @@ function MovementWarning:OnMovementEvent(event, eventSpellID, baseSpellID, spell
     Addon:NotifyOptionsTreeChanged("MovementWarning", path and path[1] == "MovementWarning" and path or nil)
   end
   self:RefreshWarning()
+  self:RefreshOptionsPreview()
 end
 
 function MovementWarning:ApplySettings()
   self:UnregisterAllEvents()
+  NormalizeReminderSettings()
   local db = Addon.db.profile.movementWarning
   if self:IsEnabled() and db.enabled then
     EnsureDisplay()
@@ -432,167 +467,208 @@ function MovementWarning:ApplySettings()
     FrameUtil.SetMoverSuppressed("movement_warning", not (self:IsEnabled() and db.enabled))
   end
   self:RefreshWarning()
+  self:RefreshOptionsPreview()
+end
+
+function MovementWarning:RefreshOptionsPreview()
+  local root = optionsPreview
+  if not root or not root:IsShown() then return end
+  if not previewSpellID or not spellOptions[previewSpellID] then previewSpellID = knownSpells[1] end
+  if not previewSpellID then
+    root.title:SetText("No supported movement spells are currently known")
+    root.sample:Hide()
+    return
+  end
+
+  local config = Addon.db.profile.movementWarning.reminders[previewSpellID]
+  local selected = GetSelectedSpells()
+  local enabled = not selected or selected[previewSpellID] == true
+  local fontKey, flags = ns.Theme.GetIconTextGlobal()
+  local font = ns.LSM:Fetch("font", fontKey)
+  local size = ns.Theme.ResolveFontSize(config.fontSize, "qualityOfLife")
+  local countdownSize = ns.Theme.ResolveFontSize(config.countdownFontSize, "qualityOfLife")
+  local iconMode = config.displayMode == "icon"
+  local name = spellOptions[previewSpellID]
+  root.title:SetText(name .. (enabled and "" or " (disabled)"))
+  root.label:SetFont(font, size, flags)
+  root.label:SetTextColor(config.color.r, config.color.g, config.color.b, config.color.a)
+  root.label:SetText(config.showCountdown and ("No " .. name .. " for") or (name .. " unavailable"))
+  root.countdown:SetFont(font, countdownSize, flags)
+  root.countdown:SetTextColor(config.countdownColor.r, config.countdownColor.g, config.countdownColor.b, config.countdownColor.a)
+  root.countdown:SetText(config.showDecimals and "8.0" or "8")
+  root.countdown:SetShown(config.showCountdown)
+  root.icon:SetTexture(C_Spell.GetSpellTexture(C_Spell.GetOverrideSpell(previewSpellID)))
+  root.icon:SetSize(size, size)
+  root.icon:SetShown(iconMode)
+  root.label:SetShown(not iconMode)
+  local gap = size * 0.2
+  local width = (iconMode and size or root.label:GetStringWidth())
+    + (config.showCountdown and (gap + root.countdown:GetStringWidth()) or 0)
+  root.sample:SetSize(math.max(1, width), math.max(size, countdownSize) * 1.6)
+  root.sample:SetScale(math.min(1, math.max(1, root:GetWidth() - 40) / math.max(1, width)))
+  root.countdown:ClearAllPoints()
+  root.countdown:SetPoint("LEFT", iconMode and root.icon or root.label, "RIGHT", gap, 0)
+  root.sample:Show()
+end
+
+local function MovementWarning_BuildPreview(_, _, shell)
+  local host = shell.previewHost
+  if not optionsPreview then
+    local root = CreateFrame("Frame", nil, host)
+    optionsPreview = root
+    root:EnableMouse(false)
+    root.title = root:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    root.title:SetPoint("TOP", root, "TOP", 0, -12)
+    root.sample = CreateFrame("Frame", nil, root)
+    root.sample:SetPoint("CENTER", root, "CENTER", 0, 0)
+    root.label = root.sample:CreateFontString(nil, "OVERLAY")
+    root.label:SetPoint("LEFT", root.sample, "LEFT")
+    root.icon = root.sample:CreateTexture(nil, "ARTWORK")
+    root.icon:SetPoint("LEFT", root.sample, "LEFT")
+    root.icon:SetTexCoord(0.07, 0.93, 0.07, 0.93)
+    root.countdown = root.sample:CreateFontString(nil, "OVERLAY")
+    local hint = root:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    hint:SetPoint("BOTTOM", root, "BOTTOM", 0, 12)
+    hint:SetText("Sample countdown · Change any reminder to preview it")
+  end
+  optionsPreview:SetParent(host)
+  optionsPreview:ClearAllPoints()
+  optionsPreview:SetAllPoints(host)
+  optionsPreview:Show()
+  ns.Theme.ApplyFont(optionsPreview.title, "header")
+  MovementWarning:RefreshOptionsPreview()
+  return true
 end
 
 function MovementWarning:GetOptions()
+  NormalizeReminderSettings()
   if not InCombatLockdown() then RefreshSpellbook() end
+  if not previewSpellID or not spellOptions[previewSpellID] then previewSpellID = knownSpells[1] end
+  local db = Addon.db.profile.movementWarning
   local options = {
-    type = "group",
-    name = "Movement Reminder",
-    arg = { puiExplicit = true },
+    type = "group", name = "Movement Reminder", arg = { puiExplicit = true },
     args = {
-      enabled = {
-        type = "toggle", name = "Show movement reminder", order = 1,
-        get = function() return Addon.db.profile.movementWarning.enabled end,
-        set = function(_, value)
-          Addon.db.profile.movementWarning.enabled = value
-          self:ApplySettings()
-          Addon:NotifyOptionsTreeChanged("MovementWarning", ns._PUIActiveOptionsPath)
-        end,
-      },
-      settings = {
-        type = "group", name = "Reminder", inline = true, order = 2,
-        disabled = function() return not Addon.db.profile.movementWarning.enabled end,
+      general = {
+        type = "group", name = "General", inline = true, order = 10,
         args = {
-          combatOnly = {
-            type = "toggle", name = "Only show in combat", order = 2,
-            get = function() return Addon.db.profile.movementWarning.combatOnly end,
+          enabled = {
+            type = "toggle", name = "Show movement reminders", order = 10,
+            get = function() return db.enabled end,
             set = function(_, value)
-              Addon.db.profile.movementWarning.combatOnly = value
-              self:RefreshWarning()
-            end,
-          },
-          displayMode = {
-            type = "select", name = "Spell display", order = 2.5,
-            values = { text = "Text", icon = "Icon only" },
-            get = function() return Addon.db.profile.movementWarning.displayMode end,
-            set = function(_, value)
-              Addon.db.profile.movementWarning.displayMode = value
-              self:RefreshFonts()
-              self:RefreshWarning()
-            end,
-          },
-          showDecimals = {
-            type = "toggle", name = "Show decimals", order = 2.75,
-            get = function() return Addon.db.profile.movementWarning.showDecimals ~= false end,
-            set = function(_, value)
-              Addon.db.profile.movementWarning.showDecimals = value
-              self:RefreshFonts()
-              self:RefreshWarning()
-            end,
-          },
-          fontSize = {
-            type = "range", name = "Font size", order = 3, min = 12, max = 64, step = 1,
-            get = function() return Addon.db.profile.movementWarning.fontSize end,
-            set = function(_, value)
-              Addon.db.profile.movementWarning.fontSize = value
-              self:RefreshFonts()
-            end,
-          },
-          color = {
-            type = "color", name = "Label color", order = 4, hasAlpha = true,
-            get = function()
-              local color = Addon.db.profile.movementWarning.color
-              return color.r, color.g, color.b, color.a
-            end,
-            set = function(_, r, g, b, a)
-              local color = Addon.db.profile.movementWarning.color
-              color.r, color.g, color.b, color.a = r, g, b, a
-              self:RefreshFonts()
-            end,
-          },
-          countdownColor = {
-            type = "color", name = "Countdown color", order = 4.5, hasAlpha = true,
-            get = function()
-              local color = Addon.db.profile.movementWarning.countdownColor
-              return color.r, color.g, color.b, color.a
-            end,
-            set = function(_, r, g, b, a)
-              local color = Addon.db.profile.movementWarning.countdownColor
-              color.r, color.g, color.b, color.a = r, g, b, a
-              self:RefreshFonts()
+              db.enabled = value
+              self:ApplySettings()
+              Addon:NotifyOptionsTreeChanged("MovementWarning", ns._PUIActiveOptionsPath)
             end,
           },
           preview = {
-            type = "toggle", name = "Show preview", order = 5,
-            desc = "Show a sample reminder. Use /pe to move it.",
+            type = "select", name = "Preview reminder", order = 20,
+            values = function() return spellOptions end,
+            disabled = function() return #knownSpells == 0 end,
+            get = function() return previewSpellID end,
+            set = function(_, value) previewSpellID = value; self:RefreshOptionsPreview() end,
+          },
+          onScreenPreview = {
+            type = "toggle", name = "Show on-screen preview", order = 30,
+            desc = "Show sample reminders at their live position. Use /pe to move them.",
+            disabled = function() return not db.enabled end,
             get = function() return previewEnabled end,
-            set = function(_, value)
-              previewEnabled = value
-              self:RefreshWarning()
-            end,
+            set = function(_, value) previewEnabled = value; self:RefreshWarning() end,
           },
         },
       },
     },
   }
-  local args = options.args
-  local settings = args.settings.args
-  local disabled = args.settings.disabled
-  args.settings = nil
-  local enabled = args.enabled
-  args.enabled = nil
-  args.general = {
-    type = "group", name = "General", inline = true, order = 10,
-    args = {
-      enabled = enabled,
-      combatOnly = settings.combatOnly,
-      preview = settings.preview,
-      help = {
-        type = "description", order = 10,
-        name = "Each selected spell has its own reminder. Appearance and position are shared across reminders.",
-      },
-    },
-  }
-  settings.combatOnly.disabled = disabled
-  settings.preview.disabled = disabled
-  args.appearance = {
-    type = "group", name = "Shared appearance", inline = true, order = 20,
-    disabled = disabled,
-    args = { displayMode = settings.displayMode, fontSize = settings.fontSize, color = settings.color },
-  }
-  settings.countdownColor.name = "Text color"
-  args.countdown = {
-    type = "group", name = "Countdown", inline = true, order = 30,
-    disabled = disabled,
-    args = { showDecimals = settings.showDecimals, color = settings.countdownColor },
-  }
   if #knownSpells == 0 then
-    args.reminders = {
-      type = "group", name = "Reminders", inline = true, order = 40,
+    options.args.reminders = {
+      type = "group", name = "Reminders", inline = true, order = 20,
       args = { help = { type = "description", name = "No supported movement spells are currently known for this specialization." } },
     }
   end
   for index = 1, #knownSpells do
     local spellID = knownSpells[index]
-    args["reminder" .. spellID] = {
-      type = "group", name = spellOptions[spellID], inline = true, order = 40 + index,
-      disabled = disabled,
+    local config = db.reminders[spellID]
+    local function RefreshReminder()
+      previewSpellID = spellID
+      self:RefreshFonts()
+      self:RefreshWarning()
+    end
+    local function ColorOption(label, field, order)
+      return {
+        type = "color", name = label, order = order, hasAlpha = true,
+        get = function() local c = config[field]; return c.r, c.g, c.b, c.a end,
+        set = function(_, r, g, b, a)
+          local c = config[field]; c.r, c.g, c.b, c.a = r, g, b, a
+          RefreshReminder()
+        end,
+      }
+    end
+    options.args["reminder" .. spellID] = {
+      type = "group", name = spellOptions[spellID], inline = true, order = 20 + index,
       args = {
         enabled = {
-          type = "toggle", name = "Show reminder", order = 1,
-          desc = "Shows a countdown while this movement spell is unavailable.",
+          type = "toggle", name = "Show reminder", order = 10,
+          desc = "Show this spell's reminder while the spell is unavailable.",
           get = function()
             local selected = GetSelectedSpells()
             return not selected or selected[spellID] == true
           end,
           set = function(_, value)
-            local spells = Addon.db.profile.movementWarning.spells
             local selected = GetSelectedSpells()
             if not selected then
               selected = {}
-              for spellIndex = 1, #knownSpells do
-                selected[knownSpells[spellIndex]] = true
-              end
-              spells[specializationID] = selected
+              for spellIndex = 1, #knownSpells do selected[knownSpells[spellIndex]] = true end
+              db.spells[specializationID] = selected
             end
             selected[spellID] = value
-            RefreshSelectedSpells()
+            previewSpellID = spellID
+            if self:IsEnabled() and db.enabled then
+              RefreshSelectedSpells()
+            else
+              self:RefreshOptionsPreview()
+            end
             self:RefreshWarning()
           end,
         },
+        combatOnly = {
+          type = "toggle", name = "Only show in combat", order = 20,
+          get = function() return config.combatOnly end,
+          set = function(_, value) config.combatOnly = value; RefreshReminder() end,
+        },
+        displayMode = {
+          type = "select", name = "Display type", order = 30,
+          values = { text = "Text", icon = "Icon" },
+          get = function() return config.displayMode end,
+          set = function(_, value) config.displayMode = value; RefreshReminder() end,
+        },
+        fontSize = {
+          type = "range", name = "Font size", order = 40, min = 12, max = 64, step = 1,
+          desc = "Size of this reminder's label or icon.",
+          get = function() return config.fontSize end,
+          set = function(_, value) config.fontSize = value; RefreshReminder() end,
+        },
+        color = ColorOption("Text color", "color", 50),
+        showCountdown = {
+          type = "toggle", name = "Show countdown", order = 60,
+          get = function() return config.showCountdown end,
+          set = function(_, value) config.showCountdown = value; RefreshReminder() end,
+        },
+        countdownFontSize = {
+          type = "range", name = "Countdown font size", order = 70, min = 12, max = 64, step = 1,
+          disabled = function() return not config.showCountdown end,
+          get = function() return config.countdownFontSize end,
+          set = function(_, value) config.countdownFontSize = value; RefreshReminder() end,
+        },
+        countdownColor = ColorOption("Countdown color", "countdownColor", 80),
+        showDecimals = {
+          type = "toggle", name = "Show decimals", order = 90,
+          disabled = function() return not config.showCountdown end,
+          get = function() return config.showDecimals end,
+          set = function(_, value) config.showDecimals = value; RefreshReminder() end,
+        },
       },
     }
+    options.args["reminder" .. spellID].args.countdownColor.disabled = function() return not config.showCountdown end
+    options.args["reminder" .. spellID].args.color.disabled = function() return config.displayMode == "icon" end
   end
   return options
 end
@@ -624,7 +700,15 @@ function MovementWarning:OnInitialize()
   })
   Addon:RegisterOptionsSection("MovementWarning", function() return self end, 3,
     "Movement Reminder", "Quality", {
-      preview = false,
+      allowPreview = true,
+      page = {
+        previewAlwaysShown = true,
+        previewWidth = 340,
+        previewHeight = 190,
+        tabsBeforeHeader = true,
+        previewPathMatches = function() return true end,
+        buildPreview = MovementWarning_BuildPreview,
+      },
       pageDescription = "Show a countdown for each unavailable movement spell.",
       pageHelp = "Use /pe to move the reminder.",
     })
