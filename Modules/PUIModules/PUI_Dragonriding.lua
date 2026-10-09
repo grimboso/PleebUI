@@ -324,7 +324,7 @@ local function _ApplyStyle()
 
   frame:SetSize(wMain, hMain)
 
-  local isEditing = ns.Flags.IsEditing and true or false
+  local isEditing = ns.Flags.IsEditing and FrameUtil.IsMoverPreviewVisible("Dragonriding")
 
   -- In Edit Mode: FrameUtil owns moverGhost position. The bar follows the ghost.
   frame:ClearAllPoints()
@@ -690,7 +690,7 @@ end
 local function _RefreshVisibility(runtime)
   if not frame then return end
 
-  local isEditing = ns.Flags.IsEditing and true or false
+  local isEditing = ns.Flags.IsEditing and FrameUtil.IsMoverPreviewVisible("Dragonriding")
 
   -- In Edit Mode: keep frames stable and visible so dragging does not "spasm".
   if isEditing then
@@ -939,7 +939,7 @@ local function _RefreshRuntimeState(owner)
     return
   end
 
-  local isEditing = ns.Flags.IsEditing and true or false
+  local isEditing = ns.Flags.IsEditing and FrameUtil.IsMoverPreviewVisible("Dragonriding")
 
   _RefreshGlidingState()
   local gliding = _cache.gliding and true or false
@@ -1128,6 +1128,10 @@ function Dragonriding:EnsureMovers()
     label = "Skyriding",
     moduleKey = "skyriding",
     moduleLabel = "Skyriding",
+    defaultVisibility = { Party = false, Raid = false },
+    onPreviewVisibilityChanged = function()
+      Dragonriding:Refresh()
+    end,
     useOverlayDrag = true,
     optionsString = "Dragonriding",
     smartSnap = {
