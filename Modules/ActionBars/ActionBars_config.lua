@@ -275,12 +275,12 @@ local function ActionBarsOptionsProvider(Addon)
         args = {
           behavior = {
             type = "group",
-            name = "Behavior",
+            name = "Behaviour",
             order = 10,
             args = {
               globalBehavior = {
                 type = "group",
-                name = "Button behavior",
+                name = "Button behaviour",
                 inline = true,
                 order = 10,
                 args = {
@@ -501,18 +501,18 @@ local function ActionBarsOptionsProvider(Addon)
                 args = {
                   alpha = {
                     type = "range",
-                    name = "Opacity (%)",
+                    name = "Opacity",
                     desc = "How visible the bars are normally.",
-                    min = 0, max = 100, step = 5,
+                    min = 0, max = 1, step = 0.05, isPercent = true,
                     order = 10,
                     get = function()
                       local a = tonumber(skin.alpha) or 1.0
                       if a < 0 then a = 0 end
                       if a > 1 then a = 1 end
-                      return math.floor(a * 100 + 0.5)
+                      return a
                     end,
                     set = function(_, v)
-                      local a = (tonumber(v) or 100) / 100
+                      local a = tonumber(v) or 1
                       if a < 0 then a = 0 end
                       if a > 1 then a = 1 end
                       skin.alpha = a
@@ -529,19 +529,19 @@ local function ActionBarsOptionsProvider(Addon)
                   },
                   fadeOutAlpha = {
                     type = "range",
-                    name = "Fade-out opacity (%)",
+                    name = "Fade-out opacity",
                     desc = "How visible the bars are while faded.",
-                    min = 0, max = 100, step = 5,
+                    min = 0, max = 1, step = 0.05, isPercent = true,
                     order = 30,
                     disabled = function() return skin.fadeOutEnabled ~= true end,
                     get = function()
                       local a = tonumber(skin.fadeOutAlpha) or 0
                       if a < 0 then a = 0 end
                       if a > 1 then a = 1 end
-                      return math.floor(a * 100 + 0.5)
+                      return a
                     end,
                     set = function(_, v)
-                      local a = (tonumber(v) or 100) / 100
+                      local a = tonumber(v) or 1
                       if a < 0 then a = 0 end
                       if a > 1 then a = 1 end
                       skin.fadeOutAlpha = a
@@ -891,10 +891,10 @@ local function ActionBarsOptionsProvider(Addon)
                     type = "range",
                     name = "Opacity (%)",
                     desc = "How visible this bar is normally.",
-                    min = 0, max = 100, step = 5,
+                    min = 0, max = 1, step = 0.05, isPercent = true,
                     order = 10,
                     set = function(_, v)
-                      local a = (tonumber(v) or 100) / 100
+                      local a = tonumber(v) or 1
                       if a < 0 then a = 0 end
                       if a > 1 then a = 1 end
                       s.alpha = a
@@ -910,9 +910,9 @@ local function ActionBarsOptionsProvider(Addon)
                   },
                   fadeOutAlpha = {
                     type = "range",
-                    name = "Fade-out opacity (%)",
+                    name = "Fade-out opacity",
                     desc = "How visible this bar is while faded.",
-                    min = 0, max = 100, step = 5,
+                    min = 0, max = 1, step = 0.05, isPercent = true,
                     order = 30,
                     disabled = function()
                       if override.useCustom ~= true then return true end
@@ -921,7 +921,7 @@ local function ActionBarsOptionsProvider(Addon)
                       return enabled ~= true
                     end,
                     set = function(_, v)
-                      local a = (tonumber(v) or 100) / 100
+                      local a = tonumber(v) or 1
                       if a < 0 then a = 0 end
                       if a > 1 then a = 1 end
                       s.fadeOutAlpha = a
@@ -1161,10 +1161,10 @@ local function ActionBarsOptionsProvider(Addon)
             type = "range",
             name = "Opacity (%)",
             desc = "How visible this bar is normally.",
-            min = 0, max = 100, step = 5,
+            min = 0, max = 1, step = 0.05, isPercent = true,
             order = 10,
             set = function(_, value)
-              local alpha = (tonumber(value) or 100) / 100
+              local alpha = tonumber(value) or 1
               if alpha < 0 then alpha = 0 end
               if alpha > 1 then alpha = 1 end
               s.alpha = alpha
@@ -1183,9 +1183,9 @@ local function ActionBarsOptionsProvider(Addon)
           },
           fadeOutAlpha = {
             type = "range",
-            name = "Fade-out opacity (%)",
+            name = "Fade-out opacity",
             desc = "How visible this bar is while faded.",
-            min = 0, max = 100, step = 5,
+            min = 0, max = 1, step = 0.05, isPercent = true,
             order = 30,
             disabled = function()
               if override.useCustom ~= true then return true end
@@ -1194,7 +1194,7 @@ local function ActionBarsOptionsProvider(Addon)
               return enabled ~= true
             end,
             set = function(_, value)
-              local alpha = (tonumber(value) or 0) / 100
+              local alpha = tonumber(value) or 0
               if alpha < 0 then alpha = 0 end
               if alpha > 1 then alpha = 1 end
               s.fadeOutAlpha = alpha
@@ -1247,7 +1247,8 @@ local function ActionBarsOptionsProvider(Addon)
 
       args.resetShared = {
         type = "execute",
-        name = "Reset to shared",
+        name = "Reset to shared settings",
+        confirm = "Discard this bar's custom settings and use the shared settings?",
         desc = "Discard this bar's saved appearance overrides and use shared settings.",
         order = 16,
         disabled = function()
@@ -1294,7 +1295,7 @@ local function ActionBarsOptionsProvider(Addon)
       AddCustomizationControls(settings, override, override.skin, barKey)
 
       page.behavior = behavior
-      page.behavior.name = "Behavior"
+      page.behavior.name = "Behaviour"
       page.behavior.order = 10
 
       page.layout = page.size.args.layout
@@ -1390,7 +1391,7 @@ local function ActionBarsOptionsProvider(Addon)
       local page = node.args
 
       page.behavior = page.general
-      page.behavior.name = "Behavior"
+      page.behavior.name = "Behaviour"
       page.behavior.inline = nil
       page.behavior.order = 10
       page.behavior.args.useCustom.name = "Customize this bar"
@@ -1492,10 +1493,6 @@ local function ActionBarsOptionsProvider(Addon)
                   return value[1], value[2], value[3], value[4]
                 end
 
-                if field == "alpha" or field == "fadeOutAlpha" then
-                  return math.floor(value * 100 + 0.5)
-                end
-
                 if field == "iconsPerRow" and barKey == "pet" then
                   return math.min(10, value)
                 end
@@ -1583,17 +1580,25 @@ local function ActionBarsOptionsProvider(Addon)
 
     local function ArrangeBarPage(page)
       local layout, appearance = page.layout, page.appearance
-      layout.name, layout.order, layout.inline = "Size and arrangement", 10, true
-      appearance.name, appearance.order, appearance.inline = "Style", 20, true
+      layout.name, layout.order, layout.inline = "Buttons", 10, true
       page.layout = {
-        type = "group", name = "Layout and appearance", order = 20,
-        args = { arrangement = layout, style = appearance },
+        type = "group", name = "Layout and appearance", order = 20, arg = { puiExplicit = true },
+        args = { arrangement = layout },
       }
+      for key, group in pairs(appearance.args) do
+        if group.type == "group" then page.layout.args[key] = group end
+      end
       page.appearance = nil
       if page.behavior then
         page.general = page.behavior
         page.general.name, page.general.order = "General", 10
         page.behavior = nil
+        if layout.args.iconSize and layout.args.iconSpacing then
+          page.general.args.commonSettings = ns.OptionsSchema.BuildCommonSettings(page.layout, {
+            { path = { "arrangement", "iconSize" }, label = "Button size" },
+            { path = { "arrangement", "iconSpacing" }, label = "Button spacing" },
+          })
+        end
       end
       if page.text then
         page.text.name, page.text.order = "Text", 40
@@ -1613,6 +1618,7 @@ local function ActionBarsOptionsProvider(Addon)
     return {
       type = "group",
       name = "Action bars",
+      arg = { puiExplicit = true },
       childGroups = "tab",
       args = tabs,
     }
