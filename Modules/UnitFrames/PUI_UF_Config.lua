@@ -189,160 +189,6 @@ local function UFCB_BuildInlineArgsGroup(name, order, args)
   }
 end
 
-local UFCB_INLINE_GROUP_NAMES = {
-  core = "Module and behavior",
-  frameLayout = "Frame size and layout",
-  indicators = "Indicators",
-  textures = "Textures",
-  sorting = "Sorting",
-  groupLayout = "Raid groups",
-  layout = "Layout and sorting",
-  visibility = "Visibility",
-  dispelIndicator = "Dispel indicator",
-  roleSetup = "Role order",
-}
-
-local UFCB_INLINE_SECTION_ORDER = {
-  behavior = 1,
-  size = 2,
-  appearance = 3,
-  textures = 4,
-  colors = 5,
-  typography = 6,
-  position = 7,
-  layout = 8,
-  sorting = 9,
-  other = 10,
-  info = 99,
-}
-
-local UFCB_INLINE_SECTION_NAMES = {
-  behavior = "Behavior",
-  size = "Size",
-  appearance = "Appearance",
-  textures = "Textures",
-  colors = "Colors",
-  typography = "Font",
-  position = "Position",
-  layout = "Layout",
-  sorting = "Sorting",
-  other = "Settings",
-  info = "Information",
-}
-
-local function UFCB_GetInlineSectionKey(key, option)
-  local lowerKey = tostring(key or ""):lower()
-
-  if option.type == "description"
-    or lowerKey:find("note", 1, true)
-    or lowerKey:find("help", 1, true)
-    or lowerKey:find("info", 1, true)
-  then
-    return "info"
-  end
-
-  if lowerKey:find("sort", 1, true) then
-    return "sorting"
-  end
-
-  if lowerKey:find("anchor", 1, true)
-    or lowerKey:find("offset", 1, true)
-    or lowerKey:find("position", 1, true)
-    or lowerKey:find("point", 1, true)
-    or lowerKey == "side"
-  then
-    return "position"
-  end
-
-  if lowerKey:find("font", 1, true)
-    or lowerKey:find("outline", 1, true)
-    or lowerKey:find("textsize", 1, true)
-  then
-    return "typography"
-  end
-
-  if lowerKey:find("growth", 1, true)
-    or lowerKey:find("orientation", 1, true)
-    or lowerKey:find("spacing", 1, true)
-    or lowerKey:find("row", 1, true)
-    or lowerKey:find("column", 1, true)
-    or lowerKey:find("group", 1, true)
-  then
-    return "layout"
-  end
-
-  if lowerKey:find("texture", 1, true) then
-    return "textures"
-  end
-
-  if lowerKey:find("color", 1, true) then
-    return "colors"
-  end
-
-  if lowerKey:find("alpha", 1, true)
-    or lowerKey:find("opacity", 1, true)
-    or lowerKey:find("style", 1, true)
-    or lowerKey:find("zoom", 1, true)
-    or lowerKey:find("border", 1, true)
-  then
-    return "appearance"
-  end
-
-  if lowerKey:find("width", 1, true)
-    or lowerKey:find("height", 1, true)
-    or lowerKey:find("size", 1, true)
-  then
-    return "size"
-  end
-
-  if option.type == "toggle"
-    or lowerKey:find("enable", 1, true)
-    or lowerKey:find("disable", 1, true)
-    or lowerKey:find("show", 1, true)
-    or lowerKey:find("hide", 1, true)
-    or lowerKey:find("use", 1, true)
-    or lowerKey:find("mode", 1, true)
-    or lowerKey:find("visibility", 1, true)
-  then
-    return "behavior"
-  end
-
-  return "other"
-end
-
-local function UFCB_BuildCategorizedInlineArgs(args)
-  local output = {}
-  local sections = {}
-
-  for key, option in pairs(args or {}) do
-    if type(option) == "table" and option.type == "group" then
-      if option.name == nil or option.name == "" or option.name == " " then
-        option.name = UFCB_INLINE_GROUP_NAMES[key] or "Settings"
-      end
-      output[key] = option
-    elseif type(option) == "table" then
-      local sectionKey = UFCB_GetInlineSectionKey(key, option)
-      local section = sections[sectionKey]
-      if not section then
-        section = {}
-        sections[sectionKey] = section
-      end
-      section[key] = option
-    end
-  end
-
-  for sectionKey, sectionArgs in pairs(sections) do
-    output["__puiInline_" .. sectionKey] = UFCB_BuildInlineArgsGroup(
-      UFCB_INLINE_SECTION_NAMES[sectionKey],
-      UFCB_INLINE_SECTION_ORDER[sectionKey],
-      sectionArgs
-    )
-  end
-
-  return output
-end
-
-
 local function UFCB_IsUsingGlobalFont(fontKey, useGlobalFont)
   if useGlobalFont ~= nil then
     return useGlobalFont == true
@@ -7171,7 +7017,7 @@ local function UFCB_BuildCastbarArgs(unitKey)
     type = "description",
     name = function()
       local shared = OptionsUtil.ResolveFontKey(nil, true)
-      return "Shared font: " .. tostring(shared)
+      return "Global font: " .. tostring(shared)
         .. ". Spell name size and position are configured below."
     end,
     order = 1.5,
@@ -7236,7 +7082,7 @@ local function UFCB_BuildCastbarArgs(unitKey)
 
   args.castTime.args.font.desc = function()
     if UFCB_IsUsingGlobalFont(time.fontKey, time.useGlobalFont) then
-      return "Using shared settings. Turn off Use shared font to select a font here."
+      return "Using the global font. Turn off Use global font to select a font here."
     end
     return "Font used for the cast time."
   end
@@ -7423,16 +7269,6 @@ local function UFCB_BuildCastbarArgs(unitKey)
 end
 
 local function UFCB_BuildTreeGroupLeaf(name, order, args, childGroups)
-  if childGroups == "tab" then
-    for _, tab in pairs(args or {}) do
-      if type(tab) == "table" and type(tab.args) == "table" then
-        tab.args = UFCB_BuildCategorizedInlineArgs(tab.args)
-      end
-    end
-  else
-    args = UFCB_BuildCategorizedInlineArgs(args)
-  end
-
   args.combatNotice = {
     type = "description",
     name = "Unit frame and cast-bar settings cannot be changed in combat.",
@@ -8276,8 +8112,6 @@ ns.UFPreview.RegisterAuraManagerPositionCommitter(UFCB_CommitAuraManagerPreviewP
   CB_RefreshUnit = P:Def("CB_RefreshUnit", CB_RefreshUnit)
   UFCB_BlockCombat = P:Def("UFCB_BlockCombat", UFCB_BlockCombat)
   UFCB_BuildInlineArgsGroup = P:Def("UFCB_BuildInlineArgsGroup", UFCB_BuildInlineArgsGroup)
-  UFCB_GetInlineSectionKey = P:Def("UFCB_GetInlineSectionKey", UFCB_GetInlineSectionKey)
-  UFCB_BuildCategorizedInlineArgs = P:Def("UFCB_BuildCategorizedInlineArgs", UFCB_BuildCategorizedInlineArgs)
   UFCB_GetValidChoice = P:Def("UFCB_GetValidChoice", UFCB_GetValidChoice)
   UFCB_GetTextModeChoice = P:Def("UFCB_GetTextModeChoice", UFCB_GetTextModeChoice)
   UFCB_GetNumberOrDefault = P:Def("UFCB_GetNumberOrDefault", UFCB_GetNumberOrDefault)
