@@ -68,6 +68,34 @@ local function ActionBarsOptionsProvider(Addon)
 
     baseSkin = baseSkin or skinTable or {}
 
+    local visibilityKeys = {
+      hotkey = "showHotkeyText",
+      macro = "showMacroText",
+      charge = "showChargeText",
+      cooldown = "showCooldownText",
+    }
+    local visibilityKey = visibilityKeys[prefix]
+
+    local function GetDisplayField(field)
+      if barKey then
+        local _, override = _GetBarConfig(Core:GetDB(), barKey)
+        if override.useCustom ~= true then
+          return baseSkin[field]
+        end
+      end
+
+      local value = skinTable[field]
+      if value ~= nil then
+        return value
+      end
+
+      return baseSkin[field]
+    end
+
+    local function TextStyleDisabled()
+      return (disabledFn and disabledFn()) or GetDisplayField(visibilityKey) == false
+    end
+
     local function MarkFontDirty()
       if barKey then
         MarkBarDirtyFromOptions(barKey, { fonts = true })
@@ -85,16 +113,40 @@ local function ActionBarsOptionsProvider(Addon)
       order = orderBase,
       disabled = disabledFn,
       args = {
+        showText = {
+          type = "toggle",
+          name = visibilityKey == "showHotkeyText" and "Show keybinds"
+            or visibilityKey == "showMacroText" and "Show macro name"
+            or visibilityKey == "showChargeText" and "Show counts"
+            or "Show cooldown text",
+          desc = not barKey and prefix == "cooldown"
+            and "Show cooldown numbers on action buttons and turn on WoW's cooldown numbers."
+            or nil,
+          order = 5,
+          get = function()
+            return GetDisplayField(visibilityKey) ~= false
+          end,
+          set = function(_, value)
+            skinTable[visibilityKey] = value == true
+            if not barKey and prefix == "cooldown" then
+              Core:GetDB().countdownForCooldowns = value == true
+              MarkDirtyFromOptions({ fonts = true, cvars = true })
+            else
+              MarkFontDirty()
+            end
+          end,
+        },
         useGlobalFont = {
           type = "toggle",
           name = "Use global font",
           order = 10,
+          disabled = TextStyleDisabled,
           get = function()
-            local flag = skinTable[useGlobalKey]
+            local flag = GetDisplayField(useGlobalKey)
             if flag ~= nil then
               return flag == true
             end
-            local v = skinTable[faceKey]
+            local v = GetDisplayField(faceKey)
             return not (type(v) == "string" and v ~= "")
           end,
           set = function(_, v)
@@ -109,16 +161,19 @@ local function ActionBarsOptionsProvider(Addon)
           values = fontValues,
           order = 11,
           disabled = function()
-            local flag = skinTable[useGlobalKey]
+            if TextStyleDisabled() then return true end
+            local flag = GetDisplayField(useGlobalKey)
             if flag ~= nil then
               return flag == true
             end
-            local v = skinTable[faceKey]
+            local v = GetDisplayField(faceKey)
             return not (type(v) == "string" and v ~= "")
           end,
           get = function()
-            local v = skinTable[faceKey]
-            return OptionsUtil.ResolveFontKey(v, skinTable[useGlobalKey])
+            return OptionsUtil.ResolveFontKey(
+              GetDisplayField(faceKey),
+              GetDisplayField(useGlobalKey)
+            )
           end,
           set = function(_, v)
             skinTable[faceKey] = v
@@ -129,12 +184,13 @@ local function ActionBarsOptionsProvider(Addon)
         fontSize = {
           type = "range",
           name = "Font size",
-          min = 8,
-          max = 24,
+          min = 6,
+          max = 36,
           step = 1,
           order = 20,
+          disabled = TextStyleDisabled,
           get = function()
-            return skinTable[sizeKey] or baseSkin[sizeKey] or baseSkin.fontSize or 12
+            return GetDisplayField(sizeKey) or baseSkin.fontSize or 12
           end,
           set = function(_, v)
             skinTable[sizeKey] = v
@@ -146,8 +202,9 @@ local function ActionBarsOptionsProvider(Addon)
           name = "Font outline",
           values = outlineValues,
           order = 30,
+          disabled = TextStyleDisabled,
           get = function()
-            local cur = ThemeObj.NormalizeOutlineFlags(skinTable[outlineKey])
+            local cur = ThemeObj.NormalizeOutlineFlags(GetDisplayField(outlineKey))
             if cur == nil then
               return STANDARD_OUTLINE_KEY
             end
@@ -167,8 +224,9 @@ local function ActionBarsOptionsProvider(Addon)
           name = "Font color",
           hasAlpha = true,
           order = 40,
+          disabled = TextStyleDisabled,
           get = function()
-            local c = skinTable[colorKey] or baseSkin[colorKey] or baseSkin.fontColor or { 1, 1, 1, 1 }
+            local c = GetDisplayField(colorKey) or baseSkin.fontColor or { 1, 1, 1, 1 }
             return c[1] or 1, c[2] or 1, c[3] or 1, c[4] or 1
           end,
           set = function(_, r, g, b, a)
@@ -182,7 +240,14 @@ local function ActionBarsOptionsProvider(Addon)
 
   MarkDirtyFromOptions = function(flags)
     flags = type(flags) == "table" and flags or { full = true }
+    Core:InvalidateCaches(flags)
+    if flags.bars then
+      for barKey, barFlags in pairs(flags.bars) do
+        Core:InvalidateBarCache(barKey, barFlags)
+      end
+    end
     Addon:ApplyOptionsChange("ActionBars", flags)
+    ns.ActionBarsPreview.Refresh()
   end
 
   MarkBarDirtyFromOptions = function(barKey, flags)
@@ -207,7 +272,7 @@ local function ActionBarsOptionsProvider(Addon)
     local tabs = {
       general = {
         type = "group",
-        name = "General",
+        name = "Shared settings",
         order = 10,
         childGroups = "tree",
         args = {
@@ -243,18 +308,6 @@ local function ActionBarsOptionsProvider(Addon)
                     order = 30,
                     get = function() return db.alwaysShowGrid == false end,
                     set = function(_, v) db.alwaysShowGrid = v ~= true; MarkDirtyFromOptions({ cvars = true }) end,
-                  },
-                  cooldownNumbers = {
-                    type = "toggle",
-                    name = "Global cooldown numbers",
-                    order = 40,
-                    get = function() return db.countdownForCooldowns ~= false end,
-                    set = function(_, v)
-                      db.countdownForCooldowns = v and true or false
-                      db.skin = db.skin or {}
-                      db.skin.showCooldownText = v and true or false
-                      MarkDirtyFromOptions({ cvars = true, fonts = true })
-                    end,
                   },
                   tooltipMode = {
                     type = "select",
@@ -295,54 +348,6 @@ local function ActionBarsOptionsProvider(Addon)
             name = "Bars",
             order = 20,
             args = {
-              activateBars = {
-                type = "group",
-                name = "Enabled bars",
-                inline = true,
-                order = 20,
-                arg = {
-                  puiWidgetColumns = 8,
-                },
-                args = (function()
-                  local args = {}
-
-                  local function BuildBarToggle(index)
-                    local barKey = tostring(index)
-
-                    return {
-                      type = "toggle",
-                      name = "Bar " .. barKey,
-                      order = index * 10,
-                      disabled = index == 1,
-                      get = function()
-                        local barCfg = _GetBarConfig(db, barKey)
-                        if index == 1 then
-                          barCfg.enabled = true
-                          return true
-                        end
-                        return barCfg.enabled ~= false
-                      end,
-                      set = function(_, enabled)
-                        if index == 1 then
-                          return
-                        end
-
-                        local barCfg = _GetBarConfig(db, barKey)
-                        barCfg.enabled = enabled == true
-                        MarkBarDirtyFromOptions(barKey, { visibility = true })
-                      end,
-                    }
-                  end
-
-                  BuildBarToggle = P:Def("BuildBarToggle", BuildBarToggle)
-
-                  for index = 1, 12 do
-                    args["bar" .. index] = BuildBarToggle(index)
-                  end
-
-                  return args
-                end)(),
-              },
               layout = {
                 type = "group",
                 name = "Layout",
@@ -352,7 +357,7 @@ local function ActionBarsOptionsProvider(Addon)
                   iconSize = {
                     type = "range",
                     name = "Button size",
-                    min = 16, max = 64, step = 1,
+                    min = 16, max = 96, step = 1,
                     order = 10,
                     get = function() return skin.iconSize or 30 end,
                     set = function(_, v) skin.iconSize = v; MarkDirtyFromOptions({ layout = true }) end,
@@ -410,7 +415,7 @@ local function ActionBarsOptionsProvider(Addon)
                   borderSize = {
                     type = "range",
                     name = "Icon border size",
-                    min = 0, max = 4, step = 1,
+                    min = 0, max = 10, step = 1,
                     order = 50,
                     get = function() return skin.borderSize or 1 end,
                     set = function(_, v) skin.borderSize = v; MarkDirtyFromOptions({ skin = true }) end,
@@ -461,7 +466,7 @@ local function ActionBarsOptionsProvider(Addon)
                   frameBorderSize = {
                     type = "range",
                     name = "Backdrop border size",
-                    min = 0, max = 4, step = 1,
+                    min = 0, max = 10, step = 1,
                     order = 90,
                     get = function() return skin.frameBorderSize or 2 end,
                     set = function(_, v) skin.frameBorderSize = v; MarkDirtyFromOptions({ skin = true }) end,
@@ -497,7 +502,7 @@ local function ActionBarsOptionsProvider(Addon)
                 args = {
                   alpha = {
                     type = "range",
-                    name = "Alpha",
+                    name = "Opacity (%)",
                     desc = "How visible the bars are normally.",
                     min = 0, max = 100, step = 5,
                     order = 10,
@@ -517,7 +522,7 @@ local function ActionBarsOptionsProvider(Addon)
                   },
                   fadeOutEnabled = {
                     type = "toggle",
-                    name = "Fade out",
+                    name = "Show on mouseover",
                     desc = "Fade the bars until you move the mouse over them.",
                     order = 20,
                     get = function() return skin.fadeOutEnabled and true or false end,
@@ -525,7 +530,7 @@ local function ActionBarsOptionsProvider(Addon)
                   },
                   fadeOutAlpha = {
                     type = "range",
-                    name = "Fade-out alpha",
+                    name = "Fade-out opacity (%)",
                     desc = "How visible the bars are while faded.",
                     min = 0, max = 100, step = 5,
                     order = 30,
@@ -546,7 +551,7 @@ local function ActionBarsOptionsProvider(Addon)
                   },
                   fadeOutDuration = {
                     type = "range",
-                    name = "Fade-out time",
+                    name = "Fade-out time (seconds)",
                     desc = "How long the fade-out takes.",
                     min = 0, max = 10, step = 0.5,
                     order = 40,
@@ -571,20 +576,10 @@ local function ActionBarsOptionsProvider(Addon)
             name = "Text",
             order = 50,
             args = {
-              showHotkeyText = {
-                type = "toggle",
-                name = "Show keybinds",
-                order = 5,
-                get = function() return skin.showHotkeyText ~= false end,
-                set = function(_, value)
-                  skin.showHotkeyText = value and true or false
-                  MarkDirtyFromOptions({ fonts = true })
-                end,
-              },
               hotkey = _AB_MakeFontGroup("Keybind text", skin, skin, "hotkey", 10),
               macro = _AB_MakeFontGroup("Macro text", skin, skin, "macro", 20),
               charge = _AB_MakeFontGroup("Charge and count", skin, skin, "charge", 30),
-              cooldown = _AB_MakeFontGroup("Cooldown count", skin, skin, "cooldown", 40),
+              cooldown = _AB_MakeFontGroup("Cooldown text", skin, skin, "cooldown", 40),
             },
           },
         },
@@ -608,7 +603,7 @@ local function ActionBarsOptionsProvider(Addon)
 
       tabs[barKey] = {
         type = "group",
-        name = barKey,
+        name = "Bar " .. barKey,
         order = 10 + i,
         childGroups = "tree",
         args = {
@@ -629,54 +624,6 @@ local function ActionBarsOptionsProvider(Addon)
                     order = 10,
                     get = function() return override.useCustom == true end,
                     set = function(_, v) override.useCustom = v and true or false; MarkBarDirty({ full = true }) end,
-                  },
-                  showCooldownText = {
-                    type = "toggle",
-                    name = "Show cooldown text",
-                    order = 20,
-                    disabled = function() return override.useCustom ~= true end,
-                    get = function()
-                      local v = s.showCooldownText
-                      if v == nil then v = base.showCooldownText ~= false end
-                      return v and true or false
-                    end,
-                    set = function(_, v) s.showCooldownText = v and true or false; MarkBarDirty({ fonts = true }) end,
-                  },
-                  showHotkeyText = {
-                    type = "toggle",
-                    name = "Show keybinds",
-                    order = 25,
-                    disabled = function() return override.useCustom ~= true end,
-                    get = function()
-                      local v = s.showHotkeyText
-                      if v == nil then v = base.showHotkeyText ~= false end
-                      return v and true or false
-                    end,
-                    set = function(_, v) s.showHotkeyText = v and true or false; MarkBarDirty({ fonts = true }) end,
-                  },
-                  showMacroText = {
-                    type = "toggle",
-                    name = "Show macro name",
-                    order = 30,
-                    disabled = function() return override.useCustom ~= true end,
-                    get = function()
-                      local v = s.showMacroText
-                      if v == nil then v = base.showMacroText ~= false end
-                      return v and true or false
-                    end,
-                    set = function(_, v) s.showMacroText = v and true or false; MarkBarDirty({ fonts = true }) end,
-                  },
-                  showChargeText = {
-                    type = "toggle",
-                    name = "Show counts",
-                    order = 40,
-                    disabled = function() return override.useCustom ~= true end,
-                    get = function()
-                      local v = s.showChargeText
-                      if v == nil then v = base.showChargeText ~= false end
-                      return v and true or false
-                    end,
-                    set = function(_, v) s.showChargeText = v and true or false; MarkBarDirty({ fonts = true }) end,
                   },
                   flyoutDirection = {
                     type = "select",
@@ -720,9 +667,8 @@ local function ActionBarsOptionsProvider(Addon)
                   iconSize = {
                     type = "range",
                     name = "Button size",
-                    min = 16, max = 64, step = 1,
+                    min = 16, max = 96, step = 1,
                     order = 10,
-                    get = function() return s.iconSize ~= nil and s.iconSize or (base.iconSize or 30) end,
                     set = function(_, v) s.iconSize = v; MarkBarDirty({ layout = true }) end,
                   },
                   iconSpacing = {
@@ -730,7 +676,6 @@ local function ActionBarsOptionsProvider(Addon)
                     name = "Button spacing",
                     min = 0, max = 16, step = 1,
                     order = 20,
-                    get = function() return s.iconSpacing ~= nil and s.iconSpacing or (base.iconSpacing or 4) end,
                     set = function(_, v) s.iconSpacing = v; MarkBarDirty({ layout = true }) end,
                   },
                   iconsPerRow = {
@@ -738,7 +683,6 @@ local function ActionBarsOptionsProvider(Addon)
                     name = "Buttons per row",
                     min = 1, max = 12, step = 1,
                     order = 30,
-                    get = function() return s.iconsPerRow ~= nil and s.iconsPerRow or (base.iconsPerRow or 12) end,
                     set = function(_, v) s.iconsPerRow = v; MarkBarDirty({ layout = true }) end,
                   },
                   iconsPerBar = {
@@ -746,16 +690,6 @@ local function ActionBarsOptionsProvider(Addon)
                     name = "Buttons per bar",
                     min = 1, max = 12, step = 1,
                     order = 40,
-                    get = function()
-                      local baseIconsPerBar = tonumber(base.iconsPerBar) or 12
-                      if baseIconsPerBar < 1 then baseIconsPerBar = 1 end
-                      if baseIconsPerBar > 12 then baseIconsPerBar = 12 end
-                      local v = tonumber(s.iconsPerBar)
-                      if v == nil then v = baseIconsPerBar end
-                      if v < 1 then v = 1 end
-                      if v > 12 then v = 12 end
-                      return v
-                    end,
                     set = function(_, v)
                       local val = tonumber(v) or 12
                       if val < 1 then val = 1 end
@@ -776,9 +710,8 @@ local function ActionBarsOptionsProvider(Addon)
                   borderSize = {
                     type = "range",
                     name = "Icon border size",
-                    min = 0, max = 4, step = 1,
+                    min = 0, max = 10, step = 1,
                     order = 50,
-                    get = function() return s.borderSize ~= nil and s.borderSize or (base.borderSize or 1) end,
                     set = function(_, v) s.borderSize = v; MarkBarDirty({ skin = true }) end,
                   },
                   borderColor = {
@@ -786,10 +719,6 @@ local function ActionBarsOptionsProvider(Addon)
                     name = "Border color",
                     hasAlpha = true,
                     order = 60,
-                    get = function()
-                      local c = s.borderColor or base.borderColor or { 0, 0, 0, 1 }
-                      return c[1] or 0, c[2] or 0, c[3] or 0, c[4] or 1
-                    end,
                     set = function(_, r, g, b, a) s.borderColor = { r, g, b, a or 1 }; MarkBarDirty({ skin = true }) end,
                   },
                 },
@@ -806,18 +735,13 @@ local function ActionBarsOptionsProvider(Addon)
                     name = "Backdrop color",
                     hasAlpha = true,
                     order = 70,
-                    get = function()
-                      local c = s.frameBgColor or base.frameBgColor or { 0, 0, 0, 0.7 }
-                      return c[1] or 0, c[2] or 0, c[3] or 0, c[4] or 0.7
-                    end,
                     set = function(_, r, g, b, a) s.frameBgColor = { r, g, b, a or 1 }; MarkBarDirty({ skin = true }) end,
                   },
                   frameBorderSize = {
                     type = "range",
                     name = "Backdrop border size",
-                    min = 0, max = 4, step = 1,
+                    min = 0, max = 10, step = 1,
                     order = 80,
-                    get = function() return s.frameBorderSize ~= nil and s.frameBorderSize or (base.frameBorderSize or 2) end,
                     set = function(_, v) s.frameBorderSize = v; MarkBarDirty({ skin = true }) end,
                   },
                   frameBorderColor = {
@@ -825,10 +749,6 @@ local function ActionBarsOptionsProvider(Addon)
                     name = "Backdrop border color",
                     hasAlpha = true,
                     order = 90,
-                    get = function()
-                      local c = s.frameBorderColor or base.frameBorderColor or { 0, 0, 0, 0.7 }
-                      return c[1] or 0, c[2] or 0, c[3] or 0, c[4] or 0.7
-                    end,
                     set = function(_, r, g, b, a) s.frameBorderColor = { r, g, b, a or 1 }; MarkBarDirty({ skin = true }) end,
                   },
                 },
@@ -846,36 +766,39 @@ local function ActionBarsOptionsProvider(Addon)
                 inline = true,
                 order = 10,
                 args = {
-                  alwaysHidden = {
-                    type = "toggle",
-                    name = "Always hide",
-                    desc = "Keep this bar hidden while its keybinds remain active.",
+                  combatVisibility = {
+                    type = "select",
+                    name = "Show bar",
+                    desc = "Choose when this bar appears. Hidden bars retain active keybinds.",
                     order = 10,
-                    get = function() return visibility.alwaysHidden == true end,
-                    set = function(_, value)
-                      visibility.alwaysHidden = value and true or false
-                      MarkBarDirty({ visibilityDriver = true })
+                    values = {
+                      always = "Always",
+                      combat = "In combat",
+                      nocombat = "Out of combat",
+                      never = "Never",
+                    },
+                    sorting = { "always", "combat", "nocombat", "never" },
+                    get = function()
+                      if visibility.alwaysHidden
+                        or (visibility.hideInCombat and visibility.hideOutOfCombat)
+                      then
+                        return "never"
+                      end
+
+                      if visibility.hideOutOfCombat then
+                        return "combat"
+                      end
+
+                      if visibility.hideInCombat then
+                        return "nocombat"
+                      end
+
+                      return "always"
                     end,
-                  },
-                  hideInCombat = {
-                    type = "toggle",
-                    name = "Hide in combat",
-                    order = 20,
-                    disabled = function() return visibility.alwaysHidden == true end,
-                    get = function() return visibility.hideInCombat == true end,
                     set = function(_, value)
-                      visibility.hideInCombat = value and true or false
-                      MarkBarDirty({ visibilityDriver = true })
-                    end,
-                  },
-                  hideOutOfCombat = {
-                    type = "toggle",
-                    name = "Hide out of combat",
-                    order = 30,
-                    disabled = function() return visibility.alwaysHidden == true end,
-                    get = function() return visibility.hideOutOfCombat == true end,
-                    set = function(_, value)
-                      visibility.hideOutOfCombat = value and true or false
+                      visibility.alwaysHidden = value == "never"
+                      visibility.hideInCombat = value == "nocombat"
+                      visibility.hideOutOfCombat = value == "combat"
                       MarkBarDirty({ visibilityDriver = true })
                     end,
                   },
@@ -904,6 +827,7 @@ local function ActionBarsOptionsProvider(Addon)
                   hideWithVehicle = {
                     type = "toggle",
                     name = "Hide with vehicle",
+                    desc = "Hide while a vehicle unit exists. This is separate from the vehicle action UI.",
                     order = 60,
                     disabled = function() return visibility.alwaysHidden == true end,
                     get = function() return visibility.hideWithVehicle == true end,
@@ -915,6 +839,7 @@ local function ActionBarsOptionsProvider(Addon)
                   hideWithVehicleUI = {
                     type = "toggle",
                     name = "Hide with vehicle UI",
+                    desc = "Hide when the vehicle action interface is active.",
                     order = 70,
                     disabled = function() return visibility.alwaysHidden == true end,
                     get = function() return visibility.hideWithVehicleUI == true end,
@@ -926,6 +851,7 @@ local function ActionBarsOptionsProvider(Addon)
                   hideWithOverride = {
                     type = "toggle",
                     name = "Hide with override bar",
+                    desc = "Hide when a temporary override action bar is active.",
                     order = 80,
                     disabled = function() return visibility.alwaysHidden == true end,
                     get = function() return visibility.hideWithOverride == true end,
@@ -956,24 +882,17 @@ local function ActionBarsOptionsProvider(Addon)
               },
               group = {
                 type = "group",
-                name = "Alpha and fade",
+                name = "Opacity and fade",
                 inline = true,
                 order = 20,
                 disabled = function() return override.useCustom ~= true end,
                 args = {
                   alpha = {
                     type = "range",
-                    name = "Alpha",
+                    name = "Opacity (%)",
                     desc = "How visible this bar is normally.",
                     min = 0, max = 100, step = 5,
                     order = 10,
-                    get = function()
-                      local a = s.alpha
-                      if a == nil then a = base.alpha or 1.0 end
-                      if a < 0 then a = 0 end
-                      if a > 1 then a = 1 end
-                      return math.floor((a or 1) * 100 + 0.5)
-                    end,
                     set = function(_, v)
                       local a = (tonumber(v) or 100) / 100
                       if a < 0 then a = 0 end
@@ -984,19 +903,14 @@ local function ActionBarsOptionsProvider(Addon)
                   },
                   fadeOutEnabled = {
                     type = "toggle",
-                    name = "Fade out",
+                    name = "Show on mouseover",
                     desc = "Fade this bar until you move the mouse over it.",
                     order = 20,
-                    get = function()
-                      local enabled = s.fadeOutEnabled
-                      if enabled == nil then enabled = base.fadeOutEnabled == true end
-                      return enabled == true
-                    end,
                     set = function(_, v) s.fadeOutEnabled = v and true or false; MarkBarDirty({ alpha = true }) end,
                   },
                   fadeOutAlpha = {
                     type = "range",
-                    name = "Fade-out alpha",
+                    name = "Fade-out opacity (%)",
                     desc = "How visible this bar is while faded.",
                     min = 0, max = 100, step = 5,
                     order = 30,
@@ -1005,13 +919,6 @@ local function ActionBarsOptionsProvider(Addon)
                       local enabled = s.fadeOutEnabled
                       if enabled == nil then enabled = base.fadeOutEnabled == true end
                       return enabled ~= true
-                    end,
-                    get = function()
-                      local a = s.fadeOutAlpha
-                      if a == nil then a = base.fadeOutAlpha or 0 end
-                      if a < 0 then a = 0 end
-                      if a > 1 then a = 1 end
-                      return math.floor((a or 1) * 100 + 0.5)
                     end,
                     set = function(_, v)
                       local a = (tonumber(v) or 100) / 100
@@ -1023,7 +930,7 @@ local function ActionBarsOptionsProvider(Addon)
                   },
                   fadeOutDuration = {
                     type = "range",
-                    name = "Fade-out time",
+                    name = "Fade-out time (seconds)",
                     desc = "How long the fade-out takes.",
                     min = 0, max = 10, step = 0.5,
                     order = 40,
@@ -1032,13 +939,6 @@ local function ActionBarsOptionsProvider(Addon)
                       local enabled = s.fadeOutEnabled
                       if enabled == nil then enabled = base.fadeOutEnabled == true end
                       return enabled ~= true
-                    end,
-                    get = function()
-                      local fade = s.fadeOutDuration
-                      if fade == nil then fade = base.fadeOutDuration or 0 end
-                      if fade < 0 then fade = 0 end
-                      if fade > 10 then fade = 10 end
-                      return fade
                     end,
                     set = function(_, v) s.fadeOutDuration = tonumber(v) or 0; MarkBarDirty({ alpha = true }) end,
                   },
@@ -1054,7 +954,7 @@ local function ActionBarsOptionsProvider(Addon)
               hotkey = _AB_MakeFontGroup("Keybind text", s, base, "hotkey", 10, function() return override.useCustom ~= true end, barKey),
               macro = _AB_MakeFontGroup("Macro text", s, base, "macro", 20, function() return override.useCustom ~= true end, barKey),
               charge = _AB_MakeFontGroup("Charge and count", s, base, "charge", 30, function() return override.useCustom ~= true end, barKey),
-              cooldown = _AB_MakeFontGroup("Cooldown count", s, base, "cooldown", 40, function() return override.useCustom ~= true end, barKey),
+              cooldown = _AB_MakeFontGroup("Cooldown text", s, base, "cooldown", 40, function() return override.useCustom ~= true end, barKey),
             },
           },
         },
@@ -1082,7 +982,7 @@ local function ActionBarsOptionsProvider(Addon)
       },
     }
 
-    local function AddSpecialArgs(node, specialKey, defaultSize)
+    local function AddSpecialArgs(node, specialKey)
       local barConfig, override = _GetBarConfig(db, specialKey)
       override.skin = override.skin or {}
       local s = override.skin
@@ -1109,7 +1009,7 @@ local function ActionBarsOptionsProvider(Addon)
           },
           buttonCount = {
             type = "range",
-            name = "Buttons",
+            name = "Buttons per bar",
             desc = "Number of pet actions shown.",
             min = 1,
             max = 10,
@@ -1153,9 +1053,8 @@ local function ActionBarsOptionsProvider(Addon)
           iconSize = {
             type = "range",
             name = "Button size",
-            min = 8, max = 64, step = 1,
+            min = 8, max = 96, step = 1,
             order = 10,
-            get = function() return s.iconSize ~= nil and s.iconSize or defaultSize end,
             set = function(_, v) s.iconSize = v; MarkSpecialDirty({ layout = true }) end,
           },
           iconSpacing = {
@@ -1163,7 +1062,6 @@ local function ActionBarsOptionsProvider(Addon)
             name = "Button spacing",
             min = 0, max = 16, step = 1,
             order = 20,
-            get = function() return s.iconSpacing ~= nil and s.iconSpacing or (base.iconSpacing or 4) end,
             set = function(_, v) s.iconSpacing = v; MarkSpecialDirty({ layout = true }) end,
           },
           iconsPerRow = {
@@ -1172,13 +1070,6 @@ local function ActionBarsOptionsProvider(Addon)
             min = 1, max = 10, step = 1,
             order = 30,
             hidden = specialKey ~= "pet",
-            get = function()
-              local value = tonumber(s.iconsPerRow)
-              if value == nil then value = tonumber(base.iconsPerRow) or 10 end
-              if value < 1 then value = 1 end
-              if value > 10 then value = 10 end
-              return value
-            end,
             set = function(_, v) s.iconsPerRow = v; MarkSpecialDirty({ layout = true }) end,
           },
         },
@@ -1194,9 +1085,8 @@ local function ActionBarsOptionsProvider(Addon)
           borderSize = {
             type = "range",
             name = "Icon border size",
-            min = 0, max = 4, step = 1,
+            min = 0, max = 10, step = 1,
             order = 10,
-            get = function() return s.borderSize ~= nil and s.borderSize or (base.borderSize or 1) end,
             set = function(_, v) s.borderSize = v; MarkSpecialDirty({ skin = true }) end,
           },
           borderColor = {
@@ -1204,10 +1094,6 @@ local function ActionBarsOptionsProvider(Addon)
             name = "Border color",
             hasAlpha = true,
             order = 20,
-            get = function()
-              local c = s.borderColor or base.borderColor or { 0, 0, 0, 1 }
-              return c[1] or 0, c[2] or 0, c[3] or 0, c[4] or 1
-            end,
             set = function(_, r, g, b, a)
               s.borderColor = { r, g, b, a or 1 }
               MarkSpecialDirty({ skin = true })
@@ -1227,11 +1113,6 @@ local function ActionBarsOptionsProvider(Addon)
             type = "toggle",
             name = "Show backdrop",
             order = 10,
-            get = function()
-              local value = s.showBarBackground
-              if value == nil then value = base.showBarBackground ~= false end
-              return value ~= false
-            end,
             set = function(_, value)
               s.showBarBackground = value and true or false
               MarkSpecialDirty({ skin = true })
@@ -1242,10 +1123,6 @@ local function ActionBarsOptionsProvider(Addon)
             name = "Backdrop color",
             hasAlpha = true,
             order = 20,
-            get = function()
-              local c = s.frameBgColor or base.frameBgColor or { 0, 0, 0, 0.7 }
-              return c[1] or 0, c[2] or 0, c[3] or 0, c[4] or 0.7
-            end,
             set = function(_, r, g, b, a)
               s.frameBgColor = { r, g, b, a or 1 }
               MarkSpecialDirty({ skin = true })
@@ -1254,9 +1131,8 @@ local function ActionBarsOptionsProvider(Addon)
           frameBorderSize = {
             type = "range",
             name = "Backdrop border size",
-            min = 0, max = 4, step = 1,
+            min = 0, max = 10, step = 1,
             order = 30,
-            get = function() return s.frameBorderSize ~= nil and s.frameBorderSize or (base.frameBorderSize or 2) end,
             set = function(_, v) s.frameBorderSize = v; MarkSpecialDirty({ skin = true }) end,
           },
           frameBorderColor = {
@@ -1264,10 +1140,6 @@ local function ActionBarsOptionsProvider(Addon)
             name = "Backdrop border color",
             hasAlpha = true,
             order = 40,
-            get = function()
-              local c = s.frameBorderColor or base.frameBorderColor or { 0, 0, 0, 0.7 }
-              return c[1] or 0, c[2] or 0, c[3] or 0, c[4] or 0.7
-            end,
             set = function(_, r, g, b, a)
               s.frameBorderColor = { r, g, b, a or 1 }
               MarkSpecialDirty({ skin = true })
@@ -1285,17 +1157,10 @@ local function ActionBarsOptionsProvider(Addon)
         args = {
           alpha = {
             type = "range",
-            name = "Alpha",
+            name = "Opacity (%)",
             desc = "How visible this bar is normally.",
             min = 0, max = 100, step = 5,
             order = 10,
-            get = function()
-              local value = s.alpha
-              if value == nil then value = base.alpha or 1 end
-              if value < 0 then value = 0 end
-              if value > 1 then value = 1 end
-              return math.floor(value * 100 + 0.5)
-            end,
             set = function(_, value)
               local alpha = (tonumber(value) or 100) / 100
               if alpha < 0 then alpha = 0 end
@@ -1306,14 +1171,9 @@ local function ActionBarsOptionsProvider(Addon)
           },
           fadeOutEnabled = {
             type = "toggle",
-            name = "Fade out",
+            name = "Show on mouseover",
             desc = "Fade this bar until you move the mouse over it.",
             order = 20,
-            get = function()
-              local enabled = s.fadeOutEnabled
-              if enabled == nil then enabled = base.fadeOutEnabled == true end
-              return enabled == true
-            end,
             set = function(_, value)
               s.fadeOutEnabled = value and true or false
               MarkSpecialDirty({ alpha = true })
@@ -1321,7 +1181,7 @@ local function ActionBarsOptionsProvider(Addon)
           },
           fadeOutAlpha = {
             type = "range",
-            name = "Fade-out alpha",
+            name = "Fade-out opacity (%)",
             desc = "How visible this bar is while faded.",
             min = 0, max = 100, step = 5,
             order = 30,
@@ -1330,13 +1190,6 @@ local function ActionBarsOptionsProvider(Addon)
               local enabled = s.fadeOutEnabled
               if enabled == nil then enabled = base.fadeOutEnabled == true end
               return enabled ~= true
-            end,
-            get = function()
-              local value = s.fadeOutAlpha
-              if value == nil then value = base.fadeOutAlpha or 0 end
-              if value < 0 then value = 0 end
-              if value > 1 then value = 1 end
-              return math.floor(value * 100 + 0.5)
             end,
             set = function(_, value)
               local alpha = (tonumber(value) or 0) / 100
@@ -1348,7 +1201,7 @@ local function ActionBarsOptionsProvider(Addon)
           },
           fadeOutDuration = {
             type = "range",
-            name = "Fade-out time",
+            name = "Fade-out time (seconds)",
             desc = "How long the fade-out takes.",
             min = 0, max = 10, step = 0.5,
             order = 40,
@@ -1357,13 +1210,6 @@ local function ActionBarsOptionsProvider(Addon)
               local enabled = s.fadeOutEnabled
               if enabled == nil then enabled = base.fadeOutEnabled == true end
               return enabled ~= true
-            end,
-            get = function()
-              local value = s.fadeOutDuration
-              if value == nil then value = base.fadeOutDuration or 0 end
-              if value < 0 then value = 0 end
-              if value > 10 then value = 10 end
-              return value
             end,
             set = function(_, value)
               s.fadeOutDuration = tonumber(value) or 0
@@ -1376,8 +1222,361 @@ local function ActionBarsOptionsProvider(Addon)
 
     AddSpecialArgs = P:Def("AddSpecialArgs", AddSpecialArgs)
 
-    AddSpecialArgs(tabs.special.args.pet, "pet", 17)
-    AddSpecialArgs(tabs.special.args.stance, "stance", 23)
+    AddSpecialArgs(tabs.special.args.pet, "pet")
+    AddSpecialArgs(tabs.special.args.stance, "stance")
+
+    local shared = tabs.general.args
+    shared.layout = shared.size.args.layout
+    shared.layout.inline = nil
+    shared.layout.order = 20
+    shared.size = nil
+
+    local function AddCustomizationControls(args, override, customSkin, barKey)
+      args.sharedStatus = {
+        type = "description",
+        name = function()
+          if override.useCustom == true then
+            return "Using custom settings for this bar."
+          end
+          return "Using shared settings. Enable customization to change this bar separately."
+        end,
+        order = 15,
+      }
+
+      args.resetShared = {
+        type = "execute",
+        name = "Reset to shared",
+        desc = "Discard this bar's saved appearance overrides and use shared settings.",
+        order = 16,
+        disabled = function()
+          return override.useCustom ~= true and next(customSkin) == nil
+        end,
+        func = function()
+          for key in pairs(customSkin) do
+            customSkin[key] = nil
+          end
+          override.useCustom = false
+          MarkBarDirtyFromOptions(barKey, { full = true })
+        end,
+      }
+    end
+
+    for index = 1, 12 do
+      local barKey = tostring(index)
+      local barDB, override = _GetBarConfig(db, barKey)
+      local page = tabs[barKey].args
+      local behavior = page.general
+      local settings = behavior.args.group.args
+
+      settings.enableBar = {
+        type = "toggle",
+        name = "Enable bar",
+        desc = index == 1
+          and "Bar 1 is required for the main action bar and cannot be disabled. Use Visibility to hide it while keeping its actions and keybinds."
+          or "Disable this action bar and its actions. To keep its keybinds active while hiding it, choose Never under Visibility instead.",
+        order = 5,
+        disabled = index == 1,
+        get = function()
+          return barKey == "1" or barDB.enabled ~= false
+        end,
+        set = function(_, enabled)
+          if barKey == "1" then
+            return
+          end
+          barDB.enabled = enabled == true
+          MarkBarDirtyFromOptions(barKey, { visibility = true })
+        end,
+      }
+
+      settings.useCustom.name = "Customize this bar"
+      AddCustomizationControls(settings, override, override.skin, barKey)
+
+      page.behavior = behavior
+      page.behavior.name = "Behavior"
+      page.behavior.order = 10
+
+      page.layout = page.size.args.layout
+      page.layout.inline = nil
+      page.layout.order = 20
+
+      page.appearance = page.size
+      page.appearance.name = "Appearance"
+      page.appearance.order = 30
+      page.appearance.args.layout = nil
+      page.appearance.args.buttonAppearance.order = 10
+      page.appearance.args.barBackdrop.order = 20
+
+      local backdrop = page.appearance.args.barBackdrop.args
+
+      backdrop.showBarBackground = {
+        type = "toggle",
+        name = "Show backdrop",
+        order = 10,
+        set = function(_, enabled)
+          override.skin.showBarBackground = enabled == true
+          MarkBarDirtyFromOptions(barKey, { skin = true })
+        end,
+      }
+
+      backdrop.frameBgColor.order = 20
+      backdrop.frameBorderSize.order = 30
+      backdrop.frameBorderColor.order = 40
+
+      local function BackdropControlsDisabled()
+        if override.useCustom ~= true then
+          return true
+        end
+
+        local enabled = override.skin.showBarBackground
+        if enabled == nil then
+          enabled = db.skin.showBarBackground
+        end
+        return enabled == false
+      end
+
+      backdrop.frameBgColor.disabled = BackdropControlsDisabled
+      backdrop.frameBorderSize.disabled = BackdropControlsDisabled
+      backdrop.frameBorderColor.disabled = BackdropControlsDisabled
+
+      page.visibility.order = 40
+
+      page.text = page.fonts
+      page.text.order = 50
+
+      local offset = settings.buttonOffset
+      settings.buttonOffset = nil
+
+      page.advanced = {
+        type = "group",
+        name = "Advanced",
+        order = 60,
+        args = {
+          explanation = {
+            type = "description",
+            name = "Button offset changes which action slots each button uses. This changes actions, not just their appearance.",
+            order = 5,
+          },
+          buttonOffset = offset,
+          slotOrder = {
+            type = "description",
+            name = function()
+              local offsetValue = tonumber(barDB.buttonOffset) or 0
+              local slots = {}
+
+              for buttonIndex = 1, 12 do
+                slots[buttonIndex] = tostring(((buttonIndex + offsetValue - 1) % 12) + 1)
+              end
+
+              return "Button 1 to 12 use slots:\n" .. table.concat(slots, "  →  ")
+            end,
+            order = 70,
+          },
+        },
+      }
+
+      page.general = nil
+      page.size = nil
+      page.fonts = nil
+    end
+
+    for _, specialKey in ipairs({ "pet", "stance" }) do
+      local node = tabs.special.args[specialKey]
+      local _, override = _GetBarConfig(db, specialKey)
+      local s = override.skin
+      local base = db.skin
+      local page = node.args
+
+      page.behavior = page.general
+      page.behavior.name = "Behavior"
+      page.behavior.inline = nil
+      page.behavior.order = 10
+      page.behavior.args.useCustom.name = "Customize this bar"
+
+      AddCustomizationControls(page.behavior.args, override, s, specialKey)
+
+      page.layout.inline = nil
+      page.layout.order = 20
+      page.layout.disabled = nil
+      for _, field in ipairs({ "iconSize", "iconSpacing", "iconsPerRow" }) do
+        page.layout.args[field].disabled = function() return override.useCustom ~= true end
+      end
+      if specialKey == "pet" then
+        page.layout.args.buttonCount = page.behavior.args.buttonCount
+        page.layout.args.buttonCount.disabled = false
+        page.layout.args.buttonCount.order = 40
+      end
+      page.behavior.args.buttonCount = nil
+
+      page.appearance = {
+        type = "group",
+        name = "Appearance",
+        order = 30,
+        args = {
+          buttonAppearance = page.buttonAppearance,
+          barBackdrop = page.barBackdrop,
+        },
+      }
+
+      page.appearance.args.buttonAppearance.order = 10
+      page.appearance.args.barBackdrop.order = 20
+
+      page.visibility.inline = nil
+      page.visibility.order = 40
+      page.visibility.disabled = nil
+      page.visibility.args.alpha.disabled = function() return override.useCustom ~= true end
+      page.visibility.args.fadeOutEnabled.disabled = function() return override.useCustom ~= true end
+
+      page.text = {
+        type = "group",
+        name = "Text",
+        order = 50,
+        args = {
+          hotkey = _AB_MakeFontGroup(
+            "Keybind text", s, base, "hotkey", 10,
+            function() return override.useCustom ~= true end,
+            specialKey
+          ),
+          cooldown = _AB_MakeFontGroup(
+            "Cooldown text", s, base, "cooldown", 20,
+            function() return override.useCustom ~= true end,
+            specialKey
+          ),
+        },
+      }
+
+      page.general = nil
+      page.buttonAppearance = nil
+      page.barBackdrop = nil
+    end
+
+    local effectiveFields = {
+      iconSize = true,
+      iconSpacing = true,
+      iconsPerRow = true,
+      iconsPerBar = true,
+      borderSize = true,
+      borderColor = true,
+      frameBgColor = true,
+      frameBorderSize = true,
+      frameBorderColor = true,
+      showBarBackground = true,
+      alpha = true,
+      fadeOutEnabled = true,
+      fadeOutAlpha = true,
+      fadeOutDuration = true,
+    }
+
+    local function BindEffectiveGetters(args, barKey, defaultSize)
+      local function Visit(children)
+        for key, option in pairs(children) do
+          if type(option) == "table" then
+            if option.type == "group" then
+              Visit(option.args)
+            elseif effectiveFields[key] then
+              local field = key
+              local controlType = option.type
+              option.get = function()
+                local effective
+                if barKey == "pet" or barKey == "stance" then
+                  effective = Core:GetSpecialSkin(barKey, defaultSize)
+                else
+                  effective = Core:GetEffectiveSkin(barKey, defaultSize)
+                end
+
+                local value = effective[field]
+
+                if controlType == "color" then
+                  return value[1], value[2], value[3], value[4]
+                end
+
+                if field == "alpha" or field == "fadeOutAlpha" then
+                  return math.floor(value * 100 + 0.5)
+                end
+
+                if field == "iconsPerRow" and barKey == "pet" then
+                  return math.min(10, value)
+                end
+
+                return value
+              end
+            end
+          end
+        end
+      end
+
+      Visit(args)
+    end
+
+    for index = 1, 12 do
+      local barKey = tostring(index)
+      BindEffectiveGetters(tabs[barKey].args, barKey, 35)
+    end
+
+    BindEffectiveGetters(tabs.special.args.pet.args, "pet", 17)
+    BindEffectiveGetters(tabs.special.args.stance.args, "stance", 23)
+
+    local function AddPendingCombatStatus(sections)
+      for _, section in pairs(sections) do
+        if type(section) == "table"
+          and section.type == "group"
+          and type(section.args) == "table"
+        then
+          section.args.pendingCombatStatus = {
+            type = "description",
+            name = "Applies after combat — action-bar changes are waiting for combat to end.",
+            order = 1,
+            hidden = function()
+              return not (
+                InCombatLockdown()
+                and Core.combatFlushRegistered == true
+                and next(Core.pendingRefreshFlags) ~= nil
+              )
+            end,
+          }
+        end
+      end
+    end
+
+    AddPendingCombatStatus(tabs.general.args)
+
+    for index = 1, 12 do
+      AddPendingCombatStatus(tabs[tostring(index)].args)
+    end
+
+    AddPendingCombatStatus(tabs.special.args.pet.args)
+    AddPendingCombatStatus(tabs.special.args.stance.args)
+
+    local sharedBackdrop = shared.appearance.args.barBackdrop.args
+    sharedBackdrop.showBarBackground.order = 10
+    sharedBackdrop.frameBgColor.order = 20
+    sharedBackdrop.frameBorderSize.order = 30
+    sharedBackdrop.frameBorderColor.order = 40
+
+    for _, key in ipairs({ "frameBgColor", "frameBorderSize", "frameBorderColor" }) do
+      sharedBackdrop[key].disabled = function()
+        return db.skin.showBarBackground == false
+      end
+    end
+
+    for _, specialKey in ipairs({ "pet", "stance" }) do
+      local _, override = _GetBarConfig(db, specialKey)
+      local backdrop = tabs.special.args[specialKey].args.appearance.args.barBackdrop.args
+
+      for _, key in ipairs({ "frameBgColor", "frameBorderSize", "frameBorderColor" }) do
+        backdrop[key].disabled = function()
+          if override.useCustom ~= true then
+            return true
+          end
+
+          local enabled = override.skin.showBarBackground
+          if enabled == nil then
+            enabled = db.skin.showBarBackground
+          end
+
+          return enabled == false
+        end
+      end
+    end
 
     return {
       type = "group",
@@ -1396,5 +1595,9 @@ _GetBarConfig = P:Def("_GetBarConfig", _GetBarConfig)
 ActionBarsOptionsProvider = P:Def("ActionBarsOptionsProvider", ActionBarsOptionsProvider)
 
 Addon:RegisterOptionsSection("ACTIONBARS", ActionBarsOptionsProvider, 30, "Action bars", nil, {
-  preview = false,
+  page = {
+    previewWidth = 360,
+    previewHeight = 185,
+    buildPreview = ns.ActionBarsPreview.Build,
+  },
 })
