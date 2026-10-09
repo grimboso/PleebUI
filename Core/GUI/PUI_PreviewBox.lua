@@ -304,13 +304,15 @@ function PreviewBox.CreateZoomControl(parent, options)
 
   Pixel.Point(label, "RIGHT", slider, "LEFT", -gap, 0)
   label:SetJustifyH("RIGHT")
-  Theme.ApplyFont(label, "tiny", tonumber(options.fontSize) or 9)
+  label.__puiOptionsFontOwned = true
+  Theme.ApplyFont(label, "body", tonumber(options.fontSize) or 11)
   label:SetText(options.label or "Zoom")
   label:SetShown(options.showLabel ~= false)
 
   Pixel.Point(valueText, "LEFT", slider, "RIGHT", gap, 0)
   valueText:SetJustifyH("LEFT")
-  Theme.ApplyFont(valueText, "tiny", tonumber(options.fontSize) or 9)
+  valueText.__puiOptionsFontOwned = true
+  Theme.ApplyFont(valueText, "body", tonumber(options.fontSize) or 11)
 
   function control:SetZoom(zoom)
     local percent = math_floor(
@@ -575,12 +577,14 @@ function PreviewBox.Create(parent)
   box.title = box:CreateFontString(nil, "OVERLAY", "GameFontNormal")
   Pixel.Point(box.title, "TOPLEFT", box, "TOPLEFT", 14, -12)
   Pixel.Point(box.title, "TOPRIGHT", box, "TOPRIGHT", -14, -12)
+  box.title.__puiOptionsFontOwned = true
   box.title:SetJustifyH("LEFT")
   box.title:SetJustifyV("MIDDLE")
 
   box.description = box:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
   Pixel.Point(box.description, "TOPLEFT", box.title, "BOTTOMLEFT", 0, -4)
   Pixel.Point(box.description, "TOPRIGHT", box.title, "BOTTOMRIGHT", 0, -4)
+  box.description.__puiOptionsFontOwned = true
   box.description:SetJustifyH("LEFT")
   box.description:SetJustifyV("TOP")
   box.description:SetWordWrap(true)
@@ -595,7 +599,8 @@ function PreviewBox.Create(parent)
   PUI_PreviewBox_ApplyBackdrop(box.canvas, colors.background, colors.border, edge)
 
   Theme.ApplyFont(box.title, "header", 13)
-  Theme.ApplyFont(box.description, "tiny", 10)
+  Theme.ApplyFont(box.description, "body", 12)
+  box.description:SetTextColor(colors.text[1], colors.text[2], colors.text[3], colors.text[4])
 
   function box:SetTitle(text)
     self.title:SetText(text or "")
