@@ -27,6 +27,7 @@ for display, preserving existing toggle polarity.
 Within each group put activation/display toggles first, then modes and source selections, primary
 values, styling, position, and scoped reset/delete actions. Preserve intentionally arranged rows
 and keep custom-color toggles next to their pickers.
+Relative-width rows keep their builder order during label normalization and final widget ordering.
 Text roles use Show text, Format, inheritance, Font, Font size, Outline, Text color, Anchor point,
 Horizontal offset and Vertical offset, omitting properties that do not apply.
 
@@ -42,6 +43,8 @@ Use Spacing between icon and bar for the distance separating those two elements.
 
 Search section destinations come from the same builders as the actual editors.
 Delete actions and resets that discard saved customization require a scoped confirmation.
+Describe the fields a reset actually changes. Use one confirmation owner per action, including
+conditional reloads, and recheck combat restrictions when the user accepts.
 Routine position resets may remain immediate.
 
 Run the checked-in Options tests after changing builders or the schema, then perform the live
