@@ -86,6 +86,7 @@ local function UpdateStanceState(button)
   else
     button.icon:SetVertexColor(0.4, 0.4, 0.4)
   end
+  ns.ActionBarsPreview.QueueIconRefresh("stance")
 end
 
 local function UpdateStanceCooldown(button)
@@ -540,6 +541,7 @@ function StanceBar:OnEvent(event)
 
   if event == "UPDATE_SHAPESHIFT_FORMS" then
     self:RefreshForms()
+    ns.ActionBarsPreview.QueueIconRefresh("stance")
     return
   end
 
