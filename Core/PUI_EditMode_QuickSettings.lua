@@ -337,12 +337,17 @@ function QuickSettings:Open(anchor, spec)
   panel.description:SetText(spec.description or "Changes apply immediately.")
   panel.openAllSettings = openAllSettings
 
-  for _, control in ipairs(spec.controls or {}) do
+  local controls = spec.controls or {}
+  if controls[1] and controls[1].type ~= "heading" then
+    AddControl(panel, { type = "heading", label = "Common settings" })
+  end
+  for _, control in ipairs(controls) do
     AddControl(panel, control)
   end
 
   local moverKey = ns.FrameUtil.GetMoverKeyForAnchor(anchor)
   if moverKey then
+    AddControl(panel, { type = "heading", label = "Mover" })
     AddControl(panel, {
       type = "button",
       label = "Hide mover",
