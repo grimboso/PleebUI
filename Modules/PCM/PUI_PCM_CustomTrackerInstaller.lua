@@ -212,7 +212,7 @@ end
 
 local function AddCheckbox(label, value, callback, state)
   local widget = AceGUI:Create("PUI_Checkbox")
-  widget:SetLabel(label)
+  widget:SetLabel(ns.OptionsSchema.GetCompactLabel(label))
   widget:SetValue(value == true)
   widget:SetWidth(235)
   widget:SetCallback("OnValueChanged", function(_, _, checked)
@@ -225,7 +225,7 @@ end
 
 local function AddSlider(label, value, minimum, maximum, step, callback, state)
   local widget = AceGUI:Create("PUI_Slider")
-  widget:SetLabel(label)
+  widget:SetLabel(ns.OptionsSchema.GetCompactLabel(label))
   widget:SetSliderValues(minimum, maximum, step)
   widget:SetValue(value)
   widget:SetWidth(235)
@@ -239,7 +239,7 @@ end
 
 local function AddDropdown(label, values, sorting, value, callback, state)
   local widget = AceGUI:Create("PUI_Dropdown")
-  widget:SetLabel(label)
+  widget:SetLabel(ns.OptionsSchema.GetCompactLabel(label))
   widget:SetList(values, sorting)
   widget:SetValue(value)
   widget:SetWidth(235)
@@ -253,7 +253,7 @@ end
 
 local function AddEditBox(label, value, callback, state)
   local widget = AceGUI:Create("PUI_EditBox")
-  widget:SetLabel(label)
+  widget:SetLabel(ns.OptionsSchema.GetCompactLabel(label))
   widget:SetText(value or "")
   widget:SetWidth(235)
   widget:SetCallback("OnEnterPressed", function(_, _, entered)
@@ -266,7 +266,7 @@ end
 
 local function AddColor(label, color, callback, state)
   local widget = AceGUI:Create("ColorPicker")
-  widget:SetLabel(label)
+  widget:SetLabel(ns.OptionsSchema.GetCompactLabel(label))
   widget:SetHasAlpha(true)
   local rgba = CopyColor(color, { 1, 0.55, 0.1, 1 })
   widget:SetColor(rgba[1], rgba[2], rgba[3], rgba[4])
