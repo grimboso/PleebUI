@@ -2737,7 +2737,11 @@ local function Quality_BuildPreview(_, _, shell, path)
   root.Title:SetTextColor(colors.text[1], colors.text[2], colors.text[3], colors.text[4])
   ns.Theme.WidgetSkins.UIButton(root.Next)
 
-  Quality_RefreshPreview()
+  if QualityPreviewTab == "automationTab" then
+    root:Hide()
+  else
+    Quality_RefreshPreview()
+  end
   return true
 end
 
@@ -3420,10 +3424,11 @@ Addon:RegisterOptionsSection("Quality", QualityProvider, 80, "Quality of Life", 
   allowPreview = true,
   page = {
     previewAlwaysShown = true,
+    tabsBeforeHeader = true,
     previewWidth = 340,
     previewHeight = 190,
     previewPathMatches = function(path)
-      return path[2] == "combatTab" or path[2] == "cursorTab" or path[2] == "groupTab"
+      return path[2] == "combatTab" or path[2] == "cursorTab" or path[2] == "groupTab" or path[2] == "automationTab"
     end,
     buildPreview = Quality_BuildPreview,
   },
