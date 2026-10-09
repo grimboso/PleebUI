@@ -695,7 +695,7 @@ local function BuildEditControls(panel)
     widget.frame:SetParent(host)
     widget.frame:Show()
     ns.AceHooks.TakeOwnership(widget)
-    widgets[key] = { widget = widget, value = value, height = 30 }
+    widgets[key] = { widget = widget, label = label, value = value, height = 30 }
   end
 
   local function Slider(key, label, minimum, maximum, step, value, setter)
@@ -708,7 +708,7 @@ local function BuildEditControls(panel)
     widget.frame:SetParent(host)
     widget.frame:Show()
     ns.AceHooks.TakeOwnership(widget)
-    widgets[key] = { widget = widget, value = value, height = 66 }
+    widgets[key] = { widget = widget, label = label, value = value, height = 66 }
   end
 
   local function Dropdown(key, label, choices, value, setter)
@@ -722,7 +722,7 @@ local function BuildEditControls(panel)
     widget.frame:SetParent(host)
     widget.frame:Show()
     ns.AceHooks.TakeOwnership(widget)
-    widgets[key] = { widget = widget, value = value, height = 58 }
+    widgets[key] = { widget = widget, label = label, value = value, height = 58 }
   end
 
   local util = ns.FrameUtil
@@ -752,6 +752,30 @@ local function BuildEditControls(panel)
     function() return util._snapTolerance end, util.SetSnapTolerance)
   Slider("fade", "Screen dimming", 0, 1, 0.05,
     function() return util._dimAlpha end, util.SetEditDimAlpha)
+
+  local help = {
+    keyboard = "Use Tab to cycle movers, arrow keys to move them, and keys 1–9 to change the step.",
+    nudge = "Distance moved by each arrow press, in pixels.",
+    snap = "Align a mover with nearby frame edges while dragging.",
+    smart = "Link supported movers so they move and arrange together.",
+    tolerance = "How close movers must be before frame snapping or Smart Snap activates.",
+    snapGrid = "Align movers with the grid while dragging.",
+    grid = "Show a positioning grid. Grid visibility and snapping are separate settings.",
+    dim = "Keep the game background at its normal brightness while editing.",
+    fade = "How much to darken the game background while editing.",
+  }
+  for key, text in pairs(help) do
+    local spec = widgets[key]
+    local control = { label = spec.label, tooltip = text }
+    if key == "fade" then
+      control.disabled = function() return util._disableDimming end
+      control.disabledReason = function() return "Turn off Disable screen dimming to adjust the strength." end
+    elseif key == "tolerance" then
+      control.disabled = function() return not util._snapToFrame and not util._smartSnapEnabled end
+      control.disabledReason = function() return "Enable Snap to frames or Smart Snap to adjust the snap distance." end
+    end
+    ns.EditModeQuickSettings:BindControlTooltip(spec.widget, control, panel)
+  end
 
   panel.positionUnit = "target"
   host = CreateFrame("Frame", nil, panel.content)
@@ -828,6 +852,9 @@ function TestMode:RefreshEditControlButtons()
   local panel = self.toolbar
   if not panel or not panel.sessionButtons then return end
   local selected = ns.FrameUtil._GetSelectedMoverCount() > 0
+  local widgets = panel.editWidgets
+  widgets.fade.widget:SetDisabled(ns.FrameUtil._disableDimming)
+  widgets.tolerance.widget:SetDisabled(not ns.FrameUtil._snapToFrame and not ns.FrameUtil._smartSnapEnabled)
   panel.sessionButtons[1]:SetEnabled(selected)
   panel.sessionButtons[2]:SetEnabled(selected)
   panel.sessionButtons[3]:SetEnabled(ns.FrameUtil.GetEditSessionHiddenMoverCount() > 0)
@@ -1186,6 +1213,10 @@ local function AcquireMoverRow(panel, index)
     end
   end)
 
+  local highlight = row:CreateTexture(nil, "HIGHLIGHT")
+  highlight:SetAllPoints()
+  row.hoverHighlight = highlight
+
   local expand = CreateToolbarButton(row, "+", 22, function()
     ToggleMoverRowExpansion(panel, row)
   end)
@@ -1242,6 +1273,8 @@ local function ShowMoverRow(panel, index, y, kind, key, label, depth, state, exp
   row.label:SetPoint("LEFT", row, "LEFT", expansionKey and 27 or 8, 0)
   row.label:SetPoint("RIGHT", row.check, "LEFT", -5, 0)
   row.label:SetText(label)
+  local accent = ns.Theme.GetColors().accent
+  row.hoverHighlight:SetColorTexture(accent[1], accent[2], accent[3], 0.10)
   StyleText(row.label, depth == 0 and "header" or "body", 12)
   row:Show()
 end
@@ -1670,6 +1703,8 @@ local function RefreshToolbarTheme()
   end
   for _, row in ipairs(panel.moverRows) do
     if row:IsShown() then
+      local accent = ns.Theme.GetColors().accent
+      row.hoverHighlight:SetColorTexture(accent[1], accent[2], accent[3], 0.10)
       StyleText(row.label, "body", 12)
       StyleVisibilityCheckbox(row.check, row.check.__puiState)
       StyleButton(row.expand, false)
