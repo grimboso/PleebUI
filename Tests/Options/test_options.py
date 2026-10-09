@@ -396,9 +396,14 @@ for name in ['_PUI_ThemeRegistry_CopyArgsWithoutHeader','PUI_THEME_COLOR_OPTIONS
     lua.execute(builders[name])
 lua.execute('''
 local opts=UIThemeOptionsProvider():GetOptions();ns.OptionsSchema.Apply(opts,'UITHEME');checkInline(opts)
-assert(opts.childGroups=='tab' and opts.args.general and opts.args.layout and opts.args.colors and opts.args.text)
-assert(opts.args.text.args.global.args.font.name=='Font')
-assert(not opts.args.layout.args.text and opts.args.layout.args.window.args.fontSize.name=='Font size')
+assert(opts.childGroups=='tab' and opts.args.general and opts.args.layout and not opts.args.colors and not opts.args.text)
+local tabs=0;for _ in pairs(opts.args) do tabs=tabs+1 end;assert(tabs==2)
+assert(opts.args.layout.args.text.args.font.name=='Font')
+assert(opts.args.layout.args.colors.inline and opts.args.layout.args.text.inline)
+assert(opts.args.layout.args.window.order<opts.args.layout.args.colors.order)
+assert(opts.args.layout.args.colors.order<opts.args.layout.args.text.order)
+assert(opts.args.layout.args.window.args.fontSize.name=='Font size')
+checkCompact(opts)
 local savedFont
 Theme.GetOptionsFontSize=function() return savedFont end
 Theme.SetOptionsFontSize=function(value) savedFont=value end
@@ -439,8 +444,6 @@ Quality={GetQuickSetupValue=function(_,key) return qualityDB[key] end,SetQuickSe
 IsPetWarningAvailable=function() return true end}
 qualityDB={};function NormalizeDB() return qualityDB end
 function Quality_RefreshPreview() end
-function Quality_GetPreviewWarnings() return {"Combat message"} end
-QualityPreviewIndex=1
 function Clamp(v,a,b) return math.min(b,math.max(a,v)) end
 function IsPetClass() return TEST_CLASS=='HUNTER' end
 function IsHealPetClass() return false end
@@ -448,6 +451,10 @@ ns.RaidUtilityModule={BuildBresLustOptions=function(ctx) return {type='group',na
 BuildRaidUtilityOptions=function() return {type='group',name='Raid utility',inline=true,args={buttons={type='group',name='Ready',inline=true,args={}},raidMarkers={type='group',name='Targets',inline=true,args={}},worldMarkers={type='group',name='World',inline=true,args={}},general={type='group',name='General',inline=true,args={}}}} end}
 ''')
 lua.execute(builders['QualityProvider'])
+lua.execute('Module={};POSITION_DEFAULTS={}')
+for name in ['RAID_UTILITY_WINDOW_SPECS','Module.BuildBresLustOptions','Module.BuildRaidUtilityOptions']:
+    lua.execute(builders[name])
+lua.execute('ns.RaidUtilityModule=Module')
 lua.execute('''
 for _,class in ipairs({'HUNTER','MAGE'}) do
  TEST_CLASS=class
@@ -481,7 +488,26 @@ for _,class in ipairs({'HUNTER','MAGE'}) do
  assert(pets.missing.hidden()==(class~='HUNTER') and pets.dead.hidden()==(class~='HUNTER'))
  assert(pets.missingPetWarning.hidden()==(class~='HUNTER'))
  assert(pets.missing.args.fontSize.name=='Font size' and pets.dead.args.textColor.name=='Text color')
- assert(opts.args.combatTab.args.preview.args.warning.name=='Preview warning')
+ assert(not opts.args.combatTab.args.preview)
+ assert(opts.args.groupTab.args.battleResLust.order==20)
+ assert(opts.args.groupTab.args.general.order<opts.args.groupTab.args.battleResLust.order)
+ for _,key in ipairs({'buttons','raidMarkers','worldMarkers'}) do
+  local group=opts.args.groupTab.args[key]
+  assert(group.order>opts.args.groupTab.args.battleResLust.order)
+  for _,control in pairs(group.args) do
+   if control~=group.args.enabled then assert(group.args.enabled.order<control.order) end
+  end
+ end
+ local invites=opts.args.automationTab.args.invites.args
+ qualityDB.autoAcceptInvites=true;qualityDB.acceptInviteFriends=true
+ invites.acceptInviteEveryone.set(nil,true)
+ assert(qualityDB.acceptInviteEveryone and invites.acceptInviteFriends.disabled())
+ assert(qualityDB.acceptInviteFriends)
+ invites.acceptInviteEveryone.set(nil,false)
+ assert(not invites.acceptInviteFriends.disabled() and qualityDB.acceptInviteFriends)
+ qualityDB.autoAcceptInvites=false
+ assert(invites.acceptInviteEveryone.disabled() and invites.acceptInviteFriends.disabled())
+ assert(not opts.args.automationTab.args.loot.args.autoLoot)
 end
 ''')
 print('Actual Quality provider: Hunter-only Emergency Salve, role groups, cursor groups, and mandatory headings passed.')
@@ -547,6 +573,7 @@ common.args.width.set({},.8);assert(saved==.8)
 local options={type='group',name='Example',arg={puiExplicit=true},args={
  general={type='group',name='General',args={settings={type='group',name='Behaviour',inline=true,args={
  size={type='range',name='Font size',order=1},show={type='toggle',name='Show text',order=20},
+ enable={type='toggle',name='Enable',order=40},hide={type='toggle',name='Hide in combat',order=1},
  opacity={type='range',name='Ready opacity',min=0,max=100,step=5,order=30,
  get=function() return 35 end,set=function(_,value) saved=value end},
  delete={type='execute',name='Delete window',order=2,confirm='Delete this window?'}
@@ -556,12 +583,14 @@ local options={type='group',name='Example',arg={puiExplicit=true},args={
 ns.OptionsSchema.Apply(options,'Example')
 local controls=options.args.general.args.settings.args
 assert(controls.show.order<controls.size.order and controls.delete.order>controls.opacity.order)
+assert(controls.enable.order<controls.show.order and controls.enable.order<controls.hide.order)
 assert(controls.opacity.max==1 and controls.opacity.isPercent and controls.opacity.get({})==.35)
 controls.opacity.set({},.8);assert(saved==80)
 assert(not options.args.general.args.puiCommonSettings)
 assert(not controls.puiStyle_text)
 local order=controls.show.order
 ns.OptionsSchema.Apply(options,'Example');assert(controls.show.order==order)
+assert(controls.enable.order<controls.show.order and controls.enable.order<controls.hide.order)
 
 ns.PCMGroupManager={GetGroups=function() return {order={},byID={}} end}
 local owner={};ns.Modules.CooldownManager=owner
