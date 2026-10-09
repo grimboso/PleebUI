@@ -444,7 +444,7 @@ QualityPreviewIndex=1
 function Clamp(v,a,b) return math.min(b,math.max(a,v)) end
 function IsPetClass() return TEST_CLASS=='HUNTER' end
 function IsHealPetClass() return false end
-ns.RaidUtilityModule={BuildBresLustOptions=function() return {type='group',name='Battle resurrection and bloodlust',inline=true,args={general={args={}},layout={args={bresLustWidgetIconSize={type='range',name='Icon size'}}}}} end,
+ns.RaidUtilityModule={BuildBresLustOptions=function(ctx) return {type='group',name='Battle resurrection and bloodlust',inline=true,args={general={args={bresWidgetEnable=ctx.ToggleOption('Battle resurrection','bresWidgetEnable',1),lustWidgetEnable=ctx.ToggleOption('Bloodlust','lustWidgetEnable',2),bresLustWidgetShowOnlyInGroup=ctx.ToggleOption('Show only in group','bresLustWidgetShowOnlyInGroup',3)}},layout={args={bresLustWidgetIconSize=ctx.RangeOption('Icon size','bresLustWidgetIconSize',16,64,1,1)}}}} end,
 BuildRaidUtilityOptions=function() return {type='group',name='Raid utility',inline=true,args={buttons={type='group',name='Ready',inline=true,args={}},raidMarkers={type='group',name='Targets',inline=true,args={}},worldMarkers={type='group',name='World',inline=true,args={}},general={type='group',name='General',inline=true,args={}}}} end}
 ''')
 lua.execute(builders['QualityProvider'])
@@ -453,6 +453,16 @@ for _,class in ipairs({'HUNTER','MAGE'}) do
  TEST_CLASS=class
  local opts=QualityProvider(ns.Addon):GetOptions();ns.OptionsSchema.Apply(opts,'Quality');checkInline(opts)
  assert((opts.args.combatTab.args.emergencySalve~=nil)==(class=='HUNTER'),'Hunter visibility '..class..' '..tostring(opts.args.combatTab.args.emergencySalve))
+ local bres=opts.args.groupTab.args.battleResLust.args
+ qualityDB.bresLustWidgetIconSize=37;qualityDB.bresLustWidgetShowOnlyInGroup=true
+ for _,showBres in ipairs({false,true}) do
+  for _,showLust in ipairs({false,true}) do
+   bres.bresWidgetEnable.set(nil,showBres);bres.lustWidgetEnable.set(nil,showLust)
+   assert(bres.bresLustWidgetIconSize.disabled()==(not showBres and not showLust))
+   assert(bres.bresLustWidgetShowOnlyInGroup.disabled()==(not showBres and not showLust))
+   assert(bres.bresLustWidgetIconSize.get()==37 and bres.bresLustWidgetShowOnlyInGroup.get()==true)
+  end
+ end
  local status={message=opts.args.combatTab.args.combatMessages,timer=opts.args.combatTab.args.combatTimer}
  assert(status.message.args.fontSize.name=='Font size' and status.timer.args.showText.name=='Show text')
  local ring={inner=opts.args.cursorTab.args.innerRing,click=opts.args.cursorTab.args.clickRing}
@@ -619,12 +629,18 @@ assert(sky.args.secondary.args.wsColor and sky.args.secondary.args.swGap)
 local skyDB=GetDB()
 skyDB.showSegments=false;assert(not sky.args.vigor.args.showSegments.get() and sky.args.vigor.args.segmentThickness.disabled())
 skyDB.showSegments=true;assert(sky.args.vigor.args.showSegments.get() and not sky.args.vigor.args.segmentThickness.disabled())
-skyDB.swEnabled=false
-assert(sky.args.secondary.args.swHeight.disabled() and sky.args.secondary.args.swGap.disabled() and sky.args.secondary.args.swColor.disabled())
-skyDB.wsEnabled=true;assert(not sky.args.secondary.args.wsColor.disabled())
-skyDB.swEnabled=true
-assert(not sky.args.secondary.args.swHeight.disabled() and not sky.args.secondary.args.swGap.disabled() and not sky.args.secondary.args.swColor.disabled())
-skyDB.wsEnabled=false;assert(sky.args.secondary.args.wsColor.disabled())
+assert(sky.args.secondary.args.swHeight.name=='Height' and sky.args.secondary.args.swGap.name=='Spacing')
+skyDB.swHeight=12;skyDB.swGap=5
+for _,showWind in ipairs({false,true}) do
+ for _,showSurge in ipairs({false,true}) do
+  skyDB.swEnabled=showWind;skyDB.wsEnabled=showSurge
+  assert(sky.args.secondary.args.swHeight.disabled()==(not showWind and not showSurge))
+  assert(sky.args.secondary.args.swGap.disabled()==(not showWind and not showSurge))
+  assert(sky.args.secondary.args.swColor.disabled()==not showWind)
+  assert(sky.args.secondary.args.wsColor.disabled()==not showSurge)
+  assert(sky.args.secondary.args.swHeight.get()==12 and sky.args.secondary.args.swGap.get()==5)
+ end
+end
 print('Skyriding: consolidated behavior, vigor styling, and secondary bars passed.')
 ''')
 
