@@ -897,6 +897,7 @@ function Engine:ClearButton(button)
   button:ClearProfessionQuality()
   button:UpdateAssistedCombatRotationFrame()
   ActionButtonSpellAlertManager:HideAlert(button)
+  ns.ActionBarsPreview.QueueIconRefresh("standard")
 end
 
 function Engine:UpdateCount(button)
@@ -1023,6 +1024,7 @@ function Engine:RefreshButton(button)
   button.icon:SetTexture(C_ActionBar.GetActionTexture(action))
   button.icon:Show()
   button.icon:SetDesaturated(false)
+  ns.ActionBarsPreview.QueueIconRefresh("standard")
 
   UpdateButtonStateAndFlash(button)
   button:UpdateUsable()
@@ -1651,7 +1653,11 @@ local function RuntimeUpdateOnUpdate(frame)
   frame:Hide()
 
   if Engine.enabled then
+    local refreshIcons = Engine.pendingIconRefresh or #Engine.pendingIconButtons > 0
     Engine:FlushRuntimeUpdate()
+    if refreshIcons then
+      ns.ActionBarsPreview.QueueIconRefresh("standard")
+    end
   end
 end
 
