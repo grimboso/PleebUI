@@ -916,7 +916,7 @@ local function ChatProvider(AddonObj)
               name = "Timestamp format",
               order = 2,
               disabled = function()
-                return IsLocked()
+                return IsLocked() or f.timestamps == false
               end,
               values = {
                 HM24 = TsPreview("HM24") .. " (default)",
