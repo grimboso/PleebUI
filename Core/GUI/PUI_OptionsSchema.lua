@@ -421,6 +421,7 @@ local function ArrangeGroup(group, context, groupKey)
       ArrangeGroup(option, nextContext, key)
     elseif option.type ~= "description" and option.type ~= "header" and type(option.name) == "string" then
       local oldName = option.name
+      local preserveRowOrder = option.width == "relative" and type(option.relWidth) == "number" and option.relWidth < 1
       local rule = RULES[oldName]
       if rule and rule.group == "buttons" and nextContext.moduleKey == "CooldownManager" then
         rule = { group = "icon", label = rule.label, order = rule.order }
@@ -438,7 +439,7 @@ local function ArrangeGroup(group, context, groupKey)
           or rule.group == "text" and nextContext.text
           or rule.group == "size" and (nextContext.Bar or nextContext.Buttons or nextContext.Icon)
         option.name = inContext and rule.label or nextContext.explicit and Schema.GetCompactLabel(oldName) or rule.label
-        if inContext or not nextContext.explicit then option.order = rule.order end
+        if not preserveRowOrder and (inContext or not nextContext.explicit) then option.order = rule.order end
         if not inContext and not nextContext.explicit then
           local groupKey = "puiStyle_" .. rule.group
           local bucket = additions[groupKey] or args[groupKey]
@@ -459,15 +460,17 @@ local function ArrangeGroup(group, context, groupKey)
         if oldName == "Delete" and type(name) == "string" and name:match("^Window %d+$") then
           option.name = "Delete window"
         end
-        if option.name == "Horizontal offset" then option.order = 90
-        elseif option.name == "Vertical offset" then option.order = 100
-        elseif option.name == "Anchor point" then option.order = 80
-        elseif option.type == "toggle" and option.name:match("^Enable") then
-          option.order = 5 + (tonumber(option.order) or 0) / 100
-        elseif option.type == "toggle" and option.name:match("^Show") then
-          option.order = 1 + (tonumber(option.order) or 0) / 100
-        elseif option.type == "execute" and (tonumber(option.order) or 0) < 900 then
-          option.order = 900 + (tonumber(option.order) or 0)
+        if not preserveRowOrder then
+          if option.name == "Horizontal offset" then option.order = 90
+          elseif option.name == "Vertical offset" then option.order = 100
+          elseif option.name == "Anchor point" then option.order = 80
+          elseif option.type == "toggle" and option.name:match("^Enable") then
+            option.order = 5 + (tonumber(option.order) or 0) / 100
+          elseif option.type == "toggle" and option.name:match("^Show") then
+            option.order = 1 + (tonumber(option.order) or 0) / 100
+          elseif option.type == "execute" and (tonumber(option.order) or 0) < 900 then
+            option.order = 900 + (tonumber(option.order) or 0)
+          end
         end
       end
       if option.type == "range" and option.name:lower():find("opacity", 1, true) then
@@ -568,6 +571,7 @@ local function OrderInlineControls(group)
   -- Preserve deliberately arranged rows and adjacent source/color controls.
   for _, item in ipairs(controls) do
     if item.option.width == "half" or item.option.width == "third"
+      or item.option.width == "relative" and type(item.option.relWidth) == "number" and item.option.relWidth < 1
       or type(item.option.width) == "number" and item.option.width < 1 then return end
   end
   local function Phase(option)
