@@ -27,7 +27,7 @@ Use short property labels when the heading identifies the affected object. Keep 
 multiple objects share one group. Use Behaviour consistently. Use Enable for activation and Show
 for display, preserving existing toggle polarity.
 
-Within each group put activation/display toggles first, then modes and source selections, primary
+Within each group put Enable before other display/visibility toggles, then modes and source selections, primary
 values, styling, position, and scoped reset/delete actions. Preserve intentionally arranged rows
 and keep custom-color toggles next to their pickers.
 Relative-width rows keep their builder order during label normalization and final widget ordering.
