@@ -933,7 +933,6 @@ local function _PUI_DoesOptionsPathExist(path)
       cursorTab = true,
       groupTab = true,
       automationTab = true,
-      interfaceTab = true,
     },
     ACTIONBARS = {
       general = true,
@@ -3551,11 +3550,10 @@ local PUI_SHELL_TOP_TAB_UX = {
     tweaks = { name = "Tweaks", desc = "History, buttons, sticky channels, and edit box behavior." },
   },
   Quality = {
-    combatTab = { name = "Combat", desc = "Combat status, target warnings, pet warnings, and positioning." },
-    cursorTab = { name = "Cursor", desc = "Cursor ring, click ring, and crosshair appearance." },
+    combatTab = { name = "Combat", desc = "Combat messages, time in combat, and class-specific warning previews." },
+    cursorTab = { name = "Position indicators", desc = "Cursor rings and a separate screen-center crosshair." },
     groupTab = { name = "Group tools", desc = "Battle resurrection, Bloodlust, and raid utilities." },
-    automationTab = { name = "Automation", desc = "Looting, merchants, invites, role checks, and dialogs." },
-    interfaceTab = { name = "Interface", desc = "Camera, visibility, and interface helpers." },
+    automationTab = { name = "Convenience", desc = "Looting, items, merchants, group invitations, and interface helpers." },
   },
 }
 
