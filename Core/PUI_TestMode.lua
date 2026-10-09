@@ -837,6 +837,7 @@ function TestMode:EnsureToolbar()
   end
 
   local panel = CreateFrame("Frame", "PleebUI_TestModeToolbar", UIParent, "BackdropTemplate")
+  panel:Hide()
   local window = ns.FrameUtil._GetEditModeDB().window or {}
   local maxWidth = math_max(TOOLBAR_MIN_WIDTH, UIParent:GetWidth() - 30)
   local maxHeight = math_max(TOOLBAR_MIN_HEIGHT, UIParent:GetHeight() - 60)
@@ -1028,7 +1029,6 @@ function TestMode:EnsureToolbar()
   panel.searchCollapsed = {}
   panel.__puiSections = {}
   panel.profileEditMode = ns.FrameUtil._GetEditModeDB()
-  panel:Hide()
   self.toolbar = panel
   BuildEditControls(panel)
   StylePanel(panel)
