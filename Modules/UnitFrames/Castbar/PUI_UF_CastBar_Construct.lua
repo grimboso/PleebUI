@@ -245,6 +245,10 @@ local function CB_CreateCastBarFrame(frame, unit, options)
 
     FrameUtil:RegisterMover("CastBar_" .. tostring(unit), holder, {
       label = "CastBar: " .. unit,
+      moduleKey = "unitFrames",
+      moduleLabel = "Unit Frames",
+      groupKey = "castbars",
+      groupLabel = "Castbars",
       useOverlayDrag = true,
       optionsString = "unitframes," .. (
         (unit == "target" and "target")
