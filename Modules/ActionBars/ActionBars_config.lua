@@ -365,7 +365,6 @@ local function ActionBarsOptionsProvider(Addon)
                   iconSpacing = {
                     type = "range",
                     name = "Button spacing",
-            desc = "Space between buttons and rows.",
                     desc = "Space between buttons and rows.",
                     min = 0, max = 16, step = 1,
                     order = 20,
@@ -461,8 +460,6 @@ local function ActionBarsOptionsProvider(Addon)
                   showBarBackground = {
                     type = "toggle",
                     name = "Show backdrop",
-        desc = "Adds padding around the buttons. Turn off to snap bars directly together.",
-            desc = "Adds padding around the buttons. Turn off to snap bars directly together.",
                     desc = "Adds padding around the buttons. Turn off to snap bars directly together.",
                     order = 80,
                     get = function() return skin.showBarBackground ~= false end,
@@ -679,7 +676,6 @@ local function ActionBarsOptionsProvider(Addon)
                   iconSpacing = {
                     type = "range",
                     name = "Button spacing",
-            desc = "Space between buttons and rows.",
                     desc = "Space between buttons and rows.",
                     min = 0, max = 16, step = 1,
                     order = 20,
@@ -1120,7 +1116,6 @@ local function ActionBarsOptionsProvider(Addon)
           showBarBackground = {
             type = "toggle",
             name = "Show backdrop",
-        desc = "Adds padding around the buttons. Turn off to snap bars directly together.",
             desc = "Adds padding around the buttons. Turn off to snap bars directly together.",
             order = 10,
             set = function(_, value)
