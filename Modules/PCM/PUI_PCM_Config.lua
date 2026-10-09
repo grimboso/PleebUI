@@ -8018,7 +8018,7 @@ local function _PCM_BuildBuffBarLeafArgs(id)
 
   args.durationGap = {
     type = "range",
-    name = "Gap",
+    name = "Spacing between icon and bar",
     order = 72,
     min = 0,
     max = 20,
