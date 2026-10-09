@@ -1242,6 +1242,8 @@ function Core:RegisterMover(bar)
   bar.mover = FrameUtil:EnsureGhostMover(bar.moverKey, {
     frameName = bar.frame:GetName() .. "Mover",
     label = bar.label or bar.moverKey,
+    moduleKey = "actionBars",
+    moduleLabel = "Action Bars",
     ghost = false,
     useOverlayDrag = true,
     liveFrame = bar.frame,
