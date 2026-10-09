@@ -1486,6 +1486,21 @@ local function ValuesEqual(first, second)
   return true
 end
 
+local function ApplyEditHistoryDelta(current, saved, opposite)
+  for key, value in pairs(saved) do
+    if not ValuesEqual(value, opposite[key]) then
+      if type(value) == "table" and type(opposite[key]) == "table" and type(current[key]) == "table" then
+        ApplyEditHistoryDelta(current[key], value, opposite[key])
+      else
+        current[key] = CopyValue(value)
+      end
+    end
+  end
+  for key in pairs(opposite) do
+    if saved[key] == nil then current[key] = nil end
+  end
+end
+
 local function GetSmartSnapDB()
   local db = FrameUtil._GetEditModeDB()
   db.smartSnap = db.smartSnap or {}
@@ -3565,8 +3580,9 @@ function FrameUtil.BeginExternalSmartSnapDrag(key, breakSnap)
     return nil
   end
 
-  local history = FrameUtil.BeginEditHistory("Move movers")
+  local history = FrameUtil.BeginEditHistory("Move " .. entry.label)
   EnsureSmartSnapLoaded()
+  local snapBefore = CopyValue(GetSmartSnapDB())
 
   local suppressSnap = breakSnap == true
   if suppressSnap then
@@ -3591,6 +3607,7 @@ function FrameUtil.BeginExternalSmartSnapDrag(key, breakSnap)
     start = start,
     suppressSnap = suppressSnap,
     history = history,
+    snapBefore = snapBefore,
   }
 end
 
@@ -3636,9 +3653,6 @@ function FrameUtil.FinishExternalSmartSnapDrag(state)
 end
 
 function FrameUtil.CancelExternalSmartSnapDrag(state)
-  if state and state.history == FrameUtil._editHistory.pending then
-    FrameUtil._editHistory.pending = nil
-  end
   if not state or not state.entry then
     return false
   end
@@ -3648,6 +3662,22 @@ function FrameUtil.CancelExternalSmartSnapDrag(state)
   if InCombatLockdown() then
     return false
   end
+
+  local history = FrameUtil._editHistory
+  if state.history and state.history == history.pending then
+    local changed = FrameUtil.CaptureEditHistoryState(state.history.before)
+    history.pending = nil
+    history.replaying = true
+    FrameUtil.RestoreEditHistoryState(state.history.before, changed)
+    history.replaying = nil
+    ns.TestMode:RefreshEditControlButtons()
+    return true
+  end
+
+  local snap = GetSmartSnapDB()
+  ApplyEditHistoryDelta(snap, state.snapBefore, CopyValue(snap))
+  FrameUtil._smartSnapLoaded = false
+  EnsureSmartSnapLoaded()
 
   for member, point in pairs(state.start or {}) do
     if member.frame then
@@ -4145,7 +4175,7 @@ function FrameUtil._MoveGroupBy(group, dx, dy, primary)
     return
   end
 
-  local history = FrameUtil.BeginEditHistory("Move movers")
+  local history = FrameUtil.BeginEditHistory("Move " .. (primary and primary.label or "movers"))
   dx = dx or 0
   dy = dy or 0
 
@@ -4814,7 +4844,7 @@ function FrameUtil.CaptureEditHistoryState(previous)
       for _, control in ipairs(spec and spec.controls or {}) do
         if control.get and control.set then
           state.settings[#state.settings + 1] = { get = control.get, set = control.set,
-            color = control.type == "color", value = CopyValue(control.get()) }
+            ownerKey = entry.key, color = control.type == "color", value = CopyValue(control.get()) }
         end
       end
     end
@@ -4825,7 +4855,7 @@ function FrameUtil.CaptureEditHistoryState(previous)
   if previous then
     for _, control in ipairs(previous.settings) do
       state.settings[#state.settings + 1] = { get = control.get, set = control.set,
-        color = control.color, value = CopyValue(control.get()) }
+        ownerKey = control.ownerKey, color = control.color, value = CopyValue(control.get()) }
     end
   else
     for _, control in ipairs(ns.TestMode:GetEditHistoryControls()) do
@@ -4858,12 +4888,52 @@ function FrameUtil.CommitEditHistory(transaction)
   ns.TestMode:RefreshEditControlButtons()
 end
 
+function FrameUtil.RemoveMoverEditHistory(key)
+  local history = FrameUtil._editHistory
+  if history.pending then
+    FrameUtil.CommitEditHistory(history.pending)
+  end
+  for _, stack in ipairs({ history.undo, history.redo }) do
+    for index = #stack, 1, -1 do
+      local transaction = stack[index]
+      local before, after = transaction.before, transaction.after
+      local first, last = before.movers[key], after.movers[key]
+      local affected = not ValuesEqual(first, last)
+        or not ValuesEqual(before.snap.links[key], after.snap.links[key])
+        or before.snap.masters[key] ~= after.snap.masters[key]
+        or before.snap.widthSyncDisabled[key] ~= after.snap.widthSyncDisabled[key]
+      for controlIndex, control in ipairs(before.settings) do
+        if control.ownerKey == key and not ValuesEqual(control.value, after.settings[controlIndex].value) then
+          affected = true
+        end
+      end
+      if affected then
+        _G.table.remove(stack, index)
+      else
+        for _, snapshot in ipairs({ before, after }) do
+          snapshot.movers[key] = nil
+          for controlIndex = #snapshot.settings, 1, -1 do
+            if snapshot.settings[controlIndex].ownerKey == key then
+              _G.table.remove(snapshot.settings, controlIndex)
+            end
+          end
+          snapshot.snap.links[key] = nil
+          snapshot.snap.masters[key] = nil
+          snapshot.snap.widthSyncDisabled[key] = nil
+          for _, peers in pairs(snapshot.snap.links) do peers[key] = nil end
+        end
+      end
+    end
+  end
+  ns.TestMode:RefreshEditControlButtons()
+end
+
 function FrameUtil.RestoreEditHistoryState(state, other)
   local db = FrameUtil._GetEditModeDB()
   FrameUtil._smartSnapApplying = true
   wipe(PendingSmartSnapRelayouts)
   wipe(PendingSmartSnapRuntimeRelayouts)
-  db.smartSnap = CopyValue(state.snap)
+  ApplyEditHistoryDelta(db.smartSnap, state.snap, other.snap)
   FrameUtil._smartSnapLoaded = false
   EnsureSmartSnapLoaded()
   for key, value in pairs(state.participants) do
@@ -4884,9 +4954,11 @@ function FrameUtil.RestoreEditHistoryState(state, other)
     local entry = MoversByKey[key]
     local opposite = other.movers[key]
     if entry == point.entry and opposite then
-      local saved, changed = point.snapState, CaptureSmartSnapState(entry)
+      local saved, changed = point.snapState, opposite.snapState
+      local current = CaptureSmartSnapState(entry)
       local options = GetSmartSnapOptions(entry)
-      if saved and changed and not ValuesEqual(saved.size, changed.size) then
+      if saved and changed and current and not ValuesEqual(saved.size, changed.size)
+        and not ValuesEqual(saved.size, current.size) then
         if options.syncAxis == "WIDTH" and options.applySyncWidth then
           options.applySyncWidth(saved.size.width, entry)
         elseif options.copySizeFrom then
@@ -4896,7 +4968,9 @@ function FrameUtil.RestoreEditHistoryState(state, other)
           options.applyDimensions(saved.size.width, saved.size.height, entry)
         end
       end
-      if saved and changed and options.applyDesign and not ValuesEqual(saved.design, changed.design) then
+      if saved and changed and current and options.applyDesign
+        and not ValuesEqual(saved.design, changed.design)
+        and not ValuesEqual(saved.design, current.design) then
         options.applyDesign(CopyValue(saved.design), entry)
       end
     end
@@ -4919,7 +4993,19 @@ function FrameUtil.RestoreEditHistoryState(state, other)
     visibility.followGroup = state.visibility.followGroup
     FrameUtil.ApplyMoverVisibilityPreset()
   end
-  ns.EditModeQuickSettings:Hide(true)
+  local panel = ns.EditModeQuickSettings.panel
+  if panel and panel:IsShown() and panel.fadeDirection ~= "out" then
+    local key = FrameUtil.GetMoverKeyForAnchor(panel.anchor)
+    local entry = key and MoversByKey[key]
+    if IsSelectableEntry(entry) then
+      if not ns.EditModeQuickSettings:Refresh(panel.ownerKey, panel.anchor,
+        FrameUtil.GetMoverQuickSettingsSpec(entry, entry.frame)) then
+        ns.EditModeQuickSettings:Hide(true)
+      end
+    else
+      ns.EditModeQuickSettings:Hide(true)
+    end
+  end
   ns.TestMode:QueueToolbarRefresh()
   FrameUtil._RefreshSelectionVisuals()
 end
@@ -4967,6 +5053,61 @@ local function OpenQuickSettingsForEntry(entry, frame)
 
   ns.EditModeQuickSettings:Hide()
   return ns.EditModeQuickSettings:Open(anchor, spec)
+end
+
+local function GetMoverOverlapEdges(entry)
+  local left, right, top, bottom = GetFrameEdges(entry.frame)
+  if not left then return end
+  local scale = entry.frame:GetEffectiveScale()
+  if _G.issecretvalue(scale) then return end
+  scale = scale / UIParent:GetEffectiveScale()
+  return left * scale, right * scale, top * scale, bottom * scale
+end
+
+function FrameUtil.GetOverlappingMovers()
+  local entries = {}
+  if not ns.Flags.IsEditing or not IsSelectableEntry(SelectedEntry) then return entries end
+  local left, right, top, bottom = GetMoverOverlapEdges(SelectedEntry)
+  if not left then return entries end
+  for _, entry in ipairs(MoversList) do
+    if IsSelectableEntry(entry) then
+      local l, r, t, b = GetMoverOverlapEdges(entry)
+      if l and r > left and l < right and t > bottom and b < top then
+        entries[#entries + 1] = entry
+      end
+    end
+  end
+  _G.table.sort(entries, function(first, second)
+    if first.label == second.label then return first.key < second.key end
+    return first.label < second.label
+  end)
+  return entries
+end
+
+function FrameUtil.ShowOverlappingMoverChooser()
+  if InCombatLockdown() then return false end
+  local entries = FrameUtil.GetOverlappingMovers()
+  if #entries < 2 then return false end
+  local choices, order = {}, {}
+  for _, entry in ipairs(entries) do
+    choices[entry.key] = entry.label
+    order[#order + 1] = entry.key
+  end
+  return ns.EditModeQuickSettings:Open(SelectedEntry.overlay or SelectedEntry.frame, {
+    ownerKey = "overlapping-movers", title = "Overlapping movers",
+    description = "Choose a mover to select it and open its settings.",
+    controls = {{ type = "select", label = "Mover", values = choices, sorting = order,
+      get = function() return SelectedEntry.key end,
+      set = function(key)
+        local entry = MoversByKey[key]
+        if IsSelectableEntry(entry) then
+          FrameUtil._SelectMover(entry, false)
+          ns.EditModeQuickSettings:Hide(true)
+          OpenQuickSettingsForEntry(entry, entry.frame)
+        end
+      end,
+    }},
+  })
 end
 
 local function AttachDrag(entry)
@@ -5103,7 +5244,7 @@ local function AttachDrag(entry)
       FrameUtil._SelectMover(entry, false)
     end
 
-    entry._editHistoryDrag = entry._editHistoryDrag or FrameUtil.BeginEditHistory("Move movers")
+    entry._editHistoryDrag = entry._editHistoryDrag or FrameUtil.BeginEditHistory("Move " .. entry.label)
     entry.__puiLeftDragStarted = true
     entry.__puiPendingSelectionAction = nil
     entry.__puiPendingQuickSettings = nil
@@ -6305,7 +6446,6 @@ end
 
 
 function FrameUtil:UnregisterMover(key)
-  FrameUtil.ClearEditHistory()
   if not key then
     return
   end
@@ -6316,6 +6456,8 @@ function FrameUtil:UnregisterMover(key)
   if not entry then
     return
   end
+
+  FrameUtil.RemoveMoverEditHistory(key)
 
   local feedback = FrameUtil._frameSnapFeedback
   if feedback and (feedback.ownerKey == key or feedback.targetKey == key) then
