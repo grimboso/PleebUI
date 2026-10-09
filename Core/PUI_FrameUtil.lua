@@ -30,6 +30,7 @@ ns.FrameUtil = ns.FrameUtil or {}
 local FrameUtil = ns.FrameUtil
 
 local MoversByKey = {}
+local MoversByFrame = _G.setmetatable({}, { __mode = "k" })
 local MoversList = {}
 local GhostFrameState = _G.setmetatable({}, { __mode = "k" })
 
@@ -61,6 +62,117 @@ FrameUtil._keybindsCollapsed   = FrameUtil._keybindsCollapsed or false
 function FrameUtil._GetEditModeDB()
   Addon.db.profile.EditMode = Addon.db.profile.EditMode or {}
   return Addon.db.profile.EditMode
+end
+
+local VISIBILITY_SET_NAMES = { "Custom", "Solo", "Party", "Raid" }
+local moverVisibilityDB
+
+function FrameUtil.GetMoverVisibilityConfig()
+  local db = FrameUtil._GetEditModeDB()
+  if moverVisibilityDB == db.moverVisibility and moverVisibilityDB then
+    return moverVisibilityDB
+  end
+  db.moverVisibility = db.moverVisibility or {}
+  local config = db.moverVisibility
+  config.sets = config.sets or {}
+  config.expanded = config.expanded or {}
+
+  for _, name in ipairs(VISIBILITY_SET_NAMES) do
+    local set = config.sets[name]
+    if not set then
+      set = {}
+      config.sets[name] = set
+    end
+    set.modules = set.modules or {}
+    set.groups = set.groups or {}
+    set.movers = set.movers or {}
+  end
+
+  if not config.sets[config.selectedSet] then
+    config.selectedSet = "Custom"
+  end
+
+  moverVisibilityDB = config
+  return config
+end
+
+function FrameUtil.GetMoverVisibilitySetNames()
+  return VISIBILITY_SET_NAMES
+end
+
+function FrameUtil.GetRegisteredMoverEntries()
+  local entries = {}
+  for _, entry in ipairs(MoversList) do
+    entries[#entries + 1] = entry
+  end
+  return entries
+end
+
+function FrameUtil.GetMoverVisibilityChoice(entry, setName)
+  local config = FrameUtil.GetMoverVisibilityConfig()
+  local set = config.sets[setName or config.selectedSet]
+  local selected = set.movers[entry.key]
+  if selected ~= nil then
+    return selected == true
+  end
+
+  local defaults = entry.opts.defaultVisibility
+  return not (defaults and defaults[setName or config.selectedSet] == false)
+end
+
+function FrameUtil.IsMoverVisibleInPreset(entry)
+  local config = FrameUtil.GetMoverVisibilityConfig()
+  local set = config.sets[config.selectedSet]
+  local opts = entry.opts
+
+  if set.modules[opts.moduleKey] == false then
+    return false
+  end
+
+  if opts.groupKey and set.groups[opts.moduleKey .. ":" .. opts.groupKey] == false then
+    return false
+  end
+
+  return FrameUtil.GetMoverVisibilityChoice(entry, config.selectedSet)
+end
+
+function FrameUtil.GetMoverVisibilityNodeChoice(kind, key)
+  local config = FrameUtil.GetMoverVisibilityConfig()
+  local set = config.sets[config.selectedSet]
+  return set[kind][key] ~= false
+end
+
+function FrameUtil.SelectMoverVisibilitySet(name)
+  local config = FrameUtil.GetMoverVisibilityConfig()
+  config.selectedSet = name
+  FrameUtil.ApplyMoverVisibilityPreset()
+end
+
+function FrameUtil.SetMoverVisibilityNode(kind, key, visible)
+  local config = FrameUtil.GetMoverVisibilityConfig()
+  local set = config.sets[config.selectedSet]
+  set[kind][key] = visible == true
+  FrameUtil.ApplyMoverVisibilityPreset()
+end
+
+function FrameUtil.ResetMoverVisibilitySet()
+  local config = FrameUtil.GetMoverVisibilityConfig()
+  config.sets[config.selectedSet] = { modules = {}, groups = {}, movers = {} }
+  FrameUtil.ApplyMoverVisibilityPreset()
+end
+
+function FrameUtil.SelectGroupMoverVisibilitySet()
+  local config = FrameUtil.GetMoverVisibilityConfig()
+  if config.followGroup ~= true then
+    return
+  end
+  if _G.IsInRaid() then
+    config.selectedSet = "Raid"
+  elseif _G.IsInGroup() then
+    config.selectedSet = "Party"
+  else
+    config.selectedSet = "Solo"
+  end
 end
 
 function FrameUtil._InitEditModeConfig()
@@ -231,12 +343,21 @@ function FrameUtil.GetMoverOffsets(frame)
   return x or 0, y or 0
 end
 
-function FrameUtil.SetMoverFrameVisible(frame, show)
+function FrameUtil.SetMoverFrameVisible(frame, show, applyPolicy)
   if not frame then
     return
   end
 
   show = show and true or false
+  if not applyPolicy and frame.__puiEditMoverHelper then
+    frame.__puiEditMoverAvailable = show
+  end
+  local entry = MoversByFrame[frame]
+  if show and ns.Flags.IsEditing and entry
+    and (entry._presetHidden or entry._editSessionHidden or entry._suppressed)
+  then
+    show = false
+  end
 
   local useOverlayDrag = frame.__puiUseOverlayDrag == true
 
@@ -537,6 +658,11 @@ function FrameUtil.EnsureHeaderMover(owner, key, frameName, anchor, db, opts)
 
   FrameUtil:RegisterMover(key, mover, {
     label = opts.label,
+    moduleKey = opts.moduleKey,
+    moduleLabel = opts.moduleLabel,
+    groupKey = opts.groupKey,
+    groupLabel = opts.groupLabel,
+    defaultVisibility = opts.defaultVisibility,
     optionsString = opts.optionsString,
     quickSettings = opts.quickSettings,
     overlayBelowFrame = opts.overlayBelowFrame,
@@ -568,6 +694,11 @@ function FrameUtil.EnsureGhostMovers(owner, opts)
     owner.ghosts[moverKey] = FrameUtil:EnsureGhostMover(opts.keyPrefix .. tostring(moverKey), {
       frameName = opts.frameNamePrefix .. tostring(moverKey),
       label = label,
+      moduleKey = opts.moduleKey,
+      moduleLabel = opts.moduleLabel,
+      groupKey = opts.groupKey,
+      groupLabel = opts.groupLabel,
+      defaultVisibility = opts.defaultVisibility,
       useOverlayDrag = opts.useOverlayDrag ~= false,
       optionsString = opts.optionsString(moverKey, owner),
       quickSettings = type(opts.quickSettings) == "function" and function(frame, key, entry)
@@ -1067,7 +1198,8 @@ function FrameUtil._ApplyFrameSnap(entry, live, ignoreEntries)
        and not (ignoreEntries and ignoreEntries[other])
        and other.frame
        and other.frame:IsShown()
-       and not other._editSessionHidden then
+       and not other._editSessionHidden
+       and not other._presetHidden then
       local ol, orr, ot, ob = GetFrameEdges(other.frame)
       if ol then
         local nearVert  = IsVerticallyNear(ft, fb, ot, ob, tol)
@@ -1591,7 +1723,10 @@ local function SmartSnapCanSyncDesign(firstEntry, secondEntry)
 end
 
 local function IsSmartSnapRuntimeEntryActive(entry)
-  if not entry or not entry.frame or entry._suppressed then
+  -- Presets filter edit interactions; saved links still drive runtime layouts.
+  if not entry or not entry.frame or entry._suppressed
+    or (ns.Flags.IsEditing and entry._presetHidden)
+  then
     return false
   end
 
@@ -1639,6 +1774,7 @@ local function CanSmartSnap(first, second)
     or second._suppressed
     or first._editSessionHidden
     or second._editSessionHidden
+    or (ns.Flags.IsEditing and (first._presetHidden or second._presetHidden))
   then
     return false
   end
@@ -3581,6 +3717,11 @@ local function RefreshMoverEditSessionVisibility(entry)
   local visible = ns.Flags.IsEditing
     and not entry._suppressed
     and not entry._editSessionHidden
+    and not entry._presetHidden
+
+  if entry.frame.__puiHeaderMoverHelper then
+    visible = visible and entry.frame.__puiEditMoverAvailable == true
+  end
 
   if entry._ghostManaged then
     visible = visible and entry._ghostVisible and true or false
@@ -3589,11 +3730,33 @@ local function RefreshMoverEditSessionVisibility(entry)
   ShowOverlay(entry, visible)
   EnableDrag(entry, visible)
 
+  if entry.frame and entry.frame.__puiEditMoverHelper then
+    FrameUtil.SetMoverFrameVisible(entry.frame, visible, true)
+  end
+
   if not visible and entry.nudgeGroup then
     entry.nudgeGroup:Hide()
   end
 
   return visible
+end
+
+function FrameUtil.ApplyMoverVisibilityPreset()
+  for _, entry in ipairs(MoversList) do
+    entry._presetHidden = not FrameUtil.IsMoverVisibleInPreset(entry)
+    local visible = RefreshMoverEditSessionVisibility(entry)
+    if not visible then
+      ClearSmartSnapCandidate(entry)
+      if FrameUtil._IsMoverSelected(entry) then
+        FrameUtil._RemoveMoverSelection(entry)
+      end
+    end
+  end
+
+  if ns.Flags.IsEditing then
+    ns.EditModeQuickSettings:Hide()
+    FrameUtil._RefreshSelectionVisuals()
+  end
 end
 
 local function GetEditSessionHiddenMoverCount()
@@ -3701,6 +3864,7 @@ local function IsSelectableEntry(entry)
   if not entry
     or not entry.frame
     or entry._editSessionHidden
+    or entry._presetHidden
     or entry._suppressed
   then
     return false
@@ -3790,6 +3954,7 @@ local function AddEntryToMoveGroup(group, entry, includeSmartSnap)
     for peer in pairs(cluster) do
       if peer.frame
         and not peer._suppressed
+        and not peer._presetHidden
         and IsSmartSnapRuntimeEntryActive(peer)
         and (
           peer._editSessionHidden
@@ -5225,11 +5390,14 @@ EnableDrag = function(entry, enable)
       frame:StopMovingOrSizing()
     end
 
-    if dragOverlay and dragOverlay.EnableMouse then
+    if dragOverlay then
+      dragOverlay:SetScript("OnUpdate", nil)
       dragOverlay:EnableMouse(false)
     end
+    entry._dragMoveGroup = nil
+    entry._dragPeersStart = nil
 
-      if frame._puiPrevMovable ~= nil then
+    if frame._puiPrevMovable ~= nil then
       frame:SetMovable(frame._puiPrevMovable)
     end
     if frame._puiPrevMouse ~= nil then
@@ -5984,6 +6152,11 @@ function FrameUtil:EnsureGhostMover(key, opts)
 
   self:RegisterMover(key, ghost, {
     label = opts.label,
+    moduleKey = opts.moduleKey,
+    moduleLabel = opts.moduleLabel,
+    groupKey = opts.groupKey,
+    groupLabel = opts.groupLabel,
+    defaultVisibility = opts.defaultVisibility,
     ghost = opts.ghost and true or false,
     useOverlayDrag = opts.useOverlayDrag ~= false,
     savePosition = opts.savePosition,
@@ -6043,7 +6216,12 @@ function FrameUtil.CompleteProfileTransition()
   FrameUtil._smartSnapDBRef = nil
   FrameUtil._InitEditModeConfig()
   EnsureSmartSnapLoaded()
+  FrameUtil.ApplyMoverVisibilityPreset()
   FrameUtil:RefreshAllGhostMovers()
+
+  if ns.TestMode.toolbar and ns.TestMode.toolbar:IsShown() then
+    ns.TestMode:QueueToolbarRefresh()
+  end
 
   local roots = {}
   for key in pairs(SmartSnapLinks) do
@@ -6119,6 +6297,7 @@ function FrameUtil:RegisterMover(key, frame, opts)
     table.insert(MoversList, entry)
   else
     if entry.frame ~= frame then
+      MoversByFrame[entry.frame] = nil
       if editSessionHidden then
         SetMoverEditSessionHidden(entry, false)
       end
@@ -6175,7 +6354,9 @@ function FrameUtil:RegisterMover(key, frame, opts)
     end
   end
 
+  MoversByFrame[frame] = entry
   ns.Registry.Movers[key] = { frame = frame, opts = entry.opts }
+  entry._presetHidden = not FrameUtil.IsMoverVisibleInPreset(entry)
 
   EnsureSmartSnapLoaded()
 
@@ -6186,6 +6367,10 @@ function FrameUtil:RegisterMover(key, frame, opts)
   end
 
   FrameUtil.RefreshSmartSnapState(key)
+
+  if ns.TestMode.toolbar and ns.TestMode.toolbar:IsShown() then
+    ns.TestMode:QueueToolbarRefresh()
+  end
 
   if smartSnapRegistrationChanged
     and SmartSnapLinks[key]
@@ -6265,6 +6450,7 @@ function FrameUtil:UnregisterMover(key)
 
   -- Remove from key map and global registry
   MoversByKey[key] = nil
+  MoversByFrame[entry.frame] = nil
   ns.Registry.Movers[key] = nil
 
   -- Remove from linear list
@@ -6277,6 +6463,10 @@ function FrameUtil:UnregisterMover(key)
 
   if relayoutSmartSnap and not FrameUtil._smartSnapApplying then
     QueueSmartSnapRuntimeRelayout(key)
+  end
+
+  if ns.TestMode.toolbar and ns.TestMode.toolbar:IsShown() then
+    ns.TestMode:QueueToolbarRefresh()
   end
 end
 
@@ -6336,6 +6526,8 @@ function FrameUtil._EnsureObjectiveTrackerMover()
 
   FrameUtil:EnsureGhostMover("ObjectiveTracker", {
     label = "Objective Tracker",
+    moduleKey = "objectiveTracker",
+    moduleLabel = "Objective Tracker",
     useOverlayDrag = true,
     smartSnap = {
       family = "positionOnly",
@@ -6431,6 +6623,7 @@ function FrameUtil.OnEditModeChanged(enable)
 
   FrameUtil._InitEditModeConfig()
   if enable then
+    FrameUtil.SelectGroupMoverVisibilitySet()
     FrameUtil._EnsureObjectiveTrackerMover()
   end
   FrameUtil:RefreshAllGhostMovers()
@@ -6441,6 +6634,7 @@ function FrameUtil.OnEditModeChanged(enable)
       SetMoverEditSessionHidden(entry, false)
     end
 
+    entry._presetHidden = not FrameUtil.IsMoverVisibleInPreset(entry)
     RefreshMoverEditSessionVisibility(entry)
   end
 
