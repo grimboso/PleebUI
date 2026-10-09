@@ -1416,6 +1416,7 @@ local function UFCB_BuildUnitGeneralArgs(unitKey, extraNote)
         reset = {
           type = "execute",
           name = "Reset to default",
+          confirm = "Restore this section to its default settings?",
           desc = "Restore this unit frame's General settings to the current PleebUI defaults.",
           order = 0.5,
           width = 0.8,
@@ -1820,6 +1821,7 @@ local function UFCB_BuildUnitTextArgs(unitKey, kind)
     resetSection = {
       type = "execute",
       name = "Reset " .. kind .. " to defaults",
+      confirm = "Restore this frame's " .. kind .. " settings to defaults?",
       desc = "Restore this frame's " .. kind .. " settings without resetting other sections.",
       order = 0.1,
       width = "full",
@@ -3098,6 +3100,7 @@ local function UFCB_BuildCustomAuraDisplaysArgs(getAuras, refresh, displayID, de
         reset = {
           type = "execute",
           name = "Reset to default",
+          confirm = "Restore this section to its default settings?",
           desc = "Restore this built-in aura display to the current PleebUI defaults for this frame type.",
           order = 2,
           width = 0.8,
@@ -4859,6 +4862,7 @@ local function UFCB_BuildPartyGeneralArgs(groupKind, opts)
       reset = {
         type = "execute",
         name = "Reset to default",
+        confirm = "Restore this section to its default settings?",
         desc = "Restore these General settings to the current PleebUI defaults.",
         order = 0.5,
         width = 0.8,
@@ -5780,6 +5784,7 @@ local function UFCB_BuildPartyTextArgs(kind, groupKind)
   prefixArgs.resetSection = {
     type = "execute",
     name = "Reset " .. kind .. " to defaults",
+    confirm = "Restore this frame's " .. kind .. " settings to defaults?",
     desc = "Restore only this " .. kind .. " section.",
     order = 0.1,
     width = "full",
@@ -6986,6 +6991,7 @@ local function UFCB_BuildCastbarArgs(unitKey)
   args.appearance.args.reset = {
     type = "execute",
     name = "Reset castbar to defaults",
+    confirm = "Restore this castbar to its default settings?",
     desc = "Restore this castbar's appearance, text, behavior, and position.",
     order = 0.1,
     width = "full",
@@ -7301,7 +7307,7 @@ local function UFCB_BuildFrameLeafSpecs(general, name, health, power, indicators
     range = UFCB_BuildInlineArgsGroup("Range", 20, {
       opacity = {
         type = "range", name = "Out-of-range opacity", order = 10,
-        min = 0, max = 1, step = 0.05,
+        min = 0, max = 1, step = 0.05, isPercent = true,
         get = function() return UFCB_GetGroupedDB(grouped).range.outOfRangeAlpha end,
         set = function(_, value)
           UFCB_MutateGrouped(grouped, false, { range = true }, function(db)
@@ -7329,6 +7335,10 @@ local function UFCB_BuildFrameLeafSpecs(general, name, health, power, indicators
     general.shared = { type = "description", name = "Feature activation and shared settings are configured in General settings.", order = 1 }
   end
   for _, group in pairs(layout) do group.arg = { puiExplicit = true } end
+  general.commonSettings = ns.OptionsSchema.BuildCommonSettings({ args = layout }, {
+    { path = { "size", "width" }, label = "Frame width" },
+    { path = { "size", "height" }, label = "Frame height" },
+  })
   local specs = {
     { key = "general", name = "General", order = 1, args = general },
     { key = "layout", name = "Layout and appearance", order = 2, args = layout },
@@ -7428,7 +7438,7 @@ local function UFCB_BuildPartyPetsArgs()
   local BuildInlineArgsGroup = UFCB_BuildInlineArgsGroup
 
   return {
-    behavior = BuildInlineArgsGroup("Behavior", 1, {
+    behavior = BuildInlineArgsGroup("Behaviour", 1, {
       enabled = {
         type = "toggle",
         name = "Enable party pets",
