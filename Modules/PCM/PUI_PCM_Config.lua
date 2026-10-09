@@ -3461,23 +3461,43 @@ local function _PCM_BuildBuffBarsTabArgs()
     end,
   }
 
+  args.layoutMode = {
+    type = "select",
+    name = "Bar layout",
+    desc = "Keep tracked bars in their assigned slots, or pack active bars together.",
+    order = 10.5,
+    values = { FIXED = "Fixed positions", GROW = "Grow active bars" },
+    sorting = { "FIXED", "GROW" },
+    get = function()
+      return ns.PCM_DBExports.GetStyleDB().buffBar.layoutMode
+    end,
+    set = function(_, value)
+      ns.PCM_DBExports.GetStyleDB().buffBar.layoutMode = value
+      ns.Modules.PCM_BuffBars:RefreshSettings()
+      LibStub("AceConfigRegistry-3.0"):NotifyChange(ADDON_NAME)
+    end,
+  }
+
   args.growthDirection = {
     type = "select",
-    name = "Growth direction",
-    desc = "Choose where additional bars are added.",
+    name = "Grow from",
+    desc = "Choose which edge stays in place as additional bars appear.",
+    hidden = function()
+      return ns.PCM_DBExports.GetStyleDB().buffBar.layoutMode ~= "GROW"
+    end,
     order = 11,
     values = function()
       local cm, style = _PCM_GetMainBuffBarsRoot()
       local bb = style and style.buffBar or nil
       if bb and bb.orientation == "VERTICAL" then
         return {
-          RIGHT = "Right",
-          LEFT = "Left",
+          RIGHT = "Left",
+          LEFT = "Right",
         }
       end
       return {
-        DOWN = "Down",
-        UP = "Up",
+        DOWN = "Top",
+        UP = "Bottom",
       }
     end,
     sorting = function()
@@ -3755,6 +3775,7 @@ local function _PCM_BuildBuffBarsTabArgs()
       args = {
         orientation = args.orientation,
         drainDirection = args.drainDirection,
+        layoutMode = args.layoutMode,
         growthDirection = args.growthDirection,
         width = args.width,
         height = args.height,
@@ -8990,6 +9011,46 @@ local function _PCM_BuildCustomGroupSettings(groupID, group)
       disabled = _PCM_IsGroupStructureLocked,
       get = function() return layout.rowSpacing or 1 end,
       set = function(_, value) layout.rowSpacing = Round(value) ns.PCMGroupManager:RequestLayout() end,
+    }
+    args.layoutMode = {
+      type = "select",
+      name = "Bar layout",
+      order = 13,
+      values = { FIXED = "Fixed positions", GROW = "Grow active bars" },
+      sorting = { "FIXED", "GROW" },
+      disabled = _PCM_IsGroupStructureLocked,
+      get = function() return layout.layoutMode == "GROW" and "GROW" or "FIXED" end,
+      set = function(_, value)
+        layout.layoutMode = value
+        ns.PCMGroupManager:RequestLayout()
+        LibStub("AceConfigRegistry-3.0"):NotifyChange(ADDON_NAME)
+      end,
+    }
+    args.growthDirection = {
+      type = "select",
+      name = "Grow from",
+      order = 14,
+      hidden = function() return layout.layoutMode ~= "GROW" end,
+      values = function()
+        if layout.orientation == "VERTICAL" then
+          return { RIGHT = "Left", LEFT = "Right" }
+        end
+        return { DOWN = "Top", UP = "Bottom" }
+      end,
+      sorting = function()
+        return layout.orientation == "VERTICAL" and { "RIGHT", "LEFT" } or { "DOWN", "UP" }
+      end,
+      disabled = _PCM_IsGroupStructureLocked,
+      get = function()
+        if layout.orientation == "VERTICAL" then
+          return layout.growthDirection == "LEFT" and "LEFT" or "RIGHT"
+        end
+        return layout.growthDirection == "UP" and "UP" or "DOWN"
+      end,
+      set = function(_, value)
+        layout.growthDirection = value
+        ns.PCMGroupManager:RequestLayout()
+      end,
     }
   end
 
