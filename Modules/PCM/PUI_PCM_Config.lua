@@ -2600,7 +2600,8 @@ _PCM_BuildIconOverrideArgs = function(viewerKey, entry)
     args.resetIcon = {
       type = "execute",
       name = "Reset icon settings",
-      confirm = "Discard this icon's overrides and use its group settings?",
+      confirm = true,
+      confirmText = "Discard this icon's overrides and use its group settings?",
       order = 80,
       func = function()
         IconSettings:ResetEntry(entry)
@@ -3107,7 +3108,8 @@ _PCM_BuildIconOverrideArgs = function(viewerKey, entry)
   args.resetIcon = {
     type = "execute",
     name = "Reset icon settings",
-      confirm = "Discard this icon's overrides and use its group settings?",
+      confirm = true,
+      confirmText = "Discard this icon's overrides and use its group settings?",
     order = 110,
     func = function()
       IconSettings:ResetEntry(entry)
@@ -7313,7 +7315,8 @@ local function _PCM_BuildBuffBarLeafArgs(id)
         delete = {
           type = "execute",
           name = "Delete color shift",
-          confirm = "Delete this color shift?",
+          confirm = true,
+          confirmText = "Delete this color shift?",
           order = 5,
           func = function()
             local _, cfg = GetStackColorThresholds()
