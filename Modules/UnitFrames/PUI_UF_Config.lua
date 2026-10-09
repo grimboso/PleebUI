@@ -1414,6 +1414,12 @@ local function UFCB_BuildUnitGeneralArgs(unitKey, extraNote)
   local unitDefaults = UF:GetDefaultUnitConfig(unitKey)
   local unitMediaDefaults = type(unitDefaults.media) == "table" and unitDefaults.media or {}
   local globalMediaDefaults = {}
+  local resetScope = "Restore frame size and texture settings to defaults."
+  if unitKey == "player" then
+    resetScope = "Restore frame size, texture settings, and resting, PvP and combat indicators to defaults."
+  elseif unitKey == "boss" then
+    resetScope = "Restore frame size, texture settings, growth direction and spacing to defaults."
+  end
 
   return UFCB_BuildSharedFrameGeneralArgs({
     prefixArgs = {
@@ -1421,8 +1427,9 @@ local function UFCB_BuildUnitGeneralArgs(unitKey, extraNote)
         reset = {
           type = "execute",
           name = "Reset to default",
-          confirm = "Restore this section to its default settings?",
-          desc = "Restore this unit frame's General settings to the current PleebUI defaults.",
+          confirm = true,
+          confirmText = resetScope .. "\n\nText, colors, auras, castbar and portrait settings stay unchanged.",
+          desc = resetScope .. " Text, colors, auras, castbar and portrait settings stay unchanged.",
           order = 0.5,
           width = 0.8,
           func = function()
@@ -4839,6 +4846,11 @@ local function UFCB_BuildPartyGeneralArgs(groupKind, opts)
     Addon:NotifyOptionsTreeChanged("unitframes", ns._PUIActiveOptionsPath)
   end
 
+  local resetScope = isRaid
+    and "Restore raid frame activation, layout, textures, health colors, threat indicator and group settings to defaults."
+    or "Restore party frame activation, layout, textures, health colors, visibility conditions and group indicators to defaults."
+  local resetDescription = resetScope .. " Text, auras, castbar, portrait and range opacity settings stay unchanged."
+
   local function ResetGeneralDefaults()
     if UFCB_BlockCombat() then return end
 
@@ -4847,17 +4859,13 @@ local function UFCB_BuildPartyGeneralArgs(groupKind, opts)
       or (isRaid and db.hideBlizzard ~= groupedDefaults.hideBlizzard)
       or (not isRaid and db.showPlayer ~= groupedDefaults.showPlayer)
 
-    if not requiresReload then
-      ApplyGeneralDefaults()
-      return
-    end
-
     Addon:PUI_ConfirmAction({
-      title = "Reset " .. groupedKind .. " frames",
-      text = "Reset these General settings to defaults?\n\nThis will reload the UI.",
-      yesText = "Reset + Reload",
+      title = "Reset " .. groupedKind .. " layout and core settings",
+      text = resetDescription .. (requiresReload and "\n\nThis will reload the UI." or ""),
+      yesText = requiresReload and "Reset + Reload" or "Reset",
       onYes = function()
-        ApplyGeneralDefaults(true)
+        if UFCB_BlockCombat() then return end
+        ApplyGeneralDefaults(requiresReload)
       end,
     })
   end
@@ -4866,9 +4874,9 @@ local function UFCB_BuildPartyGeneralArgs(groupKind, opts)
     core = UFCB_BuildInlineArgsGroup(" ", 1, {
       reset = {
         type = "execute",
-        name = "Reset to default",
-        confirm = "Restore this section to its default settings?",
-        desc = "Restore these General settings to the current PleebUI defaults.",
+        name = "Reset layout and core settings",
+        confirm = false,
+        desc = resetDescription,
         order = 0.5,
         width = 0.8,
         func = ResetGeneralDefaults,
@@ -7338,8 +7346,7 @@ local function UFCB_BuildFrameLeafSpecs(general, name, health, power, indicators
     general.core.name = "Feature"
   end
   local reset = general.core.args.reset
-  reset.name, reset.order = "Reset frame settings", 900
-  reset.desc = "Restore frame layout, appearance, and behavior to defaults."
+  reset.name, reset.order = "Reset layout and core settings", 900
   if not grouped then
     general.shared = { type = "description", name = "Feature activation and shared settings are configured in General settings.", order = 1 }
   end
