@@ -7301,6 +7301,7 @@ local function UFCB_BuildFrameLeafSpecs(general, name, health, power, indicators
   })
   if layout.health.args.color then layout.health.args.color.name = "Color" end
   if layout.health.args.backgroundColor then layout.health.args.backgroundColor.name = "Background color" end
+  if not next(layout.health.args) then layout.health = nil end
   layout.textures = UFCB_BuildInlineArgsGroup("Textures", 40, {
     useCustomTexture = not grouped and general.useCustomTexture or nil,
     healthTexture = textures.healthTexture,
@@ -7397,7 +7398,7 @@ end
 
 local function UFCB_BuildUnitBaseLeafSpecs(unitKey, opts)
   opts = opts or {}
-  local general = UFCB_BuildUnitGeneralArgs(unitKey)
+  local general = UFCB_BuildUnitGeneralArgs(unitKey, unitKey == "boss" and "Boss 1-5 share the same size, power, text and aura settings. Boss 1 anchors to the Boss Frames mover. Boss 2-5 follow the shared growth direction and spacing." or nil)
   local shared = UFCB_BuildGeneralAppearanceArgs()
   local indicators = {
     sharedMouseover = UFCB_BuildInlineArgsGroup("Shared mouseover highlight", 20, {
@@ -7694,8 +7695,6 @@ local function UFCB_BuildUnitEntryArgs(spec)
 end
 
 local function UFCB_BuildTopLevelUnitArgs(activeKey)
-  local bossInfoNote = "Boss 1-5 share the same size, power, text and aura settings. Boss 1 anchors to the Boss Frames mover. Boss 2-5 follow the shared growth direction and spacing."
-
   local specs = {
     {
       key = "player",
@@ -7749,18 +7748,6 @@ local function UFCB_BuildTopLevelUnitArgs(activeKey)
       unitKey = "boss",
       rootName = "Boss Frames",
       castbarUnit = "boss",
-      extraLeavesBuilder = function()
-        return {
-          UFCB_BuildExtraLeaf("bossinfo", "Boss Stack Info", 8, {
-            note = {
-              type = "description",
-              name = bossInfoNote,
-              order = 1,
-              fontSize = "medium",
-            },
-          }),
-        }
-      end,
     },
   }
 
