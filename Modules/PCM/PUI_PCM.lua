@@ -1356,6 +1356,8 @@ local function _RegisterViewerMover(info)
 
   FrameUtil:RegisterMover("PCM_" .. info.key, anchor, {
     label = info.title or info.key,
+    moduleKey = "pcm",
+    moduleLabel = "Cooldown Manager",
 
     useOverlayDrag = true,
     optionsString = (info.key == "EssentialCooldownViewer" and "CooldownManager,essential")
