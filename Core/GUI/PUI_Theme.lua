@@ -2820,8 +2820,26 @@ local function UIThemeOptionsProvider()
           args = {
             description = {
               type = "description",
-              name = "Makes existing combat text and important visual cues easier to distinguish. This applies normal Unit Frame, PRD, and custom-bar settings once; it does not lock or override them afterward.",
+              name = "Applies these changes to the current profile:\n\n"
+                .. "Unit Frames\n"
+                .. "- Larger name, health, and power text\n"
+                .. "- Thicker text outlines\n"
+                .. "- Shortened health values\n\n"
+                .. "Party and Raid\n"
+                .. "- Larger unit text\n"
+                .. "- Larger buff and debuff icons\n\n"
+                .. "Personal Resource Display\n"
+                .. "- Larger resource text\n"
+                .. "- Stronger borders and backgrounds\n"
+                .. "- Thicker text outlines\n\n"
+                .. "Custom trackers\n"
+                .. "- Larger cooldown, charge, and stack text\n"
+                .. "- Thicker text outlines\n\n"
+                .. "Undo restores the preset's changes unless you have edited "
+                .. "those values afterward. It remains available until you "
+                .. "switch profiles or reload.",
               order = 1,
+              width = "full",
             },
             apply = {
               type = "execute",
@@ -2832,6 +2850,19 @@ local function UIThemeOptionsProvider()
               end,
               func = function()
                 Addon:ApplyCombatReadabilityPreset()
+                LibStub("AceConfigRegistry-3.0"):NotifyChange(ADDON_NAME)
+              end,
+            },
+            undo = {
+              type = "execute",
+              name = "Undo combat readability",
+              order = 3,
+              disabled = function()
+                return _G.InCombatLockdown()
+                  or not Addon:CanUndoCombatReadabilityPreset()
+              end,
+              func = function()
+                Addon:UndoCombatReadabilityPreset()
               end,
             },
           },
