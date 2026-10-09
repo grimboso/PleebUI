@@ -614,6 +614,64 @@ function DamageMeters:GetOptions()
     }
   end
 
+  local source = options.args
+  local appearance = source.appearance.args
+  local general = source.general
+  general.inline = nil
+  general.args = { feature = { type = "group", name = "Feature", inline = true, order = 10, args = general.args } }
+  local visible = general.args.feature.args.visible
+  general.args.feature.args.visible = nil
+  appearance.headerHeight.name = "Height"
+  appearance.barHeight.name = "Height"
+  appearance.barSpacing.name = "Spacing"
+  appearance.barAlpha.name = "Opacity"
+  local breakdown = source.breakdown
+  local details = breakdown.args
+  breakdown.inline = nil
+  breakdown.childGroups = "tab"
+  breakdown.args = {
+    general = { type = "group", name = "General", order = 10, args = {
+      content = { type = "group", name = "Content", inline = true, order = 10, args = {
+        showIcons = details.showIcons, amounts = details.amounts, showPercent = details.showPercent,
+        maxSpells = details.maxSpells, showSpellTooltips = details.showSpellTooltips,
+      } },
+    } },
+    layout = { type = "group", name = "Layout and appearance", order = 20, args = {
+      size = { type = "group", name = "Size", inline = true, order = 10, arg = { puiExplicit = true }, args = {
+        width = details.width, height = details.height, position = details.position,
+      } },
+      targets = { type = "group", name = "Target list", inline = true, order = 20, arg = { puiExplicit = true }, args = { height = details.targetHeight } },
+    } },
+  }
+  details.targetHeight.name = "Height"
+  local windows = { type = "group", name = "Windows", order = 50, childGroups = "tree", args = {} }
+  for index = 1, MAX_WINDOWS do
+    local key = "window" .. index
+    local window = source[key]
+    window.inline = nil
+    window.args.delete.name = "Delete window"
+    windows.args[key] = window
+  end
+  source.history.inline, source.history.order = nil, 60
+  options.childGroups = "tab"
+  options.args = {
+    general = general,
+    layout = { type = "group", name = "Layout and appearance", order = 20, args = {
+      header = { type = "group", name = "Header", order = 10, inline = true, arg = { puiExplicit = true }, args = { height = appearance.headerHeight } },
+      bar = { type = "group", name = "Bars", order = 20, inline = true, arg = { puiExplicit = true }, args = {
+        showSpecIcons = appearance.showSpecIcons, height = appearance.barHeight, spacing = appearance.barSpacing,
+      } },
+    } },
+    visibility = { type = "group", name = "Visibility", order = 30, args = {
+      windows = { type = "group", name = "Windows", order = 10, inline = true, args = { visible = visible } },
+      bars = { type = "group", name = "Bars", order = 20, inline = true, arg = { puiExplicit = true }, args = { opacity = appearance.barAlpha } },
+    } },
+    text = { type = "group", name = "Text", order = 40, args = {
+      rows = ns.OptionsSchema.BuildTextGroup("Meter text", 10, { fontSize = appearance.fontSize }),
+    } },
+    windows = windows, breakdown = breakdown, history = source.history,
+  }
+  breakdown.order = 55
   return options
 end
 
