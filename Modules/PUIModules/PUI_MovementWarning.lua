@@ -252,6 +252,9 @@ local function EnsureDisplay()
     label = "Movement Reminder",
     moduleKey = "movementWarning",
     moduleLabel = "Movement Reminder",
+    onPreviewVisibilityChanged = function()
+      MovementWarning:RefreshWarning()
+    end,
     optionsString = "MovementWarning",
     smartSnap = {
       family = "positionOnly",
@@ -322,7 +325,9 @@ function MovementWarning:RefreshWarning()
 
   local db = Addon.db.profile.movementWarning
   local enabled = self:IsEnabled() and db.enabled
+  local previewVisible = FrameUtil.IsMoverPreviewVisible("movement_warning")
   local preview = enabled and (previewEnabled or ns.Flags.IsEditing)
+    and previewVisible
   local iconMode = db.displayMode == "icon"
   for index = 1, trackedCount do
     local row = rows[index]
@@ -331,7 +336,10 @@ function MovementWarning:RefreshWarning()
     row.label:SetShown(not preview and not iconMode)
     row.icon:SetShown(iconMode)
     row.unavailable:SetShown(iconMode)
-    if not enabled or (db.combatOnly and not InCombatLockdown() and not preview) then
+    if not enabled
+      or (ns.Flags.IsEditing and not previewVisible)
+      or (db.combatOnly and not InCombatLockdown() and not preview)
+    then
       row.runtime:Hide()
       row.countdown:Clear()
     elseif preview then
@@ -385,12 +393,14 @@ function MovementWarning:OnMovementEvent(event, eventSpellID, baseSpellID, spell
   then
     RefreshSpellbook()
     RefreshSelectedSpells()
+    Addon:NotifyOptionsTreeChanged("MovementWarning", ns._PUIActiveOptionsPath)
   elseif event == "UPDATE_SHAPESHIFT_FORM" then
     ResolveTrackedSpells()
     RefreshSpellText()
   elseif event == "PLAYER_REGEN_ENABLED" and spellbookDirty then
     RefreshSpellbook()
     RefreshSelectedSpells()
+    Addon:NotifyOptionsTreeChanged("MovementWarning", ns._PUIActiveOptionsPath)
   end
   self:RefreshWarning()
 end
@@ -420,9 +430,11 @@ function MovementWarning:ApplySettings()
 end
 
 function MovementWarning:GetOptions()
-  return {
+  if not InCombatLockdown() then RefreshSpellbook() end
+  local options = {
     type = "group",
     name = "Movement Reminder",
+    arg = { puiExplicit = true },
     args = {
       enabled = {
         type = "toggle", name = "Show movement reminder", order = 1,
@@ -430,37 +442,15 @@ function MovementWarning:GetOptions()
         set = function(_, value)
           Addon.db.profile.movementWarning.enabled = value
           self:ApplySettings()
+          Addon:NotifyOptionsTreeChanged("MovementWarning", ns._PUIActiveOptionsPath)
         end,
       },
       settings = {
         type = "group", name = "Reminder", inline = true, order = 2,
         disabled = function() return not Addon.db.profile.movementWarning.enabled end,
         args = {
-          spells = {
-            type = "multiselect", name = "Movement spells", order = 1,
-            desc = "Select the spells to track for this specialization. Each unavailable spell has its own reminder.",
-            values = function() return spellOptions end,
-            get = function(_, spellID)
-              local selected = GetSelectedSpells()
-              return not selected or selected[spellID] == true
-            end,
-            set = function(_, spellID, value)
-              local spells = Addon.db.profile.movementWarning.spells
-              local selected = GetSelectedSpells()
-              if not selected then
-                selected = {}
-                for index = 1, #knownSpells do
-                  selected[knownSpells[index]] = true
-                end
-                spells[specializationID] = selected
-              end
-              selected[spellID] = value
-              RefreshSelectedSpells()
-              self:RefreshWarning()
-            end,
-          },
           combatOnly = {
-            type = "toggle", name = "Only in combat", order = 2,
+            type = "toggle", name = "Only show in combat", order = 2,
             get = function() return Addon.db.profile.movementWarning.combatOnly end,
             set = function(_, value)
               Addon.db.profile.movementWarning.combatOnly = value
@@ -487,7 +477,7 @@ function MovementWarning:GetOptions()
             end,
           },
           fontSize = {
-            type = "range", name = "Text size", order = 3, min = 12, max = 64, step = 1,
+            type = "range", name = "Font size", order = 3, min = 12, max = 64, step = 1,
             get = function() return Addon.db.profile.movementWarning.fontSize end,
             set = function(_, value)
               Addon.db.profile.movementWarning.fontSize = value
@@ -531,6 +521,75 @@ function MovementWarning:GetOptions()
       },
     },
   }
+  local args = options.args
+  local settings = args.settings.args
+  local disabled = args.settings.disabled
+  args.settings = nil
+  local enabled = args.enabled
+  args.enabled = nil
+  args.general = {
+    type = "group", name = "General", inline = true, order = 10,
+    args = {
+      enabled = enabled,
+      combatOnly = settings.combatOnly,
+      preview = settings.preview,
+      help = {
+        type = "description", order = 10,
+        name = "Each selected spell has its own reminder. Appearance and position are shared across reminders.",
+      },
+    },
+  }
+  settings.combatOnly.disabled = disabled
+  settings.preview.disabled = disabled
+  args.appearance = {
+    type = "group", name = "Shared appearance", inline = true, order = 20,
+    disabled = disabled,
+    args = { displayMode = settings.displayMode, fontSize = settings.fontSize, color = settings.color },
+  }
+  settings.countdownColor.name = "Text color"
+  args.countdown = {
+    type = "group", name = "Countdown", inline = true, order = 30,
+    disabled = disabled,
+    args = { showDecimals = settings.showDecimals, color = settings.countdownColor },
+  }
+  if #knownSpells == 0 then
+    args.reminders = {
+      type = "group", name = "Reminders", inline = true, order = 40,
+      args = { help = { type = "description", name = "No supported movement spells are currently known for this specialization." } },
+    }
+  end
+  for index = 1, #knownSpells do
+    local spellID = knownSpells[index]
+    args["reminder" .. spellID] = {
+      type = "group", name = spellOptions[spellID], inline = true, order = 40 + index,
+      disabled = disabled,
+      args = {
+        enabled = {
+          type = "toggle", name = "Show reminder", order = 1,
+          desc = "Shows a countdown while this movement spell is unavailable.",
+          get = function()
+            local selected = GetSelectedSpells()
+            return not selected or selected[spellID] == true
+          end,
+          set = function(_, value)
+            local spells = Addon.db.profile.movementWarning.spells
+            local selected = GetSelectedSpells()
+            if not selected then
+              selected = {}
+              for spellIndex = 1, #knownSpells do
+                selected[knownSpells[spellIndex]] = true
+              end
+              spells[specializationID] = selected
+            end
+            selected[spellID] = value
+            RefreshSelectedSpells()
+            self:RefreshWarning()
+          end,
+        },
+      },
+    }
+  end
+  return options
 end
 
 function MovementWarning:ShowEnablePrompt(onClosed)
