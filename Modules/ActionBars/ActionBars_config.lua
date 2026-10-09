@@ -1350,10 +1350,11 @@ local function ActionBarsOptionsProvider(Addon)
       local offset = settings.buttonOffset
       settings.buttonOffset = nil
 
-      page.advanced = {
+      page.behavior.args.actionSlots = {
         type = "group",
-        name = "Advanced",
-        order = 60,
+        name = "Action slots",
+        inline = true,
+        order = 100,
         args = {
           explanation = {
             type = "description",
