@@ -2434,6 +2434,8 @@ local function RegisterPrimaryChatMover()
 
   FrameUtil:RegisterMover("Chat_Primary", holder, {
     label = "Chat - Primary",
+    moduleKey = "chat",
+    moduleLabel = "Chat",
     overlayInsets = GetPrimaryChatMoverInsets,
 
     savePosition = SavePrimaryChatLayout,
