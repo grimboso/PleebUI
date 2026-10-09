@@ -3403,6 +3403,11 @@ local function QualityProvider(AddonObj)
     local bresArgs = bres.args.general.args
     bresArgs.bresLustWidgetIconSize = bres.args.layout.args.bresLustWidgetIconSize
     bresArgs.bresLustWidgetIconSize.order = 4
+    bresArgs.bresLustWidgetIconSize.disabled = function()
+      local qq = GetQ()
+      return qq.bresWidgetEnable ~= true and qq.lustWidgetEnable ~= true
+    end
+    bresArgs.bresLustWidgetShowOnlyInGroup.disabled = bresArgs.bresLustWidgetIconSize.disabled
     bres.args = bresArgs
     local utility = groupTools.raidUtility.args
     utility.buttons.name = "Ready check and pull timer"
