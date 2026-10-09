@@ -292,7 +292,7 @@ local SECTION_ORDER = {
 }
 local UNIT_FRAME_SECTION_ORDER = {
   General = 10, ["Layout and appearance"] = 20, Text = 30,
-  Auras = 40, Castbar = 50, Visibility = 60, Indicators = 70,
+  Auras = 40, Dispels = 45, Castbar = 50, Visibility = 60, Indicators = 70,
   Portrait = 80, Pet = 90, ["Target of Target"] = 90,
   ["Focus Target"] = 90, ["Party Pets"] = 90, ["Boss Stack Info"] = 90,
 }
