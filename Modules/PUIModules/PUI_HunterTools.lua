@@ -146,6 +146,8 @@ local function EnsureSalveAnchor()
 
   FrameUtil:RegisterMover("hunter_emergency_salve", frame, {
     label = "Emergency Salve",
+    moduleKey = "hunterTools",
+    moduleLabel = "Hunter Tools",
     optionsString = "Quality,combatTab",
     smartSnap = {
       family = "positionOnly",
