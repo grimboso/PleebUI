@@ -43,6 +43,7 @@ local function GetStyle()
     height = bb.height,
     rowSpacing = bb.rowSpacing,
     orientation = bb.orientation,
+    layoutMode = bb.layoutMode,
     growthDirection = bb.growthDirection,
     drainDirection = bb.drainDirection,
     texture = bb.texture,
@@ -84,18 +85,37 @@ local function ApplyAnchor(frame)
   local relative = _G[pos.rel or "UIParent"] or UIParent
   frame:ClearAllPoints()
   frame:SetPoint(
-    pos.point or "CENTER",
+    pos.point,
     relative,
-    pos.relPoint or pos.point or "CENTER",
+    pos.relPoint or pos.point,
     Round(tonumber(pos.x) or 0),
     Round(tonumber(pos.y) or 0)
   )
+
+  if bb.layoutMode ~= "GROW" then
+    return
+  end
+
+  local point = GrowthAnchor(bb)
+  if pos.point ~= point then
+    local x, y = ns.FrameUtil.GetPointOffsetsForFrame(frame, point)
+    pos = {
+      point = point,
+      rel = "UIParent",
+      relPoint = point,
+      x = Round(x or 0),
+      y = Round(y or 0),
+    }
+    bb.pos = pos
+    frame:ClearAllPoints()
+    frame:SetPoint(point, UIParent, point, pos.x, pos.y)
+  end
 end
 
 local function SavePosition(frame)
   local bb = ns.PCM_DBExports.GetStyleDB().buffBar
-  local style = GetStyle()
-  local point = GrowthAnchor(style)
+  local point = bb.layoutMode == "GROW"
+    and GrowthAnchor(bb) or (bb.pos and bb.pos.point or "CENTER")
   local x, y = ns.FrameUtil.GetPointOffsetsForFrame(frame, point)
   bb.pos = {
     point = point,
@@ -134,6 +154,43 @@ local function RegisterMover(frame)
         y = -110,
       }
       ApplyAnchor(frame)
+    end,
+    quickSettings = function()
+      local bb = ns.PCM_DBExports.GetStyleDB().buffBar
+      local vertical = bb.orientation == "VERTICAL"
+      local controls = {
+        {
+          type = "select",
+          label = "Bar layout",
+          values = { FIXED = "Fixed positions", GROW = "Grow active bars" },
+          sorting = { "FIXED", "GROW" },
+          get = function() return bb.layoutMode end,
+          set = function(value)
+            bb.layoutMode = value
+            BuffBars:RefreshSettings()
+          end,
+        },
+      }
+      if bb.layoutMode == "GROW" then
+        controls[#controls + 1] = {
+          type = "select",
+          label = "Grow from",
+          values = vertical
+            and { RIGHT = "Left", LEFT = "Right" }
+            or { DOWN = "Top", UP = "Bottom" },
+          sorting = vertical and { "RIGHT", "LEFT" } or { "DOWN", "UP" },
+          get = function() return bb.growthDirection end,
+          set = function(value)
+            bb.growthDirection = value
+            BuffBars:RefreshSettings()
+          end,
+        }
+      end
+      return {
+        ownerKey = VIEWER_KEY,
+        title = "Tracked Buff Bars",
+        controls = controls,
+      }
     end,
   })
 end
