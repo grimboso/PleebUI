@@ -3382,6 +3382,7 @@ _PUI_RefreshCustomPageShell = function(frame, path)
   shell:SetPoint("BOTTOMRIGHT", contentShell, "BOTTOMRIGHT", 0, 0)
   shell:Show()
   shell:BeginLayoutBatch()
+  shell.__puiTabsBeforeHeader = info.page.tabsBeforeHeader == true
 
   local rootKey = info.path[1]
   local preserveShellChrome = rootKey and shell.__puiLastOptionsRootKey == rootKey
@@ -3541,13 +3542,9 @@ local PUI_SHELL_TOP_TAB_UX = {
     advanced = { name = "Advanced", desc = "Native viewer diagnostics and group resets." },
   },
   Chat = {
-    status = { name = "Status", desc = "Shows which addon currently controls chat." },
-    features = { name = "Features", desc = "Enable chat links, copying, and PleebUI Chat." },
-    copyStyle = { name = "Copy window", desc = "Copy window appearance and size." },
-    chatStyle = { name = "Chat window", desc = "Chat frame appearance, padding, and dock style." },
-    formatting = { name = "Formatting", desc = "Timestamps, channel names, brackets, and messages." },
-    fade = { name = "Fade", desc = "Chat opacity, delay, and fade behavior." },
-    tweaks = { name = "Tweaks", desc = "History, buttons, sticky channels, and edit box behavior." },
+    general = { name = "General", desc = "Chat features, timestamps, scrolling, and saved history." },
+    appearance = { name = "Appearance", desc = "Chat window colors and fonts for messages, tabs, and input." },
+    tools = { name = "Copying and fading", desc = "Copy-window appearance and fading for chat windows, text, and tabs." },
   },
   Quality = {
     combatTab = { name = "Combat", desc = "Combat messages, time in combat, and class-specific warning previews." },

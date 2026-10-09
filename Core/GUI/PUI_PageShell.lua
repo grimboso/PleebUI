@@ -167,8 +167,11 @@ local function PUI_PageShell_RebuildLayout(self)
   self.header:ClearAllPoints()
   self.stickyStrip:ClearAllPoints()
 
-  Pixel.Point(self.header, "TOPLEFT", self.body, "TOPLEFT", 0, 0)
-  Pixel.Point(self.header, "TOPRIGHT", self.body, "TOPRIGHT", 0, 0)
+  local stickyHeight = tonumber(self.stickyStrip.__puiDesiredHeight) or 36
+  local tabsBeforeHeader = hasSticky and self.__puiTabsBeforeHeader == true
+  local headerOffset = tabsBeforeHeader and (stickyHeight + gap) or 0
+  Pixel.Point(self.header, "TOPLEFT", self.body, "TOPLEFT", 0, -headerOffset)
+  Pixel.Point(self.header, "TOPRIGHT", self.body, "TOPRIGHT", 0, -headerOffset)
 
   local textRightInset = hasHeaderActions and 190 or 16
 
@@ -232,19 +235,19 @@ local function PUI_PageShell_RebuildLayout(self)
     self.header:Hide()
   end
 
-  local contentTopOffset = 0
+  local contentTopOffset = headerOffset
   if self.header:IsShown() then
-    contentTopOffset = headerHeight + gap
+    contentTopOffset = contentTopOffset + headerHeight + gap
   end
 
-  local stickyHeight = tonumber(self.stickyStrip.__puiDesiredHeight) or 36
   Pixel.Height(self.stickyStrip, stickyHeight)
 
   if hasSticky then
-    Pixel.Point(self.stickyStrip, "TOPLEFT", self.body, "TOPLEFT", 0, -contentTopOffset)
-    Pixel.Point(self.stickyStrip, "TOPRIGHT", self.body, "TOPRIGHT", 0, -contentTopOffset)
+    local stickyOffset = tabsBeforeHeader and 0 or contentTopOffset
+    Pixel.Point(self.stickyStrip, "TOPLEFT", self.body, "TOPLEFT", 0, -stickyOffset)
+    Pixel.Point(self.stickyStrip, "TOPRIGHT", self.body, "TOPRIGHT", 0, -stickyOffset)
     self.stickyStrip:Show()
-    contentTopOffset = contentTopOffset + stickyHeight + gap
+    if not tabsBeforeHeader then contentTopOffset = contentTopOffset + stickyHeight + gap end
   else
     self.stickyStrip:Hide()
   end
