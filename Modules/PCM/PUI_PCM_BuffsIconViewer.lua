@@ -74,6 +74,8 @@ end
 local function RegisterMover(frame)
   ns.FrameUtil:RegisterMover(VIEWER_KEY, frame, {
     label = "Tracked Icons",
+    moduleKey = "pcm",
+    moduleLabel = "Cooldown Manager",
     optionsString = "CooldownManager,buff-icons",
     useOverlayDrag = true,
     smartSnap = {
