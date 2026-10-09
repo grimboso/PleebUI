@@ -588,7 +588,8 @@ function DamageMeters:GetOptions()
         },
         delete = {
           type = "execute",
-          name = "Delete",
+          name = "Delete window",
+          confirm = "Delete this window and its saved settings?",
           order = 30,
           func = function()
             self:DeleteWindow(windowIndex)
