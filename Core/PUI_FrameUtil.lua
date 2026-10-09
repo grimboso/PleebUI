@@ -32,6 +32,8 @@ local FrameUtil = ns.FrameUtil
 local MoversByKey = {}
 local MoversByFrame = _G.setmetatable({}, { __mode = "k" })
 local MoversList = {}
+local MoverLayerOrder = {}
+local moverLayeringPending
 local GhostFrameState = _G.setmetatable({}, { __mode = "k" })
 
 local ShowOverlay
@@ -320,10 +322,36 @@ end
 
 function FrameUtil.RefreshMoverLayering()
   local strata = GetMoverChromeStrata()
+  wipe(MoverLayerOrder)
+  for _, entry in ipairs(MoversList) do
+    local overlay = entry.overlay
+    if overlay and overlay:IsShown() then
+      local width, height = overlay:GetWidth(), overlay:GetHeight()
+      if not _G.issecretvalue(width) and not _G.issecretvalue(height) then
+        entry._editOverlayArea = width * height
+        MoverLayerOrder[#MoverLayerOrder + 1] = entry
+      else
+        overlay:SetFrameLevel(1000)
+      end
+    end
+  end
+  _G.table.sort(MoverLayerOrder, function(first, second)
+    if first._editOverlayArea == second._editOverlayArea then
+      return first.key < second.key
+    end
+    return first._editOverlayArea > second._editOverlayArea
+  end)
+  local selectedLevel = 1001 + #MoverLayerOrder
+  for index, entry in ipairs(MoverLayerOrder) do
+    entry.overlay:SetFrameLevel(1000 + index)
+  end
 
   for _, entry in ipairs(MoversList) do
     if entry.overlay then
       entry.overlay:SetFrameStrata(strata)
+      if SelectedEntries[entry] then
+        entry.overlay:SetFrameLevel(selectedLevel)
+      end
     end
 
     if entry.chrome then
@@ -333,6 +361,7 @@ function FrameUtil.RefreshMoverLayering()
 
     if entry.nudgeGroup then
       entry.nudgeGroup:SetFrameStrata(strata)
+      entry.nudgeGroup:SetFrameLevel(selectedLevel + 10)
     end
 
     if entry.frame and entry.frame.__puiEditMoverHelper then
@@ -346,9 +375,23 @@ function FrameUtil.RefreshMoverLayering()
 
   if FrameUtil._selectionBox then
     FrameUtil._selectionBox:SetFrameStrata(GetMoverChromeStrata())
+    FrameUtil._selectionBox:SetFrameLevel(selectedLevel + 20)
   end
 end
 
+
+local function QueueMoverLayeringRefresh()
+  if not ns.Flags.IsEditing or moverLayeringPending then return end
+  moverLayeringPending = true
+  _G.C_Timer.After(0, function()
+    moverLayeringPending = nil
+    if ns.Flags.IsEditing then
+      FrameUtil.RefreshMoverLayering()
+    else
+      wipe(MoverLayerOrder)
+    end
+  end)
+end
 
 function FrameUtil.GetMoverOffsets(frame)
   local x, y = GetOffsetsForFrame(frame)
@@ -3946,6 +3989,7 @@ function FrameUtil._RefreshSelectionVisuals()
 
   FrameUtil._UpdateNudgeUI(SelectedEntry)
 
+  FrameUtil.RefreshMoverLayering()
   ns.TestMode:RefreshEditControlButtons()
 end
 
@@ -4504,6 +4548,7 @@ local function EnsureOverlay(entry)
   o:SetScript("OnShow",  Sync)
   o:SetScript("OnEvent", Sync)
   o:RegisterEvent("UI_SCALE_CHANGED")
+  o:SetScript("OnSizeChanged", QueueMoverLayeringRefresh)
 
   entry.overlay = o
   return o
@@ -4521,6 +4566,7 @@ ShowOverlay = function(entry, show)
   end
 
   o:SetShown(show and true or false)
+  QueueMoverLayeringRefresh()
   if entry.chrome then
     entry.chrome:SetShown(show and true or false)
   end
@@ -6005,6 +6051,8 @@ function FrameUtil:UnregisterMover(key)
       break
     end
   end
+
+  FrameUtil.RefreshMoverLayering()
 
   if relayoutSmartSnap and not FrameUtil._smartSnapApplying then
     QueueSmartSnapRuntimeRelayout(key)
