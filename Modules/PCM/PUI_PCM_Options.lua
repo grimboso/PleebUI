@@ -404,9 +404,10 @@ function Options:BuildSections(source, context)
   end
   if context.customTracker or context.items then
     if next(sections.glow.args) then
-      sections.visibility.args.glow = {
-        type = "group", name = "Glow", inline = true, order = 80, args = sections.glow.args,
-      }
+      for key, group in pairs(sections.glow.args) do
+        group.order = 80 + (tonumber(group.order) or 0) / 100
+        sections.visibility.args["glow_" .. key] = group
+      end
     end
     sections.glow.args = {}
     sections.visibility.name = "Visibility and glow"
@@ -507,20 +508,10 @@ function Options.GetSearchEntries()
     local group = groups.byID[groupID]
     local path = { "CooldownManager", "groups", groupID }
     Add("Groups / " .. group.name, path, groupID)
+    local availableSections = Options.GetSearchSections("groups", groupID, group)
     for sectionIndex = 1, #SECTIONS do
       local section = SECTIONS[sectionIndex]
-      local available
-      if group.isDefault then
-        if group.defaultViewerKey == "BuffIconCooldownViewer" then
-          available = section[1] == "general" or section[1] == "layout" or section[1] == "timer" or section[1] == "text"
-        elseif group.defaultViewerKey == "BuffBarCooldownViewer" then
-          available = section[1] ~= "glow" and section[1] ~= "advanced"
-        else
-          available = section[1] ~= "advanced"
-        end
-      else
-        available = section[1] == "general" or section[1] == "layout" or section[1] == "advanced"
-      end
+      local available = availableSections[section[1]]
       if available then
         Add("Groups / " .. group.name .. " / " .. section[2],
           { "CooldownManager", "groups", groupID, section[1] }, settingKeywords[section[1]])
@@ -552,13 +543,16 @@ function Options.GetSearchEntries()
       end
       for _, words in pairs(settingKeywords) do keywords = keywords .. " " .. words end
       Add("Custom trackers / " .. owner:GetCustomBarDisplayName(config), path, keywords)
+      local availableSections = Options.GetSearchSections(source[1], id, config)
       for sectionIndex = 1, #SECTIONS do
         local section = SECTIONS[sectionIndex]
-        local sectionPath = {}
-        for index = 1, #path do sectionPath[index] = path[index] end
-        sectionPath[#sectionPath + 1] = section[1]
-        Add("Custom trackers / " .. owner:GetCustomBarDisplayName(config) .. " / " .. section[2],
-          sectionPath, tostring(config.label or "") .. " " .. settingKeywords[section[1]])
+        if availableSections[section[1]] then
+          local sectionPath = {}
+          for index = 1, #path do sectionPath[index] = path[index] end
+          sectionPath[#sectionPath + 1] = section[1]
+          Add("Custom trackers / " .. owner:GetCustomBarDisplayName(config) .. " / " .. availableSections[section[1]].name,
+            sectionPath, tostring(config.label or "") .. " " .. settingKeywords[section[1]])
+        end
       end
     end
   end
@@ -568,10 +562,11 @@ function Options.GetSearchEntries()
     Add("Items & racials / " .. definition.label,
       { "CooldownManager", "consumables", "slots", definition.key }, definition.key)
   end
+  local itemSections = Options.GetSearchSections("consumables")
   for sectionIndex = 1, #SECTIONS do
     local section = SECTIONS[sectionIndex]
-    if section[1] ~= "advanced" then
-      Add("Items & racials / " .. section[2],
+    if itemSections[section[1]] then
+      Add("Items & racials / " .. itemSections[section[1]].name,
         { "CooldownManager", "consumables", section[1] }, settingKeywords[section[1]])
     end
   end
