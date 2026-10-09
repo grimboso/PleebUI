@@ -254,16 +254,16 @@ end
 
 local function ApplyControlChange(panel, control, ...)
   if not CanEditPanel(panel) then return end
-  local history = ns.FrameUtil.BeginEditHistory(control.label or "Change setting")
+  local history = ns.FrameUtil.BeginEditHistory("Change " .. (control.label or "setting"))
   control.set(...)
   ns.FrameUtil.CommitEditHistory(history)
 end
 
 local function QuiescePanel(panel)
-  if panel.sliderHistory then
-    ns.FrameUtil.CommitEditHistory(panel.sliderHistory)
-    panel.sliderHistory = nil
-  end
+  local history, control, value = panel.sliderHistory, panel.sliderControl, panel.sliderValue
+  panel.sliderHistory, panel.sliderControl, panel.sliderValue = nil, nil, nil
+  if control and control.commitOnRelease == true then control.set(value) end
+  ns.FrameUtil.CommitEditHistory(history)
   AceGUI:ClearFocus()
   for _, widget in ipairs(panel.controls) do
     if widget.SetDisabled then widget:SetDisabled(true) end
@@ -343,7 +343,8 @@ local function AddControl(panel, control)
     widget:SetValue(tonumber(value) or control.min)
     widget:SetCallback("OnValueChanging", function(_, _, newValue)
       if not CanEditPanel(panel) then return end
-      panel.sliderHistory = panel.sliderHistory or ns.FrameUtil.BeginEditHistory(control.label)
+      panel.sliderHistory = panel.sliderHistory or ns.FrameUtil.BeginEditHistory("Change " .. (control.label or "setting"))
+      panel.sliderControl, panel.sliderValue = control, newValue
       if control.commitOnRelease == true then
         if control.liveSet then control.liveSet(newValue) end
       else
@@ -352,8 +353,8 @@ local function AddControl(panel, control)
     end)
     widget:SetCallback("OnMouseUp", function(_, _, newValue)
       if not CanEditPanel(panel) then return end
-      local history = panel.sliderHistory or ns.FrameUtil.BeginEditHistory(control.label)
-      panel.sliderHistory = nil
+      local history = panel.sliderHistory or ns.FrameUtil.BeginEditHistory("Change " .. (control.label or "setting"))
+      panel.sliderHistory, panel.sliderControl, panel.sliderValue = nil, nil, nil
       control.set(newValue)
       ns.FrameUtil.CommitEditHistory(history)
     end)
@@ -388,7 +389,7 @@ local function AddControl(panel, control)
     widget:SetCallback("OnClick", function()
       if not CanEditPanel(panel) then return end
       if type(control.action) == "function" then
-        local history = ns.FrameUtil.BeginEditHistory(control.label)
+        local history = ns.FrameUtil.BeginEditHistory("Change " .. (control.label or "setting"))
         control.action()
         ns.FrameUtil.CommitEditHistory(history)
       end
@@ -419,6 +420,7 @@ function QuickSettings:Open(anchor, spec, preserveScroll)
   end
 
   local panel = self:EnsurePanel()
+  QuiescePanel(panel)
   local sameSession = panel:IsShown()
     and panel.ownerKey == spec.ownerKey
     and panel.anchor == anchor
