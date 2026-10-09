@@ -320,6 +320,9 @@ function Spotlight.EnsureAnchor(owner)
       defaultPoint = "CENTER",
       defaultRelativePoint = "CENTER",
       label = "Spotlight",
+      moduleKey = "unitFrames",
+      moduleLabel = "Unit Frames",
+      defaultVisibility = { Solo = false, Party = false },
       optionsString = "unitframes,raid",
       quickSettings = function()
         return {
