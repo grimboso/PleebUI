@@ -2117,6 +2117,8 @@ function M:AttachMover()
  ----
   FrameUtil:RegisterMover("PRD", self.frame, {
       label = "Personal Resource Display",
+      moduleKey = "prd",
+      moduleLabel = "Personal Resource Display",
 
       savePosition = SaveRootPosition,
 
@@ -2177,6 +2179,8 @@ function M:AttachMover()
   if self.health and healthDetached then
     FrameUtil:RegisterMover("PRD_HEALTH", self.health, {
       label = "PRD: Health bar",
+      moduleKey = "prd",
+      moduleLabel = "Personal Resource Display",
 
       savePosition = SaveHealthPosition,
 
@@ -2221,6 +2225,8 @@ function M:AttachMover()
   if self.primary and primaryDetached then
     FrameUtil:RegisterMover("PRD_PRIMARY", self.primary, {
       label = "PRD: Primary bar",
+      moduleKey = "prd",
+      moduleLabel = "Personal Resource Display",
 
       savePosition = SavePrimaryPosition,
 
@@ -2292,6 +2298,8 @@ function M:AttachMover()
 
     FrameUtil:RegisterMover(moverKey, frame, {
       label = "PRD: " .. config.resourceName,
+      moduleKey = "prd",
+      moduleLabel = "Personal Resource Display",
 
       savePosition = SavePosition,
 
