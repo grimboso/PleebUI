@@ -1853,32 +1853,37 @@ function Theme.GetWidgetRowGeometry(widget)
   return PUI_WIDGET_ROW_GEOMETRY
 end
 
-function Theme.GetOptionsWidgetColumns()
-  local optionsDB = Addon:GetOptionsDB()
-  local columns = tonumber(optionsDB.optionsWidgetColumns) or 4
+function Theme.GetConfiguredOptionsWidgetColumns()
+  local columns = Addon:GetOptionsDB().optionsWidgetColumns
+  return columns == nil and "auto" or columns
+end
 
-  if columns < 2 then
-    return 2
+function Theme.GetOptionsWidgetColumns(availableWidth)
+  local configured = Theme.GetConfiguredOptionsWidgetColumns()
+  local maxColumns = configured == "auto" and 4 or tonumber(configured) or 4
+  maxColumns = math.max(1, math.min(5, maxColumns))
+
+  if not availableWidth or availableWidth <= 0 then
+    return maxColumns
   end
 
-  if columns > 5 then
-    return 5
-  end
+  local fontSize = Theme.ResolveFontSize(Theme.GetOptionsFontSize(), "options")
+  local minimumWidth = 205 + math.max(0, fontSize - 14) * 12
+  local fittingColumns = math.floor(availableWidth / minimumWidth)
 
-  return columns
+  return math.max(1, math.min(maxColumns, fittingColumns))
 end
 
 function Theme.SetOptionsWidgetColumns(columns)
   local optionsDB = Addon:GetOptionsDB()
-  columns = tonumber(columns) or 4
 
-  if columns < 2 then
-    columns = 2
-  elseif columns > 5 then
-    columns = 5
+  if columns == "auto" then
+    optionsDB.optionsWidgetColumns = nil
+    return
   end
 
-  optionsDB.optionsWidgetColumns = columns
+  columns = math.floor(tonumber(columns) or 4)
+  optionsDB.optionsWidgetColumns = math.max(1, math.min(5, columns))
 end
 
 local function StripIconFrameArt(frame)
@@ -2344,6 +2349,7 @@ function Theme.SetFontSizeOffset(value)
   Addon:GetMediaDB().fontSizeOffset = value
   Addon:RefreshIconFonts()
   Addon:RefreshOptionsTheme()
+  Addon:NotifyOptionsTreeChanged(nil, ns._PUIActiveOptionsPath)
 end
 
 function Theme.GetFontSizeScope(scope)
@@ -2354,7 +2360,7 @@ function Theme.SetFontSizeScope(scope, enabled)
   Addon:GetMediaDB().fontSizeScopes[scope] = enabled == true
   Addon:RefreshIconFonts()
   Addon:RefreshOptionsTheme()
-  LibStub("AceConfigRegistry-3.0"):NotifyChange(ADDON_NAME)
+  Addon:NotifyOptionsTreeChanged(nil, ns._PUIActiveOptionsPath)
 end
 
 function Theme.GetAllFontSizeScopes()
@@ -2377,7 +2383,7 @@ function Theme.SetAllFontSizeScopes(enabled)
 
   Addon:RefreshIconFonts()
   Addon:RefreshOptionsTheme()
-  LibStub("AceConfigRegistry-3.0"):NotifyChange(ADDON_NAME)
+  Addon:NotifyOptionsTreeChanged(nil, ns._PUIActiveOptionsPath)
 end
 
 Theme.OptionsFontSizeRange = Theme.OptionsFontSizeRange or {
@@ -2434,6 +2440,7 @@ function Theme.SetOptionsFontSize(value)
 
   Addon:GetOptionsDB().puiOptionsFontSize = value
   _PUI_ThemeRegistry_NotifyChange()
+  Addon:NotifyOptionsTreeChanged(nil, ns._PUIActiveOptionsPath)
 end
 
 function Theme.GetOptionsUIScale()
@@ -2463,6 +2470,7 @@ function Theme.SetOptionsUIScale(value)
 
   Addon:GetOptionsDB().optionsScale = value
   Addon:ApplyOptionsUIScale()
+  Addon:NotifyOptionsTreeChanged(nil, ns._PUIActiveOptionsPath)
 end
 
 Theme.ColorPresets = {
@@ -2740,6 +2748,38 @@ local function GeneralOptionsProvider()
   return provider
 end
 
+local selectedAccessibilityPreset = "default"
+
+local function PresetColorHex(color)
+  return string.format("%02x%02x%02x",
+    math.floor((color[1] or 1) * 255 + 0.5),
+    math.floor((color[2] or 1) * 255 + 0.5),
+    math.floor((color[3] or 1) * 255 + 0.5)
+  )
+end
+
+local function PresetLuminance(color)
+  local function LinearChannel(value)
+    if value <= 0.04045 then
+      return value / 12.92
+    end
+
+    return ((value + 0.055) / 1.055) ^ 2.4
+  end
+
+  return 0.2126 * LinearChannel(color[1])
+    + 0.7152 * LinearChannel(color[2])
+    + 0.0722 * LinearChannel(color[3])
+end
+
+local function PresetTextContrast(preview)
+  local text = PresetLuminance(preview.text)
+  local background = PresetLuminance(preview.background)
+
+  return (math.max(text, background) + 0.05)
+    / (math.min(text, background) + 0.05)
+end
+
 local function UIThemeOptionsProvider()
   local provider = {}
 
@@ -2747,7 +2787,13 @@ local function UIThemeOptionsProvider()
     local colorOptions = ThemeColorsProvider():GetOptions()
     local fontOptions = ThemeFontsProvider():GetOptions()
 
-    return {
+    local presetValues = {}
+    for i = 1, #Theme.ColorPresetOrder do
+      local key = Theme.ColorPresetOrder[i]
+      presetValues[key] = Theme.GetColorPresetLabel(key)
+    end
+
+    local options = {
       type = "group",
       name = "UI Theme",
       order = 15,
@@ -2850,6 +2896,140 @@ local function UIThemeOptionsProvider()
         },
       },
     }
+
+    local layout = options.args.optionsLayout
+    local layoutArgs = layout.args
+    local fonts = options.args.fonts.args
+
+    layout.name = "Options appearance (current profile)"
+    layout.order = 5
+
+    layoutArgs.puiOptionsFontSize = fonts.puiOptionsFontSize
+    layoutArgs.puiOptionsFontSize.name = "Options font size"
+    layoutArgs.puiOptionsFontSize.order = 2
+    layoutArgs.puiOptionsFontSize.desc =
+      "Changes text in the PleebUI options window, not text across the game."
+    fonts.puiOptionsFontSize = nil
+
+    layoutArgs.optionsUIScale.name = "Options window scale"
+    layoutArgs.optionsUIScale.desc =
+      "Resizes only the PleebUI options window."
+    layoutArgs.optionsWidgetColumns.name = "Columns"
+    layoutArgs.optionsWidgetColumns.order = 3
+    layoutArgs.optionsWidgetColumns.values = {
+      auto = "Automatic",
+      [1] = "1 column",
+      [2] = "2 columns",
+      [3] = "3 columns",
+      [4] = "4 columns",
+      [5] = "5 columns",
+    }
+    layoutArgs.optionsWidgetColumns.get = function()
+      return Theme.GetConfiguredOptionsWidgetColumns()
+    end
+
+    layoutArgs.widgetRowBackgrounds.name = "Shaded backgrounds"
+    layoutArgs.widgetRowBackgrounds.order = 4
+
+    options.args.themeColors.order = 2
+    options.args.fonts.name = "Fonts and global text (current profile)"
+    options.args.fonts.order = 3
+    options.args.combatReadability.order = 4
+
+    options.args.accessibilityPresets = {
+      type = "group",
+      name = "Accessibility presets (current profile)",
+      order = 1,
+      inline = true,
+      args = {
+        description = {
+          type = "description",
+          name = "Preview a color palette, then apply it. The selected colors affect the current profile.",
+          order = 1,
+          width = "full",
+        },
+        selected = {
+          type = "select",
+          name = "Color preset",
+          order = 2,
+          values = presetValues,
+          get = function()
+            return selectedAccessibilityPreset
+          end,
+          set = function(_, key)
+            selectedAccessibilityPreset = key
+            LibStub("AceConfigRegistry-3.0"):NotifyChange(ADDON_NAME)
+          end,
+        },
+        sample = {
+          type = "description",
+          name = function()
+            local definition = Theme.GetColorPresetDefinition(selectedAccessibilityPreset)
+            local preview = Theme.GetColorPresetPreviewColors(selectedAccessibilityPreset)
+            local textColor = PresetColorHex(preview.text)
+            local accentColor = PresetColorHex(preview.accent)
+            local ratio = PresetTextContrast(preview)
+
+            return string.format(
+              "%s\n|cff%sSample text: The quick brown fox 12345|r\n|cff%sAccent: Selected option|r\nText/background contrast: %.2f:1",
+              definition.description or "",
+              textColor,
+              accentColor,
+              ratio
+            )
+          end,
+          order = 3,
+          width = "full",
+        },
+        background = {
+          type = "color",
+          name = "Preview background",
+          order = 4,
+          disabled = true,
+          hasAlpha = true,
+          get = function()
+            local color = Theme.GetColorPresetPreviewColors(selectedAccessibilityPreset).background
+            return color[1], color[2], color[3], color[4]
+          end,
+        },
+        accent = {
+          type = "color",
+          name = "Preview accent",
+          order = 5,
+          disabled = true,
+          hasAlpha = true,
+          get = function()
+            local color = Theme.GetColorPresetPreviewColors(selectedAccessibilityPreset).accent
+            return color[1], color[2], color[3], color[4]
+          end,
+        },
+        sampleControl = {
+          type = "toggle",
+          name = "Sample checked control",
+          order = 6,
+          disabled = true,
+          get = function()
+            return true
+          end,
+        },
+        apply = {
+          type = "execute",
+          name = "Apply selected preset",
+          order = 7,
+          func = function()
+            Theme.ApplyColorPreset(selectedAccessibilityPreset)
+          end,
+        },
+        guidance = {
+          type = "description",
+          name = "WCAG AA uses 4.5:1 for normal text and 3:1 for large text. The displayed ratio measures the preset text and background colors only; inspect the actual controls as well.",
+          order = 8,
+          width = "full",
+        },
+      },
+    }
+
+    return options
   end
 
   return provider
@@ -2998,8 +3178,8 @@ ThemeFontsProvider = function()
         },
         fontSizeOffset = {
           type = "range",
-          name = "Font size offset",
-          desc = "Adds or removes font size without changing individual font settings.",
+          name = "Global font size adjustment",
+          desc = "Adds or removes text size in the selected PleebUI areas of the current profile. Options font size is configured separately under Options appearance.",
           order = 4,
           min = Theme.FontSizeOffsetRange.min,
           max = Theme.FontSizeOffsetRange.max,
@@ -3149,7 +3329,8 @@ UIScaleProvider = function()
         },
         UIScale = {
           type = "range",
-          name = "UI scale",
+          name = "UI scale (all characters)",
+          desc = "Changes the scale of the whole game interface. This setting applies across characters, not just the current profile.",
           order = 3,
           min = 0.1,
           max = 1.25,
