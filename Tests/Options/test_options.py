@@ -125,7 +125,13 @@ for _,family in ipairs({'player','target','focus','boss','party','raid'}) do
  assert(not args.layout.args.absorb and args.layout.args.textures.name=='Textures')
  local textures=args.layout.args.textures.args
  assert(textures.healthTexture and textures.powerTexture and textures.absorbTexture)
- assert(not args.layout.args.health.args.texture and not args.layout.args.power.args.texture)
+ assert(not args.layout.args.power.args.texture)
+ if family=='player' or family=='party' or family=='raid' then
+  assert(args.layout.args.health and next(args.layout.args.health.args))
+  assert(not args.layout.args.health.args.texture)
+ else
+  assert(not args.layout.args.health)
+ end
  if family=='party' or family=='raid' then
   assert(not textures.useCustomTexture)
  else
@@ -162,6 +168,18 @@ end
 assert(opts.args.player.args.pet.args.text)
 assert(opts.args.target.args.targettarget.args.text)
 assert(opts.args.focus.args.focustarget.args.text)
+assert(not opts.args.player.args.pet.args.layout.args.health)
+assert(not opts.args.target.args.targettarget.args.layout.args.health)
+assert(not opts.args.focus.args.focustarget.args.layout.args.health)
+assert(not opts.args.boss.args.bossinfo)
+local bossNoteFound=false
+local function FindBossNote(group)
+ for _,option in pairs(group.args or {}) do
+  if option.type=='group' then FindBossNote(option)
+  elseif option.type=='description' and type(option.name)=='string' and option.name:find('Boss 1-5 share',1,true) then bossNoteFound=true end
+ end
+end
+FindBossNote(opts.args.boss.args.general);assert(bossNoteFound)
 local player=ns.UnitFrames:GetConfigUnit('player')
 local height=opts.args.player.args.layout.args.size.args.height
 height.set(nil,47);assert(player.height==47)
@@ -577,17 +595,36 @@ local n=0;for _ in pairs(opts.args) do n=n+1 end;assert(n==3)
 assert(opts.args.general.args.features.args.scrollMessages and opts.args.general.args.history.args.persistHistory)
 assert(opts.args.tools.args.copy.args.width and opts.args.tools.args.copy.args.height)
 assert(opts.args.appearance.args.message.inline and opts.args.appearance.args.tab.inline and opts.args.appearance.args.input.inline)
+local timestamps=opts.args.general.args.features.args.timestamps
+local timestampFormat=opts.args.general.args.features.args.tsPreset
+local originalFormat=timestampFormat.get()
+ChatLinks.db.profile.chatFormat.timestamps=false;assert(not timestamps.get() and timestampFormat.disabled() and timestampFormat.get()==originalFormat)
+ChatLinks.db.profile.chatFormat.timestamps=true;assert(timestamps.get() and not timestampFormat.disabled())
 print('Chat: three tabs, preserved formatting/history/copy controls, and headings passed.')
 local map=MinimapProvider(Addon):GetOptions();ns.OptionsSchema.Apply(map,'Minimap');checkInline(map);checkCompact(map)
 assert(map.args.general.args.minimap.args.hideTracking and map.args.general.args.minimap.args.hideCalendar)
 assert(map.args.topPanel.args.clock.args.hideClock and map.args.general.args.buttons.args.hide)
 assert(map.args.topPanel.args.zone.args.hideZoneText.order<map.args.topPanel.args.zone.args.fontSize.order)
 assert(map.args.topPanel.args.panel.args.clockBoxEnabled and map.args.general.args.minimap.args.clockBoxBorderSize)
+local zone=map.args.topPanel.args.zone.args
+MinimapModule.db.profile.clockBoxEnabled=true
+MinimapModule.db.profile.hideZoneText=true;assert(zone.hideZoneText.get() and zone.fontSize.disabled())
+MinimapModule.db.profile.hideZoneText=false;assert(not zone.hideZoneText.get() and not zone.fontSize.disabled())
+MinimapModule.db.profile.clockBoxEnabled=false;assert(zone.fontSize.disabled())
 print('Minimap: two tabs, existing hide settings exposed, panel toggle and shared border available.')
 local sky=DragonridingProvider(Addon):GetOptions();ns.OptionsSchema.Apply(sky,'Dragonriding');checkInline(sky);checkCompact(sky)
 assert(sky.args.general.args.swEnabled and sky.args.general.args.wsEnabled)
 assert(sky.args.vigor.args.width and sky.args.vigor.args.barColor)
 assert(sky.args.secondary.args.wsColor and sky.args.secondary.args.swGap)
+local skyDB=GetDB()
+skyDB.showSegments=false;assert(not sky.args.vigor.args.showSegments.get() and sky.args.vigor.args.segmentThickness.disabled())
+skyDB.showSegments=true;assert(sky.args.vigor.args.showSegments.get() and not sky.args.vigor.args.segmentThickness.disabled())
+skyDB.swEnabled=false
+assert(sky.args.secondary.args.swHeight.disabled() and sky.args.secondary.args.swGap.disabled() and sky.args.secondary.args.swColor.disabled())
+skyDB.wsEnabled=true;assert(not sky.args.secondary.args.wsColor.disabled())
+skyDB.swEnabled=true
+assert(not sky.args.secondary.args.swHeight.disabled() and not sky.args.secondary.args.swGap.disabled() and not sky.args.secondary.args.swColor.disabled())
+skyDB.wsEnabled=false;assert(sky.args.secondary.args.wsColor.disabled())
 print('Skyriding: consolidated behavior, vigor styling, and secondary bars passed.')
 ''')
 
