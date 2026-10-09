@@ -247,6 +247,44 @@ function QuickSettings:BindControlTooltip(widget, control, panel)
   end
 end
 
+local function CanEditPanel(panel)
+  return ns.Flags.IsEditing and not InCombatLockdown() and panel:IsShown()
+    and panel.fadeDirection ~= "out"
+end
+
+local function ApplyControlChange(panel, control, ...)
+  if not CanEditPanel(panel) then return end
+  local history = ns.FrameUtil.BeginEditHistory(control.label or "Change setting")
+  control.set(...)
+  ns.FrameUtil.CommitEditHistory(history)
+end
+
+local function QuiescePanel(panel)
+  if panel.sliderHistory then
+    ns.FrameUtil.CommitEditHistory(panel.sliderHistory)
+    panel.sliderHistory = nil
+  end
+  AceGUI:ClearFocus()
+  for _, widget in ipairs(panel.controls) do
+    if widget.SetDisabled then widget:SetDisabled(true) end
+    if widget.ClearFocus then widget:ClearFocus() end
+    if widget.type == "PUI_Slider" then
+      widget.slider:EnableMouseWheel(false)
+      widget.editbox:ClearFocus()
+    end
+  end
+  if panel.colorCallback and ColorPickerFrame.swatchFunc == panel.colorCallback then
+    ColorPickerFrame:Hide()
+    ColorPickerFrame.swatchFunc = nil
+    ColorPickerFrame.opacityFunc = nil
+    ColorPickerFrame.cancelFunc = nil
+  end
+  panel.colorCallback = nil
+  panel.scroll:EnableMouseWheel(false)
+  panel.closeButton:Disable()
+  panel.allSettingsButton:Disable()
+end
+
 local function AddControl(panel, control)
   local widgetType
   if control.type == "toggle" then
@@ -296,27 +334,29 @@ local function AddControl(panel, control)
   if control.type == "toggle" then
     widget:SetValue(control.get() == true)
     widget:SetCallback("OnValueChanged", function(_, _, value)
-      control.set(value == true)
+      ApplyControlChange(panel, control, value == true)
     end)
   elseif control.type == "slider" then
-    widget:SetCommitOnRelease(control.commitOnRelease == true)
+    widget:SetCommitOnRelease(true)
     widget:SetSliderValues(control.min, control.max, control.step or 1)
     local value = control.get()
     widget:SetValue(tonumber(value) or control.min)
-    if control.commitOnRelease == true then
-      if control.liveSet then
-        widget:SetCallback("OnValueChanging", function(_, _, value)
-          control.liveSet(value)
-        end)
+    widget:SetCallback("OnValueChanging", function(_, _, newValue)
+      if not CanEditPanel(panel) then return end
+      panel.sliderHistory = panel.sliderHistory or ns.FrameUtil.BeginEditHistory(control.label)
+      if control.commitOnRelease == true then
+        if control.liveSet then control.liveSet(newValue) end
+      else
+        control.set(newValue)
       end
-      widget:SetCallback("OnMouseUp", function(_, _, value)
-        control.set(value)
-      end)
-    else
-      widget:SetCallback("OnValueChanged", function(_, _, value)
-        control.set(value)
-      end)
-    end
+    end)
+    widget:SetCallback("OnMouseUp", function(_, _, newValue)
+      if not CanEditPanel(panel) then return end
+      local history = panel.sliderHistory or ns.FrameUtil.BeginEditHistory(control.label)
+      panel.sliderHistory = nil
+      control.set(newValue)
+      ns.FrameUtil.CommitEditHistory(history)
+    end)
   elseif control.type == "select"
     or control.type == "font"
     or control.type == "statusbar"
@@ -324,20 +364,33 @@ local function AddControl(panel, control)
     widget:SetList(control.values, control.sorting)
     widget:SetValue(control.get())
     widget:SetCallback("OnValueChanged", function(currentWidget, _, value)
+      if not CanEditPanel(panel) then return end
       currentWidget:SetValue(value)
-      control.set(value)
+      ApplyControlChange(panel, control, value)
     end)
   elseif control.type == "color" then
     local color = control.get()
     widget:SetHasAlpha(control.hasAlpha ~= false)
     widget:SetColor(color[1], color[2], color[3], color[4] or 1)
     widget:SetCallback("OnValueConfirmed", function(_, _, r, g, b, a)
-      control.set(r, g, b, a)
+      ApplyControlChange(panel, control, r, g, b, a)
     end)
+    if not widget.__puiColorOwnerHook then
+      widget.__puiColorOwnerHook = true
+      widget.frame:HookScript("OnClick", function()
+        local owner = widget:GetUserData("puiControlTooltipPanel")
+        if owner and CanEditPanel(owner) then
+          owner.colorCallback = ColorPickerFrame.swatchFunc
+        end
+      end)
+    end
   elseif control.type == "button" then
     widget:SetCallback("OnClick", function()
+      if not CanEditPanel(panel) then return end
       if type(control.action) == "function" then
+        local history = ns.FrameUtil.BeginEditHistory(control.label)
         control.action()
+        ns.FrameUtil.CommitEditHistory(history)
       end
     end)
   end
@@ -387,6 +440,9 @@ function QuickSettings:Open(anchor, spec, preserveScroll)
   local showFade = currentAlpha < 1
   panel.fadeDirection = "in"
   panel:EnableMouse(true)
+  panel.scroll:EnableMouseWheel(true)
+  panel.closeButton:Enable()
+  panel.allSettingsButton:Enable()
   panel:SetAlpha(currentAlpha)
   ReleaseControls(panel)
 
@@ -475,6 +531,7 @@ function QuickSettings:Hide(immediate)
   end
 
   panel:StopMovingOrSizing()
+  QuiescePanel(panel)
   HideControlTooltip(panel)
   panel:EnableMouse(false)
   local startingAlpha = panel:GetAlpha()
