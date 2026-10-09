@@ -626,14 +626,146 @@ for _,role in ipairs({'health','primary'}) do
  local state={db={[role]=config}}
  args=PRD_ArrangeNativeBarArgs(args,state,role)
  local opts={type='group',name=role,args=args};ns.OptionsSchema.Apply(opts,'PRD');checkInline(opts);checkCompact(opts)
- assert(not args.general and args.layoutAppearance and args.textGroup)
- assert(args.layoutAppearance.args.border.args.borderSize.name=='Thickness')
- assert(args.layoutAppearance.args.border.args.borderSize.get==callback)
- assert(args.textGroup.args.leftFont.args.fontSize.name=='Font size')
- assert(args.textGroup.args.content.args.percentVisibility.name=='Percent visibility')
+ assert(not args.general and not args.layoutAppearance and args.textGroup.inline and args.layoutGroup.inline)
+ assert(args.border.args.borderSize.name=='Thickness')
+ assert(args.border.args.borderSize.get==callback)
+ assert(args.textAppearance.args.fontSize.name=='Font size')
+ assert(args.textGroup.args.percentVisibility.name=='Percent visibility')
 end
 ''')
 print('Current PRD presentation builders: bar/style ownership, typography roles, and callback preservation passed.')
+
+lua.execute(builders['defaults'])
+lua.execute("""
+local originalDropIn=ns.Pleebug.DropIn
+ns.Pleebug.DropIn=function() return {Def=function(_,name,fn) captured[name]=fn;return fn end} end
+prdTestResources={}
+ns.Modules.PRD={db={profile=copy(defaults.profile)},
+ GetPrimaryResourceSettings=function(self) return self:EnsurePrimaryResourceSettings('FOCUS') end,
+ GetPrimaryResourceKey=function() return 'FOCUS' end,
+ GetPrimaryTickMaximum=function() return 100 end,
+ GetPrimaryResourceMaximum=function() return 100 end,
+ SetUsePlayerHealth=function(self,value) self.db.profile.usePlayerHealth=value end,
+ IsSecondaryResourceEnabled=function(self,key) return self.db.profile.secondary.resourceEnabled[key]~=false end,
+ SetSecondaryResourceEnabled=function(self,key,value) self.db.profile.secondary.resourceEnabled[key]=value end}
+ns.PRDSecondary={PlayerClassHasAlternatePower=false,
+ GetResourceOptionsForClass=function() return prdTestResources end,
+ HasResourceForCurrentSpec=function() return #prdTestResources>0 end,
+ ResourceSupportsNumericCues=function() return true end,
+ GetApplicationCountdownMax=function() return nil end,
+ ResourceSupportsStackColorShifts=function() return false end,
+ GetResourceSettings=function(_,db,key)
+  local config=db.secondary.resourceSettings[key]
+  if not config then
+   config={height=15,width=240,texture='Pleebar',anchor={},style=copy(db.secondary.style),text={size=14,flags=''},behavior={},cues={}}
+   db.secondary.resourceSettings[key]=config
+  end
+  return config
+ end}
+""")
+load('Modules/PRD/PUI_PRD_Config.lua')
+lua.execute("""
+local function checkFlat(args)
+ assert(not args.layoutAppearance and not args.general)
+ for _,option in pairs(args) do if option.type=='group' then assert(option.inline and option.childGroups~='tab') end end
+end
+for _,resources in ipairs({{},{{key='COMBO_POINTS',name='Combo points',category='RESOURCE'}},
+ {{key='RUNES',name='Runes',category='RESOURCE'},{key='TEST_EFFECT',name='Tracked effect',category='TRACKED_EFFECT'}}}) do
+ prdTestResources=resources
+ local opts=providers.PRD():GetOptions();ns.OptionsSchema.Apply(opts,'PRD');checkInline(opts)
+ assert(not opts.args.general and opts.args.health.order==1 and opts.args.primary.order==2)
+ for _,role in ipairs({'health','primary'}) do
+  local page=opts.args[role];assert(not page.childGroups)
+  local args=page.args;checkFlat(args)
+  assert(args.feature.args.enabled.name=='Enable')
+  local size=args.layoutGroup.args
+  assert(size.height.order<size.detached.order and size.detached.order<size.width.order)
+  assert(size.height.relWidth==.333 and size.detached.relWidth==.333 and size.width.relWidth==.333)
+  assert(size.width.disabled());size.detached.set(nil,true);assert(not size.width.disabled());size.detached.set(nil,false)
+  local bar=args.bar.args
+  assert(bar.texture and bar.colorMode and bar.customColor and bar.bgColor)
+  assert(not bar.puiStyle_background and not args.puiStyle_bar)
+  for _,mode in ipairs({'DEFAULT','CLASS','CUSTOM','TEXTURE'}) do
+   bar.colorMode.set(nil,mode);assert(bar.colorMode.get()==mode)
+   assert(bar.customColor.disabled()==(mode~='CUSTOM'))
+   assert(ns.Modules.PRD.db.profile[role].colorMode==mode)
+  end
+  bar.customColor.set(nil,.1,.2,.3,.4);assert(ns.Modules.PRD.db.profile[role].customColor[4]==.4)
+  bar.bgColor.set(nil,.4,.3,.2,.1);assert(ns.Modules.PRD.db.profile[role].style.bgColor[4]==.1)
+  args.feature.args.enabled.set(nil,false);assert(not args.feature.args.enabled.get())
+  args.feature.args.enabled.set(nil,true);assert(args.feature.args.enabled.get())
+  args.textGroup.args.percentVisibility.set(nil,'MOUSEOVER')
+  assert(args.textGroup.args.percentVisibility.get()=='MOUSEOVER')
+ end
+ local health=opts.args.health.args
+ assert(health.sharedStack and health.outerBorderGroup and health.appearanceCopyGroup)
+ health.feature.args.usePlayerHealth.set(nil,true);assert(ns.Modules.PRD.db.profile.usePlayerHealth)
+ TEST_COMBAT=true;assert(health.feature.args.usePlayerHealth.disabled());TEST_COMBAT=false
+ health.sharedStack.args.width.set(nil,330);assert(ns.Modules.PRD.db.profile.size.width==330)
+ if #resources>0 then
+  local secondary=opts.args.secondary.args
+  local shared=secondary.shared.args
+  shared.enabled.set(nil,false);assert(shared.visibility.disabled())
+  shared.enabled.set(nil,true);assert(not shared.visibility.disabled())
+  shared.visibility.set(nil,'COMBAT');shared.spacing.set(nil,7)
+  assert(ns.Modules.PRD.db.profile.secondary.visibilityMode=='COMBAT' and ns.Modules.PRD.db.profile.secondary.gap==7)
+  for _,resource in ipairs(resources) do
+   local args=#resources>1 and secondary[resource.key].args or secondary
+   if #resources>1 then assert(not secondary[resource.key].childGroups) end
+   checkFlat(args)
+   assert(args.bar.args.bgColor and args.bar.args.customColor and args.feature.args.enabled.name=='Enable')
+   assert(args.layout.args.height.relWidth==.333 and args.layout.args.detached.relWidth==.333)
+   assert(args.textGroup.inline)
+  end
+ end
+end
+""")
+print('Actual PRD provider: three top tabs, flat bar pages, size/color rows, moved settings and resource variants passed.')
+
+for name in ['PRDPreview_ConfigureBarInteractions','PRDPreview_GetResourcePath','PRDPreview_Navigate','PRDPreview_SetBarHovered','PRD_HasMultipleSecondaryResources']:
+    lua.execute(builders[name])
+lua.execute("""
+local function interaction() return {SetPreviewInteractionOptions=function(self,options) self.options=options end} end
+local function verifyPreview(opts,role,definition)
+ local bar={frame={},interactions={body=interaction(),leftText=interaction(),rightText=interaction(),centerText=interaction(),borders={interaction()}}}
+ PRDPreview_ConfigureBarInteractions({},bar,role,nil,definition,{})
+ ns.PreviewBox={NavigateToOption=function(_,path,section,option)
+  assert(path[1]=='PRD' and path[2]~='general')
+  local node=opts
+  for i=2,#path do node=node.args[path[i]];assert(node,'Missing preview destination') end
+  assert(node.args[section] and node.args[section].args[option],'Missing preview focus '..tostring(section)..'/'..tostring(option))
+ end}
+ bar.interactions.body.options.onClick();bar.interactions.leftText.options.onClick();bar.interactions.borders[1].options.onClick()
+end
+prdTestResources={{key='COMBO_POINTS',name='Combo points',category='RESOURCE'}}
+local opts=providers.PRD():GetOptions();ns.OptionsSchema.Apply(opts,'PRD')
+verifyPreview(opts,'health');verifyPreview(opts,'primary')
+verifyPreview(opts,'secondary',{resourceKey='COMBO_POINTS'})
+prdTestResources={{key='RUNES',name='Runes',category='RESOURCE'},{key='ESSENCE',name='Essence',category='RESOURCE'}}
+opts=providers.PRD():GetOptions();ns.OptionsSchema.Apply(opts,'PRD')
+verifyPreview(opts,'secondary',{resourceKey='RUNES'})
+ns.PRDSecondary.PlayerClassHasAlternatePower=true
+opts=providers.PRD():GetOptions();ns.OptionsSchema.Apply(opts,'PRD')
+verifyPreview(opts,'secondary',{isAlternatePower=true,resourceKey='ALTERNATE_MANA'})
+""")
+print('PRD preview clicks reach flat bar, text, border and Alternate Mana controls for single/multiple resources.')
+
+lua.execute("""
+function UnitClass() return 'Druid','DRUID' end
+function ns.Modules.PRD:NormalizeDruidFormPrimary(config) return config end
+""")
+load('Modules/PRD/PUI_PRD_Config.lua')
+lua.execute("""
+local opts=providers.PRD():GetOptions();ns.OptionsSchema.Apply(opts,'PRD');checkInline(opts)
+assert(not opts.args.primary.childGroups and not opts.args.primary.args.formOverridesGroup)
+for _,form in ipairs({'CASTER','MOONKIN','CAT','BEAR'}) do
+ local group=opts.args.primary.args['form'..form]
+ assert(group.inline and not group.childGroups)
+ group.args.colorMode.set(nil,'CLASS')
+ assert(ns.Modules.PRD.db.profile.class.DRUID.forms[form].primary.colorMode=='CLASS')
+end
+""")
+print('Druid form color overrides remain editable inline without introducing subtabs.')
 
 
 # Compile production Lua, including files whose runtime requires the WoW client.
