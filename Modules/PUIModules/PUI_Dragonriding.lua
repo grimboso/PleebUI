@@ -1530,12 +1530,12 @@ local function DragonridingProvider(AddonObj)
     surgeColor.name, surgeColor.order = "Whirling Surge color", 70
     secondWind.args.wsColor = surgeColor
     secondWind.name = "Secondary bars"
-    secondWind.args.swHeight.name = "Second Wind height"
-    secondWind.args.swGap.name = "Second Wind spacing"
+    secondWind.args.swHeight.name = "Height"
+    secondWind.args.swGap.name = "Spacing"
     secondWind.args.swColor.name = "Second Wind color"
-    secondWind.args.swHeight.disabled = function() return db.swEnabled == false end
+    secondWind.args.swHeight.disabled = function() return db.swEnabled == false and db.wsEnabled == false end
     secondWind.args.swGap.disabled = secondWind.args.swHeight.disabled
-    secondWind.args.swColor.disabled = secondWind.args.swHeight.disabled
+    secondWind.args.swColor.disabled = function() return db.swEnabled == false end
     surgeColor.disabled = function() return db.wsEnabled == false end
     options.arg = { puiExplicit = true }
     options.args = {
