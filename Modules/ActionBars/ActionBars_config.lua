@@ -365,6 +365,8 @@ local function ActionBarsOptionsProvider(Addon)
                   iconSpacing = {
                     type = "range",
                     name = "Button spacing",
+            desc = "Space between buttons and rows.",
+                    desc = "Space between buttons and rows.",
                     min = 0, max = 16, step = 1,
                     order = 20,
                     get = function() return skin.iconSpacing or 4 end,
@@ -459,9 +461,12 @@ local function ActionBarsOptionsProvider(Addon)
                   showBarBackground = {
                     type = "toggle",
                     name = "Show backdrop",
+        desc = "Adds padding around the buttons. Turn off to snap bars directly together.",
+            desc = "Adds padding around the buttons. Turn off to snap bars directly together.",
+                    desc = "Adds padding around the buttons. Turn off to snap bars directly together.",
                     order = 80,
                     get = function() return skin.showBarBackground ~= false end,
-                    set = function(_, v) skin.showBarBackground = v and true or false; MarkDirtyFromOptions({ skin = true }) end,
+                    set = function(_, v) skin.showBarBackground = v and true or false; MarkDirtyFromOptions({ layout = true, skin = true }) end,
                   },
                   frameBorderSize = {
                     type = "range",
@@ -674,6 +679,8 @@ local function ActionBarsOptionsProvider(Addon)
                   iconSpacing = {
                     type = "range",
                     name = "Button spacing",
+            desc = "Space between buttons and rows.",
+                    desc = "Space between buttons and rows.",
                     min = 0, max = 16, step = 1,
                     order = 20,
                     set = function(_, v) s.iconSpacing = v; MarkBarDirty({ layout = true }) end,
@@ -1060,6 +1067,7 @@ local function ActionBarsOptionsProvider(Addon)
           iconSpacing = {
             type = "range",
             name = "Button spacing",
+            desc = "Space between buttons and rows.",
             min = 0, max = 16, step = 1,
             order = 20,
             set = function(_, v) s.iconSpacing = v; MarkSpecialDirty({ layout = true }) end,
@@ -1112,10 +1120,12 @@ local function ActionBarsOptionsProvider(Addon)
           showBarBackground = {
             type = "toggle",
             name = "Show backdrop",
+        desc = "Adds padding around the buttons. Turn off to snap bars directly together.",
+            desc = "Adds padding around the buttons. Turn off to snap bars directly together.",
             order = 10,
             set = function(_, value)
               s.showBarBackground = value and true or false
-              MarkSpecialDirty({ skin = true })
+              MarkSpecialDirty({ layout = true, skin = true })
             end,
           },
           frameBgColor = {
@@ -1311,10 +1321,11 @@ local function ActionBarsOptionsProvider(Addon)
       backdrop.showBarBackground = {
         type = "toggle",
         name = "Show backdrop",
+        desc = "Adds padding around the buttons. Turn off to snap bars directly together.",
         order = 10,
         set = function(_, enabled)
           override.skin.showBarBackground = enabled == true
-          MarkBarDirtyFromOptions(barKey, { skin = true })
+          MarkBarDirtyFromOptions(barKey, { layout = true, skin = true })
         end,
       }
 
