@@ -1814,6 +1814,7 @@ local function MinimapProvider(AddonObj)
     text.clockFontSize.order, text.zoneTextFontSize.order = 20, 20
     local clock = { hideClock = HideToggle("Hide clock", "hideClock", 10), fontSize = text.clockFontSize }
     clock.fontSize.disabled = function() return db.hideClock == true end
+    text.zoneTextFontSize.disabled = function() return db.clockBoxEnabled ~= true or db.hideZoneText == true end
     source.coordinates.args.clockBoxCoordFontSize.name = "Font size"
     source.coordinates.order = 40
     options.childGroups = "tab"
