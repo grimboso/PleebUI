@@ -320,6 +320,236 @@ end
 
 local Round = ns.Pixel.Round
 
+local POSITION_CONTEXTS = { "Shared", "Solo", "Party", "Raid" }
+local CONTEXT_ROOT_UNITS = { target = true, focus = true, boss1 = true }
+local ConfigureBossHeader
+local EnsureSingleUnitPositionHolder
+
+local function CurrentGroupContext()
+  if _G.IsInRaid() then
+    return "Raid"
+  elseif _G.IsInGroup() then
+    return "Party"
+  end
+  return "Solo"
+end
+
+local function GetPositionSettings(owner)
+  local profile = owner.db.profile
+  profile.positionContexts = profile.positionContexts or {}
+  local settings = profile.positionContexts
+  if settings.switchMode ~= "Auto" and settings.switchMode ~= "Prompt" then
+    settings.switchMode = "Never"
+  end
+  if settings.active ~= "Solo" and settings.active ~= "Party" and settings.active ~= "Raid" then
+    settings.active = "Shared"
+  end
+  return settings
+end
+
+local function GetContextUnitConfig(owner, unit)
+  return owner.db.profile.units[unit]
+end
+
+function UF:GetPositionSettings()
+  return GetPositionSettings(self)
+end
+
+function UF:GetPositionEditContext(unit)
+  return self._positionEditContexts and self._positionEditContexts[unit] or "Shared"
+end
+
+function UF:GetPositionConfig(unit, editing)
+  local shared = GetContextUnitConfig(self, unit)
+  if not shared or not CONTEXT_ROOT_UNITS[unit] then
+    return shared
+  end
+
+  local settings = GetPositionSettings(self)
+  local selected = editing and self:GetPositionEditContext(unit) or settings.active
+  local contexts = shared.contextPositions
+  local override = contexts and contexts.enabled == true and contexts[selected]
+  if override and override.enabled == true then
+    return override
+  end
+  return shared
+end
+
+function UF:HasSeparatePosition(key)
+  local unit = type(key) == "string" and key:match("^UF_(.+)$")
+  local shared = CONTEXT_ROOT_UNITS[unit] and GetContextUnitConfig(self, unit)
+  return shared and shared.contextPositions and shared.contextPositions.enabled == true or false
+end
+
+function UF:ApplyActivePositionHolders(unitKey)
+  if InCombatLockdown() then
+    self._pendingPositionApply = true
+    self:RegisterEvent("PLAYER_REGEN_ENABLED")
+    return
+  end
+
+  self._pendingPositionApply = nil
+  if not self:IsEnabled() or self.db.profile.enabled == false then
+    return
+  end
+
+  for _, unit in ipairs({ "target", "focus" }) do
+    local frame = (not unitKey or unitKey == unit) and self.frames and self.frames[unit]
+    if frame then
+      local config = self:ResolveUnitConfig(unit)
+      if config and config.enabled ~= false then
+        EnsureSingleUnitPositionHolder(frame, unit, config)
+      end
+    end
+  end
+
+  local boss = self.db.profile.units.boss1
+  if (not unitKey or unitKey == "boss1") and boss and boss.enabled ~= false then
+    ConfigureBossHeader()
+  end
+end
+
+function UF:RefreshPositionEditing(unit)
+  if not InCombatLockdown() then
+    FrameUtil:RefreshGhostMover("UF_" .. unit)
+    if ns.TestMode:IsActive() then
+      ns.TestMode:Refresh("unitframes", "position-edit", "uf.singleSettings")
+    end
+  end
+end
+
+function UF:SetPositionEditContext(unit, context)
+  if not CONTEXT_ROOT_UNITS[unit] then
+    return
+  end
+  for _, valid in ipairs(POSITION_CONTEXTS) do
+    if context == valid then
+      self._positionEditContexts = self._positionEditContexts or {}
+      self._positionEditContexts[unit] = context
+      self:RefreshPositionEditing(unit)
+      return
+    end
+  end
+end
+
+function UF:SetSeparatePosition(unit, enabled)
+  if not CONTEXT_ROOT_UNITS[unit] or InCombatLockdown() then
+    return false
+  end
+  local shared = GetContextUnitConfig(self, unit)
+  if enabled and FrameUtil.HasSmartSnapLinks("UF_" .. unit) then
+    Addon:Print("Remove the existing Smart Snap links before enabling separate positions for this frame.")
+    return false
+  end
+
+  shared.contextPositions = shared.contextPositions or {}
+  shared.contextPositions.enabled = enabled == true
+  self:ApplyActivePositionHolders(unit)
+  self:RefreshPositionEditing(unit)
+  return true
+end
+
+function UF:SetContextPositionEnabled(unit, context, enabled)
+  if not CONTEXT_ROOT_UNITS[unit] or context == "Shared" or InCombatLockdown() then
+    return
+  end
+  local shared = GetContextUnitConfig(self, unit)
+  local contexts = shared.contextPositions
+  if not contexts or contexts.enabled ~= true then
+    return
+  end
+  if not contexts[context] then
+    contexts[context] = {
+      point = shared.point, relativeTo = shared.relativeTo,
+      relativePoint = shared.relativePoint, x = shared.x, y = shared.y,
+    }
+  end
+  contexts[context].enabled = enabled == true
+  self:ApplyActivePositionHolders(unit)
+  self:RefreshPositionEditing(unit)
+end
+
+function UF:RemoveContextPosition(unit, context)
+  if not CONTEXT_ROOT_UNITS[unit] or context == "Shared" or InCombatLockdown() then
+    return
+  end
+  local shared = GetContextUnitConfig(self, unit)
+  if shared.contextPositions then
+    shared.contextPositions[context] = nil
+  end
+  self:ApplyActivePositionHolders(unit)
+  self:RefreshPositionEditing(unit)
+end
+
+function UF:ActivatePositionContext(context)
+  if context ~= "Shared" and context ~= "Solo" and context ~= "Party" and context ~= "Raid" then
+    return
+  end
+  GetPositionSettings(self).active = context
+  self:ApplyActivePositionHolders()
+end
+
+function UF:SetPositionSwitchMode(mode)
+  if mode ~= "Auto" and mode ~= "Prompt" and mode ~= "Never" then
+    return
+  end
+  GetPositionSettings(self).switchMode = mode
+  self._pendingPositionGroup = nil
+  if mode == "Auto" then
+    self:ActivatePositionContext(CurrentGroupContext())
+  end
+end
+
+function UF:PromptPositionContext(context)
+  if GetPositionSettings(self).switchMode ~= "Prompt" or CurrentGroupContext() ~= context then
+    return
+  end
+  local profile = self.db.profile
+  Addon:PUI_ConfirmAction({
+    title = "Switch Unit Frame positions?",
+    text = "Your group changed to " .. context .. ". Use the " .. context .. " positions?",
+    yesText = "Switch positions",
+    noText = "Keep current",
+    onYes = function()
+      if self:IsEnabled() and self.db.profile == profile and CurrentGroupContext() == context
+        and GetPositionSettings(self).switchMode == "Prompt"
+      then
+        self:ActivatePositionContext(context)
+      end
+    end,
+  })
+end
+
+function UF:GROUP_ROSTER_UPDATE()
+  local context = CurrentGroupContext()
+  if self._lastPositionGroup == context then
+    return
+  end
+  self._lastPositionGroup = context
+  local settings = GetPositionSettings(self)
+  if settings.switchMode == "Never" then
+    self._pendingPositionGroup = nil
+    return
+  end
+  if settings.switchMode == "Auto" then
+    self._pendingPositionGroup = nil
+    self:ActivatePositionContext(context)
+    return
+  end
+  if settings.active == context then
+    self._pendingPositionGroup = nil
+    return
+  end
+  if InCombatLockdown() then
+    self._pendingPositionGroup = context
+    self:RegisterEvent("PLAYER_REGEN_ENABLED")
+    return
+  end
+
+  self._pendingPositionGroup = nil
+  self:PromptPositionContext(context)
+end
+
 local function ResolveRelativeToObject(cfg, frame, unit)
   if ROOT_SINGLE_UNIT_ANCHORS[unit] then
     cfg.relativeTo = "UIParent"
@@ -398,8 +628,8 @@ local function GetBossHeaderSize()
   return width + ((width + spacing) * (MAX_BOSS_FRAMES - 1)), height, growthDirection, spacing
 end
 
-local function ConfigureBossHeader()
-  local anchor = UF.db.profile.units.boss1
+ConfigureBossHeader = function()
+  local anchor = UF:GetPositionConfig("boss1", false)
   local width, height, growthDirection, spacing = GetBossHeaderSize()
 
   BossHeader:SetSize(width, height)
@@ -550,11 +780,6 @@ end
 
 local function PositionBossHolder(holder, unit, cfg)
   local header, growthDirection, spacing = ConfigureBossHeader()
-  local bossMover = ns.TestMode:IsActive() and UF.ghosts and UF.ghosts.boss1 or nil
-  if bossMover then
-    header:ClearAllPoints()
-    header:SetAllPoints(bossMover)
-  end
   local index = GetBossIndex(unit) or 1
   local width, height = UFStyle.ResolveFrameSize(cfg)
 
@@ -608,7 +833,8 @@ local function ResolveSingleUnitHolderParent(cfg, frame, unit)
   return ResolveRelativeToObject(cfg, frame, unit)
 end
 
-local function EnsureSingleUnitPositionHolder(frame, unit, cfg)
+EnsureSingleUnitPositionHolder = function(frame, unit, cfg)
+  local position = CONTEXT_ROOT_UNITS[unit] and UF:GetPositionConfig(unit, false) or cfg
   local holder = frame.__puiPositionHolder or GetSingleUnitHolder(unit) or CreateFrame("Frame", GetSingleUnitHolderName(unit), UIParent)
 
   frame.__puiPositionHolder = holder
@@ -618,15 +844,15 @@ local function EnsureSingleUnitPositionHolder(frame, unit, cfg)
     return holder
   end
 
-  local parent = ResolveSingleUnitHolderParent(cfg, frame, unit)
-  local point = cfg.point or "CENTER"
-  local relativePoint = cfg.relativePoint or point
+  local parent = ResolveSingleUnitHolderParent(position, frame, unit)
+  local point = position.point or "CENTER"
+  local relativePoint = position.relativePoint or point
   local width, height = UFStyle.ResolveFrameSize(cfg)
 
   holder:SetParent(UIParent)
   holder:SetSize(width, height)
   holder:ClearAllPoints()
-  holder:SetPoint(point, parent, relativePoint, Round(cfg.x or 0), Round(cfg.y or 0))
+  holder:SetPoint(point, parent, relativePoint, Round(position.x or 0), Round(position.y or 0))
   holder:Show()
 
   return holder
@@ -817,7 +1043,33 @@ function UF:LayoutTestFrame(frame, unit)
     return false
   end
 
-  local mover = not IsBossUnit(unit) and self.ghosts and self.ghosts[unit] or nil
+  if IsBossUnit(unit) then
+    local index = GetBossIndex(unit)
+    local mover = self.ghosts and self.ghosts.boss1
+    local previous = ns.UnitFrameTest.presentationFrames.single["boss" .. (index - 1)]
+    local anchor = index == 1 and (mover or BossHeader) or previous
+    local _, _, direction, spacing = GetBossHeaderSize()
+    frame:SetParent(UIParent)
+    frame:ClearAllPoints()
+    if index == 1 then
+      local point = (direction == "UP") and "BOTTOMRIGHT"
+        or (direction == "RIGHT") and "LEFT"
+        or (direction == "LEFT") and "RIGHT" or "TOPRIGHT"
+      frame:SetPoint(point, anchor, point, 0, 0)
+    elseif direction == "UP" then
+      frame:SetPoint("BOTTOMRIGHT", anchor, "TOPRIGHT", 0, spacing)
+    elseif direction == "RIGHT" then
+      frame:SetPoint("LEFT", anchor, "RIGHT", spacing, 0)
+    elseif direction == "LEFT" then
+      frame:SetPoint("RIGHT", anchor, "LEFT", -spacing, 0)
+    else
+      frame:SetPoint("TOPRIGHT", anchor, "BOTTOMRIGHT", 0, -spacing)
+    end
+    frame:Show()
+    return true
+  end
+
+  local mover = self.ghosts and self.ghosts[unit]
   if mover then
     frame:SetParent(UIParent)
     frame:ClearAllPoints()
@@ -1421,8 +1673,15 @@ function UF:EnsureMovers()
       return
     end
 
-    local cfg = owner.db.profile.units[unitKey]
+    local cfg = owner:GetPositionConfig(unitKey, true)
     if not cfg then
+      return
+    end
+    if CONTEXT_ROOT_UNITS[unitKey]
+      and owner:GetPositionEditContext(unitKey) ~= "Shared"
+      and cfg == owner.db.profile.units[unitKey]
+    then
+      FrameUtil:RefreshGhostMover("UF_" .. unitKey)
       return
     end
 
@@ -1438,18 +1697,17 @@ function UF:EnsureMovers()
       return
     end
 
-    if unitKey == "boss1" then
-      ConfigureBossHeader()
-      owner:RefreshSingleUnit("boss", "layout")
-      return
-    end
-
-    local real = owner.frames and owner.frames[unitKey]
-    if real then
-      local holder = EnsureSingleUnitPositionHolder(real, unitKey, cfg)
-
-      real:ClearAllPoints()
-      real:SetAllPoints(holder)
+    if CONTEXT_ROOT_UNITS[unitKey] then
+      if cfg == owner:GetPositionConfig(unitKey, false) then
+        owner:ApplyActivePositionHolders(unitKey)
+      end
+    else
+      local real = owner.frames and owner.frames[unitKey]
+      if real then
+        local holder = EnsureSingleUnitPositionHolder(real, unitKey, cfg)
+        real:ClearAllPoints()
+        real:SetAllPoints(holder)
+      end
     end
   end
 
@@ -1571,9 +1829,10 @@ function UF:EnsureMovers()
         return nil
       end
 
+      local position = owner:GetPositionConfig(unitKey, true)
       local frame = owner.frames and owner.frames[unitKey]
-      local relTo = ResolveSingleUnitHolderParent(cfg, frame, unitKey)
-      return cfg.point or "CENTER", relTo, cfg.relativePoint or cfg.point or "CENTER", Round(cfg.x or 0), Round(cfg.y or 0)
+      local relTo = ResolveSingleUnitHolderParent(position, frame, unitKey)
+      return position.point or "CENTER", relTo, position.relativePoint or position.point or "CENTER", Round(position.x or 0), Round(position.y or 0)
     end,
     shouldShow = function(unitKey, owner, cfg)
       local db = owner.db and owner.db.profile
@@ -1585,10 +1844,7 @@ function UF:EnsureMovers()
     end,
     onGhostSavePosition = SavePosition,
     onGhostResetPosition = function(unitKey, owner)
-      local cfg = owner.db
-        and owner.db.profile
-        and owner.db.profile.units
-        and owner.db.profile.units[unitKey]
+      local cfg = owner:GetPositionConfig(unitKey, true)
       local defaults = owner:GetDefaultUnitConfig(unitKey)
       if not cfg or not defaults then
         return
@@ -1600,9 +1856,10 @@ function UF:EnsureMovers()
       cfg.x = defaults.x
       cfg.y = defaults.y
 
-      if unitKey == "boss1" then
-        ConfigureBossHeader()
-        owner:RefreshSingleUnit("boss", "layout")
+      if CONTEXT_ROOT_UNITS[unitKey] then
+        if cfg == owner:GetPositionConfig(unitKey, false) then
+          owner:ApplyActivePositionHolders(unitKey)
+        end
       else
         owner:RefreshSingleUnit(unitKey, "layout")
       end
@@ -1838,6 +2095,15 @@ end
 function UF:PLAYER_REGEN_ENABLED()
   self:UnregisterEvent("PLAYER_REGEN_ENABLED")
 
+  if self._pendingPositionApply then
+    self:ApplyActivePositionHolders()
+  end
+  if self._pendingPositionGroup then
+    local context = self._pendingPositionGroup
+    self._pendingPositionGroup = nil
+    self:PromptPositionContext(context)
+  end
+
   FlushDeferredRefreshes(
     self,
     function(mode)
@@ -1871,6 +2137,11 @@ end
 
 function UF:OnEnable()
   self.__puiRuntimeAvailable = true
+  self._lastPositionGroup = CurrentGroupContext()
+  self:RegisterEvent("GROUP_ROSTER_UPDATE")
+  if GetPositionSettings(self).switchMode == "Auto" then
+    GetPositionSettings(self).active = self._lastPositionGroup
+  end
   self:EnsureMovers()
 
   if self._initialRefreshComplete ~= true then
@@ -1921,6 +2192,8 @@ function UF:OnDisable()
 
   self:UnregisterAllEvents()
   self.__puiDeferredRefresh = nil
+  self._pendingPositionApply = nil
+  self._pendingPositionGroup = nil
   self.__puiLastFrameScale = nil
 
   self:IterateSingleFrames(function(frame)
@@ -1931,7 +2204,14 @@ function UF:OnDisable()
 end
 
 function UF:OnProfileChanged()
+  self._pendingPositionApply = nil
+  self._pendingPositionGroup = nil
+  self._positionEditContexts = nil
+  self._lastPositionGroup = CurrentGroupContext()
   self:EnsureConfigDefaults(self.db.profile)
+  if GetPositionSettings(self).switchMode == "Auto" then
+    GetPositionSettings(self).active = self._lastPositionGroup
+  end
   self:SafeRefresh("all")
   UFTags.RefreshNicknames()
 end
@@ -1992,6 +2272,9 @@ local P = select(1, ns.Pleebug:DropIn(UF, { name = "UnitFrames.Core" }))
   UF.OnInitialize = P:Def("UF.OnInitialize", UF.OnInitialize)
   UF.OnEnable = P:Def("UF.OnEnable", UF.OnEnable)
   UF.OnDisable = P:Def("UF.OnDisable", UF.OnDisable)
+  UF.GROUP_ROSTER_UPDATE = P:Def("UF.GROUP_ROSTER_UPDATE", UF.GROUP_ROSTER_UPDATE)
+  UF.GetPositionConfig = P:Def("UF.GetPositionConfig", UF.GetPositionConfig)
+  UF.ActivatePositionContext = P:Def("UF.ActivatePositionContext", UF.ActivatePositionContext)
   UF.OnProfileChanged = P:Def("UF.OnProfileChanged", UF.OnProfileChanged)
   UF.ApplySettings = P:Def("UF.ApplySettings", UF.ApplySettings)
   UF.SoftRebuild = P:Def("UF.SoftRebuild", UF.SoftRebuild)
@@ -2030,5 +2313,9 @@ _G.PleebUIAPI:RegisterPlugin("PleebUI_UnitFrames", {
   order = 100,
   onChanged = function(enable)
     UF:SetMoversVisible(enable)
+    if not enable then
+      UF._positionEditContexts = nil
+      UF:ApplyActivePositionHolders()
+    end
   end,
 })

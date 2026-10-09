@@ -119,7 +119,7 @@ local function CS_GetCachedSlotInfo(unit, slotId)
   end
 
   local itemLink = GetInventoryItemLink(unit, slotId)
-  if not itemLink then
+  if issecretvalue(itemLink) or not itemLink then
     return nil, nil
   end
 
@@ -164,6 +164,7 @@ local function _CS_GetDB()
       profile = {
         showEnchants = true,
         showSocketIcons = true,
+        showSocketStrip = true,
         showBagItemLevel = false,
         showStatRatings = false,
         highlightStatGear = true,
@@ -199,6 +200,11 @@ local function CS_SetShowSocketIcons(v)
   if csdb then
     csdb.showSocketIcons = not not v
   end
+end
+
+function CharacterSheet:GetShowSocketStrip()
+  local csdb = _CS_GetDB()
+  return not csdb or csdb.showSocketStrip ~= false
 end
 
 local function _Clamp01(v)
@@ -691,6 +697,17 @@ local function CS_GetUsePleebUIFont()
   return csdb and csdb.usePleebUIFont == true
 end
 
+function CharacterSheet:StyleStatRow(statFrame)
+  if not (statFrame and statFrame.Label) then
+    return
+  end
+  if statFrame.Background then
+    statFrame.Background:SetAlpha(0)
+  end
+  local tr, tg, tb, ta = GetTextColor()
+  statFrame.Label:SetTextColor(tr * 0.70, tg * 0.70, tb * 0.70, ta)
+end
+
 local function CS_TrackCharacterStatFrame(statFrame)
   if not (statFrame and statFrame.Label and statFrame.Value) then
     return
@@ -743,10 +760,10 @@ local function CS_ApplyCharacterStatFont(statFrame)
     if statFrame._puiSecondaryStatValue then
       Theme.ApplyFont(statFrame._puiSecondaryStatValue, "body")
     end
-    return
+  else
+    CS_RestoreCharacterStatFont(statFrame)
   end
-
-  CS_RestoreCharacterStatFont(statFrame)
+  CharacterSheet:StyleStatRow(statFrame)
 end
 
 local function CS_RefreshCharacterStatFonts()
@@ -820,7 +837,7 @@ local SECONDARY_STAT_RATING_IDS = {
 
 local CS_STAT_GROUPS = {
   {
-    title = "Secondary Stats",
+    title = "Secondary",
     stats = {
       ITEM_STAT_CRIT,
       ITEM_STAT_HASTE,
@@ -829,7 +846,7 @@ local CS_STAT_GROUPS = {
     },
   },
   {
-    title = "Tertiary Stats",
+    title = "Tertiary",
     stats = {
       ITEM_STAT_LIFESTEAL,
       ITEM_STAT_AVOIDANCE,
@@ -1010,18 +1027,41 @@ local function CS_LayoutMaxHealthRow()
 end
 
 local function CS_RefreshStatCategory(category, title)
-  category:SetSize(187, 22)
-  if not category._puiStatGroupSkinned then
-    Theme.WidgetSkins.Frame(category)
-    category._puiStatGroupSkinned = true
-  else
-    local backdrop = EnsureBackdropFrame(category)
-    backdrop:SetBackdropColor(CS_BG())
-    backdrop:SetBackdropBorderColor(CS_B())
+  if not category then
+    return
   end
-  Theme.ApplyFont(category.Title, "nav")
-  category.Title:SetText(title)
-  category.Title:SetTextColor(GetTextColor())
+  category:SetSize(187, 22)
+  local text = category.Title or category.Text
+  if not text then
+    return
+  end
+
+  if not category._puiStatHeaderStyled then
+    StripTextures(category, true)
+    if category._puiBg then
+      category._puiBg:SetBackdrop(nil)
+    end
+    category._puiHeaderLeft = category:CreateTexture(nil, "ARTWORK")
+    category._puiHeaderRight = category:CreateTexture(nil, "ARTWORK")
+    category._puiHeaderLeft:SetHeight(1)
+    category._puiHeaderRight:SetHeight(1)
+    category._puiHeaderLeft:SetPoint("LEFT", category, "LEFT", 9, 0)
+    category._puiHeaderLeft:SetPoint("RIGHT", text, "LEFT", -6, 0)
+    category._puiHeaderRight:SetPoint("LEFT", text, "RIGHT", 6, 0)
+    category._puiHeaderRight:SetPoint("RIGHT", category, "RIGHT", -9, 0)
+    text:ClearAllPoints()
+    text:SetPoint("CENTER", category, "CENTER", 0, 0)
+    category._puiStatHeaderStyled = true
+  end
+
+  if title then
+    text:SetText(title)
+  end
+  Theme.ApplyFont(text, "nav")
+  local r, g, b = CS_ACCENT()
+  text:SetTextColor(r, g, b)
+  category._puiHeaderLeft:SetColorTexture(r, g, b, 0.35)
+  category._puiHeaderRight:SetColorTexture(r, g, b, 0.35)
 end
 
 local function CS_LayoutStatGroups()
@@ -1036,6 +1076,7 @@ local function CS_LayoutStatGroups()
   end
 
   for frame in pane.statsFramePool:EnumerateActive() do
+    CharacterSheet:StyleStatRow(frame)
     local key = frame._puiItemStatKey or frame._puiDefenseStat
     if key then
       rows[key] = frame
@@ -1105,7 +1146,6 @@ local function CS_LayoutStatGroups()
       end
       row:ClearAllPoints()
       row:SetPoint("TOP", lastAnchor, "BOTTOM", 0, index == 1 and -2 or rowOffset)
-      row.Background:SetShown(index % 2 == 0)
       row:Show()
       lastAnchor = row
     end
@@ -1131,7 +1171,6 @@ local function CS_LayoutStatGroups()
       row:ClearAllPoints()
       row:SetPoint("TOP", lastAnchor, "BOTTOM", 0, defenseCount == 0 and -2 or rowOffset)
       defenseCount = defenseCount + 1
-      row.Background:SetShown(defenseCount % 2 == 0)
       lastAnchor = row
     end
   end
@@ -2231,54 +2270,357 @@ local function CS_SkinModelControlButtons(controlFrame)
 end
 
 local function CS_SkinSidebarTabs()
-  local index = 1
-  local tab = _G["PaperDollSidebarTab" .. index]
-
-  while tab do
-    CS_ApplyBackdrop(tab, CS_CONTROL)
-
-    local nt = tab.GetNormalTexture and tab:GetNormalTexture()
-    if nt and nt.SetAlpha then
-      nt:SetAlpha(0)
-    end
-
-    if tab.TabBg and tab.TabBg.SetAlpha then
-      tab.TabBg:SetAlpha(0)
-    end
-
-    if tab.Hider and tab.Hider.SetColorTexture then
-      tab.Hider:SetColorTexture(0, 0, 0, 0.80)
-      tab.Hider:SetAllPoints(tab)
-    end
-
-    if tab.Highlight and tab.Highlight.SetColorTexture then
-      local ar, ag, ab = CS_ACCENT()
-      tab.Highlight:SetColorTexture(ar, ag, ab, 0.20)
-      tab.Highlight:SetAllPoints(tab)
-    end
-
-    if tab.Icon then
-      local atlas = tab.Icon.GetAtlas and tab.Icon:GetAtlas()
-
-      if tab.Icon._puiCharIconBackdrop and tab.Icon._puiCharIconBackdrop.Hide then
-        tab.Icon._puiCharIconBackdrop:Hide()
+  for index = 1, 3 do
+    local tab = _G["PaperDollSidebarTab" .. index]
+    if tab then
+      local pane = _G.GetPaperDollSideBarFrame(index)
+      local selected = pane:IsShown()
+      local r, g, b = CS_ACCENT()
+      local background = CS_ApplyBackdrop(tab, CS_CONTROL)
+      if selected then
+        background:SetBackdropBorderColor(r, g, b, 0.85)
       end
 
-      tab.Icon:ClearAllPoints()
-      tab.Icon:SetPoint("CENTER", tab, "CENTER", 0, 0)
+      if not tab._puiCharSidebarStyled then
+        if tab.TabBg then tab.TabBg:SetAlpha(0) end
+        if tab.Hider then tab.Hider:SetAlpha(0) end
+        if tab.Highlight then tab.Highlight:SetAlpha(0) end
 
-      if tab.Icon.SetTexCoord then
-        if atlas then
+        local normal = tab:GetNormalTexture()
+        if normal then normal:SetAlpha(0) end
+
+        tab._puiCharUnderline = tab:CreateTexture(nil, "OVERLAY")
+        tab._puiCharUnderline:SetHeight(2)
+        tab._puiCharUnderline:SetPoint("BOTTOMLEFT", tab, "BOTTOMLEFT", 2, 1)
+        tab._puiCharUnderline:SetPoint("BOTTOMRIGHT", tab, "BOTTOMRIGHT", -2, 1)
+        tab._puiCharSidebarStyled = true
+      end
+
+      if tab.Icon then
+        if index == 1 then
           tab.Icon:SetTexCoord(0, 1, 0, 1)
         else
-          tab.Icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+          local coords = _G.PAPERDOLL_SIDEBARS[index].texCoords
+          tab.Icon:SetTexCoord(coords[1], coords[2], coords[3], coords[4])
+        end
+        tab.Icon:ClearAllPoints()
+        tab.Icon:SetPoint("CENTER", tab, "CENTER", 0, 0)
+        tab.Icon:SetSize(29, 29)
+        if selected then
+          tab.Icon:SetVertexColor(1, 1, 1, 1)
+        else
+          tab.Icon:SetVertexColor(0.78, 0.78, 0.78, tab:IsEnabled() and 0.85 or 0.35)
+        end
+      end
+
+      tab._puiCharUnderline:SetColorTexture(r, g, b, 1)
+      tab._puiCharUnderline:SetShown(selected)
+    end
+  end
+end
+
+function CharacterSheet:SkinGearManagerIcon(button)
+  if not button then
+    return
+  end
+
+  if not button._puiCharGearIconStyled then
+    for _, region in ipairs({ button:GetRegions() }) do
+      if region:IsObjectType("Texture") and region ~= button.Icon
+        and region ~= button.SelectedTexture and region ~= button.Highlight then
+        region:SetAlpha(0)
+      end
+    end
+    button.Icon:ClearAllPoints()
+    button.Icon:SetPoint("TOPLEFT", button, "TOPLEFT", 2, -2)
+    button.Icon:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT", -2, 2)
+    button.Icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+
+    button:HookScript("OnEnter", function(self)
+      local icon = self:GetIconTexture()
+      if issecretvalue(icon) or icon == nil then
+        return
+      end
+
+      GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+      local popup = _G.GearManagerPopupFrame
+      local name = popup._puiCharSearchNames and popup._puiCharSearchNames[icon]
+      if name then
+        GameTooltip:SetText(name)
+      elseif type(icon) == "string" then
+        GameTooltip:SetText(icon:match("[^/\\]+$") or icon)
+      else
+        GameTooltip:SetText("Icon")
+      end
+      if type(icon) == "number" then
+        GameTooltip:AddLine("Icon ID: " .. tostring(icon), 0.75, 0.75, 0.75)
+      elseif type(icon) == "string" then
+        GameTooltip:AddLine(icon, 0.75, 0.75, 0.75)
+      end
+      GameTooltip:Show()
+    end)
+    button:HookScript("OnLeave", function(self)
+      if GameTooltip:IsOwned(self) then
+        GameTooltip:Hide()
+      end
+    end)
+    button._puiCharGearIconStyled = true
+  end
+
+  CS_ApplyBackdrop(button, CS_CONTROL)
+  local r, g, b = CS_ACCENT()
+  if button.SelectedTexture then
+    button.SelectedTexture:SetAllPoints(button)
+    button.SelectedTexture:SetColorTexture(r, g, b, 0.25)
+  end
+  if button.Highlight then
+    button.Highlight:SetAllPoints(button)
+    button.Highlight:SetColorTexture(1, 1, 1, 0.10)
+  end
+end
+
+function CharacterSheet:FilterGearManagerIcons()
+  local popup = _G.GearManagerPopupFrame
+  if not (popup and popup:IsShown() and popup.iconDataProvider and popup._puiCharIconSearch) then
+    return
+  end
+
+  local query = popup._puiCharIconSearch:GetText():match("^%s*(.-)%s*$"):lower()
+  local selector = popup.IconSelector
+  local selectedIcon = popup.BorderBox.SelectedIconArea.SelectedIconButton:GetIconTexture()
+  if issecretvalue(selectedIcon) then
+    selectedIcon = nil
+  end
+
+  popup._puiCharSearchNames = {}
+  if query == "" then
+    selector:SetSelectionsDataProvider(
+      function(index) return popup:GetIconByIndex(index) end,
+      function() return popup:GetNumIcons() end
+    )
+    selector:SetSelectedIndex(selectedIcon and popup:GetIndexOfIcon(selectedIcon) or nil)
+    popup._puiCharNoIcons:Hide()
+    popup:SetSelectedIconText()
+    return
+  end
+
+  local results = {}
+  local seen = {}
+  local function AddIcon(icon, name)
+    if issecretvalue(icon) or (type(icon) ~= "number" and type(icon) ~= "string") or seen[icon] then
+      return
+    end
+    seen[icon] = true
+    results[#results + 1] = icon
+    if name and not issecretvalue(name) then
+      popup._puiCharSearchNames[icon] = name
+    end
+  end
+
+  local spellID = tonumber(query:match("^spell:(%d+)$"))
+  local iconID = tonumber(query:match("^icon:(%d+)$"))
+  if spellID then
+    local icon = C_Spell.GetSpellTexture(spellID)
+    if not issecretvalue(icon) and icon then
+      local name = C_Spell.GetSpellName(spellID)
+      AddIcon(icon, name)
+    end
+  elseif iconID then
+    AddIcon(iconID)
+  elseif query:match("^%d+$") then
+    local count = popup:GetNumIcons()
+    if not issecretvalue(count) and type(count) == "number" then
+      for index = 1, count do
+        local icon = popup:GetIconByIndex(index)
+        if not issecretvalue(icon) and type(icon) == "number"
+          and tostring(icon):find(query, 1, true) then
+          AddIcon(icon)
+        end
+      end
+    end
+  else
+    local exactIcon = C_Spell.GetSpellTexture(query)
+    if not issecretvalue(exactIcon) and exactIcon then
+      local exactName = C_Spell.GetSpellName(query)
+      AddIcon(exactIcon, exactName)
+    end
+
+    if popup:GetIconFilter() ~= IconSelectorPopupFrameIconFilterTypes.Item then
+      local skillLineCount = C_SpellBook.GetNumSpellBookSkillLines()
+      if not issecretvalue(skillLineCount) and type(skillLineCount) == "number" then
+        for line = 1, skillLineCount do
+          local lineInfo = C_SpellBook.GetSpellBookSkillLineInfo(line)
+          if lineInfo and not issecretvalue(lineInfo) then
+            local offset = lineInfo.itemIndexOffset
+            local count = lineInfo.numSpellBookItems
+            if not issecretvalue(offset) and not issecretvalue(count)
+              and type(offset) == "number" and type(count) == "number" then
+              for slot = offset + 1, offset + count do
+                local spell = C_SpellBook.GetSpellBookItemInfo(slot, Enum.SpellBookSpellBank.Player)
+                if spell and not issecretvalue(spell) then
+                  local name = spell.name
+                  local icon = spell.iconID
+                  local kind = spell.itemType
+                  if not issecretvalue(name) and not issecretvalue(icon) and not issecretvalue(kind)
+                    and kind == Enum.SpellBookItemType.Spell and type(name) == "string"
+                    and name:lower():find(query, 1, true) then
+                    AddIcon(icon, name)
+                  end
+                end
+              end
+            end
+          end
         end
       end
     end
 
-    index = index + 1
-    tab = _G["PaperDollSidebarTab" .. index]
+    local numIcons = popup:GetNumIcons()
+    if not issecretvalue(numIcons) and type(numIcons) == "number" then
+      for index = 1, numIcons do
+        local icon = popup:GetIconByIndex(index)
+        if not issecretvalue(icon) and type(icon) == "string"
+          and icon:lower():find(query, 1, true) then
+          AddIcon(icon, icon:match("[^/\\]+$") or icon)
+        end
+      end
+    end
   end
+
+  selector:SetSelectionsArray(results)
+  local selectedIndex
+  for index, icon in ipairs(results) do
+    if icon == selectedIcon then
+      selectedIndex = index
+      break
+    end
+  end
+  selector:SetSelectedIndex(selectedIndex)
+  popup._puiCharNoIcons:SetShown(#results == 0)
+  popup:SetSelectedIconText()
+end
+
+function CharacterSheet:SkinGearManagerPopup()
+  local popup = _G.GearManagerPopupFrame
+  if not popup then
+    return
+  end
+
+  if not popup._puiCharPopupSkinned then
+    StripTextures(popup, true)
+    StripTextures(popup.BorderBox, true)
+    if popup.BorderBox.NineSlice then popup.BorderBox.NineSlice:Hide() end
+    if popup.BG then popup.BG:SetAlpha(0) end
+
+    CS_SkinEditBox(popup.BorderBox.IconSelectorEditBox)
+    CS_SkinButton(popup.BorderBox.OkayButton)
+    CS_SkinButton(popup.BorderBox.CancelButton)
+
+    local search = CreateFrame("EditBox", nil, popup.BorderBox, "SearchBoxTemplate")
+    search:SetSize(148, 22)
+    search:SetPoint("TOPLEFT", popup.BorderBox, "TOPLEFT", 165, -65)
+    search:SetAutoFocus(false)
+    search.instructionText = "Search name or ID"
+    search.Instructions:SetText(search.instructionText)
+    search:HookScript("OnEnterPressed", function(self)
+      self:ClearFocus()
+      CharacterSheet:FilterGearManagerIcons()
+    end)
+    search:HookScript("OnTextChanged", function(self)
+      if self:GetText() == "" then
+        CharacterSheet:FilterGearManagerIcons()
+      end
+    end)
+    search:HookScript("OnEscapePressed", function(self)
+      self:SetText("")
+      self:ClearFocus()
+    end)
+    popup._puiCharIconSearch = search
+
+    popup._puiCharNoIcons = popup.IconSelector:CreateFontString(nil, "OVERLAY")
+    Theme.ApplyFont(popup._puiCharNoIcons, "body")
+    popup._puiCharNoIcons:SetPoint("CENTER", popup.IconSelector, "CENTER", 0, 0)
+    popup._puiCharNoIcons:SetWidth(390)
+    popup._puiCharNoIcons:SetText("No matching icons or known spells")
+    popup._puiCharNoIcons:Hide()
+
+    hooksecurefunc(popup.IconSelector, "RunSetup", function(_, button)
+      CharacterSheet:SkinGearManagerIcon(button)
+    end)
+    hooksecurefunc(popup, "SetIconFilterInternal", function(frame)
+      CharacterSheet:FilterGearManagerIcons()
+    end)
+    popup:HookScript("OnShow", function(frame)
+      CharacterSheet:SkinGearManagerPopup()
+      frame._puiCharIconSearch:SetText("")
+      CharacterSheet:FilterGearManagerIcons()
+    end)
+    popup._puiCharPopupSkinned = true
+  end
+
+  popup:SetFrameStrata("FULLSCREEN_DIALOG")
+  popup.IconSelector:SetFrameStrata("FULLSCREEN_DIALOG")
+  popup.IconSelector:SetFrameLevel(popup.BorderBox:GetFrameLevel() + 1)
+
+  local host = CharacterSheet._shellHost
+  popup:ClearAllPoints()
+  popup:SetPoint("TOPLEFT", host, "TOPRIGHT", 0, 0)
+  popup:SetPoint("BOTTOMLEFT", host, "BOTTOMRIGHT", 0, 0)
+  popup.IconSelector:ClearAllPoints()
+  popup.IconSelector:SetPoint("TOPLEFT", popup, "TOPLEFT", 21, -97)
+  popup.IconSelector:SetPoint("BOTTOMRIGHT", popup, "BOTTOMRIGHT", -10, 37)
+  CS_ApplyBackdrop(popup, CS_BG)
+  Theme.WidgetSkins.UIEditBox(popup._puiCharIconSearch)
+
+  local dropdown = popup.BorderBox.IconTypeDropdown
+  dropdown.Background:SetAlpha(0)
+  CS_ApplyBackdrop(dropdown, CS_CONTROL)
+  Theme.ApplyFont(dropdown.Text, "body")
+  local tr, tg, tb, ta = GetTextColor()
+  dropdown.Text:SetTextColor(tr, tg, tb, ta)
+
+  if not dropdown._puiCharMenuStyle then
+    local style = CreateFromMixins(MenuStyle1Mixin)
+    function style:Generate()
+      local r, g, b, a = CS_CONTROL()
+      local background = self:AttachTexture()
+      background:SetPoint("TOPLEFT", self, "TOPLEFT", -4, 4)
+      background:SetPoint("BOTTOMRIGHT", self, "BOTTOMRIGHT", 4, -4)
+      background:SetColorTexture(r, g, b, a)
+
+      local br, bg, bb, ba = CS_B()
+      local edge = math.max(Theme.GetEdgeSize(), 2)
+
+      local top = self:AttachTexture()
+      top:SetColorTexture(br, bg, bb, ba)
+      top:SetPoint("TOPLEFT", background, "TOPLEFT")
+      top:SetPoint("TOPRIGHT", background, "TOPRIGHT")
+      top:SetHeight(edge)
+
+      local bottom = self:AttachTexture()
+      bottom:SetColorTexture(br, bg, bb, ba)
+      bottom:SetPoint("BOTTOMLEFT", background, "BOTTOMLEFT")
+      bottom:SetPoint("BOTTOMRIGHT", background, "BOTTOMRIGHT")
+      bottom:SetHeight(edge)
+
+      local left = self:AttachTexture()
+      left:SetColorTexture(br, bg, bb, ba)
+      left:SetPoint("TOPLEFT", background, "TOPLEFT", 0, -edge)
+      left:SetPoint("BOTTOMLEFT", background, "BOTTOMLEFT", 0, edge)
+      left:SetWidth(edge)
+
+      local right = self:AttachTexture()
+      right:SetColorTexture(br, bg, bb, ba)
+      right:SetPoint("TOPRIGHT", background, "TOPRIGHT", 0, -edge)
+      right:SetPoint("BOTTOMRIGHT", background, "BOTTOMRIGHT", 0, edge)
+      right:SetWidth(edge)
+    end
+    dropdown.menuMixin = style
+    dropdown._puiCharMenuStyle = style
+  end
+
+  local selected = popup.BorderBox.SelectedIconArea.SelectedIconButton
+  self:SkinGearManagerIcon(selected)
+  CS_SkinScrollBar(popup.IconSelector.ScrollBar)
 end
 
 local function CS_SkinEquipmentManagerPane()
@@ -2328,25 +2670,7 @@ local function CS_SkinEquipmentManagerPane()
 
 
 
-  if _G.GearManagerPopupFrame then
-    if not _G.GearManagerPopupFrame._puiCharHooked then
-      _G.GearManagerPopupFrame:HookScript("OnShow", function(frame)
-        frame:SetFrameStrata("FULLSCREEN_DIALOG")
-        frame.IconSelector:SetFrameStrata("FULLSCREEN_DIALOG")
-        frame.IconSelector:SetFrameLevel(frame.BorderBox:GetFrameLevel() + 1)
-        StripTextures(frame, true)
-        CS_ApplyBackdrop(frame, CS_BG)
-      end)
-      _G.GearManagerPopupFrame._puiCharHooked = true
-    end
-
-    if _G.GearManagerPopupFrame:IsShown() then
-      _G.GearManagerPopupFrame:SetFrameStrata("FULLSCREEN_DIALOG")
-      _G.GearManagerPopupFrame.IconSelector:SetFrameStrata("FULLSCREEN_DIALOG")
-      _G.GearManagerPopupFrame.IconSelector:SetFrameLevel(_G.GearManagerPopupFrame.BorderBox:GetFrameLevel() + 1)
-      CS_ApplyBackdrop(_G.GearManagerPopupFrame, CS_BG)
-    end
-  end
+  CharacterSheet:SkinGearManagerPopup()
 end
 
 local function CS_SkinEquipmentFlyout()
@@ -2852,46 +3176,43 @@ end
 
 local function GetGemInfo(unit, slotId)
   local cache, itemLink = CS_GetCachedSlotInfo(unit, slotId)
-  if not itemLink then
+  if issecretvalue(itemLink) or not itemLink then
     return {}, 0
   end
 
-  if cache and cache.gems then
-    return cache.gems, cache.totalSockets or 0
+  if cache and cache.sockets then
+    return cache.sockets, cache.totalSockets
   end
 
-  local gems = {}
-  local totalSockets = 0
+  local socketCount = C_Item.GetItemNumSockets(itemLink)
+  if issecretvalue(socketCount) then
+    return {}, 0
+  end
+  socketCount = socketCount or 0
 
-  do
-    local tooltipData = CS_GetCachedInventoryTooltipData(cache, unit, slotId)
-    if tooltipData and tooltipData.lines then
-      for _, line in ipairs(tooltipData.lines) do
-        if line.type == 3 then
-          totalSockets = totalSockets + 1
-        end
+  local sockets = {}
+  local itemString = itemLink:match("item:([%-%d:]+)")
+  for i = 1, socketCount do
+    local _, gemLink = C_Item.GetItemGem(itemLink, i)
+    if issecretvalue(gemLink) then
+      gemLink = nil
+    end
+    local pendingID
+    if not gemLink and itemString then
+      local gemID = tonumber((select(i + 2, _G.strsplit(":", itemString))))
+      if gemID and gemID > 0 then
+        gemLink = "item:" .. gemID
+        pendingID = gemID
       end
     end
-  end
-
-  local filledCount = 0
-  for i = 1, 4 do
-    local gemName, gemLink = C_Item.GetItemGem(itemLink, i)
-    if gemLink then
-      filledCount = filledCount + 1
-      gems[filledCount] = {
-        link = gemLink,
-        name = gemName,
-      }
-    end
+    sockets[i] = { link = gemLink, pendingID = pendingID }
   end
 
   if cache then
-    cache.gems = gems
-    cache.totalSockets = totalSockets
+    cache.sockets = sockets
+    cache.totalSockets = socketCount
   end
-
-  return gems, totalSockets
+  return sockets, socketCount
 end
 
 local function CS_RefreshItemStatHighlightColor(button)
@@ -3326,6 +3647,222 @@ local function CS_RefreshPlayerSlots(force)
   end
 end
 
+CharacterSheet._socketSlots = {
+  INVSLOT_HEAD, INVSLOT_NECK, INVSLOT_SHOULDER, INVSLOT_BACK,
+  INVSLOT_CHEST, INVSLOT_WRIST, INVSLOT_HAND, INVSLOT_WAIST,
+  INVSLOT_LEGS, INVSLOT_FEET, INVSLOT_FINGER1, INVSLOT_FINGER2,
+  INVSLOT_TRINKET1, INVSLOT_TRINKET2, INVSLOT_MAINHAND, INVSLOT_OFFHAND,
+}
+CharacterSheet._socketPageSize = 7
+
+function CharacterSheet:EnsureSocketStrip()
+  local strip = CharacterSheet._socketStrip
+  if strip then
+    return strip
+  end
+
+  strip = CreateFrame("Frame", nil, CharacterFrame)
+  strip:SetSize(190, 22)
+  strip:SetPoint("BOTTOMRIGHT", CharacterFrame, "BOTTOMRIGHT", -34, -34)
+  strip:SetFrameLevel(CharacterFrame:GetFrameLevel() + 10)
+  strip.page = 1
+  strip.sockets = {}
+  strip.icons = {}
+  strip.pendingItemIDs = {}
+  strip.requestedItemIDs = {}
+  strip:Hide()
+  CharacterSheet._socketStrip = strip
+
+  local function ChangePage(delta)
+    strip.page = strip.page + delta
+    CharacterSheet:RefreshSocketStrip()
+  end
+
+  for i = 1, CharacterSheet._socketPageSize do
+    local button = CreateFrame("Button", nil, strip)
+    button:SetSize(22, 22)
+    button.icon = button:CreateTexture(nil, "ARTWORK")
+    button.icon:SetPoint("TOPLEFT", button, "TOPLEFT", 1, -1)
+    button.icon:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT", -1, 1)
+    button.icon:SetTexCoord(0.07, 0.93, 0.07, 0.93)
+    button.border = button:CreateTexture(nil, "OVERLAY")
+    button.border:SetAllPoints(button)
+    button.border:SetTexture("Interface\\Buttons\\WHITE8x8")
+    button.border:SetDrawLayer("BACKGROUND")
+    local highlight = button:CreateTexture(nil, "HIGHLIGHT")
+    highlight:SetAllPoints(button)
+    highlight:SetColorTexture(1, 1, 1, 0.12)
+    button:SetScript("OnEnter", function(self)
+      local socket = self.socket
+      if not socket then
+        return
+      end
+      GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+      if socket.link then
+        GameTooltip:SetHyperlink(socket.link)
+      else
+        GameTooltip:SetInventoryItem("player", socket.slot)
+        GameTooltip:AddLine("Empty socket", 1, 0.82, 0.30)
+      end
+      GameTooltip:Show()
+    end)
+    button:SetScript("OnLeave", function()
+      GameTooltip:Hide()
+    end)
+    button:SetScript("OnClick", function(self)
+      local socket = self.socket
+      if not socket or InCombatLockdown() then
+        return
+      end
+      if _G.C_ItemSocketInfo and _G.C_ItemSocketInfo.SocketInventoryItem then
+        _G.C_ItemSocketInfo.SocketInventoryItem(socket.slot)
+      end
+    end)
+    strip.icons[i] = button
+  end
+
+  local function CreatePageButton(text, delta)
+    local button = CreateFrame("Button", nil, strip)
+    button:SetSize(16, 22)
+    button.text = button:CreateFontString(nil, "ARTWORK")
+    Theme.ApplyFont(button.text, "body")
+    button.text:SetPoint("CENTER")
+    button.text:SetText(text)
+    button:SetScript("OnClick", function() ChangePage(delta) end)
+    return button
+  end
+  strip.previous = CreatePageButton("<", -1)
+  strip.next = CreatePageButton(">", 1)
+
+  strip.events = CreateFrame("Frame")
+  strip.events:SetScript("OnEvent", function(_, event, itemID)
+    if event == "ITEM_DATA_LOAD_RESULT" then
+      if issecretvalue(itemID) or not strip.pendingItemIDs[itemID] then
+        return
+      end
+      strip.pendingItemIDs[itemID] = nil
+    end
+    CS_ClearSlotInfoCacheForGUID(UnitGUID("player"))
+    CharacterSheet:RefreshSocketStrip()
+    if event ~= "ITEM_DATA_LOAD_RESULT" then
+      CS_RefreshPlayerSlots()
+    end
+  end)
+  return strip
+end
+
+function CharacterSheet:RefreshSocketStrip()
+  local strip = CharacterSheet._socketStrip
+  if not strip or not strip.active then
+    return
+  end
+
+  local sockets = strip.sockets
+  for i = #sockets, 1, -1 do
+    sockets[i] = nil
+  end
+
+  for _, slot in ipairs(CharacterSheet._socketSlots) do
+    local gems, count = GetGemInfo("player", slot)
+    for index = 1, count do
+      local gem = gems[index]
+      sockets[#sockets + 1] = {
+        slot = slot,
+        index = index,
+        link = gem and gem.link,
+      }
+      if gem and gem.pendingID and not strip.requestedItemIDs[gem.pendingID] then
+        strip.requestedItemIDs[gem.pendingID] = true
+        strip.pendingItemIDs[gem.pendingID] = true
+        C_Item.RequestLoadItemDataByID(gem.pendingID)
+      end
+    end
+  end
+
+  local total = #sockets
+  if total == 0 then
+    strip:Hide()
+    return
+  end
+
+  local pages = math.ceil(total / CharacterSheet._socketPageSize)
+  strip.page = math.max(1, math.min(strip.page, pages))
+  local paged = pages > 1
+  local first = (strip.page - 1) * CharacterSheet._socketPageSize + 1
+  local visible = math.min(CharacterSheet._socketPageSize, total - first + 1)
+  local width = visible * 25 - 3 + (paged and 40 or 0)
+  strip:SetWidth(width)
+
+  local br, bg, bb = CS_B()
+  for i, button in ipairs(strip.icons) do
+    local socket = i <= visible and sockets[first + i - 1] or nil
+    button.socket = socket
+    if socket then
+      button:ClearAllPoints()
+      button:SetPoint("LEFT", strip, "LEFT", (paged and 20 or 0) + (i - 1) * 25, 0)
+      if socket.link then
+        button.icon:SetTexture(C_Item.GetItemIconByID(socket.link))
+      else
+        button.icon:SetTexture("Interface\\ItemSocketingFrame\\UI-EmptySocket-Prismatic")
+      end
+      button.border:SetColorTexture(br, bg, bb, 0.75)
+      button:Show()
+    else
+      button:Hide()
+    end
+  end
+
+  strip.previous:SetShown(paged)
+  strip.next:SetShown(paged)
+  if paged then
+    strip.previous:ClearAllPoints()
+    strip.previous:SetPoint("LEFT", strip, "LEFT", 0, 0)
+    strip.next:ClearAllPoints()
+    strip.next:SetPoint("RIGHT", strip, "RIGHT", 0, 0)
+    strip.previous:SetEnabled(strip.page > 1)
+    strip.next:SetEnabled(strip.page < pages)
+    strip.previous:SetAlpha(strip.page > 1 and 1 or 0.3)
+    strip.next:SetAlpha(strip.page < pages and 1 or 0.3)
+    local ar, ag, ab = CS_ACCENT()
+    strip.previous.text:SetTextColor(ar, ag, ab)
+    strip.next.text:SetTextColor(ar, ag, ab)
+  end
+  strip:Show()
+end
+
+function CharacterSheet:SetSocketStripActive(active)
+  local strip = CharacterSheet._socketStrip
+  active = active and CharacterSheet:GetShowSocketStrip() and PaperDollFrame and PaperDollFrame:IsShown()
+  if not active then
+    if strip then
+      strip.active = false
+      strip.events:UnregisterAllEvents()
+      strip:Hide()
+    end
+    return
+  end
+
+  strip = CharacterSheet:EnsureSocketStrip()
+  if strip.active then
+    return
+  end
+  strip.active = true
+  for id in pairs(strip.requestedItemIDs) do
+    strip.requestedItemIDs[id] = nil
+  end
+  for id in pairs(strip.pendingItemIDs) do
+    strip.pendingItemIDs[id] = nil
+  end
+  strip.events:RegisterEvent("SOCKET_INFO_SUCCESS")
+  strip.events:RegisterEvent("ITEM_DATA_LOAD_RESULT")
+  CharacterSheet:RefreshSocketStrip()
+end
+
+function CharacterSheet:SetShowSocketStrip(v)
+  _CS_GetDB().showSocketStrip = not not v
+  self:SetSocketStripActive(v)
+end
+
 local function CS_RefreshSlotDisplaySettings()
   CS_RefreshPlayerSlots()
 
@@ -3382,6 +3919,13 @@ local function CS_ToggleCharacterSettingsMenu()
       end
     )
     rootDescription:CreateCheckbox(
+      "Show socket strip",
+      function() return CharacterSheet:GetShowSocketStrip() end,
+      function()
+        CharacterSheet:SetShowSocketStrip(not CharacterSheet:GetShowSocketStrip())
+      end
+    )
+    rootDescription:CreateCheckbox(
       "Show Bag Item Level",
       CS_GetShowBagItemLevel,
       function()
@@ -3432,6 +3976,7 @@ end
 local function CS_AfterCharacterSubFrameShown(_, frameName)
   CharacterSheet:SetShellExtended(true)
   CS_UpdateCharacterSettingsButtonVisibility()
+  CharacterSheet:SetSocketStripActive(frameName == "PaperDollFrame")
 
   if frameName == "PaperDollFrame" then
     UpdateCharacterAverageItemLevelText()
@@ -3740,149 +4285,25 @@ local function SetupCharacterFrameSkinning()
       end
     end
 
-    local function SkinStatsHeader(cat)
-      if not cat then
-        return
-      end
 
-      -- Always refresh colors (Blizzard can relayout/re-show, and palette tweaks should apply).
-      local tr, tg, tb, ta = GetTextColor()
-      local br, bgG, bB, bA = CS_B()
-
-      if cat == CharacterStatsPane.AttributesCategory or cat == CharacterStatsPane.EnhancementsCategory then
-        cat:SetSize(187, 22)
-      end
-
-      local title = cat.Title or cat.Text
-
-      if cat._puiCharHeaderSkinned then
-        local bg = EnsureBackdropFrame(cat)
-        if bg and bg.SetBackdropColor then
-          local r, g, b, a = CS_BG()
-          bg:SetBackdropColor(r, g, b, a)
-        end
-        if bg and bg.SetBackdropBorderColor then
-          bg:SetBackdropBorderColor(br, bgG, bB, bA)
-        end
-        if title then
-          ns.Theme.ApplyFont(title, "nav")
-          title:SetTextColor(tr, tg, tb, ta)
-        end
-        return
-      end
-
-      StripTextures(cat, true)
-
-      local bg = EnsureBackdropFrame(cat)
-      if bg and bg.SetBackdrop then
-        local edgeSize = Theme.GetEdgeSize()
-        bg:SetBackdrop({
-          bgFile   = "Interface\\Buttons\\WHITE8x8",
-          edgeFile = "Interface\\Buttons\\WHITE8x8",
-          edgeSize = edgeSize,
-        })
-
-        local r, g, b, a      = CS_BG()
-        local br, bgG, bB, bA = CS_B()
-
-        bg:SetBackdropColor(r, g, b, a)
-        bg:SetBackdropBorderColor(br, bgG, bB, bA)
-      end
-
-      if title then
-        ns.Theme.ApplyFont(title, "nav")
-        local tr, tg, tb, ta = GetTextColor()
-        title:SetTextColor(tr, tg, tb, ta)
-      end
-
-      cat._puiCharHeaderSkinned = true
-    end
 
     local function SkinStatsFrame(frame)
-      if not frame then
+      if not frame or frame._puiCharStatsSkinned then
         return
       end
-
-      -- Always refresh backdrop colors/border after first skin (but keep the expensive font walking only once).
-      local tr, tg, tb, ta = GetTextColor()
-      local br, bgG, bB, bA = CS_B()
-
-      if frame._puiCharStatsSkinned then
-        local bg = EnsureBackdropFrame(frame)
-        if bg and bg.SetBackdropColor then
-          local r, g, b, a = CS_BG()
-          bg:SetBackdropColor(r, g, b, a)
-        end
-        if bg and bg.SetBackdropBorderColor then
-          bg:SetBackdropBorderColor(br, bgG, bB, bA)
-        end
-
-        -- Keep text color in sync too.
-        if frame.GetRegions then
-          for _, region in ipairs({ frame:GetRegions() }) do
-            if region and region.IsObjectType and region:IsObjectType("FontString") then
-              region:SetTextColor(tr, tg, tb, ta)
-            end
-          end
-        end
-        return
-      end
-
       StripTextures(frame, true)
-
-      -- These sections often have their own NineSlice/backdrop chrome.
       if frame.NineSlice then frame.NineSlice:Hide() end
       if frame.BorderFrame then frame.BorderFrame:SetAlpha(0) end
-      if frame.Background and frame.Background.SetAlpha then frame.Background:SetAlpha(0) end
-      if frame.Bg and frame.Bg.SetAlpha then frame.Bg:SetAlpha(0) end
+      if frame.Background then frame.Background:SetAlpha(0) end
+      if frame.Bg then frame.Bg:SetAlpha(0) end
       if frame.Inset and frame.Inset.NineSlice then frame.Inset.NineSlice:Hide() end
-
-      local bg = EnsureBackdropFrame(frame)
-      if bg and bg.SetBackdrop then
-        local edgeSize = Theme.GetEdgeSize()
-        bg:SetBackdrop({
-          bgFile   = "Interface\\Buttons\\WHITE8x8",
-          edgeFile = "Interface\\Buttons\\WHITE8x8",
-          edgeSize = edgeSize,
-        })
-
-        local r, g, b, a      = CS_BG()
-        local br, bgG, bB, bA = CS_B()
-
-        bg:SetBackdropColor(r, g, b, a)
-        bg:SetBackdropBorderColor(br, bgG, bB, bA)
-      end
-
-      -- Keep stat text colors in sync; row fonts are owned by PaperDollFrame_SetLabelAndText.
-      local tr, tg, tb, ta = GetTextColor()
-
-      if frame.GetRegions then
-        for _, region in ipairs({ frame:GetRegions() }) do
-          if region and region.IsObjectType and region:IsObjectType("FontString") then
-            region:SetTextColor(tr, tg, tb, ta)
-          end
-        end
-      end
-
-      if frame.GetChildren then
-        for _, child in ipairs({ frame:GetChildren() }) do
-          if child and child.GetRegions then
-            for _, region in ipairs({ child:GetRegions() }) do
-              if region and region.IsObjectType and region:IsObjectType("FontString") then
-                region:SetTextColor(tr, tg, tb, ta)
-              end
-            end
-          end
-        end
-      end
-
+      if frame._puiBg then frame._puiBg:SetBackdrop(nil) end
       frame._puiCharStatsSkinned = true
     end
 
-    -- Skin category headers if present on this build.
-    SkinStatsHeader(CharacterStatsPane.ItemLevelCategory)
-    SkinStatsHeader(CharacterStatsPane.AttributesCategory)
-    SkinStatsHeader(CharacterStatsPane.EnhancementsCategory)
+    CS_RefreshStatCategory(CharacterStatsPane.ItemLevelCategory)
+    CS_RefreshStatCategory(CharacterStatsPane.AttributesCategory)
+    CS_RefreshStatCategory(CharacterStatsPane.EnhancementsCategory)
 
     -- Keep item level clean: the category header and value are enough.
     if CharacterStatsPane.ItemLevelFrame then
@@ -4019,6 +4440,16 @@ local function SetupCharacterFrameSkinning()
   end
 
   CS_UpdateCharacterSettingsButtonVisibility()
+
+  PaperDollFrame:HookScript("OnShow", function()
+    CharacterSheet:SetSocketStripActive(true)
+  end)
+  PaperDollFrame:HookScript("OnHide", function()
+    CharacterSheet:SetSocketStripActive(false)
+  end)
+  CharacterFrame:HookScript("OnHide", function()
+    CharacterSheet:SetSocketStripActive(false)
+  end)
 
   if not CharacterFrame._puiSubFrameHooked then
     hooksecurefunc(CharacterFrame, "ShowSubFrame", CS_AfterCharacterSubFrameShown)
@@ -4348,46 +4779,10 @@ function CharacterSheet:RefreshTheme()
     CS_ApplyBackdrop(CharacterFramePortraitFrame, CS_BG)
     CS_ApplyBackdrop(CharacterStatsPane, CS_BG)
 
-    if CharacterStatsPane then
-      for _, category in pairs({
-        CharacterStatsPane.ItemLevelCategory,
-        CharacterStatsPane.AttributesCategory,
-        CharacterStatsPane.EnhancementsCategory,
-      }) do
-        if category then
-          CS_ApplyBackdrop(category, CS_BG)
-          if category.Text then
-            ns.Theme.ApplyFont(category.Text, "nav")
-            category.Text:SetTextColor(tr, tg, tb, ta)
-          end
-        end
-      end
-
-      for _, statsFrame in pairs({
-        CharacterStatsPane.EnhancementsFrame,
-        CharacterStatsPane.AttributesFrame,
-      }) do
-        if statsFrame then
-          CS_ApplyBackdrop(statsFrame, CS_BG)
-
-          for _, region in ipairs({ statsFrame:GetRegions() }) do
-            if region and region.IsObjectType and region:IsObjectType("FontString") then
-              region:SetTextColor(tr, tg, tb, ta)
-            end
-          end
-
-          for _, child in ipairs({ statsFrame:GetChildren() }) do
-            if child and child.GetRegions then
-              for _, region in ipairs({ child:GetRegions() }) do
-                if region and region.IsObjectType and region:IsObjectType("FontString") then
-                  region:SetTextColor(tr, tg, tb, ta)
-                end
-              end
-            end
-          end
-        end
-      end
-    end
+    CS_RefreshStatCategory(CharacterStatsPane.ItemLevelCategory)
+    CS_RefreshStatCategory(CharacterStatsPane.AttributesCategory)
+    CS_RefreshStatCategory(CharacterStatsPane.EnhancementsCategory)
+    CharacterSheet:RefreshSocketStrip()
 
     for i = 1, 3 do
       CS_ApplyBackdrop(_G["CharacterFrameTab" .. i], CS_CONTROL)
@@ -4488,6 +4883,7 @@ do
     if event == "PLAYER_EQUIPMENT_CHANGED" then
       CS_ClearSlotInfoCache()
       CS_RefreshPlayerSlots()
+      CharacterSheet:RefreshSocketStrip()
       return
     end
 
@@ -4565,6 +4961,11 @@ end
   CS_SetShowEnchants = P:Def("CS_SetShowEnchants", CS_SetShowEnchants)
   CS_GetShowSocketIcons = P:Def("CS_GetShowSocketIcons", CS_GetShowSocketIcons)
   CS_SetShowSocketIcons = P:Def("CS_SetShowSocketIcons", CS_SetShowSocketIcons)
+  CharacterSheet.GetShowSocketStrip = P:Def("CharacterSheet.GetShowSocketStrip", CharacterSheet.GetShowSocketStrip)
+  CharacterSheet.SetShowSocketStrip = P:Def("CharacterSheet.SetShowSocketStrip", CharacterSheet.SetShowSocketStrip)
+  CharacterSheet.EnsureSocketStrip = P:Def("CharacterSheet.EnsureSocketStrip", CharacterSheet.EnsureSocketStrip)
+  CharacterSheet.RefreshSocketStrip = P:Def("CharacterSheet.RefreshSocketStrip", CharacterSheet.RefreshSocketStrip)
+  CharacterSheet.SetSocketStripActive = P:Def("CharacterSheet.SetSocketStripActive", CharacterSheet.SetSocketStripActive)
   CS_GetShowBagItemLevel = P:Def("CS_GetShowBagItemLevel", CS_GetShowBagItemLevel)
   CS_SetShowBagItemLevel = P:Def("CS_SetShowBagItemLevel", CS_SetShowBagItemLevel)
   CS_GetShowStatRatings = P:Def("CS_GetShowStatRatings", CS_GetShowStatRatings)
@@ -4575,6 +4976,7 @@ end
   CS_SetShowMaxHealth = P:Def("CS_SetShowMaxHealth", CS_SetShowMaxHealth)
   CS_GetUsePleebUIFont = P:Def("CS_GetUsePleebUIFont", CS_GetUsePleebUIFont)
   CS_SetUsePleebUIFont = P:Def("CS_SetUsePleebUIFont", CS_SetUsePleebUIFont)
+  CharacterSheet.StyleStatRow = P:Def("CharacterSheet.StyleStatRow", CharacterSheet.StyleStatRow)
   CS_RestoreCharacterStatFont = P:Def("CS_RestoreCharacterStatFont", CS_RestoreCharacterStatFont)
   CS_TrackCharacterStatFrame = P:Def("CS_TrackCharacterStatFrame", CS_TrackCharacterStatFrame)
   CS_ApplyCharacterStatFont = P:Def("CS_ApplyCharacterStatFont", CS_ApplyCharacterStatFont)
@@ -4632,6 +5034,9 @@ end
   CS_SkinScrollBar = P:Def("CS_SkinScrollBar", CS_SkinScrollBar)
   CS_SkinModelControlButtons = P:Def("CS_SkinModelControlButtons", CS_SkinModelControlButtons)
   CS_SkinSidebarTabs = P:Def("CS_SkinSidebarTabs", CS_SkinSidebarTabs)
+  CharacterSheet.SkinGearManagerIcon = P:Def("CharacterSheet.SkinGearManagerIcon", CharacterSheet.SkinGearManagerIcon)
+  CharacterSheet.FilterGearManagerIcons = P:Def("CharacterSheet.FilterGearManagerIcons", CharacterSheet.FilterGearManagerIcons)
+  CharacterSheet.SkinGearManagerPopup = P:Def("CharacterSheet.SkinGearManagerPopup", CharacterSheet.SkinGearManagerPopup)
   CS_SkinEquipmentManagerPane = P:Def("CS_SkinEquipmentManagerPane", CS_SkinEquipmentManagerPane)
   CS_SkinEquipmentFlyout = P:Def("CS_SkinEquipmentFlyout", CS_SkinEquipmentFlyout)
   CS_SkinReputationAndCurrencyExtras = P:Def("CS_SkinReputationAndCurrencyExtras", CS_SkinReputationAndCurrencyExtras)

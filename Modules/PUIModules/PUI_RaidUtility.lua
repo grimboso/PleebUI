@@ -1879,8 +1879,8 @@ RaidUtility_ShowDragGhosts = function()
   for _, kind in ipairs(RAID_UTILITY_WINDOW_ORDER) do
     local mover = RaidUtilityGhostMovers[kind]
     local spec = RAID_UTILITY_WINDOW_SPECS[kind]
-    if mover and q[spec.enabledKey] == true then
-      mover:Show()
+    if mover then
+      ns.FrameUtil.SetMoverFrameVisible(mover, q[spec.enabledKey] == true)
     end
   end
 end

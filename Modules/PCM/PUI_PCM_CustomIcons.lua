@@ -444,6 +444,9 @@ local function RegisterMover(record)
     moduleLabel = "Cooldown Manager",
     groupKey = "customIcons",
     groupLabel = "Custom Icons",
+    onPreviewVisibilityChanged = function()
+      CustomIcons:RefreshVisibility(record.key, record.inCombat)
+    end,
     useOverlayDrag = true,
     liveFrame = function() return frame end,
     shouldShow = function()
@@ -894,7 +897,10 @@ local function ApplyStateVisibility(record, active)
     alpha = icon.outOfCombatAlpha / 100
   end
 
-  if ns.Flags.IsEditing == true and record.runtimeEnabled == true then
+  if ns.Flags.IsEditing == true
+    and record.runtimeEnabled == true
+    and FrameUtil.IsMoverPreviewVisible(record.moverKey)
+  then
     visible = true
     alpha = math.max(alpha, EDIT_MODE_PREVIEW_ALPHA)
   elseif alpha <= 0 then

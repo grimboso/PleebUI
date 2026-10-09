@@ -693,7 +693,7 @@ local function AddShowPortraitControl(controls, context)
   )
 end
 
-local function AddShowPowerControl(controls, context)
+local function AddShowPowerControl(controls, context, onChanged)
   local geometry = context.geometry
 
   AddToggle(
@@ -708,6 +708,9 @@ local function AddShowPowerControl(controls, context)
         geometry.powerHeight = 5
       end
       RequestFrameRefresh(context)
+      if onChanged then
+        onChanged()
+      end
     end
   )
 end
@@ -911,43 +914,13 @@ local function AddAuraControls(controls, context)
   end
 end
 
-local function AddUnifiedFrameControls(controls, context)
+local function AddUnifiedFrameControls(controls, context, onPowerChanged)
   AddFrameSizeControls(controls, context)
+  AddShowPowerControl(controls, context, onPowerChanged)
+  if context.geometry.showPower ~= false then
+    AddPowerHeightControl(controls, context)
+  end
   AddShowPortraitControl(controls, context)
-  AddShowPowerControl(controls, context)
-  AddPowerHeightControl(controls, context)
-  AddTextureControls(controls, context)
-  AddBorderControls(controls, context)
-
-  AddSelect(
-    controls,
-    "select",
-    "Health display",
-    TEXT_MODE_VALUES,
-    function()
-      return GetTextMode(context, "health")
-    end,
-    function(value)
-      SetTextMode(context, "health", value)
-    end
-  )
-  AddFontControls(controls, context, "health", "Health")
-
-  AddSelect(
-    controls,
-    "select",
-    "Power display",
-    TEXT_MODE_VALUES,
-    function()
-      return GetTextMode(context, "power")
-    end,
-    function(value)
-      SetTextMode(context, "power", value)
-    end
-  )
-  AddFontControls(controls, context, "power", "Power")
-  AddFontControls(controls, context, "name", "Name")
-  AddAuraControls(controls, context)
 end
 
 function Inspector:BuildFrameSpec(frame)
@@ -982,7 +955,99 @@ function Inspector:BuildFrameSpec(frame)
     }
   end
 
-  AddUnifiedFrameControls(controls, context)
+  local function UpdatePanel()
+    if Inspector.positionPanelRefreshQueued then
+      return
+    end
+    Inspector.positionPanelRefreshQueued = true
+    C_Timer.After(0, function()
+      Inspector.positionPanelRefreshQueued = nil
+      local panel = ns.EditModeQuickSettings.panel
+      if panel and panel:IsShown() and panel.ownerKey == OWNER_KEY then
+        ns.EditModeQuickSettings:Refresh(OWNER_KEY, panel.anchor, function()
+          return Inspector:BuildFrameSpec(frame)
+        end)
+      end
+    end)
+  end
+
+  AddUnifiedFrameControls(controls, context, UpdatePanel)
+
+  local unit = context.family == "single" and context.visualKey or nil
+  if unit == "boss" then
+    unit = "boss1"
+  end
+  if unit == "target" or unit == "focus" or unit == "boss1" then
+    Inspector.expandedPositionUnits = Inspector.expandedPositionUnits or {}
+    local moreOpen = Inspector.expandedPositionUnits[unit] == true
+    controls[#controls + 1] = {
+      type = "button", label = moreOpen and "Less: group positions" or "More: group positions",
+      action = function()
+        Inspector.expandedPositionUnits[unit] = not moreOpen
+        UpdatePanel()
+      end,
+    }
+    if moreOpen then
+    local shared = UF.db.profile.units[unit]
+    local position = shared.contextPositions
+    local selected = UF:GetPositionEditContext(unit)
+    local linked = ns.FrameUtil.HasSmartSnapLinks("UF_" .. unit)
+    controls[#controls + 1] = { type = "heading", label = "Group positions" }
+    controls[#controls + 1] = {
+      type = "select", label = "When your group changes",
+      values = { Never = "Never switch", Prompt = "Ask before switching", Auto = "Switch automatically" },
+      get = function() return UF:GetPositionSettings().switchMode end,
+      set = function(value) UF:SetPositionSwitchMode(value); UpdatePanel() end,
+    }
+    controls[#controls + 1] = {
+      type = "select", label = "Active position layout",
+      values = { Shared = "Shared", Solo = "Solo", Party = "Party", Raid = "Raid" },
+      get = function() return UF:GetPositionSettings().active end,
+      set = function(value) UF:ActivatePositionContext(value); UpdatePanel() end,
+    }
+    controls[#controls + 1] = {
+      type = "toggle", label = "Use different positions by group",
+      disabled = function() return linked and not (shared.contextPositions and shared.contextPositions.enabled == true) end,
+      get = function() return shared.contextPositions and shared.contextPositions.enabled == true end,
+      set = function(value) UF:SetSeparatePosition(unit, value); UpdatePanel() end,
+    }
+    if linked and not (position and position.enabled == true) then
+      controls[#controls + 1] = {
+        type = "description", text = "This mover is linked with Smart Snap. Unlink it before using separate positions.",
+      }
+    end
+    if position and position.enabled == true then
+      controls[#controls + 1] = {
+        type = "select", label = "Position to edit",
+        values = { Shared = "Shared", Solo = "Solo", Party = "Party", Raid = "Raid" },
+        get = function() return UF:GetPositionEditContext(unit) end,
+        set = function(value) UF:SetPositionEditContext(unit, value); UpdatePanel() end,
+      }
+      if selected ~= "Shared" then
+        controls[#controls + 1] = {
+          type = "toggle", label = "Use a separate " .. selected .. " position",
+          get = function()
+            local override = shared.contextPositions and shared.contextPositions[selected]
+            return override and override.enabled == true or false
+          end,
+          set = function(value) UF:SetContextPositionEnabled(unit, selected, value); UpdatePanel() end,
+        }
+        local override = position[selected]
+        if not override or override.enabled ~= true then
+          controls[#controls + 1] = {
+            type = "description", text = "This context inherits Shared. Enable its separate position before dragging.",
+          }
+        end
+        if override then
+          controls[#controls + 1] = {
+            type = "button", label = "Remove " .. selected .. " position",
+            action = function() UF:RemoveContextPosition(unit, selected); UpdatePanel() end,
+          }
+        end
+      end
+    end
+    end
+  end
 
   return {
     ownerKey = OWNER_KEY,
