@@ -961,6 +961,7 @@ function TestMode:EnsureToolbar()
   panel.scroll = CreateFrame("ScrollFrame", nil, panel, "UIPanelScrollFrameTemplate")
   panel.scroll:SetPoint("TOPLEFT", panel, "TOPLEFT", 0, -TOOLBAR_TITLE_HEIGHT)
   panel.scroll:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", -27, 8)
+  panel.scroll.ScrollBar.scrollStep = 26
   ns.Theme.WidgetSkins.Scrollbar(panel.scroll.ScrollBar)
 
   panel.content = CreateFrame("Frame", nil, panel.scroll)
