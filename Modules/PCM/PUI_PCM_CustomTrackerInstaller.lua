@@ -26,7 +26,7 @@ local PAGES = {
   "Choose what to track",
   "Choose a spell",
   "Style",
-  "Behavior",
+  "Behaviour",
   "Active glow",
 }
 
@@ -226,11 +226,18 @@ end
 local function AddSlider(label, value, minimum, maximum, step, callback, state)
   local widget = AceGUI:Create("PUI_Slider")
   widget:SetLabel(ns.OptionsSchema.GetCompactLabel(label))
-  widget:SetSliderValues(minimum, maximum, step)
-  widget:SetValue(value)
+  local opacity = label:lower():find("opacity", 1, true) ~= nil
+  widget:SetIsPercent(opacity)
+  if opacity then
+    widget:SetSliderValues(0, 1, step / 100)
+    widget:SetValue(value / 100)
+  else
+    widget:SetSliderValues(minimum, maximum, step)
+    widget:SetValue(value)
+  end
   widget:SetWidth(235)
   widget:SetCallback("OnValueChanged", function(_, _, selected)
-    callback(selected)
+    callback(opacity and selected * 100 or selected)
     PreviewChanged(state)
   end)
   controls:AddChild(widget)
@@ -431,16 +438,16 @@ local function SetPage(newPage)
     end
   elseif page == 5 then
     AddHeading("Visibility and states")
-    AddDescription("The preview rotates through each supported state every three seconds. Changing a state option immediately previews that state. Alpha 0 fully hides that state. Combat-only visibility applies to the live tracker; the setup preview stays visible while you configure it.")
+    AddDescription("The preview rotates through each supported state every three seconds. Changing a state option immediately previews that state. Opacity at 0% fully hides that state. Combat-only visibility applies to the live tracker; the setup preview stays visible while you configure it.")
     AddCheckbox("Only show in combat", draft.combatOnly, function(value) draft.combatOnly = value end)
     if draft.kind == "cooldown" or draft.kind == "charge" then
       AddCheckbox("Show while ready", draft.showReady, function(value) draft.showReady = value end, "READY")
-      AddSlider("Ready alpha", draft.readyAlpha, 0, 100, 1, function(value) draft.readyAlpha = value end, "READY")
+      AddSlider("Ready opacity", draft.readyAlpha, 0, 100, 1, function(value) draft.readyAlpha = value end, "READY")
       AddCheckbox("Desaturate while ready", draft.desaturateReady, function(value) draft.desaturateReady = value end, "READY")
       AddDropdown("Ready glow", GLOW_STYLES, GLOW_ORDER, draft.readyGlowStyle, function(value) draft.readyGlowStyle = value end, "READY")
 
       AddCheckbox(draft.kind == "charge" and "Show while recharging" or "Show while on cooldown", draft.showCooldown, function(value) draft.showCooldown = value end, draft.kind == "charge" and "RECHARGING" or "COOLDOWN")
-      AddSlider(draft.kind == "charge" and "Recharging alpha" or "On cooldown alpha", draft.cooldownAlpha, 0, 100, 1, function(value) draft.cooldownAlpha = value end, draft.kind == "charge" and "RECHARGING" or "COOLDOWN")
+      AddSlider(draft.kind == "charge" and "Recharging opacity" or "On cooldown opacity", draft.cooldownAlpha, 0, 100, 1, function(value) draft.cooldownAlpha = value end, draft.kind == "charge" and "RECHARGING" or "COOLDOWN")
       AddCheckbox(draft.kind == "charge" and "Desaturate while recharging" or "Desaturate while on cooldown", draft.desaturateCooldown, function(value) draft.desaturateCooldown = value end, draft.kind == "charge" and "RECHARGING" or "COOLDOWN")
       AddDropdown(draft.kind == "charge" and "Recharging glow" or "On cooldown glow", GLOW_STYLES, GLOW_ORDER, draft.cooldownGlowStyle, function(value) draft.cooldownGlowStyle = value end, draft.kind == "charge" and "RECHARGING" or "COOLDOWN")
 
@@ -465,10 +472,10 @@ local function SetPage(newPage)
       if draft.kind == "stack" then
         AddCheckbox("Hide tracked aura in Buff Icon Viewer", draft.hideViewerIcon, function(value) draft.hideViewerIcon = value end)
       end
-      AddSlider("Inactive alpha", draft.readyAlpha, 0, 100, 1, function(value) draft.readyAlpha = value end, "INACTIVE")
+      AddSlider("Inactive opacity", draft.readyAlpha, 0, 100, 1, function(value) draft.readyAlpha = value end, "INACTIVE")
       AddCheckbox("Desaturate while inactive", draft.desaturateReady, function(value) draft.desaturateReady = value end, "INACTIVE")
     end
-    AddSlider("Active alpha", draft.activeAlpha, 0, 100, 1, function(value) draft.activeAlpha = value end, "ACTIVE")
+    AddSlider("Active aura opacity", draft.activeAlpha, 0, 100, 1, function(value) draft.activeAlpha = value end, "ACTIVE")
     AddCheckbox("Desaturate while active", draft.desaturateActive, function(value) draft.desaturateActive = value end, "ACTIVE")
   elseif page == 6 then
     AddHeading("Active glow")
