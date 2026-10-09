@@ -400,7 +400,7 @@ local PUI_DEFAULT_OPTIONS_CHILD = {
   unitframes = "general",
   ACTIONBARS = "general",
   CooldownManager = "overview",
-  PRD = "general",
+  PRD = "health",
   Quality = "combatTab",
 }
 
