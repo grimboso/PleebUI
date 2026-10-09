@@ -829,6 +829,9 @@ function RaidFrames:ApplyAnchor()
       return FrameUtil.GetGroupedMoverAnchorPoint(current)
     end,
     label = "Raid Frames",
+    moduleKey = "unitFrames",
+    moduleLabel = "Unit Frames",
+    defaultVisibility = { Solo = false, Party = false },
     optionsString = "unitframes,raid",
     overlayBelowFrame = true,
     getDB = function()
