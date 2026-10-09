@@ -5,7 +5,7 @@ local FrameUtil = ns.FrameUtil
 
 local API = {
   VERSION = 1,
-  MINOR_VERSION = 2,
+  MINOR_VERSION = 3,
 }
 
 local PluginMixin = {}
@@ -14,6 +14,7 @@ local unitFrameDisplayNameListeners = {}
 
 local MOVER_OPTION_KEYS = {
   "label",
+  "defaultVisibility",
   "ghost",
   "useOverlayDrag",
   "savePosition",
@@ -30,6 +31,7 @@ local MOVER_OPTION_KEYS = {
 local GHOST_MOVER_OPTION_KEYS = {
   "frameName",
   "label",
+  "defaultVisibility",
   "ghost",
   "useOverlayDrag",
   "savePosition",
@@ -422,6 +424,10 @@ function PluginMixin:RegisterMover(moverKey, frame, options)
 
   local ownedKey = BuildOwnedKey(self, "Mover", moverKey)
   local moverOptions = CopyMoverOptions(options, MOVER_OPTION_KEYS)
+  moverOptions.moduleKey = "external"
+  moverOptions.moduleLabel = "External Modules"
+  moverOptions.groupKey = "plugin:" .. self.key
+  moverOptions.groupLabel = self.name
   ApplyMoverOptionsRoute(self, options, moverOptions)
 
   local existing = self.movers[moverKey]
@@ -444,6 +450,10 @@ function PluginMixin:RegisterGhostMover(moverKey, options)
 
   local ownedKey = BuildOwnedKey(self, "Mover", moverKey)
   local moverOptions = CopyMoverOptions(options, GHOST_MOVER_OPTION_KEYS)
+  moverOptions.moduleKey = "external"
+  moverOptions.moduleLabel = "External Modules"
+  moverOptions.groupKey = "plugin:" .. self.key
+  moverOptions.groupLabel = self.name
   ApplyMoverOptionsRoute(self, options, moverOptions)
 
   local existing = self.movers[moverKey]
