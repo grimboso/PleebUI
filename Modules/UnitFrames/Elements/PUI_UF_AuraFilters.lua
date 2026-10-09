@@ -729,7 +729,10 @@ function AuraFilters.NormalizeDisplay(display, id)
     display.hideRaidBuff = false
   else
     local prefix = display.displayType == "slot" and "Aura Slot " or "Aura Group "
-    display.name = prefix .. tostring(display.id)
+
+    if type(display.name) ~= "string" or not display.name:find("%S") then
+      display.name = prefix .. tostring(display.id)
+    end
   end
 
   local usesBuiltInSlotFilter = display.builtInKey == "DEFENSIVES_EXTERNALS"
