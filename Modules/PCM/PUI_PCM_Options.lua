@@ -63,13 +63,6 @@ local QUICK_SETTINGS = {
   keybindToggle = { 22, "Show keybinds" },
   keybindShow = { 22, "Show keybinds" },
   showKeybinds = { 22, "Show keybinds" },
-  cooldownFontSize = { 30, "Countdown font size" },
-  DurationSize = { 30, "Countdown font size" },
-  fontSize = { 30 },
-  chargeFontSize = { 31, "Charges / stacks font size" },
-  StackSize = { 31, "Stacks font size" },
-  countFontSize = { 31, "Charges / stacks font size" },
-  keybindFontSize = { 32, "Keybind font size" },
   enabled = { 40, "Enable custom glow" },
   size = { 50, "Icon size" },
   iconSize = { 50, "Icon size" },
@@ -124,12 +117,18 @@ local TIMER_ROWS = {
   countCooldown = { 2, 0.5, "Show countdown" },
   swipeDuration = { 3, 0.25, "Show swipe" },
   swipeCooldown = { 3, 0.25, "Show swipe" },
+  swipeGCD = { 3, 0.25, "Show swipe" },
+  durationSwipe = { 3, 0.25, "Show swipe" },
+  showDurationSwipe = { 3, 0.25, "Show swipe" },
   durationSwipeColor = { 4, 0.25, "Swipe color" },
   cooldownSwipeColor = { 4, 0.25, "Swipe color" },
   durationSwipeEdge = { 5, 0.25, "Swipe edge" },
   cooldownSwipeEdge = { 5, 0.25, "Swipe edge" },
   durationSwipeEdgeColor = { 6, 0.25, "Swipe edge color" },
   cooldownSwipeEdgeColor = { 6, 0.25, "Swipe edge color" },
+  gcdSwipeColor = { 4, 0.25, "Swipe color" },
+  gcdSwipeEdge = { 5, 0.25, "Swipe edge" },
+  gcdSwipeEdgeColor = { 6, 0.25, "Swipe edge color" },
 }
 
 local function CombineCondition(parent, child)
@@ -147,10 +146,23 @@ end
 
 function Options:BuildSections(source)
   local sections = {}
+  local hasStackStyle, hasCharges, hasStacks = false, false, false
+  local function InspectTextRoles(args)
+    for key, option in pairs(args) do
+      if option.type == "group" and option.hidden ~= true then
+        InspectTextRoles(option.args or {})
+      elseif option.hidden ~= true then
+        if key:match("^Stack") then hasStackStyle = true end
+        if key == "countCharge" then hasCharges = true end
+        if key == "countBuff" then hasStacks = true end
+      end
+    end
+  end
+  InspectTextRoles(source)
   for index = 1, #SECTIONS do
     local definition = SECTIONS[index]
     sections[definition[1]] = {
-      type = "group", name = definition[2], order = index * 10, args = {},
+      type = "group", name = definition[2], order = index * 10, arg = { puiExplicit = true }, args = {},
     }
   end
 
@@ -166,11 +178,11 @@ function Options:BuildSections(source)
         else
           Collect(option.args or {}, nextCategory, optionKey, option.name, CombineCondition(hidden, option.hidden), CombineCondition(disabled, option.disabled))
         end
-      elseif option.type ~= "header" then
+      elseif option.type ~= "header" and option.hidden ~= true and hidden ~= true then
         local destination = FIELD_SECTIONS[key] or category
         local bucketPrefix, bucketLabel = prefix, label
         local role = key:match("^(cooldown)") or key:match("^(charge)") or key:match("^(keybind)")
-          or key:match("^Duration") and "cooldown" or key:match("^Stack") and "charge"
+          or key:match("^Duration") and "cooldown" or key:match("^Stack") and "stacks"
         if category == "glow" or prefix:match("whenActive$") and (key == "thickness" or key == "color") then
           destination = "glow"
         elseif key == "showDuration" and prefix == "duration" then
@@ -185,27 +197,35 @@ function Options:BuildSections(source)
         end
         if destination == "text" then
           if key == "showCountdown" or key == "showDuration" or key:match("^durationText")
+            or key == "durationFont" or key == "durationOutline"
             or key == "fontSize" and prefix == "icon_fonts" then
             role = "cooldown"
-          elseif key == "countCharge" or key == "countBuff" or key == "showCount" or key == "countFontSize" or key:match("^countText") then
+          elseif key == "countBuff" and hasStackStyle then
+            role = "stacks"
+          elseif key == "countCharge" or key == "countBuff" or key == "showCount" or key == "countVisibility"
+            or key == "countFontSize" or key:match("^countText") then
             role = "charge"
           elseif key == "keybindToggle" or key == "showKeybinds" then
             role = "keybind"
+          elseif key == "font" or key == "fontSize" or key == "fontColor" or key == "outline" or key == "fontOutline" then
+            bucketPrefix, bucketLabel = "sharedTypography", "Shared typography"
           end
           if role then
             bucketPrefix = role
-            bucketLabel = role == "cooldown" and "Countdown" or role == "charge" and "Counts" or "Keybinds"
+            bucketLabel = role == "cooldown" and "Countdown" or role == "stacks" and "Stacks"
+              or role == "charge" and (hasCharges and hasStacks and "Charges and stacks"
+                or hasCharges and "Charges" or hasStacks and "Stacks" or "Counts") or "Keybinds"
           end
         elseif destination == "timer" then
           if key:lower():find("gcd", 1, true) then
-            bucketPrefix, bucketLabel = "gcdTimer", "Global cooldown"
+            bucketPrefix, bucketLabel = "gcdTimer", "GCD"
           elseif key:lower():find("duration", 1, true) or key:match("^activeAura")
             or key == "forceCooldown" or key == "timerDisplay" or key == "swipeSource"
             or key == "showActive" or key == "source" or key == "cdmBuff" or key == "customBuff"
           then
-            bucketPrefix, bucketLabel = "durationTimer", "Duration timer"
+            bucketPrefix, bucketLabel = "durationTimer", "Duration"
           elseif key:lower():find("cooldown", 1, true) or key:match("^recharge") then
-            bucketPrefix, bucketLabel = "cooldownTimer", "Cooldown timer"
+            bucketPrefix, bucketLabel = "cooldownTimer", "Cooldown"
           else
             bucketPrefix, bucketLabel = "swipeSettings", "Swipe settings"
           end
@@ -231,18 +251,32 @@ function Options:BuildSections(source)
         end
         if destination == "text" then
           local property = key:match("^[Cc]ooldown(.+)$") or key:match("^charge(.+)$")
-            or key:match("^keybind(.+)$") or key:match("^Duration(.+)$") or key:match("^Stack(.+)$")
+            or key:match("^keybind(.+)$") or key:match("^[Dd]uration(.+)$") or key:match("^Stack(.+)$")
+            or key:match("^count(.+)$")
           local properties = {
             Font = { "Font", 40 }, FontSize = { "Font size", 50 }, Size = { "Font size", 50 },
             Outline = { "Outline", 60 }, Color = { "Text color", 70 },
             Anchor = { "Anchor point", 80 }, OffsetX = { "Horizontal offset", 90 },
             OffsetY = { "Vertical offset", 100 },
+            TextScale = { "Scale", 55 }, TextAnchor = { "Anchor point", 80 },
+            TextX = { "Horizontal offset", 90 }, TextY = { "Vertical offset", 100 },
+            TextColor = { "Text color", 70 },
           }
           local definition = property and properties[property]
           if definition then option.name, option.order = definition[1], definition[2] end
           if key == "countFontSize" or key == "durationCountFontSize" then option.name, option.order = "Font size", 50 end
           if key == "countTextColor" or key == "durationTextColor" then option.name, option.order = "Text color", 70 end
+          if key == "font" then option.name, option.order = "Font", 40 end
+          if key == "fontSize" then option.name, option.order = "Font size", 50 end
+          if key == "fontColor" then option.name, option.order = "Text color", 70 end
+          if key == "outline" or key == "fontOutline" then option.name, option.order = "Outline", 60 end
+          if key == "keybindToggle" or key == "showKeybinds" or key == "keybindShow" then option.name, option.order = "Show text", 10 end
+          if key == "countCharge" then option.name, option.order = hasStacks and "Show charges" or "Show count", 10 end
+          if key == "countBuff" then option.name, option.order = hasCharges and not hasStackStyle and "Show stacks" or "Show count", 10 end
+          if key == "showCount" or key == "chargeShow" then option.name, option.order = "Show count", 10 end
+          if key == "showCountdown" or key == "cooldownShow" then option.name, option.order = "Show countdown", 10 end
         end
+        option.name = ns.OptionsSchema.GetCompactLabel(option.name)
         local inlineDefinition = INLINE_GROUPS[bucketPrefix]
         if inlineDefinition then bucketLabel = inlineDefinition[1] end
         option.hidden = CombineCondition(hidden, option.hidden)
@@ -283,9 +317,17 @@ function Options:BuildSections(source)
             local order = inlineDefinition and inlineDefinition[2] or destination == "timer" and (bucketPrefix == "durationTimer" and 10
               or bucketPrefix == "cooldownTimer" and 20 or bucketPrefix == "gcdTimer" and 30 or 40)
               or destination == "text" and (bucketPrefix == "cooldown" and 10
-                or bucketPrefix == "charge" and 20 or bucketPrefix == "keybind" and 30)
+                or (bucketPrefix == "charge" or bucketPrefix == "stacks") and 20 or bucketPrefix == "keybind" and 30 or 40)
               or option.order
             bucket = { type = "group", name = bucketLabel, inline = true, order = order, args = {} }
+            bucket.hidden = function(info)
+              for _, control in pairs(bucket.args) do
+                local hidden = control.hidden
+                if type(hidden) == "function" then hidden = hidden(info) end
+                if not hidden then return false end
+              end
+              return true
+            end
             sectionArgs[bucketPrefix] = bucket
           elseif not inlineDefinition and destination ~= "timer" and destination ~= "text"
             and (tonumber(option.order) or 50) < (tonumber(bucket.order) or 50) then
