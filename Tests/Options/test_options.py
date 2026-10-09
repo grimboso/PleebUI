@@ -62,7 +62,10 @@ function checkInline(group, ancestors)
  if group.inline then assert(type(group.name)=='string' and group.name:match('%S'),'Missing inline heading '..ancestors) end
  for key,option in pairs(group.args or {}) do
   if option.type=='group' then checkInline(option,ancestors..'/'..key)
-  else assert(group.inline==true,'Unheaded widget '..ancestors..'/'..key) end
+  else
+   assert(group.inline==true,'Unheaded widget '..ancestors..'/'..key)
+   assert(type(option.confirm)~='string','Confirmation text used as a method name '..ancestors..'/'..key)
+  end
  end
 end
 ''')
@@ -94,7 +97,7 @@ function ns.UnitFrames:GetBaseTextSizesForUnit() return 12,12,12 end
 function ns.UnitFrames:GetQuickSetupValue(key) return self.db.profile.quick and self.db.profile.quick[key] end
 function ns.UnitFrames:SetQuickSetupValue(key,value) self.db.profile.quick=self.db.profile.quick or {};self.db.profile.quick[key]=value end
 for _,pair in ipairs({{'PartyFrames',ns.UFDefaults.GetPartyDefaults()},{'RaidFrames',ns.UFDefaults.GetRaidDefaults()}}) do
- ns.Modules[pair[1]]={db=copy(pair[2]),IsEnabled=function() return true end,SafeRefresh=function() end,RefreshText=function() end,RefreshTextures=function() end}
+ ns.Modules[pair[1]]={db=copy(pair[2]),IsEnabled=function() return true end,SafeRefresh=function() end,RefreshText=function() end,RefreshTextures=function() end,RefreshThreat=function() end,RefreshAuraDisplay=function() end,RefreshMouseoverSettings=function() end}
 end
 ns.Modules.CastBar={db={profile={enabled=true}}}
 ''')
@@ -135,6 +138,26 @@ for _,family in ipairs({'player','target','focus','boss','party','raid'}) do
  for _,key in ipairs({'layout','text','visibility'}) do
   assert(not args[key].args.puiControls, family..' has a notice-only heading in '..key)
  end
+end
+local highlights=opts.args.general.args.indicators.args.highlights
+assert(highlights.inline and highlights.args.mouseoverThickness and highlights.args.targetThickness)
+assert(not opts.args.general.args.indicators.args.puiStyle_mouseoverBorder)
+highlights.args.mouseoverThickness.set(nil,6)
+assert(highlights.args.mouseoverThickness.get()==6)
+for _,family in ipairs({'party','raid'}) do
+ local args=opts.args[family].args
+ local db=ns.Modules[family=='party' and 'PartyFrames' or 'RaidFrames'].db.profile
+ local aggro=args.indicators.args.aggro.args
+ assert(aggro.enabled.name=='Enable' and aggro.style.name=='Style')
+ aggro.enabled.set(nil,true);aggro.style.set(nil,'BOTH');aggro.thickness.set(nil,5)
+ assert(db.threatIndicator.enabled and db.threatIndicator.style=='BOTH' and db.threatIndicator.borderSize==5)
+ local dispels=args.dispels.args.highlighting.args
+ assert(not args.dispels.args.puiStyle_border and args.dispels.args.blizzardIndicatorSettings)
+ db.debuffHighlighting='NONE'
+ dispels.healthColor.set(nil,true);assert(db.debuffHighlighting=='FILL' and dispels.borderSize.disabled())
+ dispels.border.set(nil,true);dispels.borderSize.set(nil,7)
+ assert(db.debuffHighlighting=='BOTH' and db.debuffHighlight.borderSize==7 and not dispels.borderSize.disabled())
+ dispels.border.set(nil,false);assert(db.debuffHighlighting=='FILL')
 end
 assert(opts.args.player.args.pet.args.text)
 assert(opts.args.target.args.targettarget.args.text)
@@ -216,6 +239,8 @@ for _,key in ipairs({'general','1','12'}) do
  local page=opts.args[key].args
  assert(page.general and page.layout and page.visibility)
  assert(page.layout.name=='Layout and appearance' and not page.appearance and not page.behavior)
+ assert(page.layout.args.buttonAppearance.name=='Button border')
+ assert(page.layout.args.buttonAppearance.args.borderColor.name=='Color')
 end
 for bar=1,12 do
  local page=opts.args[tostring(bar)].args
@@ -280,6 +305,7 @@ local source={
 local sections=ns.PCMOptions:BuildSections(source)
 local opts={type='group',name='Tracker',args=sections}
 ns.OptionsSchema.Apply(opts,'CooldownManager');checkInline(opts)
+assert(sections.general.args.quickTimers.name=='Timers')
 local function collect(group,result)
  for key,option in pairs(group.args or {}) do
   if option.type=='group' then collect(option,result) else result[key]=option end
@@ -328,7 +354,18 @@ assert(sections.timer.args.durationTimer.args.durationSwipeEdge.order==5)
 assert(sections.timer.args.cooldownTimer.args.cooldownSwipeEdge.order==5)
 assert(sections.timer.args.gcdTimer.args.gcdSwipeEdge.order==5)
 """)
-print('PCM section builder: concise quick settings, preserved callbacks, detailed controls and timer-row ordering passed.')
+lua.execute("""
+local deleted=0
+local sections=ns.PCMOptions:BuildSections({
+ deleteBar={type='execute',name='Delete tracker',confirm=true,confirmText='Delete this tracker and its saved settings?',
+ func=function() deleted=deleted+1 end}
+},{customTracker=true})
+local actions=sections.general.args.actions.args
+assert(actions.deleteBar.confirm==true and actions.deleteBar.confirmText=='Delete this tracker and its saved settings?')
+assert(deleted==0)
+actions.deleteBar.func();assert(deleted==1)
+""")
+print('PCM section builder: concise quick settings, preserved callbacks, confirmation metadata and timer-row ordering passed.')
 
 
 lua.execute('''
@@ -343,7 +380,12 @@ lua.execute('''
 local opts=UIThemeOptionsProvider():GetOptions();ns.OptionsSchema.Apply(opts,'UITHEME');checkInline(opts)
 assert(opts.childGroups=='tab' and opts.args.general and opts.args.layout and opts.args.colors and opts.args.text)
 assert(opts.args.text.args.global.args.font.name=='Font')
-assert(opts.args.layout.args.text.args.fontSize.name=='Font size')
+assert(not opts.args.layout.args.text and opts.args.layout.args.window.args.fontSize.name=='Font size')
+local savedFont
+Theme.GetOptionsFontSize=function() return savedFont end
+Theme.SetOptionsFontSize=function(value) savedFont=value end
+opts.args.layout.args.window.args.fontSize.set(nil,16)
+assert(opts.args.layout.args.window.args.fontSize.get()==16)
 assert(opts.args.layout.args.window.args.optionsUIScale.name=='Scale')
 ''')
 print('Actual UI Theme provider: named sections, global typography, options text, and mandatory headings passed.')
@@ -382,7 +424,7 @@ function Quality_RefreshPreview() end
 function Quality_GetPreviewWarnings() return {"Combat message"} end
 QualityPreviewIndex=1
 function Clamp(v,a,b) return math.min(b,math.max(a,v)) end
-function IsPetClass() return true end
+function IsPetClass() return TEST_CLASS=='HUNTER' end
 function IsHealPetClass() return false end
 ns.RaidUtilityModule={BuildBresLustOptions=function() return {type='group',name='Battle resurrection and bloodlust',inline=true,args={general={args={}},layout={args={bresLustWidgetIconSize={type='range',name='Icon size'}}}}} end,
 BuildRaidUtilityOptions=function() return {type='group',name='Raid utility',inline=true,args={buttons={type='group',name='Ready',inline=true,args={}},raidMarkers={type='group',name='Targets',inline=true,args={}},worldMarkers={type='group',name='World',inline=true,args={}},general={type='group',name='General',inline=true,args={}}}} end}
@@ -397,6 +439,21 @@ for _,class in ipairs({'HUNTER','MAGE'}) do
  assert(status.message.args.fontSize.name=='Font size' and status.timer.args.showText.name=='Show text')
  local ring={inner=opts.args.cursorTab.args.innerRing,click=opts.args.cursorTab.args.clickRing}
  assert(ring.inner.args.size.name=='Size' and ring.click.args.color.name=='Color')
+ assert(ring.click.args.size.name=='Extra size')
+ for _,inner in ipairs({false,true}) do
+  for _,click in ipairs({false,true}) do
+   ring.inner.args.shown.set(nil,inner);ring.click.args.shown.set(nil,click)
+   assert(ring.inner.args.size.disabled()==(not inner and not click))
+   assert(ring.inner.args.color.disabled()==not inner)
+   assert(ring.click.args.size.disabled()==not click and ring.click.args.color.disabled()==not click)
+  end
+ end
+ local pets=opts.args.combatTab.args.petWarnings.args
+ assert(not pets.missingPet and pets.missing and pets.dead and pets.missingPetWarning)
+ assert(pets.missing.hidden()==(class~='HUNTER') and pets.dead.hidden()==(class~='HUNTER'))
+ assert(pets.missingPetWarning.hidden()==(class~='HUNTER'))
+ assert(pets.missing.args.fontSize.name=='Font size' and pets.dead.args.textColor.name=='Text color')
+ assert(opts.args.combatTab.args.preview.args.warning.name=='Preview warning')
 end
 ''')
 print('Actual Quality provider: Hunter-only Emergency Salve, role groups, cursor groups, and mandatory headings passed.')
