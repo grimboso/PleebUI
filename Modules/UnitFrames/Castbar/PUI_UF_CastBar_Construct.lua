@@ -249,7 +249,7 @@ local function CB_CreateCastBarFrame(frame, unit, options)
       optionsString = "unitframes," .. (
         (unit == "target" and "target")
         or (unit == "focus" and "focus")
-        or (unit == "pet" and "pet")
+        or (unit == "pet" and "player,pet")
         or "player"
       ) .. ",castbar",
       overlayBelowFrame = true,
