@@ -12,13 +12,14 @@ local math_floor = _G.math.floor
 local math_max = _G.math.max
 local math_min = _G.math.min
 local pairs = _G.pairs
+local next = _G.next
 local sort = _G.table.sort
 local tostring = _G.tostring
 local type = _G.type
 
-local TOOLBAR_WIDTH = 570
+local TOOLBAR_WIDTH = 420
 local TOOLBAR_PADDING = 12
-local TOOLBAR_TITLE_HEIGHT = 34
+local TOOLBAR_TITLE_HEIGHT = 160
 local TOOLBAR_COLLAPSED_HEIGHT = 38
 local SECTION_GAP = 10
 local TOGGLE_WIDTH = 72
@@ -35,7 +36,7 @@ TestMode.active = TestMode.active == true
 TestMode.pendingStop = TestMode.pendingStop == true
 TestMode.toolbar = TestMode.toolbar or nil
 if TestMode.toolbarCollapsed == nil then
-  TestMode.toolbarCollapsed = true
+  TestMode.toolbarCollapsed = false
 end
 
 local function SortedRecords(records)
@@ -604,26 +605,25 @@ local function ConfigureChoiceControl(row, control, value, yOffset)
     button:ClearAllPoints()
   end
 
-  local previous
-  for index, choice in ipairs(control.values or {}) do
+  local choices = control.values or {}
+  local rowsUsed = math_max(1, math_floor((#choices + 2) / 3))
+  local rowHeight = rowsUsed * (TOGGLE_HEIGHT + TOGGLE_GAP) - TOGGLE_GAP
+  row:SetHeight(rowHeight)
+  for index, choice in ipairs(choices) do
     local button = AcquireChoiceButton(row, index)
     button.__puiControl = control
     button.__puiChoiceValue = choice.value
     button:SetText(choice.label or tostring(choice.value))
     button:ClearAllPoints()
-
-    if previous then
-      button:SetPoint("LEFT", previous, "RIGHT", TOGGLE_GAP, 0)
-    else
-      button:SetPoint("LEFT", row.label, "RIGHT", 8, 0)
-    end
-
+    button:SetPoint("TOPLEFT", row, "TOPLEFT",
+      82 + ((index - 1) % 3) * (TOGGLE_WIDTH + TOGGLE_GAP),
+      -math_floor((index - 1) / 3) * (TOGGLE_HEIGHT + TOGGLE_GAP))
     StyleButton(button, value == choice.value)
     button:Show()
-    previous = button
   end
 
   row:Show()
+  return rowHeight
 end
 
 local function CreateToolbarSection(parent)
@@ -690,14 +690,49 @@ local function AcquireRangeControl(section, index)
   return row
 end
 
+local function StyleVisibilityCheckbox(check, state)
+  local colors = ns.Theme.GetColors()
+  ns.Theme.SetSquareBackdrop(check, {
+    bg = colors.control,
+    border = colors.border,
+  }, math_max(1, ns.Theme.GetEdgeSize()))
+  check:SetChecked(state == "on")
+  check.indicator:SetText(state == "mixed" and "-" or "X")
+  check.indicator:SetShown(state ~= "off")
+  ns.Theme.ApplyFont(check.indicator, "body", 13)
+  check.indicator:SetTextColor(colors.accent[1], colors.accent[2], colors.accent[3], 1)
+end
+
+local function CreateVisibilityCheckbox(parent, onClick)
+  local check = CreateFrame("CheckButton", nil, parent, "BackdropTemplate")
+  check:SetSize(20, 20)
+  check.indicator = check:CreateFontString(nil, "OVERLAY")
+  check.indicator:SetPoint("CENTER")
+  check:SetScript("OnClick", onClick)
+  return check
+end
+
+function TestMode:QueueToolbarRefresh()
+  if self.toolbarRefreshPending then
+    return
+  end
+  self.toolbarRefreshPending = true
+  _G.C_Timer.After(0, function()
+    self.toolbarRefreshPending = nil
+    if self.toolbar and self.toolbar:IsShown() then
+      self:RebuildToolbar()
+    end
+  end)
+end
+
 function TestMode:EnsureToolbar()
   if self.toolbar then
     return self.toolbar
   end
 
   local panel = CreateFrame("Frame", "PleebUI_TestModeToolbar", UIParent, "BackdropTemplate")
-  panel:SetSize(TOOLBAR_WIDTH, 160)
-  panel:SetPoint("TOP", UIParent, "TOP", 0, -90)
+  panel:SetSize(TOOLBAR_WIDTH, 520)
+  panel:SetPoint("TOP", UIParent, "TOP", 0, -55)
   panel:SetFrameStrata("DIALOG")
   panel:SetFrameLevel(180)
   panel:SetClampedToScreen(true)
@@ -716,7 +751,7 @@ function TestMode:EnsureToolbar()
   local title = panel:CreateFontString(nil, "OVERLAY")
   title:SetPoint("TOPLEFT", panel, "TOPLEFT", TOOLBAR_PADDING, -10)
   StyleText(title, "header", 14)
-  title:SetText("PleebUI Test Mode")
+  title:SetText("PleebUI Edit Mode")
   panel.title = title
 
   local exit = CreateToolbarButton(panel, "Exit", 62, function()
@@ -735,11 +770,72 @@ function TestMode:EnsureToolbar()
   ns.Theme.ApplyExpandCollapseButton(minimize, not TestMode.toolbarCollapsed)
   panel.minimizeButton = minimize
 
-  panel.content = CreateFrame("Frame", nil, panel)
-  panel.content:SetPoint("TOPLEFT", panel, "TOPLEFT", 0, -TOOLBAR_TITLE_HEIGHT)
-  panel.content:SetPoint("TOPRIGHT", panel, "TOPRIGHT", 0, -TOOLBAR_TITLE_HEIGHT)
-  panel.content:SetHeight(100)
+  local visibility = ns.FrameUtil.GetMoverVisibilityConfig()
+  panel.setLabel = panel:CreateFontString(nil, "OVERLAY")
+  panel.setLabel:SetPoint("TOPLEFT", panel, "TOPLEFT", TOOLBAR_PADDING, -38)
+  StyleText(panel.setLabel, "body", 11)
+  panel.setButtons = {}
+  local previous
+  for _, setName in ipairs(ns.FrameUtil.GetMoverVisibilitySetNames()) do
+    local button = CreateToolbarButton(panel, setName, 91, function()
+      ns.FrameUtil.SelectMoverVisibilitySet(setName)
+      TestMode:RebuildToolbar()
+    end)
+    button:SetPoint("TOPLEFT", previous or panel, previous and "TOPRIGHT" or "TOPLEFT", previous and 6 or TOOLBAR_PADDING, previous and 0 or -61)
+    panel.setButtons[setName] = button
+    previous = button
+  end
 
+  panel.followCheck = CreateVisibilityCheckbox(panel, function(self)
+    ns.FrameUtil.GetMoverVisibilityConfig().followGroup = self:GetChecked() == true
+    StyleVisibilityCheckbox(self, self:GetChecked() and "on" or "off")
+  end)
+  panel.followCheck:SetPoint("TOPLEFT", panel, "TOPLEFT", TOOLBAR_PADDING, -99)
+  StyleVisibilityCheckbox(panel.followCheck, visibility.followGroup and "on" or "off")
+
+  panel.followLabel = panel:CreateFontString(nil, "OVERLAY")
+  panel.followLabel:SetPoint("LEFT", panel.followCheck, "RIGHT", 3, 0)
+  panel.followLabel:SetText("Follow current group on open")
+  panel.followLabel:SetWidth(180)
+  panel.followLabel:SetJustifyH("LEFT")
+  StyleText(panel.followLabel, "body", 11)
+
+  panel.resetButton = CreateToolbarButton(panel, "Reset preset", 112, function()
+    ns.FrameUtil.ResetMoverVisibilitySet()
+    TestMode:RebuildToolbar()
+  end)
+  panel.resetButton:SetPoint("TOPRIGHT", panel, "TOPRIGHT", -TOOLBAR_PADDING, -96)
+
+  panel.search = CreateFrame("EditBox", nil, panel, "InputBoxTemplate")
+  panel.search:SetAutoFocus(false)
+  panel.search:SetHeight(24)
+  panel.search:SetPoint("TOPLEFT", panel, "TOPLEFT", TOOLBAR_PADDING + 6, -132)
+  panel.search:SetPoint("TOPRIGHT", panel, "TOPRIGHT", -TOOLBAR_PADDING - 6, -132)
+  panel.searchHint = panel.search:CreateFontString(nil, "OVERLAY")
+  panel.searchHint:SetPoint("LEFT", panel.search, "LEFT", 5, 0)
+  panel.searchHint:SetText("Search movers...")
+  StyleText(panel.searchHint, "body", 11)
+  panel.search:SetScript("OnTextChanged", function(self)
+    panel.searchCollapsed = {}
+    panel.searchHint:SetShown(self:GetText() == "")
+    TestMode:RebuildToolbar()
+  end)
+  panel.search:SetScript("OnEscapePressed", function(self)
+    self:ClearFocus()
+  end)
+
+  panel.scroll = CreateFrame("ScrollFrame", nil, panel, "UIPanelScrollFrameTemplate")
+  panel.scroll:SetPoint("TOPLEFT", panel, "TOPLEFT", 0, -TOOLBAR_TITLE_HEIGHT)
+  panel.scroll:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", -27, 8)
+  ns.Theme.WidgetSkins.Scrollbar(panel.scroll.ScrollBar)
+
+  panel.content = CreateFrame("Frame", nil, panel.scroll)
+  panel.content:SetWidth(TOOLBAR_WIDTH - 30)
+  panel.content:SetHeight(100)
+  panel.scroll:SetScrollChild(panel.content)
+
+  panel.moverRows = {}
+  panel.searchCollapsed = {}
   panel.__puiSections = {}
   panel:Hide()
   self.toolbar = panel
@@ -786,124 +882,362 @@ local function ControlVisible(control, participantKey)
   return control:Visible(BuildContext(participantKey, "toolbar")) ~= false
 end
 
+local function BuildMoverTree()
+  local modules = {}
+  local keyed = {}
+
+  for _, entry in ipairs(ns.FrameUtil.GetRegisteredMoverEntries()) do
+    local opts = entry.opts
+    if opts.moduleKey then
+      local module = keyed[opts.moduleKey]
+      if not module then
+        module = {
+          key = opts.moduleKey,
+          label = opts.moduleLabel or opts.moduleKey,
+          groups = {},
+          groupMap = {},
+          movers = {},
+          allMovers = {},
+        }
+        keyed[opts.moduleKey] = module
+        modules[#modules + 1] = module
+      end
+      module.allMovers[#module.allMovers + 1] = entry
+
+      if opts.groupKey then
+        local group = module.groupMap[opts.groupKey]
+        if not group then
+          group = {
+            key = opts.moduleKey .. ":" .. opts.groupKey,
+            label = opts.groupLabel or opts.groupKey,
+            movers = {},
+          }
+          module.groupMap[opts.groupKey] = group
+          module.groups[#module.groups + 1] = group
+        end
+        group.movers[#group.movers + 1] = entry
+      else
+        module.movers[#module.movers + 1] = entry
+      end
+    end
+  end
+
+  local function ByLabel(first, second)
+    if first.label == second.label then
+      return first.key < second.key
+    end
+    return first.label < second.label
+  end
+  local function ByMoverLabel(first, second)
+    if first.label == second.label then
+      return first.key < second.key
+    end
+    return tostring(first.label) < tostring(second.label)
+  end
+
+  sort(modules, function(first, second)
+    if first.key == "external" then return false end
+    if second.key == "external" then return true end
+    return ByLabel(first, second)
+  end)
+  for _, module in ipairs(modules) do
+    sort(module.groups, ByLabel)
+    sort(module.movers, ByMoverLabel)
+    for _, group in ipairs(module.groups) do
+      sort(group.movers, ByMoverLabel)
+    end
+  end
+  return modules
+end
+
+local function AcquireMoverRow(panel, index)
+  local row = panel.moverRows[index]
+  if row then return row end
+
+  row = CreateFrame("Frame", nil, panel.content)
+  row:SetHeight(25)
+
+  local expand = CreateToolbarButton(row, "+", 22, function(self)
+    local config = ns.FrameUtil.GetMoverVisibilityConfig()
+    local key = self.__puiExpansionKey
+    if key == "previews" then
+      config.previewsExpanded = not (config.previewsExpanded == true)
+    else
+      local searching = panel.search:GetText() ~= ""
+      if searching then
+        panel.searchCollapsed[key] = not panel.searchCollapsed[key]
+      else
+        config.expanded[key] = not (config.expanded[key] == true)
+      end
+    end
+    TestMode:RebuildToolbar()
+  end)
+  row.expand = expand
+
+  local check = CreateVisibilityCheckbox(row, function(self)
+    ns.FrameUtil.SetMoverVisibilityNode(self.__puiKind, self.__puiKey, self.__puiState == "off")
+    TestMode:RebuildToolbar()
+  end)
+  check:SetPoint("RIGHT", row, "RIGHT", -5, 0)
+  row.check = check
+
+  local label = row:CreateFontString(nil, "OVERLAY")
+  label:SetJustifyH("LEFT")
+  StyleText(label, "body", 12)
+  row.label = label
+  panel.moverRows[index] = row
+  return row
+end
+
+local function MoverNodeState(kind, key, entries)
+  if not ns.FrameUtil.GetMoverVisibilityNodeChoice(kind, key) then
+    return "off"
+  end
+  local active = 0
+  for _, entry in ipairs(entries) do
+    if ns.FrameUtil.IsMoverVisibleInPreset(entry) then
+      active = active + 1
+    end
+  end
+  return active == #entries and "on" or "mixed"
+end
+
+local function ShowMoverRow(panel, index, y, kind, key, label, depth, state, expansionKey, expanded)
+  local row = AcquireMoverRow(panel, index)
+  row:ClearAllPoints()
+  row:SetPoint("TOPLEFT", panel.content, "TOPLEFT", TOOLBAR_PADDING + depth * 18, y)
+  row:SetPoint("TOPRIGHT", panel.content, "TOPRIGHT", -TOOLBAR_PADDING, y)
+  row.expand:ClearAllPoints()
+  row.expand:SetPoint("LEFT", row, "LEFT", 0, 0)
+  row.expand.__puiExpansionKey = expansionKey
+  row.expand:SetShown(expansionKey ~= nil)
+  if expansionKey then
+    row.expand:SetText(expanded and "-" or "+")
+    StyleButton(row.expand, false)
+  end
+  if type(state) == "boolean" then
+    state = state and "on" or "off"
+  end
+  row.check.__puiKind = kind
+  row.check.__puiKey = key
+  row.check.__puiState = state
+  StyleVisibilityCheckbox(row.check, state)
+  row.check:SetShown(kind ~= "preview")
+  row.label:ClearAllPoints()
+  row.label:SetPoint("LEFT", row, "LEFT", expansionKey and 27 or 8, 0)
+  row.label:SetPoint("RIGHT", row.check, "LEFT", -5, 0)
+  row.label:SetText(label)
+  StyleText(row.label, depth == 0 and "header" or "body", 12)
+  row:Show()
+end
+
 function TestMode:RebuildToolbar()
   local panel = self:EnsureToolbar()
   local content = panel.content
+  local config = ns.FrameUtil.GetMoverVisibilityConfig()
   HideToolbarSections(panel)
+  for _, row in ipairs(panel.moverRows) do row:Hide() end
+
+  panel.setLabel:SetText("Editing: " .. config.selectedSet)
+  panel.setLabel:SetShown(not self.toolbarCollapsed)
+  for name, button in pairs(panel.setButtons) do
+    StyleButton(button, name == config.selectedSet)
+  end
+  StyleVisibilityCheckbox(panel.followCheck, config.followGroup and "on" or "off")
+  for _, button in pairs(panel.setButtons) do
+    button:SetShown(not self.toolbarCollapsed)
+  end
+  panel.followCheck:SetShown(not self.toolbarCollapsed)
+  panel.followLabel:SetShown(not self.toolbarCollapsed)
+  panel.resetButton:SetShown(not self.toolbarCollapsed)
+  panel.search:SetShown(not self.toolbarCollapsed)
+
+  local search = (panel.search:GetText() or ""):lower()
+  local function Matches(value)
+    return search == "" or (tostring(value):lower():find(search, 1, true) ~= nil)
+  end
 
   local y = -2
-  local sectionIndex = 0
+  local rowIndex = 0
+  local function AddRow(kind, key, label, depth, state, expansionKey, expanded)
+    rowIndex = rowIndex + 1
+    ShowMoverRow(panel, rowIndex, y, kind, key, label, depth, state, expansionKey, expanded)
+    y = y - 26
+  end
 
-  for _, participantEntry in ipairs(SortedRecords(self.participants)) do
-    local key = participantEntry.key
-    local participant = participantEntry.record
-
-    if IsParticipantAvailable(key, participant) then
-      sectionIndex = sectionIndex + 1
-
-      local section = panel.__puiSections[sectionIndex]
-      if not section then
-        section = CreateToolbarSection(content)
-        panel.__puiSections[sectionIndex] = section
-      end
-
-      section:SetPoint("TOPLEFT", content, "TOPLEFT", TOOLBAR_PADDING, y)
-      section:SetPoint("TOPRIGHT", content, "TOPRIGHT", -TOOLBAR_PADDING, y)
-      section:SetHeight(70)
-      section:Show()
-
-      local Theme = ns.Theme
-      local colors = Theme.GetColors()
-      Theme.SetSquareBackdrop(section, {
-        bg = colors.background,
-        border = colors.border,
-      }, math_max(1, Theme.GetEdgeSize()))
-
-      section.heading:SetText(participant.label or key)
-
-      local enabled = self:IsParticipantEnabled(key)
-      section.enabledButton.__puiParticipantKey = key
-      section.enabledButton:SetText(enabled and "Enabled" or "Disabled")
-      StyleButton(section.enabledButton, enabled)
-
-      local toggleControls = {}
-      local choiceControls = {}
-      local rangeControls = {}
-
-      for _, controlEntry in ipairs(SortedRecords(self.controls)) do
-        local control = controlEntry.record
-        if ControlVisible(control, key) then
-          if control.type == "range" then
-            rangeControls[#rangeControls + 1] = control
-          elseif control.type == "choice" then
-            choiceControls[#choiceControls + 1] = control
-          else
-            toggleControls[#toggleControls + 1] = control
+  for _, module in ipairs(BuildMoverTree()) do
+    local moduleMatch = Matches(module.label)
+    local matching = {}
+    for _, entry in ipairs(module.allMovers) do
+      if moduleMatch or Matches(entry.label) then
+        matching[entry] = true
+      else
+        for _, group in ipairs(module.groups) do
+          if Matches(group.label) then
+            for _, member in ipairs(group.movers) do matching[member] = true end
           end
         end
       end
+    end
+    if next(matching) then
+      local moduleExpansion = "module:" .. module.key
+      local moduleExpanded = (search ~= "" and not panel.searchCollapsed[moduleExpansion])
+        or (search == "" and config.expanded[moduleExpansion] == true)
+      AddRow("modules", module.key, module.label, 0,
+        MoverNodeState("modules", module.key, module.allMovers), moduleExpansion, moduleExpanded)
+      if moduleExpanded then
+        for _, entry in ipairs(module.movers) do
+          if matching[entry] then
+            AddRow("movers", entry.key, entry.label, 1,
+              ns.FrameUtil.GetMoverVisibilityChoice(entry), nil, false)
+          end
+        end
+        for _, group in ipairs(module.groups) do
+          local groupMembers = {}
+          for _, entry in ipairs(group.movers) do
+            if matching[entry] then groupMembers[#groupMembers + 1] = entry end
+          end
+          if #groupMembers > 0 then
+            local groupExpansion = "group:" .. group.key
+            local groupExpanded = (search ~= "" and not panel.searchCollapsed[groupExpansion])
+              or (search == "" and config.expanded[groupExpansion] == true)
+            AddRow("groups", group.key, group.label, 1,
+              MoverNodeState("groups", group.key, group.movers), groupExpansion, groupExpanded)
+            if groupExpanded then
+              for _, entry in ipairs(groupMembers) do
+                AddRow("movers", entry.key, entry.label, 2,
+                  ns.FrameUtil.GetMoverVisibilityChoice(entry), nil, false)
+              end
+            end
+          end
+        end
+      end
+    end
+  end
 
-      local toggleY = -32
-      local toggleX = 8
-      local usableWidth = TOOLBAR_WIDTH - (TOOLBAR_PADDING * 2) - 16
+  y = y - SECTION_GAP
+  local previewExpanded = config.previewsExpanded == true
+  AddRow("preview", "previews", "Test previews", 0,
+    "off", "previews", previewExpanded)
+  y = y - 2
 
-      for index, control in ipairs(toggleControls) do
-        if toggleX + TOGGLE_WIDTH > usableWidth then
-          toggleX = 8
-          toggleY = toggleY - (TOGGLE_HEIGHT + TOGGLE_GAP)
+  local sectionIndex = 0
+  if previewExpanded then
+    for _, participantEntry in ipairs(SortedRecords(self.participants)) do
+      local key = participantEntry.key
+      local participant = participantEntry.record
+
+      if IsParticipantAvailable(key, participant) then
+        sectionIndex = sectionIndex + 1
+
+        local section = panel.__puiSections[sectionIndex]
+        if not section then
+          section = CreateToolbarSection(content)
+          panel.__puiSections[sectionIndex] = section
         end
 
-        local button = AcquireToggleButton(section, index)
-        button.__puiControl = control
-        button:SetText(control.label or control.key)
-        button:SetPoint("TOPLEFT", section, "TOPLEFT", toggleX, toggleY)
-        StyleButton(button, self:GetValue(control.key) == true)
-        button:Show()
-        toggleX = toggleX + TOGGLE_WIDTH + TOGGLE_GAP
+        section:SetPoint("TOPLEFT", content, "TOPLEFT", TOOLBAR_PADDING, y)
+        section:SetPoint("TOPRIGHT", content, "TOPRIGHT", -TOOLBAR_PADDING, y)
+        section:SetHeight(70)
+        section:Show()
+
+        local Theme = ns.Theme
+        local colors = Theme.GetColors()
+        Theme.SetSquareBackdrop(section, {
+          bg = colors.background,
+          border = colors.border,
+        }, math_max(1, Theme.GetEdgeSize()))
+
+        section.heading:SetText(participant.label or key)
+
+        local enabled = self:IsParticipantEnabled(key)
+        section.enabledButton.__puiParticipantKey = key
+        section.enabledButton:SetText(enabled and "Enabled" or "Disabled")
+        StyleButton(section.enabledButton, enabled)
+
+        local toggleControls = {}
+        local choiceControls = {}
+        local rangeControls = {}
+
+        for _, controlEntry in ipairs(SortedRecords(self.controls)) do
+          local control = controlEntry.record
+          if ControlVisible(control, key) then
+            if control.type == "range" then
+              rangeControls[#rangeControls + 1] = control
+            elseif control.type == "choice" then
+              choiceControls[#choiceControls + 1] = control
+            else
+              toggleControls[#toggleControls + 1] = control
+            end
+          end
+        end
+
+        local toggleY = -32
+        local toggleX = 8
+        local usableWidth = content:GetWidth() - (TOOLBAR_PADDING * 2) - 16
+
+        for index, control in ipairs(toggleControls) do
+          if toggleX + TOGGLE_WIDTH > usableWidth then
+            toggleX = 8
+            toggleY = toggleY - (TOGGLE_HEIGHT + TOGGLE_GAP)
+          end
+
+          local button = AcquireToggleButton(section, index)
+          button.__puiControl = control
+          button:SetText(control.label or control.key)
+          button:SetPoint("TOPLEFT", section, "TOPLEFT", toggleX, toggleY)
+          StyleButton(button, self:GetValue(control.key) == true)
+          button:Show()
+          toggleX = toggleX + TOGGLE_WIDTH + TOGGLE_GAP
+        end
+
+        local rowsUsed = #toggleControls > 0
+          and (math_floor((#toggleControls - 1) / math_max(1, math_floor((usableWidth - 8) / (TOGGLE_WIDTH + TOGGLE_GAP)))) + 1)
+          or 0
+        local sectionHeight = 31 + (rowsUsed * (TOGGLE_HEIGHT + TOGGLE_GAP))
+        local controlY = -(sectionHeight + 2)
+
+        for index, control in ipairs(choiceControls) do
+          local rowHeight = ConfigureChoiceControl(
+            AcquireChoiceControl(section, index),
+            control,
+            self:GetValue(control.key),
+            controlY
+          )
+          controlY = controlY - (rowHeight + TOGGLE_GAP)
+          sectionHeight = sectionHeight + rowHeight + TOGGLE_GAP
+        end
+
+        for index, control in ipairs(rangeControls) do
+          ConfigureRangeControl(
+            AcquireRangeControl(section, index),
+            control,
+            self:GetValue(control.key),
+            controlY
+          )
+          controlY = controlY - RANGE_HEIGHT
+          sectionHeight = sectionHeight + RANGE_HEIGHT
+        end
+
+        sectionHeight = math_max(58, sectionHeight + 8)
+        section:SetHeight(sectionHeight)
+        y = y - sectionHeight - SECTION_GAP
       end
-
-      local rowsUsed = #toggleControls > 0
-        and (math_floor((#toggleControls - 1) / math_max(1, math_floor((usableWidth - 8) / (TOGGLE_WIDTH + TOGGLE_GAP)))) + 1)
-        or 0
-      local sectionHeight = 31 + (rowsUsed * (TOGGLE_HEIGHT + TOGGLE_GAP))
-      local controlY = -(sectionHeight + 2)
-
-      for index, control in ipairs(choiceControls) do
-        ConfigureChoiceControl(
-          AcquireChoiceControl(section, index),
-          control,
-          self:GetValue(control.key),
-          controlY
-        )
-        controlY = controlY - (TOGGLE_HEIGHT + TOGGLE_GAP)
-        sectionHeight = sectionHeight + TOGGLE_HEIGHT + TOGGLE_GAP
-      end
-
-      for index, control in ipairs(rangeControls) do
-        ConfigureRangeControl(
-          AcquireRangeControl(section, index),
-          control,
-          self:GetValue(control.key),
-          controlY
-        )
-        controlY = controlY - RANGE_HEIGHT
-        sectionHeight = sectionHeight + RANGE_HEIGHT
-      end
-
-      sectionHeight = math_max(58, sectionHeight + 8)
-      section:SetHeight(sectionHeight)
-      y = y - sectionHeight - SECTION_GAP
     end
+
   end
 
   local contentHeight = math_max(60, -y + 2)
   content:SetHeight(contentHeight)
-  content:SetShown(not self.toolbarCollapsed)
+  local availableHeight = math_max(200, UIParent:GetHeight() - 110)
   panel:SetHeight(
     self.toolbarCollapsed
       and TOOLBAR_COLLAPSED_HEIGHT
-      or TOOLBAR_TITLE_HEIGHT + contentHeight + TOOLBAR_PADDING
+      or math_min(availableHeight, math_max(350, TOOLBAR_TITLE_HEIGHT + contentHeight + TOOLBAR_PADDING))
   )
+  panel.scroll:SetShown(not self.toolbarCollapsed)
+  panel.scroll:SetVerticalScroll(math_min(panel.scroll:GetVerticalScroll(),
+    math_max(0, contentHeight - (panel:GetHeight() - TOOLBAR_TITLE_HEIGHT - 8))))
   ns.Theme.ApplyExpandCollapseButton(panel.minimizeButton, not self.toolbarCollapsed)
   StylePanel(panel)
 end
@@ -916,6 +1250,22 @@ local function RefreshToolbarTheme()
 
   StylePanel(panel)
   StyleText(panel.title, "header", 14)
+  StyleText(panel.setLabel, "body", 11)
+  StyleText(panel.followLabel, "body", 11)
+  StyleVisibilityCheckbox(panel.followCheck, ns.FrameUtil.GetMoverVisibilityConfig().followGroup and "on" or "off")
+  ns.Theme.WidgetSkins.Scrollbar(panel.scroll.ScrollBar)
+  StyleText(panel.searchHint, "body", 11)
+  StyleButton(panel.resetButton, false)
+  for name, button in pairs(panel.setButtons) do
+    StyleButton(button, name == ns.FrameUtil.GetMoverVisibilityConfig().selectedSet)
+  end
+  for _, row in ipairs(panel.moverRows) do
+    if row:IsShown() then
+      StyleText(row.label, "body", 12)
+      StyleVisibilityCheckbox(row.check, row.check.__puiState)
+      StyleButton(row.expand, false)
+    end
+  end
   StyleButton(panel.exitButton, false)
   StyleButton(panel.minimizeButton, false)
   ns.Theme.ApplyExpandCollapseButton(panel.minimizeButton, not TestMode.toolbarCollapsed)
@@ -1016,6 +1366,7 @@ TestMode.IsActive = P:Def("TestMode:IsActive", TestMode.IsActive)
 TestMode.SetActive = P:Def("TestMode:SetActive", TestMode.SetActive)
 TestMode.EnsureToolbar = P:Def("TestMode:EnsureToolbar", TestMode.EnsureToolbar)
 TestMode.RebuildToolbar = P:Def("TestMode:RebuildToolbar", TestMode.RebuildToolbar)
+TestMode.QueueToolbarRefresh = P:Def("TestMode:QueueToolbarRefresh", TestMode.QueueToolbarRefresh)
 TestMode.RefreshTheme = P:Def("TestMode:RefreshTheme", TestMode.RefreshTheme)
 TestMode.ShowToolbar = P:Def("TestMode:ShowToolbar", TestMode.ShowToolbar)
 TestMode.HideToolbar = P:Def("TestMode:HideToolbar", TestMode.HideToolbar)
