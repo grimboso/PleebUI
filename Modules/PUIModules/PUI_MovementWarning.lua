@@ -36,9 +36,7 @@ local knownSpells = {}
 local spellOptions = {}
 local specializationID = 0
 local spellbookDirty = true
-local previewEnabled = false
 local optionsPreview
-local previewSpellID
 
 local function NormalizeReminderSettings()
   local db = Addon.db.profile.movementWarning
@@ -164,7 +162,7 @@ local function EnsureRow(index)
   row.countdownText = countdown:GetCountdownFontString()
   row.countdownText:SetJustifyH("LEFT")
   countdown:SetScript("OnCooldownDone", function()
-    if not previewEnabled and not ns.Flags.IsEditing then
+    if not ns.Flags.IsEditing then
       row.runtime:Hide()
     end
   end)
@@ -360,8 +358,7 @@ function MovementWarning:RefreshWarning()
   local db = Addon.db.profile.movementWarning
   local enabled = self:IsEnabled() and db.enabled
   local previewVisible = FrameUtil.IsMoverPreviewVisible("movement_warning")
-  local preview = enabled and (previewEnabled or ns.Flags.IsEditing)
-    and previewVisible
+  local preview = enabled and ns.Flags.IsEditing and previewVisible
   for index = 1, trackedCount do
     local row = rows[index]
     local config = db.reminders[row.baseSpellID]
@@ -392,7 +389,7 @@ function MovementWarning:OnMovementEvent(event, eventSpellID, baseSpellID, spell
   if event == "PLAYER_SPECIALIZATION_CHANGED" and eventSpellID ~= "player" then return end
 
   if event == "SPELL_UPDATE_COOLDOWN" or event == "SPELL_UPDATE_CHARGES" then
-    if trackedCount == 0 or previewEnabled or ns.Flags.IsEditing
+    if trackedCount == 0 or ns.Flags.IsEditing
     then
       return
     end
@@ -460,8 +457,6 @@ function MovementWarning:ApplySettings()
     }) do
       self:RegisterEvent(event, "OnMovementEvent")
     end
-  else
-    previewEnabled = false
   end
   if anchor then
     FrameUtil.SetMoverSuppressed("movement_warning", not (self:IsEnabled() and db.enabled))
@@ -473,42 +468,64 @@ end
 function MovementWarning:RefreshOptionsPreview()
   local root = optionsPreview
   if not root or not root:IsShown() then return end
-  if not previewSpellID or not spellOptions[previewSpellID] then previewSpellID = knownSpells[1] end
-  if not previewSpellID then
-    root.title:SetText("No supported movement spells are currently known")
-    root.sample:Hide()
-    return
-  end
-
-  local config = Addon.db.profile.movementWarning.reminders[previewSpellID]
+  local count = #knownSpells
+  root.title:SetText(count > 0 and "Movement reminders" or "No supported movement spells are currently known")
   local selected = GetSelectedSpells()
-  local enabled = not selected or selected[previewSpellID] == true
+  local db = Addon.db.profile.movementWarning
   local fontKey, flags = ns.Theme.GetIconTextGlobal()
   local font = ns.LSM:Fetch("font", fontKey)
-  local size = ns.Theme.ResolveFontSize(config.fontSize, "qualityOfLife")
-  local countdownSize = ns.Theme.ResolveFontSize(config.countdownFontSize, "qualityOfLife")
-  local iconMode = config.displayMode == "icon"
-  local name = spellOptions[previewSpellID]
-  root.title:SetText(name .. (enabled and "" or " (disabled)"))
-  root.label:SetFont(font, size, flags)
-  root.label:SetTextColor(config.color.r, config.color.g, config.color.b, config.color.a)
-  root.label:SetText(config.showCountdown and ("No " .. name .. " for") or (name .. " unavailable"))
-  root.countdown:SetFont(font, countdownSize, flags)
-  root.countdown:SetTextColor(config.countdownColor.r, config.countdownColor.g, config.countdownColor.b, config.countdownColor.a)
-  root.countdown:SetText(config.showDecimals and "8.0" or "8")
-  root.countdown:SetShown(config.showCountdown)
-  root.icon:SetTexture(C_Spell.GetSpellTexture(C_Spell.GetOverrideSpell(previewSpellID)))
-  root.icon:SetSize(size, size)
-  root.icon:SetShown(iconMode)
-  root.label:SetShown(not iconMode)
-  local gap = size * 0.2
-  local width = (iconMode and size or root.label:GetStringWidth())
-    + (config.showCountdown and (gap + root.countdown:GetStringWidth()) or 0)
-  root.sample:SetSize(math.max(1, width), math.max(size, countdownSize) * 1.6)
-  root.sample:SetScale(math.min(1, math.max(1, root:GetWidth() - 40) / math.max(1, width)))
-  root.countdown:ClearAllPoints()
-  root.countdown:SetPoint("LEFT", iconMode and root.icon or root.label, "RIGHT", gap, 0)
-  root.sample:Show()
+  local cellHeight = math.max(1, (root:GetHeight() - 64) / math.max(1, count))
+  local cellWidth = math.max(1, root:GetWidth() - 40)
+  for index, spellID in ipairs(knownSpells) do
+    local preview = root.samples[index]
+    if not preview then
+      preview = CreateFrame("Frame", nil, root)
+      preview.title = preview:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+      preview.title:SetPoint("TOP", preview, "TOP", 0, 0)
+      preview.sample = CreateFrame("Frame", nil, preview)
+      preview.sample:SetPoint("CENTER", preview, "CENTER", 0, -8)
+      preview.label = preview.sample:CreateFontString(nil, "OVERLAY")
+      preview.label:SetPoint("LEFT", preview.sample, "LEFT")
+      preview.icon = preview.sample:CreateTexture(nil, "ARTWORK")
+      preview.icon:SetPoint("LEFT", preview.sample, "LEFT")
+      preview.icon:SetTexCoord(0.07, 0.93, 0.07, 0.93)
+      preview.countdown = preview.sample:CreateFontString(nil, "OVERLAY")
+      root.samples[index] = preview
+    end
+    local config = db.reminders[spellID]
+    local enabled = not selected or selected[spellID] == true
+    local size = ns.Theme.ResolveFontSize(config.fontSize, "qualityOfLife")
+    local countdownSize = ns.Theme.ResolveFontSize(config.countdownFontSize, "qualityOfLife")
+    local iconMode = config.displayMode == "icon"
+    local name = spellOptions[spellID]
+    ns.Theme.ApplyFont(preview.title, "body", 12)
+    preview.title:SetText(name .. (enabled and "" or " (disabled)"))
+    preview.title:SetScale(math.min(1, cellWidth / math.max(1, preview.title:GetStringWidth())))
+    preview:SetSize(cellWidth, cellHeight)
+    preview:ClearAllPoints()
+    preview:SetPoint("TOP", root, "TOP", 0, -32 - (index - 1) * cellHeight)
+    preview.label:SetFont(font, size, flags)
+    preview.label:SetTextColor(config.color.r, config.color.g, config.color.b, config.color.a)
+    preview.label:SetText(config.showCountdown and ("No " .. name .. " for") or (name .. " unavailable"))
+    preview.countdown:SetFont(font, countdownSize, flags)
+    preview.countdown:SetTextColor(config.countdownColor.r, config.countdownColor.g, config.countdownColor.b, config.countdownColor.a)
+    preview.countdown:SetText(config.showDecimals and "8.0" or "8")
+    preview.countdown:SetShown(config.showCountdown)
+    preview.icon:SetTexture(C_Spell.GetSpellTexture(C_Spell.GetOverrideSpell(spellID)))
+    preview.icon:SetSize(size, size)
+    preview.icon:SetShown(iconMode)
+    preview.label:SetShown(not iconMode)
+    local gap = size * 0.2
+    local width = (iconMode and size or preview.label:GetStringWidth())
+      + (config.showCountdown and (gap + preview.countdown:GetStringWidth()) or 0)
+    local height = math.max(size, config.showCountdown and countdownSize or 0) * 1.6
+    preview.sample:SetSize(math.max(1, width), height)
+    preview.sample:SetScale(math.max(0.01, math.min(1, cellWidth / math.max(1, width), (cellHeight - 20) / height)))
+    preview.countdown:ClearAllPoints()
+    preview.countdown:SetPoint("LEFT", iconMode and preview.icon or preview.label, "RIGHT", gap, 0)
+    preview:Show()
+  end
+  for index = count + 1, #root.samples do root.samples[index]:Hide() end
 end
 
 local function MovementWarning_BuildPreview(_, _, shell)
@@ -517,19 +534,13 @@ local function MovementWarning_BuildPreview(_, _, shell)
     local root = CreateFrame("Frame", nil, host)
     optionsPreview = root
     root:EnableMouse(false)
+    root.samples = {}
     root.title = root:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     root.title:SetPoint("TOP", root, "TOP", 0, -12)
-    root.sample = CreateFrame("Frame", nil, root)
-    root.sample:SetPoint("CENTER", root, "CENTER", 0, 0)
-    root.label = root.sample:CreateFontString(nil, "OVERLAY")
-    root.label:SetPoint("LEFT", root.sample, "LEFT")
-    root.icon = root.sample:CreateTexture(nil, "ARTWORK")
-    root.icon:SetPoint("LEFT", root.sample, "LEFT")
-    root.icon:SetTexCoord(0.07, 0.93, 0.07, 0.93)
-    root.countdown = root.sample:CreateFontString(nil, "OVERLAY")
     local hint = root:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    hint:SetPoint("BOTTOM", root, "BOTTOM", 0, 12)
-    hint:SetText("Sample countdown · Change any reminder to preview it")
+    hint:SetPoint("BOTTOM", root, "BOTTOM", 0, 8)
+    hint:SetText("Sample countdowns")
+    root:SetScript("OnSizeChanged", function() MovementWarning:RefreshOptionsPreview() end)
   end
   optionsPreview:SetParent(host)
   optionsPreview:ClearAllPoints()
@@ -543,7 +554,6 @@ end
 function MovementWarning:GetOptions()
   NormalizeReminderSettings()
   if not InCombatLockdown() then RefreshSpellbook() end
-  if not previewSpellID or not spellOptions[previewSpellID] then previewSpellID = knownSpells[1] end
   local db = Addon.db.profile.movementWarning
   local options = {
     type = "group", name = "Movement Reminder", arg = { puiExplicit = true },
@@ -560,20 +570,6 @@ function MovementWarning:GetOptions()
               Addon:NotifyOptionsTreeChanged("MovementWarning", ns._PUIActiveOptionsPath)
             end,
           },
-          preview = {
-            type = "select", name = "Preview reminder", order = 20,
-            values = function() return spellOptions end,
-            disabled = function() return #knownSpells == 0 end,
-            get = function() return previewSpellID end,
-            set = function(_, value) previewSpellID = value; self:RefreshOptionsPreview() end,
-          },
-          onScreenPreview = {
-            type = "toggle", name = "Show on-screen preview", order = 30,
-            desc = "Show sample reminders at their live position. Use /pe to move them.",
-            disabled = function() return not db.enabled end,
-            get = function() return previewEnabled end,
-            set = function(_, value) previewEnabled = value; self:RefreshWarning() end,
-          },
         },
       },
     },
@@ -588,7 +584,6 @@ function MovementWarning:GetOptions()
     local spellID = knownSpells[index]
     local config = db.reminders[spellID]
     local function RefreshReminder()
-      previewSpellID = spellID
       self:RefreshFonts()
       self:RefreshWarning()
     end
@@ -620,7 +615,6 @@ function MovementWarning:GetOptions()
               db.spells[specializationID] = selected
             end
             selected[spellID] = value
-            previewSpellID = spellID
             if self:IsEnabled() and db.enabled then
               RefreshSelectedSpells()
             else
@@ -723,7 +717,6 @@ end
 
 function MovementWarning:OnDisable()
   self:UnregisterAllEvents()
-  previewEnabled = false
   if anchor then
     for index = 1, #rows do
       local row = rows[index]
