@@ -93,7 +93,7 @@ function ns.UnitFrames:GetBaseTextSizesForUnit() return 12,12,12 end
 function ns.UnitFrames:GetQuickSetupValue(key) return self.db.profile.quick and self.db.profile.quick[key] end
 function ns.UnitFrames:SetQuickSetupValue(key,value) self.db.profile.quick=self.db.profile.quick or {};self.db.profile.quick[key]=value end
 for _,pair in ipairs({{'PartyFrames',ns.UFDefaults.GetPartyDefaults()},{'RaidFrames',ns.UFDefaults.GetRaidDefaults()}}) do
- ns.Modules[pair[1]]={db=copy(pair[2]),IsEnabled=function() return true end,SafeRefresh=function() end,RefreshText=function() end}
+ ns.Modules[pair[1]]={db=copy(pair[2]),IsEnabled=function() return true end,SafeRefresh=function() end,RefreshText=function() end,RefreshTextures=function() end}
 end
 ns.Modules.CastBar={db={profile={enabled=true}}}
 ''')
@@ -118,6 +118,22 @@ for _,family in ipairs({'player','target','focus','boss','party','raid'}) do
   assert(not text.height and not text.frameHeight and not text.powerHeight)
  end
  assert(args.layout.args.size.args.height.name=='Height')
+ assert(not args.layout.args.absorb and args.layout.args.textures.name=='Textures')
+ local textures=args.layout.args.textures.args
+ assert(textures.healthTexture and textures.powerTexture and textures.absorbTexture)
+ assert(not args.layout.args.health.args.texture and not args.layout.args.power.args.texture)
+ if family=='party' or family=='raid' then
+  assert(not textures.useCustomTexture)
+ else
+  assert(textures.useCustomTexture and textures.healthTexture.disabled())
+  textures.useCustomTexture.set(nil,true);assert(not textures.healthTexture.disabled())
+  textures.useCustomTexture.set(nil,false);assert(textures.healthTexture.disabled())
+  local range=args.visibility.args.range
+  assert(range.args.outOfRangeAlpha and not range.args.puiStyle_outOfRange)
+ end
+ for _,key in ipairs({'layout','text','visibility'}) do
+  assert(not args[key].args.puiControls, family..' has a notice-only heading in '..key)
+ end
 end
 assert(opts.args.player.args.pet.args.text)
 assert(opts.args.target.args.targettarget.args.text)
@@ -156,6 +172,14 @@ for _,key in ipairs({'general','1','12'}) do
  local page=opts.args[key].args
  assert(page.general and page.layout and page.visibility)
  assert(page.layout.name=='Layout and appearance' and not page.appearance and not page.behavior)
+end
+for bar=1,12 do
+ local page=opts.args[tostring(bar)].args
+ assert(not page.advanced and page.general.args.actionSlots.inline)
+ local slots=page.general.args.actionSlots.args
+ slots.buttonOffset.set({},3)
+ assert(ns.ActionBarsCore.db.bars[tostring(bar)].buttonOffset==3)
+ assert(slots.slotOrder.name():find('4',1,true))
 end
 for _,key in ipairs({'pet','stance'}) do
  local page=opts.args.special.args[key].args
@@ -199,7 +223,36 @@ assert(countdown.fonts_cooldownFontSize.disabled()==true)
 disabled=false;assert(countdown.fonts_cooldownFontSize.disabled()==false)
 assert(countdown.fonts_cooldownFont.order<countdown.fonts_cooldownFontSize.order)
 ''')
-print('PCM section builder: explicit text roles, generic typography, inherited disabled state, and heading rule passed.')
+lua.execute("""
+local changed
+local function toggle(name) return {type='toggle',name=name,get=function() return false end,
+ set=function(_,value) changed=value end} end
+local source={
+ forceCooldown=toggle('Enable duration timer'),cooldownTimerEnabled=toggle('Enable cooldown timer'),
+ showTooltips=toggle('Show tooltips'),desaturateCooldown=toggle('Desaturation'),
+ showCountdown=toggle('Show countdown'),countCharge=toggle('Show charges'),keybindShow=toggle('Show keybinds'),
+ size={type='range',name='Icon size'},spacing={type='range',name='Spacing'},columns={type='range',name='Icons per row'},
+}
+local sections=ns.PCMOptions:BuildSections(source)
+local opts={type='group',name='Tracker',args=sections}
+ns.OptionsSchema.Apply(opts,'CooldownManager');checkInline(opts)
+local function collect(group,result)
+ for key,option in pairs(group.args or {}) do
+  if option.type=='group' then collect(option,result) else result[key]=option end
+ end
+ return result
+end
+local quick=collect(sections.general,{})
+assert(quick.forceCooldown and quick.cooldownTimerEnabled and quick.showTooltips and quick.desaturateCooldown)
+assert(not quick.size and not quick.spacing and not quick.columns)
+assert(not quick.showCountdown and not quick.countCharge and not quick.keybindShow)
+quick.forceCooldown.set(nil,true);assert(changed==true)
+local text=collect(sections.text,{})
+local layout=collect(sections.layout,{})
+assert(text.showCountdown and text.countCharge and text.keybindShow)
+assert(layout.size and layout.spacing and layout.columns)
+""")
+print('PCM section builder: text roles, inherited conditions, concise quick settings, original callbacks and detailed controls passed.')
 
 
 lua.execute('''
@@ -311,6 +364,14 @@ for folder in ('Core', 'Modules'):
                     file.read_text(encoding='utf-8-sig'), str(file))
 
 lua.execute("""
+local notice={type='description',name='Unavailable in combat',order=-10,hidden=function() return true end}
+local notices={type='group',name='Text',arg={puiExplicit=true},args={
+ notice=notice,
+ appearance={type='group',name='Appearance',inline=true,order=10,args={color={type='color',name='Text color'}}},
+}}
+ns.OptionsSchema.Apply(notices,'Example')
+assert(not notices.args.puiControls and notices.args.appearance.args.notice==notice)
+assert(notice.hidden())
 local callback=function() return .35 end
 local saved=.35
 local source={args={layout={type='group',name='Layout',disabled=function() return true end,args={
