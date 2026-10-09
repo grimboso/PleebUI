@@ -3430,7 +3430,8 @@ do
           reset = {
             type = "execute",
             name = "Reset form override",
-            confirm = "Discard this form's custom color override?",
+            confirm = true,
+            confirmText = "Discard this form's custom color override?",
             order = 10,
             func = function()
               config.colorMode = nil
@@ -3638,7 +3639,8 @@ do
           delete = {
             type = "execute",
             name = "Delete tick",
-            confirm = "Delete this tick marker?",
+            confirm = true,
+            confirmText = "Delete this tick marker?",
             order = 5,
             func = function()
               table.remove(entries, tickIndex)
@@ -4130,7 +4132,8 @@ do
           delete = {
             type = "execute",
             name = "Delete color shift",
-            confirm = "Delete this color shift?",
+            confirm = true,
+            confirmText = "Delete this color shift?",
             order = 5,
             func = function()
               if AuraWidget.RemoveStackColorThreshold(settings, index) then
