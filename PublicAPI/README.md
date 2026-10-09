@@ -2,7 +2,7 @@
 
 PleebUI exposes `PleebUIAPI` for addons that want to use PleebUI Edit Mode movers or add configuration pages to the PleebUI options window.
 
-The current API version is `1.1`.
+The current API version is `1.3`.
 
 ## Loading PleebUI first
 
@@ -45,6 +45,8 @@ local plugin = PleebUIAPI:RegisterPlugin("PleebDefensives", {
 Plugin keys must be stable and unique. PleebUI prefixes mover, page, and Edit Mode participant keys with the plugin key so separate addons cannot overwrite one another accidentally.
 
 The plugin owns its frames, SavedVariables, configuration values, and runtime behavior. PleebUI owns only registration, Edit Mode presentation, and options navigation.
+
+In Edit Mode, movers registered through `plugin:RegisterMover` or `plugin:RegisterGhostMover` automatically appear beneath **External Modules > plugin name**. The plugin must unregister movers it no longer owns. The mover tree controls only the Edit Mode handles, never the plugin's runtime visibility, layout, or saved position.
 
 ## API version
 
@@ -191,6 +193,7 @@ plugin:RegisterMover("reminders", reminderHolder, {
 Supported direct-mover fields:
 
 - `label`
+- `defaultVisibility`: optional starting choices for `Custom`, `Solo`, `Party`, and `Raid`; omitted contexts default to shown. Users can override these choices in /pe.
 - `savePosition`
 - `resetPosition`
 - `onDragStop`
