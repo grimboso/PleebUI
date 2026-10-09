@@ -470,7 +470,7 @@ function Options.GetSearchEntries()
     results[#results + 1] = { label = label, path = path, keywords = keywords or "" }
   end
   local settingKeywords = {
-    general = "general quick settings enabled visibility opacity tooltip spell specialization assignment timer swipe countdown charges stacks keybind font size glow desaturate saturation behavior",
+    general = "general quick settings enabled tooltip spell specialization assignment timer duration cooldown charges stacks glow desaturate saturation behavior",
     layout = "layout appearance size width height spacing rows columns orientation growth icon position color saturation desaturate texture border",
     timer = "timer display duration active aura buff cooldown gcd swipe countdown recharge fill drain",
     visibility = "visibility combat mouseover opacity fade active inactive ready cooldown",
