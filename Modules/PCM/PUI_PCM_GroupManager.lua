@@ -113,6 +113,20 @@ local function GetGroupFrame(group)
   return frame
 end
 
+local function GetCustomGroupAnchor(group)
+  if group.kind ~= "BAR" then
+    return "CENTER"
+  end
+  local layout = type(group.layout) == "table" and group.layout or nil
+  if not layout or layout.layoutMode ~= "GROW" then
+    return "CENTER"
+  end
+  if layout.orientation == "VERTICAL" then
+    return layout.growthDirection == "LEFT" and "TOPRIGHT" or "TOPLEFT"
+  end
+  return layout.growthDirection == "UP" and "BOTTOMLEFT" or "TOPLEFT"
+end
+
 local function ApplyCustomGroupPosition(group, frame)
   local position = group.position
   if type(position) ~= "table" then
@@ -122,6 +136,7 @@ local function ApplyCustomGroupPosition(group, frame)
       x = 0,
       y = 0,
     }
+    group.position = position
   end
 
   frame:ClearAllPoints()
@@ -132,13 +147,25 @@ local function ApplyCustomGroupPosition(group, frame)
     Pixel.Round(tonumber(position.x) or 0),
     Pixel.Round(tonumber(position.y) or 0)
   )
+
+  local point = GetCustomGroupAnchor(group)
+  if position.point ~= point then
+    local x, y = FrameUtil.GetPointOffsetsForFrame(frame, point)
+    position.point = point
+    position.relativePoint = point
+    position.x = Pixel.Round(x or 0)
+    position.y = Pixel.Round(y or 0)
+    frame:ClearAllPoints()
+    frame:SetPoint(point, UIParent, point, position.x, position.y)
+  end
 end
 
 local function SaveCustomGroupPosition(group, frame)
-  local x, y = FrameUtil.GetMoverOffsets(frame)
+  local point = GetCustomGroupAnchor(group)
+  local x, y = FrameUtil.GetPointOffsetsForFrame(frame, point)
   group.position = {
-    point = "CENTER",
-    relativePoint = "CENTER",
+    point = point,
+    relativePoint = point,
     x = Pixel.Round(x or 0),
     y = Pixel.Round(y or 0),
   }
@@ -494,6 +521,57 @@ local function SetDynamicBoundsActive(active)
   flushFrame:SetShown(enabled and (pendingLayout or dynamicBoundsRefreshPasses > 0))
 end
 
+local BAR_AURA_UNITS = { "player", "target", "totem" }
+
+local function LayoutAuraBarButtons(group, records, plan)
+  for index = 1, #records do
+    for _, button in pairs(records[index].buttons) do
+      if not button:CanBeAccessedInContext() then
+        return
+      end
+    end
+  end
+
+  local style = ResolveBarLayout(group.data)
+  local grow = style.layoutMode == "GROW"
+  local vertical = style.orientation == "VERTICAL"
+  local reverse = vertical and style.growthDirection == "LEFT"
+    or not vertical and style.growthDirection == "UP"
+  local point = vertical
+    and (reverse and "TOPRIGHT" or "TOPLEFT")
+    or (reverse and "BOTTOMLEFT" or "TOPLEFT")
+  local previousPoint = vertical
+    and (reverse and "TOPLEFT" or "TOPRIGHT")
+    or (reverse and "TOPLEFT" or "BOTTOMLEFT")
+  local spacing = Pixel.Round(tonumber(style.rowSpacing) or 1)
+  local x = vertical and (reverse and -spacing or spacing) or 0
+  local y = not vertical and (reverse and spacing or -spacing) or 0
+  local previousButton
+
+  for index = 1, #records do
+    local record = records[index]
+    AuraRuntime:SetBarGrowthPresentation(record, grow)
+    for _, unit in ipairs(BAR_AURA_UNITS) do
+      local button = record.buttons[unit]
+      if button then
+        button:ClearAllPoints()
+        if grow then
+          local item = plan.items[index]
+          button:SetSize(item.width, item.height)
+          if previousButton then
+            button:SetPoint(point, previousButton, previousPoint, x, y)
+          else
+            button:SetPoint(point, group.frame, point, 0, 0)
+          end
+          previousButton = button
+        else
+          button:SetAllPoints(record.parts.frame)
+        end
+      end
+    end
+  end
+end
+
 local function ApplyPlan(group, records, plan)
   local frame = group.frame
   local minimum = not group.data.isDefault and 40 or 1
@@ -515,6 +593,10 @@ local function ApplyPlan(group, records, plan)
     then
       AuraRuntime:FinalizeRecordLayout(record)
     end
+  end
+
+  if group.data.kind == "BAR" then
+    LayoutAuraBarButtons(group, records, plan)
   end
 
   if not group.data.isDefault then
@@ -861,6 +943,7 @@ local function CreateCustomGroup(kind, x, y, name)
       height = 20,
       rowSpacing = 1,
       orientation = "HORIZONTAL",
+      layoutMode = "FIXED",
       growthDirection = "DOWN",
     } or {
       iconSize = 36,
