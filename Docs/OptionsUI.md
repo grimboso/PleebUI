@@ -16,6 +16,9 @@ Every widget belongs to a named inline group. Avoid inline containers whose only
 wrap other inline groups. A parent with real shared controls may contain independently named roles.
 Combine sparse pages or groups when their controls serve the same goal; do not invent empty groups
 to meet a template. Lazy editor placeholders may be empty until selected.
+Place page notices inside an existing visible inline group rather than adding a notice-only heading.
+Keep shared range opacity in one group. Keep related texture sources and selectors together.
+Use an inline group in General for a small advanced setting instead of giving it a sparse page.
 
 Use short property labels when the heading identifies the affected object. Keep qualifiers when
 multiple objects share one group. Use Behaviour consistently. Use Enable for activation and Show
@@ -33,6 +36,9 @@ units; the UI translates where required. Do not change runtime database units to
 General shortcuts use `OptionsSchema.BuildCommonSettings` with explicit source paths and clear
 labels. Copies retain source callbacks and inherited visibility/disabled conditions. Avoid callbacks
 that infer their owner from the complete options path. Keep the list small and omit font-size lists.
+PCM quick settings keep timer activation, tooltips and desaturation; dimensions, spacing and text
+display controls stay in their detailed sections. Name size controls for the selected display type.
+Use Spacing between icon and bar for the distance separating those two elements.
 
 Search section destinations come from the same builders as the actual editors.
 Delete actions and resets that discard saved customization require a scoped confirmation.
