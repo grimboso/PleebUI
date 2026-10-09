@@ -148,6 +148,10 @@ local function EnsureSalveAnchor()
     label = "Emergency Salve",
     moduleKey = "hunterTools",
     moduleLabel = "Hunter Tools",
+    isAvailable = IsHunter,
+    onPreviewVisibilityChanged = function(visible)
+      HunterTools:OnEditModeChanged(visible)
+    end,
     optionsString = "Quality,combatTab",
     smartSnap = {
       family = "positionOnly",
@@ -420,9 +424,11 @@ function HunterTools:OnEditModeChanged(enable)
   if not IsHunter() then return end
   local db = NormalizeDB()
   local showSalvePreview = enable == true
+    and self:IsEnabled()
     and db.enabled == true
     and db.emergencySalveEnabled == true
     and IsHunter()
+    and FrameUtil.IsMoverPreviewVisible("hunter_emergency_salve")
 
   if showSalvePreview then
     EnsureSalveAnchor()
