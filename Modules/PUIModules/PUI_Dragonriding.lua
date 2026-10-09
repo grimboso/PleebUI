@@ -1126,6 +1126,8 @@ function Dragonriding:EnsureMovers()
 
   FrameUtil:RegisterMover("Dragonriding", moverGhost, {
     label = "Skyriding",
+    moduleKey = "skyriding",
+    moduleLabel = "Skyriding",
     useOverlayDrag = true,
     optionsString = "Dragonriding",
     smartSnap = {
