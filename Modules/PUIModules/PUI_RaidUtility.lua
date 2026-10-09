@@ -328,7 +328,7 @@ BRLWidget_UpdateGhostMover = function()
 
       return ns.Flags.IsEditing and true or false
     end,
-    optionsString = "Quality,qualityTab",
+    optionsString = "Quality,groupTab",
     savePosition = SavePosition,
     onDragStop = function()
       BRLWidget_UpdateGhostMover()
@@ -1852,7 +1852,7 @@ RaidUtility_UpdateGhostMovers = function()
           RaidUtility_UpdateWindowAlpha(windowKind, false, false)
           return current[spec.enabledKey] == true and ns.Flags.IsEditing and true or false
         end,
-        optionsString = "Quality,qualityTab",
+        optionsString = "Quality,groupTab",
         savePosition = SavePosition,
         resetPosition = function()
           local current = NormalizeDB()
