@@ -4014,9 +4014,32 @@ local function UFCB_BuildCustomAuraDisplaysArgs(getAuras, refresh, displayID, de
   sections.iconSize.hidden = IsDefensivesDisplay
   sections.iconSize.disabled = FieldsDisabled
   sections.appearance.args.iconSize = nil
+  advanced.appearance = nil
+  for order, definition in ipairs({
+    { "duration", "Duration text", "durationTextSize", "durationOverride", "Font size" },
+    { "stacks", "Stack text", "stackTextSize", "stackOverride", "Font size" },
+    { "border", "Border", "borderSize", "borderOverride", "Thickness" },
+    { "tooltips", "Tooltips", "tooltips", "tooltipsOverride", "Show tooltips" },
+    { "swipe", "Cooldown swipe", "disableSwipe", "swipeOverride", "Hide swipe" },
+    { "countdown", "Countdown", "disableCountdownText", "countdownOverride", "Hide countdown" },
+  }) do
+    local value = sections.appearance.args[definition[3]]
+    local override = sections.appearance.args[definition[4]]
+    value.name, value.order = definition[5], 10
+    override.name, override.order = "Override shared setting", 20
+    value.width, value.relWidth = "relative", 0.5
+    override.width, override.relWidth = "relative", 0.5
+    local group = UFCB_BuildInlineArgsGroup(definition[2], 10 + order, { value = value, override = override })
+    group.arg = { puiExplicit = true }
+    group.hidden, group.disabled = sections.appearance.hidden, sections.appearance.disabled
+    advanced[definition[1]] = group
+  end
   sections.appearance = nil
   sections.layout.args.sortMethod = nil
   sections.layout.args.sortDirection = nil
+  for _, option in pairs(advanced.sorting.args) do
+    option.width, option.relWidth = "relative", 0.5
+  end
 
   return {
     overview = {
@@ -6857,17 +6880,6 @@ local function UFCB_BuildCastbarArgs(unitKey)
   args.spellName.args.offsetY.order = 8
   args.spellName.args.maxWidth.order = 9
 
-  args.spellName.args.sharedFontInfo = {
-    type = "description",
-    name = function()
-      local shared = OptionsUtil.ResolveFontKey(nil, true)
-      return "Global font: " .. tostring(shared)
-        .. ". Spell name size and position are configured below."
-    end,
-    order = 1.5,
-    fontSize = "medium",
-  }
-
   args.castTime = UFCB_BuildInlineArgsGroup("Cast time", 2, {
     showCast = toggles.showCast,
     showRemainingTime = toggles.showRemainingTime,
@@ -7110,6 +7122,80 @@ local function UFCB_BuildCastbarArgs(unitKey)
       )
     end,
   }
+
+  local appearance = args.appearance.args
+  args.feature = UFCB_BuildInlineArgsGroup("Feature", 0, {
+    enabled = appearance.enabled, testMode = appearance.testMode, reset = appearance.reset,
+  })
+  args.size = UFCB_BuildInlineArgsGroup("Size", 4, { width = appearance.width, height = appearance.height })
+  args.bar = UFCB_BuildInlineArgsGroup("Bar", 5, {
+    useCustomColor = appearance.useCustomColor,
+    texture = appearance.texture, color = appearance.barColor, backgroundColor = appearance.backgroundColor,
+  })
+  args.bar.args.useCustomColor.order = 1
+  args.bar.args.texture.name, args.bar.args.texture.order = "Texture", 2
+  args.bar.args.color.name, args.bar.args.color.order = "Color", 3
+  args.bar.args.backgroundColor.order = 4
+  args.border = UFCB_BuildInlineArgsGroup("Border", 6, {
+    thickness = appearance.borderSize,
+    color = BuildCastbarColor(cfg, "borderColor", "Color", 2, { hasAlpha = true, alphaDefault = 1 }),
+  })
+  args.border.args.thickness.name, args.border.args.thickness.order = "Thickness", 1
+  args.appearance = UFCB_BuildInlineArgsGroup("Appearance", 7, {
+    showIcon = appearance.showIcon, showPingOverlay = appearance.showPingOverlay,
+  })
+  args.uninterruptible = UFCB_BuildInlineArgsGroup("Uninterruptible casts", 8, {
+    shield = appearance.uninterruptShieldMode, texture = appearance.uninterruptTextureMode,
+  })
+  args.empowerStageColors = appearance.empowerStageColors
+  args.empowerStageColors.order = 10
+  if unitKey == "player" then
+    args.empower = UFCB_BuildInlineArgsGroup("Empowered casts", 9, {
+      showPips = appearance.showEmpowerPips, showHold = appearance.showEmpowerHold,
+      holdColor = appearance.empowerHoldColor,
+    })
+    args.channel = UFCB_BuildInlineArgsGroup("Channels", 11, {
+      showTicks = appearance.showChannelTicks, thickness = appearance.channelTickThickness,
+      showClipWarning = appearance.showDisintegrateClipWarning, clipWarningText = appearance.disintegrateClipWarningText,
+    })
+    args.channel.args.showClipWarning.order = 1
+    args.channel.args.showTicks.order = 2
+    args.channel.args.thickness.order = 3
+    args.channel.args.clipWarningText.order = 4
+    args.instantCast.name, args.instantCast.order = "Instant casts", 12
+    local instant = args.instantCast.args
+    instant.showInstantCasts.desc = instant.instantCastHelp.name
+    instant.instantCastHelp = nil
+    for index, entry in ipairs({
+      { "showInstantCasts", "Enable instant cast bar" },
+      { "instantCastFillMode", "GCD direction" },
+      { "instantCastTexture", "Bar texture" },
+      { "instantCastAlpha", "Bar opacity" },
+      { "instantCastUseOverlay", "Show overlay" },
+      { "instantCastOverlayTexture", "Overlay texture" },
+      { "instantCastOverlayAlpha", "Overlay opacity" },
+    }) do
+      instant[entry[1]].name, instant[entry[1]].order = entry[2], index
+    end
+    instant.instantCastUseOverlay.desc = "Add a decorative texture over the timed bar."
+  end
+  args.castTarget.args.displayTarget.desc = args.castTarget.args.help.name
+  args.castTarget.args.help = nil
+  for _, group in pairs(args) do
+    group.arg = { puiExplicit = true }
+    for _, option in pairs(group.args) do
+      if option.type ~= "description" and option.type ~= "group" then
+        option.width, option.relWidth = "relative", group == args.bar and 0.333 or 0.5
+      end
+    end
+  end
+  args.bar.args.useCustomColor.relWidth = 1
+  if unitKey == "player" then
+    for _, key in ipairs({ "instantCastUseOverlay", "instantCastOverlayTexture", "instantCastOverlayAlpha" }) do
+      args.instantCast.args[key].relWidth = 0.333
+    end
+  end
+  args.feature.args.reset.order = 900
 
   return args
 end
@@ -7375,17 +7461,13 @@ local function UFCB_BuildFrameLeafSpecs(general, name, health, power, indicators
     general.shared = { type = "description", name = "Feature activation and shared settings are configured in General settings.", order = 1 }
   end
   for _, group in pairs(layout) do group.arg = { puiExplicit = true } end
-  general.commonSettings = ns.OptionsSchema.BuildCommonSettings({ args = layout }, {
-    { path = { "size", "width" }, label = "Frame width" },
-    { path = { "size", "height" }, label = "Frame height" },
-  })
+  layout.range = range
+  layout.range.order = 70
+  if next(visibility) then
+    layout.conditions = UFCB_BuildInlineArgsGroup("Visibility", 60, visibility)
+  end
   local specs = {
-    { key = "general", name = "General", order = 1, args = general },
-    { key = "layout", name = "Layout and appearance", order = 2, args = layout },
-    { key = "visibility", name = "Visibility", order = 3, args = {
-      conditions = next(visibility) and UFCB_BuildInlineArgsGroup("Conditions", 10, visibility) or nil,
-      range = range,
-    } },
+    { key = "layout", name = "Layout and appearance", order = 1, args = UFCB_MergeOptionArgs(general, layout) },
     { key = "text", name = "Text", order = 4, args = {
       name = ns.OptionsSchema.BuildTextGroup("Name", 10, name),
       health = ns.OptionsSchema.BuildTextGroup("Health", 20, health),
@@ -7668,9 +7750,7 @@ local function UFCB_BuildGeneralRootLeafSpecs()
   general.portraitsEnabled = appearance.portraitsEnabled
   appearance.enableUnitMouseoverTooltips, appearance.portraitsEnabled = nil, nil
   return {
-    { key = "auras", name = "General", order = 1, args = general },
-    { key = "appearance", name = "Layout and appearance", order = 2, args = UFCB_MergeOptionArgs(appearance, { textures = media.textures }) },
-    { key = "visibility", name = "Visibility", order = 3, args = { range = media.range } },
+    { key = "appearance", name = "Layout and appearance", order = 1, args = UFCB_MergeOptionArgs(general, appearance, { textures = media.textures, range = media.range }) },
     { key = "textfonts", name = "Text", order = 4, args = anchors },
     { key = "indicators", name = "Indicators", order = 5, args = indicators },
   }
@@ -7730,7 +7810,7 @@ local function UFCB_BuildTopLevelUnitArgs(activeKey)
     },
     {
       key = "focus",
-      order = 4,
+      order = 6,
       name = "Focus",
       unitKey = "focus",
       rootName = "Focus",
@@ -7743,7 +7823,7 @@ local function UFCB_BuildTopLevelUnitArgs(activeKey)
     },
     {
       key = "boss",
-      order = 5,
+      order = 7,
       name = "Boss Frames",
       unitKey = "boss",
       rootName = "Boss Frames",
@@ -7806,14 +7886,14 @@ Addon:RegisterOptionsSection("unitframes", function()
         UFCB_BuildTopLevelUnitArgs(lazyBuild and activeTab or nil),
         {
           party = {
-            order = 6,
+            order = 4,
             name = "Party",
             type = "group",
             childGroups = "tree",
             args = (not lazyBuild or activeTab == "party") and UFCB_BuildGroupedRootArgs("party") or {},
           },
           raid = {
-            order = 7,
+            order = 5,
             name = "Raid",
             type = "group",
             childGroups = "tree",
