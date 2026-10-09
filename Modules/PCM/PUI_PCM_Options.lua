@@ -132,7 +132,7 @@ local TIMER_ROWS = {
   cooldownSwipeEdgeColor = { 6, 0.25, "Swipe edge color" },
 }
 
-local function CombineHidden(parent, child)
+local function CombineCondition(parent, child)
   if parent == nil then return child end
   if child == nil then return parent end
   if parent == true or child == true then return true end
@@ -154,7 +154,7 @@ function Options:BuildSections(source)
     }
   end
 
-  local function Collect(args, category, prefix, label, hidden)
+  local function Collect(args, category, prefix, label, hidden, disabled)
     for key, option in pairs(args) do
       local optionKey = prefix == "" and key or prefix .. "_" .. key
       if option.type == "group" then
@@ -164,7 +164,7 @@ function Options:BuildSections(source)
           option.order = 20
           sections.general.args[optionKey] = option
         else
-          Collect(option.args or {}, nextCategory, optionKey, option.name, CombineHidden(hidden, option.hidden))
+          Collect(option.args or {}, nextCategory, optionKey, option.name, CombineCondition(hidden, option.hidden), CombineCondition(disabled, option.disabled))
         end
       elseif option.type ~= "header" then
         local destination = FIELD_SECTIONS[key] or category
@@ -194,7 +194,7 @@ function Options:BuildSections(source)
           end
           if role then
             bucketPrefix = role
-            bucketLabel = role == "cooldown" and "Countdown" or role == "charge" and "Charges / stacks" or "Keybinds"
+            bucketLabel = role == "cooldown" and "Countdown" or role == "charge" and "Counts" or "Keybinds"
           end
         elseif destination == "timer" then
           if key:lower():find("gcd", 1, true) then
@@ -229,9 +229,24 @@ function Options:BuildSections(source)
             bucketPrefix = "glowStyle"
           end
         end
+        if destination == "text" then
+          local property = key:match("^[Cc]ooldown(.+)$") or key:match("^charge(.+)$")
+            or key:match("^keybind(.+)$") or key:match("^Duration(.+)$") or key:match("^Stack(.+)$")
+          local properties = {
+            Font = { "Font", 40 }, FontSize = { "Font size", 50 }, Size = { "Font size", 50 },
+            Outline = { "Outline", 60 }, Color = { "Text color", 70 },
+            Anchor = { "Anchor point", 80 }, OffsetX = { "Horizontal offset", 90 },
+            OffsetY = { "Vertical offset", 100 },
+          }
+          local definition = property and properties[property]
+          if definition then option.name, option.order = definition[1], definition[2] end
+          if key == "countFontSize" or key == "durationCountFontSize" then option.name, option.order = "Font size", 50 end
+          if key == "countTextColor" or key == "durationTextColor" then option.name, option.order = "Text color", 70 end
+        end
         local inlineDefinition = INLINE_GROUPS[bucketPrefix]
         if inlineDefinition then bucketLabel = inlineDefinition[1] end
-        option.hidden = CombineHidden(hidden, option.hidden)
+        option.hidden = CombineCondition(hidden, option.hidden)
+        option.disabled = CombineCondition(disabled, option.disabled)
         local quickSetting = QUICK_SETTINGS[key]
         if quickSetting and destination ~= "general" and destination ~= "visibility" and option.hidden ~= true
           and (key ~= "enabled" or destination == "glow")
