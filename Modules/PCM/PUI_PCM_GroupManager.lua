@@ -176,6 +176,10 @@ local function RegisterCustomGroupMover(group, frame)
   local moverKey = "PCM_Group_" .. group.id
   FrameUtil:RegisterMover(moverKey, frame, {
     label = group.name,
+    moduleKey = "pcm",
+    moduleLabel = "Cooldown Manager",
+    groupKey = "customGroups",
+    groupLabel = "Custom Groups",
     optionsString = "CooldownManager," .. group.id,
     useOverlayDrag = true,
     smartSnap = {
