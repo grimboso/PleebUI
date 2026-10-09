@@ -96,7 +96,7 @@ local function PUI_PageShell_GetPreviewHeightBounds(self)
     or self.__puiHelpText ~= ""
     or self.headerActions:IsShown()
   then
-    reservedHeight = reservedHeight + PUI_PAGE_HEADER_HEIGHT + PUI_PAGE_GAP
+    reservedHeight = reservedHeight + math_max(PUI_PAGE_HEADER_HEIGHT, self.header:GetHeight()) + PUI_PAGE_GAP
   end
 
   if self.stickyStrip:IsShown() then
@@ -175,7 +175,7 @@ local function PUI_PageShell_RebuildLayout(self)
   self.title:ClearAllPoints()
   Pixel.Point(self.title, "TOPLEFT", self.header, "TOPLEFT", 16, -9)
   Pixel.Point(self.title, "TOPRIGHT", self.header, "TOPRIGHT", -textRightInset, -9)
-  Pixel.Height(self.title, 20)
+  Pixel.Height(self.title, math_max(20, self.title:GetStringHeight() + 2))
 
   self.description:ClearAllPoints()
   if hasTitle then
@@ -185,7 +185,7 @@ local function PUI_PageShell_RebuildLayout(self)
     Pixel.Point(self.description, "TOPLEFT", self.header, "TOPLEFT", 16, -9)
     Pixel.Point(self.description, "TOPRIGHT", self.header, "TOPRIGHT", -textRightInset, -9)
   end
-  Pixel.Height(self.description, 16)
+  Pixel.Height(self.description, math_max(16, self.description:GetStringHeight() + 2))
 
   self.helpLine:ClearAllPoints()
   if hasDescription then
@@ -198,15 +198,30 @@ local function PUI_PageShell_RebuildLayout(self)
     Pixel.Point(self.helpLine, "TOPLEFT", self.header, "TOPLEFT", 16, -9)
     Pixel.Point(self.helpLine, "TOPRIGHT", self.header, "TOPRIGHT", -textRightInset, -9)
   end
-  Pixel.Height(self.helpLine, 14)
+  Pixel.Height(self.helpLine, math_max(14, self.helpLine:GetStringHeight() + 2))
 
   self.headerActions:ClearAllPoints()
   Pixel.Point(self.headerActions, "TOPRIGHT", self.header, "TOPRIGHT", -16, -10)
   Pixel.Size(self.headerActions, 160, 22)
 
   local headerHeight = 0
+
   if hasTitle or hasDescription or hasHelp or hasHeaderActions then
-    headerHeight = PUI_PAGE_HEADER_HEIGHT
+    local textHeight = 0
+
+    if hasTitle then
+      textHeight = textHeight + self.title:GetHeight() + 1
+    end
+
+    if hasDescription then
+      textHeight = textHeight + self.description:GetHeight() + 1
+    end
+
+    if hasHelp then
+      textHeight = textHeight + self.helpLine:GetHeight() + 1
+    end
+
+    headerHeight = math_max(PUI_PAGE_HEADER_HEIGHT, textHeight + 18)
   end
 
   if headerHeight > 0 then
@@ -298,12 +313,12 @@ local function PUI_PageShell_RefreshTheme(self)
 
 
   Theme.ApplyFont(self.title, "title", 16)
-  Theme.ApplyFont(self.description, "body", 11)
-  Theme.ApplyFont(self.helpLine, "tiny", 10)
+  Theme.ApplyFont(self.description, "body", 12)
+  Theme.ApplyFont(self.helpLine, "body", 11)
 
   self.title:SetTextColor(textColor[1], textColor[2], textColor[3], textColor[4])
-  self.description:SetTextColor(textColor[1], textColor[2], textColor[3], textColor[4] * 0.72)
-  self.helpLine:SetTextColor(textColor[1], textColor[2], textColor[3], textColor[4] * 0.58)
+  self.description:SetTextColor(textColor[1], textColor[2], textColor[3], textColor[4] * 0.90)
+  self.helpLine:SetTextColor(textColor[1], textColor[2], textColor[3], textColor[4] * 0.85)
 end
 
 function PageShell.Create(parent)
@@ -383,6 +398,7 @@ function PageShell.Create(parent)
 
   function shell:RefreshTheme()
     PUI_PageShell_RefreshTheme(self)
+    PUI_PageShell_RequestLayout(self)
   end
 
   function shell:SetTitle(text)
