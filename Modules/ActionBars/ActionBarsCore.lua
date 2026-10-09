@@ -815,8 +815,8 @@ function Core:LayoutButtons(bar, skin, buttonCount, perRow)
   local buttons = bar.buttons
   local size = math_max(1, Round(skin.iconSize))
   local spacing = math_max(0, Round(skin.iconSpacing))
-  local paddingX = math_max(0, Round(PADDING_X))
-  local paddingY = math_max(0, Round(PADDING_Y))
+  local paddingX = skin.showBarBackground and math_max(0, Round(PADDING_X)) or 0
+  local paddingY = skin.showBarBackground and math_max(0, Round(PADDING_Y)) or 0
   local count = Clamp(buttonCount or skin.iconsPerBar or #buttons, 1, #buttons > 0 and #buttons or 1)
   local columns = Clamp(perRow or skin.iconsPerRow or count, 1, count)
   local rows = math_floor((count - 1) / columns) + 1
@@ -1342,7 +1342,7 @@ function Core:RegisterMover(bar)
         custom.macroFontSize = design.macroFontSize
         custom.showChargeText = design.showChargeText ~= false
         custom.chargeFontSize = design.chargeFontSize
-        Refresh({ skin = true, alpha = true, fonts = true })
+        Refresh({ layout = true, skin = true, alpha = true, fonts = true })
       end,
     } or (barKey == "pet" and {
       family = "actionBars",
