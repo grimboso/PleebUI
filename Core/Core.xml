@@ -16,6 +16,7 @@
   <Script file="GUI\PUI_Dialogs.lua"/>
   <Script file="GUI\PUI_Label.lua"/>
   <Script file="GUI\PUI_OptionsUtil.lua"/>
+  <Script file="GUI\PUI_OptionsSchema.lua"/>
   <Script file="GUI\PUI_PageShell.lua"/>
   <Script file="GUI\PUI_PreviewBox.lua"/>
   <Script file="GUI\PUI_GUI.lua"/>
