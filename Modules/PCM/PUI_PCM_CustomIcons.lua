@@ -440,6 +440,10 @@ local function RegisterMover(record)
   FrameUtil:EnsureGhostMover(key, {
     label = record.label,
     optionsString = record.optionsString,
+    moduleKey = "pcm",
+    moduleLabel = "Cooldown Manager",
+    groupKey = "customIcons",
+    groupLabel = "Custom Icons",
     useOverlayDrag = true,
     liveFrame = function() return frame end,
     shouldShow = function()
