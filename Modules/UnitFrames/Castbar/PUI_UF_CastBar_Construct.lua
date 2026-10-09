@@ -97,7 +97,8 @@ local function CB_GetBorder(frame, cfg)
   end
 
   border:SetBackdrop(border.__puiBackdrop)
-  border:SetBackdropBorderColor(0, 0, 0, 1)
+  local color = cfg and cfg.borderColor or CastBar.defaults.profile.player.borderColor
+  border:SetBackdropBorderColor(color[1], color[2], color[3], color[4])
 
   return border
 end
