@@ -3354,10 +3354,9 @@ local function QualityProvider(AddonObj)
     }
     warnings.args.combatWarningFontSize.name = "Font size"
     warnings.args.combatWarningFontSize.order = 50
-    warnings.args.text = ns.OptionsSchema.BuildTextGroup("Warning", 30, {
-      fontSize = warnings.args.combatWarningFontSize,
-    })
-    warnings.args.combatWarningFontSize = nil
+    options.args.combatTab.args.combatMessages = combatStatus.args.message
+    options.args.combatTab.args.combatTimer = combatStatus.args.timer
+    options.args.combatTab.args.combatStatus = nil
 
     local pets = visual.petWarnings.args
     local missing = pets.missingPet.args
@@ -3372,8 +3371,8 @@ local function QualityProvider(AddonObj)
     }
     for _, key in ipairs({ "idlePet", "lowHealth" }) do
       local args = pets[key].args
-      args.text = ns.OptionsSchema.BuildTextGroup("Warning", 30, { fontSize = args.size, textColor = args.color })
-      args.size, args.color = nil, nil
+      args.size.name, args.color.name = "Font size", "Text color"
+      args.size.order, args.color.order = 50, 70
     end
     ring.args = {
       inner = { type = "group", name = "Inner ring", inline = true, order = 10, arg = { puiExplicit = true }, args = {
@@ -3388,6 +3387,9 @@ local function QualityProvider(AddonObj)
       group.args.size.name, group.args.size.order = "Size", 20
       group.args.color.name, group.args.color.order = "Color", 30
     end
+    options.args.cursorTab.args.innerRing = ring.args.inner
+    options.args.cursorTab.args.clickRing = ring.args.click
+    options.args.cursorTab.args.cursorRing = nil
     local groupTools = options.args.groupTab.args
     local bres = groupTools.battleResLust
     local bresArgs = bres.args.general.args
