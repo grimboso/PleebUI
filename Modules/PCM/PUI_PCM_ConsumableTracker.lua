@@ -826,6 +826,8 @@ local function RefreshMover()
 
   FrameUtil:EnsureGhostMover(TRACKER_MOVER_KEY, {
     label = "Consumable Tracker",
+    moduleKey = "pcm",
+    moduleLabel = "Cooldown Manager",
     optionsString = "CooldownManager,consumables",
     useOverlayDrag = true,
     smartSnap = {
