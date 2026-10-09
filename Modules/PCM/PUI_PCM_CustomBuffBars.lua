@@ -794,6 +794,10 @@ local function _CustomBars_RegisterMover(id, f, cfg)
   end
 
   local moverOpts = {
+    moduleKey = "pcm",
+    moduleLabel = "Cooldown Manager",
+    groupKey = "buffBars",
+    groupLabel = "Custom Buff Bars",
     label = ns.Modules.CooldownManager:GetCustomBarDisplayName(cfg),
     optionsString = "CooldownManager,customTrackers,bb:" .. tostring(id),
     liveFrame = function()
