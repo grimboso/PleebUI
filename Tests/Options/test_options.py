@@ -109,9 +109,10 @@ ns.OptionsSchema.Apply(opts,'unitframes')
 checkInline(opts)
 for _,family in ipairs({'player','target','focus','boss','party','raid'}) do
  local args=opts.args[family].args
- for _,key in ipairs({'general','layout','visibility','text','indicators','auras'}) do
+ for _,key in ipairs({'layout','text','indicators','auras'}) do
   assert(args[key],family..' missing '..key)
  end
+ assert(not args.general and not args.visibility and not args.layout.args.commonSettings)
  assert(not args.health and not args.name and not args.power)
  for _,role in ipairs({'name','health','power'}) do
   local text=args.text.args[role].args
@@ -138,12 +139,19 @@ for _,family in ipairs({'player','target','focus','boss','party','raid'}) do
   assert(textures.useCustomTexture and textures.healthTexture.disabled())
   textures.useCustomTexture.set(nil,true);assert(not textures.healthTexture.disabled())
   textures.useCustomTexture.set(nil,false);assert(textures.healthTexture.disabled())
-  local range=args.visibility.args.range
+  local range=args.layout.args.range
   assert(range.args.outOfRangeAlpha and not range.args.puiStyle_outOfRange)
  end
- for _,key in ipairs({'layout','text','visibility'}) do
+ for _,key in ipairs({'layout','text'}) do
   assert(not args[key].args.puiControls, family..' has a notice-only heading in '..key)
  end
+end
+assert(opts.args.target.order<opts.args.party.order and opts.args.party.order<opts.args.raid.order)
+assert(opts.args.raid.order<opts.args.focus.order and opts.args.focus.order<opts.args.boss.order)
+assert(not opts.args.general.args.auras and not opts.args.general.args.visibility)
+for _,family in ipairs({'party','raid'}) do
+ assert(opts.args[family].args.auras.order<opts.args[family].args.dispels.order)
+ assert(opts.args[family].args.dispels.order<opts.args[family].args.indicators.order)
 end
 local highlights=opts.args.general.args.indicators.args.highlights
 assert(highlights.inline and highlights.args.mouseoverThickness and highlights.args.targetThickness)
@@ -179,7 +187,7 @@ local function FindBossNote(group)
   elseif option.type=='description' and type(option.name)=='string' and option.name:find('Boss 1-5 share',1,true) then bossNoteFound=true end
  end
 end
-FindBossNote(opts.args.boss.args.general);assert(bossNoteFound)
+FindBossNote(opts.args.boss.args.layout);assert(bossNoteFound)
 local player=ns.UnitFrames:GetConfigUnit('player')
 local height=opts.args.player.args.layout.args.size.args.height
 height.set(nil,47);assert(player.height==47)
@@ -198,7 +206,7 @@ lua.execute("""
 local opts=providers.unitframes():GetOptions()
 ns.OptionsSchema.Apply(opts,'unitframes')
 local player=ns.UnitFrames:GetConfigUnit('player')
-local reset=opts.args.player.args.general.args.core.args.reset
+local reset=opts.args.player.args.layout.args.core.args.reset
 assert(reset.name=='Reset layout and core settings' and reset.confirm==true)
 assert(reset.confirmText:find('resting',1,true) and reset.confirmText:find('stay unchanged',1,true))
 player.width=333;player.text.sizeHealth=27;player.useClassColor=false
@@ -216,7 +224,7 @@ for _,family in ipairs({'party','raid'}) do
  db.enabled=defaults.enabled;db.hideBlizzard=defaults.hideBlizzard;db.showPlayer=defaults.showPlayer
  db.width=defaults.width+17
  local text,auras,range=db.text,db.auras,db.range
- local reset=opts.args[family].args.general.args.core.args.reset
+ local reset=opts.args[family].args.layout.args.core.args.reset
  assert(reset.confirm==false and reset.name=='Reset layout and core settings')
  local count=prompts
  reset.func()
@@ -238,6 +246,90 @@ for _,family in ipairs({'party','raid'}) do
 end
 """)
 print('Actual Unit Frames: reset scope, single confirmation, conditional reload and combat protection passed.')
+
+lua.execute("""
+ns.UFAuraFilters={NormalizeDisplays=function() end,NormalizeDisplay=function() end,
+ BuildEffectiveAppearance=function() return {borderSize=2,durationTextSize=11,stackTextSize=12,tooltips=true} end}
+C_Timer.NewTimer=function(_,callback) callback();return {Cancel=function() end} end
+local display={id=100,displayType='group',auraType='HELPFUL',appearanceOverrides={}}
+local auras={customDisplays={[100]=display}}
+local args=captured.UFCB_BuildCustomAuraDisplaysArgs(function() return auras end,function() end,100,nil,'player')
+local opts={type='group',name='Auras',args=args}
+ns.OptionsSchema.Apply(opts,'unitframes')
+local advanced=args.advanced.args
+assert(not advanced.appearance)
+for _,key in ipairs({'duration','stacks','border','tooltips','swipe','countdown'}) do
+ local group=advanced[key]
+ assert(group.inline and group.args.value.relWidth==.5 and group.args.override.relWidth==.5)
+ assert(group.args.value.order<group.args.override.order)
+end
+local border=advanced.border.args
+assert(border.value.disabled())
+border.override.set(nil,true);assert(not border.value.disabled())
+border.value.set(nil,4);assert(display.appearanceOverrides.borderSize==4)
+border.override.set(nil,false);assert(border.value.disabled() and display.appearanceOverrides.borderSize==nil)
+assert(advanced.sorting.args.sortMethod.relWidth==.5 and advanced.sorting.args.sortDirection.relWidth==.5)
+""")
+print('Actual aura Advanced builder: six paired rows and inherited override behavior passed.')
+
+load('Modules/UnitFrames/Castbar/PUI_UF_CastBar_Defaults.lua')
+lua.execute("ns.Modules.CastBar.db.profile=copy(ns.Modules.CastBar.defaults.profile);function ns.Modules.CastBar:GetUnitConfig(key) return self.db.profile[key] end;function ns.Modules.CastBar:RefreshPlayerSpellcastEvents() end")
+lua.execute("""
+for _,unit in ipairs({'player','target','focus','boss','pet'}) do
+ local args=captured.UFCB_BuildCastbarArgs(unit)
+ local opts={type='group',name='Castbar',args=args}
+ ns.OptionsSchema.Apply(opts,'unitframes');checkInline(opts);checkCompact(opts)
+ assert(args.appearance.args.showIcon and args.appearance.args.showPingOverlay)
+ assert(not args.appearance.args.backgroundColor and not args.bar.args.puiStyle_background)
+ assert(args.bar.args.texture.order<args.bar.args.color.order and args.bar.args.color.order<args.bar.args.backgroundColor.order)
+ assert(args.spellName.args.showName.relWidth==.5 and not args.spellName.args.sharedFontInfo)
+ assert(args.border.args.color and args.border.args.thickness.relWidth==.5)
+ args.border.args.color.set(nil,.2,.3,.4,.7)
+ local r,g,b,a=args.border.args.color.get();assert(r==.2 and g==.3 and b==.4 and a==.7)
+ TEST_COMBAT=true;args.border.args.color.set(nil,1,1,1,1);TEST_COMBAT=false
+ assert(ns.Modules.CastBar.db.profile[unit].borderColor[1]==.2)
+ assert(args.empowerStageColors)
+ if unit=='player' then
+  local instant=args.instantCast.args
+  assert(not instant.instantCastHelp and not instant.puiStyle_instantCast and not instant.puiStyle_instantOverlay)
+  instant.instantCastAlpha.set(nil,.8);instant.instantCastOverlayAlpha.set(nil,.2)
+  assert(instant.instantCastAlpha.get()==.8 and instant.instantCastOverlayAlpha.get()==.2)
+  instant.instantCastUseOverlay.set(nil,false)
+  assert(instant.instantCastOverlayTexture.disabled() and not instant.instantCastTexture.disabled())
+  instant.instantCastTexture.set(nil,'Base');instant.instantCastUseOverlay.set(nil,true)
+  instant.instantCastOverlayTexture.set(nil,'Overlay')
+  assert(instant.instantCastTexture.get()=='Base' and instant.instantCastOverlayTexture.get()=='Overlay')
+ end
+ args.feature.args.reset.func()
+ assert(ns.Modules.CastBar.db.profile[unit].borderColor[1]==0)
+end
+""")
+print('Actual castbar builder: compact rows, all unit colors, reset/combat protection and independent instant layers passed.')
+
+lua.execute("""
+ns.Pixel={Round=function(v) return v end,GetOnePixel=function() return 1 end}
+local methods={}
+function methods:SetBackdropBorderColor(...) self.color={...} end
+function methods:GetFrameStrata() return 'HIGH' end
+function methods:GetFrameLevel() return 1 end
+function methods:Hide() self.shown=false end
+function methods:Show() self.shown=true end
+function methods:SetBackdrop(v) self.backdrop=v end
+for _,key in ipairs({'SetFrameStrata','SetFrameLevel','ClearAllPoints','SetPoint'}) do methods[key]=function() end end
+local meta={__index=methods}
+function CreateFrame() return setmetatable({},meta) end
+borderHost=setmetatable({},meta)
+""")
+load('Modules/UnitFrames/Castbar/PUI_UF_CastBar_Construct.lua')
+lua.execute("""
+local cfg={borderSize=2,borderColor={.2,.3,.4,.7}}
+local border=ns.Modules.CastBar.GetBorder(borderHost,cfg)
+assert(border.shown and border.color[1]==.2 and border.color[4]==.7)
+cfg.borderColor={.9,.8,.7,.6};assert(ns.Modules.CastBar.GetBorder(borderHost,cfg)==border)
+assert(border.color[1]==.9 and border.color[4]==.6)
+cfg.borderSize=0;ns.Modules.CastBar.GetBorder(borderHost,cfg);assert(not border.shown)
+""")
+print('Castbar border renderer: saved RGBA updates in place and zero thickness hides the border.')
 
 lua.execute('''
 ns.ActionBarsCore={db={skin={},bars={},overrides={},ui={}},GetDB=function(self) return self.db end,
