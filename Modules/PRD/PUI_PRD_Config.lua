@@ -371,27 +371,27 @@ local function PRDPreview_ConfigureBarInteractions(
 
   if role == "health" then
     title = "Health"
-    bodyPath = { "PRD", "health" }
+    bodyPath = { "PRD", "health", "layoutAppearance" }
     bodySection = "layoutGroup"
     bodyOption = "height"
-    textPath = bodyPath
-    textSection = "textGroup"
-    textOption = "leftVisibility"
+    textPath = { "PRD", role, "textGroup" }
+    textSection = "percent"
+    textOption = "visibility"
 
     borderPath = bodyPath
-    borderSection = "appearanceGroup"
+    borderSection = "border"
     borderOption = "borderSize"
   elseif role == "primary" then
     title = "Primary power"
-    bodyPath = { "PRD", "primary" }
+    bodyPath = { "PRD", "primary", "layoutAppearance" }
     bodySection = "layoutGroup"
     bodyOption = "height"
-    textPath = bodyPath
-    textSection = "textGroup"
-    textOption = "leftVisibility"
+    textPath = { "PRD", role, "textGroup" }
+    textSection = "percent"
+    textOption = "visibility"
 
     borderPath = bodyPath
-    borderSection = "appearanceGroup"
+    borderSection = "border"
     borderOption = "borderSize"
   else
     title = config and config.resourceName
@@ -399,16 +399,20 @@ local function PRDPreview_ConfigureBarInteractions(
       or "Secondary resource"
 
     bodyPath = PRDPreview_GetResourcePath(definition)
-    bodySection = definition.isAlternatePower == true and "visibilityGroup" or "layout"
+    bodyPath[#bodyPath + 1] = definition.isAlternatePower == true and "visibilityGroup" or "layoutAppearance"
+    bodySection = "layout"
     bodyOption = definition.isAlternatePower == true and "hideAlternateMana" or "detached"
-    textPath = bodyPath
-    textSection = "textGroup"
+    textPath = PRDPreview_GetResourcePath(definition)
+    textPath[#textPath + 1] = "textGroup"
+    textSection = "value"
     textOption = "textMode"
     borderPath = bodyPath
-    borderSection = "appearanceGroup"
+    borderSection = "border"
     borderOption = "borderSize"
     if definition.isAlternatePower == true then
-      textSection = "visibilityGroup"
+      textPath = bodyPath
+      bodySection = nil
+      textSection = nil
       textOption = "hideAlternateMana"
       borderSection = textSection
       borderOption = textOption
@@ -2773,6 +2777,51 @@ do
     return true
   end
 
+  local function PRD_ArrangePresentationArgs(args, layoutKey)
+    local layout, appearance = args[layoutKey], args.appearanceGroup
+    layout.name, layout.order = "Size and placement", 10
+    appearance.name, appearance.order = "Bar", 20
+    local style = appearance.args
+    local border = { type = "group", name = "Border", order = 30, inline = true, arg = { puiExplicit = true },
+      hidden = appearance.hidden, disabled = appearance.disabled,
+      args = { borderSize = style.borderSize, borderColor = style.borderColor },
+    }
+    border.args.borderSize.name, border.args.borderSize.order = "Thickness", 10
+    border.args.borderColor.name, border.args.borderColor.order = "Color", 20
+    style.borderSize, style.borderColor = nil, nil
+    args.layoutAppearance = {
+      type = "group", name = "Layout and appearance", order = 20, args = {
+        [layoutKey] = layout, bar = appearance, border = border,
+      },
+    }
+    args[layoutKey], args.appearanceGroup = nil, nil
+    layout.args.width.name = "Width"
+    layout.args.width.order, layout.args.height.order = 10, 20
+    local text = args.textGroup
+    text.inline, text.order = nil, 40
+    if text.args.leftFont then
+      text.args.leftFont.name = "Shared typography"
+      text.args.leftFont.args.fontFlags.name = "Outline"
+      text.args.leftFont.args.fontFlags.order = 60
+      text.args.leftFont = ns.OptionsSchema.BuildTextGroup("Shared typography", 30, text.args.leftFont.args)
+      text.args.percent = { type = "group", name = "Percent", inline = true, order = 10, arg = { puiExplicit = true },
+        args = { visibility = text.args.leftVisibility } }
+      text.args.value = { type = "group", name = "Value", inline = true, order = 20, arg = { puiExplicit = true },
+        args = { visibility = text.args.rightVisibility } }
+      text.args.percent.args.visibility.name, text.args.value.args.visibility.name = "Visibility", "Visibility"
+      text.args.leftVisibility, text.args.rightVisibility = nil, nil
+      text.args.centerText.name = "Center text"
+    else
+      text.args.fontFlags.name, text.args.fontFlags.order = "Outline", 60
+      text.args.textMode.name, text.args.textMode.order = "Format", 20
+      text.args = { value = ns.OptionsSchema.BuildTextGroup("Value", 10, text.args) }
+    end
+    if args.visibilityGroup then
+      args.visibilityGroup.inline, args.visibilityGroup.order = nil, 30
+    end
+    return args
+  end
+
   local function PRD_ArrangeNativeBarArgs(args, state, role)
     local config = state.db[role]
     local layout = args.layoutGroup.args
@@ -2824,9 +2873,13 @@ do
     args.appearanceGroup = appearance
     args.colorGroup = nil
     args.styleGroup = nil
+    args.general = { type = "group", name = "General", order = 10, args = {
+      feature = { type = "group", name = "Feature", order = 10, inline = true, args = { showBar = args.visibilityGroup.args.showBar } },
+    } }
+    args.visibilityGroup.args.showBar = nil
     args.textGroup.order = 30
-    if args.ticksGroup then args.ticksGroup.order = 40 end
-    return args
+    if args.ticksGroup then args.ticksGroup.order = 50 end
+    return PRD_ArrangePresentationArgs(args, "layoutGroup")
   end
 
   local function PRD_BuildAppearanceCopyGroup(state)
@@ -4856,7 +4909,17 @@ do
     args.display.order = 40
     if args.behaviorGroup then args.behaviorGroup.order = 50 end
     args.cueGroup.name = "Cues"
-    return args
+    local general = { enabled = args.enabled }
+    args.enabled = nil
+    if args.behaviorGroup then
+      general.behavior = args.behaviorGroup
+      args.behaviorGroup = nil
+    end
+    args.general = { type = "group", name = "General", order = 10, args = general }
+    local arranged = PRD_ArrangePresentationArgs(args, "layout")
+    arranged.cueGroup.inline = nil
+    arranged.display.inline = nil
+    return arranged
   end
 
   local function PRD_BuildSecondaryArgs()
@@ -4882,7 +4945,7 @@ do
     local args = {}
     for index, resource in ipairs(resources) do
       args[resource.key] = {
-        type = "group", name = resource.name, order = index,
+        type = "group", name = resource.name, order = index, childGroups = "tab",
         desc = resource.category == "TRACKED_EFFECT" and "Tracked effect" or "Class resource",
         args = PRD_BuildResourceLayoutArgs(state, resource),
       }
@@ -4909,19 +4972,21 @@ do
             type = "group",
             name = "Health",
             order = 2,
+            childGroups = "tab",
             args = PRD_BuildHealthArgs(),
           },
           primary = {
             type = "group",
-            name = "Primary Power",
+            name = "Primary power",
             order = 3,
+            childGroups = "tab",
             args = PRD_BuildPrimaryArgs(),
           },
           secondary = {
             type = "group",
             name = "Resources & tracked effects",
             order = 4,
-            childGroups = PRD_UsesSecondaryResourceTabs() and "tab" or nil,
+            childGroups = "tab",
             hidden = function()
               return not ns.PRDSecondary:HasResourceForCurrentSpec()
             end,
