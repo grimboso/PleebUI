@@ -56,7 +56,7 @@ local INLINE_GROUPS = {
   groupSettings = { "Group", 5 },
   tracking = { "Tracking", 10 },
   behavior = { "Behaviour", 20 },
-  quickTimers = { "Timers & swipes", 30 },
+  quickTimers = { "Timers", 30 },
   size = { "Size", 10 },
   arrangement = { "Arrangement", 20 },
   iconPlacement = { "Behaviour", 30 },
@@ -300,8 +300,8 @@ function Options:BuildSections(source, context)
           option.order = 0
         elseif context.customTracker and key == "deleteBar" then
           option.name, option.order = "Delete tracker", 1000
-          option.confirm = option.confirmText or "Delete this tracker?"
-          option.confirmText = nil
+          option.confirm = true
+          option.confirmText = option.confirmText or "Delete this tracker?"
         end
         option.name = ns.OptionsSchema.GetCompactLabel(option.name)
         local inlineDefinition = INLINE_GROUPS[bucketPrefix]
