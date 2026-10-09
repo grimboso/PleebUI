@@ -1164,18 +1164,25 @@ local function PCMPreview_ConfigureBuffBarPanel(panel, style)
   local borderColor = config.borderColor or { 0.20, 0.20, 0.24, 1 }
   local borderThickness = PCMPreview_Clamp(config.borderThickness or 2, 0, 6)
   local entries = IconSettings:GetViewerEntries("BuffBarCooldownViewer")
+  local grow = config.layoutMode == "GROW"
+  local displayCount = 0
+  for index = 1, #entries do
+    if not grow or index % 3 ~= 2 then
+      displayCount = displayCount + 1
+    end
+  end
   local totalWidth
   local totalHeight
 
   if vertical then
-    totalWidth = #entries > 0
-      and #entries * rowWidth + (#entries - 1) * displaySpacing
+    totalWidth = displayCount > 0
+      and displayCount * rowWidth + (displayCount - 1) * displaySpacing
       or 0
     totalHeight = rowHeight
   else
     totalWidth = rowWidth
-    totalHeight = #entries > 0
-      and #entries * rowHeight + (#entries - 1) * displaySpacing
+    totalHeight = displayCount > 0
+      and displayCount * rowHeight + (displayCount - 1) * displaySpacing
       or 0
   end
 
@@ -1205,19 +1212,25 @@ local function PCMPreview_ConfigureBuffBarPanel(panel, style)
 
   PCMPreview_EnsureBarCount(panel, #entries)
 
+  local visibleIndex = 0
   for index = 1, #entries do
     local entry = entries[index]
     local bar = panel.__puiPCMPreviewBars[index]
+    local sampleActive = not grow or index % 3 ~= 2
+    if sampleActive then
+      visibleIndex = visibleIndex + 1
+    end
+    local slotIndex = grow and visibleIndex or index
     local growthIndex
     local x
     local y
 
     if vertical then
-      growthIndex = growthDirection == "LEFT" and (#entries - index) or (index - 1)
+      growthIndex = growthDirection == "LEFT" and (displayCount - slotIndex) or (slotIndex - 1)
       x = startX + growthIndex * (rowWidth + displaySpacing)
       y = startY
     else
-      growthIndex = growthDirection == "UP" and (#entries - index) or (index - 1)
+      growthIndex = growthDirection == "UP" and (displayCount - slotIndex) or (slotIndex - 1)
       x = startX
       y = startY - growthIndex * (rowHeight + displaySpacing)
     end
@@ -1234,7 +1247,7 @@ local function PCMPreview_ConfigureBuffBarPanel(panel, style)
     bar.frame:ClearAllPoints()
     bar.frame:SetPoint("TOPLEFT", content, "TOPLEFT", x, y)
     bar.frame:SetSize(rowWidth, rowHeight)
-    bar.frame:Show()
+    bar.frame:SetShown(sampleActive)
 
     bar.label:SetParent(bar.valueTextFrame)
     bar.label:ClearAllPoints()
