@@ -326,175 +326,49 @@ local INLINE_NAMES = {
   roleSetup = "Role order", topLine = "General", pages = "Settings",
 }
 
-local PROPERTY_SECTIONS = {
-  text = "Text", name = "Text", healthText = "Text", powerText = "Text",
-  castTime = "Text", castTarget = "Text", countdown = "Text", charges = "Text",
-  stacks = "Text", counts = "Text", keybinds = "Text", macroName = "Text",
-  warning = "Text", missingPet = "Text", deadPet = "Text", idleWarning = "Text",
-  clock = "Text", coordinates = "Text", zoneText = "Text", message = "Text", timerText = "Text",
-  unitTooltips = "General", auraTooltips = "General",
-  ready = "Visibility", inactive = "Visibility", cooldown = "Visibility",
-  recharging = "Visibility", auraActive = "Visibility", outOfRange = "Visibility",
-  fadeIn = "Visibility", fadeOut = "Visibility", visibility = "Visibility", barOpacity = "Visibility",
-  hidden = "Visibility", unavailable = "Visibility", outOfCombat = "Visibility",
-}
-
-local PRESENTATION_SECTIONS = {
-  Layout = true, Appearance = true, ["Layout and appearance"] = true,
-  ["Frame style"] = true, ["Size and layout"] = true, Icons = true,
-}
-
 local INHERITED_FIELDS = { "get", "set", "func", "handler", "disabled", "hidden", "confirm", "validate", "arg" }
 
-local function ArrangePageSections(group)
-  local args = group.args
-  local hasPages = false
-  for _, child in pairs(args) do
-    if child.type == "group" and not child.inline then hasPages = true end
-  end
-  if hasPages or TEXT_CONTEXTS[group.name] or PRESENTATION_SECTIONS[group.name]
-    or group.name == "Visibility" then return end
-
-  local lifted = {}
-  for parentKey, parent in pairs(args) do
-    if parent.type == "group" and parent.inline and PRESENTATION_SECTIONS[parent.name]
-      and type(parent.args) == "table" then
-      local remove = {}
-      for key, child in pairs(parent.args) do
-        local role = key:match("^puiStyle_(.+)$")
-        local section = role and PROPERTY_SECTIONS[role]
-        if child.type == "group" and (section == "Text" or section == "Visibility") then
-          -- Moving a group must retain its original callbacks and conditions.
-          for index = 1, #INHERITED_FIELDS do
-            local field = INHERITED_FIELDS[index]
-            if child[field] == nil then child[field] = parent[field] end
-          end
-          lifted["puiLift_" .. parentKey .. "_" .. key] = { role = role, option = child }
-          remove[#remove + 1] = key
-        end
-      end
-      for index = 1, #remove do parent.args[remove[index]] = nil end
-    end
-  end
-  for key, item in pairs(lifted) do args[key] = item.option end
-
-  local collected, counts = {}, {}
-  local function Collect(section, key, option)
-    collected[section] = collected[section] or {}
-    collected[section][key] = option
-    counts[section] = (counts[section] or 0) + 1
-  end
-  for key, child in pairs(args) do
-    if child.type == "group" and child.inline then
-      local role = key:match("^puiStyle_(.+)$") or lifted[key] and lifted[key].role
-      if role then
-        Collect(PROPERTY_SECTIONS[role] or "Layout and appearance", key, child)
-      elseif TEXT_CONTEXTS[child.name] then
-        Collect("Text", key, child)
-      elseif PRESENTATION_SECTIONS[child.name] then
-        Collect("Layout and appearance", key, child)
-      end
-    end
-  end
-  for section, children in pairs(collected) do
-    local singleSection
-    if counts[section] == 1 then
-      for _, child in pairs(children) do singleSection = child.name == section end
-    end
-    if not singleSection then
-      local key = section == "Text" and "puiText" or section == "Visibility" and "puiVisibility"
-        or section == "General" and "puiGeneral" or "puiLayoutAppearance"
-      local container = { type = "group", name = section == "General" and "Tooltips" or section,
-        order = SECTION_ORDER[section], inline = true, args = children }
-      for childKey, child in pairs(children) do
-        args[childKey] = nil
-        if section == "Layout and appearance" then
-          if child.name == "Layout" then child.name = "Size and arrangement"
-          elseif child.name == "Appearance" or child.name == section then child.name = "Style" end
-        elseif section == "Text" and child.name == "Text" then
-          child.name = "Typography"
-        elseif section == "Visibility" and child.name == "Visibility" then
-          child.name = "Conditions and opacity"
-        end
-      end
-      args[key] = container
-    end
-  end
-  for _, child in pairs(args) do
-    if child.type == "group" and child.inline then
-      child.order = SECTION_ORDER[child.name] or (60 + (tonumber(child.order) or 0) / 100)
-    end
-  end
-end
-
-local COMMON_CONTROLS = {
-  { "Buttons", "Size" }, { "Buttons", "Spacing" },
-  { "Icon", "Size" }, { "Icon", "Spacing" },
-  { "Size", "Width" }, { "Size", "Height" },
-  { "Visibility", "Only show in combat" }, { "Visibility", "Show on mouseover" },
-  { "Keybinds", "Show keybinds" }, { "Countdown", "Show countdown" },
-}
-
-local function AddCommonSettings(group)
-  local general, pages = nil, {}
-  for _, child in pairs(group.args) do
-    if child.type == "group" and not child.inline then
-      if child.name == "General" then general = child
-      elseif SECTION_ORDER[child.name] then pages[#pages + 1] = child end
-    end
-  end
-  if not general or type(general.args) ~= "table" or #pages == 0
-    or general.args.puiCommonSettings or general.args.quickLayout or general.args.quickText or general.args.quickTimers then return end
-
-  local candidates = {}
-  local function Visit(node, inherited)
-    local effective = {}
-    for key, value in pairs(inherited) do effective[key] = value end
-    for index = 1, #INHERITED_FIELDS do
-      local field = INHERITED_FIELDS[index]
-      if node[field] ~= nil then effective[field] = node[field] end
-    end
-    if type(node.args) ~= "table" then return end
-    for key, option in pairs(node.args) do
-      if option.type == "group" then
-        Visit(option, effective)
-      else
-        for index = 1, #COMMON_CONTROLS do
-          local definition = COMMON_CONTROLS[index]
-          if node.name == definition[1] and option.name == definition[2] then
-            if candidates[index] == nil then
-              candidates[index] = { key = key, option = option, inherited = effective, group = node.name }
-            else
-              candidates[index] = false
-            end
+-- Shortcuts are selected by the owning builder, never inferred from labels.
+function Schema.BuildCommonSettings(source, definitions)
+  local args = {}
+  for index, definition in ipairs(definitions) do
+    local node, inherited = source, {}
+    local conditions = { hidden = {}, disabled = {} }
+    for _, key in ipairs(definition.path) do
+      for _, field in ipairs(INHERITED_FIELDS) do
+        if node[field] ~= nil then
+          inherited[field] = node[field]
+          if conditions[field] then
+            conditions[field][#conditions[field] + 1] = { value = node[field], handler = node.handler or inherited.handler }
           end
         end
       end
+      node = node.args[key]
     end
-  end
-  for index = 1, #pages do Visit(pages[index], {}) end
-
-  local common = { type = "group", name = "Common settings", order = 80, inline = true, args = {} }
-  local count = 0
-  for index = 1, #COMMON_CONTROLS do
-    local candidate = candidates[index]
-    if candidate and count < 6 then
-      local key = "group" .. candidate.group
-      local bucket = common.args[key]
-      if not bucket then
-        bucket = { type = "group", name = candidate.group, order = index, inline = true, args = {} }
-        common.args[key] = bucket
-      end
-      local shortcut = {}
-      for field, value in pairs(candidate.option) do shortcut[field] = value end
-      for field, value in pairs(candidate.inherited) do
-        if shortcut[field] == nil then shortcut[field] = value end
-      end
-      bucket.args[candidate.key] = shortcut
-      count = count + 1
+    local shortcut = {}
+    for field, value in pairs(node) do shortcut[field] = value end
+    for field, value in pairs(inherited) do
+      if shortcut[field] == nil then shortcut[field] = value end
     end
+    for field, parents in pairs(conditions) do
+      if node[field] ~= nil then parents[#parents + 1] = { value = node[field], handler = node.handler or inherited.handler } end
+      if #parents > 0 then
+        shortcut[field] = function(info)
+          for _, condition in ipairs(parents) do
+            local value = condition.value
+            if type(value) == "function" then value = value(info)
+            elseif type(value) == "string" then value = condition.handler[value](condition.handler, info) end
+            if value then return true end
+          end
+          return false
+        end
+      end
+    end
+    shortcut.name, shortcut.order = definition.label, index * 10
+    args[definition.path[#definition.path]] = shortcut
   end
-  if count > 0 then general.args.puiCommonSettings = common end
+  return { type = "group", name = "Common settings", inline = true, order = 80,
+    arg = { puiExplicit = true }, args = args }
 end
 
 -- Providers can return the same table after their GUI cache is invalidated.
@@ -512,19 +386,19 @@ local function FormatValues(values, isOutline)
 end
 
 local function ArrangeGroup(group, context, groupKey)
-  if type(group.arg) == "table" and group.arg.puiExplicit then return end
   if APPLIED_GROUPS[group] then return end
   APPLIED_GROUPS[group] = true
   local name = group.name
   local inheritedText = context.text
   local nextContext = {}
   for key, value in pairs(context) do nextContext[key] = value end
+  nextContext.explicit = context.explicit or type(group.arg) == "table" and group.arg.puiExplicit
   if type(name) == "string" then
     if name == "" or name == " " then
       name = INLINE_NAMES[groupKey] or "General"
     else
       name = SECTION_NAMES[name] or name
-      if name == "Behavior" and not group.inline then name = "General" end
+      if name == "Behavior" then name = "Behaviour" end
     end
     group.name = name
     nextContext[name] = true
@@ -563,9 +437,9 @@ local function ArrangeGroup(group, context, groupKey)
         local inContext = HasContext(nextContext, definition.name)
           or rule.group == "text" and nextContext.text
           or rule.group == "size" and (nextContext.Bar or nextContext.Buttons or nextContext.Icon)
-        option.name = rule.label
-        option.order = rule.order
-        if not inContext then
+        option.name = inContext and rule.label or nextContext.explicit and Schema.GetCompactLabel(oldName) or rule.label
+        if inContext or not nextContext.explicit then option.order = rule.order end
+        if not inContext and not nextContext.explicit then
           local groupKey = "puiStyle_" .. rule.group
           local bucket = additions[groupKey] or args[groupKey]
           if not bucket then
@@ -596,6 +470,18 @@ local function ArrangeGroup(group, context, groupKey)
           option.order = 900 + (tonumber(option.order) or 0)
         end
       end
+      if option.type == "range" and option.name:lower():find("opacity", 1, true) then
+        if option.max == 1 then
+          option.isPercent = true
+        elseif option.min == 0 and option.max == 100 and type(option.get) == "function" and type(option.set) == "function" then
+          local getter, setter = option.get, option.set
+          option.min, option.max, option.step, option.isPercent = 0, 1, (option.step or 1) / 100, true
+          if option.softMin then option.softMin = option.softMin / 100 end
+          if option.softMax then option.softMax = option.softMax / 100 end
+          option.get = function(info) return getter(info) / 100 end
+          option.set = function(info, value) setter(info, value * 100) end
+        end
+      end
       if type(option.values) == "table" then
         FormatValues(option.values, option.name == "Outline")
       elseif type(option.values) == "function" then
@@ -609,9 +495,6 @@ local function ArrangeGroup(group, context, groupKey)
   end
   for index = 1, #removals do args[removals[index]] = nil end
   for key, bucket in pairs(additions) do args[key] = bucket end
-
-  ArrangePageSections(group)
-  AddCommonSettings(group)
 
   local sectionOrder = nextContext.moduleKey == "unitframes" and UNIT_FRAME_SECTION_ORDER or SECTION_ORDER
   local sectionCount = 0
@@ -649,9 +532,46 @@ local function EnsureInlineGroups(group)
   end
 end
 
+local ORDERED_GROUPS = setmetatable({}, { __mode = "k" })
+
+local function OrderInlineControls(group)
+  if type(group.args) ~= "table" then return end
+  local controls = {}
+  for key, option in pairs(group.args) do
+    if option.type == "group" then
+      OrderInlineControls(option)
+    elseif group.inline then
+      controls[#controls + 1] = { key = key, option = option }
+    end
+  end
+  if not group.inline or ORDERED_GROUPS[group] then return end
+  ORDERED_GROUPS[group] = true
+  -- Preserve deliberately arranged rows and adjacent source/color controls.
+  for _, item in ipairs(controls) do
+    if item.option.width == "half" or item.option.width == "third"
+      or type(item.option.width) == "number" and item.option.width < 1 then return end
+  end
+  local function Phase(option)
+    local name = type(option.name) == "string" and option.name or ""
+    if option.type == "toggle" and (name:match("^Enable") or name:match("^Show")
+      or name:match("^Hide") or name:match("^Only ") or name:match("^Allow ")) then return 1 end
+    if option.type == "execute" and (name:match("^Reset") or name:match("^Delete")) then return 3 end
+    return 2
+  end
+  table.sort(controls, function(a, b)
+    local ap, bp = Phase(a.option), Phase(b.option)
+    if ap ~= bp then return ap < bp end
+    local ao, bo = tonumber(a.option.order) or 50, tonumber(b.option.order) or 50
+    if ao ~= bo then return ao < bo end
+    return a.key < b.key
+  end)
+  for index, item in ipairs(controls) do item.option.order = index * 10 end
+end
+
 function Schema.Apply(options, moduleKey)
   ArrangeGroup(options, { moduleKey = moduleKey })
   EnsureInlineGroups(options)
+  OrderInlineControls(options)
 end
 
 function Schema.GetCompactLabel(label)
@@ -664,6 +584,9 @@ function Schema.GetCompactLabel(label)
   if label == "Ready alpha" then return "Ready opacity" end
   if label == "On cooldown alpha" then return "On cooldown opacity" end
   if label == "Recharging alpha" then return "Recharging opacity" end
+  if label == "Active aura alpha" then return "Active aura opacity" end
+  if label == "Out of range alpha" then return "Out-of-range opacity" end
+  if label == "Fade-out opacity (%)" then return "Fade-out opacity" end
   if label == "Fade-out time" then return "Fade-out time (seconds)" end
   if label == "Font outline" or label == "Text outline" then return "Outline" end
   if label == "Font color" then return "Text color" end
