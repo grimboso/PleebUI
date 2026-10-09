@@ -4,11 +4,11 @@ local Options = {}
 ns.PCMOptions = Options
 
 local SECTIONS = {
-  { "general", "General Settings" },
-  { "layout", "Layout" },
-  { "timer", "Timers & Swipes" },
-  { "appearance", "Appearance" },
+  { "general", "General" },
+  { "layout", "Layout and appearance" },
+  { "visibility", "Visibility" },
   { "text", "Text" },
+  { "timer", "Timers and swipes" },
   { "glow", "Glow" },
   { "advanced", "Advanced" },
 }
@@ -17,13 +17,13 @@ local GROUP_SECTIONS = {
   general = "general", tracking = "general", placement = "general",
   layout = "layout", barLayout = "layout", icons = "layout",
   swipe = "timer", timer = "timer", duration = "timer",
-  appearance = "appearance", design = "appearance", barDesign = "appearance",
-  border = "layout", glow = "glow", stackColors = "appearance",
-  slotColors = "appearance", ready = "appearance", cooldown = "appearance",
-  active = "appearance", whenReady = "appearance", whenCooldown = "appearance",
-  whenActive = "appearance", aura = "appearance",
+  appearance = "layout", design = "layout", barDesign = "layout",
+  border = "layout", glow = "glow", stackColors = "layout",
+  slotColors = "layout", ready = "layout", cooldown = "layout",
+  active = "layout", whenReady = "layout", whenCooldown = "layout",
+  whenActive = "layout", aura = "layout",
   text = "text", textsFonts = "text", fonts = "text", fontSettings = "text",
-  visibility = "general", behavior = "general", advanced = "advanced",
+  visibility = "visibility", behavior = "general", advanced = "advanced",
 }
 
 local FIELD_SECTIONS = {}
@@ -33,11 +33,12 @@ local function AssignFields(section, fields)
   end
 end
 
-AssignFields("general", "enabled name group auraTrackMode maxStacks powerInfusion bloodlust customBuffSpellIDs onlyOnUseTrinkets nativeTracking showSwipe swipeShow showTooltips showTooltip hideWhenInactive visibility combatOnly hideOutOfCombat outOfCombatAlpha missingAlpha readyAlpha readyAlphaOverride cooldownAlpha cooldownAlphaOverride onCooldownAlpha activeAlpha activeAuraAlpha auraAlpha auraAlphaOverride alpha opacity showOnlyWhenActive hideViewerIcon activeAuraHideViewerIcon")
+AssignFields("general", "enabled name group auraTrackMode maxStacks powerInfusion bloodlust customBuffSpellIDs onlyOnUseTrinkets nativeTracking showSwipe swipeShow showTooltips showTooltip")
 AssignFields("layout", "size iconSize width height fixedWidth widthMode iconSpacing spacing columns iconsPerRow growUp growth rowGrowth growthDirection orientation rowSpacing wrap showIcon showSpellIconNextToBar iconPlacement iconAnchor durationHideIconFrame durationHideSpellIcon durationAnchor durationGap durationHeight durationIconSize borderThickness borderColor borderSize viewerBorderSize viewerBorderColor durationIconBorderSize durationIconBorderColor showSlotBorder slotBorderThickness slotBorderColor")
 AssignFields("timer", "forceCooldown cooldownTimerEnabled timerDisplay swipeSource durationSwipe durationText swipeGCD swipeCooldown swipeDuration countCooldown countDuration showCooldownText showDurationSwipe showDurationText rechargeCountdown barMode durationBarFillMode drainDirection fillDirection activeAuraSource activeAuraCDM activeAuraCustom source cdmBuff customBuff showActive hideDurationWhenMissing inheritedTimer swipeEdge swipeReverse swipeColorOverride swipeColor cooldownSwipeColor cooldownSwipeEdge cooldownSwipeEdgeColor durationSwipeColor durationSwipeEdge durationSwipeEdgeColor gcdSwipeColor gcdSwipeEdge gcdSwipeEdgeColor rechargeEdge")
-AssignFields("general", "desaturateCooldown")
-AssignFields("appearance", "texture barTexture stackTexture durationTexture useClassColor buffBarColor buffBarBgColor backgroundColor durationBarColor desaturateReady activeAuraDesaturate customTextureOverride chromeStyle readySaturationOverride readySaturation cooldownSaturationOverride cooldownSaturation auraSaturationOverride auraSaturation")
+AssignFields("visibility", "visibility combatOnly hideOutOfCombat outOfCombatAlpha missingAlpha readyAlpha readyAlphaOverride cooldownAlpha cooldownAlphaOverride onCooldownAlpha activeAlpha activeAuraAlpha auraAlpha auraAlphaOverride alpha opacity showOnlyWhenActive hideWhenInactive hideViewerIcon activeAuraHideViewerIcon")
+AssignFields("layout", "desaturateCooldown")
+AssignFields("layout", "texture barTexture stackTexture durationTexture useClassColor buffBarColor buffBarBgColor backgroundColor durationBarColor desaturateReady activeAuraDesaturate customTextureOverride chromeStyle readySaturationOverride readySaturation cooldownSaturationOverride cooldownSaturation auraSaturationOverride auraSaturation")
 AssignFields("text", "cooldownShow showText showDuration showName countCharge countBuff countVisibility showItemQuality keybindToggle showKeybinds chargeShow keybindShow showCount showPips showStackStrip font fontSize fontColor fontOutline outline countFontSize cooldownFontSize keybindFontSize durationFont durationOutline durationCountFontSize countTextColor durationTextColor showCountdown durationTextScale durationTextAnchor durationTextX durationTextY countTextScale countTextAnchor countTextX countTextY")
 AssignFields("glow", "glowDuringDurationSwipe readyGlowStyle readyGlowColor cooldownGlowStyle cooldownGlowColor auraGlowStyle auraGlowColor activeAuraGlowStyle activeAuraGlowColor glow glowColor activeGlowStyle")
 AssignFields("advanced", "delete deleteBar resetIcon resetGroups customTexture rotateTexture dynamicTextOnSlot")
@@ -83,7 +84,7 @@ local QUICK_SETTINGS = {
 local INLINE_GROUPS = {
   groupSettings = { "Group", 5 },
   tracking = { "Tracking", 10 },
-  behavior = { "Visibility & behavior", 20 },
+  behavior = { "Behavior", 20 },
   quickTimers = { "Timers & swipes", 30 },
   quickText = { "Text", 40 },
   quickLayout = { "Size & spacing", 50 },
@@ -92,6 +93,8 @@ local INLINE_GROUPS = {
   arrangement = { "Arrangement", 20 },
   iconPlacement = { "Icon placement", 30 },
   borders = { "Borders", 40 },
+  styling = { "Bar style", 35 },
+  saturation = { "Saturation", 45 },
   glowStyle = { "Glow style", 10 },
   glowShape = { "Animation & shape", 20 },
   readyGlow = { "Ready", 30 },
@@ -111,6 +114,9 @@ AssignInlineGroup(LAYOUT_GROUPS, "arrangement", "iconSpacing spacing columns ico
 AssignInlineGroup(LAYOUT_GROUPS, "iconPlacement", "showIcon showSpellIconNextToBar iconPlacement iconAnchor durationHideIconFrame durationHideSpellIcon durationAnchor durationGap")
 AssignInlineGroup(LAYOUT_GROUPS, "borders", "borderThickness borderColor borderSize viewerBorderSize viewerBorderColor durationIconBorderSize durationIconBorderColor showSlotBorder slotBorderThickness slotBorderColor")
 
+AssignInlineGroup(LAYOUT_GROUPS, "styling", "texture barTexture stackTexture durationTexture useClassColor buffBarColor buffBarBgColor backgroundColor durationBarColor customTextureOverride chromeStyle")
+AssignInlineGroup(LAYOUT_GROUPS, "saturation", "desaturateCooldown desaturateReady activeAuraDesaturate readySaturationOverride readySaturation cooldownSaturationOverride cooldownSaturation auraSaturationOverride auraSaturation")
+
 local TIMER_ROWS = {
   forceCooldown = { 1, 0.5, "Enable duration timer" },
   cooldownTimerEnabled = { 1, 0.5, "Enable cooldown timer" },
@@ -124,36 +130,6 @@ local TIMER_ROWS = {
   cooldownSwipeEdge = { 5, 0.25, "Swipe edge" },
   durationSwipeEdgeColor = { 6, 0.25, "Swipe edge color" },
   cooldownSwipeEdgeColor = { 6, 0.25, "Swipe edge color" },
-}
-
-local LABELS = {
-  ["Use viewer setting"] = "Use inherited setting",
-  ["Button size"] = "Icon size",
-  ["Button settings"] = "Icon settings",
-  ["Show cooldown text"] = "Show cooldown countdown",
-  ["Show duration text"] = "Show duration countdown",
-  ["Cooldown text"] = "Countdown",
-  ["Duration text"] = "Duration countdown",
-  ["Timer text"] = "Countdown",
-  ["Charge text"] = "Charges",
-  ["Stack text"] = "Stacks",
-  ["Font Settings"] = "Text",
-  ["Bar Size & Layout"] = "Layout",
-  ["Bar Design"] = "Appearance",
-  ["When on CD"] = "On cooldown",
-  ["When Active"] = "Aura active",
-  ["When active"] = "Aura active",
-  ["When ready"] = "Ready",
-  ["When recharging"] = "Recharging",
-  ["At full charges"] = "Full charges",
-  ["When inactive"] = "Inactive",
-  ["Ready alpha"] = "Ready opacity",
-  ["Inactive alpha"] = "Inactive opacity",
-  ["On cooldown alpha"] = "On cooldown opacity",
-  ["Active aura alpha"] = "Aura active opacity",
-  ["Active alpha"] = "Aura active opacity",
-  ["Border size"] = "Border thickness",
-  ["Show stack count"] = "Show stacks",
 }
 
 local function CombineHidden(parent, child)
@@ -181,12 +157,6 @@ function Options:BuildSections(source)
   local function Collect(args, category, prefix, label, hidden)
     for key, option in pairs(args) do
       local optionKey = prefix == "" and key or prefix .. "_" .. key
-      option.name = LABELS[option.name] or option.name
-      if type(option.values) == "table" then
-        for value, name in pairs(option.values) do
-          option.values[value] = LABELS[name] or name
-        end
-      end
       if option.type == "group" then
         local nextCategory = GROUP_SECTIONS[key] or (key:lower():find("glow", 1, true) and "glow") or category
         if key == "specializationSpells" then
@@ -240,7 +210,9 @@ function Options:BuildSections(source)
             bucketPrefix, bucketLabel = "swipeSettings", "Swipe settings"
           end
         end
-        if destination == "general" and option.type ~= "description" then
+        if destination == "visibility" then
+          bucketPrefix, bucketLabel = "visibility", "Visibility"
+        elseif destination == "general" and option.type ~= "description" then
           bucketPrefix = GENERAL_GROUPS[key] or "behavior"
         elseif destination == "layout" then
           bucketPrefix = LAYOUT_GROUPS[key] or "arrangement"
@@ -259,15 +231,9 @@ function Options:BuildSections(source)
         end
         local inlineDefinition = INLINE_GROUPS[bucketPrefix]
         if inlineDefinition then bucketLabel = inlineDefinition[1] end
-        if destination == "timer" then
-          option.name = option.name:gsub("[Gg]lobal cooldown swipe", "Swipe"):gsub("GCD swipe", "Swipe")
-            :gsub("[Cc]ooldown swipe", "Swipe"):gsub("[Dd]uration swipe", "Swipe")
-            :gsub("Show Swipe", "Show swipe"):gsub("^Show cooldown countdown$", "Show countdown")
-            :gsub("^Show duration countdown$", "Show countdown")
-        end
         option.hidden = CombineHidden(hidden, option.hidden)
         local quickSetting = QUICK_SETTINGS[key]
-        if quickSetting and destination ~= "general" and option.hidden ~= true
+        if quickSetting and destination ~= "general" and destination ~= "visibility" and option.hidden ~= true
           and (key ~= "enabled" or destination == "glow")
           and (key ~= "showDuration" or destination == "text")
         then
@@ -368,6 +334,17 @@ function Options.ResolvePath(path)
       else path[3], path[4] = "__disabledNotLoaded", first.key end
     end
   end
+  local sectionIndex
+  if path[2] == "groups" then
+    sectionIndex = path[4] == "entries" and 6 or 4
+  elseif path[2] == "customTrackers" then
+    sectionIndex = path[3] == "__disabledNotLoaded" and 5 or 4
+  elseif path[2] == "consumables" then
+    sectionIndex = 3
+  end
+  if sectionIndex and path[sectionIndex] == "appearance" then
+    path[sectionIndex] = "layout"
+  end
   return path
 end
 
@@ -391,9 +368,9 @@ function Options.GetSearchEntries()
   end
   local settingKeywords = {
     general = "general quick settings enabled visibility opacity tooltip spell specialization assignment timer swipe countdown charges stacks keybind font size glow desaturate saturation behavior",
-    layout = "layout size width height spacing rows columns orientation growth icon position",
+    layout = "layout appearance size width height spacing rows columns orientation growth icon position color saturation desaturate texture border",
     timer = "timer display duration active aura buff cooldown gcd swipe countdown recharge fill drain",
-    appearance = "appearance color saturation desaturate texture",
+    visibility = "visibility combat mouseover opacity fade active inactive ready cooldown",
     text = "text font size outline anchor offset countdown charges stacks keybinds name",
     glow = "glow style color speed scale lines thickness aura ready cooldown",
     advanced = "advanced reset delete custom texture",
@@ -413,7 +390,7 @@ function Options.GetSearchEntries()
         elseif group.defaultViewerKey == "BuffBarCooldownViewer" then
           available = section[1] ~= "glow" and section[1] ~= "advanced"
         else
-          available = section[1] ~= "advanced" and section[1] ~= "appearance"
+          available = section[1] ~= "advanced"
         end
       else
         available = section[1] == "general" or section[1] == "layout" or section[1] == "advanced"
