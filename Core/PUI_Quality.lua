@@ -561,6 +561,7 @@ local function EnsureCombatMsgFrame()
 
   ns.FrameUtil:RegisterMover("quality_combat_message", f, {
     label = "Combat Message",
+    defaultVisibility = { Solo = false },
     moduleKey = "quality",
     moduleLabel = "Quality of Life",
     optionsString = "Quality,combatTab",
@@ -914,6 +915,7 @@ local function EnsureCombatWarningFrame()
 
   ns.FrameUtil:RegisterMover("quality_combat_warning", f, {
     label = "Combat Warning",
+    defaultVisibility = { Solo = false },
     moduleKey = "quality",
     moduleLabel = "Quality of Life",
     optionsString = "Quality,combatTab",
@@ -1886,21 +1888,20 @@ local function IsPetClass()
     return IsPlayerSpell(31687)
   end
 
-  -- Marksmanship Hunter should not be warned (Lone Wolf playstyle).
-  if class == "HUNTER" then
+  if class == "HUNTER" or class == "DEATHKNIGHT" then
     local specIndex = GetSpecialization()
     local specID = specIndex and GetSpecializationInfo(specIndex)
-
-    if specID == 254 then
-      return false
+    if class == "HUNTER" then
+      return specID ~= 254
     end
+    return specID == 252
   end
 
   return true
 end
 
 function Quality:IsPetWarningAvailable()
-  return IsPetClass() or IsHealPetClass()
+  return IsPetClass()
 end
 
 function Quality:GetQuickSetupValue(key)
@@ -1944,6 +1945,7 @@ local function EnsurePetWarnFrame()
 
   ns.FrameUtil:RegisterMover("quality_pet_warning", f, {
     label = "Pet Warning",
+    isAvailable = function() return Quality:IsPetWarningAvailable() end,
     moduleKey = "quality",
     moduleLabel = "Quality of Life",
     optionsString = "Quality,combatTab",
@@ -2472,16 +2474,25 @@ local QualityPreviewRoot
 local QualityPreviewTab = "combatTab"
 local QualityPreviewIndex = 1
 
-local QUALITY_PREVIEW_WARNINGS = {
-  "No target",
-  "Out of melee range",
-  "Missing pet",
-  "Dead pet",
-  "Idle pet",
-  "Low pet health",
-  "Combat message",
-  "Combat timer",
-}
+local function Quality_GetPreviewWarnings()
+  CombatWarning_RefreshMeleeSpec()
+  local warnings = { "No target" }
+  if CombatWarningMeleeSpec then
+    warnings[#warnings + 1] = "Out of melee range"
+  end
+  if IsPetClass() then
+    warnings[#warnings + 1] = "Missing pet"
+    warnings[#warnings + 1] = "Dead pet"
+    if IsHealPetClass() then
+      warnings[#warnings + 1] = "Low pet health"
+    else
+      warnings[#warnings + 1] = "Idle pet"
+    end
+  end
+  warnings[#warnings + 1] = "Combat message"
+  warnings[#warnings + 1] = "Combat timer"
+  return warnings
+end
 
 local function Quality_RefreshPreview()
   local root = QualityPreviewRoot
@@ -2491,12 +2502,31 @@ local function Quality_RefreshPreview()
 
   local q = GetQ()
   local isCursor = QualityPreviewTab == "cursorTab"
+  local isGroup = QualityPreviewTab == "groupTab"
 
-  root.Warning:SetShown(not isCursor)
+  root.Warning:SetShown(not isCursor and not isGroup)
+  root.CursorLabel:SetShown(isCursor)
+  root.CrosshairLabel:SetShown(isCursor)
+  root.GroupSamples:SetShown(isGroup)
+  root.Next:SetShown(not isCursor and not isGroup)
+  root.PreviewHelp:SetShown(not isCursor and not isGroup)
   root.Ring:SetShown(isCursor and q.cursorRingShowInner ~= false)
   root.ClickRing:SetShown(isCursor and q.cursorRingShowOutline ~= false)
   root.Horizontal:SetShown(isCursor and q.crosshair)
   root.Vertical:SetShown(isCursor and q.crosshair)
+
+  if isGroup then
+    root.Title:SetText("Group tools — sample displays")
+    local size = Clamp(q.bresLustWidgetIconSize or 32, 16, 64)
+    root.Bres:SetSize(size, size)
+    root.Lust:SetSize(size, size)
+    root.Bres:SetAlpha(q.bresWidgetEnable and 1 or 0.35)
+    root.Lust:SetAlpha(q.lustWidgetEnable and 1 or 0.35)
+    root.Ready:SetAlpha(q.raidUtilityButtonsEnable and 1 or 0.35)
+    root.Pull:SetAlpha(q.raidUtilityButtonsEnable and 1 or 0.35)
+    root.Pull:SetText("Pull " .. tostring(q.raidUtilityPullTimerSeconds or 10))
+    return
+  end
 
   if isCursor then
     local ringSize = Clamp(q.cursorRingSize or 26, 8, 128)
@@ -2522,12 +2552,17 @@ local function Quality_RefreshPreview()
       crosshairColor.r, crosshairColor.g, crosshairColor.b, crosshairColor.a
     )
 
-    root.Title:SetText("Cursor and crosshair")
-    root.Next:Hide()
+    root.Title:SetText("Position indicators")
+    root.CursorLabel:SetText("Cursor ring")
+    root.CrosshairLabel:SetText("Screen-center crosshair")
     return
   end
 
-  local kind = QUALITY_PREVIEW_WARNINGS[QualityPreviewIndex]
+  local warnings = Quality_GetPreviewWarnings()
+  QualityPreviewIndex = math.min(QualityPreviewIndex, #warnings)
+  local kind = warnings[QualityPreviewIndex]
+  root.PreviewHelp:SetText(tostring(QualityPreviewIndex) .. " / " .. tostring(#warnings)
+    .. " · Select an example below")
   local text = ""
   local size = 20
   local color = { r = 1, g = 1, b = 1, a = 1 }
@@ -2609,27 +2644,65 @@ local function Quality_BuildPreview(_, _, shell, path)
 
     root.ClickRing = root:CreateTexture(nil, "ARTWORK")
     root.ClickRing:SetTexture(ringTexture)
-    root.ClickRing:SetPoint("CENTER", root, "CENTER", 0, 0)
+    root.ClickRing:SetPoint("CENTER", root, "CENTER", -100, 0)
 
     root.Ring = root:CreateTexture(nil, "OVERLAY")
     root.Ring:SetTexture(ringTexture)
-    root.Ring:SetPoint("CENTER", root, "CENTER", 0, 0)
+    root.Ring:SetPoint("CENTER", root, "CENTER", -100, 0)
 
     root.Horizontal = root:CreateTexture(nil, "OVERLAY")
     root.Horizontal:SetTexture([[Interface\Buttons\WHITE8x8]])
-    root.Horizontal:SetPoint("CENTER", root, "CENTER", 0, 0)
+    root.Horizontal:SetPoint("CENTER", root, "CENTER", 100, 0)
 
     root.Vertical = root:CreateTexture(nil, "OVERLAY")
     root.Vertical:SetTexture([[Interface\Buttons\WHITE8x8]])
-    root.Vertical:SetPoint("CENTER", root, "CENTER", 0, 0)
+    root.Vertical:SetPoint("CENTER", root, "CENTER", 100, 0)
+
+    root.CursorLabel = root:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    root.CursorLabel:SetPoint("BOTTOM", root, "BOTTOM", -100, 18)
+    root.CrosshairLabel = root:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    root.CrosshairLabel:SetPoint("BOTTOM", root, "BOTTOM", 100, 18)
+    root.PreviewHelp = root:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    root.PreviewHelp:SetPoint("BOTTOM", root, "BOTTOM", 0, 42)
+
+    root.GroupSamples = CreateFrame("Frame", nil, root)
+    root.GroupSamples:SetAllPoints(root)
+    for _, sample in ipairs({
+      { key = "Bres", texture = 136080, text = "Battle resurrection", time = "1 · 04:30", x = -100 },
+      { key = "Lust", texture = 136012, text = "Bloodlust", time = "00:32", x = 100 },
+    }) do
+      local icon = CreateFrame("Frame", nil, root.GroupSamples)
+      icon:SetPoint("CENTER", root.GroupSamples, "CENTER", sample.x, 10)
+      local texture = icon:CreateTexture(nil, "ARTWORK")
+      texture:SetAllPoints(icon)
+      texture:SetTexture(sample.texture)
+      texture:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+      local timer = icon:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+      timer:SetPoint("TOP", icon, "BOTTOM", 0, -4)
+      timer:SetText(sample.time)
+      local label = icon:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+      label:SetPoint("BOTTOM", icon, "TOP", 0, 6)
+      label:SetText(sample.text)
+      root[sample.key] = icon
+    end
+    for index, sample in ipairs({ { key = "Ready", text = "Ready check" }, { key = "Pull", text = "Pull 10" } }) do
+      local button = CreateFrame("Button", nil, root.GroupSamples, "UIPanelButtonTemplate")
+      button:SetSize(120, 24)
+      button:SetPoint("BOTTOM", root.GroupSamples, "BOTTOM", (index - 1.5) * 132, 12)
+      button:SetText(sample.text)
+      button:EnableMouse(false)
+      ns.Theme.WidgetSkins.UIButton(button)
+      root[sample.key] = button
+    end
 
     local nextButton = CreateFrame("Button", nil, root, "UIPanelButtonTemplate")
     nextButton:SetSize(128, 24)
     nextButton:SetPoint("BOTTOM", root, "BOTTOM", 0, 10)
-    nextButton:SetText("Next example")
+    nextButton:SetText("Next warning")
     nextButton:SetScript("OnClick", function()
-      QualityPreviewIndex = QualityPreviewIndex % #QUALITY_PREVIEW_WARNINGS + 1
+      QualityPreviewIndex = QualityPreviewIndex % #Quality_GetPreviewWarnings() + 1
       Quality_RefreshPreview()
+      Addon:NotifyOptionsTreeChanged("Quality", ns._PUIActiveOptionsPath)
     end)
     ns.Theme.WidgetSkins.UIButton(nextButton)
     root.Next = nextButton
@@ -3126,9 +3199,14 @@ local function QualityProvider(AddonObj)
     local warnings = visual.combatWarnings
     warnings.name = "Target and range warnings"
     warnings.args.notAttackingWarning.name = "Out of melee range"
+    warnings.args.notAttackingWarning.hidden = function()
+      CombatWarning_RefreshMeleeSpec()
+      return not CombatWarningMeleeSpec
+    end
     warnings.args.combatWarningFontSize.disabled = function()
       local qq = GetQ()
-      return not qq.noTargetWarning and not qq.notAttackingWarning
+      CombatWarning_RefreshMeleeSpec()
+      return not qq.noTargetWarning and (not CombatWarningMeleeSpec or not qq.notAttackingWarning)
     end
 
     local combatStatus = automation.combat
@@ -3163,20 +3241,10 @@ local function QualityProvider(AddonObj)
         Quality_RefreshPreview()
       end
     )
-    combatStatus.args.editMode = {
-      type = "execute",
-      name = "Position in Edit Mode",
-      order = 5,
-      disabled = function()
-        return InCombatLockdown()
-      end,
-      func = function()
-        AddonObj:SetEditMode(true)
-      end,
-    }
-
+    automation.loot.args.autoLoot.desc =
+      "Enables WoW's automatic looting preference. Faster looting separately takes items as soon as loot is ready, even when Auto loot is off."
     automation.loot.args.fasterLooting.desc =
-      "Loots items faster and automatically confirms loot-binding prompts."
+      "Takes all items as soon as loot is ready and automatically confirms loot-binding prompts. This also loots automatically when Auto loot is off."
     automation.merchant.args.autoRepair.desc =
       "Automatically repairs at merchants. Hold Shift when opening a merchant to skip automatic repair and junk selling."
     automation.merchant.args.autoSellJunk.desc =
@@ -3189,6 +3257,21 @@ local function QualityProvider(AddonObj)
       name = "Combat",
       order = 1,
       args = {
+        preview = {
+          type = "group", name = "Warning preview", inline = true, order = 0,
+          args = {
+            warning = {
+              type = "select", name = "Preview example", order = 1,
+              desc = "Preview the warnings and combat displays available to your class and specialization. Examples are shown even when their feature is disabled.",
+              values = Quality_GetPreviewWarnings,
+              get = function() return math.min(QualityPreviewIndex, #Quality_GetPreviewWarnings()) end,
+              set = function(_, value)
+                QualityPreviewIndex = value
+                Quality_RefreshPreview()
+              end,
+            },
+          },
+        },
         combatStatus = combatStatus,
         combatWarnings = warnings,
         petWarnings = visual.petWarnings,
@@ -3197,7 +3280,7 @@ local function QualityProvider(AddonObj)
 
     options.args.cursorTab = {
       type = "group",
-      name = "Cursor",
+      name = "Position indicators",
       order = 2,
       args = {
         cursorRing = ring,
@@ -3215,37 +3298,44 @@ local function QualityProvider(AddonObj)
       },
     }
 
-    automation.combat = nil
     local interfaceSettings = automation.uiAndCamera
-    automation.uiAndCamera = nil
-
-    options.args.automationTab.name = "Automation"
-    options.args.automationTab.order = 4
-
-    options.args.interfaceTab = {
-      type = "group",
-      name = "Interface",
-      order = 5,
-      args = {
-        uiAndCamera = interfaceSettings,
-      },
+    automation.loot.name = "Everyday conveniences"
+    automation.loot.args.autoKeystone = automation.mythicPlus.args.autoKeystone
+    automation.loot.args.autoKeystone.order = 3
+    automation.loot.args.fasterMovieSkip = automation.dialogs.args.fasterMovieSkip
+    automation.loot.args.fasterMovieSkip.order = 4
+    automation.merchant.name = "Items and merchants"
+    automation.merchant.args.auctionHouseCurrentExpansionOnly = automation.auctionHouse.args.auctionHouseCurrentExpansionOnly
+    automation.merchant.args.auctionHouseCurrentExpansionOnly.name = "Auction house: current expansion only"
+    automation.merchant.args.auctionHouseCurrentExpansionOnly.desc = "Applies the current-expansion filter when opening the auction house."
+    automation.merchant.args.auctionHouseCurrentExpansionOnly.order = 5
+    automation.merchant.args.easyItemDestroy = automation.dialogs.args.easyItemDestroy
+    automation.merchant.args.easyItemDestroy.order = 6
+    interfaceSettings.name = "Interface and camera"
+    options.args.automationTab.args = {
+      loot = automation.loot, merchant = automation.merchant,
+      roleCheck = automation.roleCheck, invites = automation.invites,
+      uiAndCamera = interfaceSettings,
     }
+    options.args.automationTab.name = "Convenience"
+    options.args.automationTab.order = 4
 
     options.args.qualityTab = nil
 
     -- Feature groups own their behavior, appearance, visibility, and text together.
     local message = combatStatus.args.combatMessage
     message.name = "Show text"
+    message.desc = "Briefly shows Entering Combat or Leaving Combat when your combat status changes."
     local timer = combatStatus.args.combatTimer
     timer.name = "Show text"
+    timer.desc = "Shows elapsed time in minutes and seconds while you are in combat. The timer starts again when you enter combat."
     combatStatus.args = {
-      message = ns.OptionsSchema.BuildTextGroup("Message", 10, {
+      message = ns.OptionsSchema.BuildTextGroup("Combat status messages", 10, {
         showText = message, fontSize = combatStatus.args.combatMessageFontSize,
       }),
-      timer = ns.OptionsSchema.BuildTextGroup("Timer", 20, {
+      timer = ns.OptionsSchema.BuildTextGroup("Time in combat", 20, {
         showText = timer, fontSize = combatStatus.args.combatTimerFontSize,
       }),
-      editMode = combatStatus.args.editMode,
     }
     warnings.args.combatWarningFontSize.name = "Font size"
     warnings.args.combatWarningFontSize.order = 50
@@ -3283,7 +3373,26 @@ local function QualityProvider(AddonObj)
       group.args.size.name, group.args.size.order = "Size", 20
       group.args.color.name, group.args.color.order = "Color", 30
     end
-    options.args.combatTab.arg = { puiExplicit = true }
+    local groupTools = options.args.groupTab.args
+    local bres = groupTools.battleResLust
+    local bresArgs = bres.args.general.args
+    bresArgs.bresLustWidgetIconSize = bres.args.layout.args.bresLustWidgetIconSize
+    bresArgs.bresLustWidgetIconSize.order = 4
+    bres.args = bresArgs
+    local utility = groupTools.raidUtility.args
+    utility.buttons.name = "Ready check and pull timer"
+    utility.raidMarkers.name = "Target markers"
+    utility.worldMarkers.name = "World markers"
+    utility.general.name = "Group visibility"
+    groupTools.raidUtility = nil
+    for key, group in pairs(utility) do
+      groupTools[key] = group
+      if group.args.freeMove then group.args.freeMove.name = "Allow dragging" end
+      if group.args.fadeOutDuration then group.args.fadeOutDuration.name = "Fade-out time (seconds)" end
+    end
+    for _, tab in pairs(options.args) do
+      tab.arg = { puiExplicit = true }
+    end
     local _, playerClass = UnitClass("player")
     if playerClass == "HUNTER" then
       options.args.combatTab.args.emergencySalve = ns.Modules.HunterTools:GetOptions()
@@ -3303,7 +3412,7 @@ Addon:RegisterOptionsSection("Quality", QualityProvider, 80, "Quality of Life", 
     previewWidth = 340,
     previewHeight = 190,
     previewPathMatches = function(path)
-      return path[2] == "combatTab" or path[2] == "cursorTab"
+      return path[2] == "combatTab" or path[2] == "cursorTab" or path[2] == "groupTab"
     end,
     buildPreview = Quality_BuildPreview,
   },
