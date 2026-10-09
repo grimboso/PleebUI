@@ -612,9 +612,12 @@ local function CreateVisibilityCheckbox(parent, onClick)
   widget:SetTriState(true)
   widget.frame:SetParent(check)
   widget.frame:ClearAllPoints()
-  widget.frame:SetPoint("TOPLEFT", check, "TOPLEFT", 0, 0)
   widget.frame:Show()
   ns.AceHooks.TakeOwnership(widget)
+  widget:SetHeight(24)
+  local geometry = ns.Theme.GetWidgetRowGeometry(widget)
+  local metrics = ns.Theme.GetControlMetrics(widget)
+  widget.frame:SetPoint("LEFT", check, "LEFT", (24 - metrics.checkboxBoxSize) / 2 - geometry.controlLeft, 0)
   check.widget = widget
   check.GetChecked = function() return widget:GetValue() == true end
   widget:SetCallback("OnValueChanged", function()
@@ -738,12 +741,8 @@ local function BuildEditControls(panel)
     function() return util._dimAlpha end, util.SetEditDimAlpha)
 
   panel.positionUnit = "target"
-  panel.editGroupPositionsOpen = false
-  panel.groupPositionButton = CreateToolbarButton(host, "Group positions  [+]", 230, function()
-    panel.editGroupPositionsOpen = not panel.editGroupPositionsOpen
-    TestMode:RebuildToolbar()
-  end)
-  StyleButton(panel.groupPositionButton, false)
+  host = CreateFrame("Frame", nil, panel.content)
+  panel.positionControls = host
   Dropdown("positionUnit", "Frame positions", { target = "Target", focus = "Focus", boss1 = "Boss" },
     function() return panel.positionUnit end,
     function(value) panel.positionUnit = value end)
@@ -790,6 +789,7 @@ local function BuildEditControls(panel)
   end)
   StyleButton(panel.removePositionButton, false)
 
+  host = panel.editControls
   panel.blizzardSettingsButton = CreateToolbarButton(host, "Blizzard Cooldown Settings", 230, function()
     _G.CooldownViewerSettings:ShowUIPanel(false)
   end)
@@ -981,6 +981,7 @@ function TestMode:EnsureToolbar()
 
   panel.sectionButtons = {}
   for _, definition in ipairs({
+    { key = "positions", label = "Group positions" },
     { key = "movers", label = "Movers" },
     { key = "controls", label = "Edit controls" },
     { key = "help", label = "Help & shortcuts" },
@@ -1138,35 +1139,47 @@ local function BuildMoverTree()
   return modules
 end
 
+local function ToggleMoverVisibility(check)
+  ns.FrameUtil.SetMoverVisibilityNode(check.__puiKind, check.__puiKey, check.__puiState == "off")
+  TestMode:RebuildToolbar()
+end
+
+local function ToggleMoverRowExpansion(panel, row)
+  local config = ns.FrameUtil.GetMoverVisibilityConfig()
+  local key = row.__puiExpansionKey
+  if key == "previews" then
+    config.previewsExpanded = not (config.previewsExpanded == true)
+  elseif panel.search:GetText() ~= "" then
+    panel.searchCollapsed[key] = not panel.searchCollapsed[key]
+  else
+    config.expanded[key] = not (config.expanded[key] == true)
+  end
+  TestMode:RebuildToolbar()
+end
+
 local function AcquireMoverRow(panel, index)
   local row = panel.moverRows[index]
   if row then return row end
 
-  row = CreateFrame("Frame", nil, panel.content)
+  row = CreateFrame("Button", nil, panel.content)
   row:SetHeight(25)
-
-  local expand = CreateToolbarButton(row, "+", 22, function(self)
-    local config = ns.FrameUtil.GetMoverVisibilityConfig()
-    local key = self.__puiExpansionKey
-    if key == "previews" then
-      config.previewsExpanded = not (config.previewsExpanded == true)
+  row:EnableMouse(true)
+  row:RegisterForClicks("LeftButtonUp")
+  row:SetScript("OnClick", function(self)
+    if self.__puiExpansionKey then
+      ToggleMoverRowExpansion(panel, self)
     else
-      local searching = panel.search:GetText() ~= ""
-      if searching then
-        panel.searchCollapsed[key] = not panel.searchCollapsed[key]
-      else
-        config.expanded[key] = not (config.expanded[key] == true)
-      end
+      ToggleMoverVisibility(self.check)
     end
-    TestMode:RebuildToolbar()
+  end)
+
+  local expand = CreateToolbarButton(row, "+", 22, function()
+    ToggleMoverRowExpansion(panel, row)
   end)
   expand:SetHeight(22)
   row.expand = expand
 
-  local check = CreateVisibilityCheckbox(row, function(self)
-    ns.FrameUtil.SetMoverVisibilityNode(self.__puiKind, self.__puiKey, self.__puiState == "off")
-    TestMode:RebuildToolbar()
-  end)
+  local check = CreateVisibilityCheckbox(row, ToggleMoverVisibility)
   check:SetPoint("RIGHT", row, "RIGHT", -5, 0)
   row.check = check
 
@@ -1198,7 +1211,7 @@ local function ShowMoverRow(panel, index, y, kind, key, label, depth, state, exp
   row:SetPoint("TOPRIGHT", panel.content, "TOPRIGHT", -TOOLBAR_PADDING, y)
   row.expand:ClearAllPoints()
   row.expand:SetPoint("LEFT", row, "LEFT", 0, 0)
-  row.expand.__puiExpansionKey = expansionKey
+  row.__puiExpansionKey = expansionKey
   row.expand:SetShown(expansionKey ~= nil)
   if expansionKey then
     row.expand:SetText(expanded and "-" or "+")
@@ -1260,6 +1273,60 @@ function TestMode:RebuildToolbar()
     y = y - 34
     return open
   end
+  local uf = ns.Modules.UnitFrames
+  local groupAvailable = uf ~= nil and uf.db ~= nil
+  local positionsOpen = groupAvailable and AddSectionHeader("positions", "Group positions")
+  panel.sectionButtons.positions:SetShown(groupAvailable)
+  panel.positionControls:SetShown(positionsOpen)
+  if positionsOpen then
+    local host = panel.positionControls
+    host:ClearAllPoints()
+    host:SetPoint("TOPLEFT", content, "TOPLEFT", TOOLBAR_PADDING, y)
+    host:SetPoint("TOPRIGHT", content, "TOPRIGHT", -TOOLBAR_PADDING, y)
+    local controlY = -4
+    local available = math_max(220, content:GetWidth() - TOOLBAR_PADDING * 2 - 12)
+    local positions = uf.db.profile.units[panel.positionUnit].contextPositions
+    local editContext = uf:GetPositionEditContext(panel.positionUnit)
+    for _, key in ipairs({ "positionUnit", "switchMode", "activeContext", "separate",
+      "positionEdit", "positionOverride" }) do
+      local spec = panel.editWidgets[key]
+      local frame = spec.widget.frame
+      local show = true
+      if key == "positionEdit" or key == "positionOverride" then
+        show = positions ~= nil and positions.enabled == true
+        if key == "positionOverride" then
+          show = show and editContext ~= "Shared"
+        end
+      end
+      frame:SetShown(show)
+      if show then
+        frame:ClearAllPoints()
+        frame:SetPoint("TOPLEFT", host, "TOPLEFT", 4, controlY)
+        spec.widget:SetWidth(available)
+        frame:SetHeight(spec.height)
+        if key == "positionOverride" then
+          spec.widget:SetLabel("Use a separate " .. editContext .. " position")
+        end
+        spec.widget:SetValue(spec.value())
+        if key == "separate" then
+          spec.widget:SetDisabled(ns.FrameUtil.HasSmartSnapLinks("UF_" .. panel.positionUnit)
+            and not spec.value())
+        end
+        controlY = controlY - spec.height - 4
+      end
+    end
+    local existing = positions and positions[editContext]
+    panel.removePositionButton:ClearAllPoints()
+    panel.removePositionButton:SetPoint("TOPLEFT", host, "TOPLEFT", 4, controlY)
+    panel.removePositionButton:SetWidth(available)
+    panel.removePositionButton:SetShown(editContext ~= "Shared" and existing ~= nil)
+    if panel.removePositionButton:IsShown() then
+      controlY = controlY - 34
+    end
+    host:SetHeight(-controlY)
+    y = y + controlY - SECTION_GAP
+  end
+
   local moversOpen = AddSectionHeader("movers", "Movers")
   panel.setLabel:SetShown(moversOpen)
   panel.followCheck:SetShown(moversOpen)
@@ -1272,7 +1339,8 @@ function TestMode:RebuildToolbar()
   if moversOpen then
     panel.setLabel:SetText("Editing: " .. config.selectedSet)
     panel.setLabel:SetPoint("TOPLEFT", content, "TOPLEFT", TOOLBAR_PADDING, y)
-    y = y - 24
+    panel.resetButton:SetPoint("TOPRIGHT", content, "TOPRIGHT", -TOOLBAR_PADDING, y + 4)
+    y = y - 36
     local previous
     local tabWidth = math_floor((content:GetWidth() - TOOLBAR_PADDING * 2 - 18) / 4)
     for _, name in ipairs(ns.FrameUtil.GetMoverVisibilitySetNames()) do
@@ -1286,8 +1354,9 @@ function TestMode:RebuildToolbar()
     y = y - 35
     StyleVisibilityCheckbox(panel.followCheck, config.followGroup and "on" or "off")
     panel.followCheck:SetPoint("TOPLEFT", content, "TOPLEFT", TOOLBAR_PADDING, y)
+    panel.followLabel:ClearAllPoints()
     panel.followLabel:SetPoint("LEFT", panel.followCheck, "RIGHT", 3, 0)
-    panel.resetButton:SetPoint("TOPRIGHT", content, "TOPRIGHT", -TOOLBAR_PADDING, y + 2)
+    panel.followLabel:SetPoint("RIGHT", content, "RIGHT", -TOOLBAR_PADDING, 0)
     y = y - 34
     panel.search:SetPoint("TOPLEFT", content, "TOPLEFT", TOOLBAR_PADDING + 6, y)
     panel.search:SetPoint("TOPRIGHT", content, "TOPRIGHT", -TOOLBAR_PADDING - 6, y)
@@ -1481,66 +1550,17 @@ function TestMode:RebuildToolbar()
     host:SetPoint("TOPRIGHT", content, "TOPRIGHT", -TOOLBAR_PADDING, y)
     local controlY = -4
     local available = math_max(220, content:GetWidth() - TOOLBAR_PADDING * 2 - 12)
-    local order = { "keyboard", "dim", "snap", "smart", "snapGrid", "grid",
-      "nudge", "tolerance", "fade", "positionUnit", "switchMode", "activeContext",
-      "separate", "positionEdit", "positionOverride" }
-    local uf = ns.Modules.UnitFrames
-    local groupAvailable = uf ~= nil and uf.db ~= nil
-    local groupOpen = groupAvailable and panel.editGroupPositionsOpen == true
-    for _, key in ipairs(order) do
+    for _, key in ipairs({ "keyboard", "dim", "snap", "smart", "snapGrid", "grid",
+      "nudge", "tolerance", "fade" }) do
       local spec = panel.editWidgets[key]
       local frame = spec.widget.frame
       frame:ClearAllPoints()
       frame:SetPoint("TOPLEFT", host, "TOPLEFT", 4, controlY)
       spec.widget:SetWidth(available)
       frame:SetHeight(spec.height)
-      local show = true
-      if key == "separate" or key == "switchMode" or key == "activeContext"
-        or key == "positionUnit" or key == "positionEdit" or key == "positionOverride"
-      then
-        show = groupOpen
-        if key == "positionEdit" or key == "positionOverride" then
-          local cfg = groupAvailable and uf.db.profile.units[panel.positionUnit]
-          show = groupOpen and cfg ~= nil and cfg.contextPositions ~= nil and cfg.contextPositions.enabled == true
-          if key == "positionOverride" then
-            show = show and uf:GetPositionEditContext(panel.positionUnit) ~= "Shared"
-          end
-        end
-      end
-      frame:SetShown(show)
-      if key == "positionUnit" then
-        panel.groupPositionButton:ClearAllPoints()
-        panel.groupPositionButton:SetPoint("TOPLEFT", host, "TOPLEFT", 4, controlY)
-        panel.groupPositionButton:SetWidth(available)
-        panel.groupPositionButton:SetText(groupOpen and "Group positions  [-]" or "Group positions  [+]")
-        panel.groupPositionButton:SetShown(groupAvailable)
-        if groupAvailable then
-          controlY = controlY - 36
-        end
-      end
-      if show then
-        frame:ClearAllPoints()
-        frame:SetPoint("TOPLEFT", host, "TOPLEFT", 4, controlY)
-        if key == "positionOverride" then
-          spec.widget:SetLabel("Use a separate " .. uf:GetPositionEditContext(panel.positionUnit) .. " position")
-        end
-        spec.widget:SetValue(spec.value())
-        if key == "separate" then
-          spec.widget:SetDisabled(ns.FrameUtil.HasSmartSnapLinks("UF_" .. panel.positionUnit)
-            and not spec.value())
-        end
-        controlY = controlY - spec.height - 4
-      end
-    end
-    local editUnit = groupAvailable and uf:GetPositionEditContext(panel.positionUnit)
-    local positions = groupAvailable and uf.db.profile.units[panel.positionUnit].contextPositions
-    local existing = positions and positions[editUnit]
-    panel.removePositionButton:ClearAllPoints()
-    panel.removePositionButton:SetPoint("TOPLEFT", host, "TOPLEFT", 4, controlY)
-    panel.removePositionButton:SetWidth(available)
-    panel.removePositionButton:SetShown(groupOpen and editUnit ~= "Shared" and existing ~= nil)
-    if panel.removePositionButton:IsShown() then
-      controlY = controlY - 34
+      spec.widget:SetValue(spec.value())
+      frame:Show()
+      controlY = controlY - spec.height - 4
     end
     for index, button in ipairs(panel.sessionButtons) do
       button:ClearAllPoints()
@@ -1632,7 +1652,6 @@ local function RefreshToolbarTheme()
     StyleButton(button, false)
   end
   StyleButton(panel.blizzardSettingsButton, false)
-  StyleButton(panel.groupPositionButton, false)
   StyleButton(panel.removePositionButton, false)
   for _, label in ipairs(panel.helpRows or {}) do
     if label:IsShown() then
