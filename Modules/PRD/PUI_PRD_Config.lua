@@ -2804,13 +2804,14 @@ do
       text.args.leftFont.args.fontFlags.name = "Outline"
       text.args.leftFont.args.fontFlags.order = 60
       text.args.leftFont = ns.OptionsSchema.BuildTextGroup("Shared typography", 30, text.args.leftFont.args)
-      text.args.percent = { type = "group", name = "Percent", inline = true, order = 10, arg = { puiExplicit = true },
-        args = { visibility = text.args.leftVisibility } }
-      text.args.value = { type = "group", name = "Value", inline = true, order = 20, arg = { puiExplicit = true },
-        args = { visibility = text.args.rightVisibility } }
-      text.args.percent.args.visibility.name, text.args.value.args.visibility.name = "Visibility", "Visibility"
-      text.args.leftVisibility, text.args.rightVisibility = nil, nil
+      text.args.leftVisibility.name, text.args.rightVisibility.name = "Percent visibility", "Value visibility"
       text.args.centerText.name = "Center text"
+      text.args.content = { type = "group", name = "Content", inline = true, order = 10,
+        arg = { puiExplicit = true }, args = {
+          percentVisibility = text.args.leftVisibility, valueVisibility = text.args.rightVisibility,
+          centerText = text.args.centerText,
+        } }
+      text.args.leftVisibility, text.args.rightVisibility, text.args.centerText = nil, nil, nil
     else
       text.args.fontFlags.name, text.args.fontFlags.order = "Outline", 60
       text.args.textMode.name, text.args.textMode.order = "Format", 20
@@ -2873,13 +2874,18 @@ do
     args.appearanceGroup = appearance
     args.colorGroup = nil
     args.styleGroup = nil
-    args.general = { type = "group", name = "General", order = 10, args = {
-      feature = { type = "group", name = "Feature", order = 10, inline = true, args = { showBar = args.visibilityGroup.args.showBar } },
-    } }
+    layout.showBar = args.visibilityGroup.args.showBar
+    layout.showBar.name = "Show bar"
     args.visibilityGroup.args.showBar = nil
     args.textGroup.order = 30
     if args.ticksGroup then args.ticksGroup.order = 50 end
-    return PRD_ArrangePresentationArgs(args, "layoutGroup")
+    PRD_ArrangePresentationArgs(args, "layoutGroup")
+    if next(args.visibilityGroup.args) then
+      args.visibilityGroup.inline, args.visibilityGroup.order = true, 40
+      args.layoutAppearance.args.visibility = args.visibilityGroup
+    end
+    args.visibilityGroup = nil
+    return args
   end
 
   local function PRD_BuildAppearanceCopyGroup(state)
@@ -3424,6 +3430,7 @@ do
           reset = {
             type = "execute",
             name = "Reset form override",
+            confirm = "Discard this form's custom color override?",
             order = 10,
             func = function()
               config.colorMode = nil
@@ -3631,6 +3638,7 @@ do
           delete = {
             type = "execute",
             name = "Delete tick",
+            confirm = "Delete this tick marker?",
             order = 5,
             func = function()
               table.remove(entries, tickIndex)
@@ -3935,7 +3943,7 @@ do
 
       return {
         type = "group",
-        name = "Resource behavior",
+        name = "Resource behaviour",
         order = 5,
         inline = true,
         args = args,
@@ -3943,7 +3951,7 @@ do
     elseif resourceKey == "STAGGER" then
       return {
         type = "group",
-        name = "Resource behavior",
+        name = "Resource behaviour",
         order = 5,
         inline = true,
         args = {
@@ -4121,7 +4129,8 @@ do
           },
           delete = {
             type = "execute",
-            name = "Delete shift",
+            name = "Delete color shift",
+            confirm = "Delete this color shift?",
             order = 5,
             func = function()
               if AuraWidget.RemoveStackColorThreshold(settings, index) then
@@ -4915,7 +4924,11 @@ do
       general.behavior = args.behaviorGroup
       args.behaviorGroup = nil
     end
-    args.general = { type = "group", name = "General", order = 10, args = general }
+    if general.behavior then
+      args.general = { type = "group", name = "General", order = 10, args = general }
+    else
+      args.layout.args.enabled = general.enabled
+    end
     local arranged = PRD_ArrangePresentationArgs(args, "layout")
     arranged.cueGroup.inline = nil
     arranged.display.inline = nil
