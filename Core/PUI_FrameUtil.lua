@@ -166,16 +166,20 @@ function FrameUtil.SelectMoverVisibilitySet(name)
 end
 
 function FrameUtil.SetMoverVisibilityNode(kind, key, visible)
+  local history = FrameUtil.BeginEditHistory("Mover visibility")
   local config = FrameUtil.GetMoverVisibilityConfig()
   local set = config.sets[config.selectedSet]
   set[kind][key] = visible == true
   FrameUtil.ApplyMoverVisibilityPreset()
+  FrameUtil.CommitEditHistory(history)
 end
 
 function FrameUtil.ResetMoverVisibilitySet()
+  local history = FrameUtil.BeginEditHistory("Reset preset")
   local config = FrameUtil.GetMoverVisibilityConfig()
   config.sets[config.selectedSet] = { modules = {}, groups = {}, movers = {} }
   FrameUtil.ApplyMoverVisibilityPreset()
+  FrameUtil.CommitEditHistory(history)
 end
 
 function FrameUtil.SelectGroupMoverVisibilitySet()
@@ -1103,7 +1107,7 @@ local function RoundToNearestGrid(value, size)
   return MoverRound(_G.math.ceil(scaled - 0.5) * size)
 end
 
-local function GetGridCornerDelta(cornerX, cornerY, parentLeft, parentTop, maxGridX, maxGridY, size)
+local function GetGridCornerDelta(cornerX, cornerY, parentLeft, parentTop, maxGridX, maxGridY, size, preserveAxis)
   local gridOffsetX = RoundToNearestGrid(cornerX - parentLeft, size)
   local gridOffsetY = RoundToNearestGrid(parentTop - cornerY, size)
 
@@ -1112,12 +1116,14 @@ local function GetGridCornerDelta(cornerX, cornerY, parentLeft, parentTop, maxGr
 
   local dx = (parentLeft + gridOffsetX) - cornerX
   local dy = (parentTop - gridOffsetY) - cornerY
+  if preserveAxis == "H" then dx = 0 end
+  if preserveAxis == "V" then dy = 0 end
   local distance = (dx * dx) + (dy * dy)
 
   return dx, dy, distance
 end
 
-function FrameUtil._ApplyGridSnap(entry)
+function FrameUtil._ApplyGridSnap(entry, preserveAxis)
   if not entry or not entry.frame then return end
   if not FrameUtil._snapToGrid then return end
 
@@ -1140,22 +1146,22 @@ function FrameUtil._ApplyGridSnap(entry)
   local maxGridY = math_floor(parentHeight / size) * size
 
   local bestDx, bestDy, bestDistance =
-    GetGridCornerDelta(fl, ft, parentLeft, parentTop, maxGridX, maxGridY, size)
+    GetGridCornerDelta(fl, ft, parentLeft, parentTop, maxGridX, maxGridY, size, preserveAxis)
 
   local dx, dy, distance =
-    GetGridCornerDelta(fr, ft, parentLeft, parentTop, maxGridX, maxGridY, size)
+    GetGridCornerDelta(fr, ft, parentLeft, parentTop, maxGridX, maxGridY, size, preserveAxis)
   if distance < bestDistance then
     bestDx, bestDy, bestDistance = dx, dy, distance
   end
 
   dx, dy, distance =
-    GetGridCornerDelta(fl, fb, parentLeft, parentTop, maxGridX, maxGridY, size)
+    GetGridCornerDelta(fl, fb, parentLeft, parentTop, maxGridX, maxGridY, size, preserveAxis)
   if distance < bestDistance then
     bestDx, bestDy, bestDistance = dx, dy, distance
   end
 
   dx, dy, distance =
-    GetGridCornerDelta(fr, fb, parentLeft, parentTop, maxGridX, maxGridY, size)
+    GetGridCornerDelta(fr, fb, parentLeft, parentTop, maxGridX, maxGridY, size, preserveAxis)
   if distance < bestDistance then
     bestDx, bestDy = dx, dy
   end
@@ -1351,13 +1357,12 @@ function FrameUtil._ApplyFrameSnap(entry, live, ignoreEntries)
     ny = oy + bestDy
   end
 
-  if nx == ox and ny == oy then
-    return
+  if nx ~= ox or ny ~= oy then
+    MoveEntryTo(entry, nx, ny, live and true or false)
   end
 
-  MoveEntryTo(entry, nx, ny, live and true or false)
-
   FrameUtil._InitEditModeConfig()
+  return bestAxis
 end
 
 FrameUtil._smartSnapEnabled = FrameUtil._smartSnapEnabled ~= false
@@ -1395,6 +1400,7 @@ function FrameUtil:RegisterStartupLayoutParticipant(key, prepare, complete)
 end
 
 function FrameUtil.BeginProfileTransition()
+  FrameUtil.ClearEditHistory()
   FrameUtil._profileTransitionActive = true
   FrameUtil._editModeConfigDB = nil
   FrameUtil._smartSnapDBRef = nil
@@ -3559,6 +3565,7 @@ function FrameUtil.BeginExternalSmartSnapDrag(key, breakSnap)
     return nil
   end
 
+  local history = FrameUtil.BeginEditHistory("Move movers")
   EnsureSmartSnapLoaded()
 
   local suppressSnap = breakSnap == true
@@ -3583,6 +3590,7 @@ function FrameUtil.BeginExternalSmartSnapDrag(key, breakSnap)
     group = group,
     start = start,
     suppressSnap = suppressSnap,
+    history = history,
   }
 end
 
@@ -3623,10 +3631,14 @@ function FrameUtil.FinishExternalSmartSnapDrag(state)
     FrameUtil._FinalizeMovedGroup(state.group or { [state.entry] = true }, state.entry)
   end
 
+  FrameUtil.CommitEditHistory(state.history)
   return committed
 end
 
 function FrameUtil.CancelExternalSmartSnapDrag(state)
+  if state and state.history == FrameUtil._editHistory.pending then
+    FrameUtil._editHistory.pending = nil
+  end
   if not state or not state.entry then
     return false
   end
@@ -4133,6 +4145,7 @@ function FrameUtil._MoveGroupBy(group, dx, dy, primary)
     return
   end
 
+  local history = FrameUtil.BeginEditHistory("Move movers")
   dx = dx or 0
   dy = dy or 0
 
@@ -4142,6 +4155,7 @@ function FrameUtil._MoveGroupBy(group, dx, dy, primary)
   end
 
   FrameUtil._FinalizeMovedGroup(group, primary)
+  FrameUtil.CommitEditHistory(history)
 end
 
 FrameUtil._IsMoverSelected = function(entry)
@@ -4337,12 +4351,18 @@ end
 function FrameUtil._UpdateEditDialogKeyboardState()
   local panel = ns.TestMode.toolbar
   if panel and not InCombatLockdown() then
-    panel:EnableKeyboard(FrameUtil._keyboardMoveEnabled == true)
+    panel:EnableKeyboard(ns.Flags.IsEditing == true)
   end
 end
 
 function FrameUtil.HandleEditModeKeyDown(key)
-  if not ns.Flags.IsEditing or not FrameUtil._keyboardMoveEnabled then
+  if not ns.Flags.IsEditing or InCombatLockdown() then return false end
+  if _G.GetCurrentKeyBoardFocus() then return false end
+  if IsControlKeyDown() and (key == "Z" or key == "Y") then
+    FrameUtil.ReplayEditHistory(key == "Y" or IsShiftKeyDown())
+    return true
+  end
+  if not FrameUtil._keyboardMoveEnabled then
     return
   end
   if key == "1" or key == "2" or key == "3"
@@ -4756,6 +4776,175 @@ function FrameUtil.GetMoverQuickSettingsSpec(keyOrEntry, providerFrame)
   return spec
 end
 
+FrameUtil._editHistory = { undo = {}, redo = {} }
+FrameUtil._editHistoryParticipants = {}
+
+function FrameUtil.RegisterEditHistoryParticipant(key, capture, restore)
+  FrameUtil._editHistoryParticipants[key] = { capture = capture, restore = restore }
+end
+
+function FrameUtil.ClearEditHistory()
+  local history = FrameUtil._editHistory
+  wipe(history.undo)
+  wipe(history.redo)
+  history.pending = nil
+  history.replaying = nil
+  for _, entry in ipairs(MoversList) do entry._editHistoryDrag = nil end
+end
+
+function FrameUtil.CaptureEditHistoryState(previous)
+  EnsureSmartSnapLoaded()
+  local visibility = FrameUtil.GetMoverVisibilityConfig()
+  local state = { movers = {}, settings = {}, participants = {}, snap = CopyValue(GetSmartSnapDB()),
+    visibility = { sets = CopyValue(visibility.sets), selectedSet = visibility.selectedSet,
+      followGroup = visibility.followGroup } }
+  for _, entry in ipairs(MoversList) do
+    local frame = entry.frame
+    local x, y = frame:GetCenter()
+    local width, height = frame:GetSize()
+    if not _G.issecretvalue(x) and not _G.issecretvalue(y)
+      and not _G.issecretvalue(width) and not _G.issecretvalue(height) and x and y
+    then
+      local ux, uy = UIParent:GetCenter()
+      state.movers[entry.key] = { entry = entry, x = x - ux, y = y - uy,
+        snapState = CaptureSmartSnapState(entry) }
+    end
+    if not previous then
+      local spec = FrameUtil.GetMoverQuickSettingsSpec(entry, frame)
+      for _, control in ipairs(spec and spec.controls or {}) do
+        if control.get and control.set then
+          state.settings[#state.settings + 1] = { get = control.get, set = control.set,
+            color = control.type == "color", value = CopyValue(control.get()) }
+        end
+      end
+    end
+  end
+  for key, participant in pairs(FrameUtil._editHistoryParticipants) do
+    state.participants[key] = CopyValue(participant.capture())
+  end
+  if previous then
+    for _, control in ipairs(previous.settings) do
+      state.settings[#state.settings + 1] = { get = control.get, set = control.set,
+        color = control.color, value = CopyValue(control.get()) }
+    end
+  else
+    for _, control in ipairs(ns.TestMode:GetEditHistoryControls()) do
+      state.settings[#state.settings + 1] = { get = control.get, set = control.set,
+        value = CopyValue(control.get()) }
+    end
+  end
+  return state
+end
+
+function FrameUtil.BeginEditHistory(label)
+  local history = FrameUtil._editHistory
+  if not ns.Flags.IsEditing or InCombatLockdown() or history.replaying then return end
+  if history.pending then return end
+  local transaction = { label = label, before = FrameUtil.CaptureEditHistoryState() }
+  history.pending = transaction
+  return transaction
+end
+
+function FrameUtil.CommitEditHistory(transaction)
+  local history = FrameUtil._editHistory
+  if not transaction or history.pending ~= transaction then return end
+  history.pending = nil
+  if not ns.Flags.IsEditing or InCombatLockdown() then return end
+  transaction.after = FrameUtil.CaptureEditHistoryState(transaction.before)
+  if ValuesEqual(transaction.before, transaction.after) then return end
+  history.undo[#history.undo + 1] = transaction
+  if #history.undo > 100 then _G.table.remove(history.undo, 1) end
+  wipe(history.redo)
+  ns.TestMode:RefreshEditControlButtons()
+end
+
+function FrameUtil.RestoreEditHistoryState(state, other)
+  local db = FrameUtil._GetEditModeDB()
+  FrameUtil._smartSnapApplying = true
+  wipe(PendingSmartSnapRelayouts)
+  wipe(PendingSmartSnapRuntimeRelayouts)
+  db.smartSnap = CopyValue(state.snap)
+  FrameUtil._smartSnapLoaded = false
+  EnsureSmartSnapLoaded()
+  for key, value in pairs(state.participants) do
+    if not ValuesEqual(value, other.participants[key]) then
+      FrameUtil._editHistoryParticipants[key].restore(CopyValue(value))
+    end
+  end
+  for index, control in ipairs(state.settings) do
+    if not ValuesEqual(control.value, other.settings[index].value) then
+      if control.color then
+        control.set(_G.unpack(CopyValue(control.value)))
+      else
+        control.set(CopyValue(control.value))
+      end
+    end
+  end
+  for key, point in pairs(state.movers) do
+    local entry = MoversByKey[key]
+    local opposite = other.movers[key]
+    if entry == point.entry and opposite then
+      local saved, changed = point.snapState, CaptureSmartSnapState(entry)
+      local options = GetSmartSnapOptions(entry)
+      if saved and changed and not ValuesEqual(saved.size, changed.size) then
+        if options.syncAxis == "WIDTH" and options.applySyncWidth then
+          options.applySyncWidth(saved.size.width, entry)
+        elseif options.copySizeFrom then
+          options.copySizeFrom({ frame = entry.frame, key = entry.key,
+            opts = { smartSnap = { getSizeState = function() return CopyValue(saved.size) end } } })
+        elseif options.applyDimensions then
+          options.applyDimensions(saved.size.width, saved.size.height, entry)
+        end
+      end
+      if saved and changed and options.applyDesign and not ValuesEqual(saved.design, changed.design) then
+        options.applyDesign(CopyValue(saved.design), entry)
+      end
+    end
+  end
+  for key, point in pairs(state.movers) do
+    local entry = MoversByKey[key]
+    local opposite = other.movers[key]
+    if entry == point.entry and opposite and (point.x ~= opposite.x or point.y ~= opposite.y
+      or not ValuesEqual(point.snapState, opposite.snapState)) then
+      MoveEntryTo(entry, point.x, point.y, true)
+      FinalizeEntryMove(entry)
+      entry._smartSnapState = CaptureSmartSnapState(entry)
+    end
+  end
+  FrameUtil._smartSnapApplying = false
+  if not ValuesEqual(state.visibility, other.visibility) then
+    local visibility = FrameUtil.GetMoverVisibilityConfig()
+    visibility.sets = CopyValue(state.visibility.sets)
+    visibility.selectedSet = state.visibility.selectedSet
+    visibility.followGroup = state.visibility.followGroup
+    FrameUtil.ApplyMoverVisibilityPreset()
+  end
+  ns.EditModeQuickSettings:Hide(true)
+  ns.TestMode:QueueToolbarRefresh()
+  FrameUtil._RefreshSelectionVisuals()
+end
+
+function FrameUtil.ReplayEditHistory(redo)
+  local history = FrameUtil._editHistory
+  if not ns.Flags.IsEditing or InCombatLockdown() or history.pending or history.replaying then return false end
+  local from, to = history.undo, history.redo
+  if redo then from, to = history.redo, history.undo end
+  local transaction = from[#from]
+  if not transaction then return false end
+  history.replaying = true
+  FrameUtil._StopAllNudgeHolds()
+  if redo then
+    FrameUtil.RestoreEditHistoryState(transaction.after, transaction.before)
+  else
+    FrameUtil.RestoreEditHistoryState(transaction.before, transaction.after)
+  end
+  history.replaying = nil
+  from[#from] = nil
+  to[#to + 1] = transaction
+  ns.TestMode:RefreshEditControlButtons()
+  return true
+end
+
 local function OpenQuickSettingsForEntry(entry, frame)
   local anchor = entry.overlay or frame
   local spec = FrameUtil.GetMoverQuickSettingsSpec(entry, frame)
@@ -4818,6 +5007,7 @@ local function AttachDrag(entry)
       entry.__puiShiftDrag = shiftClick and true or nil
 
       if shiftClick and entry.key then
+        entry._editHistoryDrag = FrameUtil.BeginEditHistory("Detach and move")
         FrameUtil.ClearSmartSnapForKey(entry.key)
       end
 
@@ -4842,7 +5032,9 @@ local function AttachDrag(entry)
 
       if _G.IsAltKeyDown() then
         if entry.key then
+          local history = FrameUtil.BeginEditHistory("Detach mover")
           FrameUtil.ClearSmartSnapForKey(entry.key)
+          FrameUtil.CommitEditHistory(history)
           Addon:Print("|cffd0ff00[PUI]|r Detached Smart Snap links for '" .. tostring(entry.label or entry.key) .. "'.")
         end
         return
@@ -4852,9 +5044,11 @@ local function AttachDrag(entry)
         local resetPosition = entry.resetPosition
           or (entry.opts and entry.opts.resetPosition)
         if type(resetPosition) == "function" then
+          local history = FrameUtil.BeginEditHistory("Reset mover position")
           FrameUtil.ClearSmartSnapForKey(entry.key)
           resetPosition(frame, entry.key)
           FrameUtil._OnMoverMoved(entry)
+          FrameUtil.CommitEditHistory(history)
         else
           Addon:Print("|cffd0ff00[PUI]|r No resetPosition handler for mover '" .. tostring(entry.key) .. "'.")
         end
@@ -4883,6 +5077,10 @@ local function AttachDrag(entry)
         end
       end
 
+      if not entry.__puiLeftDragStarted then
+        FrameUtil.CommitEditHistory(entry._editHistoryDrag)
+        entry._editHistoryDrag = nil
+      end
       entry.__puiLeftDragStarted = nil
       entry.__puiPendingSelectionAction = nil
       entry.__puiPendingQuickSettings = nil
@@ -4905,6 +5103,7 @@ local function AttachDrag(entry)
       FrameUtil._SelectMover(entry, false)
     end
 
+    entry._editHistoryDrag = entry._editHistoryDrag or FrameUtil.BeginEditHistory("Move movers")
     entry.__puiLeftDragStarted = true
     entry.__puiPendingSelectionAction = nil
     entry.__puiPendingQuickSettings = nil
@@ -5025,8 +5224,8 @@ local function AttachDrag(entry)
       if not entry._dragSnapSuppressed then
         local beforeSnapX, beforeSnapY = GetOffsetsForFrame(frame)
 
-        FrameUtil._ApplyFrameSnap(entry, true, moveGroup)
-        FrameUtil._ApplyGridSnap(entry)
+        local snapAxis = FrameUtil._ApplyFrameSnap(entry, true, moveGroup)
+        FrameUtil._ApplyGridSnap(entry, snapAxis)
 
         local afterSnapX, afterSnapY = GetOffsetsForFrame(frame)
         local snapDx = afterSnapX - beforeSnapX
@@ -5053,6 +5252,8 @@ local function AttachDrag(entry)
     end
 
     ClearFrameSnapFeedback()
+    FrameUtil.CommitEditHistory(entry._editHistoryDrag)
+    entry._editHistoryDrag = nil
     entry._dragMoveGroup = nil
     entry._dragPeersStart = nil
     entry._dragStartX = nil
@@ -5189,6 +5390,9 @@ local function StopHoldGroup(g)
     g._holdTicker:Cancel()
     g._holdTicker = nil
   end
+  local history = g._editHistoryHold
+  g._editHistoryHold = nil
+  FrameUtil.CommitEditHistory(history)
   g._holdPending = nil
   g._holdDx = nil
   g._holdDy = nil
@@ -5296,6 +5500,7 @@ local function EnsureNudgeControls(entry)
     end
 
     StopHold()
+    g._editHistoryHold = FrameUtil.BeginEditHistory("Nudge movers")
     g._holdPending = true
     g._holdDx = dx or 0
     g._holdDy = dy or 0
@@ -5414,6 +5619,7 @@ function FrameUtil._ApplyNudgeFromInputs()
     return
   end
 
+  local history = FrameUtil.BeginEditHistory("Set mover position")
   local oldX, oldY = GetOffsetsForFrame(SelectedEntry.frame)
   local dx = x - oldX
   local dy = y - oldY
@@ -5430,6 +5636,7 @@ function FrameUtil._ApplyNudgeFromInputs()
   end
 
   FrameUtil._FinalizeMovedGroup(moveGroup, SelectedEntry)
+  FrameUtil.CommitEditHistory(history)
 end
 
 function FrameUtil._UpdateNudgeUI(entry)
@@ -6098,6 +6305,7 @@ end
 
 
 function FrameUtil:UnregisterMover(key)
+  FrameUtil.ClearEditHistory()
   if not key then
     return
   end
@@ -6310,6 +6518,7 @@ local function GetSortedEditModeParticipants()
 end
 
 function FrameUtil.OnEditModeChanged(enable)
+  FrameUtil.ClearEditHistory()
   enable = not not enable
 
   if not enable then
