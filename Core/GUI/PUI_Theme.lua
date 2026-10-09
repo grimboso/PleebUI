@@ -2470,6 +2470,7 @@ function Theme.SetOptionsUIScale(value)
 
   Addon:GetOptionsDB().optionsScale = value
   Addon:ApplyOptionsUIScale()
+  ns.UFPreview.RefreshAuraManagerPreview()
   Addon:NotifyOptionsTreeChanged(nil, ns._PUIActiveOptionsPath)
 end
 

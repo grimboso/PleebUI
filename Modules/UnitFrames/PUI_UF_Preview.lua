@@ -1212,12 +1212,16 @@ local function AcquireAuraPreviewFrame(box, canvas)
   return frame
 end
 
+local function GetPreviewScale(zoom)
+  return (tonumber(zoom) or 1) / Theme.GetOptionsUIScale()
+end
+
 local function BuildAuraPreviewFrame(box, canvas, context)
   local frameDB = context.frameDB
   local resolvedWidth, resolvedHeight = ns.UFStyle.ResolveFrameSize(frameDB)
   local rawWidth = math_max(40, resolvedWidth)
   local rawHeight = math_max(12, resolvedHeight)
-  local scale = tonumber(context.previewZoom) or 1
+  local scale = GetPreviewScale(context.previewZoom)
   local forceNoPower = context.forceNoPower == true
   local themeColors = ns.UFStyle.GetUFThemeColors()
   local frameColors = type(frameDB.colors) == "table" and frameDB.colors or themeColors
@@ -1436,10 +1440,8 @@ local function GetInlineGroupedPreviewInsets(box, context)
 end
 
 local function GetInlineGroupedPreviewScale(box, context)
-  return math_max(
-    0.25,
-    math_min(2, tonumber(context.previewZoom) or 1)
-  ), GetInlineGroupedPreviewInsets(box, context)
+  local zoom = math_max(0.25, math_min(2, tonumber(context.previewZoom) or 1))
+  return GetPreviewScale(zoom), GetInlineGroupedPreviewInsets(box, context)
 end
 
 local function RenderInlineGroupedPreview(box, addon, context)
@@ -1486,7 +1488,6 @@ local function RenderInlineGroupedPreview(box, addon, context)
     memberContext.supportsAuraManager = memberIndex == 1
       and context.supportsAuraManager == true
     memberContext.sampleIndex = memberIndex
-    memberContext.previewZoom = effectiveScale
     memberContext.previewHealth = 38 + ((memberIndex * 13) % 59)
     memberContext.previewPower = 20 + ((memberIndex * 17) % 73)
     memberContext.previewClassToken = classToken
@@ -1707,13 +1708,15 @@ local function RenderUnitFrameOverviewGallery(box, addon)
       + UNIT_FRAME_OVERVIEW_FRAME_GAP * (definition.rows - 1)
     local frameAreaWidth = math_max(1, cardWidth - 16)
     local frameAreaHeight = math_max(1, cardHeight - UNIT_FRAME_OVERVIEW_TITLE_HEIGHT - 8)
-    local scale = math_min(
+    local baseScale = GetPreviewScale(1)
+    local zoom = math_min(
       1,
-      frameAreaWidth / clusterRawWidth,
-      frameAreaHeight / clusterRawHeight
+      frameAreaWidth / (clusterRawWidth * baseScale),
+      frameAreaHeight / (clusterRawHeight * baseScale)
     )
-    local clusterWidth = clusterRawWidth * scale
-    local clusterHeight = clusterRawHeight * scale
+    local renderedScale = GetPreviewScale(zoom)
+    local clusterWidth = clusterRawWidth * renderedScale
+    local clusterHeight = clusterRawHeight * renderedScale
     local clusterX = (cardWidth - clusterWidth) * 0.5
     local clusterY = -UNIT_FRAME_OVERVIEW_TITLE_HEIGHT
       - (frameAreaHeight - clusterHeight) * 0.5
@@ -1732,11 +1735,11 @@ local function RenderUnitFrameOverviewGallery(box, addon)
       context.allowDrag = false
       context.compactOverview = true
       context.forceShown = true
-      context.previewZoom = scale
+      context.previewZoom = zoom
       context.previewX = clusterX
-        + frameColumn * (rawWidth + UNIT_FRAME_OVERVIEW_FRAME_GAP) * scale
+        + frameColumn * (rawWidth + UNIT_FRAME_OVERVIEW_FRAME_GAP) * renderedScale
       context.previewY = clusterY
-        - frameRow * (rawHeight + UNIT_FRAME_OVERVIEW_FRAME_GAP) * scale
+        - frameRow * (rawHeight + UNIT_FRAME_OVERVIEW_FRAME_GAP) * renderedScale
       context.previewName = definition.names[frameIndex]
       context.previewHealth = 42 + ((familyIndex * 11 + frameIndex * 9) % 51)
       context.previewPower = 24 + ((familyIndex * 13 + frameIndex * 7) % 65)
@@ -1987,7 +1990,7 @@ local function CreateAuraPreviewIcon(box, context, display, appearance, spellID,
   icon.Icon:SetTexture(C_Spell.GetSpellTexture(spellID) or "Interface\\Icons\\INV_Misc_QuestionMark")
   icon.Count:Show()
   icon.__puiAuraPreviewShowDurationText = appearance.disableCountdownText ~= true
-  AuraButtons.ApplyButtonAppearance(icon, appearance, size, context.previewZoom)
+  AuraButtons.ApplyButtonAppearance(icon, appearance, size, context.scale)
 
   if state.duration > 0 then
     local elapsed = state.duration * state.elapsedFraction
@@ -2008,7 +2011,7 @@ local function CreateAuraPreviewIcon(box, context, display, appearance, spellID,
   if state.dispelColor then
     AuraButtons.ApplyPreviewDispelBorder(
       icon,
-      (tonumber(appearance.dispelBorderSize) or 0) * (tonumber(context.previewZoom) or 1),
+      (tonumber(appearance.dispelBorderSize) or 0) * context.scale,
       state.dispelColor
     )
   else
@@ -3786,6 +3789,7 @@ LayoutUnitFramePreviewInteractions = P:Def("LayoutUnitFramePreviewInteractions",
 SetUnitFramePreviewInteraction = P:Def("SetUnitFramePreviewInteraction", SetUnitFramePreviewInteraction)
 ConfigureUnitFramePreviewInteractions = P:Def("ConfigureUnitFramePreviewInteractions", ConfigureUnitFramePreviewInteractions)
 AcquireAuraPreviewFrame = P:Def("AcquireAuraPreviewFrame", AcquireAuraPreviewFrame)
+GetPreviewScale = P:Def("GetPreviewScale", GetPreviewScale)
 BuildAuraPreviewFrame = P:Def("BuildAuraPreviewFrame", BuildAuraPreviewFrame)
 BeginUnitFrameOverviewCardPool = P:Def("BeginUnitFrameOverviewCardPool", BeginUnitFrameOverviewCardPool)
 AcquireUnitFrameOverviewCard = P:Def("AcquireUnitFrameOverviewCard", AcquireUnitFrameOverviewCard)
