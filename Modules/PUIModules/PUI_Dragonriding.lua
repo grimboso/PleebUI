@@ -1521,6 +1521,7 @@ local function DragonridingProvider(AddonObj)
     vigor.width.order, vigor.height.order = 10, 20
     vigor.texture.order, vigor.barColor.order = 30, 40
     vigor.showSegments.order, vigor.segmentThickness.order = 50, 60
+    vigor.segmentThickness.disabled = function() return db.showSegments == false end
     local secondWind = source.secondWind
     secondWind.args.swEnabled = nil
     secondWind.args.swGap.name = "Spacing"
@@ -1532,6 +1533,10 @@ local function DragonridingProvider(AddonObj)
     secondWind.args.swHeight.name = "Second Wind height"
     secondWind.args.swGap.name = "Second Wind spacing"
     secondWind.args.swColor.name = "Second Wind color"
+    secondWind.args.swHeight.disabled = function() return db.swEnabled == false end
+    secondWind.args.swGap.disabled = secondWind.args.swHeight.disabled
+    secondWind.args.swColor.disabled = secondWind.args.swHeight.disabled
+    surgeColor.disabled = function() return db.wsEnabled == false end
     options.arg = { puiExplicit = true }
     options.args = {
       general = { type = "group", name = "Behaviour", inline = true, order = 10, args = behavior },
