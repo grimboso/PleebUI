@@ -10,7 +10,8 @@ captured={}; providers={}; applied={}; ns={Modules={},Registry={Options={}},UFPr
 function copy(source)
  local result={};for k,v in pairs(source) do result[k]=type(v)=='table' and copy(v) or v end;return result
 end
-function InCombatLockdown() return false end
+TEST_COMBAT=false
+function InCombatLockdown() return TEST_COMBAT end
 function GetBuildInfo() return '12.1.5','', '',120105 end
 function GetTime() return 10 end
 function UnitClass() return 'Hunter','HUNTER' end
@@ -152,7 +153,50 @@ opts.args.party.args.text.args.health.args.resetSection.func()
 assert(party.height==61 and party.healthTexture=='custom' and party.colors.healthMissing[1]==.1)
 opts.args.party.args.text.args.power.args.resetSection.func();assert(party.powerHeight==12)
 ''')
-print('Actual Unit Frames builders: all frame trees, inline headings, typography order, setters, and text-only reset scopes passed.')
+lua.execute("""
+local opts=providers.unitframes():GetOptions()
+ns.OptionsSchema.Apply(opts,'unitframes')
+local player=ns.UnitFrames:GetConfigUnit('player')
+local reset=opts.args.player.args.general.args.core.args.reset
+assert(reset.name=='Reset layout and core settings' and reset.confirm==true)
+assert(reset.confirmText:find('resting',1,true) and reset.confirmText:find('stay unchanged',1,true))
+player.width=333;player.text.sizeHealth=27;player.useClassColor=false
+local text=player.text
+reset.func()
+assert(player.width==ns.UFDefaults.Player.player.width and player.text==text)
+assert(player.text.sizeHealth==27 and player.useClassColor==false)
+local prompts,reloads=0,0
+function ns.Addon:PUI_ConfirmAction(options) prompts=prompts+1;prompt=options end
+function ReloadUI() reloads=reloads+1 end
+for _,family in ipairs({'party','raid'}) do
+ local owner=ns.Modules[family=='party' and 'PartyFrames' or 'RaidFrames']
+ local db=owner.db.profile
+ local defaults=(family=='party' and ns.UFDefaults.GetPartyDefaults() or ns.UFDefaults.GetRaidDefaults()).profile
+ db.enabled=defaults.enabled;db.hideBlizzard=defaults.hideBlizzard;db.showPlayer=defaults.showPlayer
+ db.width=defaults.width+17
+ local text,auras,range=db.text,db.auras,db.range
+ local reset=opts.args[family].args.general.args.core.args.reset
+ assert(reset.confirm==false and reset.name=='Reset layout and core settings')
+ local count=prompts
+ reset.func()
+ assert(prompts==count+1 and prompt.yesText=='Reset' and db.width==defaults.width+17)
+ assert(not prompt.text:find('reload the UI',1,true))
+ prompt.onYes()
+ assert(prompts==count+1 and db.width==defaults.width and reloads==0)
+ assert(db.text==text and db.auras==auras and db.range==range)
+ db.enabled=not defaults.enabled
+ count=prompts
+ reset.func()
+ assert(prompts==count+1 and prompt.yesText=='Reset + Reload')
+ assert(prompt.text:find('reload the UI',1,true) and db.enabled~=defaults.enabled)
+ TEST_COMBAT=true;prompt.onYes()
+ assert(db.enabled~=defaults.enabled and reloads==0)
+ TEST_COMBAT=false;prompt.onYes()
+ assert(db.enabled==defaults.enabled and reloads==1)
+ reloads=0
+end
+""")
+print('Actual Unit Frames: reset scope, single confirmation, conditional reload and combat protection passed.')
 
 lua.execute('''
 ns.ActionBarsCore={db={skin={},bars={},overrides={},ui={}},GetDB=function(self) return self.db end,
@@ -252,7 +296,39 @@ local layout=collect(sections.layout,{})
 assert(text.showCountdown and text.countCharge and text.keybindShow)
 assert(layout.size and layout.spacing and layout.columns)
 """)
-print('PCM section builder: text roles, inherited conditions, concise quick settings, original callbacks and detailed controls passed.')
+lua.execute("""
+local source={}
+for _,prefix in ipairs({'duration','cooldown','gcd'}) do
+ for _,suffix in ipairs({'SwipeColor','SwipeEdge','SwipeEdgeColor'}) do
+  source[prefix..suffix]={type=suffix=='SwipeEdge' and 'toggle' or 'color',name=prefix..suffix}
+ end
+end
+for _,key in ipairs({'forceCooldown','cooldownTimerEnabled','countDuration','countCooldown','swipeDuration','swipeCooldown','swipeGCD'}) do
+ source[key]={type='toggle',name=key}
+end
+local sections=ns.PCMOptions:BuildSections(source)
+local before={}
+for groupKey,group in pairs(sections.timer.args) do
+ before[groupKey]={}
+ for key,option in pairs(group.args) do
+  before[groupKey][key]={order=option.order,width=option.width,relWidth=option.relWidth}
+ end
+end
+local opts={type='group',name='Timers',args=sections}
+ns.OptionsSchema.Apply(opts,'CooldownManager');checkInline(opts)
+for groupKey,group in pairs(sections.timer.args) do
+ for key,option in pairs(group.args) do
+  local original=before[groupKey][key]
+  assert(original and option.order==original.order and option.width==original.width and option.relWidth==original.relWidth,
+   'Timer row changed: '..groupKey..'/'..key)
+ end
+end
+assert(sections.timer.args.durationTimer.args.forceCooldown.relWidth==.5)
+assert(sections.timer.args.durationTimer.args.durationSwipeEdge.order==5)
+assert(sections.timer.args.cooldownTimer.args.cooldownSwipeEdge.order==5)
+assert(sections.timer.args.gcdTimer.args.gcdSwipeEdge.order==5)
+""")
+print('PCM section builder: concise quick settings, preserved callbacks, detailed controls and timer-row ordering passed.')
 
 
 lua.execute('''
