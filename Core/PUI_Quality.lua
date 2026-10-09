@@ -3208,8 +3208,12 @@ local function QualityProvider(AddonObj)
     ring.args.cursorRingColor.disabled = DisabledWhenOff("cursorRingShowInner")
     ring.args.cursorRingOutlineSize.disabled = DisabledWhenOff("cursorRingShowOutline")
     ring.args.cursorRingOutlineColor.disabled = DisabledWhenOff("cursorRingShowOutline")
+    ring.args.cursorRingSize.desc =
+      "Base size used by both rings. It still changes the click ring when the inner ring is hidden."
+    ring.args.cursorRingColor.desc = "Color of the inner ring."
     ring.args.cursorRingOutlineSize.desc =
-      "Extra size added to the inner ring when you click."
+      "Extra size added to the base ring size when you click."
+    ring.args.cursorRingOutlineColor.desc = "Color of the ring shown when you click."
 
     local warnings = visual.combatWarnings
     warnings.name = "Target and range warnings"
@@ -3276,7 +3280,7 @@ local function QualityProvider(AddonObj)
           type = "group", name = "Warning preview", inline = true, order = 0,
           args = {
             warning = {
-              type = "select", name = "Preview example", order = 1,
+              type = "select", name = "Preview warning", order = 1,
               desc = "Preview the warnings and combat displays available to your class and specialization. Examples are shown even when their feature is disabled.",
               values = Quality_GetPreviewWarnings,
               get = function() return math.min(QualityPreviewIndex, #Quality_GetPreviewWarnings()) end,
@@ -3359,16 +3363,19 @@ local function QualityProvider(AddonObj)
     options.args.combatTab.args.combatStatus = nil
 
     local pets = visual.petWarnings.args
-    local missing = pets.missingPet.args
-    pets.missingPet.args = {
-      enabled = missing.enabled,
-      missing = ns.OptionsSchema.BuildTextGroup("Missing pet", 10, {
-        fontSize = missing.missingSize, textColor = missing.missingColor,
-      }),
-      dead = ns.OptionsSchema.BuildTextGroup("Dead pet", 20, {
-        fontSize = missing.deadSize, textColor = missing.deadColor,
-      }),
-    }
+    local missingGroup = pets.missingPet
+    local missing = missingGroup.args
+    pets.missingPetWarning = missing.enabled
+    pets.missingPetWarning.order = 3
+    pets.missingPetWarning.hidden = missingGroup.hidden
+    pets.missing = ns.OptionsSchema.BuildTextGroup("Missing pet", 10, {
+      fontSize = missing.missingSize, textColor = missing.missingColor,
+    })
+    pets.dead = ns.OptionsSchema.BuildTextGroup("Dead pet", 15, {
+      fontSize = missing.deadSize, textColor = missing.deadColor,
+    })
+    pets.missing.hidden, pets.dead.hidden = missingGroup.hidden, missingGroup.hidden
+    pets.missingPet = nil
     for _, key in ipairs({ "idlePet", "lowHealth" }) do
       local args = pets[key].args
       args.size.name, args.color.name = "Font size", "Text color"
@@ -3387,6 +3394,7 @@ local function QualityProvider(AddonObj)
       group.args.size.name, group.args.size.order = "Size", 20
       group.args.color.name, group.args.color.order = "Color", 30
     end
+    ring.args.click.args.size.name = "Extra size"
     options.args.cursorTab.args.innerRing = ring.args.inner
     options.args.cursorTab.args.clickRing = ring.args.click
     options.args.cursorTab.args.cursorRing = nil
