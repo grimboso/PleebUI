@@ -15,6 +15,56 @@ local function StyleSampleText(text, skin, prefix)
   text:SetTextColor(unpack(skin[prefix .. "FontColor"]))
 end
 
+function Preview.RefreshIcons()
+  local box = Preview.box
+  if not box or not box:IsVisible() then return end
+
+  local sourceKey = box.barKey == "shared" and "1" or box.barKey
+  local sourceBar
+  for _, bar in pairs(Core.bars) do
+    if bar.dbKey == sourceKey then
+      sourceBar = bar
+      break
+    end
+  end
+  if sourceKey == "stance" and GetNumShapeshiftForms() == 0 then
+    sourceBar = nil
+  end
+
+  for index, button in ipairs(box.buttons) do
+    local source = sourceBar and sourceBar.buttons[index]
+    if source then
+      button.icon:SetTexture(source.icon:GetTexture())
+      button.icon:SetShown(source.icon:IsShown())
+    else
+      button.icon:SetTexture(nil)
+      button.icon:Hide()
+    end
+  end
+end
+
+function Preview.QueueIconRefresh(barKey)
+  local box = Preview.box
+  if not box or not box:IsVisible() then return end
+  if barKey == "standard" then
+    if box.barKey == "pet" or box.barKey == "stance" then return end
+  elseif box.barKey ~= barKey then
+    return
+  end
+  if box.iconsPending then return end
+
+  box.iconsPending = true
+  box:SetScript("OnUpdate", function(self)
+    self:SetScript("OnUpdate", nil)
+    self.iconsPending = nil
+    if self.barKey == "stance" and self.previewCount ~= math.max(1, GetNumShapeshiftForms()) then
+      Preview.Refresh()
+    else
+      Preview.RefreshIcons()
+    end
+  end)
+end
+
 function Preview.Refresh()
   local box = Preview.box
   if not box or not box:IsVisible() then return end
@@ -30,21 +80,34 @@ function Preview.Refresh()
   end
 
   local count = barKey == "pet" and db.bars.pet.buttonCount
-    or barKey == "stance" and 5
+    or barKey == "stance" and math.max(1, GetNumShapeshiftForms())
     or skin.iconsPerBar
   local columns = barKey == "stance" and count or math.min(skin.iconsPerRow, count)
   local rows = math.ceil(count / columns)
-  local paddingX, paddingY = Core.PADDING_X, Core.PADDING_Y
+  local paddingX = skin.showBarBackground and Core.PADDING_X or 0
+  local paddingY = skin.showBarBackground and Core.PADDING_Y or 0
   local width = columns * skin.iconSize + (columns - 1) * skin.iconSpacing + paddingX * 2
   local height = rows * skin.iconSize + (rows - 1) * skin.iconSpacing + paddingY * 2
   local canvas = box:GetCanvas()
   local bar = box.sampleBar
+  local host = box:GetParent()
+  local strata = host:GetFrameStrata()
+  box:SetFrameStrata(strata)
+  box:SetFrameLevel(host:GetFrameLevel() + 1)
+  canvas:SetFrameStrata(strata)
+  canvas:SetFrameLevel(box:GetFrameLevel() + 2)
+  bar:SetFrameStrata(strata)
+  bar:SetFrameLevel(canvas:GetFrameLevel() + 2)
+  Theme.SyncBackdropFrame(box, box._puiBg)
+  Theme.SyncBackdropFrame(canvas, canvas._puiBg)
   local scale = math.min(1, math.max(1, canvas:GetWidth() - 20) / width,
     math.max(1, canvas:GetHeight() - 20) / height)
 
   bar:SetSize(width, height)
   bar:SetScale(scale)
   Core:ApplyBackdrop(box.sample, skin)
+  box.sample.backdrop:SetFrameStrata(strata)
+  box.sample.backdrop:SetFrameLevel(bar:GetFrameLevel() - 1)
 
   local override = db.overrides[barKey]
   local title = barKey == "shared" and "Shared action bar preview"
@@ -53,10 +116,11 @@ function Preview.Refresh()
     or "Bar " .. barKey .. " preview"
   box:SetTitle(title)
   local description = override and override.useCustom == true and "Custom settings." or "Shared settings."
-  if barKey == "stance" then
-    description = description .. " Five sample stances."
+  description = description .. (barKey == "shared" and " Main Action Bar icons. Sample text."
+    or " Live bar icons. Sample text.")
+  if barKey == "stance" and GetNumShapeshiftForms() == 0 then
+    description = description .. " No stances available."
   end
-  description = description .. " Sample actions and text."
   if scale < 1 then
     description = description .. " Scaled to " .. math.floor(scale * 100 + 0.5) .. "% to fit."
   end
@@ -65,6 +129,8 @@ function Preview.Refresh()
   local showCooldown = skin.showCooldownText
     and (barKey ~= "pet" or db.bars.pet.showCooldowns ~= false)
   for index, button in ipairs(box.buttons) do
+    button:SetFrameStrata(strata)
+    button:SetFrameLevel(bar:GetFrameLevel() + 1)
     button:SetShown(index <= count)
     if index <= count then
       local column = (index - 1) % columns
@@ -91,6 +157,8 @@ function Preview.Refresh()
   end
 
   box.skin = skin
+  box.previewCount = count
+  Preview.RefreshIcons()
   bar:SetAlpha(skin.fadeOutEnabled and not box.hovered and skin.fadeOutAlpha or skin.alpha)
 end
 
@@ -118,14 +186,18 @@ function Preview.Build(addon, optionsFrame, shell, path)
       bar:SetAlpha(box.skin.fadeOutEnabled and box.skin.fadeOutAlpha or box.skin.alpha)
     end)
     box:SetScript("OnShow", Preview.Refresh)
-    box:SetScript("OnHide", function() box.hovered = false end)
+    box:SetScript("OnHide", function(self)
+      self.hovered = false
+      self.iconsPending = nil
+      self:SetScript("OnUpdate", nil)
+    end)
     canvas:SetScript("OnSizeChanged", Preview.Refresh)
 
     for index = 1, 12 do
       local button = CreateFrame("Frame", nil, bar)
       local icon = button:CreateTexture(nil, "ARTWORK")
+      button.icon = icon
       icon:SetAllPoints(button)
-      icon:SetTexture("Interface\\Icons\\INV_Misc_QuestionMark")
       icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
       button.hotkey = button:CreateFontString(nil, "OVERLAY", "GameFontNormal")
       button.hotkey:SetPoint("TOPRIGHT", button, "TOPRIGHT", -2, -2)
@@ -156,5 +228,7 @@ function Preview.Build(addon, optionsFrame, shell, path)
 end
 
 StyleSampleText = P:Def("StyleSampleText", StyleSampleText)
+Preview.RefreshIcons = P:Def("Preview.RefreshIcons", Preview.RefreshIcons)
+Preview.QueueIconRefresh = P:Def("Preview.QueueIconRefresh", Preview.QueueIconRefresh)
 Preview.Refresh = P:Def("Preview.Refresh", Preview.Refresh)
 Preview.Build = P:Def("Preview.Build", Preview.Build)
