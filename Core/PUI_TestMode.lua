@@ -671,6 +671,19 @@ local function BuildEditControls(panel)
   panel.editControls = host
   panel.editWidgets = {}
   local widgets = panel.editWidgets
+  panel.editHeadings = {}
+  for _, entry in ipairs({
+    { "movement", "Movement" },
+    { "snapping", "Snapping & grid" },
+    { "appearance", "Appearance" },
+    { "session", "Temporary visibility" },
+  }) do
+    local heading = host:CreateFontString(nil, "OVERLAY")
+    heading:SetJustifyH("LEFT")
+    StyleText(heading, "header", 12)
+    heading:SetText(entry[2])
+    panel.editHeadings[entry[1]] = heading
+  end
 
   local function Checkbox(key, label, value, setter)
     local widget = AceGUI:Create("PUI_Checkbox")
@@ -1550,8 +1563,19 @@ function TestMode:RebuildToolbar()
     host:SetPoint("TOPRIGHT", content, "TOPRIGHT", -TOOLBAR_PADDING, y)
     local controlY = -4
     local available = math_max(220, content:GetWidth() - TOOLBAR_PADDING * 2 - 12)
-    for _, key in ipairs({ "keyboard", "dim", "snap", "smart", "snapGrid", "grid",
-      "nudge", "tolerance", "fade" }) do
+    for _, key in ipairs({ "keyboard", "nudge", "snap", "smart", "tolerance", "snapGrid", "grid",
+      "dim", "fade" }) do
+      local headingKey = key == "keyboard" and "movement"
+        or key == "snap" and "snapping"
+        or key == "dim" and "appearance"
+      if headingKey then
+        local heading = panel.editHeadings[headingKey]
+        StyleText(heading, "header", 12)
+        heading:ClearAllPoints()
+        heading:SetPoint("TOPLEFT", host, "TOPLEFT", 4, controlY)
+        heading:Show()
+        controlY = controlY - 26
+      end
       local spec = panel.editWidgets[key]
       local frame = spec.widget.frame
       frame:ClearAllPoints()
@@ -1562,6 +1586,12 @@ function TestMode:RebuildToolbar()
       frame:Show()
       controlY = controlY - spec.height - 4
     end
+    local sessionHeading = panel.editHeadings.session
+    StyleText(sessionHeading, "header", 12)
+    sessionHeading:ClearAllPoints()
+    sessionHeading:SetPoint("TOPLEFT", host, "TOPLEFT", 4, controlY)
+    sessionHeading:Show()
+    controlY = controlY - 26
     for index, button in ipairs(panel.sessionButtons) do
       button:ClearAllPoints()
       button:SetPoint("TOPLEFT", host, "TOPLEFT", 4 + (index - 1) * (available - 8) / 3, controlY)
@@ -1653,6 +1683,9 @@ local function RefreshToolbarTheme()
   end
   StyleButton(panel.blizzardSettingsButton, false)
   StyleButton(panel.removePositionButton, false)
+  for _, heading in pairs(panel.editHeadings) do
+    StyleText(heading, "header", 12)
+  end
   for _, label in ipairs(panel.helpRows or {}) do
     if label:IsShown() then
       StyleText(label, "body", 12)
