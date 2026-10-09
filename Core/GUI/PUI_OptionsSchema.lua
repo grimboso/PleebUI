@@ -465,7 +465,7 @@ local function ArrangeGroup(group, context, groupKey)
           elseif option.name == "Vertical offset" then option.order = 100
           elseif option.name == "Anchor point" then option.order = 80
           elseif option.type == "toggle" and option.name:match("^Enable") then
-            option.order = 5 + (tonumber(option.order) or 0) / 100
+            option.order = (tonumber(option.order) or 0) / 100
           elseif option.type == "toggle" and option.name:match("^Show") then
             option.order = 1 + (tonumber(option.order) or 0) / 100
           elseif option.type == "execute" and (tonumber(option.order) or 0) < 900 then
@@ -576,7 +576,8 @@ local function OrderInlineControls(group)
   end
   local function Phase(option)
     local name = type(option.name) == "string" and option.name or ""
-    if option.type == "toggle" and (name:match("^Enable") or name:match("^Show")
+    if option.type == "toggle" and name:match("^Enable") then return 0 end
+    if option.type == "toggle" and (name:match("^Show")
       or name:match("^Hide") or name:match("^Only ") or name:match("^Allow ")) then return 1 end
     if option.type == "execute" and (name:match("^Reset") or name:match("^Delete")) then return 3 end
     return 2
