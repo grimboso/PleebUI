@@ -3082,8 +3082,8 @@ local function UIThemeOptionsProvider()
     local window = sections.optionsLayout.args
     sections.optionsLayout.args = {
       window = { type = "group", name = "Options window", order = 10, inline = true, arg = { puiExplicit = true }, args = window },
-      text = ns.OptionsSchema.BuildTextGroup("Options text", 20, { fontSize = optionsText }),
     }
+    window.fontSize = optionsText
     window.optionsUIScale.name = "Scale"
     sections.themeColors.name, sections.themeColors.order = "Colors", 30
     sections.fonts.name, sections.fonts.order = "Text", 40
