@@ -408,10 +408,10 @@ function Core:GetSpecialSkin(barKey, defaultSize)
   local skin = self:GetEffectiveSkin(barKey, defaultSize)
   local db = self:GetDB()
   local override = db.overrides and db.overrides[barKey]
-  local customSize = override
-    and override.useCustom == true
-    and override.skin
-    and override.skin.iconSize
+  local customSize
+  if override and override.useCustom == true and override.skin then
+    customSize = override.skin.iconSize
+  end
 
   if customSize == nil then
     skin.iconSize = Round(defaultSize)
@@ -881,13 +881,15 @@ function Core:ApplyBackdrop(bar, skin)
 end
 
 function Core:GetMoverOptionsString(moverKey)
-  local barNumber = tostring(moverKey):match("^ACTIONBAR_(%d+)$")
-  if barNumber then
-    return "ACTIONBARS," .. barNumber .. ",general"
-  elseif moverKey == "ACTIONBAR_PET" then
-    return "ACTIONBARS,special,pet"
-  elseif moverKey == "ACTIONBAR_STANCE" then
-    return "ACTIONBARS,special,stance"
+  for _, bar in pairs(self.bars) do
+    if bar.moverKey == moverKey then
+      if STANDARD_BAR_KEYS[bar.dbKey] then
+        return "ACTIONBARS," .. bar.dbKey .. ",behavior"
+      elseif bar.dbKey == "pet" or bar.dbKey == "stance" then
+        return "ACTIONBARS,special," .. bar.dbKey .. ",behavior"
+      end
+      break
+    end
   end
   return "ACTIONBARS"
 end
@@ -1700,10 +1702,22 @@ function Core:RegisterCombatFlush()
   self.combatFlushRegistered = true
 end
 
+local function RefreshPendingOptions()
+  local window = Addon._OptionsWindow
+  local path = ns._PUIActiveOptionsPath
+  if window and window:IsShown() and path and path[1] == "ACTIONBARS" then
+    Addon:NotifyOptionsTreeChanged("ACTIONBARS", path)
+  end
+end
+
 function Core:QueueRefresh(flags)
+  local alreadyPending = next(self.pendingRefreshFlags) ~= nil
   MergeRefreshFlags(self.pendingRefreshFlags, flags)
   if not self.combatFlushRegistered then
     self:RegisterCombatFlush()
+  end
+  if not alreadyPending and next(self.pendingRefreshFlags) then
+    RefreshPendingOptions()
   end
 end
 
@@ -1772,6 +1786,10 @@ function Core:FlushCombatWork()
   self.pendingBindings = nil
   self.pendingSubsystemRefreshes = {}
   self.pendingCooldownStyles = setmetatable({}, { __mode = "k" })
+
+  if next(refreshFlags) then
+    RefreshPendingOptions()
+  end
 
   if refreshFlags.full then
     self:RefreshAll(refreshFlags)
@@ -1916,6 +1934,7 @@ function Core:RefreshAll(flags)
   if flags.full then
     self.runtimeInitialized = true
   end
+  ns.ActionBarsPreview.Refresh()
 end
 
 function Core:ReconcileWorldState()
