@@ -1843,6 +1843,7 @@ function Cooldowns:_ConsumableTracker_SoftRebuild(flags)
 end
 
 local TestParticipant = {
+  moverKey = TRACKER_MOVER_KEY,
   label = "Consumable Tracker",
   order = 30,
   defaultEnabled = true,
