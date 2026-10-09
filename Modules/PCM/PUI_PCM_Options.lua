@@ -48,26 +48,8 @@ local QUICK_SETTINGS = {
   cooldownTimerEnabled = { 2, "Enable cooldown timer" },
   timerDisplay = { 1, "Enable duration timer" },
   swipeSource = { 1, "Enable duration timer" },
-  showCountdown = { 20, "Show countdown" },
-  cooldownShow = { 20, "Show countdown" },
-  showDuration = { 20, "Show countdown" },
-  countCharge = { 21, "Show charges" },
-  countBuff = { 21, "Show stacks" },
-  chargeShow = { 21 },
-  showCount = { 21 },
-  keybindToggle = { 22, "Show keybinds" },
-  keybindShow = { 22, "Show keybinds" },
-  showKeybinds = { 22, "Show keybinds" },
   enabled = { 40, "Enable custom glow" },
   desaturateCooldown = { 21, "Desaturation" },
-  size = { 50, "Icon size" },
-  iconSize = { 50, "Icon size" },
-  fixedWidth = { 51, "Width" },
-  width = { 51 },
-  height = { 52 },
-  spacing = { 53 },
-  iconSpacing = { 53, "Icon spacing" },
-  columns = { 54, "Icons per row" },
 }
 
 local INLINE_GROUPS = {
@@ -75,9 +57,6 @@ local INLINE_GROUPS = {
   tracking = { "Tracking", 10 },
   behavior = { "Behaviour", 20 },
   quickTimers = { "Timers & swipes", 30 },
-  quickText = { "Text", 40 },
-  quickLayout = { "Size & spacing", 50 },
-  quickGlow = { "Glow", 60 },
   size = { "Size", 10 },
   arrangement = { "Arrangement", 20 },
   iconPlacement = { "Behaviour", 30 },
@@ -333,12 +312,9 @@ function Options:BuildSections(source, context)
         if context.customTracker and state == "cooldownState" and key == "desaturate" then quickSetting = { 21, "Desaturation" } end
         if quickSetting and destination ~= "general" and (destination ~= "visibility" or key == "desaturateCooldown" or key == "desaturate") and option.hidden ~= true
           and (key ~= "enabled" or destination == "glow")
-          and (key ~= "showDuration" or destination == "text")
         then
           local quickGroup = (key == "desaturateCooldown" or key == "desaturate" or key == "enabled" and destination == "glow")
-            and "behavior" or destination == "timer" and "quickTimers"
-            or destination == "text" and "quickText"
-            or destination == "layout" and "quickLayout" or "quickGlow"
+            and "behavior" or "quickTimers"
           local definition = INLINE_GROUPS[quickGroup]
           local quickSettings = sections.general.args[quickGroup]
           if not quickSettings then
