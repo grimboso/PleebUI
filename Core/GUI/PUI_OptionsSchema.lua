@@ -515,15 +515,34 @@ end
 local function EnsureInlineGroups(group)
   if type(group.args) ~= "table" then return end
   local loose, firstOrder = {}, 1000
+  local noticesOnly, noticeGroup, noticeGroupKey = true, nil, nil
   for key, option in pairs(group.args) do
     if option.type == "group" then
       EnsureInlineGroups(option)
+      if option.inline and option.hidden == nil and type(option.args) == "table"
+        and (not noticeGroup or (tonumber(option.order) or 50) < (tonumber(noticeGroup.order) or 50)
+          or (tonumber(option.order) or 50) == (tonumber(noticeGroup.order) or 50) and key < noticeGroupKey) then
+        noticeGroup, noticeGroupKey = option, key
+      end
     elseif not group.inline then
       loose[key] = option
+      if option.type ~= "description" and option.type ~= "header" then noticesOnly = false end
       firstOrder = math.min(firstOrder, tonumber(option.order) or 50)
     end
   end
   if next(loose) then
+    if noticesOnly and noticeGroup then
+      for key in pairs(loose) do
+        if noticeGroup.args[key] then noticeGroup = nil; break end
+      end
+    end
+    if noticesOnly and noticeGroup then
+      for key, option in pairs(loose) do
+        noticeGroup.args[key] = option
+        group.args[key] = nil
+      end
+      return
+    end
     for key in pairs(loose) do group.args[key] = nil end
     group.args.puiControls = {
       type = "group", name = group.name == "General" and "Feature" or group.name,
