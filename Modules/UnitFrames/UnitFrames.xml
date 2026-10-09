@@ -22,6 +22,7 @@
   <Script file="PUI_UF_Preview.lua"/>
   <Script file="PUI_UF_Defaults.lua"/>
   <Script file="Units\Unitframes.lua"/>
+  <Script file="PUI_UF_PositionHistory.lua"/>
   <Script file="Units\Party.lua"/>
   <Script file="Units\Raid.lua"/>
   <Script file="Units\TankFrames.lua"/>
