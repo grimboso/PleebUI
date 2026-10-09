@@ -2734,7 +2734,7 @@ local function QualityProvider(AddonObj)
       return opt
     end
 
-    local function RangeOption(label, key, minV, maxV, step, order, disabledFunc)
+    local function RangeOption(label, key, minV, maxV, step, order, disabledFunc, onChanged)
       local opt = {
         type = "range",
         name = label,
@@ -2749,7 +2749,12 @@ local function QualityProvider(AddonObj)
         set = function(_, val)
           local qq = GetQ()
           qq[key] = Clamp(val, minV, maxV)
-          RequestApply()
+
+          if onChanged then
+            onChanged(qq)
+          else
+            RequestApply()
+          end
         end,
       }
 
@@ -2783,7 +2788,7 @@ local function QualityProvider(AddonObj)
       return opt
     end
 
-    local function ColorOption(label, key, order, disabledFunc)
+    local function ColorOption(label, key, order, disabledFunc, hiddenFunc)
       local opt = {
         type = "color",
         name = label,
@@ -2809,6 +2814,10 @@ local function QualityProvider(AddonObj)
 
       if disabledFunc ~= nil then
         opt.disabled = disabledFunc
+      end
+
+      if hiddenFunc ~= nil then
+        opt.hidden = hiddenFunc
       end
 
       return opt
@@ -2901,19 +2910,16 @@ local function QualityProvider(AddonObj)
                       10, 50, 1, 2, DisabledWhenPetFeatureOff("lowHealthPetWarning")),
                     size = RangeOption("Warning size", "petHealWarningFontSize",
                       5, 100, 1, 3, DisabledWhenPetFeatureOff("lowHealthPetWarning")),
-                    color = {
-                      type = "color",
-                      name = "Warning color",
-                      order = 4,
-                      hasAlpha = true,
-                      hidden = function()
+                    color = ColorOption(
+                      "Warning color",
+                      "petLowHealthWarningColor",
+                      4,
+                      DisabledWhenPetFeatureOff("lowHealthPetWarning"),
+                      function()
                         local _, class = IsHealPetClass()
                         return class ~= "HUNTER"
-                      end,
-                      disabled = DisabledWhenPetFeatureOff("lowHealthPetWarning"),
-                      get = ColorOption("Warning color", "petLowHealthWarningColor", 4).get,
-                      set = ColorOption("Warning color", "petLowHealthWarningColor", 4).set,
-                    },
+                      end
+                    ),
                     showIcon = ToggleOption("Show heal icon", "petHealWarningShowIcon",
                       5, nil, DisabledWhenPetFeatureOff("lowHealthPetWarning")),
                     iconOnly = ToggleOption("Icon only", "petHealWarningIconOnly",
@@ -3122,11 +3128,32 @@ local function QualityProvider(AddonObj)
     combatStatus.order = 10
     combatStatus.args.combatMessageFontSize = RangeOption(
       "Message font size", "combatMessageFontSize",
-      10, 40, 1, 3, DisabledWhenOff("combatMessage")
+      10, 40, 1, 3, DisabledWhenOff("combatMessage"),
+      function(qq)
+        ns.Theme.ApplyFont(
+          CombatMsgText,
+          "header",
+          qq.combatMessageFontSize,
+          nil,
+          "qualityOfLife"
+        )
+        Quality_RefreshPreview()
+      end
     )
+
     combatStatus.args.combatTimerFontSize = RangeOption(
       "Timer font size", "combatTimerFontSize",
-      10, 28, 1, 4, DisabledWhenOff("combatTimer")
+      10, 28, 1, 4, DisabledWhenOff("combatTimer"),
+      function(qq)
+        ns.Theme.ApplyFont(
+          CombatTimerText,
+          "body",
+          qq.combatTimerFontSize,
+          nil,
+          "qualityOfLife"
+        )
+        Quality_RefreshPreview()
+      end
     )
     combatStatus.args.editMode = {
       type = "execute",
