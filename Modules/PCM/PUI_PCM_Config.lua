@@ -946,7 +946,7 @@ local function _PCM_BuildBuffIconsTabArgs()
       args = {
         behavior = {
           type = "group",
-          name = "Behavior",
+          name = "Behaviour",
           order = 10,
           inline = true,
           args = {
@@ -2600,6 +2600,7 @@ _PCM_BuildIconOverrideArgs = function(viewerKey, entry)
     args.resetIcon = {
       type = "execute",
       name = "Reset icon settings",
+      confirm = "Discard this icon's overrides and use its group settings?",
       order = 80,
       func = function()
         IconSettings:ResetEntry(entry)
@@ -3106,6 +3107,7 @@ _PCM_BuildIconOverrideArgs = function(viewerKey, entry)
   args.resetIcon = {
     type = "execute",
     name = "Reset icon settings",
+      confirm = "Discard this icon's overrides and use its group settings?",
     order = 110,
     func = function()
       IconSettings:ResetEntry(entry)
@@ -7310,7 +7312,8 @@ local function _PCM_BuildBuffBarLeafArgs(id)
         },
         delete = {
           type = "execute",
-          name = "Delete shift",
+          name = "Delete color shift",
+          confirm = "Delete this color shift?",
           order = 5,
           func = function()
             local _, cfg = GetStackColorThresholds()
@@ -9797,6 +9800,23 @@ local function _PCM_WrapPreviewRefresh(option)
       _PCM_WrapPreviewRefresh(child)
     end
   end
+end
+
+function Options.GetSearchSections(kind, id, config)
+  if kind == "groups" then
+    local source = config.isDefault and _PCM_BuildDefaultGroupSettings(config)
+      or _PCM_BuildCustomGroupSettings(id, config)
+    return Options:BuildSections(source, { buffBars = config.defaultViewerKey == "BuffBarCooldownViewer" })
+  elseif kind == "consumables" then
+    return _PCM_BuildConsumablesTabArgs()
+  end
+  local source
+  if kind == "spell" then source = _PCM_BuildSpellBarLeafArgs(id)
+  elseif kind == "chargeSpell" then source = _PCM_BuildChargeCooldownBarLeafArgs(id)
+  elseif kind == "bb" then source = _PCM_BuildBuffBarLeafArgs(id) end
+  return Options:BuildSections(source, {
+    customTracker = true, auraTracker = config.kind == "duration" or config.kind == "stack",
+  })
 end
 
 local function PCMOptionsProvider(Addon)
