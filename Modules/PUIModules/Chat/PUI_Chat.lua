@@ -1219,91 +1219,57 @@ local function ChatProvider(AddonObj)
       },
     }
 
-    local sections = options.args or {}
-    local statusGroup = sections.status or {}
-    local featuresGroup = sections.features or {}
-    local statusArgs = statusGroup.args or {}
-    local featureArgs = featuresGroup.args or {}
-
-    local topLine = {
-      type = "group",
-      name = "",
-      inline = true,
-      order = 1,
-      args = {},
-    }
-
-    if statusArgs.lockedNote then
-      statusArgs.lockedNote.order = 1
-      topLine.args.lockedNote = statusArgs.lockedNote
-    end
-
-    if featureArgs.enabled then
-      featureArgs.enabled.order = 10
-
-      topLine.args.enabled = featureArgs.enabled
-    end
-
-    if featureArgs.clickableUrls then
-      featureArgs.clickableUrls.order = 20
-
-      topLine.args.clickableUrls = featureArgs.clickableUrls
-    end
-
-    if featureArgs.copyWindow then
-      featureArgs.copyWindow.order = 30
-
-      topLine.args.copyWindow = featureArgs.copyWindow
-    end
-
-    if featureArgs.chatTools then
-      featureArgs.chatTools.order = 40
-      topLine.args.chatTools = featureArgs.chatTools
-    end
-
-    local pages = {
-      type = "group",
-      name = "",
-      order = 20,
-      inline = true,
-      childGroups = "tree",
-      args = {},
-    }
-
-    if sections.copyStyle then
-      sections.copyStyle.order = 10
-      pages.args.copyStyle = sections.copyStyle
-    end
-
-    if sections.chatStyle then
-      sections.chatStyle.order = 20
-      pages.args.chatStyle = sections.chatStyle
-    end
-
-    if sections.formatting then
-      sections.formatting.order = 30
-      pages.args.formatting = sections.formatting
-    end
-
-    if sections.typography then
-      sections.typography.order = 40
-      pages.args.typography = sections.typography
-    end
-
-    if sections.fade then
-      sections.fade.order = 50
-      pages.args.fade = sections.fade
-    end
-
-    if sections.tweaks then
-      sections.tweaks.order = 60
-      pages.args.tweaks = sections.tweaks
-    end
-
-    options.childGroups = nil
+    local sections = options.args
+    local featureArgs = sections.features.args
+    featureArgs.lockedNote = sections.status.args.lockedNote
+    featureArgs.lockedNote.order = 0
+    featureArgs.timestamps = sections.formatting.args.timestamps
+    featureArgs.tsPreset = sections.formatting.args.tsPreset
+    featureArgs.timestamps.order, featureArgs.tsPreset.order = 50, 60
+    featureArgs.scrollMessages = sections.tweaks.args.scrollMessages
+    featureArgs.scrollMessages.order = 70
+    sections.tweaks.args.scrollMessages = nil
+    sections.tweaks.name, sections.tweaks.inline = "Saved chat history", true
+    local style = sections.chatStyle
+    style.inline, style.order = true, 10
+    style.args.bg.name, style.args.border.name = "Background color", "Border color"
+    style.args.borderSize.name = "Border thickness"
+    local typography = sections.typography.args
+    typography.message.order, typography.tab.order, typography.input.order = 20, 30, 40
+    local copy = sections.copyStyle
+    local copyArgs = copy.args.appearance.args
+    copyArgs.width, copyArgs.height = copy.args.size.args.width, copy.args.size.args.height
+    copyArgs.copyHint = copy.args.copyHint
+    copyArgs.copyHint.order = 0
+    copyArgs.borderSize.name = "Border thickness"
+    copy.args, copy.inline, copy.order = copyArgs, true, 10
+    local fade = sections.fade.args
+    fade.windowDelay.name = "Fade-out delay (seconds)"
+    fade.windowFadeInDuration.name = "Fade-in time (seconds)"
+    fade.windowFadeOutDuration.name = "Fade-out time (seconds)"
+    fade.idleDelay.name = "Inactivity time (seconds)"
+    options.childGroups = "tab"
+    options.arg = { puiExplicit = true }
     options.args = {
-      topLine = topLine,
-      pages = pages,
+      general = { type = "group", name = "General", order = 10, args = {
+        features = { type = "group", name = "Features and formatting", inline = true, order = 10, args = featureArgs },
+        history = sections.tweaks,
+      } },
+      appearance = { type = "group", name = "Appearance", order = 20, args = {
+        window = style, message = typography.message, tab = typography.tab, input = typography.input,
+      } },
+      tools = { type = "group", name = "Copying and fading", order = 30, args = {
+        copy = copy,
+        windowFade = { type = "group", name = "Window fading", inline = true, order = 20, args = {
+          fadeWindow = fade.fadeWindow, windowDelay = fade.windowDelay,
+          windowFadeInAlpha = fade.windowFadeInAlpha, windowFadeOutAlpha = fade.windowFadeOutAlpha,
+          windowFadeInDuration = fade.windowFadeInDuration, windowFadeOutDuration = fade.windowFadeOutDuration,
+        } },
+        textFade = { type = "group", name = "Text and tab fading", inline = true, order = 30, args = {
+          enabled = fade.enabled, idleDelay = fade.idleDelay,
+          fadeUndockedTabs = fade.fadeUndockedTabs, fadeTabsNoBackdrop = fade.fadeTabsNoBackdrop,
+        } },
+      } },
     }
 
     return options
