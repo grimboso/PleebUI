@@ -193,6 +193,10 @@ local function InitializeAuraButton(record, button, unit)
     sizeAssistant:SetPoint("TOPLEFT", button, "BOTTOMRIGHT", record.horizontalPadding / 2, 0)
     record.boundsAssistants[unit] = sizeAssistant
   end
+
+  if record.viewerKey == BUFF_BAR_VIEWER and groupLayoutEnabled and record.layoutPrepared then
+    ns.PCMGroupManager:RequestLayout()
+  end
 end
 
 SetSlotActive = function(record, active)
@@ -334,7 +338,7 @@ local function ApplyRecordAppearance(record)
       style.backgroundColor[3] or style.backgroundColor.b or 0.12,
       style.backgroundColor[4] or style.backgroundColor.a or 0.95
     )
-    record.parts.frame:SetAlpha(style.hideWhenInactive and 0 or 1)
+    record.parts.frame:SetAlpha((record.growthLayoutActive or style.hideWhenInactive) and 0 or 1)
     record.placeholderLabel:SetText(record.runtimeName or record.entry.name or "")
     record.placeholderLabel:SetShown(style.orientation ~= "VERTICAL")
   end
@@ -466,6 +470,7 @@ local function ReleaseRecord(viewer, record)
   record.layoutVisible = nil
   record.layoutPrepared = nil
   record.presentationShown = nil
+  record.growthLayoutActive = nil
   if record.viewerKey == BUFF_ICON_VIEWER then
     PCMPresentation.DeactivateOwnedAuraIcon(record.parts)
   end
@@ -697,6 +702,9 @@ function AuraRuntime:RefreshAppearance(viewerKey)
   for _, record in ipairs(viewer.orderedRecords) do
     ApplyRecordAppearance(record)
   end
+  if viewerKey == BUFF_BAR_VIEWER and groupLayoutEnabled then
+    ns.PCMGroupManager:RequestLayout()
+  end
 end
 
 function AuraRuntime:RefreshLayout(viewerKey)
@@ -762,6 +770,12 @@ end
 function AuraRuntime:FinalizeRecordLayout(record)
   record.layoutPrepared = true
   UpdateRecordVisibility(record)
+end
+
+function AuraRuntime:SetBarGrowthPresentation(record, active)
+  record.growthLayoutActive = active == true
+  local style = viewers[BUFF_BAR_VIEWER].style
+  record.parts.frame:SetAlpha((record.growthLayoutActive or style.hideWhenInactive) and 0 or 1)
 end
 
 function AuraRuntime:RefreshLayoutBounds(records)
@@ -1020,6 +1034,7 @@ AuraRuntime.RefreshLayout = P:Def("AuraRuntime:RefreshLayout", AuraRuntime.Refre
 AuraRuntime.UsesCollapsedLayout = P:Def("AuraRuntime:UsesCollapsedLayout", AuraRuntime.UsesCollapsedLayout)
 AuraRuntime.PrepareRecordLayout = P:Def("AuraRuntime:PrepareRecordLayout", AuraRuntime.PrepareRecordLayout)
 AuraRuntime.FinalizeRecordLayout = P:Def("AuraRuntime:FinalizeRecordLayout", AuraRuntime.FinalizeRecordLayout)
+AuraRuntime.SetBarGrowthPresentation = P:Def("AuraRuntime:SetBarGrowthPresentation", AuraRuntime.SetBarGrowthPresentation)
 AuraRuntime.RefreshLayoutBounds = P:Def("AuraRuntime:RefreshLayoutBounds", AuraRuntime.RefreshLayoutBounds)
 AuraRuntime.ApplySpellOverride = P:Def("AuraRuntime:ApplySpellOverride", AuraRuntime.ApplySpellOverride)
 AuraRuntime.OnCatalogChanged = P:Def("AuraRuntime:OnCatalogChanged", AuraRuntime.OnCatalogChanged)
