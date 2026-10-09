@@ -697,9 +697,9 @@ local function StyleVisibilityCheckbox(check, state)
     border = colors.border,
   }, math_max(1, ns.Theme.GetEdgeSize()))
   check:SetChecked(state == "on")
+  ns.Theme.ApplyFont(check.indicator, "body", 13)
   check.indicator:SetText(state == "mixed" and "-" or "X")
   check.indicator:SetShown(state ~= "off")
-  ns.Theme.ApplyFont(check.indicator, "body", 13)
   check.indicator:SetTextColor(colors.accent[1], colors.accent[2], colors.accent[3], 1)
 end
 
@@ -795,10 +795,10 @@ function TestMode:EnsureToolbar()
 
   panel.followLabel = panel:CreateFontString(nil, "OVERLAY")
   panel.followLabel:SetPoint("LEFT", panel.followCheck, "RIGHT", 3, 0)
+  StyleText(panel.followLabel, "body", 11)
   panel.followLabel:SetText("Follow current group on open")
   panel.followLabel:SetWidth(180)
   panel.followLabel:SetJustifyH("LEFT")
-  StyleText(panel.followLabel, "body", 11)
 
   panel.resetButton = CreateToolbarButton(panel, "Reset preset", 112, function()
     ns.FrameUtil.ResetMoverVisibilitySet()
@@ -813,8 +813,8 @@ function TestMode:EnsureToolbar()
   panel.search:SetPoint("TOPRIGHT", panel, "TOPRIGHT", -TOOLBAR_PADDING - 6, -132)
   panel.searchHint = panel.search:CreateFontString(nil, "OVERLAY")
   panel.searchHint:SetPoint("LEFT", panel.search, "LEFT", 5, 0)
-  panel.searchHint:SetText("Search movers...")
   StyleText(panel.searchHint, "body", 11)
+  panel.searchHint:SetText("Search movers...")
   panel.search:SetScript("OnTextChanged", function(self)
     panel.searchCollapsed = {}
     panel.searchHint:SetShown(self:GetText() == "")
