@@ -96,6 +96,9 @@ function TankFrames.EnsureMover(owner)
       anchorPoint = moverDB.point or point,
       anchorRelativePoint = moverDB.relativePoint or moverDB.point or point,
       label = "Main Tanks",
+      moduleKey = "unitFrames",
+      moduleLabel = "Unit Frames",
+      defaultVisibility = { Solo = false, Party = false },
       optionsString = "unitframes,raid",
       getDB = function()
         return owner.db.profile.mainTankMover
