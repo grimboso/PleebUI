@@ -194,6 +194,10 @@ local function _SB_RegisterMover(id, f, cfg)
   end
 
   local moverOpts = {
+    moduleKey = "pcm",
+    moduleLabel = "Cooldown Manager",
+    groupKey = "cooldownBars",
+    groupLabel = "Custom Cooldown Bars",
     label = Cooldowns:GetCustomBarDisplayName(cfg),
     optionsString = "CooldownManager,customTrackers,spell:" .. tostring(id),
     useOverlayDrag = true,
