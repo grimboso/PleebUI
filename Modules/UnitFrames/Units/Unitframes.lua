@@ -1455,6 +1455,8 @@ function UF:EnsureMovers()
 
   FrameUtil.EnsureGhostMovers(self, {
     labels = GHOST_LABELS,
+    moduleKey = "unitFrames",
+    moduleLabel = "Unit Frames",
     keyPrefix = "UF_",
     frameNamePrefix = "PleebUI_UF_Ghost_",
     optionsString = function(unitKey)
