@@ -10,7 +10,8 @@ const targets = {
  'Core/PUI_Quality.lua': ['QualityProvider','Quality_GetPreviewWarnings','Quality_RefreshPreview','Quality_BuildPreview','EnsureInviteDriver','EnsureLootFrame','NormalizeDB','NormalizeBool','SeedAnchorDefaults','QUALITY_POSITION_DEFAULTS','Quality:ApplyAll'],
  'Modules/PUIModules/PUI_RaidUtility.lua': ['RAID_UTILITY_WINDOW_SPECS','Module.BuildBresLustOptions','Module.BuildRaidUtilityOptions'],
  'Core/GUI/PUI_Theme.lua': ['UIThemeOptionsProvider','ThemeColorsProvider','ThemeFontsProvider','PUI_ThemeColorOption','_PUI_ThemeRegistry_CopyArgsWithoutHeader','PUI_THEME_COLOR_OPTIONS'],
- 'Modules/PRD/PUI_PRD_Config.lua': ['PRD_ArrangePresentationArgs','PRD_ArrangeNativeBarArgs','PRD_BuildNativeTextGroup']
+ 'Modules/PRD/PUI_PRD.lua': ['defaults'],
+ 'Modules/PRD/PUI_PRD_Config.lua': ['PRD_ArrangePresentationArgs','PRD_ArrangeNativeBarArgs','PRD_BuildNativeTextGroup','PRDPreview_ConfigureBarInteractions','PRDPreview_GetResourcePath','PRDPreview_Navigate','PRDPreview_SetBarHovered','PRD_HasMultipleSecondaryResources']
 };
 const output = {};
 for (const [file, names] of Object.entries(targets)) {
