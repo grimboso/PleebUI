@@ -3061,6 +3061,43 @@ local function UIThemeOptionsProvider()
       },
     }
 
+    local sections = options.args
+    local fonts = sections.fonts.args
+    local optionsText = sections.optionsLayout.args.puiOptionsFontSize
+    sections.optionsLayout.args.puiOptionsFontSize = nil
+    optionsText.name = "Font size"
+    sections.fonts.args = {
+      global = ns.OptionsSchema.BuildTextGroup("Global typography", 10, {
+        font = fonts.iconTextGlobalFont, outline = fonts.iconTextGlobalFlags,
+      }),
+      sizeAdjustment = { type = "group", name = "Font size adjustment", inline = true, order = 20, args = {
+        fontSizeOffset = fonts.fontSizeOffset, applyTo = fonts.fontSizeScopes,
+      } },
+    }
+    sections.fonts.args.global.args.font.name = "Font"
+    sections.fonts.args.global.args.outline.name = "Outline"
+    sections.fonts.args.sizeAdjustment.args.fontSizeOffset.name = "Adjustment"
+    sections.optionsLayout.name = "Layout and appearance"
+    sections.optionsLayout.order = 20
+    local window = sections.optionsLayout.args
+    sections.optionsLayout.args = {
+      window = { type = "group", name = "Options window", order = 10, inline = true, arg = { puiExplicit = true }, args = window },
+      text = ns.OptionsSchema.BuildTextGroup("Options text", 20, { fontSize = optionsText }),
+    }
+    window.optionsUIScale.name = "Scale"
+    sections.themeColors.name, sections.themeColors.order = "Colors", 30
+    sections.fonts.name, sections.fonts.order = "Text", 40
+    sections.accessibilityPresets.name = "Color presets"
+    sections.accessibilityPresets.order, sections.combatReadability.order = 10, 20
+    options.childGroups = "tab"
+    options.args = {
+      general = { type = "group", name = "General", order = 10, args = {
+        accessibilityPresets = sections.accessibilityPresets,
+        combatReadability = sections.combatReadability,
+      } },
+      layout = sections.optionsLayout, colors = sections.themeColors, text = sections.fonts,
+    }
+    options.args.layout.inline, options.args.colors.inline, options.args.text.inline = nil, nil, nil
     return options
   end
 
