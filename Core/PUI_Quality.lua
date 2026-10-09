@@ -396,7 +396,12 @@ local function NormalizeDB()
 
   if q.petWarningsEnabled == nil then q.petWarningsEnabled = true end
   if q.missingPetWarning == nil then q.missingPetWarning = true end
+  if q.idlePetWarning == nil then q.idlePetWarning = q.missingPetWarning end
+  if q.lowHealthPetWarning == nil then q.lowHealthPetWarning = true end
   if q.hidePetWarningWhileDragonriding == nil then q.hidePetWarningWhileDragonriding = true end
+
+  q.petIdleWarningFontSize = Clamp(q.petIdleWarningFontSize or 20, 5, 100)
+  q.petIdleWarningColor = q.petIdleWarningColor or { r = 1, g = 1, b = 1, a = 1 }
   q.petHealWarningThreshold = Clamp(q.petHealWarningThreshold or 50, 10, 50)
   if q.petHealWarningText == nil then q.petHealWarningText = "Heal Pet" end
   if q.petHealWarningShowIcon == nil then q.petHealWarningShowIcon = true end
@@ -556,7 +561,7 @@ local function EnsureCombatMsgFrame()
 
   ns.FrameUtil:RegisterMover("quality_combat_message", f, {
     label = "Combat Message",
-    optionsString = "Quality,qualityTab",
+    optionsString = "Quality,combatTab",
     savePosition = function()
       SaveMoverPosition(f, "combatMessageAnchor")
     end,
@@ -666,7 +671,7 @@ local function EnsureCombatTimer()
 
   ns.FrameUtil:RegisterMover("quality_combat_timer", f, {
     label = "Combat Timer",
-    optionsString = "Quality,qualityTab",
+    optionsString = "Quality,combatTab",
     smartSnap = {
       family = "positionOnly",
     },
@@ -884,7 +889,7 @@ local function EnsureCombatWarningFrame()
   notAttackingText:SetJustifyH("CENTER")
   notAttackingText:SetJustifyV("MIDDLE")
   notAttackingText:SetTextColor(1, 0, 0, 1)
-  notAttackingText:SetText("NOT ATTACKING")
+  notAttackingText:SetText("OUT OF MELEE RANGE")
   notAttackingText:Show()
 
   local function ApplyAnchor()
@@ -905,7 +910,7 @@ local function EnsureCombatWarningFrame()
 
   ns.FrameUtil:RegisterMover("quality_combat_warning", f, {
     label = "Combat Warning",
-    optionsString = "Quality,qualityTab",
+    optionsString = "Quality,combatTab",
     smartSnap = {
       family = "positionOnly",
     },
@@ -1933,7 +1938,7 @@ local function EnsurePetWarnFrame()
 
   ns.FrameUtil:RegisterMover("quality_pet_warning", f, {
     label = "Pet Warning",
-    optionsString = "Quality,qualityTab",
+    optionsString = "Quality,combatTab",
     savePosition = function()
       SaveMoverPosition(f, "petWarningAnchor")
     end,
@@ -1987,6 +1992,16 @@ local function PetWarn_Hide()
   end
 end
 
+local function FormatPetWarningText(message, size, iconOnly, showIcon, icon)
+  if iconOnly and icon then
+    return string.format("|T%s:%d:%d:0:0:64:64:5:59:5:59|t", tostring(icon), size, size)
+  elseif showIcon and icon then
+    return string.format("%s |T%s:%d:%d:0:0:64:64:5:59:5:59|t", message, tostring(icon), size, size)
+  end
+
+  return message
+end
+
 local function PetWarn_Show(msg, opts)
   local f = EnsurePetWarnFrame()
   local size = 20
@@ -2037,13 +2052,7 @@ local function PetWarn_Show(msg, opts)
   )
   PetWarnText:SetTextColor(r, g, b, a)
 
-  if iconOnly and icon then
-    message = string.format("|T%s:%d:%d:0:0:64:64:5:59:5:59|t", tostring(icon), size, size)
-  elseif showIcon and icon then
-    message = string.format("%s |T%s:%d:%d:0:0:64:64:5:59:5:59|t", message, tostring(icon), size, size)
-  end
-
-  PetWarnText:SetText(message)
+  PetWarnText:SetText(FormatPetWarningText(message, size, iconOnly, showIcon, icon))
 
   f:SetSize((PetWarnText:GetStringWidth() or 300) + 40, (PetWarnText:GetStringHeight() or 30) + 20)
 
@@ -2084,7 +2093,10 @@ local function PetWarn_CheckMissingPet(q, hasPet, petDead)
   local _, class = UnitClass("player")
   if class ~= "HUNTER" then
     if not hasPet or petDead then
-      PetWarn_Show(petDead and "***DEAD PET***" or "***SUMMON PET***")
+      PetWarn_Show(petDead and "***DEAD PET***" or "***SUMMON PET***", {
+        fontSize = petDead and q.petDeadWarningFontSize or q.petMissingWarningFontSize,
+        color = petDead and q.petDeadWarningColor or q.petMissingWarningColor,
+      })
       return true
     end
     return false
@@ -2117,7 +2129,7 @@ local function PetWarn_CheckMissingPet(q, hasPet, petDead)
 end
 
 local function PetWarn_CheckPetNotAttacking(q, hasPet, petDead)
-  if not q.missingPetWarning then
+  if not q.idlePetWarning then
     return false
   end
 
@@ -2138,7 +2150,10 @@ local function PetWarn_CheckPetNotAttacking(q, hasPet, petDead)
   end
 
   if not UnitExists("pettarget") and not UnitAffectingCombat("pet") then
-    PetWarn_Show("***PET NOT ATTACKING***")
+    PetWarn_Show("***PET NOT ATTACKING***", {
+      fontSize = q.petIdleWarningFontSize,
+      color = q.petIdleWarningColor,
+    })
     return true
   end
 
@@ -2146,7 +2161,7 @@ local function PetWarn_CheckPetNotAttacking(q, hasPet, petDead)
 end
 
 local function PetWarn_CheckHealPet(q, hasPet, petDead)
-  if not hasPet or petDead then
+  if not q.lowHealthPetWarning or not hasPet or petDead then
     return false
   end
 
@@ -2206,6 +2221,7 @@ local function PetWarn_Check()
 end
 
 local PetWarnEvents
+local ApplyPetWarnings
 local function EnsurePetWarnEvents()
   if PetWarnEvents then return PetWarnEvents end
 
@@ -2253,7 +2269,7 @@ local function EnsurePetWarnEvents()
       or event == "TRAIT_CONFIG_UPDATED"
       or event == "TRAIT_CONFIG_LIST_UPDATED"
     then
-      C_Timer.After(0, PetWarn_Check)
+      C_Timer.After(0, ApplyPetWarnings)
       return
     end
 
@@ -2265,28 +2281,42 @@ local function EnsurePetWarnEvents()
 
     self:UnregisterAllEvents()
 
-    if q.petWarningsEnabled
-      and (
-        q.missingPetWarning
-        or IsPetClass()
-        or IsHealPetClass()
-      )
-    then
-      self:RegisterEvent("PLAYER_ENTERING_WORLD")
-      self:RegisterEvent("PLAYER_REGEN_DISABLED")
-      self:RegisterEvent("PLAYER_REGEN_ENABLED")
+    local petClass = IsPetClass()
+    local healClass = IsHealPetClass()
+    local needsMissing = petClass and q.missingPetWarning
+    local needsIdle = petClass and not healClass and q.idlePetWarning
+    local needsHealth = healClass and q.lowHealthPetWarning
+
+    if q.petWarningsEnabled and (q.missingPetWarning or q.idlePetWarning or q.lowHealthPetWarning) then
       self:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED")
       self:RegisterEvent("PLAYER_TALENT_UPDATE")
       self:RegisterEvent("TRAIT_CONFIG_UPDATED")
       self:RegisterEvent("TRAIT_CONFIG_LIST_UPDATED")
+    end
+
+    if q.petWarningsEnabled and (needsMissing or needsIdle or needsHealth) then
+      self:RegisterEvent("PLAYER_ENTERING_WORLD")
+      self:RegisterEvent("PLAYER_REGEN_DISABLED")
+      self:RegisterEvent("PLAYER_REGEN_ENABLED")
       self:RegisterEvent("UNIT_PET")
       self:RegisterEvent("PET_BAR_UPDATE")
-      self:RegisterEvent("READY_CHECK")
-      self:RegisterEvent("READY_CHECK_FINISHED")
 
-      self:RegisterUnitEvent("UNIT_FLAGS", "pet")
-      self:RegisterUnitEvent("UNIT_TARGET", "pet")
-      self:RegisterUnitEvent("UNIT_HEALTH", "pet")
+      if needsMissing then
+        self:RegisterEvent("READY_CHECK")
+        self:RegisterEvent("READY_CHECK_FINISHED")
+      end
+
+      if needsMissing or needsIdle then
+        self:RegisterUnitEvent("UNIT_FLAGS", "pet")
+      end
+
+      if needsIdle then
+        self:RegisterUnitEvent("UNIT_TARGET", "pet")
+      end
+
+      if needsMissing or needsHealth then
+        self:RegisterUnitEvent("UNIT_HEALTH", "pet")
+      end
     else
       PetWarnReadyCheckActive = false
       PetHealWarnNextUpdate = 0
@@ -2296,8 +2326,12 @@ local function EnsurePetWarnEvents()
   return f
 end
 
-local function ApplyPetWarnings()
-  BuildPetHealWarnCurve()
+ApplyPetWarnings = function()
+  local q = GetQ()
+
+  if q.petWarningsEnabled and q.lowHealthPetWarning and IsHealPetClass() then
+    BuildPetHealWarnCurve()
+  end
 
   local f = EnsurePetWarnEvents()
   f:RefreshState()
@@ -2394,6 +2428,9 @@ function Quality:ApplyAll()
   EnsureCombatMsgFrame():RefreshState()
   EnsureCombatTimerEvents():RefreshState()
   EnsureCombatWarningEvents():RefreshState()
+
+  ns.Theme.ApplyFont(CombatMsgText, "header", q.combatMessageFontSize, nil, "qualityOfLife")
+  ns.Theme.ApplyFont(CombatTimerText, "body", q.combatTimerFontSize, nil, "qualityOfLife")
   EnsureLootFrame():RefreshState()
   EnsureMerchantDriver():RefreshState()
   EnsureKeystoneDriver():RefreshState()
@@ -2423,6 +2460,195 @@ function Quality:ApplyAll()
   CVarSetSafe("autoLootDefault", q.autoLoot == true)
 end
 
+local QualityPreviewRoot
+local QualityPreviewTab = "combatTab"
+local QualityPreviewIndex = 1
+
+local QUALITY_PREVIEW_WARNINGS = {
+  "No target",
+  "Out of melee range",
+  "Missing pet",
+  "Dead pet",
+  "Idle pet",
+  "Low pet health",
+  "Combat message",
+  "Combat timer",
+}
+
+local function Quality_RefreshPreview()
+  local root = QualityPreviewRoot
+  if not root or not root:IsShown() then
+    return
+  end
+
+  local q = GetQ()
+  local isCursor = QualityPreviewTab == "cursorTab"
+
+  root.Warning:SetShown(not isCursor)
+  root.Ring:SetShown(isCursor and q.cursorRingShowInner ~= false)
+  root.ClickRing:SetShown(isCursor and q.cursorRingShowOutline ~= false)
+  root.Horizontal:SetShown(isCursor and q.crosshair)
+  root.Vertical:SetShown(isCursor and q.crosshair)
+
+  if isCursor then
+    local ringSize = Clamp(q.cursorRingSize or 26, 8, 128)
+    local extraSize = Clamp(q.cursorRingOutlineSize or 10, 0, 128)
+    local ringColor = q.cursorRingColor or { r = 1, g = 1, b = 1, a = 0.55 }
+    local clickColor = q.cursorRingOutlineColor or { r = 1, g = 1, b = 1, a = 0.35 }
+    local crosshairColor = q.crosshairColor or { r = 1, g = 1, b = 1, a = 0.35 }
+    local length = Clamp(q.crosshairLength or 10, 2, 100) * 2
+    local thickness = Clamp(q.crosshairThickness or 1, 1, 10)
+
+    root.Ring:SetSize(ringSize, ringSize)
+    root.Ring:SetVertexColor(ringColor.r, ringColor.g, ringColor.b, ringColor.a)
+
+    root.ClickRing:SetSize(ringSize + extraSize, ringSize + extraSize)
+    root.ClickRing:SetVertexColor(clickColor.r, clickColor.g, clickColor.b, clickColor.a)
+
+    root.Horizontal:SetSize(length, thickness)
+    root.Vertical:SetSize(thickness, length)
+    root.Horizontal:SetVertexColor(
+      crosshairColor.r, crosshairColor.g, crosshairColor.b, crosshairColor.a
+    )
+    root.Vertical:SetVertexColor(
+      crosshairColor.r, crosshairColor.g, crosshairColor.b, crosshairColor.a
+    )
+
+    root.Title:SetText("Cursor and crosshair")
+    root.Next:Hide()
+    return
+  end
+
+  local kind = QUALITY_PREVIEW_WARNINGS[QualityPreviewIndex]
+  local text = ""
+  local size = 20
+  local color = { r = 1, g = 1, b = 1, a = 1 }
+
+  if kind == "No target" then
+    text = "NO TARGET"
+    size = q.combatWarningFontSize
+    color = { r = 1, g = 0, b = 0, a = 1 }
+  elseif kind == "Out of melee range" then
+    text = "OUT OF MELEE RANGE"
+    size = q.combatWarningFontSize
+    color = { r = 1, g = 0, b = 0, a = 1 }
+  elseif kind == "Missing pet" then
+    text = "SUMMON PET"
+    size = q.petMissingWarningFontSize
+    color = q.petMissingWarningColor
+  elseif kind == "Dead pet" then
+    text = "PET DIED"
+    size = q.petDeadWarningFontSize
+    color = q.petDeadWarningColor
+  elseif kind == "Idle pet" then
+    text = "***PET NOT ATTACKING***"
+    size = q.petIdleWarningFontSize
+    color = q.petIdleWarningColor
+  elseif kind == "Low pet health" then
+    text = q.petHealWarningText
+    size = q.petHealWarningFontSize
+    local _, class = IsHealPetClass()
+    color = class == "HUNTER"
+      and q.petLowHealthWarningColor
+      or { r = 1, g = 1, b = 1, a = 1 }
+    local spellID = GetHealPetSpellID()
+    local icon = spellID and C_Spell.GetSpellTexture(spellID) or nil
+    text = FormatPetWarningText(text, size, q.petHealWarningIconOnly, q.petHealWarningShowIcon, icon)
+  elseif kind == "Combat message" then
+    text = "Entering Combat"
+    size = q.combatMessageFontSize
+  else
+    text = "01:23"
+    size = q.combatTimerFontSize
+  end
+
+  if kind == "Missing pet" or kind == "Dead pet" or kind == "Idle pet" or kind == "Low pet health" then
+    ns.Theme._AppliedFonts[root.Warning] = nil
+    root.Warning:SetFont(STANDARD_TEXT_FONT, ns.Theme.ResolveFontSize(size, "qualityOfLife"), "OUTLINE")
+  else
+    ns.Theme.ApplyFont(root.Warning, kind == "Combat timer" and "body" or "header", size, nil, "qualityOfLife")
+  end
+  if kind == "Combat message" or kind == "Combat timer" then
+    local themeColor = ns.Theme.GetColors().text
+    color = { r = themeColor[1], g = themeColor[2], b = themeColor[3], a = themeColor[4] }
+  end
+  root.Warning:SetTextColor(
+    color.r or 1, color.g or 1, color.b or 1, color.a or 1
+  )
+  root.Warning:SetText(text)
+  root.Title:SetText(kind)
+  root.Next:Show()
+end
+
+local function Quality_BuildPreview(_, _, shell, path)
+  local host = shell.previewHost
+
+  if not QualityPreviewRoot then
+    local root = CreateFrame("Frame", nil, host, "BackdropTemplate")
+    QualityPreviewRoot = root
+    root:EnableMouse(false)
+
+    local title = root:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    title:SetPoint("TOP", root, "TOP", 0, -12)
+    root.Title = title
+
+    local warning = root:CreateFontString(nil, "OVERLAY", "GameFontHighlightLarge")
+    warning:SetPoint("CENTER", root, "CENTER", 0, 8)
+    warning:SetJustifyH("CENTER")
+    root.Warning = warning
+
+    local ringTexture = [[Interface\AddOns\PleebUI\Media\Textures\Pleebring.tga]]
+
+    root.ClickRing = root:CreateTexture(nil, "ARTWORK")
+    root.ClickRing:SetTexture(ringTexture)
+    root.ClickRing:SetPoint("CENTER", root, "CENTER", 0, 0)
+
+    root.Ring = root:CreateTexture(nil, "OVERLAY")
+    root.Ring:SetTexture(ringTexture)
+    root.Ring:SetPoint("CENTER", root, "CENTER", 0, 0)
+
+    root.Horizontal = root:CreateTexture(nil, "OVERLAY")
+    root.Horizontal:SetTexture([[Interface\Buttons\WHITE8x8]])
+    root.Horizontal:SetPoint("CENTER", root, "CENTER", 0, 0)
+
+    root.Vertical = root:CreateTexture(nil, "OVERLAY")
+    root.Vertical:SetTexture([[Interface\Buttons\WHITE8x8]])
+    root.Vertical:SetPoint("CENTER", root, "CENTER", 0, 0)
+
+    local nextButton = CreateFrame("Button", nil, root, "UIPanelButtonTemplate")
+    nextButton:SetSize(128, 24)
+    nextButton:SetPoint("BOTTOM", root, "BOTTOM", 0, 10)
+    nextButton:SetText("Next example")
+    nextButton:SetScript("OnClick", function()
+      QualityPreviewIndex = QualityPreviewIndex % #QUALITY_PREVIEW_WARNINGS + 1
+      Quality_RefreshPreview()
+    end)
+    ns.Theme.WidgetSkins.UIButton(nextButton)
+    root.Next = nextButton
+  end
+
+  local root = QualityPreviewRoot
+  root:SetParent(host)
+  root:ClearAllPoints()
+  root:SetAllPoints(host)
+  root:Show()
+
+  QualityPreviewTab = path[2] or "combatTab"
+
+  local colors = ns.Theme.GetColors()
+  ns.Theme.SetSquareBackdrop(root, {
+    bg = colors.background,
+    border = colors.border,
+  }, ns.Theme.GetEdgeSize())
+
+  ns.Theme.ApplyFont(root.Title, "header")
+  root.Title:SetTextColor(colors.text[1], colors.text[2], colors.text[3], colors.text[4])
+  ns.Theme.WidgetSkins.UIButton(root.Next)
+
+  Quality_RefreshPreview()
+  return true
+end
+
 local function QualityProvider(AddonObj)
   local provider = {}
 
@@ -2434,12 +2660,11 @@ local function QualityProvider(AddonObj)
 
     local function RequestApply(flags)
       AddonObj:ApplyOptionsChange("Quality", flags or {})
+      Quality_RefreshPreview()
     end
 
     local function RefreshQualityOptions()
-      C_Timer.After(0, function()
-        AddonObj:NotifyOptionsTreeChanged("Quality", { "Quality", "qualityTab" })
-      end)
+      AddonObj:NotifyOptionsTreeChanged("Quality", ns._PUIActiveOptionsPath)
     end
 
     local q = GetQ()
@@ -2479,6 +2704,13 @@ local function QualityProvider(AddonObj)
       return function()
         local qq = GetQ()
         return not qq[key]
+      end
+    end
+
+    local function DisabledWhenPetFeatureOff(key)
+      return function()
+        local qq = GetQ()
+        return not qq.petWarningsEnabled or not qq[key]
       end
     end
 
@@ -2582,7 +2814,7 @@ local function QualityProvider(AddonObj)
       return opt
     end
 
-    return {
+    local options = {
       type = "group",
       name = "Quality of Life",
       order = 15,
@@ -2610,20 +2842,86 @@ local function QualityProvider(AddonObj)
               name = "Pet warnings",
               order = 10,
               inline = true,
+              hidden = function()
+                return not Quality:IsPetWarningAvailable()
+              end,
               args = {
-                petWarningsEnabled = ToggleOption("Enable pet warnings", "petWarningsEnabled", 1),
-                missingPetWarning = ToggleOption("Missing or idle pet", "missingPetWarning", 2, nil, DisabledWhenOff("petWarningsEnabled")),
-                hidePetWarningWhileDragonriding = ToggleOption("Hide while skyriding", "hidePetWarningWhileDragonriding", 3, nil, DisabledWhenOff("petWarningsEnabled")),
-                petHealWarningThreshold = RangeOption("Low health threshold", "petHealWarningThreshold", 10, 50, 1, 4, DisabledWhenOff("petWarningsEnabled")),
-                petHealWarningFontSize = RangeOption("Low health size", "petHealWarningFontSize", 5, 100, 1, 5, DisabledWhenOff("petWarningsEnabled")),
-                petLowHealthWarningColor = ColorOption("Low health color", "petLowHealthWarningColor", 6, DisabledWhenOff("petWarningsEnabled")),
-                petHealWarningShowIcon = ToggleOption("Show heal icon", "petHealWarningShowIcon", 7, nil, DisabledWhenOff("petWarningsEnabled")),
-                petHealWarningIconOnly = ToggleOption("Icon only", "petHealWarningIconOnly", 8, nil, DisabledWhenOff("petWarningsEnabled")),
-                petHealWarningText = InputOption("Low health text", "petHealWarningText", 9, DisabledWhenOff("petWarningsEnabled")),
-                petMissingWarningFontSize = RangeOption("Missing pet size", "petMissingWarningFontSize", 10, 100, 1, 10, DisabledWhenOff("petWarningsEnabled")),
-                petMissingWarningColor = ColorOption("Missing pet color", "petMissingWarningColor", 11, DisabledWhenOff("petWarningsEnabled")),
-                petDeadWarningFontSize = RangeOption("Pet died size", "petDeadWarningFontSize", 10, 100, 1, 12, DisabledWhenOff("petWarningsEnabled")),
-                petDeadWarningColor = ColorOption("Pet died color", "petDeadWarningColor", 13, DisabledWhenOff("petWarningsEnabled")),
+                petWarningsEnabled = ToggleOption("Show pet warnings", "petWarningsEnabled", 1),
+                hidePetWarningWhileDragonriding = ToggleOption(
+                  "Hide while skyriding",
+                  "hidePetWarningWhileDragonriding",
+                  2, nil, DisabledWhenOff("petWarningsEnabled")
+                ),
+                missingPet = {
+                  type = "group",
+                  name = "Missing or dead pet",
+                  order = 10,
+                  inline = true,
+                  hidden = function() return not IsPetClass() end,
+                  args = {
+                    enabled = ToggleOption("Show missing or dead pet", "missingPetWarning", 1,
+                      nil, DisabledWhenOff("petWarningsEnabled")),
+                    missingSize = RangeOption("Missing pet size", "petMissingWarningFontSize",
+                      10, 100, 1, 2, DisabledWhenPetFeatureOff("missingPetWarning")),
+                    missingColor = ColorOption("Missing pet color", "petMissingWarningColor",
+                      3, DisabledWhenPetFeatureOff("missingPetWarning")),
+                    deadSize = RangeOption("Dead pet size", "petDeadWarningFontSize",
+                      10, 100, 1, 4, DisabledWhenPetFeatureOff("missingPetWarning")),
+                    deadColor = ColorOption("Dead pet color", "petDeadWarningColor",
+                      5, DisabledWhenPetFeatureOff("missingPetWarning")),
+                  },
+                },
+                idlePet = {
+                  type = "group",
+                  name = "Idle pet",
+                  order = 20,
+                  inline = true,
+                  hidden = function()
+                    return not IsPetClass() or IsHealPetClass()
+                  end,
+                  args = {
+                    enabled = ToggleOption("Show idle pet warning", "idlePetWarning", 1,
+                      nil, DisabledWhenOff("petWarningsEnabled")),
+                    size = RangeOption("Idle warning size", "petIdleWarningFontSize",
+                      5, 100, 1, 2, DisabledWhenPetFeatureOff("idlePetWarning")),
+                    color = ColorOption("Idle warning color", "petIdleWarningColor",
+                      3, DisabledWhenPetFeatureOff("idlePetWarning")),
+                  },
+                },
+                lowHealth = {
+                  type = "group",
+                  name = "Low health",
+                  order = 30,
+                  inline = true,
+                  hidden = function() return not IsHealPetClass() end,
+                  args = {
+                    enabled = ToggleOption("Show low health warning", "lowHealthPetWarning",
+                      1, nil, DisabledWhenOff("petWarningsEnabled")),
+                    threshold = RangeOption("Health threshold", "petHealWarningThreshold",
+                      10, 50, 1, 2, DisabledWhenPetFeatureOff("lowHealthPetWarning")),
+                    size = RangeOption("Warning size", "petHealWarningFontSize",
+                      5, 100, 1, 3, DisabledWhenPetFeatureOff("lowHealthPetWarning")),
+                    color = {
+                      type = "color",
+                      name = "Warning color",
+                      order = 4,
+                      hasAlpha = true,
+                      hidden = function()
+                        local _, class = IsHealPetClass()
+                        return class ~= "HUNTER"
+                      end,
+                      disabled = DisabledWhenPetFeatureOff("lowHealthPetWarning"),
+                      get = ColorOption("Warning color", "petLowHealthWarningColor", 4).get,
+                      set = ColorOption("Warning color", "petLowHealthWarningColor", 4).set,
+                    },
+                    showIcon = ToggleOption("Show heal icon", "petHealWarningShowIcon",
+                      5, nil, DisabledWhenPetFeatureOff("lowHealthPetWarning")),
+                    iconOnly = ToggleOption("Icon only", "petHealWarningIconOnly",
+                      6, nil, DisabledWhenPetFeatureOff("lowHealthPetWarning")),
+                    text = InputOption("Warning text", "petHealWarningText",
+                      7, DisabledWhenPetFeatureOff("lowHealthPetWarning")),
+                  },
+                },
               },
             },
             cursorRing = {
@@ -2780,6 +3078,127 @@ local function QualityProvider(AddonObj)
         },
       },
     }
+
+    local visual = options.args.qualityTab.args
+    local automation = options.args.automationTab.args
+
+    local crosshair = visual.crosshairSettings
+    crosshair.name = "Crosshair"
+    crosshair.order = 20
+    crosshair.args.crosshair = automation.uiAndCamera.args.crosshair
+    crosshair.args.crosshair.order = 1
+    crosshair.args.crosshairLength.order = 2
+    crosshair.args.crosshairThickness.order = 3
+    crosshair.args.crosshairColor.order = 4
+
+    crosshair.args.crosshairLength.disabled = DisabledWhenOff("crosshair")
+    crosshair.args.crosshairThickness.disabled = DisabledWhenOff("crosshair")
+    crosshair.args.crosshairColor.disabled = DisabledWhenOff("crosshair")
+    automation.uiAndCamera.args.crosshair = nil
+
+    -- The click ring size is added to the inner ring size.
+    local ring = visual.cursorRing
+    ring.order = 10
+    ring.args.cursorRingSize.disabled = function()
+      local qq = GetQ()
+      return not qq.cursorRingShowInner and not qq.cursorRingShowOutline
+    end
+    ring.args.cursorRingColor.disabled = DisabledWhenOff("cursorRingShowInner")
+    ring.args.cursorRingOutlineSize.disabled = DisabledWhenOff("cursorRingShowOutline")
+    ring.args.cursorRingOutlineColor.disabled = DisabledWhenOff("cursorRingShowOutline")
+    ring.args.cursorRingOutlineSize.desc =
+      "Extra size added to the inner ring when you click."
+
+    local warnings = visual.combatWarnings
+    warnings.name = "Target and range warnings"
+    warnings.args.notAttackingWarning.name = "Out of melee range"
+    warnings.args.combatWarningFontSize.disabled = function()
+      local qq = GetQ()
+      return not qq.noTargetWarning and not qq.notAttackingWarning
+    end
+
+    local combatStatus = automation.combat
+    combatStatus.name = "Combat status"
+    combatStatus.order = 10
+    combatStatus.args.combatMessageFontSize = RangeOption(
+      "Message font size", "combatMessageFontSize",
+      10, 40, 1, 3, DisabledWhenOff("combatMessage")
+    )
+    combatStatus.args.combatTimerFontSize = RangeOption(
+      "Timer font size", "combatTimerFontSize",
+      10, 28, 1, 4, DisabledWhenOff("combatTimer")
+    )
+    combatStatus.args.editMode = {
+      type = "execute",
+      name = "Position in Edit Mode",
+      order = 5,
+      disabled = function()
+        return InCombatLockdown()
+      end,
+      func = function()
+        AddonObj:SetEditMode(true)
+      end,
+    }
+
+    automation.loot.args.fasterLooting.desc =
+      "Loots items faster and automatically confirms loot-binding prompts."
+    automation.merchant.args.autoRepair.desc =
+      "Automatically repairs at merchants. Hold Shift when opening a merchant to skip automatic repair and junk selling."
+    automation.merchant.args.autoSellJunk.desc =
+      "Automatically sells poor-quality items. Hold Shift when opening a merchant to skip both merchant automations."
+    automation.dialogs.args.easyItemDestroy.desc =
+      "Automatically fills the required confirmation text when deleting an item. You still confirm the deletion."
+
+    options.args.combatTab = {
+      type = "group",
+      name = "Combat",
+      order = 1,
+      args = {
+        combatStatus = combatStatus,
+        combatWarnings = warnings,
+        petWarnings = visual.petWarnings,
+      },
+    }
+
+    options.args.cursorTab = {
+      type = "group",
+      name = "Cursor",
+      order = 2,
+      args = {
+        cursorRing = ring,
+        crosshairSettings = crosshair,
+      },
+    }
+
+    options.args.groupTab = {
+      type = "group",
+      name = "Group tools",
+      order = 3,
+      args = {
+        battleResLust = visual.battleResLust,
+        raidUtility = visual.raidUtility,
+      },
+    }
+
+    automation.combat = nil
+    local interfaceSettings = automation.uiAndCamera
+    automation.uiAndCamera = nil
+
+    options.args.automationTab.name = "Automation"
+    options.args.automationTab.order = 4
+
+    options.args.interfaceTab = {
+      type = "group",
+      name = "Interface",
+      order = 5,
+      args = {
+        uiAndCamera = interfaceSettings,
+      },
+    }
+
+    options.args.qualityTab = nil
+
+    return options
   end
 
   return provider
@@ -2787,7 +3206,16 @@ end
 
 
 Addon:RegisterOptionsSection("Quality", QualityProvider, 80, "Quality of Life", nil, {
-  preview = false,
+  allowPreview = true,
+  page = {
+    previewAlwaysShown = true,
+    previewWidth = 340,
+    previewHeight = 190,
+    previewPathMatches = function(path)
+      return path[2] == "combatTab" or path[2] == "cursorTab"
+    end,
+    buildPreview = Quality_BuildPreview,
+  },
 })
 
 
