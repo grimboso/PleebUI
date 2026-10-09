@@ -986,7 +986,7 @@ local function BuildAccessibilityControls(frame, colors)
   }, math_max(Theme.GetEdgeSize(), 2))
 
   local fontWidget = AceGUI:Create("LSM30_Font")
-  fontWidget:SetLabel("UI Font Style")
+  fontWidget:SetLabel("Global font")
   fontWidget:SetList(Theme.BuildGlobalFontList())
   fontWidget:SetValue(Theme.GetGlobalUIFont())
   fontWidget:SetCallback("OnValueChanged", function(_, _, value)
@@ -999,7 +999,7 @@ local function BuildAccessibilityControls(frame, colors)
 
   local range = Theme.OptionsFontSizeRange
   local sizeWidget = AceGUI:Create("PUI_Slider")
-  sizeWidget:SetLabel("UI Font Size")
+  sizeWidget:SetLabel("Options font size")
   sizeWidget:SetSliderValues(range.min, range.max, range.step)
   sizeWidget:SetValue(Theme.GetOptionsFontSize())
   sizeWidget:SetCallback("OnValueChanged", function(_, _, value)
@@ -1011,7 +1011,7 @@ local function BuildAccessibilityControls(frame, colors)
   host.SizeWidget = sizeWidget
 
   local outlineWidget = AceGUI:Create("Dropdown")
-  outlineWidget:SetLabel("UI Font Outline")
+  outlineWidget:SetLabel("Global outline")
   outlineWidget:SetList(Theme.GetOutlineList())
   outlineWidget:SetValue(Theme.GetGlobalUIOutline())
   outlineWidget:SetCallback("OnValueChanged", function(_, _, value)
