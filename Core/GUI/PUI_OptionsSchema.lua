@@ -290,6 +290,12 @@ local SECTION_ORDER = {
   ["Layout and appearance"] = 20, Visibility = 30, Text = 40,
   ["Timers and swipes"] = 50, Glow = 60, Advanced = 90,
 }
+local UNIT_FRAME_SECTION_ORDER = {
+  General = 10, ["Layout and appearance"] = 20, Text = 30,
+  Auras = 40, Castbar = 50, Visibility = 60, Indicators = 70,
+  Portrait = 80, Pet = 90, ["Target of Target"] = 90,
+  ["Focus Target"] = 90, ["Party Pets"] = 90, ["Boss Stack Info"] = 90,
+}
 local TEXT_CONTEXTS = {
   Text = true, Font = true, Fonts = true, Typography = true, Message = true, Timer = true,
   Name = true, Health = true, Power = true, Warning = true,
@@ -607,16 +613,17 @@ local function ArrangeGroup(group, context, groupKey)
   ArrangePageSections(group)
   AddCommonSettings(group)
 
+  local sectionOrder = nextContext.moduleKey == "unitframes" and UNIT_FRAME_SECTION_ORDER or SECTION_ORDER
   local sectionCount = 0
   for _, option in pairs(args) do
-    if option.type == "group" and not option.inline and SECTION_ORDER[option.name] then
+    if option.type == "group" and not option.inline and sectionOrder[option.name] then
       sectionCount = sectionCount + 1
     end
   end
   if sectionCount > 1 then
     for _, option in pairs(args) do
-      if option.type == "group" and not option.inline and SECTION_ORDER[option.name] then
-        option.order = SECTION_ORDER[option.name]
+      if option.type == "group" and not option.inline and sectionOrder[option.name] then
+        option.order = sectionOrder[option.name]
       end
     end
   end
