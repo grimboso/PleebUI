@@ -58,7 +58,7 @@ local CURRENT_RELEASE = {
     {
       title = "Hunter Emergency Salve warning",
       description = "Added a movable FEIGN warning for Hunters using Emergency Salve when a supported Poison or Disease is present, with configurable warning size and color plus an Edit Mode preview.",
-      location = "PleebUI > Hunter Tools > Emergency Salve / PleebUI Edit Mode (/pe)",
+      location = "PleebUI > Quality of Life > Combat > Emergency Salve / PleebUI Edit Mode (/pe)",
     },
     {
       title = "Native Action Bar keybindings",
