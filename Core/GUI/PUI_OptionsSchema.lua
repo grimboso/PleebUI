@@ -296,7 +296,7 @@ local TEXT_CONTEXTS = {
   ["Missing pet"] = true, ["Dead pet"] = true, ["Idle warning"] = true,
   Clock = true, Coordinates = true, ["Zone text"] = true,
   ["Chat text"] = true, Tabs = true, Input = true,
-  ["Top panel text"] = true, ["Emergency Salve"] = true,
+  ["Top panel text"] = true,
   ["Bar font"] = true, ["Spell name"] = true, ["Cast time"] = true,
   Countdown = true, ["Duration countdown"] = true, Charges = true,
   Stacks = true, Counts = true, ["Charges / stacks"] = true, Keybinds = true,
@@ -506,6 +506,7 @@ local function FormatValues(values, isOutline)
 end
 
 local function ArrangeGroup(group, context, groupKey)
+  if type(group.arg) == "table" and group.arg.puiExplicit then return end
   if APPLIED_GROUPS[group] then return end
   APPLIED_GROUPS[group] = true
   local name = group.name
@@ -621,8 +622,29 @@ local function ArrangeGroup(group, context, groupKey)
   end
 end
 
+local function EnsureInlineGroups(group)
+  if type(group.args) ~= "table" then return end
+  local loose, firstOrder = {}, 1000
+  for key, option in pairs(group.args) do
+    if option.type == "group" then
+      EnsureInlineGroups(option)
+    elseif not group.inline then
+      loose[key] = option
+      firstOrder = math.min(firstOrder, tonumber(option.order) or 50)
+    end
+  end
+  if next(loose) then
+    for key in pairs(loose) do group.args[key] = nil end
+    group.args.puiControls = {
+      type = "group", name = group.name == "General" and "Feature" or group.name,
+      inline = true, order = firstOrder, args = loose,
+    }
+  end
+end
+
 function Schema.Apply(options, moduleKey)
   ArrangeGroup(options, { moduleKey = moduleKey })
+  EnsureInlineGroups(options)
 end
 
 function Schema.GetCompactLabel(label)
@@ -639,4 +661,25 @@ function Schema.GetCompactLabel(label)
   if label == "Font outline" or label == "Text outline" then return "Outline" end
   if label == "Font color" then return "Text color" end
   return LABELS[label] or label
+end
+
+-- Builders supply the text role and its controls; this template only names and orders properties.
+function Schema.BuildTextGroup(name, order, args)
+  local properties = {
+    showText = { "Show text", 10 }, hideNameText = { "Hide text", 10 },
+    hideHealthText = { "Hide text", 10 }, mode = { "Format", 20 },
+    useCustomFont = { "Override shared font settings", 30 },
+    useGlobalFont = { "Use global font", 35 }, font = { "Font", 40 },
+    fontSize = { "Font size", 50 }, outline = { "Outline", 60 },
+    nameTextColor = { "Text color", 70 }, healthTextColor = { "Text color", 70 },
+    powerTextColor = { "Text color", 70 }, textColor = { "Text color", 70 },
+    useCustomPosition = { "Override shared position", 75 },
+    anchor = { "Anchor point", 80 }, offsetX = { "Horizontal offset", 90 },
+    offsetY = { "Vertical offset", 100 }, resetSection = { "Reset text to defaults", 900 },
+  }
+  for key, definition in pairs(properties) do
+    local option = args[key]
+    if option then option.name, option.order = definition[1], definition[2] end
+  end
+  return { type = "group", name = name, order = order, inline = true, arg = { puiExplicit = true }, args = args }
 end
