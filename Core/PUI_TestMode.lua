@@ -728,6 +728,7 @@ local function BuildEditControls(panel)
   local util = ns.FrameUtil
   Checkbox("keyboard", "Keyboard movement", function() return util._keyboardMoveEnabled end,
     function(v) util.SetKeyboardMovementEnabled(v) end)
+  Checkbox("compact", "Compact movers", function() return util._compactMovers end, util.SetCompactMovers)
   Checkbox("dim", "Disable screen dimming", function() return util._disableDimming end,
     util.SetEditDimmingDisabled)
   Checkbox("snap", "Snap to frames", function() return util._snapToFrame end,
@@ -761,6 +762,7 @@ local function BuildEditControls(panel)
     tolerance = "How close movers must be before frame snapping or Smart Snap activates.",
     snapGrid = "Align movers with the grid while dragging.",
     grid = "Show a positioning grid. Grid visibility and snapping are separate settings.",
+    compact = "Soften idle mover labels and borders. Hover or select a mover to show it clearly.",
     dim = "Keep the game background at its normal brightness while editing.",
     fade = "How much to darken the game background while editing.",
   }
@@ -1597,10 +1599,10 @@ function TestMode:RebuildToolbar()
     local controlY = -4
     local available = math_max(220, content:GetWidth() - TOOLBAR_PADDING * 2 - 12)
     for _, key in ipairs({ "keyboard", "nudge", "snap", "smart", "tolerance", "snapGrid", "grid",
-      "dim", "fade" }) do
+      "compact", "dim", "fade" }) do
       local headingKey = key == "keyboard" and "movement"
         or key == "snap" and "snapping"
-        or key == "dim" and "appearance"
+        or key == "compact" and "appearance"
       if headingKey then
         local heading = panel.editHeadings[headingKey]
         StyleText(heading, "header", 12)
