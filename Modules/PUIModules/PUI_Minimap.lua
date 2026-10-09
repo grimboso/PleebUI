@@ -1211,6 +1211,8 @@ local function RegisterMinimapMover()
   FrameUtil:EnsureGhostMover("Minimap", {
     frameName = "PleebUI_MinimapGhostMover",
     label = "Minimap",
+    moduleKey = "minimap",
+    moduleLabel = "Minimap",
     liveFrame = mm,
     useOverlayDrag = true,
     smartSnap = {
