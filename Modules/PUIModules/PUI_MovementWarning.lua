@@ -388,19 +388,24 @@ function MovementWarning:OnMovementEvent(event, eventSpellID, baseSpellID, spell
     return
   end
 
+  local spellbookChanged = false
   if event == "PLAYER_ENTERING_WORLD" or event == "SPELLS_CHANGED"
     or event == "PLAYER_SPECIALIZATION_CHANGED" or event == "TRAIT_CONFIG_UPDATED"
   then
     RefreshSpellbook()
     RefreshSelectedSpells()
-    Addon:NotifyOptionsTreeChanged("MovementWarning", ns._PUIActiveOptionsPath)
+    spellbookChanged = true
   elseif event == "UPDATE_SHAPESHIFT_FORM" then
     ResolveTrackedSpells()
     RefreshSpellText()
   elseif event == "PLAYER_REGEN_ENABLED" and spellbookDirty then
     RefreshSpellbook()
     RefreshSelectedSpells()
-    Addon:NotifyOptionsTreeChanged("MovementWarning", ns._PUIActiveOptionsPath)
+    spellbookChanged = true
+  end
+  if spellbookChanged then
+    local path = ns._PUIActiveOptionsPath
+    Addon:NotifyOptionsTreeChanged("MovementWarning", path and path[1] == "MovementWarning" and path or nil)
   end
   self:RefreshWarning()
 end
