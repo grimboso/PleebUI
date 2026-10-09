@@ -540,6 +540,10 @@ local function _PUI_CreateProviderOption(node, activePath)
   opts.order = node.order or opts.order or 50
   opts.args = opts.args or {}
 
+  if not rec.ownerKey and node.key ~= "Profiles" then
+    ns.OptionsSchema.Apply(opts, node.key)
+  end
+
   if useCache then
     if rec.dynamicOptions == true then
       rec.__puiOptionsByPathKey = rec.__puiOptionsByPathKey or {}
