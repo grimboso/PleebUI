@@ -48,11 +48,6 @@ local QUICK_SETTINGS = {
   cooldownTimerEnabled = { 2, "Enable cooldown timer" },
   timerDisplay = { 1, "Enable duration timer" },
   swipeSource = { 1, "Enable duration timer" },
-  swipeCooldown = { 10, "Show cooldown swipe" },
-  swipeDuration = { 11, "Show duration swipe" },
-  showDurationSwipe = { 11, "Show duration swipe" },
-  durationSwipe = { 11, "Duration swipe" },
-  swipeGCD = { 12, "GCD swipe" },
   showCountdown = { 20, "Show countdown" },
   cooldownShow = { 20, "Show countdown" },
   showDuration = { 20, "Show countdown" },
@@ -64,6 +59,7 @@ local QUICK_SETTINGS = {
   keybindShow = { 22, "Show keybinds" },
   showKeybinds = { 22, "Show keybinds" },
   enabled = { 40, "Enable custom glow" },
+  desaturateCooldown = { 21, "Desaturation" },
   size = { 50, "Icon size" },
   iconSize = { 50, "Icon size" },
   fixedWidth = { 51, "Width" },
@@ -77,14 +73,14 @@ local QUICK_SETTINGS = {
 local INLINE_GROUPS = {
   groupSettings = { "Group", 5 },
   tracking = { "Tracking", 10 },
-  behavior = { "Behavior", 20 },
+  behavior = { "Behaviour", 20 },
   quickTimers = { "Timers & swipes", 30 },
   quickText = { "Text", 40 },
   quickLayout = { "Size & spacing", 50 },
   quickGlow = { "Glow", 60 },
   size = { "Size", 10 },
   arrangement = { "Arrangement", 20 },
-  iconPlacement = { "Icon placement", 30 },
+  iconPlacement = { "Behaviour", 30 },
   borders = { "Borders", 40 },
   styling = { "Bar style", 35 },
   saturation = { "Saturation", 45 },
@@ -144,7 +140,8 @@ local function CombineCondition(parent, child)
   end
 end
 
-function Options:BuildSections(source)
+function Options:BuildSections(source, context)
+  context = context or {}
   local sections = {}
   local hasStackStyle, hasCharges, hasStacks = false, false, false
   local function InspectTextRoles(args)
@@ -195,6 +192,24 @@ function Options:BuildSections(source)
         then
           destination = "text"
         end
+        local state
+        if prefix:match("whenReady$") or prefix:match("ready$") or key:match("^ready") or key == "desaturateReady" then
+          state = "readyState"
+        elseif prefix:match("whenCooldown$") or prefix:match("cooldown$") or key:match("^onCooldown")
+          or key:match("^cooldownAlpha") or key:match("^cooldownGlow") or key == "desaturateCooldown" then
+          state = "cooldownState"
+        elseif prefix:match("whenActive$") or prefix:match("active$") or key:match("^active")
+          or key:match("^auraGlow") or key == "desaturateActive" or key == "glowDuringDurationSwipe" then
+          state = "activeState"
+        end
+        if context.customTracker and state and destination ~= "text" then destination = "visibility" end
+        if context.items and (destination == "glow" or state) then destination = "visibility" end
+        if key == "deleteBar" and context.customTracker then destination = "general" end
+        if key == "showSwipe" or key == "swipeShow" then destination = "timer" end
+        if context.buffBars then
+          if key == "hideWhenInactive" or key == "showName" then destination = "general" end
+          if key == "drainDirection" then destination = "layout" end
+        end
         if destination == "text" then
           if key == "showCountdown" or key == "showDuration" or key:match("^durationText")
             or key == "durationFont" or key == "durationOutline"
@@ -231,11 +246,26 @@ function Options:BuildSections(source)
           end
         end
         if destination == "visibility" then
-          bucketPrefix, bucketLabel = "visibility", "Visibility"
+          if state then
+            bucketPrefix = state
+            bucketLabel = state == "readyState" and "Ready" or state == "activeState" and "Active" or "On cooldown"
+            if state == "readyState" and context.auraTracker then bucketLabel = "Inactive" end
+          elseif key == "opacity" then
+            bucketPrefix, bucketLabel = "barOpacity", "Bar content"
+          elseif key == "outOfCombatAlpha" then
+            bucketPrefix, bucketLabel = "combat", "Combat"
+          elseif key == "missingAlpha" then
+            bucketPrefix, bucketLabel = "unavailable", "Unavailable"
+          else
+            bucketPrefix, bucketLabel = "conditions", "Conditions"
+          end
         elseif destination == "general" and option.type ~= "description" then
           bucketPrefix = GENERAL_GROUPS[key] or "behavior"
+          if (context.customTracker or context.items) and key == "enabled" then bucketPrefix = "behavior" end
+          if context.customTracker and key == "deleteBar" then bucketPrefix, bucketLabel = "actions", "Actions" end
         elseif destination == "layout" then
           bucketPrefix = LAYOUT_GROUPS[key] or "arrangement"
+          if context.buffBars and (key == "orientation" or key == "drainDirection") then bucketPrefix = "iconPlacement" end
         elseif destination == "glow" then
           if key:match("^ready") or prefix:match("whenReady$") then
             bucketPrefix = "readyGlow"
@@ -276,17 +306,37 @@ function Options:BuildSections(source)
           if key == "showCount" or key == "chargeShow" then option.name, option.order = "Show count", 10 end
           if key == "showCountdown" or key == "cooldownShow" then option.name, option.order = "Show countdown", 10 end
         end
+        if destination == "visibility" then
+          if option.type == "toggle" then option.order = 10 + (tonumber(option.order) or 0) / 100
+          elseif option.type == "select" then option.order = 30 + (tonumber(option.order) or 0) / 100
+          elseif option.type == "range" then
+            option.order = 40 + (tonumber(option.order) or 0) / 100
+            if key:lower():find("alpha", 1, true) or key == "opacity" then option.name = "Opacity" end
+          end
+        end
+        if destination == "general" and (key == "showTooltips" or key == "showTooltip") then option.order = 20 end
+        if context.customTracker and key == "enabled" and destination == "general" then
+          option.name, option.order = "Enable tracker", 0
+        elseif context.items and key == "enabled" and destination == "general" then
+          option.order = 0
+        elseif context.customTracker and key == "deleteBar" then
+          option.name, option.order = "Delete tracker", 1000
+          option.confirm = option.confirmText or "Delete this tracker?"
+          option.confirmText = nil
+        end
         option.name = ns.OptionsSchema.GetCompactLabel(option.name)
         local inlineDefinition = INLINE_GROUPS[bucketPrefix]
         if inlineDefinition then bucketLabel = inlineDefinition[1] end
         option.hidden = CombineCondition(hidden, option.hidden)
         option.disabled = CombineCondition(disabled, option.disabled)
         local quickSetting = QUICK_SETTINGS[key]
-        if quickSetting and destination ~= "general" and destination ~= "visibility" and option.hidden ~= true
+        if context.customTracker and state == "cooldownState" and key == "desaturate" then quickSetting = { 21, "Desaturation" } end
+        if quickSetting and destination ~= "general" and (destination ~= "visibility" or key == "desaturateCooldown" or key == "desaturate") and option.hidden ~= true
           and (key ~= "enabled" or destination == "glow")
           and (key ~= "showDuration" or destination == "text")
         then
-          local quickGroup = destination == "timer" and "quickTimers"
+          local quickGroup = (key == "desaturateCooldown" or key == "desaturate" or key == "enabled" and destination == "glow")
+            and "behavior" or destination == "timer" and "quickTimers"
             or destination == "text" and "quickText"
             or destination == "layout" and "quickLayout" or "quickGlow"
           local definition = INLINE_GROUPS[quickGroup]
@@ -319,6 +369,13 @@ function Options:BuildSections(source)
               or destination == "text" and (bucketPrefix == "cooldown" and 10
                 or (bucketPrefix == "charge" or bucketPrefix == "stacks") and 20 or bucketPrefix == "keybind" and 30 or 40)
               or option.order
+            if bucketPrefix == "actions" then order = 1000 end
+            if context.customTracker and bucketPrefix == "behavior" then order = 0 end
+            if bucketPrefix == "conditions" then order = 10 end
+            if bucketPrefix == "combat" then order = 20 end
+            if bucketPrefix == "readyState" then order = 30 end
+            if bucketPrefix == "activeState" then order = 40 end
+            if bucketPrefix == "cooldownState" then order = 50 end
             bucket = { type = "group", name = bucketLabel, inline = true, order = order, args = {} }
             bucket.hidden = function(info)
               for _, control in pairs(bucket.args) do
@@ -342,6 +399,18 @@ function Options:BuildSections(source)
   end
 
   Collect(source, "general", "", "", nil)
+  if (context.customTracker or context.items) and sections.general.args.behavior then
+    sections.general.args.behavior.order = 0
+  end
+  if context.customTracker or context.items then
+    if next(sections.glow.args) then
+      sections.visibility.args.glow = {
+        type = "group", name = "Glow", inline = true, order = 80, args = sections.glow.args,
+      }
+    end
+    sections.glow.args = {}
+    sections.visibility.name = "Visibility and glow"
+  end
   for key, section in pairs(sections) do
     if next(section.args) == nil then sections[key] = nil end
   end
