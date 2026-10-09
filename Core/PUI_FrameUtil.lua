@@ -209,6 +209,7 @@ function FrameUtil._InitEditModeConfig()
   FrameUtil._showGrid = db.showGrid == true
   FrameUtil._dimAlpha = db.dimAlpha or 0.7
   FrameUtil._disableDimming = db.disableDimming == true
+  FrameUtil._compactMovers = db.compactMovers == true
 end
 
 function FrameUtil.ApplyGlobalEditFont(fs, sizeOverride, flagsOverride)
@@ -376,6 +377,9 @@ function FrameUtil.RefreshMoverLayering()
   if FrameUtil._selectionBox then
     FrameUtil._selectionBox:SetFrameStrata(GetMoverChromeStrata())
     FrameUtil._selectionBox:SetFrameLevel(selectedLevel + 20)
+  end
+  if FrameUtil._frameSnapFeedback then
+    FrameUtil._frameSnapFeedback:SetFrameLevel(selectedLevel + 1)
   end
 end
 
@@ -1085,6 +1089,7 @@ end
 
 local function GetFrameEdges(frame)
   local l, r, t, b = frame:GetLeft(), frame:GetRight(), frame:GetTop(), frame:GetBottom()
+  if _G.issecretvalue(l) or _G.issecretvalue(r) or _G.issecretvalue(t) or _G.issecretvalue(b) then return end
   if not l or not r or not t or not b then return end
   return l, r, t, b
 end
@@ -1196,7 +1201,7 @@ local function IsHorizontallyNear(fl, fr, ol, orr, tol)
   end
 end
 
-function FrameUtil._ApplyFrameSnap(entry, live, ignoreEntries)
+local function FindFrameSnap(entry, ignoreEntries)
   if not entry or not entry.frame then return end
   if not FrameUtil._snapToFrame then return end
 
@@ -1207,7 +1212,7 @@ function FrameUtil._ApplyFrameSnap(entry, live, ignoreEntries)
   if not fl then return end
 
   local bestDx, bestDy
-  local bestPeer
+  local bestPeer, guidePosition
   local bestAxis -- "H" or "V"
 
   for _, other in ipairs(MoversList) do
@@ -1216,6 +1221,7 @@ function FrameUtil._ApplyFrameSnap(entry, live, ignoreEntries)
        and other.frame
        and other.frame:IsShown()
        and not other._editSessionHidden
+       and not other._suppressed
        and not other._presetHidden
        and FrameUtil.CanMoversShareSnapGroup(entry, other) then
       local ol, orr, ot, ob = GetFrameEdges(other.frame)
@@ -1232,6 +1238,7 @@ function FrameUtil._ApplyFrameSnap(entry, live, ignoreEntries)
           if absDx1 <= tol then
             if not bestDx or absDx1 < math_abs(bestDx) then
               bestDx, bestDy, bestPeer, bestAxis = dx1, nil, other, "H"
+              guidePosition = ol
             end
           end
 
@@ -1239,6 +1246,7 @@ function FrameUtil._ApplyFrameSnap(entry, live, ignoreEntries)
           if absDx2 <= tol then
             if not bestDx or absDx2 < math_abs(bestDx) then
               bestDx, bestDy, bestPeer, bestAxis = dx2, nil, other, "H"
+              guidePosition = orr
             end
           end
         end
@@ -1252,6 +1260,7 @@ function FrameUtil._ApplyFrameSnap(entry, live, ignoreEntries)
           if absDy1 <= tol then
             if not bestDy or absDy1 < math_abs(bestDy) then
               bestDy, bestDx, bestPeer, bestAxis = dy1, nil, other, "V"
+              guidePosition = ot
             end
           end
 
@@ -1259,6 +1268,7 @@ function FrameUtil._ApplyFrameSnap(entry, live, ignoreEntries)
           if absDy2 <= tol then
             if not bestDy or absDy2 < math_abs(bestDy) then
               bestDy, bestDx, bestPeer, bestAxis = dy2, nil, other, "V"
+              guidePosition = ob
             end
           end
         end
@@ -1270,6 +1280,68 @@ function FrameUtil._ApplyFrameSnap(entry, live, ignoreEntries)
     return
   end
 
+  return bestPeer, bestAxis, bestDx, bestDy, guidePosition
+end
+
+local function ClearFrameSnapFeedback()
+  local feedback = FrameUtil._frameSnapFeedback
+  if feedback then
+    feedback.ownerKey, feedback.targetKey = nil, nil
+    feedback.highlight:ClearAllPoints()
+    feedback.guide:ClearAllPoints()
+    feedback:Hide()
+  end
+end
+
+local function UpdateFrameSnapFeedback(entry, ignoreEntries)
+  local peer, axis, _, _, position = FindFrameSnap(entry, ignoreEntries)
+  if not peer then
+    ClearFrameSnapFeedback()
+    return
+  end
+  local scale, parentScale = peer.frame:GetEffectiveScale(), UIParent:GetEffectiveScale()
+  if _G.issecretvalue(scale) or _G.issecretvalue(parentScale) then
+    ClearFrameSnapFeedback()
+    return
+  end
+  local feedback = FrameUtil._frameSnapFeedback
+  if not feedback then
+    feedback = CreateFrame("Frame", nil, UIParent)
+    feedback:EnableMouse(false)
+    feedback:SetFrameStrata(GetMoverChromeStrata())
+    feedback.highlight = CreateFrame("Frame", nil, feedback, "BackdropTemplate")
+    feedback.highlight:EnableMouse(false)
+    ns.Theme.SetSquareBackdrop(feedback.highlight, {
+      bg = { 0, 0, 0, 0 }, border = { 0, 0, 0, 0 },
+    }, 1)
+    feedback.guide = feedback:CreateTexture(nil, "OVERLAY")
+    FrameUtil._frameSnapFeedback = feedback
+    FrameUtil.RefreshMoverLayering()
+  end
+  local accent = ns.Theme.GetColors().accent
+  feedback.highlight:SetBackdropColor(accent[1], accent[2], accent[3], 0.06)
+  feedback.highlight:SetBackdropBorderColor(accent[1], accent[2], accent[3], 0.85)
+  feedback.highlight:ClearAllPoints()
+  feedback.highlight:SetPoint("TOPLEFT", peer.frame, "TOPLEFT", -2, 2)
+  feedback.highlight:SetPoint("BOTTOMRIGHT", peer.frame, "BOTTOMRIGHT", 2, -2)
+  feedback.guide:ClearAllPoints()
+  feedback.guide:SetColorTexture(accent[1], accent[2], accent[3], 0.45)
+  position = position * scale / parentScale
+  if axis == "H" then
+    feedback.guide:SetSize(1, UIParent:GetHeight())
+    feedback.guide:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", position, 0)
+  else
+    feedback.guide:SetSize(UIParent:GetWidth(), 1)
+    feedback.guide:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", 0, position)
+  end
+  feedback.ownerKey, feedback.targetKey = entry.key, peer.key
+  feedback:Show()
+end
+
+function FrameUtil._ApplyFrameSnap(entry, live, ignoreEntries)
+  local bestPeer, bestAxis, bestDx, bestDy = FindFrameSnap(entry, ignoreEntries)
+  if not bestPeer then return end
+  local f = entry.frame
   local ox, oy = GetOffsetsForFrame(f)
   local nx, ny = ox, oy
 
@@ -3946,6 +4018,24 @@ function FrameUtil._GetSelectedMoverCount()
   return count
 end
 
+local function RefreshMoverPresentation(entry)
+  local visual = entry.chrome or entry.overlay
+  if not visual then return end
+  local active = SelectedEntries[entry] or entry._editHovered
+  if entry == SelectedEntry then
+    SetEditModeVisualColors(visual, 0.38, 1.00)
+  elseif SelectedEntries[entry] then
+    SetEditModeVisualColors(visual, 0.28, 1.00)
+  elseif entry._editHovered then
+    SetEditModeVisualColors(visual, 0.22, 1.00)
+  elseif FrameUtil._compactMovers then
+    SetEditModeVisualColors(visual, 0.05, 0.35)
+  else
+    SetEditModeVisualColors(visual, 0.16, 0.82)
+  end
+  entry.overlay._labelFS:SetAlpha(FrameUtil._compactMovers and not active and 0.28 or 1)
+end
+
 function FrameUtil._RefreshSelectionVisuals()
   for _, entry in ipairs(MoversList) do
     if SelectedEntries[entry] and not IsSelectableEntry(entry) then
@@ -3964,19 +4054,8 @@ function FrameUtil._RefreshSelectionVisuals()
     end
   end
 
-  local selectedCount = FrameUtil._GetSelectedMoverCount()
-
   for _, entry in ipairs(MoversList) do
-    local visual = entry.chrome or entry.overlay
-    if visual then
-      if SelectedEntries[entry] and selectedCount > 1 then
-        SetEditModeVisualColors(visual, 0.28, 1.00)
-      elseif entry == SelectedEntry then
-        SetEditModeVisualColors(visual, 0.38, 1.00)
-      else
-        SetEditModeVisualColors(visual, 0.16, 0.82)
-      end
-    end
+    RefreshMoverPresentation(entry)
 
     if entry.nudgeGroup and entry ~= SelectedEntry then
       entry.nudgeGroup:Hide()
@@ -4389,9 +4468,16 @@ function FrameUtil.SetEditDimAlpha(value)
   FrameUtil._RefreshDimmerAlpha()
 end
 
+function FrameUtil.SetCompactMovers(enabled)
+  FrameUtil._compactMovers = enabled == true
+  FrameUtil._GetEditModeDB().compactMovers = FrameUtil._compactMovers
+  FrameUtil._RefreshSelectionVisuals()
+end
+
 function FrameUtil.SetEditFrameSnap(enabled)
   FrameUtil._snapToFrame = enabled == true
   FrameUtil._GetEditModeDB().snapToFrame = FrameUtil._snapToFrame
+  if not FrameUtil._snapToFrame then ClearFrameSnapFeedback() end
 end
 
 function FrameUtil.SetEditGridSnap(enabled)
@@ -4551,6 +4637,19 @@ local function EnsureOverlay(entry)
   o:SetScript("OnSizeChanged", QueueMoverLayeringRefresh)
 
   entry.overlay = o
+  o:SetScript("OnEnter", function()
+    entry._editHovered = true
+    RefreshMoverPresentation(entry)
+  end)
+  o:SetScript("OnLeave", function()
+    entry._editHovered = nil
+    RefreshMoverPresentation(entry)
+  end)
+  o:SetScript("OnHide", function()
+    entry._editHovered = nil
+    RefreshMoverPresentation(entry)
+  end)
+  RefreshMoverPresentation(entry)
   return o
 end
 
@@ -4878,8 +4977,11 @@ local function AttachDrag(entry)
 
     if attachmentActive or entry._dragSnapSuppressed then
       ClearSmartSnapCandidate(entry)
+      ClearFrameSnapFeedback()
+    elseif FrameUtil.UpdateSmartSnapCandidate(entry, entry._dragMoveGroup) then
+      ClearFrameSnapFeedback()
     else
-      FrameUtil.UpdateSmartSnapCandidate(entry, entry._dragMoveGroup)
+      UpdateFrameSnapFeedback(entry, entry._dragMoveGroup)
     end
   end
 
@@ -4950,6 +5052,7 @@ local function AttachDrag(entry)
       FrameUtil._OnMoverMoved(entry)
     end
 
+    ClearFrameSnapFeedback()
     entry._dragMoveGroup = nil
     entry._dragPeersStart = nil
     entry._dragStartX = nil
@@ -4960,6 +5063,10 @@ local function AttachDrag(entry)
 end
 
 EnableDrag = function(entry, enable)
+  local feedback = FrameUtil._frameSnapFeedback
+  if not enable and feedback and (feedback.ownerKey == entry.key or feedback.targetKey == entry.key) then
+    ClearFrameSnapFeedback()
+  end
   local frame = entry.frame
   if not frame then return end
 
@@ -6002,6 +6109,10 @@ function FrameUtil:UnregisterMover(key)
     return
   end
 
+  local feedback = FrameUtil._frameSnapFeedback
+  if feedback and (feedback.ownerKey == key or feedback.targetKey == key) then
+    ClearFrameSnapFeedback()
+  end
   local relayoutSmartSnap = SmartSnapLinks[key] ~= nil
 
   SetMoverEditSessionHidden(entry, false)
@@ -6236,6 +6347,7 @@ function FrameUtil.OnEditModeChanged(enable)
     EnsureSelectionSurface():SetShown(false)
     FrameUtil._ClearSelection()
     ClearSmartSnapCandidate(nil)
+    ClearFrameSnapFeedback()
     FrameUtil.ShowGrid(false)
   end
 
