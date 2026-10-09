@@ -853,7 +853,7 @@ local function BuildUnitFramePreviewOptionsPath(context, leafKey)
       context.optionsPath[3],
     }
 
-    if context.unitKey == "pet" and leafKey then
+    if leafKey then
       path[#path + 1] = leafKey
     end
   else
@@ -1026,23 +1026,16 @@ end
 local function ConfigureUnitFramePreviewInteractions(context)
   local frame = context.frame
   local interactions = frame.__puiAuraPreviewInteractions
-  local grouped = context.grouped == true
-  local textNavigation = (not context.nestedPreview or context.unitKey == "pet")
-    and not context.partyPetPreview
+  local textNavigation = not context.partyPetPreview
 
-  local healthLeaf = grouped and "health" or "general"
-  local powerLeaf = grouped and "power" or "general"
-  local healthTextureSection = grouped and "textures" or "general"
-  local powerTextureSection = grouped and "textures" or "general"
-  local healthTextureOption = "healthTexture"
-  local powerTextureOption = "powerTexture"
+  local healthLeaf = "layout"
+  local powerLeaf = "layout"
+  local healthTextureSection = "health"
+  local powerTextureSection = "power"
+  local healthTextureOption = "texture"
+  local powerTextureOption = "texture"
 
-  if context.nestedPreview then
-    healthLeaf = context.unitKey == "pet" and "general" or nil
-    powerLeaf = context.unitKey == "pet" and "general" or nil
-    healthTextureSection = context.unitKey == "pet" and "general" or context.optionsPath[3]
-    powerTextureSection = context.unitKey == "pet" and "general" or context.optionsPath[3]
-  elseif context.partyPetPreview then
+  if context.partyPetPreview then
     healthLeaf = nil
     powerLeaf = nil
     healthTextureSection = "size"
@@ -1089,8 +1082,8 @@ local function ConfigureUnitFramePreviewInteractions(context)
     function()
       NavigateUnitFramePreviewElement(
         context,
+        "text",
         "name",
-        grouped and "appearance" or "name",
         "fontSize"
       )
     end
@@ -1104,8 +1097,8 @@ local function ConfigureUnitFramePreviewInteractions(context)
     function()
       NavigateUnitFramePreviewElement(
         context,
+        "text",
         "health",
-        grouped and "display" or "health",
         "mode"
       )
     end
@@ -1119,16 +1112,14 @@ local function ConfigureUnitFramePreviewInteractions(context)
     function()
       NavigateUnitFramePreviewElement(
         context,
+        "text",
         "power",
-        grouped and "display" or "power",
         "mode"
       )
     end
   )
 
-  local indicatorLeaf = context.grouped
-    and "indicators"
-    or "general"
+  local indicatorLeaf = "indicators"
 
   SetUnitFramePreviewInteraction(
     interactions.roleIndicator,
