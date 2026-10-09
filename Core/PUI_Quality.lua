@@ -103,11 +103,6 @@ local function PlayRepairCoinSound()
   PlaySound(SOUNDKIT.ITEM_REPAIR, "Master")
 end
 
-local function CVarSetSafe(name, value)
-  local v = value and "1" or "0"
-  C_CVar.SetCVar(name, v)
-end
-
 local function TrustedUnits_NormalizeName(name)
   if not canaccessvalue(name) or name == nil then
     return nil
@@ -331,7 +326,7 @@ local function NormalizeDB()
   q.noTargetWarning = NormalizeBool(q.noTargetWarning, true)
   q.notAttackingWarning = NormalizeBool(q.notAttackingWarning, false)
 
-  if q.autoLoot == nil then q.autoLoot = true end
+  q.autoLoot = nil
   if q.fasterLooting == nil then q.fasterLooting = true end
 
   q.autoRepair = NormalizeBool(q.autoRepair, true)
@@ -343,6 +338,7 @@ local function NormalizeDB()
 
   if q.autoAcceptInvites == nil then q.autoAcceptInvites = true end
   q.autoAcceptInvites = NormalizeBool(q.autoAcceptInvites, true)
+  q.acceptInviteEveryone = NormalizeBool(q.acceptInviteEveryone, false)
 
   if q.acceptInviteFriends == nil then
     if q.acceptFriendsInvites ~= nil then
@@ -1362,7 +1358,7 @@ local function EnsureInviteDriver()
     if IsPartyLFG() then return end
     if IsQueueStatusActive() then return end
 
-    if not TrustedUnits_IsTrusted(
+    if not q.acceptInviteEveryone and not TrustedUnits_IsTrusted(
       inviter,
       inviterGUID,
       q.acceptInviteFriends,
@@ -2467,12 +2463,13 @@ function Quality:ApplyAll()
   ApplyCrosshair(not not q.crosshair)
   ApplyCursorRing((not not q.cursorRingShowInner) or (not not q.cursorRingShowOutline))
 
-  CVarSetSafe("autoLootDefault", q.autoLoot == true)
+  if q.fasterLooting then
+    C_CVar.SetCVar("autoLootDefault", "1")
+  end
 end
 
 local QualityPreviewRoot
 local QualityPreviewTab = "combatTab"
-local QualityPreviewIndex = 1
 
 local function Quality_GetPreviewWarnings()
   CombatWarning_RefreshMeleeSpec()
@@ -2504,12 +2501,13 @@ local function Quality_RefreshPreview()
   local isCursor = QualityPreviewTab == "cursorTab"
   local isGroup = QualityPreviewTab == "groupTab"
 
-  root.Warning:SetShown(not isCursor and not isGroup)
+  root.CombatSamples:SetShown(not isCursor and not isGroup)
   root.CursorLabel:SetShown(isCursor)
   root.CrosshairLabel:SetShown(isCursor)
   root.GroupSamples:SetShown(isGroup)
-  root.Next:SetShown(not isCursor and not isGroup)
   root.PreviewHelp:SetShown(not isCursor)
+  root.PreviewHelp:ClearAllPoints()
+  root.PreviewHelp:SetPoint("BOTTOM", root, "BOTTOM", 0, isGroup and 42 or 8)
   root.Ring:SetShown(isCursor and q.cursorRingShowInner ~= false)
   root.ClickRing:SetShown(isCursor and q.cursorRingShowOutline ~= false)
   root.Horizontal:SetShown(isCursor and q.crosshair)
@@ -2560,68 +2558,93 @@ local function Quality_RefreshPreview()
   end
 
   local warnings = Quality_GetPreviewWarnings()
-  QualityPreviewIndex = math.min(QualityPreviewIndex, #warnings)
-  local kind = warnings[QualityPreviewIndex]
-  root.PreviewHelp:SetText(tostring(QualityPreviewIndex) .. " / " .. tostring(#warnings)
-    .. " · Select an example below")
-  local text = ""
-  local size = 20
-  local color = { r = 1, g = 1, b = 1, a = 1 }
+  root.Title:SetText("Combat warnings and displays")
+  root.PreviewHelp:SetText("Samples use your current settings")
+  local columns = 2
+  local rowCount = math.ceil(#warnings / columns)
+  local cellWidth = math.max(1, (root:GetWidth() - 32) / columns)
+  local cellHeight = math.max(1, (root:GetHeight() - 64) / rowCount)
+  for index, kind in ipairs(warnings) do
+    local sample = root.samples[index]
+    if not sample then
+      sample = CreateFrame("Frame", nil, root.CombatSamples)
+      sample.content = CreateFrame("Frame", nil, sample)
+      sample.content:SetPoint("CENTER", sample, "CENTER")
+      sample.text = sample.content:CreateFontString(nil, "OVERLAY")
+      sample.text:SetPoint("CENTER", sample.content, "CENTER")
+      sample.text:SetJustifyH("CENTER")
+      root.samples[index] = sample
+    end
+    local text = ""
+    local size = 20
+    local color = { r = 1, g = 1, b = 1, a = 1 }
 
-  if kind == "No target" then
-    text = "NO TARGET"
-    size = q.combatWarningFontSize
-    color = { r = 1, g = 0, b = 0, a = 1 }
-  elseif kind == "Out of melee range" then
-    text = "OUT OF MELEE RANGE"
-    size = q.combatWarningFontSize
-    color = { r = 1, g = 0, b = 0, a = 1 }
-  elseif kind == "Missing pet" then
-    text = "SUMMON PET"
-    size = q.petMissingWarningFontSize
-    color = q.petMissingWarningColor
-  elseif kind == "Dead pet" then
-    text = "PET DIED"
-    size = q.petDeadWarningFontSize
-    color = q.petDeadWarningColor
-  elseif kind == "Idle pet" then
-    text = "***PET NOT ATTACKING***"
-    size = q.petIdleWarningFontSize
-    color = q.petIdleWarningColor
-  elseif kind == "Low pet health" then
-    text = q.petHealWarningText
-    size = q.petHealWarningFontSize
-    local _, class = IsHealPetClass()
-    color = class == "HUNTER"
-      and q.petLowHealthWarningColor
-      or { r = 1, g = 1, b = 1, a = 1 }
-    local spellID = GetHealPetSpellID()
-    local icon = spellID and C_Spell.GetSpellTexture(spellID) or nil
-    text = FormatPetWarningText(text, size, q.petHealWarningIconOnly, q.petHealWarningShowIcon, icon)
-  elseif kind == "Combat message" then
-    text = "Entering Combat"
-    size = q.combatMessageFontSize
-  else
-    text = "01:23"
-    size = q.combatTimerFontSize
-  end
+    if kind == "No target" then
+      text = "NO TARGET"
+      size = q.combatWarningFontSize
+      color = { r = 1, g = 0, b = 0, a = 1 }
+    elseif kind == "Out of melee range" then
+      text = "OUT OF MELEE RANGE"
+      size = q.combatWarningFontSize
+      color = { r = 1, g = 0, b = 0, a = 1 }
+    elseif kind == "Missing pet" then
+      text = "SUMMON PET"
+      size = q.petMissingWarningFontSize
+      color = q.petMissingWarningColor
+    elseif kind == "Dead pet" then
+      text = "PET DIED"
+      size = q.petDeadWarningFontSize
+      color = q.petDeadWarningColor
+    elseif kind == "Idle pet" then
+      text = "***PET NOT ATTACKING***"
+      size = q.petIdleWarningFontSize
+      color = q.petIdleWarningColor
+    elseif kind == "Low pet health" then
+      text = q.petHealWarningText
+      size = q.petHealWarningFontSize
+      local _, class = IsHealPetClass()
+      color = class == "HUNTER"
+        and q.petLowHealthWarningColor
+        or { r = 1, g = 1, b = 1, a = 1 }
+      local spellID = GetHealPetSpellID()
+      local icon = spellID and C_Spell.GetSpellTexture(spellID) or nil
+      text = FormatPetWarningText(text, size, q.petHealWarningIconOnly, q.petHealWarningShowIcon, icon)
+    elseif kind == "Combat message" then
+      text = "Entering Combat"
+      size = q.combatMessageFontSize
+    else
+      text = "01:23"
+      size = q.combatTimerFontSize
+    end
 
-  if kind == "Missing pet" or kind == "Dead pet" or kind == "Idle pet" or kind == "Low pet health" then
-    ns.Theme._AppliedFonts[root.Warning] = nil
-    root.Warning:SetFont(STANDARD_TEXT_FONT, ns.Theme.ResolveFontSize(size, "qualityOfLife"), "OUTLINE")
-  else
-    ns.Theme.ApplyFont(root.Warning, kind == "Combat timer" and "body" or "header", size, nil, "qualityOfLife")
+    if kind == "Missing pet" or kind == "Dead pet" or kind == "Idle pet" or kind == "Low pet health" then
+      ns.Theme._AppliedFonts[sample.text] = nil
+      sample.text:SetFont(STANDARD_TEXT_FONT, ns.Theme.ResolveFontSize(size, "qualityOfLife"), "OUTLINE")
+    else
+      ns.Theme.ApplyFont(sample.text, kind == "Combat timer" and "body" or "header", size, nil, "qualityOfLife")
+    end
+    if kind == "Combat message" or kind == "Combat timer" then
+      local themeColor = ns.Theme.GetColors().text
+      color = { r = themeColor[1], g = themeColor[2], b = themeColor[3], a = themeColor[4] }
+    end
+    sample.text:SetTextColor(
+      color.r or 1, color.g or 1, color.b or 1, color.a or 1
+    )
+    sample.text:SetText(text)
+
+    local width = math.max(1, sample.text:GetStringWidth())
+    local height = math.max(1, sample.text:GetStringHeight())
+    local scale = math.min(1, (cellWidth - 12) / width, (cellHeight - 10) / height)
+    sample:SetSize(cellWidth, cellHeight)
+    sample.content:SetSize(width, height)
+    sample.content:SetScale(math.max(0.01, scale))
+    sample:ClearAllPoints()
+    sample:SetPoint("CENTER", root.CombatSamples, "TOPLEFT",
+      16 + (index - 1) % columns * cellWidth + cellWidth / 2,
+      -34 - math.floor((index - 1) / columns) * cellHeight - cellHeight / 2)
+    sample:Show()
   end
-  if kind == "Combat message" or kind == "Combat timer" then
-    local themeColor = ns.Theme.GetColors().text
-    color = { r = themeColor[1], g = themeColor[2], b = themeColor[3], a = themeColor[4] }
-  end
-  root.Warning:SetTextColor(
-    color.r or 1, color.g or 1, color.b or 1, color.a or 1
-  )
-  root.Warning:SetText(text)
-  root.Title:SetText(kind)
-  root.Next:Show()
+  for index = #warnings + 1, #root.samples do root.samples[index]:Hide() end
 end
 
 local function Quality_BuildPreview(_, _, shell, path)
@@ -2636,10 +2659,9 @@ local function Quality_BuildPreview(_, _, shell, path)
     title:SetPoint("TOP", root, "TOP", 0, -12)
     root.Title = title
 
-    local warning = root:CreateFontString(nil, "OVERLAY", "GameFontHighlightLarge")
-    warning:SetPoint("CENTER", root, "CENTER", 0, 8)
-    warning:SetJustifyH("CENTER")
-    root.Warning = warning
+    root.CombatSamples = CreateFrame("Frame", nil, root)
+    root.CombatSamples:SetAllPoints(root)
+    root.samples = {}
 
     local ringTexture = [[Interface\AddOns\PleebUI\Media\Textures\Pleebring.tga]]
 
@@ -2664,7 +2686,7 @@ local function Quality_BuildPreview(_, _, shell, path)
     root.CrosshairLabel = root:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     root.CrosshairLabel:SetPoint("BOTTOM", root, "BOTTOM", 100, 18)
     root.PreviewHelp = root:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    root.PreviewHelp:SetPoint("BOTTOM", root, "BOTTOM", 0, 42)
+    root.PreviewHelp:SetPoint("BOTTOM", root, "BOTTOM", 0, 8)
 
     root.GroupSamples = CreateFrame("Frame", nil, root)
     root.GroupSamples:SetAllPoints(root)
@@ -2706,17 +2728,7 @@ local function Quality_BuildPreview(_, _, shell, path)
       root[sample.key] = button
     end
 
-    local nextButton = CreateFrame("Button", nil, root, "UIPanelButtonTemplate")
-    nextButton:SetSize(128, 24)
-    nextButton:SetPoint("BOTTOM", root, "BOTTOM", 0, 10)
-    nextButton:SetText("Next warning")
-    nextButton:SetScript("OnClick", function()
-      QualityPreviewIndex = QualityPreviewIndex % #Quality_GetPreviewWarnings() + 1
-      Quality_RefreshPreview()
-      Addon:NotifyOptionsTreeChanged("Quality", ns._PUIActiveOptionsPath)
-    end)
-    ns.Theme.WidgetSkins.UIButton(nextButton)
-    root.Next = nextButton
+    root:SetScript("OnSizeChanged", Quality_RefreshPreview)
   end
 
   local root = QualityPreviewRoot
@@ -2735,7 +2747,6 @@ local function Quality_BuildPreview(_, _, shell, path)
 
   ns.Theme.ApplyFont(root.Title, "header")
   root.Title:SetTextColor(colors.text[1], colors.text[2], colors.text[3], colors.text[4])
-  ns.Theme.WidgetSkins.UIButton(root.Next)
 
   if QualityPreviewTab == "automationTab" then
     root:Hide()
@@ -2801,6 +2812,11 @@ local function QualityProvider(AddonObj)
         local qq = GetQ()
         return not qq[key]
       end
+    end
+
+    local function DisabledInviteFilters()
+      local qq = GetQ()
+      return not qq.autoAcceptInvites or qq.acceptInviteEveryone == true
     end
 
     local function DisabledWhenPetFeatureOff(key)
@@ -3083,7 +3099,6 @@ local function QualityProvider(AddonObj)
               order = 15,
               inline = true,
               args = {
-                autoLoot = ToggleOption("Auto loot", "autoLoot", 1),
                 fasterLooting = ToggleOption("Faster looting", "fasterLooting", 2),
               },
             },
@@ -3139,10 +3154,11 @@ local function QualityProvider(AddonObj)
               args = {
                 autoAcceptInvites = ToggleOption("Auto accept invites", "autoAcceptInvites", 1, RefreshQualityOptions),
                 invitesHelp = DescriptionOption("Accept invites from:", 2, DisabledWhenOff("autoAcceptInvites")),
-                acceptInviteFriends = ToggleOption("Friends", "acceptInviteFriends", 3, nil, DisabledWhenOff("autoAcceptInvites")),
-                acceptInviteBattleNetFriends = ToggleOption("Battle.net friends", "acceptInviteBattleNetFriends", 4, nil, DisabledWhenOff("autoAcceptInvites")),
-                acceptInviteGuildMembers = ToggleOption("Guild members", "acceptInviteGuildMembers", 5, nil, DisabledWhenOff("autoAcceptInvites")),
-                acceptInviteCommunityMembers = ToggleOption("Community members", "acceptInviteCommunityMembers", 6, nil, DisabledWhenOff("autoAcceptInvites")),
+                acceptInviteEveryone = ToggleOption("Everyone", "acceptInviteEveryone", 3, RefreshQualityOptions, DisabledWhenOff("autoAcceptInvites")),
+                acceptInviteFriends = ToggleOption("Friends", "acceptInviteFriends", 4, nil, DisabledInviteFilters),
+                acceptInviteBattleNetFriends = ToggleOption("Battle.net friends", "acceptInviteBattleNetFriends", 5, nil, DisabledInviteFilters),
+                acceptInviteGuildMembers = ToggleOption("Guild members", "acceptInviteGuildMembers", 6, nil, DisabledInviteFilters),
+                acceptInviteCommunityMembers = ToggleOption("Community members", "acceptInviteCommunityMembers", 7, nil, DisabledInviteFilters),
               },
             },
             dialogs = {
@@ -3260,10 +3276,8 @@ local function QualityProvider(AddonObj)
         Quality_RefreshPreview()
       end
     )
-    automation.loot.args.autoLoot.desc =
-      "Enables WoW's automatic looting preference. Faster looting separately takes items as soon as loot is ready, even when Auto loot is off."
     automation.loot.args.fasterLooting.desc =
-      "Takes all items as soon as loot is ready and automatically confirms loot-binding prompts. This also loots automatically when Auto loot is off."
+      "Enables automatic looting, takes items as soon as loot is ready, and confirms loot-binding prompts."
     automation.merchant.args.autoRepair.desc =
       "Automatically repairs at merchants. Hold Shift when opening a merchant to skip automatic repair and junk selling."
     automation.merchant.args.autoSellJunk.desc =
@@ -3276,21 +3290,6 @@ local function QualityProvider(AddonObj)
       name = "Combat",
       order = 1,
       args = {
-        preview = {
-          type = "group", name = "Warning preview", inline = true, order = 0,
-          args = {
-            warning = {
-              type = "select", name = "Preview warning", order = 1,
-              desc = "Preview the warnings and combat displays available to your class and specialization. Examples are shown even when their feature is disabled.",
-              values = Quality_GetPreviewWarnings,
-              get = function() return math.min(QualityPreviewIndex, #Quality_GetPreviewWarnings()) end,
-              set = function(_, value)
-                QualityPreviewIndex = value
-                Quality_RefreshPreview()
-              end,
-            },
-          },
-        },
         combatStatus = combatStatus,
         combatWarnings = warnings,
         petWarnings = visual.petWarnings,
@@ -3409,11 +3408,13 @@ local function QualityProvider(AddonObj)
     end
     bresArgs.bresLustWidgetShowOnlyInGroup.disabled = bresArgs.bresLustWidgetIconSize.disabled
     bres.args = bresArgs
+    bres.order = 20
     local utility = groupTools.raidUtility.args
     utility.buttons.name = "Ready check and pull timer"
     utility.raidMarkers.name = "Target markers"
     utility.worldMarkers.name = "World markers"
     utility.general.name = "Group visibility"
+    utility.buttons.order, utility.raidMarkers.order, utility.worldMarkers.order = 30, 40, 50
     groupTools.raidUtility = nil
     for key, group in pairs(utility) do
       groupTools[key] = group
