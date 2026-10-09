@@ -320,6 +320,7 @@ function Addon:ActivateExistingProfile(profileName)
 end
 
 function Addon:OnProfileChanged(event, db, newProfile)
+  self.__puiCombatReadabilityUndo = nil
   local root = db or self.db
 
   if newProfile == "Default" and not root:IsDualSpecEnabled() and not root.__puiRedirectingDefaultProfile then
@@ -355,18 +356,21 @@ function Addon:OnProfileChanged(event, db, newProfile)
 end
 
 function Addon:OnProfileCopied(event, db, sourceProfile)
+  self.__puiCombatReadabilityUndo = nil
   ns.FrameUtil.BeginProfileTransition()
   self:EnsureSchema()
   self:StaggeredUpdateAll({ profile = true, profileCopied = true, movers = true, layout = true, options = true, theme = true, fonts = true })
 end
 
 function Addon:OnProfileReset(event, db)
+  self.__puiCombatReadabilityUndo = nil
   ns.FrameUtil.BeginProfileTransition()
   self:EnsureSchema()
   self:StaggeredUpdateAll({ profile = true, profileReset = true, movers = true, layout = true, options = true, theme = true, fonts = true })
 end
 
 function Addon:OnNewProfile(event, db)
+  self.__puiCombatReadabilityUndo = nil
   ns.FrameUtil.BeginProfileTransition()
   self:EnsureSchema()
 
