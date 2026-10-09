@@ -117,7 +117,7 @@ local function _SyncMinimapCompositeBounds(db)
   end
 
   local btH = 0
-  if not boxOn and cluster.BorderTop and cluster.BorderTop.GetHeight then
+  if not boxOn and not db.hideBorderTop and cluster.BorderTop and cluster.BorderTop.GetHeight then
     btH = tonumber(cluster.BorderTop:GetHeight()) or 0
     if btH < 0 then btH = 0 end
   end
@@ -467,11 +467,9 @@ local function ApplyClockCoordsBox(db)
 
   local enableBox  = db.clockBoxEnabled and true or false
   local showCoords = db.clockBoxShowCoords and true or false
-  -- Top box mode: always show clock. (No user toggle.)
-  local showClock  = true
+  local showClock = db.hideClock ~= true
 
-  -- If nothing would be shown, disable the box entirely.
-  if (not enableBox) or ((not showCoords) and (not showClock)) then
+  if not enableBox then
     _CancelClockCoordinateTicker(box)
     box:Hide()
     box:SetScript("OnUpdate", nil)
@@ -626,10 +624,8 @@ local function ApplyClockCoordsBox(db)
     end
   end
 
-  -- Respect the existing hide toggles.
-  -- Top box mode: always show these when present. (No user toggles.)
-  local showTracking = tracking and true or false
-  local showCalendar = calendar and true or false
+  local showTracking = tracking and db.hideTracking ~= true
+  local showCalendar = calendar and db.hideCalendar ~= true
 
   -- Coords FS (top-right).
   local coordsFS = box.CoordsText
@@ -970,7 +966,7 @@ local function ApplyMinimapElementHides(db)
     if boxOn then
       bt:Hide()
     else
-      bt:Show()
+      bt:SetShown(db.hideBorderTop ~= true)
 
       -- Force it to be above the minimap visually.
       if map and not map:IsForbidden() then
@@ -999,10 +995,14 @@ local function ApplyMinimapElementHides(db)
     end
   end
 
-  -- When the top box is NOT enabled, do not touch zone text, calendar, tracking, or clock.
-  -- But we still need to ensure our box is disabled/restored if it was previously enabled.
   if not boxOn then
     ApplyClockCoordsBox(db)
+    if cluster and not cluster:IsForbidden() and cluster.Tracking then
+      cluster.Tracking:SetShown(db.hideTracking ~= true)
+    end
+    if _G.GameTimeFrame then _G.GameTimeFrame:SetShown(db.hideCalendar ~= true) end
+    local clock = _ResolveClockButton()
+    if clock then clock:SetShown(db.hideClock ~= true) end
     ApplyExpansionLandingButton(db)
     return
   end
@@ -1010,7 +1010,7 @@ local function ApplyMinimapElementHides(db)
   -- Top box enabled: apply our custom box behavior.
   if cluster and not cluster:IsForbidden() then
     if cluster.Tracking then
-      cluster.Tracking:Show()
+      cluster.Tracking:SetShown(db.hideTracking ~= true)
     end
   end
 
@@ -1018,7 +1018,7 @@ local function ApplyMinimapElementHides(db)
   ApplyClockCoordsBox(db)
 
   if _G.GameTimeFrame then
-    _G.GameTimeFrame:Show()
+    _G.GameTimeFrame:SetShown(db.hideCalendar ~= true)
   end
 
   ApplyExpansionLandingButton(db)
@@ -1484,7 +1484,7 @@ local function MinimapProvider(AddonObj)
       AddonObj:ApplyOptionsChange("Minimap", {})
     end
 
-    return {
+    local options = {
       type = "group",
       name = "Minimap",
       order = 10,
@@ -1767,6 +1767,72 @@ local function MinimapProvider(AddonObj)
         },
       },
     }
+    local source = options.args
+    local function HideToggle(label, key, order)
+      return {
+        type = "toggle", name = label, order = order,
+        get = function() return db[key] == true end,
+        set = function(_, value) db[key] = value; Refresh() end,
+      }
+    end
+    local map = source.general.args
+    local buttons = {
+      bucketEnabled = map.bucketEnabled,
+      pleebUIButtonOnMinimap = map.pleebUIButtonOnMinimap,
+      hide = {
+        type = "toggle", name = "Hide PleebUI button", order = 40,
+        get = function() return db.hide == true end,
+        set = function(_, value)
+          ns.MinimapData.SetLauncherHidden(value)
+        end,
+      },
+    }
+    map.bucketEnabled, map.pleebUIButtonOnMinimap = nil, nil
+    local panel = source.topPanelAppearance.args
+    panel.clockBoxEnabled = map.clockBoxEnabled
+    panel.clockBoxEnabled.order = 0
+    map.clockBoxEnabled = nil
+    map.clockBoxBorderSize = panel.clockBoxBorderSize
+    map.clockBoxBorderSize.name = "Border thickness"
+    map.clockBoxBorderSize.desc = "Border thickness for both the minimap and its top panel."
+    map.clockBoxBorderSize.order = 50
+    panel.clockBoxBorderSize = nil
+    panel.clockBoxHeight.name = "Height"
+    panel.clockBoxHeight.disabled = function() return db.clockBoxEnabled ~= true end
+    panel.clockBoxBG.disabled = panel.clockBoxHeight.disabled
+    map.hideBorderTop = HideToggle("Hide Blizzard top border", "hideBorderTop", 60)
+    map.hideBorderTop.disabled = function() return db.clockBoxEnabled == true end
+    map.hideTracking = HideToggle("Hide tracking button", "hideTracking", 70)
+    map.hideCalendar = HideToggle("Hide calendar button", "hideCalendar", 80)
+    for key, option in pairs(source.difficulty.args) do
+      option.order = option.order + 80
+      map[key] = option
+    end
+    map.size.name = "Size"
+    local text = source.topPanelText.args
+    text.clockFontSize.name, text.zoneTextFontSize.name = "Font size", "Font size"
+    text.clockFontSize.order, text.zoneTextFontSize.order = 20, 20
+    local clock = { hideClock = HideToggle("Hide clock", "hideClock", 10), fontSize = text.clockFontSize }
+    clock.fontSize.disabled = function() return db.hideClock == true end
+    source.coordinates.args.clockBoxCoordFontSize.name = "Font size"
+    source.coordinates.order = 40
+    options.childGroups = "tab"
+    options.arg = { puiExplicit = true }
+    options.args = {
+      general = { type = "group", name = "General", order = 10, args = {
+        minimap = { type = "group", name = "Minimap", inline = true, order = 10, args = map },
+        buttons = { type = "group", name = "Addon buttons", inline = true, order = 20, args = buttons },
+      } },
+      topPanel = { type = "group", name = "Top panel", order = 20, args = {
+        panel = { type = "group", name = "Panel", inline = true, order = 10, args = panel },
+        clock = { type = "group", name = "Clock", inline = true, order = 20, args = clock },
+        zone = { type = "group", name = "Zone", inline = true, order = 30,
+          disabled = function() return db.clockBoxEnabled ~= true end,
+          args = { hideZoneText = text.hideZoneText, fontSize = text.zoneTextFontSize } },
+        coordinates = source.coordinates,
+      } },
+    }
+    return options
   end
 
   return provider
