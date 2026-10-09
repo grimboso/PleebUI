@@ -1186,7 +1186,8 @@ local function RefreshSingleFrames(context)
     for index, unit in ipairs(family.units) do
       local frame = frames[unit]
 
-      if enabled then
+      local moverUnit = family.control == "uf.boss" and "boss1" or unit
+      if enabled and ns.FrameUtil.IsMoverPreviewVisible("UF_" .. moverUnit) then
         local cfg, db, forceNoPower = UF:GetTestFrameConfig(unit)
         if not cfg then
           return false
@@ -1221,7 +1222,8 @@ local function RefreshSingleFrames(context)
 end
 
 local function RefreshPartyFrames(context)
-  if context:GetValue("uf.party") ~= true then
+  if context:GetValue("uf.party") ~= true or not ns.FrameUtil.IsMoverPreviewVisible("PartyFrames") then
+    HidePresentationFrames("party")
     if UnitFrameTest.partyLayoutActive then
       UnitFrameTest.partyLayoutActive = false
       PartyFrames:Refresh()
@@ -1285,7 +1287,8 @@ local function RefreshPartyFrames(context)
 end
 
 local function RefreshRaidFrames(context)
-  if context:GetValue("uf.raid") ~= true then
+  if context:GetValue("uf.raid") ~= true or not ns.FrameUtil.IsMoverPreviewVisible("RaidFrames") then
+    HidePresentationFrames("raid")
     if UnitFrameTest.raidLayoutActive then
       UnitFrameTest.raidLayoutActive = false
       RaidFrames:ApplyAnchor()
@@ -1349,7 +1352,13 @@ local function RefreshCastBars(context)
     units["boss" .. index] = bossShown
   end
 
-  return CastBar:SetTestMode(enabled, units) ~= false
+  local anyShown = false
+  for unit, shown in pairs(units) do
+    units[unit] = shown and ns.FrameUtil.IsMoverPreviewVisible("CastBar_" .. unit)
+    anyShown = anyShown or units[unit]
+  end
+
+  return CastBar:SetTestMode(enabled and anyShown, units) ~= false
 end
 
 function UnitFrameTest:Refresh(context)
