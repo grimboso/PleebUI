@@ -19,6 +19,9 @@ to meet a template. Lazy editor placeholders may be empty until selected.
 Place page notices inside an existing visible inline group rather than adding a notice-only heading.
 Keep shared range opacity in one group. Keep related texture sources and selectors together.
 Use an inline group in General for a small advanced setting instead of giving it a sparse page.
+Keep each highlight's activation, style and thickness together. Separate related text roles without
+adding another parent box, and preserve their class visibility and disabled conditions when moving them.
+Options-window Scale and Font size share one group. Name border-only groups for the border.
 
 Use short property labels when the heading identifies the affected object. Keep qualifiers when
 multiple objects share one group. Use Behaviour consistently. Use Enable for activation and Show
@@ -45,6 +48,8 @@ Search section destinations come from the same builders as the actual editors.
 Delete actions and resets that discard saved customization require a scoped confirmation.
 Describe the fields a reset actually changes. Use one confirmation owner per action, including
 conditional reloads, and recheck combat restrictions when the user accepts.
+Use `confirm = true` with `confirmText` for static prompts; a string in `confirm` names a handler method.
+Section builders must preserve confirmation text when copying actions.
 Routine position resets may remain immediate.
 
 Run the checked-in Options tests after changing builders or the schema, then perform the live
