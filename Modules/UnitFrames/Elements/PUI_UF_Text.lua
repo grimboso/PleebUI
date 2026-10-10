@@ -412,7 +412,8 @@ function Text.ApplyUnitTextFont(fontString, unit, kind, baseSize, cfg, useConfig
   local useGlobalFont = fontKey == nil or fontKey == ""
   fontKey = OptionsUtil.ResolveFontKey(fontKey, useGlobalFont)
 
-  fontString:SetFont(
+  ns.Theme.SetRuntimeFont(
+    fontString,
     LSM:Fetch("font", fontKey, true),
     Theme.ResolveFontSize(size, "unitFrames"),
     outline
