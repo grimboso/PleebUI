@@ -89,11 +89,22 @@ local function _PUI_EnsureCustomTabButton(host, index)
   btn:SetScript("OnEnter", function(self)
     self.__puiHovered = true
     _PUI_StyleCustomTabButton(self, self.__puiValue == _PUI_GetSelectedTabValue(self.__puiWidget))
+    if self.__puiLabel:GetUnboundedStringWidth() > math.max(1, self:GetWidth() - 24) then
+      GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+      GameTooltip:SetText(self.__puiLabel:GetText(), 1, 1, 1, 1, true)
+      GameTooltip:Show()
+    end
   end)
 
   btn:SetScript("OnLeave", function(self)
     self.__puiHovered = false
+    if GameTooltip:IsOwned(self) then GameTooltip:Hide() end
     _PUI_StyleCustomTabButton(self, self.__puiValue == _PUI_GetSelectedTabValue(self.__puiWidget))
+  end)
+
+  btn:SetScript("OnHide", function(self)
+    self.__puiHovered = nil
+    if GameTooltip:IsOwned(self) then GameTooltip:Hide() end
   end)
 
   btn:SetScript("OnClick", function(self)
@@ -159,7 +170,7 @@ _PUI_StyleCustomTabButton = function(btn, isSelected)
     colors.text[1],
     colors.text[2],
     colors.text[3],
-    isSelected and 1 or 0.66
+    isSelected and 1 or 0.86
   )
 end
 
@@ -272,9 +283,7 @@ local function _PUI_LayoutCustomTabStrip(widget, geometryOnly)
   local assignedWidth = 0
   local x = 0
   local y = 0
-  local user = widget:GetUserDataTable()
-  local wrapTabs = user.appName == "PleebUI" and user.path and user.path[1] == "CooldownManager"
-    and totalDesiredWidth + (tabCount - 1) * gap > available
+  local wrapTabs = totalDesiredWidth + (tabCount - 1) * gap > available
 
   for i = 1, tabCount do
     local btn = host.__puiButtons[i]
@@ -290,8 +299,6 @@ local function _PUI_LayoutCustomTabStrip(widget, geometryOnly)
       tabWidth = usableWidth - assignedWidth
     elseif extraWidth >= 0 then
       tabWidth = desiredWidths[i] + extraPerTab + (i <= extraRemainder and 1 or 0)
-    else
-      tabWidth = math.max(1, math.floor((usableWidth * desiredWidths[i]) / totalDesiredWidth))
     end
 
     assignedWidth = assignedWidth + tabWidth
@@ -336,6 +343,7 @@ local function _PUI_LayoutCustomTabStrip(widget, geometryOnly)
     widget.border:ClearAllPoints()
     Pixel.Point(widget.border, "TOPLEFT", widget.frame, "TOPLEFT", 0, -widget.borderoffset)
     Pixel.Point(widget.border, "BOTTOMRIGHT", widget.frame, "BOTTOMRIGHT", 0, 0)
+    widget:OnHeightSet(widget.frame:GetHeight())
   end
   if not sizingOnly then
     host:Show()
