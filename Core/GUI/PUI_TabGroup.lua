@@ -63,7 +63,7 @@ local function _PUI_EnsureCustomTabButton(host, index)
   btn = CreateFrame("Button", nil, host, "BackdropTemplate")
   btn.__puiTabStripOwned = true
   btn.__puiUseTextureBackdrop = true
-  Pixel.Height(btn, 30)
+  Pixel.Height(btn, math.max(30, Theme.GetOptionsFontHeight("tab", 12) + 12))
   btn:EnableMouse(true)
 
   btn.__puiHover = btn:CreateTexture(nil, "BORDER")
@@ -201,7 +201,7 @@ local function _PUI_LayoutCustomTabStrip(widget, geometryOnly)
   end
 
   local tabs = widget.tabs
-  local tabHeight = 30
+  local tabHeight = math.max(30, Theme.GetOptionsFontHeight("tab", 12) + 12)
   local gap = 6
   local available = tonumber(widget.frame:GetWidth()) or 0
 
@@ -251,6 +251,7 @@ local function _PUI_LayoutCustomTabStrip(widget, geometryOnly)
       btn.__puiNativeTab = tab
       btn.__puiValue = entry.value
       btn.__puiDisabled = entry.disabled == true
+      Theme.ApplyFont(btn.__puiLabel, "tab", 12)
       btn.__puiLabel:SetText(entry.text)
 
       local desiredWidth = math.ceil(btn.__puiLabel:GetUnboundedStringWidth() + 24)
@@ -398,7 +399,11 @@ function WidgetSkins.TabGroup(widget, forceLayout)
   widget.border:SetBackdropColor(0, 0, 0, 0)
   widget.border:SetBackdropBorderColor(0, 0, 0, 0)
 
-  if forceLayout or not widget.__puiTabChromeHooked then
+  local fontSignature = table.concat({
+    Theme.GetFont(), Theme.GetGlobalUIOutline(), tostring(Theme.GetOptionsFontHeight("tab", 12)),
+  }, "|")
+  if forceLayout or not widget.__puiTabChromeHooked or widget.__puiTabFontSignature ~= fontSignature then
+    widget.__puiTabFontSignature = fontSignature
     widget.__puiTabChromeHooked = true
     _PUI_LayoutCustomTabStrip(widget)
     return
