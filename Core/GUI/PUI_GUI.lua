@@ -1993,7 +1993,7 @@ local function _PUI_RefreshRootRegistryNav(frame)
   if not frame.__puiRootNavSearch then
     local search = CreateFrame("EditBox", nil, frame.__puiNavShell, "BackdropTemplate")
     search:SetAutoFocus(false)
-    search:SetHeight(30)
+    search:SetHeight(ns.Theme.GetOptionsPointerTargetSize(30))
     search:SetFontObject(GameFontHighlightSmall)
     search:SetTextInsets(10, 10, 0, 0)
     search:SetMaxLetters(64)
@@ -2084,10 +2084,9 @@ local function _PUI_RefreshRootRegistryNav(frame)
   local search = frame.__puiRootNavSearch
   local searchColors = ns.Theme.GetColors()
 
-  ns.Theme.SetSquareBackdrop(search, {
-    bg = searchColors.control,
-    border = searchColors.border,
-  }, ns.Theme.GetEdgeSize())
+  ns.Theme.WidgetSkins.UIEditBox(search)
+  local searchHeight = ns.Theme.GetOptionsPointerTargetSize(30)
+  search:SetHeight(searchHeight)
 
   ns.Theme.ApplyFont(search, "body", 11)
   ns.Theme.ApplyFont(search.__puiPlaceholder, "tiny", 10)
@@ -2182,6 +2181,7 @@ local function _PUI_RefreshRootRegistryNav(frame)
   local scrollbarWidth = ns.Theme.GetOptionsPointerTargetSize(18)
   local scrollRightInset = scrollbarWidth > 18 and scrollbarWidth + 12 or 12
   local scrollChromeKey = table.concat({
+    tostring(searchHeight),
     tostring(scrollRightInset),
     tostring(navShellWidth),
     tostring(navShellHeight),
@@ -2195,8 +2195,8 @@ local function _PUI_RefreshRootRegistryNav(frame)
     scroll:SetFrameStrata(frame:GetFrameStrata())
     scroll:SetFrameLevel(scrollFrameLevel)
     scroll:ClearAllPoints()
-    scroll:SetPoint("TOPLEFT", navShell, "TOPLEFT", 14, -58)
-    scroll:SetPoint("TOPRIGHT", navShell, "TOPRIGHT", -scrollRightInset, -58)
+    scroll:SetPoint("TOPLEFT", navShell, "TOPLEFT", 14, -searchHeight - 28)
+    scroll:SetPoint("TOPRIGHT", navShell, "TOPRIGHT", -scrollRightInset, -searchHeight - 28)
     scroll:SetPoint("BOTTOM", navShell, "BOTTOM", 0, 16)
     scroll:SetClipsChildren(true)
   end
@@ -2484,7 +2484,8 @@ local function _PUI_GetOptionsWindowSize()
     tonumber(db.optionsWindowHeight) or PUI_OPTIONS_WINDOW_DEFAULT_HEIGHT
 end
 
-local function _PUI_GetOptionsWindowResizeBounds(frame)
+function Addon:GetOptionsWindowResizeBounds(frame)
+  frame = frame or self._OptionsWindow
   local screenWidth, screenHeight = UIParent:GetSize()
   local scale = frame and frame:GetScale() or ns.Theme.GetOptionsUIScale()
   local maxWidth = math.max(1, (screenWidth - PUI_OPTIONS_WINDOW_SCREEN_MARGIN) / scale)
@@ -2497,7 +2498,7 @@ end
 
 local function _PUI_GetDefaultOptionsWindowSize(frame)
   local width, height = _PUI_GetOptionsWindowSize()
-  local minWidth, minHeight, maxWidth, maxHeight = _PUI_GetOptionsWindowResizeBounds(frame)
+  local minWidth, minHeight, maxWidth, maxHeight = Addon:GetOptionsWindowResizeBounds(frame)
 
   width = math.max(minWidth, math.min(maxWidth, width))
   height = math.max(minHeight, math.min(maxHeight, height))
@@ -2507,7 +2508,7 @@ end
 
 local function _PUI_ClampOptionsWindowBounds(width, height, frame)
   local defaultWidth, defaultHeight = _PUI_GetDefaultOptionsWindowSize(frame)
-  local minWidth, minHeight, maxWidth, maxHeight = _PUI_GetOptionsWindowResizeBounds(frame)
+  local minWidth, minHeight, maxWidth, maxHeight = Addon:GetOptionsWindowResizeBounds(frame)
 
   width = math.max(minWidth, math.min(maxWidth, tonumber(width) or defaultWidth))
   height = math.max(minHeight, math.min(maxHeight, tonumber(height) or defaultHeight))
@@ -2516,7 +2517,7 @@ local function _PUI_ClampOptionsWindowBounds(width, height, frame)
 end
 
 local function _PUI_UpdateOptionsWindowSize(frame, appName)
-  local minWidth, minHeight, maxWidth, maxHeight = _PUI_GetOptionsWindowResizeBounds(frame)
+  local minWidth, minHeight, maxWidth, maxHeight = Addon:GetOptionsWindowResizeBounds(frame)
 
   if frame then
     frame:SetResizeBounds(minWidth, minHeight, maxWidth, maxHeight)
@@ -2531,6 +2532,55 @@ local function _PUI_SaveOptionsWindowState(frame)
 
   db.optionsWindowWidth = width
   db.optionsWindowHeight = height
+  local x, y = frame:GetCenter()
+  if x and y then
+    local scale = frame:GetScale()
+    db.offsetX = x - UIParent:GetWidth() / (2 * scale)
+    db.offsetY = y - UIParent:GetHeight() / (2 * scale)
+  end
+end
+
+function Addon:GetOptionsWindowGeometry()
+  local frame = self._OptionsWindow
+  local db = _PUI_GetOptionsWindowDB()
+  local width, height = _PUI_ClampOptionsWindowBounds(
+    frame and frame:GetWidth() or db.optionsWindowWidth,
+    frame and frame:GetHeight() or db.optionsWindowHeight, frame
+  )
+  local scale = ns.Theme.GetOptionsUIScale()
+  local maxX = math.max(0, (UIParent:GetWidth() / scale - width) * 0.5)
+  local maxY = math.max(0, (UIParent:GetHeight() / scale - height) * 0.5)
+  local x, y = tonumber(db.offsetX) or 0, tonumber(db.offsetY) or 0
+  if frame then
+    local centerX, centerY = frame:GetCenter()
+    if centerX and centerY then
+      x = centerX - UIParent:GetWidth() / (2 * scale)
+      y = centerY - UIParent:GetHeight() / (2 * scale)
+    end
+  end
+  return width, height, math.max(-maxX, math.min(maxX, x)), math.max(-maxY, math.min(maxY, y)), maxX, maxY
+end
+
+function Addon:SetOptionsWindowGeometry(width, height, x, y)
+  local currentWidth, currentHeight, currentX, currentY = self:GetOptionsWindowGeometry()
+  local frame = self._OptionsWindow
+  width, height = _PUI_ClampOptionsWindowBounds(width or currentWidth, height or currentHeight, frame)
+  local scale = ns.Theme.GetOptionsUIScale()
+  local maxX = math.max(0, (UIParent:GetWidth() / scale - width) * 0.5)
+  local maxY = math.max(0, (UIParent:GetHeight() / scale - height) * 0.5)
+  x = math.max(-maxX, math.min(maxX, x or currentX))
+  y = math.max(-maxY, math.min(maxY, y or currentY))
+  local db = _PUI_GetOptionsWindowDB()
+  db.optionsWindowWidth, db.optionsWindowHeight, db.offsetX, db.offsetY = width, height, x, y
+  if frame then
+    frame:StopMovingOrSizing()
+    frame:SetSize(width, height)
+    frame:ClearAllPoints()
+    frame:SetPoint("CENTER", UIParent, "CENTER", x, y)
+    _PUI_UpdateOptionsWindowSize(frame, PUI_OPTIONS_APP)
+    self:RefreshOptionsTheme()
+  end
+  self:NotifyOptionsTreeChanged(nil, ns._PUIActiveOptionsPath)
 end
 
 local function _PUI_RestoreOptionsWindowState(frame)
@@ -2539,14 +2589,15 @@ local function _PUI_RestoreOptionsWindowState(frame)
 
   frame:SetSize(width, height)
 
-  if not frame:GetPoint(1) then
-    frame:ClearAllPoints()
-    frame:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
-  end
+  local _, _, x, y, maxX, maxY = Addon:GetOptionsWindowGeometry()
+  x = math.max(-maxX, math.min(maxX, tonumber(db.offsetX) or 0))
+  y = math.max(-maxY, math.min(maxY, tonumber(db.offsetY) or 0))
+  frame:ClearAllPoints()
+  frame:SetPoint("CENTER", UIParent, "CENTER", x, y)
 end
 
 local function _PUI_FitOptionsWindowToScreen(frame)
-  local _, _, maxWidth, maxHeight = _PUI_GetOptionsWindowResizeBounds(frame)
+  local _, _, maxWidth, maxHeight = Addon:GetOptionsWindowResizeBounds(frame)
   local width = frame:GetWidth()
   local height = frame:GetHeight()
 
