@@ -29,6 +29,7 @@ function WidgetSkins.Heading(widget)
 
   Theme.ApplyFont(text, "header")
   text:SetTextColor(color[1], color[2], color[3], color[4])
+  widget:SetHeight(math_max(18, Theme.GetOptionsFontHeight("header")))
 end
 
 local function PUI_Label_UpdateLayout(widget)
