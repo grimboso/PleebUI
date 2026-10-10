@@ -121,6 +121,7 @@ local function HookButtonState(button, fallbackText, owner)
 end
 
 function WidgetSkins.UIButton(button)
+  ns.KeyboardNavigation.RegisterFrame(button, "button", "button")
   StripButtonTextures(button)
   button:SetAlpha(1)
   ApplyButtonVisual(button)
