@@ -760,8 +760,9 @@ local function EnsureCombatTimerEvents()
         ct:SetPoint("CENTER", UIParent, "CENTER", q.combatTimerAnchor.x or d.x, q.combatTimerAnchor.y or d.y)
       end
 
-      local fontPath, _, flags = CombatTimerText:GetFont()
-      CombatTimerText:SetFont(
+      local fontPath, _, flags = ns.Theme.GetRuntimeFont(CombatTimerText)
+      ns.Theme.SetRuntimeFont(
+        CombatTimerText,
         fontPath,
         ns.Theme.ResolveFontSize(q.combatTimerFontSize or 14, "qualityOfLife"),
         flags or "OUTLINE"
@@ -1976,7 +1977,8 @@ local function EnsurePetWarnFrame()
                 PetWarnFrame.__puiPetWarnBaseFontSize = qq.petHealWarningFontSize
               end
 
-              PetWarnText:SetFont(
+              ns.Theme.SetRuntimeFont(
+                PetWarnText,
                 STANDARD_TEXT_FONT,
                 ns.Theme.ResolveFontSize(qq.petHealWarningFontSize, "qualityOfLife"),
                 "OUTLINE"
@@ -2051,7 +2053,8 @@ local function PetWarn_Show(msg, opts)
   f.__puiPetWarnShowIcon = showIcon
   f.__puiPetWarnIcon = icon
 
-  PetWarnText:SetFont(
+  ns.Theme.SetRuntimeFont(
+    PetWarnText,
     STANDARD_TEXT_FONT,
     ns.Theme.ResolveFontSize(size, "qualityOfLife"),
     "OUTLINE"
@@ -2420,7 +2423,8 @@ function Quality:RefreshFonts()
   local q = GetQ()
   local baseSize = PetWarnFrame and PetWarnFrame.__puiPetWarnBaseFontSize or q.petHealWarningFontSize or 20
 
-  PetWarnText:SetFont(
+  ns.Theme.SetRuntimeFont(
+    PetWarnText,
     STANDARD_TEXT_FONT,
     ns.Theme.ResolveFontSize(baseSize, "qualityOfLife"),
     "OUTLINE"
@@ -2616,8 +2620,7 @@ local function Quality_RefreshPreview()
     end
 
     if kind == "Missing pet" or kind == "Dead pet" or kind == "Idle pet" or kind == "Low pet health" then
-      ns.Theme._AppliedFonts[sample.text] = nil
-      sample.text:SetFont(STANDARD_TEXT_FONT, ns.Theme.ResolveFontSize(size, "qualityOfLife"), "OUTLINE")
+      ns.Theme.SetRuntimeFont(sample.text, STANDARD_TEXT_FONT, ns.Theme.ResolveFontSize(size, "qualityOfLife"), "OUTLINE")
     else
       ns.Theme.ApplyFont(sample.text, kind == "Combat timer" and "body" or "header", size, nil, "qualityOfLife")
     end
