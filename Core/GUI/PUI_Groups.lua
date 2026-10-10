@@ -116,7 +116,7 @@ end
 local PCM_TREE_ROW_HEIGHT = 54
 local PCM_TREE_ROW_GAP = 4
 local PCM_TREE_TOP_INSET = 10
-local PCM_TREE_SCROLLBAR_LANE = 22
+local PCM_TREE_SCROLLBAR_LANE = 26
 
 local function _PUI_GetTreeRowHeight(pcmManagerTree)
   if pcmManagerTree then
@@ -476,9 +476,11 @@ local function _PUI_SkinPCMTrackerTreeButton(button, isSelected, data)
   button.toggle:ClearAllPoints()
   button.toggle:SetPoint("RIGHT", button, "RIGHT", -8, 0)
   button.toggle:SetSize(12, 12)
+  button.toggle:SetHitRectInsets(-3, -3, -3, -3)
 end
 
 function WidgetSkins.TreeButton(button, isSelected)
+  button.toggle:SetHitRectInsets(0, 0, 0, 0)
   local trackerData = _PUI_GetPCMTrackerTreeData(button)
   if button.__puiUseTreeCards == true and trackerData then
     button.__puiTreeCardLayoutKey = nil
@@ -639,6 +641,7 @@ function WidgetSkins.TreeButton(button, isSelected)
     button.toggle:SetPoint("RIGHT", button, "RIGHT", -10, 0)
     button.toggle:SetSize(12, 12)
   end
+  button.toggle:SetHitRectInsets(-3, -3, -3, -3)
 
   local text = button.text
   text.__puiOptionsFontOwned = true
@@ -987,6 +990,9 @@ function WidgetSkins.TreeGroup(widget)
     end
   end
 
+  widget.scrollbar:ClearAllPoints()
+  widget.scrollbar:SetPoint("TOPRIGHT", treeframe, "TOPRIGHT", -6, -26)
+  widget.scrollbar:SetPoint("BOTTOMRIGHT", treeframe, "BOTTOMRIGHT", -6, 26)
   WidgetSkins.Scrollbar(widget.scrollbar)
   widget.__puiTreeChromeHooked = true
   _PUI_StyleTreeButtons(widget)
