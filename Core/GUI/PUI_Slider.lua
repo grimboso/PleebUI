@@ -94,8 +94,7 @@ local function UpdateText(self)
 end
 
 local function GetAdjustmentStep(self)
-  local minimumStep = self.ispercent and 0.0001 or 0.01
-  if self.step and self.step > 0 then return math_max(self.step, minimumStep) end
+  if self.step and self.step > 0 then return self.step end
   return self.ispercent and 0.01 or 1
 end
 
@@ -178,6 +177,10 @@ local function GetValueGeometry(frameWidth, geom)
   local availableWidth = math_max(4, frameWidth - geom.controlLeft - geom.controlRight)
   local gap = math_min(geom.valueGap, math_max(0, (availableWidth - 4) / 3))
   local buttonWidth = math_min(geom.controlHeight, math_max(1, math_floor((availableWidth - gap * 3 - 2) / 4)))
+  local pointerSize = Theme.GetOptionsPointerTargetSize(0)
+  if availableWidth >= pointerSize * 2 + gap * 3 + geom.valueWidth + 36 then
+    buttonWidth = math_max(buttonWidth, pointerSize)
+  end
   local remainingWidth = math_max(2, availableWidth - buttonWidth * 2 - gap * 3)
   local valueWidth = math_min(geom.valueWidth, math_max(1, remainingWidth - math_min(36, remainingWidth * 0.4)))
   return valueWidth, gap, buttonWidth
