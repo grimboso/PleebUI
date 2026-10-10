@@ -94,6 +94,28 @@ local function RefreshFavoriteState()
   if palette.favorite:IsEnabled() ~= enabled then palette.favorite:SetEnabled(enabled) end
 end
 
+local function ShowSwatchTooltip(button)
+  palette.tooltipOwner = button
+  GameTooltip:SetOwner(button, "ANCHOR_RIGHT")
+  GameTooltip:SetText(ColorDescription(button.color))
+  GameTooltip:Show()
+end
+
+local function HideSwatchTooltip(button)
+  if GameTooltip:GetOwner() == button then GameTooltip:Hide() end
+end
+
+local SWATCH_FOCUS_ACTIONS = {
+  focus = function(button)
+    button.__puiKeyboardFocused = true
+    ShowSwatchTooltip(button)
+  end,
+  blur = function(button)
+    button.__puiKeyboardFocused = nil
+    HideSwatchTooltip(button)
+  end,
+}
+
 local function RefreshPalette()
   local db = GetPaletteDB()
   local height = math.max(24, Theme.GetOptionsFontHeight("body") + 10,
@@ -138,6 +160,9 @@ local function RefreshPalette()
       button:SetSize((width - 24) / COLOR_LIMIT - 4, height - 4)
       button:SetShown(color ~= nil)
       Theme.WidgetSkins.UIButton(button)
+      ns.KeyboardNavigation.RegisterFrame(button, "button", "color:" .. key .. ":" .. index,
+        nil, nil, nil, SWATCH_FOCUS_ACTIONS)
+      if color and button.__puiKeyboardFocused then ShowSwatchTooltip(button) end
       button.checkers:SetTexture(188523)
       button.checkers:SetAlpha(1)
       button.checkers:Show()
@@ -200,14 +225,13 @@ local function EnsurePalette()
       button.swatch:SetPoint("TOPLEFT", 2, -2)
       button.swatch:SetPoint("BOTTOMRIGHT", -2, 2)
       button:SetScript("OnClick", function(self) ApplyPaletteColor(self.color); RefreshPalette() end)
-      button:SetScript("OnEnter", function(self)
-        palette.tooltipOwner = self
-        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-        GameTooltip:SetText(ColorDescription(self.color))
-        GameTooltip:Show()
-      end)
+      button:SetScript("OnEnter", ShowSwatchTooltip)
       button:SetScript("OnLeave", function(self)
-        if GameTooltip:GetOwner() == self then GameTooltip:Hide() end
+        if not self.__puiKeyboardFocused then HideSwatchTooltip(self) end
+      end)
+      button:HookScript("OnHide", function(self)
+        self.__puiKeyboardFocused = nil
+        HideSwatchTooltip(self)
       end)
       palette[key][index] = button
     end
