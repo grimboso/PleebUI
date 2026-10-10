@@ -184,6 +184,25 @@ function Theme.GetFontRoleInfo(role)
   return Theme.FontRoles[role]
 end
 
+Theme.OptionsFontRoles = {
+  body = { name = "Body and controls", font = "FiraSans Medium", size = 14, outline = "", shadow = false },
+  title = { name = "Titles", font = "FiraSans Heavy", size = 18, outline = "", shadow = false },
+  header = { name = "Group headings", font = "FiraSans Heavy", size = 16, outline = "", shadow = false },
+  nav = { name = "Navigation and trees", font = "FiraSans Medium", size = 14, outline = "", shadow = false },
+  tab = { name = "Tabs", font = "FiraSans Medium", size = 14, outline = "", shadow = false },
+  button = { name = "Buttons", font = "FiraSans Medium", size = 14, outline = "", shadow = false },
+  tiny = { name = "Small text", font = "FiraSans Medium", size = 12, outline = "", shadow = false },
+}
+Theme.OptionsFontRoleOrder = { "body", "title", "header", "nav", "tab", "button", "tiny" }
+
+local OPTIONS_FONT_ROLE_ALIASES = { label = "body", checkbox = "body", section = "header", cooldown = "body" }
+
+function Theme.GetOptionsFontSettings(role)
+  role = OPTIONS_FONT_ROLE_ALIASES[role] or role
+  local fonts = Addon:GetOptionsDB().optionsFonts
+  return fonts and fonts[role] or Theme.OptionsFontRoles[role]
+end
+
 Theme.DefaultColors = Theme.DefaultColors or {
   background = { 0.12, 0.12, 0.16, 0.92 },
   control    = { 0.070, 0.070, 0.090, 0.96 },
@@ -851,11 +870,12 @@ function Theme.ReleaseCreatedWidget(widget)
 end
 
 local function _PUI_GetOptionsFontSizeDelta()
-  return (tonumber(Addon:GetOptionsDB().puiOptionsFontSize) or 12) - 12
+  return (tonumber(Addon:GetOptionsDB().puiOptionsFontSize) or 14) - 14
 end
 
-local function _PUI_GetOptionsOwnedFontSize(size)
-  local finalSize = (tonumber(size) or 12) + _PUI_GetOptionsFontSizeDelta()
+local function GetOptionsOwnedFontSize(role, size)
+  local base = Theme.FontRoles[role == "label" and "body" or role].size
+  local finalSize = Theme.GetOptionsFontSettings(role).size + ((size or base) - base) + _PUI_GetOptionsFontSizeDelta()
 
   if finalSize < 6 then finalSize = 6 end
   if finalSize > 72 then finalSize = 72 end
@@ -864,25 +884,22 @@ local function _PUI_GetOptionsOwnedFontSize(size)
 end
 
 local optionsFontMeasure
-local optionsFontMeasureSignature
 local optionsFontHeights = {}
 
-function Theme.GetOptionsFontHeight(role, size)
-  local signature = table.concat({
-    Theme.GetFont(),
-    Theme.GetGlobalUIOutline(),
+function Theme.GetOptionsFontSignature(role, size)
+  local settings = Theme.GetOptionsFontSettings(role)
+  return table.concat({
+    settings.font, settings.outline, tostring(settings.shadow), tostring(settings.size), tostring(size),
     tostring(_PUI_GetOptionsFontSizeDelta()),
     tostring(Theme.ResolveFontSize(12, "options")),
   }, "|")
+end
 
-  if optionsFontMeasureSignature ~= signature then
-    optionsFontMeasureSignature = signature
-    wipe(optionsFontHeights)
-  end
-
-  local baseSize = size or Theme.GetFontRoleInfo(role).size
-  local height = optionsFontHeights[baseSize]
-  if not height then
+function Theme.GetOptionsFontHeight(role, size)
+  local signature = Theme.GetOptionsFontSignature(role, size)
+  local key = role .. "|" .. tostring(size)
+  local cached = optionsFontHeights[key]
+  if not cached or cached.signature ~= signature then
     if not optionsFontMeasure then
       local frame = CreateFrame("Frame")
       frame:Hide()
@@ -892,13 +909,13 @@ function Theme.GetOptionsFontHeight(role, size)
       optionsFontMeasure:SetText("Agj0123456789")
     end
 
-    Theme.ApplyFont(optionsFontMeasure, role, baseSize)
+    Theme.ApplyFont(optionsFontMeasure, role, size)
     local _, fontSize = optionsFontMeasure:GetFont()
-    height = math.ceil(math.max(fontSize, optionsFontMeasure:GetStringHeight()) + 2)
-    optionsFontHeights[baseSize] = height
+    cached = { signature = signature, height = math.ceil(math.max(fontSize, optionsFontMeasure:GetStringHeight()) + 2) }
+    optionsFontHeights[key] = cached
   end
 
-  return height
+  return cached.height
 end
 
 local function _PUI_ApplyOwnedWidgetFontString(fs, role)
@@ -962,17 +979,15 @@ function Theme.ApplyFont(fs, role, size, outline, scope)
   meta.scope = scope
 
   local roleMeta = role == "label" and Theme.FontRoles.body or Theme.FontRoles[role]
-  local optionsOutline
-
-  if fs.__puiOptionsFontOwned == true and outline == nil then
-    optionsOutline = Theme.GetGlobalUIOutline()
-  end
-
+  local font = Theme.GetFont()
   size = size or roleMeta.size or 12
-  outline = outline or optionsOutline or roleMeta.outline or "OUTLINE"
+  outline = outline or roleMeta.outline or "OUTLINE"
 
   if fs.__puiOptionsFontOwned == true and fs.__puiSkipOptionsGlobalFont ~= true then
-    size = _PUI_GetOptionsOwnedFontSize(size)
+    local settings = Theme.GetOptionsFontSettings(role)
+    font = settings.font
+    size = GetOptionsOwnedFontSize(role, size)
+    outline = (settings.shadow and "SHADOW" or "") .. settings.outline
     scope = "options"
   end
 
@@ -1000,7 +1015,7 @@ function Theme.ApplyFont(fs, role, size, outline, scope)
     style = style:gsub(",$", "")
   end
 
-  fs:SetFont(LSM:Fetch("font", Theme.GetFont(role), true), size, style)
+  fs:SetFont(LSM:Fetch("font", font, true), size, style)
 
   if fs:GetObjectType() == "FontString" then
     if wantShadow then
@@ -1910,7 +1925,7 @@ local optionsWidgetGeometryHeight
 local optionsWidgetGeometry = {}
 
 local function GetOptionsWidgetGeometry(widget)
-  local fontHeight = Theme.GetOptionsFontHeight("body")
+  local fontHeight = math.max(Theme.GetOptionsFontHeight("body"), Theme.GetOptionsFontHeight("button"))
   if optionsWidgetGeometryHeight ~= fontHeight then
     optionsWidgetGeometryHeight = fontHeight
     wipe(optionsWidgetGeometry)
@@ -1972,7 +1987,7 @@ function Theme.GetOptionsWidgetColumns(availableWidth)
     return maxColumns
   end
 
-  local fontSize = Theme.ResolveFontSize(Theme.GetOptionsFontSize(), "options")
+  local fontSize = math.max(Theme.GetOptionsFontHeight("body"), Theme.GetOptionsFontHeight("button")) - 2
   local minimumWidth = 205 + math.max(0, fontSize - 14) * 12
   local fittingColumns = math.floor(availableWidth / minimumWidth)
 
@@ -2546,6 +2561,82 @@ function Theme.SetOptionsFontSize(value)
   Addon:GetOptionsDB().puiOptionsFontSize = value
   _PUI_ThemeRegistry_NotifyChange()
   Addon:NotifyOptionsTreeChanged(nil, ns._PUIActiveOptionsPath)
+end
+
+local function RefreshOptionsTypography()
+  Theme.RefreshAppliedFonts()
+  Addon:RefreshOptionsTheme()
+  Addon:NotifyOptionsTreeChanged(nil, ns._PUIActiveOptionsPath)
+end
+
+function Theme.SetOptionsFontDefaults(role, enabled)
+  local options = Addon:GetOptionsDB()
+  options.optionsFonts = options.optionsFonts or {}
+  if enabled then
+    options.optionsFonts[role] = nil
+  else
+    local defaults = Theme.OptionsFontRoles[role]
+    options.optionsFonts[role] = {
+      font = defaults.font, size = defaults.size, outline = defaults.outline, shadow = defaults.shadow,
+    }
+  end
+  RefreshOptionsTypography()
+end
+
+function Theme.SetOptionsFontSetting(role, key, value)
+  local options = Addon:GetOptionsDB()
+  options.optionsFonts = options.optionsFonts or {}
+  if not options.optionsFonts[role] then
+    local defaults = Theme.OptionsFontRoles[role]
+    options.optionsFonts[role] = {
+      font = defaults.font, size = defaults.size, outline = defaults.outline, shadow = defaults.shadow,
+    }
+  end
+  options.optionsFonts[role][key] = value
+  RefreshOptionsTypography()
+end
+
+local function OptionsFontGroup(role, order)
+  local defaults = Theme.OptionsFontRoles[role]
+  return {
+    type = "group", name = "Options text: " .. defaults.name, order = order, inline = true,
+    arg = { puiExplicit = true },
+    args = {
+      defaults = {
+        type = "toggle", name = "Use defaults", order = 1,
+        desc = "Restore the curated font, base size, outline, and shadow for this category. Editing a setting turns this off.",
+        get = function()
+          local fonts = Addon:GetOptionsDB().optionsFonts
+          return not (fonts and fonts[role])
+        end,
+        set = function(_, value) Theme.SetOptionsFontDefaults(role, value) end,
+      },
+      font = {
+        type = "select", name = "Font", order = 2, dialogControl = "LSM30_Font",
+        values = Theme.BuildGlobalFontList,
+        get = function() return Theme.GetOptionsFontSettings(role).font end,
+        set = function(_, value) Theme.SetOptionsFontSetting(role, "font", value) end,
+      },
+      size = {
+        type = "range", name = "Base size", order = 3, min = 8, max = 32, step = 1,
+        desc = "The overall text size adjustment and any enabled global font size adjustment also apply.",
+        arg = { puiRefreshOnRelease = true },
+        get = function() return Theme.GetOptionsFontSettings(role).size end,
+        set = function(_, value) Theme.SetOptionsFontSetting(role, "size", value) end,
+      },
+      outline = {
+        type = "select", name = "Outline", order = 4,
+        values = { [""] = "None", OUTLINE = "Outline", THICKOUTLINE = "Thick outline" },
+        get = function() return Theme.GetOptionsFontSettings(role).outline end,
+        set = function(_, value) Theme.SetOptionsFontSetting(role, "outline", value) end,
+      },
+      shadow = {
+        type = "toggle", name = "Shadow", order = 5,
+        get = function() return Theme.GetOptionsFontSettings(role).shadow end,
+        set = function(_, value) Theme.SetOptionsFontSetting(role, "shadow", value) end,
+      },
+    },
+  }
 end
 
 function Theme.GetOptionsUIScale()
@@ -3190,9 +3281,11 @@ local function UIThemeOptionsProvider()
       text = sections.fonts,
     }
     window.fontSize = optionsText
+    window.fontSize.name = "Overall text size"
+    window.fontSize.desc = "Scale all options text categories together. At 14, each category uses its configured base size."
     window.optionsUIScale.name = "Scale"
     sections.themeColors.name, sections.themeColors.order = "Colors", 20
-    sections.fonts.name, sections.fonts.order = "Text", 30
+    sections.fonts.name, sections.fonts.order = "Global text", 30
     sections.accessibilityPresets.name = "Color presets"
     sections.accessibilityPresets.order, sections.combatReadability.order = 10, 20
     options.childGroups = "tab"
@@ -3204,6 +3297,18 @@ local function UIThemeOptionsProvider()
       layout = sections.optionsLayout,
     }
     options.args.layout.inline = nil
+    for index, role in ipairs(Theme.OptionsFontRoleOrder) do
+      options.args.layout.args["font_" .. role] = OptionsFontGroup(role, 40 + index)
+    end
+    options.args.layout.args.resetOptionsFonts = {
+      type = "execute", name = "Reset all options text", order = 50,
+      func = function()
+        local optionsDB = Addon:GetOptionsDB()
+        optionsDB.optionsFonts = nil
+        optionsDB.puiOptionsFontSize = 14
+        RefreshOptionsTypography()
+      end,
+    }
     return options
   end
 
