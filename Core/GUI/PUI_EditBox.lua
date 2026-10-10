@@ -673,11 +673,13 @@ local function PUI_MultiLine_Layout(widget)
 
   widget.scrollFrame:ClearAllPoints()
   Pixel.Point(widget.scrollFrame, "TOPLEFT", widget.scrollBG, "TOPLEFT", 5, -5)
-  Pixel.Point(widget.scrollFrame, "BOTTOMRIGHT", widget.scrollBG, "BOTTOMRIGHT", -20, 5)
+  local scrollbarWidth = Theme.GetOptionsPointerTargetSize(18)
+  Pixel.Point(widget.scrollFrame, "BOTTOMRIGHT", widget.scrollBG, "BOTTOMRIGHT", -scrollbarWidth - 2, 5)
 
   widget.scrollBar:ClearAllPoints()
-  Pixel.Point(widget.scrollBar, "TOPRIGHT", widget.scrollBG, "TOPRIGHT", -2, -3)
-  Pixel.Point(widget.scrollBar, "BOTTOMRIGHT", widget.scrollBG, "BOTTOMRIGHT", -2, 3)
+  local scrollbarInset = math_max(3, scrollbarWidth)
+  Pixel.Point(widget.scrollBar, "TOPRIGHT", widget.scrollBG, "TOPRIGHT", -2, -scrollbarInset)
+  Pixel.Point(widget.scrollBar, "BOTTOMRIGHT", widget.scrollBG, "BOTTOMRIGHT", -2, scrollbarInset)
 
   PUI_EditBox_LayoutChrome(widget.scrollBG, widget.scrollChrome)
   PUI_EditBox_LayoutChrome(widget.button, widget.buttonChrome)
