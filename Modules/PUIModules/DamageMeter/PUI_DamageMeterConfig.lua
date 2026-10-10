@@ -615,30 +615,26 @@ function DamageMeters:GetOptions()
   breakdown.args = {
     details = { type = "group", name = "Spell breakdown", inline = true, order = 10, args = details },
   }
-  local windows = { type = "group", name = "Windows", order = 50, childGroups = "tree", args = {} }
+  general.args.bar = { type = "group", name = "Bars", order = 20, inline = true, arg = { puiExplicit = true }, args = {
+    showSpecIcons = appearance.showSpecIcons, height = appearance.barHeight, spacing = appearance.barSpacing,
+    headerHeight = appearance.headerHeight, opacity = appearance.barAlpha, fontSize = appearance.fontSize,
+  } }
+  source.history.inline, source.history.order = true, 10
+  breakdown.order = 20
+  options.childGroups = "tree"
+  options.arg = { puiExplicit = true }
+  options.args = {
+    general = general,
+    breakdown = breakdown,
+    history = { type = "group", name = "Saved history", order = 30, args = { history = source.history } },
+  }
   for index = 1, MAX_WINDOWS do
     local key = "window" .. index
     local window = source[key]
     window.inline = nil
-    window.args.delete.name = "Delete window"
-    windows.args[key] = window
+    window.order = 40 + index
+    options.args[key] = window
   end
-  source.history.inline, source.history.order = true, 10
-  windows.args.breakdown = breakdown
-  breakdown.order = 100
-  windows.args.history = { type = "group", name = "Saved history", order = 110, args = { history = source.history } }
-  options.childGroups = "tab"
-  options.arg = { puiExplicit = true }
-  options.args = {
-    general = general,
-    layout = { type = "group", name = "Layout and appearance", order = 20, args = {
-      bar = { type = "group", name = "Bars", order = 20, inline = true, arg = { puiExplicit = true }, args = {
-        showSpecIcons = appearance.showSpecIcons, height = appearance.barHeight, spacing = appearance.barSpacing,
-        headerHeight = appearance.headerHeight, opacity = appearance.barAlpha, fontSize = appearance.fontSize,
-      } },
-    } },
-    windows = windows,
-  }
   appearance.headerHeight.name = "Header height"
   appearance.fontSize.name = "Font size"
   appearance.fontSize.order = 60
