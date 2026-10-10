@@ -16,6 +16,15 @@ local PUI_SELF_OWNED_WIDGET_TYPES = {
 }
 
 local PUI_OWNED_WIDGETS = setmetatable({}, { __mode = "k" })
+local optionsFeedDepth = 0
+local optionsFeedLayouts = {}
+
+local function PauseOptionsFeedLayout(widget)
+  if widget.children and not widget.LayoutPaused then
+    optionsFeedLayouts[widget] = true
+    widget:PauseLayout()
+  end
+end
 
 function AceHooks.HideDisabledTooltip(widget)
   local tooltip = widget.__puiDisabledTooltip
@@ -134,6 +143,7 @@ local function _PUI_InstallAceGUIHooks()
     ns.KeyboardNavigation.ReleaseWidget(widget)
     ns.OptionsMotion.ReleaseWidget(widget)
     PUI_OWNED_WIDGETS[widget] = nil
+    optionsFeedLayouts[widget] = nil
     if widget.type == "ColorPicker" then ns.ColorControls.Release(widget) end
     if widget.__puiDisabledHover then widget.__puiDisabledHover:Hide() end
     AceHooks.HideDisabledTooltip(widget)
@@ -298,6 +308,10 @@ local function _PUI_InstallAceGUIHooks()
     local ownedByPleebUI = IsPleebUIOwner(parent)
 
     if ownedByPleebUI then
+      if optionsFeedDepth > 0 then
+        PauseOptionsFeedLayout(parent)
+        PauseOptionsFeedLayout(child)
+      end
       AceHooks.TakeOwnership(child)
     elseif child.__puiAceGUIOwnedByPleebUI == true
       or child.__puiCreatedWidgetInitialized == true
@@ -326,6 +340,30 @@ end
 local function _PUI_InstallAceConfigDialogHooks()
   local AceConfigDialog = LibStub("AceConfigDialog-3.0")
   _PUI_InstallOptionsTooltipHook(AceConfigDialog.tooltip)
+
+  local originalFeedGroup = AceConfigDialog.FeedGroup
+  AceConfigDialog.FeedGroup = function(dialog, appName, options, container, ...)
+    if appName ~= "PleebUI" then
+      return originalFeedGroup(dialog, appName, options, container, ...)
+    end
+
+    optionsFeedDepth = optionsFeedDepth + 1
+    PauseOptionsFeedLayout(container)
+    local result = originalFeedGroup(dialog, appName, options, container, ...)
+    optionsFeedDepth = optionsFeedDepth - 1
+
+    if optionsFeedDepth == 0 then
+      for widget in pairs(optionsFeedLayouts) do
+        optionsFeedLayouts[widget] = nil
+        -- FeedOptions resumes populated groups; outer hosts still need a final layout.
+        if widget.LayoutPaused then
+          widget:ResumeLayout()
+          widget:DoLayout()
+        end
+      end
+    end
+    return result
+  end
 
   hooksecurefunc("StaticPopup_Show", function(which, _, _, data)
     local popup = StaticPopup_FindVisible(which, data)
