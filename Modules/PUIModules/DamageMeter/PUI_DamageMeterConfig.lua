@@ -260,6 +260,7 @@ function DamageMeters:GetOptions()
             min = 0,
             max = 50,
             step = 1,
+            arg = { puiDisabledReason = "Enable Save boss kills first." },
             disabled = function()
               return not self.db.profile.history.saveBossKills
             end,
@@ -294,6 +295,7 @@ function DamageMeters:GetOptions()
             min = 0,
             max = 30,
             step = 1,
+            arg = { puiDisabledReason = "Enable Save completed keystones first." },
             disabled = function()
               return not self.db.profile.history.saveKeystones
             end,
