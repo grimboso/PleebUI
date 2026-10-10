@@ -267,7 +267,7 @@ end
 
 local function ApplyFontObject(style, kind)
   local playerAuraFont = playerAuraFonts[kind]
-  playerAuraFont:SetFont(style.fontPath, style.fontSize, style.fontFlags)
+  ns.Theme.SetRuntimeFont(playerAuraFont, style.fontPath, style.fontSize, style.fontFlags)
   playerAuraFont:SetTextColor(style.textR, style.textG, style.textB, style.textA)
   playerAuraFont:SetShadowColor(0, 0, 0, 0.9)
   playerAuraFont:SetShadowOffset(1, -1)
@@ -803,7 +803,7 @@ local function PreviewAuraTextSize(kind, value)
   local puiStyleCache = puiStyleCaches[kind]
   local size = value and Theme.ResolveFontSize(Clamp(value, 8, 32), "playerBuffs")
     or puiStyleCache.fontSize
-  playerAuraFonts[kind]:SetFont(puiStyleCache.fontPath, size, puiStyleCache.fontFlags)
+  ns.Theme.SetRuntimeFont(playerAuraFonts[kind], puiStyleCache.fontPath, size, puiStyleCache.fontFlags)
 end
 
 local function ResolveApplyFlags(flags)
