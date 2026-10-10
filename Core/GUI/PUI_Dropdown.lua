@@ -170,7 +170,7 @@ local function SkinLabel(label, box)
   label:ClearAllPoints()
   label:SetPoint("BOTTOMLEFT", box, "TOPLEFT", 2, 0)
   label:SetPoint("BOTTOMRIGHT", box, "TOPRIGHT", -2, 0)
-  label:SetHeight(14)
+  label:SetHeight(Theme.GetOptionsFontHeight("body"))
   label:SetJustifyH("CENTER")
   label:SetJustifyV("MIDDLE")
   Theme.ApplyFont(label, "body")
@@ -391,9 +391,7 @@ local function NormalizeDropdownDisplayText(text)
 end
 
 local function GetDropdownPulloutItemHeight()
-  local role = Theme.GetFontRoleInfo("body")
-  local fontSize = tonumber(role and role.size) or 12
-  return math_max(20, fontSize + 8)
+  return math_max(20, Theme.GetOptionsFontHeight("body") + 6)
 end
 
 local function GetDropdownPulloutMetrics(pullout)
@@ -851,7 +849,7 @@ local function SkinDropdown(widget, isLSM)
     if user.appName == "PleebUI" and user.path and user.path[1] == "CooldownManager" and user.path[4] == "entries" then
       local selectorGeometry = {}
       for key, value in pairs(geom) do selectorGeometry[key] = value end
-      selectorGeometry.controlHeight = 28
+      selectorGeometry.controlHeight = math_max(28, geom.controlHeight)
       selectorGeometry.rowHeight = geom.controlTop + selectorGeometry.controlHeight + geom.controlBottom
       geom = selectorGeometry
     end
@@ -1674,8 +1672,10 @@ local PUI_Dropdown_Methods = {
     Theme.ApplyFont(self.label, "body")
     Theme.ApplyFont(self.text, "body")
 
-    if self.pullout and self.pullout.__puiDropdownSearchBox then
-      WidgetSkins.UIEditBox(self.pullout.__puiDropdownSearchBox)
+    if self.pullout then
+      if self.pullout.__puiDropdownSearchBox then
+        WidgetSkins.UIEditBox(self.pullout.__puiDropdownSearchBox)
+      end
       PUI_Dropdown_UpdateSearchAvailability(self)
     end
 
