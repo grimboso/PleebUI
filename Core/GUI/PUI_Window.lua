@@ -3,7 +3,6 @@ local _, ns = ...
 local Theme = ns.Theme
 local WHITE8 = "Interface\\Buttons\\WHITE8x8"
 local WidgetSkins = Theme.WidgetSkins
-Theme.ScrollbarWidth = 18
 
 function Theme.StripACDFrameTextures(frame)
   ns.IconSkin.StripNineSliceAndBackdrop(frame)
@@ -49,6 +48,7 @@ function WidgetSkins.Scrollbar(widget)
   local border = colors.border
   local fill = colors.control
   local accent = colors.accent
+  local scrollbarWidth = Theme.GetOptionsPointerTargetSize(18)
   local upButton = scrollbar.ScrollUpButton
   local downButton = scrollbar.ScrollDownButton
   local thumb = scrollbar:GetThumbTexture()
@@ -63,7 +63,7 @@ function WidgetSkins.Scrollbar(widget)
   end
   scrollbar.__puiScrollbarOwner = owner
 
-  scrollbar:SetWidth(Theme.ScrollbarWidth)
+  scrollbar:SetWidth(scrollbarWidth)
   scrollbar:SetHitRectInsets(0, 0, 0, 0)
   upButton:ClearAllPoints()
   upButton:SetPoint("BOTTOM", scrollbar, "TOP", 0, 0)
@@ -82,7 +82,7 @@ function WidgetSkins.Scrollbar(widget)
 
   local function SkinArrowButton(button, texture)
     StripTextures(button)
-    button:SetSize(Theme.ScrollbarWidth, Theme.ScrollbarWidth)
+    button:SetSize(scrollbarWidth, scrollbarWidth)
     button:SetHitRectInsets(0, 0, 0, 0)
 
     WidgetSkins.Button(button, owner)
@@ -119,7 +119,7 @@ function WidgetSkins.Scrollbar(widget)
   thumb:SetTexture(WHITE8)
   thumb:SetTexCoord(0, 1, 0, 1)
   thumb:SetVertexColor(accent[1], accent[2], accent[3], 0.90)
-  thumb:SetSize(Theme.ScrollbarWidth - 2, 24)
+  thumb:SetSize(scrollbarWidth - 2, Theme.GetOptionsPointerTargetSize(24))
   thumb:Show()
 
   if not scrollbar.__puiScrollbarStateHooked then
@@ -151,6 +151,46 @@ function WidgetSkins.Scrollbar(widget)
     scrollbar:HookScript("OnShow", RefreshScrollbarState)
   end
   RefreshScrollbarState(scrollbar)
+end
+
+local function LayoutScrollFrameTargets(widget)
+  local width = Theme.GetOptionsPointerTargetSize(18)
+  local margin = widget.scrollBarShown and (width + 2) or 0
+  local changed = widget.__puiScrollTargetMargin ~= margin
+  widget.__puiScrollTargetMargin = margin
+  widget.scrollframe:SetPoint("BOTTOMRIGHT", -margin, 0)
+  if widget.content.original_width then
+    widget.content.width = widget.content.original_width - margin
+  end
+  local inset = width > 18 and width or 16
+  widget.scrollbar:ClearAllPoints()
+  widget.scrollbar:SetPoint("TOPLEFT", widget.scrollframe, "TOPRIGHT", 4, -inset)
+  widget.scrollbar:SetPoint("BOTTOMLEFT", widget.scrollframe, "BOTTOMRIGHT", 4, inset)
+  return changed
+end
+
+function WidgetSkins.ScrollFrame(widget)
+  WidgetSkins.Scrollbar(widget.scrollbar)
+  if not widget.__puiScrollTargetLayoutHooked then
+    widget.__puiScrollTargetLayoutHooked = true
+    local originalDoLayout = widget.DoLayout
+    widget.DoLayout = function(self, ...)
+      if self.__puiAceGUIOwnedByPleebUI == true then
+        LayoutScrollFrameTargets(self)
+      end
+      return originalDoLayout(self, ...)
+    end
+    local originalOnWidthSet = widget.OnWidthSet
+    widget.OnWidthSet = function(self, width)
+      originalOnWidthSet(self, width)
+      if self.__puiAceGUIOwnedByPleebUI == true then
+        LayoutScrollFrameTargets(self)
+      end
+    end
+  end
+  if LayoutScrollFrameTargets(widget) then
+    widget:DoLayout()
+  end
 end
 
 function WidgetSkins.Frame(frame)
