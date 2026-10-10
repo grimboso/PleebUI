@@ -185,7 +185,8 @@ local function ApplySalveVisual(frame, text, icon)
 
   text:ClearAllPoints()
   text:SetPoint("CENTER", frame, "CENTER", 18, 0)
-  text:SetFont(
+  ns.Theme.SetRuntimeFont(
+    text,
     STANDARD_TEXT_FONT,
     ns.Theme.ResolveFontSize(size, "qualityOfLife"),
     "OUTLINE"
