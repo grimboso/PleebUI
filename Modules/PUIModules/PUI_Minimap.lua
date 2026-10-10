@@ -1818,22 +1818,17 @@ local function MinimapProvider(AddonObj)
     clock.fontSize.disabled = function() return db.hideClock == true end
     text.zoneTextFontSize.disabled = function() return db.clockBoxEnabled ~= true or db.hideZoneText == true end
     source.coordinates.args.clockBoxCoordFontSize.name = "Font size"
-    source.coordinates.order = 40
-    options.childGroups = "tab"
+    source.coordinates.order = 60
     options.arg = { puiExplicit = true }
     options.args = {
-      general = { type = "group", name = "General", order = 10, args = {
-        minimap = { type = "group", name = "Minimap", inline = true, order = 10, args = map },
-        buttons = { type = "group", name = "Addon buttons", inline = true, order = 20, args = buttons },
-      } },
-      topPanel = { type = "group", name = "Top panel", order = 20, args = {
-        panel = { type = "group", name = "Panel", inline = true, order = 10, args = panel },
-        clock = { type = "group", name = "Clock", inline = true, order = 20, args = clock },
-        zone = { type = "group", name = "Zone", inline = true, order = 30,
-          disabled = function() return db.clockBoxEnabled ~= true end,
-          args = { hideZoneText = text.hideZoneText, fontSize = text.zoneTextFontSize } },
-        coordinates = source.coordinates,
-      } },
+      minimap = { type = "group", name = "Minimap", inline = true, order = 10, args = map },
+      buttons = { type = "group", name = "Addon buttons", inline = true, order = 20, args = buttons },
+      panel = { type = "group", name = "Top panel", inline = true, order = 30, args = panel },
+      clock = { type = "group", name = "Clock", inline = true, order = 40, args = clock },
+      zone = { type = "group", name = "Zone", inline = true, order = 50,
+        disabled = function() return db.clockBoxEnabled ~= true end,
+        args = { hideZoneText = text.hideZoneText, fontSize = text.zoneTextFontSize } },
+      coordinates = source.coordinates,
     }
     return options
   end
