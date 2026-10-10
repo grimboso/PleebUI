@@ -2179,7 +2179,10 @@ local function _PUI_RefreshRootRegistryNav(frame)
   local navShellWidth = math.floor(navShell:GetWidth() + 0.5)
   local navShellHeight = math.floor(navShell:GetHeight() + 0.5)
   local scrollFrameLevel = math.max(navShell:GetFrameLevel() + 40, frame:GetFrameLevel() + 90)
+  local scrollbarWidth = ns.Theme.GetOptionsPointerTargetSize(18)
+  local scrollRightInset = scrollbarWidth > 18 and scrollbarWidth + 12 or 12
   local scrollChromeKey = table.concat({
+    tostring(scrollRightInset),
     tostring(navShellWidth),
     tostring(navShellHeight),
     tostring(frame:GetFrameStrata() or ""),
@@ -2193,7 +2196,7 @@ local function _PUI_RefreshRootRegistryNav(frame)
     scroll:SetFrameLevel(scrollFrameLevel)
     scroll:ClearAllPoints()
     scroll:SetPoint("TOPLEFT", navShell, "TOPLEFT", 14, -58)
-    scroll:SetPoint("TOPRIGHT", navShell, "TOPRIGHT", -12, -58)
+    scroll:SetPoint("TOPRIGHT", navShell, "TOPRIGHT", -scrollRightInset, -58)
     scroll:SetPoint("BOTTOM", navShell, "BOTTOM", 0, 16)
     scroll:SetClipsChildren(true)
   end
@@ -2236,6 +2239,10 @@ local function _PUI_RefreshRootRegistryNav(frame)
   end
 
   ns.Theme.WidgetSkins.Scrollbar(scroll.ScrollBar)
+  local scrollbarInset = scrollbarWidth > 18 and scrollbarWidth or 16
+  scroll.ScrollBar:ClearAllPoints()
+  scroll.ScrollBar:SetPoint("TOPLEFT", scroll, "TOPRIGHT", 6, -scrollbarInset)
+  scroll.ScrollBar:SetPoint("BOTTOMLEFT", scroll, "BOTTOMRIGHT", 6, scrollbarInset)
 
   host:EnableMouse(false)
   host:Show()
@@ -2656,7 +2663,8 @@ local function _PUI_EnsurePleebUIOptionsChrome(frame)
 
     grip:EnableMouse(true)
     grip.tex = grip:CreateTexture(nil, "OVERLAY")
-    grip.tex:SetAllPoints(grip)
+    grip.tex:SetPoint("BOTTOMRIGHT", grip, "BOTTOMRIGHT", 0, 0)
+    grip.tex:SetSize(16, 16)
     grip.tex:SetTexture("Interface\\Buttons\\WHITE8x8")
 
     grip:SetScript("OnEnter", function(self)
@@ -2818,7 +2826,9 @@ local function _PUI_EnsurePleebUIOptionsChrome(frame)
   frame.__puiHeaderButtons:SetParent(frame.__puiFooterShell)
   frame.__puiHeaderButtons:ClearAllPoints()
   frame.__puiHeaderButtons:SetPoint("BOTTOMLEFT", frame.__puiFooterShell, "BOTTOMLEFT", 14, 14)
-  frame.__puiHeaderButtons:SetPoint("BOTTOMRIGHT", frame.__puiFooterShell, "BOTTOMRIGHT", -14, 14)
+  local gripSize = ns.Theme.GetOptionsPointerTargetSize(16)
+  local footerRightInset = gripSize > 16 and math.max(14, gripSize + 8) or 14
+  frame.__puiHeaderButtons:SetPoint("BOTTOMRIGHT", frame.__puiFooterShell, "BOTTOMRIGHT", -footerRightInset, 14)
   frame.__puiHeaderButtons:SetHeight(34)
   frame.__puiHeaderButtons:SetFrameStrata(frame:GetFrameStrata())
   frame.__puiHeaderButtons:SetFrameLevel(chromeLevel)
@@ -2896,7 +2906,7 @@ local function _PUI_EnsurePleebUIOptionsChrome(frame)
       buttonWidth = measured
     end
 
-    btn:SetSize(buttonWidth, 30)
+    btn:SetSize(buttonWidth, ns.Theme.GetOptionsPointerTargetSize(30))
     btn:ClearAllPoints()
     _PUI_StyleHeaderActionButton(btn)
 
@@ -2918,7 +2928,7 @@ local function _PUI_EnsurePleebUIOptionsChrome(frame)
 
   frame.__puiResizeGrip:ClearAllPoints()
   frame.__puiResizeGrip:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -12, 12)
-  frame.__puiResizeGrip:SetSize(16, 16)
+  frame.__puiResizeGrip:SetSize(gripSize, gripSize)
   frame.__puiResizeGrip:SetFrameStrata(frame:GetFrameStrata())
   frame.__puiResizeGrip:SetFrameLevel(baseLevel + 60)
   frame.__puiResizeGrip:Show()
