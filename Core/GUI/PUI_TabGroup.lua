@@ -63,7 +63,7 @@ local function _PUI_EnsureCustomTabButton(host, index)
   btn = CreateFrame("Button", nil, host, "BackdropTemplate")
   btn.__puiTabStripOwned = true
   btn.__puiUseTextureBackdrop = true
-  Pixel.Height(btn, math.max(30, Theme.GetOptionsFontHeight("tab", 12) + 12))
+  Pixel.Height(btn, math.max(30, Theme.GetOptionsFontHeight("tab", 12) + 12, Theme.GetOptionsPointerTargetSize(0)))
   btn:EnableMouse(true)
 
   btn.__puiHover = btn:CreateTexture(nil, "BORDER")
@@ -212,7 +212,7 @@ local function _PUI_LayoutCustomTabStrip(widget, geometryOnly)
   end
 
   local tabs = widget.tabs
-  local tabHeight = math.max(30, Theme.GetOptionsFontHeight("tab", 12) + 12)
+  local tabHeight = math.max(30, Theme.GetOptionsFontHeight("tab", 12) + 12, Theme.GetOptionsPointerTargetSize(0))
   local gap = 6
   local available = tonumber(widget.frame:GetWidth()) or 0
 
