@@ -1006,7 +1006,7 @@ local function RefreshCooldownFont(cfg)
   if durationFontPath ~= fontPath or durationFontSize ~= fontSize then
     durationFontPath = fontPath
     durationFontSize = fontSize
-    durationFont:SetFont(fontPath, fontSize, "OUTLINE")
+    ns.Theme.SetRuntimeFont(durationFont, fontPath, fontSize, "OUTLINE")
     durationFont:SetTextColor(1, 1, 1, 1)
     durationFont:SetShadowColor(0, 0, 0, 1)
     durationFont:SetShadowOffset(1, -1)
