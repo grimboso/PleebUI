@@ -391,7 +391,7 @@ local function NormalizeDropdownDisplayText(text)
 end
 
 local function GetDropdownPulloutItemHeight()
-  return math_max(20, Theme.GetOptionsFontHeight("body") + 6)
+  return math_max(20, Theme.GetOptionsFontHeight("body") + 6, Theme.GetOptionsPointerTargetSize(0))
 end
 
 local function GetDropdownPulloutMetrics(pullout)
@@ -524,6 +524,19 @@ local function RefreshDropdownPulloutLayout(pullout)
   end
 end
 
+local function LayoutDropdownScrollLane(pullout)
+  if pullout.__puiAceGUIOwnedByPleebUI ~= true then return end
+  local width = Theme.GetOptionsPointerTargetSize(8)
+  local offset = pullout.scrollStatus.offset or 0
+  local lane = pullout.slider:IsShown() and width + 4 or 0
+  pullout.itemFrame:SetPoint("TOPRIGHT", pullout.scrollFrame, "TOPRIGHT", -lane, offset)
+  pullout.slider:ClearAllPoints()
+  pullout.slider:SetPoint("TOPRIGHT", pullout.scrollFrame, "TOPRIGHT", -4, 0)
+  pullout.slider:SetPoint("BOTTOMRIGHT", pullout.scrollFrame, "BOTTOMRIGHT", -4, 0)
+  pullout.slider:SetWidth(width)
+  pullout.slider:SetHitRectInsets(0, 0, 0, 0)
+end
+
 local function EnsureDropdownPulloutLayout(pullout)
   if not pullout then
     return
@@ -532,6 +545,8 @@ local function EnsureDropdownPulloutLayout(pullout)
   if not pullout.__puiDropdownLayoutHooked then
     pullout.__puiDropdownLayoutHooked = true
 
+    hooksecurefunc(pullout, "SetScroll", LayoutDropdownScrollLane)
+    hooksecurefunc(pullout, "FixScroll", LayoutDropdownScrollLane)
     local originalAddItem = pullout.AddItem
     pullout.AddItem = function(self, item)
       local result = originalAddItem(self, item)
@@ -575,7 +590,10 @@ local function SkinPulloutFrame(frame, slider, colors, edge)
   slider:SetThumbTexture(WHITE8)
   thumb = slider:GetThumbTexture()
   thumb:SetTexCoord(0, 1, 0, 1)
-  thumb:SetSize(8, 18)
+  local width = Theme.GetOptionsPointerTargetSize(frame.contentRepo and 12 or 8)
+  slider:SetWidth(width)
+  slider:SetHitRectInsets(0, 0, 0, 0)
+  thumb:SetSize(Theme.GetOptionsPointerTargetSize(8), Theme.GetOptionsPointerTargetSize(18))
   thumb:SetVertexColor(colors.accent[1], colors.accent[2], colors.accent[3], 0.90)
   thumb:Show()
 end
@@ -598,19 +616,19 @@ local function ResetLSMFontDropdownSearchFrame(dropdown)
   dropdown.scrollframe:SetPoint("BOTTOMRIGHT", dropdown, "BOTTOMRIGHT", -14, 12)
 end
 
-local function RefreshLSMFontDropdownSearch(widget)
-  local dropdown = widget and widget.dropdown
+local function RefreshLSMDropdownLayout(dropdown)
   local searchBox = dropdown and dropdown.__puiLSMFontSearchBox
   local contentframe = dropdown and dropdown.contentframe
   local scrollframe = dropdown and dropdown.scrollframe
   local slider = dropdown and dropdown.slider
   local rows = dropdown and dropdown.contentRepo
 
-  if not searchBox or not contentframe or not scrollframe or not slider or not rows then
+  if not contentframe or not scrollframe or not slider or not rows then
     return
   end
 
-  local query = string_lower(searchBox:GetText() or "")
+  local hasSearch = searchBox and searchBox:IsShown() and searchBox.obj ~= nil
+  local query = hasSearch and string_lower(searchBox:GetText() or "") or ""
   local previous
   local contentHeight = 0
 
@@ -620,6 +638,7 @@ local function RefreshLSMFontDropdownSearch(widget)
     local visible = query == "" or string_find(rowText, query, 1, true) ~= nil
 
     if row then
+      row:SetHeight(GetDropdownPulloutItemHeight())
       row:ClearAllPoints()
 
       if visible then
@@ -642,9 +661,8 @@ local function RefreshLSMFontDropdownSearch(widget)
   contentframe:SetHeight(contentHeight)
 
   local searchHeight = GetDropdownPulloutItemHeight()
-  local searchHeaderHeight = PUI_DROPDOWN_SEARCH_TOP_INSET
-    + searchHeight
-    + PUI_DROPDOWN_SEARCH_HEADER_GAP
+  local searchHeaderHeight = hasSearch and (PUI_DROPDOWN_SEARCH_TOP_INSET
+    + searchHeight + PUI_DROPDOWN_SEARCH_HEADER_GAP) or 0
   local maxHeight = UIParent:GetHeight() * 2 / 5
   local popupHeight = math_min(contentHeight + 25 + searchHeaderHeight, maxHeight)
   local viewportHeight = math_max(1, popupHeight - 25 - searchHeaderHeight)
@@ -658,10 +676,13 @@ local function RefreshLSMFontDropdownSearch(widget)
     "BOTTOMRIGHT",
     dropdown,
     "BOTTOMRIGHT",
-    scrollable and -28 or -14,
+    scrollable and -(Theme.GetOptionsPointerTargetSize(12) + 16) or -14,
     12
   )
 
+  slider:ClearAllPoints()
+  slider:SetPoint("TOPRIGHT", dropdown, "TOPRIGHT", -14, -13 - searchHeaderHeight)
+  slider:SetPoint("BOTTOMRIGHT", dropdown, "BOTTOMRIGHT", -14, 12)
   contentframe:SetWidth(scrollframe:GetWidth())
   scrollframe:SetVerticalScroll(0)
 
@@ -686,7 +707,7 @@ local function LSMFontDropdownSearchTextChanged(searchBox)
     searchBox.Instructions:SetShown(searchBox:GetText() == "" and not searchBox:HasFocus())
   end
 
-  RefreshLSMFontDropdownSearch(widget)
+  RefreshLSMDropdownLayout(widget.dropdown)
 end
 
 local function LSMFontDropdownSearchFocusGained(searchBox)
@@ -789,8 +810,6 @@ local function EnsureLSMFontDropdownSearch(widget)
   )
   searchBox:SetHeight(GetDropdownPulloutItemHeight())
   searchBox:Show()
-
-  RefreshLSMFontDropdownSearch(widget)
 end
 
 local function OwnStandardDropdownChildren(widget)
@@ -824,6 +843,7 @@ local function SkinDropdownPullout(widget, isLSM, colors, edge)
     if frame then
       SkinPulloutFrame(frame, frame.slider, colors, edge)
       EnsureLSMFontDropdownSearch(widget)
+      RefreshLSMDropdownLayout(frame)
       WatchDropdownOutsideClicks(widget, frame, widget.frame.dropButton)
     end
     return
@@ -918,9 +938,15 @@ local function SkinDropdown(widget, isLSM)
     CollapseLegacyFrame(widget.button, box, false)
     CollapseLegacyFrame(widget.button_cover, box, true)
   end
+
+  local pulloutFrame = isLSM and widget.dropdown or (widget.pullout and widget.pullout.frame)
+  if pulloutFrame and pulloutFrame:IsShown() then
+    SkinDropdownPullout(widget, isLSM, colors, edge)
+  end
 end
 
 function WidgetSkins.DropdownPullout(widget)
+  EnsureDropdownPulloutLayout(widget)
   SkinPulloutFrame(widget.frame, widget.slider, Theme.GetColors(), Theme.ControlBorderSize)
 end
 
