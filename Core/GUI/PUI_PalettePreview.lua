@@ -122,11 +122,15 @@ local methods = {
     self.panel:Show()
     self:RefreshTheme()
   end,
-  OnRelease = function(self)
+  ClearFocus = function(self)
     self.number:ClearFocus()
     self.focusInput:ClearFocus()
     self.menu:Hide()
     self.dropdown.open = nil
+    StyleSampleControl(self.dropdown)
+  end,
+  OnRelease = function(self)
+    self:ClearFocus()
     for _, control in ipairs(self.controls) do
       control.hovered, control.pressed, control.focused = nil, nil, nil
     end
