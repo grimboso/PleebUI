@@ -348,9 +348,6 @@ local function _EnsureSecondaryTexts(bar, overlay)
   text:SetTextColor(1, 1, 1, 1)
   text:SetShadowOffset(1, -1)
   text:SetShadowColor(0, 0, 0, 1)
-  if text.SetFont then
-    text:SetFont("Fonts\\FRIZQT__.TTF", 16, "OUTLINE")
-  end
   Theme.ApplyFont(text, "header", 16, "OUTLINE")
 end
 
@@ -1186,7 +1183,7 @@ function Secondary.ApplyResourceFont(self, fs, config)
   local appliedKey = tostring(fontPath) .. "|" .. tostring(fontFlags) .. "|" .. tostring(fontSize)
   if fs._puiFontAppliedKey ~= appliedKey then
     fs._puiFontAppliedKey = appliedKey
-    fs:SetFont(fontPath, fontSize, fontFlags)
+    ns.Theme.SetRuntimeFont(fs, fontPath, fontSize, fontFlags)
   end
 end
 
