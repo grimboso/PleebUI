@@ -96,7 +96,8 @@ end
 
 local function RefreshPalette()
   local db = GetPaletteDB()
-  local height = math.max(24, Theme.GetOptionsFontHeight("body") + 10, Theme.GetOptionsFontHeight("button") + 10)
+  local height = math.max(24, Theme.GetOptionsFontHeight("body") + 10,
+    Theme.GetOptionsFontHeight("button") + 10, Theme.GetOptionsPointerTargetSize(0) + 4)
   local width = math.max(320, height * COLOR_LIMIT + 36)
   local opacityHeight = session.widget.HasAlpha and (Theme.GetWidgetRowGeometry(palette.opacity).rowHeight + 8) or 0
   palette:SetSize(width, height * 6 + 24 + opacityHeight)
