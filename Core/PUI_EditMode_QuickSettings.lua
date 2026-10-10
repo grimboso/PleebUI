@@ -196,6 +196,7 @@ function QuickSettings:EnsurePanel()
   panel.allSettingsButton:Hide()
 
   StylePanel(panel)
+  ns.KeyboardNavigation.BindWindow(panel, false, function() QuickSettings:Hide(true) end)
   self.panel = panel
   return panel
 end
