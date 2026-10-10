@@ -6,7 +6,7 @@ local AceGUI = LibStub("AceGUI-3.0")
 local AceConfigDialog = LibStub("AceConfigDialog-3.0")
 
 local TYPE = "PUI_Slider"
-local VERSION = 5
+local VERSION = 6
 local WHITE8 = "Interface\\Buttons\\WHITE8x8"
 
 local math_floor = math.floor
@@ -88,9 +88,29 @@ local function FormatValue(self, value)
   return self.ispercent and text .. "%" or text
 end
 
+local function RefreshValidationMessage(self)
+  local geom = Theme.GetWidgetRowGeometry(self)
+  local message = self.inputErrorText
+  Theme.ApplyFont(message, "body")
+  local colors = Theme.GetColors()
+  local color = self.disabled and colors.disabledText or colors.text
+  message:SetTextColor(color[1], color[2], color[3], color[4])
+  message:ClearAllPoints()
+  Pixel.Point(message, "TOPLEFT", self.frame, "TOPLEFT", geom.controlLeft, -geom.rowHeight)
+  Pixel.Point(message, "TOPRIGHT", self.frame, "TOPRIGHT", -geom.controlRight, -geom.rowHeight)
+  message:SetText(self.inputError or "")
+  message:SetShown(self.inputError ~= nil)
+  local height = geom.rowHeight + (self.inputError and message:GetStringHeight() + 4 or 0)
+  if self.frame:GetHeight() ~= height then
+    self:SetHeight(height)
+    if self.parent then self.parent:DoLayout() end
+  end
+end
+
 local function UpdateText(self)
   self.inputError = nil
   self.editbox:SetText(FormatValue(self, self.value or 0))
+  RefreshValidationMessage(self)
 end
 
 local function GetAdjustmentStep(self)
@@ -224,6 +244,7 @@ local function LayoutWidget(self, width)
   Pixel.Size(self.thumb, thumbSize, thumbSize)
   LayoutControlChrome(self.slider, self.sliderChrome)
   LayoutControlChrome(self.editbox, self.editboxChrome)
+  RefreshValidationMessage(self)
 end
 
 local function SliderModifierChanged(frame)
@@ -401,6 +422,7 @@ local function EditBoxOnEnterPressed(editbox)
     self.inputError = nil
   end
   if self.inputError then
+    RefreshValidationMessage(self)
     editbox:HighlightText()
     ShowSliderTooltip(self)
     return
@@ -431,7 +453,7 @@ local function EditBoxOnFocusGained(editbox)
 end
 
 local function EditBoxOnFocusLost(editbox)
-  UpdateText(editbox.obj)
+  if not editbox.obj.inputError then UpdateText(editbox.obj) end
   HideSliderTooltip(editbox.obj)
   RefreshVisualState(editbox.obj)
 end
@@ -460,6 +482,8 @@ local methods = {
       self.livePreview = nil
     end
     SliderOnHide(self.frame)
+    self.inputError = nil
+    self.inputErrorText:Hide()
     self.commitOnRelease = nil
   end,
 
@@ -491,6 +515,7 @@ local methods = {
       SliderModifierChanged(self.slider)
     end
 
+    RefreshValidationMessage(self)
     RefreshVisualState(self)
   end,
 
@@ -610,7 +635,15 @@ local function Constructor()
     button:SetScript("OnMouseUp", StepButtonOnMouseUp)
   end
 
+  local inputErrorText = frame:CreateFontString(nil, "OVERLAY")
+  inputErrorText.__puiOptionsFontOwned = true
+  inputErrorText:SetJustifyH("LEFT")
+  inputErrorText:SetJustifyV("TOP")
+  inputErrorText:SetWordWrap(true)
+  inputErrorText:Hide()
+
   local widget = {
+    inputErrorText = inputErrorText,
     label = label,
     slider = slider,
     thumb = thumb,
@@ -634,10 +667,11 @@ local function Constructor()
   minusButton.obj = widget
   plusButton.obj = widget
 
+  widget = AceGUI:RegisterAsWidget(widget)
   LayoutWidget(widget, 200)
   RefreshVisualState(widget)
 
-  return AceGUI:RegisterAsWidget(widget)
+  return widget
 end
 
 AceGUI:RegisterWidgetType(TYPE, Constructor, VERSION)
