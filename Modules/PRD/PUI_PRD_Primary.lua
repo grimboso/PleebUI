@@ -775,7 +775,7 @@ function PRDBarPresentation.ApplyStyle(instance, state)
   local texts = { instance.leftText, instance.rightText, instance.centerText }
   for index = 1, #texts do
     local text = texts[index]
-    text:SetFont(path, size, flags)
+    ns.Theme.SetRuntimeFont(text, path, size, flags)
     text:SetShadowColor(0, 0, 0, 1)
     text:SetShadowOffset(1, -1)
   end
@@ -1320,7 +1320,7 @@ local function _EnsureFontSet(fs, cfg)
   local sig = tostring(fontPath) .. "|" .. tostring(fontSize) .. "|" .. tostring(fontFlags)
   if _PUI_PRD_NativeFontState[fs] ~= sig then
     _PUI_PRD_NativeFontState[fs] = sig
-    fs:SetFont(fontPath, fontSize, fontFlags)
+    ns.Theme.SetRuntimeFont(fs, fontPath, fontSize, fontFlags)
   end
 end
 
