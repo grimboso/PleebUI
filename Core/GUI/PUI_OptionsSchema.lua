@@ -328,6 +328,38 @@ local INLINE_NAMES = {
 
 local INHERITED_FIELDS = { "get", "set", "func", "handler", "disabled", "hidden", "confirm", "validate", "arg" }
 
+local function EvaluateCondition(condition, info)
+  local value = condition.value
+  if type(value) == "function" then return value(info) end
+  if type(value) == "string" then return condition.handler[value](condition.handler, info) end
+  return value
+end
+
+local function EvaluateDisabledReason(reason, info)
+  if type(reason) == "function" then return reason(info) end
+  return reason
+end
+
+function Schema.GetDisabledReason(user)
+  if user.appName ~= "PleebUI" or not user.options or not user.path then return end
+  local node = user.options
+  local handler = node.handler
+  local reason = node.disabled ~= nil and type(node.arg) == "table" and node.arg.puiDisabledReason or nil
+  local info = {}
+  for index, key in ipairs(user.path) do
+    node = node.args[key]
+    handler = node.handler or handler
+    info[index] = key
+    if node.disabled ~= nil then
+      reason = type(node.arg) == "table" and node.arg.puiDisabledReason or nil
+    end
+  end
+  info[0], info.appName, info.options = user.appName, user.appName, user.options
+  info.option, info.arg, info.handler = user.option, user.option.arg, handler
+  info.type, info.uiType, info.uiName = user.option.type, "dialog", "AceConfigDialog-3.0"
+  return EvaluateDisabledReason(reason, info)
+end
+
 -- Shortcuts are selected by the owning builder, never inferred from labels.
 function Schema.BuildCommonSettings(source, definitions)
   local args = {}
@@ -339,7 +371,8 @@ function Schema.BuildCommonSettings(source, definitions)
         if node[field] ~= nil then
           inherited[field] = node[field]
           if conditions[field] then
-            conditions[field][#conditions[field] + 1] = { value = node[field], handler = node.handler or inherited.handler }
+            conditions[field][#conditions[field] + 1] = { value = node[field], handler = node.handler or inherited.handler,
+              reason = type(node.arg) == "table" and node.arg.puiDisabledReason or nil }
           end
         end
       end
@@ -351,17 +384,34 @@ function Schema.BuildCommonSettings(source, definitions)
       if shortcut[field] == nil then shortcut[field] = value end
     end
     for field, parents in pairs(conditions) do
-      if node[field] ~= nil then parents[#parents + 1] = { value = node[field], handler = node.handler or inherited.handler } end
+      if node[field] ~= nil then
+        parents[#parents + 1] = { value = node[field], handler = node.handler or inherited.handler,
+          reason = type(node.arg) == "table" and node.arg.puiDisabledReason or nil }
+      end
       if #parents > 0 then
         shortcut[field] = function(info)
           for _, condition in ipairs(parents) do
-            local value = condition.value
-            if type(value) == "function" then value = value(info)
-            elseif type(value) == "string" then value = condition.handler[value](condition.handler, info) end
-            if value then return true end
+            if EvaluateCondition(condition, info) then return true end
           end
           return false
         end
+      end
+    end
+    if #conditions.disabled > 0 then
+      local arg = {}
+      if type(shortcut.arg) == "table" then
+        for key, value in pairs(shortcut.arg) do arg[key] = value end
+      elseif shortcut.arg ~= nil then
+        -- Non-table args belong to the original getter/setter contract.
+        arg = nil
+      end
+      if arg then
+        arg.puiDisabledReason = function(info)
+          for _, condition in ipairs(conditions.disabled) do
+            if EvaluateCondition(condition, info) then return EvaluateDisabledReason(condition.reason, info) end
+          end
+        end
+        shortcut.arg = arg
       end
     end
     shortcut.name, shortcut.order = definition.label, index * 10
