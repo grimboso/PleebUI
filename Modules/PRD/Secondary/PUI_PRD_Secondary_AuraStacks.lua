@@ -80,8 +80,8 @@ local function GetNativeSpellSet(definition)
 end
 
 local function CopyNativeTextStyle(source, target)
-  local fontPath, fontSize, fontFlags = source:GetFont()
-  target:SetFont(fontPath, fontSize, fontFlags)
+  local fontPath, fontSize, fontFlags = ns.Theme.GetRuntimeFont(source)
+  ns.Theme.SetRuntimeFont(target, fontPath, fontSize, fontFlags)
   target:SetTextColor(source:GetTextColor())
   target:SetShadowColor(source:GetShadowColor())
   target:SetShadowOffset(source:GetShadowOffset())
