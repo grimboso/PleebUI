@@ -630,7 +630,7 @@ function Core:ApplyAuxiliaryFonts(button, skin)
   local macro = button.Name
 
   if hotkey then
-    hotkey:SetFont(self:ResolveFont(skin.hotkeyFontFace), Theme.ResolveFontSize(Clamp(skin.hotkeyFontSize, 6, 72), "actionBars"), skin.hotkeyFontOutline or "")
+    ns.Theme.SetRuntimeFont(hotkey, self:ResolveFont(skin.hotkeyFontFace), Theme.ResolveFontSize(Clamp(skin.hotkeyFontSize, 6, 72), "actionBars"), skin.hotkeyFontOutline or "")
     hotkey:SetTextColor(unpack(skin.hotkeyFontColor))
     hotkey:SetAlpha(skin.showHotkeyText and 1 or 0)
     hotkey:ClearAllPoints()
@@ -638,7 +638,7 @@ function Core:ApplyAuxiliaryFonts(button, skin)
   end
 
   if count then
-    count:SetFont(self:ResolveFont(skin.chargeFontFace), Theme.ResolveFontSize(Clamp(skin.chargeFontSize, 6, 72), "actionBars"), skin.chargeFontOutline or "")
+    ns.Theme.SetRuntimeFont(count, self:ResolveFont(skin.chargeFontFace), Theme.ResolveFontSize(Clamp(skin.chargeFontSize, 6, 72), "actionBars"), skin.chargeFontOutline or "")
     count:SetTextColor(unpack(skin.chargeFontColor))
     count:SetAlpha(skin.showChargeText and 1 or 0)
     count:ClearAllPoints()
@@ -646,7 +646,7 @@ function Core:ApplyAuxiliaryFonts(button, skin)
   end
 
   if macro then
-    macro:SetFont(self:ResolveFont(skin.macroFontFace), Theme.ResolveFontSize(Clamp(skin.macroFontSize, 6, 72), "actionBars"), skin.macroFontOutline or "")
+    ns.Theme.SetRuntimeFont(macro, self:ResolveFont(skin.macroFontFace), Theme.ResolveFontSize(Clamp(skin.macroFontSize, 6, 72), "actionBars"), skin.macroFontOutline or "")
     macro:SetTextColor(unpack(skin.macroFontColor))
     macro:SetAlpha(skin.showMacroText and 1 or 0)
     macro:ClearAllPoints()
