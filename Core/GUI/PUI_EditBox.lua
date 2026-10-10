@@ -315,6 +315,7 @@ local function PUI_EditBox_Layout(widget, width)
 
   PUI_EditBox_LayoutChrome(widget.editbox, widget.editboxChrome)
   PUI_EditBox_LayoutChrome(widget.button, widget.buttonChrome)
+  widget.editbox:SetTextInsets(4, widget.buttonPending and geom.buttonWidth + 6 or 4, 0, 0)
   Pixel.Width(widget.frame, frameWidth)
 end
 
@@ -630,7 +631,7 @@ local function PUI_MultiLine_UpdateHeight(widget)
   local geom = Theme.GetWidgetRowGeometry()
   local labelSpace = widget.label:IsShown() and (geom.labelHeight + 8) or 4
   local buttonSpace = widget.disablebutton and 8 or (geom.controlHeight + 12)
-  local height = math_max(140, (widget.numlines or 4) * 14 + labelSpace + buttonSpace + 12)
+  local height = math_max(140, (widget.numlines or 4) * Theme.GetOptionsFontHeight("body") + labelSpace + buttonSpace + 12)
 
   widget:SetHeight(height)
 end
@@ -904,6 +905,7 @@ local PUI_MultiLine_Methods = {
     Theme.ApplyFont(self.editBox, "body")
     Theme.ApplyFont(self.buttonText, "body")
     WidgetSkins.Scrollbar(self.scrollBar)
+    PUI_MultiLine_UpdateHeight(self)
     PUI_MultiLine_Layout(self)
     PUI_MultiLine_RefreshVisualState(self)
   end,
