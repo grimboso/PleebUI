@@ -3038,6 +3038,7 @@ function Addon:RefreshOptionsTheme()
   end
 
   ns.AceHooks.RefreshOwnedWidgets()
+  ns.TestMode:RefreshToolbarTheme()
 
   frame.__puiRootNavSignature = nil
   _PUI_RefreshRootRegistryNav(frame)
