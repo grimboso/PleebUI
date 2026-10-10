@@ -394,7 +394,7 @@ function Navigation.RegisterWidget(widget)
   elseif kind == "PUI_EditBox" or kind == "PUI_MultiLineEditBox" or kind == "EditBox" or kind == "MultiLineEditBox" then
     Navigation.RegisterFrame(widget.editbox or widget.editBox, "text", "input", nil, widget)
     Navigation.RegisterFrame(widget.button, "button", "accept", nil, widget)
-  elseif kind == "PUI_Dropdown" or kind == "Dropdown" then
+  elseif kind == "PUI_Dropdown" or kind == "PUI_FontDropdown" or kind == "Dropdown" then
     Navigation.RegisterFrame(widget.button_cover or widget.button, "dropdown", "dropdown", nil, widget)
   elseif kind:sub(1, 6) == "LSM30_" then
     Navigation.RegisterFrame(widget.frame.dropButton, "dropdown", "dropdown", nil, widget)
