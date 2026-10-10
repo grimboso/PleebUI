@@ -56,7 +56,7 @@ end
 
 local function LayoutSample(widget)
   local width = math.max(1, widget.frame:GetWidth() - 24)
-  local height = math.max(Theme.GetControlMetrics().controlHeight, Theme.GetOptionsFontHeight("button") + 4, Theme.GetOptionsFontHeight("checkbox") + 4)
+  local height = math.max(Theme.GetControlMetrics().controlHeight, Theme.GetOptionsFontHeight("button") + 4, Theme.GetOptionsFontHeight("checkbox") + 4, Theme.GetOptionsPointerTargetSize(0))
   local gap = 12
   local columns = width >= math.max(420, Theme.GetOptionsFontHeight("body") * 22) and 2 or 1
   local cellWidth = (width - (columns - 1) * gap) / columns
