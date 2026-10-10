@@ -1141,6 +1141,22 @@ function TestMode:EnsureToolbar()
     panel.content:SetWidth(math_max(1, newWidth - 30))
   end)
   ns.KeyboardNavigation.BindWindow(panel, true)
+  ns.KeyboardNavigation.AttachGuide(panel, {
+    bottom = 42,
+    visible = function() return not TestMode.toolbarCollapsed end,
+    prepare = function()
+      if TestMode.toolbarCollapsed then
+        TestMode.toolbarCollapsed = false
+        TestMode:RebuildToolbar()
+      end
+    end,
+    layout = function(height)
+      panel.scroll:ClearAllPoints()
+      panel.scroll:SetPoint("TOPLEFT", panel, "TOPLEFT", 0, -TOOLBAR_TITLE_HEIGHT)
+      panel.scroll:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", -27, 42 + height)
+      panel.scroll:UpdateScrollChildRect()
+    end,
+  })
   ns.KeyboardNavigation.RegisterFrame(panel.search, "text", "moverSearch")
   panel:SetScript("OnHide", function()
     if ns.Flags.IsEditing and TestMode.active then
@@ -1764,9 +1780,10 @@ function TestMode:RebuildToolbar()
   panel.redoButton:SetShown(not self.toolbarCollapsed)
   panel.overlapButton:SetShown(not self.toolbarCollapsed)
   panel.scroll:SetVerticalScroll(math_min(panel.scroll:GetVerticalScroll(),
-    math_max(0, contentHeight - (panel:GetHeight() - TOOLBAR_TITLE_HEIGHT - 42))))
+    math_max(0, contentHeight - (panel:GetHeight() - TOOLBAR_TITLE_HEIGHT - 42 - ns.KeyboardNavigation.GetGuideHeight(panel)))))
   ns.Theme.ApplyExpandCollapseButton(panel.minimizeButton, not self.toolbarCollapsed)
   StylePanel(panel)
+  ns.KeyboardNavigation.RefreshWindows()
 end
 
 local function RefreshToolbarTheme()
