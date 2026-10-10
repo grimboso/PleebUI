@@ -7171,18 +7171,17 @@ local function UFCB_BuildCastbarArgs(unitKey)
     args.channel.args.showTicks.order = 2
     args.channel.args.thickness.order = 3
     args.channel.args.clipWarningText.order = 4
-    args.instantCast.name, args.instantCast.order = "Instant casts", 12
     local instant = args.instantCast.args
     instant.showInstantCasts.desc = instant.instantCastHelp.name
     instant.instantCastHelp = nil
     for index, entry in ipairs({
-      { "showInstantCasts", "Enable instant cast bar" },
+      { "showInstantCasts", "Enable" },
       { "instantCastFillMode", "GCD direction" },
-      { "instantCastTexture", "Bar texture" },
-      { "instantCastAlpha", "Bar opacity" },
+      { "instantCastTexture", "Texture" },
+      { "instantCastAlpha", "Opacity" },
       { "instantCastUseOverlay", "Show overlay" },
-      { "instantCastOverlayTexture", "Overlay texture" },
-      { "instantCastOverlayAlpha", "Overlay opacity" },
+      { "instantCastOverlayTexture", "Texture" },
+      { "instantCastOverlayAlpha", "Opacity" },
     }) do
       instant[entry[1]].name, instant[entry[1]].order = entry[2], index
     end
@@ -7208,13 +7207,36 @@ local function UFCB_BuildCastbarArgs(unitKey)
 
   local instantArgs
   if unitKey == "player" then
-    instantArgs = { instantCast = args.instantCast }
+    local instant = args.instantCast.args
+    instantArgs = {
+      feature = UFCB_BuildInlineArgsGroup("Enable", 10, {
+        showInstantCasts = instant.showInstantCasts,
+      }),
+      overlay = UFCB_BuildInlineArgsGroup("Overlay settings", 20, {
+        showOverlay = instant.instantCastUseOverlay,
+        texture = instant.instantCastOverlayTexture,
+        opacity = instant.instantCastOverlayAlpha,
+      }),
+      bar = UFCB_BuildInlineArgsGroup("Bar settings", 30, {
+        direction = instant.instantCastFillMode,
+        texture = instant.instantCastTexture,
+        opacity = instant.instantCastAlpha,
+      }),
+    }
+    for _, group in pairs(instantArgs) do group.arg = { puiExplicit = true } end
     args.instantCast = nil
   end
 
   local empowerArgs
   if PLAYER_CLASS == "EVOKER" then
-    empowerArgs = { empower = args.empower, empowerStageColors = args.empowerStageColors }
+    empowerArgs = { overlay = args.empower, bar = args.empowerStageColors }
+    if empowerArgs.overlay then
+      empowerArgs.overlay.name, empowerArgs.overlay.order = "Overlay settings", 10
+      empowerArgs.overlay.args.showPips.name, empowerArgs.overlay.args.showPips.order = "Show stage pips", 1
+      empowerArgs.overlay.args.showHold.name, empowerArgs.overlay.args.showHold.order = "Show hold area", 2
+      empowerArgs.overlay.args.holdColor.name, empowerArgs.overlay.args.holdColor.order = "Hold area color", 3
+    end
+    empowerArgs.bar.name, empowerArgs.bar.order = "Bar settings", 20
     args.empower = nil
     args.empowerStageColors = nil
   end
@@ -7534,12 +7556,12 @@ local function UFCB_BuildUnitBaseLeafSpecs(unitKey, opts)
   end
   if opts.includeCastbar ~= false then
     local castbar, instantCast, empower = UFCB_BuildCastbarArgs(opts.castbarUnit or unitKey)
-    specs[#specs + 1] = { key = "castbar", name = "Castbar", order = 8, args = castbar }
+    specs[#specs + 1] = { key = "castbar", name = "Cast Bar", order = 8, args = castbar }
     if instantCast then
-      specs[#specs + 1] = { key = "instantCast", name = "Instant Castbar", order = 8.1, args = instantCast }
+      specs[#specs + 1] = { key = "instantCast", name = "Instant Cast Bar", order = 8.1, args = instantCast }
     end
     if empower then
-      specs[#specs + 1] = { key = "empower", name = "Empower", order = 8.2, args = empower }
+      specs[#specs + 1] = { key = "empower", name = "Empower Cast Bar", order = 8.2, args = empower }
     end
   end
   return specs
