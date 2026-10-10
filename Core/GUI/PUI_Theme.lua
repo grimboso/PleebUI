@@ -805,7 +805,6 @@ function Theme.ReleaseCreatedWidget(widget)
     object.__puiSkipOptionsGlobalFont = nil
     object.__puiUseTextureBackdrop = nil
     object.__puiUseTreeCards = nil
-    object.__puiTreeCardFontApplied = nil
     object.__puiTreeCardShadowApplied = nil
     object.__puiTreeCardHitRectSet = nil
     object.__puiTreeCardLayoutKey = nil
@@ -830,6 +829,44 @@ local function _PUI_GetOptionsOwnedFontSize(size)
   if finalSize > 72 then finalSize = 72 end
 
   return finalSize
+end
+
+local optionsFontMeasure
+local optionsFontMeasureSignature
+local optionsFontHeights = {}
+
+function Theme.GetOptionsFontHeight(role, size)
+  local signature = table.concat({
+    Theme.GetFont(),
+    Theme.GetGlobalUIOutline(),
+    tostring(_PUI_GetOptionsFontSizeDelta()),
+    tostring(Theme.ResolveFontSize(12, "options")),
+  }, "|")
+
+  if optionsFontMeasureSignature ~= signature then
+    optionsFontMeasureSignature = signature
+    wipe(optionsFontHeights)
+  end
+
+  local baseSize = size or Theme.GetFontRoleInfo(role).size
+  local height = optionsFontHeights[baseSize]
+  if not height then
+    if not optionsFontMeasure then
+      local frame = CreateFrame("Frame")
+      frame:Hide()
+      optionsFontMeasure = frame:CreateFontString(nil, "OVERLAY")
+      optionsFontMeasure.__puiOptionsFontOwned = true
+      optionsFontMeasure:SetWordWrap(false)
+      optionsFontMeasure:SetText("Agj0123456789")
+    end
+
+    Theme.ApplyFont(optionsFontMeasure, role, baseSize)
+    local _, fontSize = optionsFontMeasure:GetFont()
+    height = math.ceil(math.max(fontSize, optionsFontMeasure:GetStringHeight()) + 2)
+    optionsFontHeights[baseSize] = height
+  end
+
+  return height
 end
 
 local function _PUI_ApplyOwnedWidgetFontString(fs, role)
@@ -1205,6 +1242,10 @@ local function _PUI_ApplyCreatedWidgetSizing(widget, opts)
 
   local metrics = Theme.GetControlMetrics(widget)
   local height = tonumber(opts and opts.height) or metrics.widgetBoxHeight
+
+  if widget.__puiWrapLabel == true then
+    height = math.max(height, widget.frame:GetHeight())
+  end
 
   if widget.type == "MultiLineEditBox" or widget.type == "PUI_MultiLineEditBox" then
     local currentHeight = tonumber(widget.frame:GetHeight()) or 0
@@ -1777,17 +1818,6 @@ local function IsCompactInlineWidget(widget)
     or widgetType == "ColorPicker"
 end
 
-function Theme.GetControlMetrics(widget)
-  if IsCompactWidget(widget) then
-    if IsCompactInlineWidget(widget) then
-      return PUI_COMPACT_INLINE_CONTROL_METRICS
-    end
-    return PUI_COMPACT_CONTROL_METRICS
-  end
-
-  return PUI_CONTROL_METRICS
-end
-
 local PUI_WIDGET_ROW_GEOMETRY = {
   rowHeight = PUI_CONTROL_METRICS.widgetBoxHeight,
   labelLeft = 8,
@@ -1842,15 +1872,56 @@ local PUI_COMPACT_INLINE_WIDGET_ROW_GEOMETRY = {
   buttonWidth = 32,
 }
 
-function Theme.GetWidgetRowGeometry(widget)
-  if IsCompactWidget(widget) then
-    if IsCompactInlineWidget(widget) then
-      return PUI_COMPACT_INLINE_WIDGET_ROW_GEOMETRY
-    end
-    return PUI_COMPACT_WIDGET_ROW_GEOMETRY
+local optionsWidgetGeometryHeight
+local optionsWidgetGeometry = {}
+
+local function GetOptionsWidgetGeometry(widget)
+  local fontHeight = Theme.GetOptionsFontHeight("body")
+  if optionsWidgetGeometryHeight ~= fontHeight then
+    optionsWidgetGeometryHeight = fontHeight
+    wipe(optionsWidgetGeometry)
   end
 
-  return PUI_WIDGET_ROW_GEOMETRY
+  local density = IsCompactWidget(widget)
+    and (IsCompactInlineWidget(widget) and "inline" or "compact") or "normal"
+  local cached = optionsWidgetGeometry[density]
+  if cached then
+    return cached.metrics, cached.geometry
+  end
+
+  local baseMetrics = density == "inline" and PUI_COMPACT_INLINE_CONTROL_METRICS
+    or density == "compact" and PUI_COMPACT_CONTROL_METRICS or PUI_CONTROL_METRICS
+  local baseGeometry = density == "inline" and PUI_COMPACT_INLINE_WIDGET_ROW_GEOMETRY
+    or density == "compact" and PUI_COMPACT_WIDGET_ROW_GEOMETRY or PUI_WIDGET_ROW_GEOMETRY
+  local metrics, geometry = {}, {}
+  for key, value in pairs(baseMetrics) do metrics[key] = value end
+  for key, value in pairs(baseGeometry) do geometry[key] = value end
+
+  geometry.labelHeight = math.max(geometry.labelHeight, fontHeight)
+  geometry.controlHeight = math.max(geometry.controlHeight, fontHeight + (density == "inline" and 0 or 4))
+  if density ~= "inline" then
+    geometry.controlTop = geometry.controlTop + geometry.labelHeight - baseGeometry.labelHeight
+  end
+  geometry.rowHeight = geometry.controlTop + geometry.controlHeight + geometry.controlBottom
+  geometry.valueWidth = math.max(geometry.valueWidth, fontHeight * 4 + 10)
+  geometry.buttonWidth = math.max(geometry.buttonWidth, fontHeight * 2 + 8)
+
+  metrics.controlHeight = geometry.controlHeight
+  metrics.widgetBoxHeight = geometry.rowHeight
+  metrics.sliderInputWidth = geometry.valueWidth
+  metrics.checkboxBoxSize = math.max(metrics.checkboxBoxSize, fontHeight)
+  optionsWidgetGeometry[density] = { metrics = metrics, geometry = geometry }
+  return metrics, geometry
+end
+
+function Theme.GetControlMetrics(widget)
+  local metrics = GetOptionsWidgetGeometry(widget)
+  return metrics
+end
+
+function Theme.GetWidgetRowGeometry(widget)
+  local _, geometry = GetOptionsWidgetGeometry(widget)
+  return geometry
 end
 
 function Theme.GetConfiguredOptionsWidgetColumns()
