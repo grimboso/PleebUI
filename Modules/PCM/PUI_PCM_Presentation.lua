@@ -88,7 +88,7 @@ local function ApplyFont(fontString, config, role, fallbackSize, maxSize)
   end
 
   local path, size, flags = ResolveFont(config, role, fallbackSize)
-  fontString:SetFont(path, maxSize and math.min(size, maxSize) or size, flags)
+  ns.Theme.SetRuntimeFont(fontString, path, maxSize and math.min(size, maxSize) or size, flags)
   fontString:SetShadowColor(0, 0, 0, 1)
   fontString:SetShadowOffset(1, -1)
 
