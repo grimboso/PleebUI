@@ -954,6 +954,12 @@ function WidgetSkins.Dropdown(widget)
   SkinDropdown(widget, IsLSMDropdown(widget.type))
 end
 
+local function ApplyFontDropdownPreview(text, value)
+  local _, size, outline = text:GetFont()
+  text.__puiSkipOptionsGlobalFont = true
+  text:SetFont(ns.OptionsUtil.FetchFontPath(value), size, outline)
+end
+
 function WidgetSkins.DropdownItem(widget)
   local colors = Theme.GetColors()
   local frame = widget.frame
@@ -995,6 +1001,10 @@ function WidgetSkins.DropdownItem(widget)
   sub:SetVertexColor(colors.text[1], colors.text[2], colors.text[3], colors.text[4])
 
   Theme.ApplyFont(text, "body")
+  local owner = widget.userdata and widget.userdata.obj
+  if owner and owner.type == "PUI_FontDropdown" then
+    ApplyFontDropdownPreview(text, widget.userdata.value)
+  end
   text:SetTextColor(colors.text[1], colors.text[2], colors.text[3], colors.text[4])
   text:ClearAllPoints()
   text:SetPoint("TOPLEFT", frame, "TOPLEFT", 20, -1)
@@ -1562,6 +1572,9 @@ local PUI_Dropdown_Methods = {
 
   SetText = function(self, text)
     self.text:SetText(NormalizeDropdownDisplayText(text))
+    if self.type == "PUI_FontDropdown" then
+      ApplyFontDropdownPreview(self.text, self.value)
+    end
   end,
 
   SetLabel = function(self, text)
@@ -1695,6 +1708,9 @@ local PUI_Dropdown_Methods = {
   RefreshTheme = function(self)
     Theme.ApplyFont(self.label, "body")
     Theme.ApplyFont(self.text, "body")
+    if self.type == "PUI_FontDropdown" then
+      ApplyFontDropdownPreview(self.text, self.value)
+    end
 
     if self.pullout then
       if self.pullout.__puiDropdownSearchBox then
@@ -1708,7 +1724,7 @@ local PUI_Dropdown_Methods = {
   end,
 }
 
-local function PUI_Dropdown_Constructor()
+local function PUI_Dropdown_Constructor(widgetType)
   local frame = CreateFrame("Frame", nil, UIParent)
   frame:SetScript("OnHide", PUI_Dropdown_OnHide)
 
@@ -1734,7 +1750,7 @@ local function PUI_Dropdown_Constructor()
   arrow:SetTexture(ARROW_TEXTURE)
 
   local widget = {
-    type = PUI_DROPDOWN_TYPE,
+    type = widgetType or PUI_DROPDOWN_TYPE,
     frame = frame,
     label = label,
     button = button,
@@ -1758,3 +1774,6 @@ local function PUI_Dropdown_Constructor()
 end
 
 AceGUI:RegisterWidgetType(PUI_DROPDOWN_TYPE, PUI_Dropdown_Constructor, PUI_DROPDOWN_VERSION)
+AceGUI:RegisterWidgetType("PUI_FontDropdown", function()
+  return PUI_Dropdown_Constructor("PUI_FontDropdown")
+end, PUI_DROPDOWN_VERSION)
