@@ -7,7 +7,8 @@ ns.ActionBarsPreview = Preview
 local P = select(1, ns.Pleebug:DropIn(Preview))
 
 local function StyleSampleText(text, skin, prefix)
-  text:SetFont(
+  ns.Theme.SetRuntimeFont(
+    text,
     Core:ResolveFont(skin[prefix .. "FontFace"]),
     Theme.ResolveFontSize(skin[prefix .. "FontSize"], "actionBars"),
     skin[prefix .. "FontOutline"] or ""
