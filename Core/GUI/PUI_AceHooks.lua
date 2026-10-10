@@ -266,6 +266,7 @@ end
 function AceHooks.RefreshOwnedWidgets()
   for widget in pairs(PUI_OWNED_WIDGETS) do
     if widget.__puiAceGUIOwnedByPleebUI == true and widget.isQueuedForRelease ~= true then
+      ns.Theme.ApplyCreatedWidgetSizing(widget)
       if PUI_SELF_OWNED_WIDGET_TYPES[widget.type] then
         widget:RefreshTheme()
       else
