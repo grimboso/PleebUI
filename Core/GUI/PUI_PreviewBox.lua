@@ -21,6 +21,7 @@ local tostring = _G.tostring
 local type = _G.type
 local Theme = ns.Theme
 local Pixel = ns.Pixel
+local interactionSerial = 0
 
 local function PUI_PreviewBox_ApplyBackdrop(frame, bgColor, borderColor, edge)
   Theme.SetSquareBackdrop(frame, {
@@ -61,6 +62,9 @@ local function PUI_PreviewBox_ShowInteractionTooltip(button)
     GameTooltip:AddLine(description, 0.82, 0.82, 0.82, true)
   end
 
+  if button.__puiPreviewInteractionFocused then
+    GameTooltip:AddLine("Enter or Space to activate.", 0.82, 0.82, 0.82, true)
+  end
   GameTooltip:Show()
 end
 
@@ -70,12 +74,33 @@ local function PUI_PreviewBox_HideInteractionTooltip(button)
   end
 end
 
+local function PUI_PreviewBox_ActivateInteraction(button, mouseButton)
+  local interaction = button.__puiPreviewInteractionOptions
+  if type(interaction.onClick) == "function" then
+    interaction.onClick(button, mouseButton or "LeftButton")
+  end
+end
+
+local INTERACTION_FOCUS_ACTIONS = {
+  activate = PUI_PreviewBox_ActivateInteraction,
+  focus = function(button)
+    button.__puiPreviewInteractionFocused = true
+    PUI_PreviewBox_ShowInteractionTooltip(button)
+  end,
+  blur = function(button)
+    button.__puiPreviewInteractionFocused = nil
+    PUI_PreviewBox_HideInteractionTooltip(button)
+  end,
+}
+
 function PreviewBox.CreateInteraction(parent, anchor, options)
   options = options or {}
 
   local colors = Theme.GetColors()
   local hoverColor = options.hoverColor or colors.accent
   local button = CreateFrame("Button", nil, parent)
+  interactionSerial = interactionSerial + 1
+  local keyboardKey = "previewInteraction:" .. interactionSerial
   local fill = button:CreateTexture(nil, "OVERLAY", nil, 6)
   local edges = {}
 
@@ -133,6 +158,12 @@ function PreviewBox.CreateInteraction(parent, anchor, options)
     else
       self:RegisterForDrag()
     end
+    if type(self.__puiPreviewInteractionOptions.onClick) == "function" then
+      ns.KeyboardNavigation.RegisterFrame(self, "button", keyboardKey, nil, nil, nil, INTERACTION_FOCUS_ACTIONS)
+      if self.__puiPreviewInteractionFocused then PUI_PreviewBox_ShowInteractionTooltip(self) end
+    else
+      ns.KeyboardNavigation.UnregisterFrame(self)
+    end
   end
 
   button:SetScript("OnEnter", function(self)
@@ -162,7 +193,7 @@ function PreviewBox.CreateInteraction(parent, anchor, options)
       interaction.onLeave(self)
     end
 
-    PUI_PreviewBox_HideInteractionTooltip(self)
+    if not self.__puiPreviewInteractionFocused then PUI_PreviewBox_HideInteractionTooltip(self) end
   end)
 
   button:SetScript("OnMouseDown", function(self, mouseButton)
@@ -221,28 +252,20 @@ function PreviewBox.CreateInteraction(parent, anchor, options)
   end)
 
   button:SetScript("OnClick", function(self, mouseButton)
-    local interaction = self.__puiPreviewInteractionOptions or {}
-
     if self.__puiPreviewInteractionDragged then
       self.__puiPreviewInteractionDragged = nil
       return
     end
 
-    if type(interaction.onClick) == "function" then
-      interaction.onClick(self, mouseButton)
-    end
+    PUI_PreviewBox_ActivateInteraction(self, mouseButton)
   end)
 
   button:SetScript("OnHide", function(self)
-    if not self.__puiPreviewInteractionHovered then
-      return
+    if self.__puiPreviewInteractionHovered then
+      self.__puiPreviewInteractionHovered = nil
+      PUI_PreviewBox_SetInteractionHighlight(self, false)
+      ResetCursor()
     end
-
-    self.__puiPreviewInteractionHovered = nil
-    PUI_PreviewBox_SetInteractionHighlight(self, false)
-
-    ResetCursor()
-
     PUI_PreviewBox_HideInteractionTooltip(self)
   end)
 
@@ -564,6 +587,7 @@ function PreviewBox.FocusOption(path, sectionKey, optionKey)
 
     if targetFrame:IsShown() then
       PUI_PreviewBox_ShowOptionGlow(targetFrame)
+      ns.KeyboardNavigation.FocusWidget(targetWidget)
     end
   end)
 end
