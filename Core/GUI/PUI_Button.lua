@@ -67,14 +67,14 @@ end
 
 local function ApplyButtonVisual(button, fallbackText)
   local colors = Theme.GetColors()
-  local bg = colors.control
-  local border = colors.border
   local enabled = button:IsEnabled()
+  local bg = enabled and colors.control or colors.disabledControl
+  local border = enabled and colors.controlBorder or colors.disabledControlBorder
 
   Theme.SetSquareBackdrop(button, {
-    bg = { bg[1], bg[2], bg[3], enabled and 0.66 or 0.42 },
-    border = { border[1], border[2], border[3], enabled and 0.22 or 0.14 },
-  }, math.max(Theme.GetEdgeSize(), 2))
+    bg = bg,
+    border = border,
+  }, Theme.ControlBorderSize)
 
   local backdrop = button._puiBg
   backdrop:ClearAllPoints()
@@ -157,8 +157,8 @@ function WidgetSkins.Keybinding(widget)
   local colors = Theme.GetColors()
   Theme.SetSquareBackdrop(msgframe, {
     bg = colors.control,
-    border = colors.border,
-  }, math.max(Theme.GetEdgeSize(), 2))
+    border = colors.controlBorder,
+  }, Theme.ControlBorderSize)
 
   msgframe.msg:ClearAllPoints()
   Pixel.Point(msgframe.msg, "CENTER", msgframe, "CENTER", 0, 0)
@@ -187,7 +187,7 @@ local function PUI_Button_RefreshVisualState(widget)
   local pressed = widget.button.__puiPressed == true and not disabled
   local background = disabled and colors.disabledControl or colors.control
   local backgroundAlpha = background[4]
-  local border = disabled and colors.disabledBorder or colors.border
+  local border = disabled and colors.disabledControlBorder or colors.controlBorder
 
   if pressed then
     background = colors.accent
@@ -202,7 +202,7 @@ local function PUI_Button_RefreshVisualState(widget)
   Theme.SetSquareBackdrop(widget.button, {
     bg = { background[1], background[2], background[3], backgroundAlpha },
     border = border,
-  }, Theme.GetEdgeSize())
+  }, Theme.ControlBorderSize)
 
   widget.button._puiBg:SetAlpha(1)
 
