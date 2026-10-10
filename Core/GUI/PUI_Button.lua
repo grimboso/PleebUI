@@ -56,7 +56,7 @@ local function ApplyButtonText(button, fallbackText, textColor)
     return
   end
 
-  Theme.ApplyFont(text, "button")
+  Theme.ApplyFont(text, button.__puiOptionsFontRole or "button")
   text:SetAlpha(1)
   text:SetDrawLayer("OVERLAY", 7)
   text:SetTextColor(textColor[1], textColor[2], textColor[3], textColor[4])
