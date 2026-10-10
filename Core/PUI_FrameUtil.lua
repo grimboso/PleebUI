@@ -4378,13 +4378,6 @@ local function EnsureSelectionSurface()
 end
 
 
-function FrameUtil._UpdateEditDialogKeyboardState()
-  local panel = ns.TestMode.toolbar
-  if panel and not InCombatLockdown() then
-    panel:EnableKeyboard(ns.Flags.IsEditing == true)
-  end
-end
-
 function FrameUtil.HandleEditModeKeyDown(key)
   if not ns.Flags.IsEditing or InCombatLockdown() then return false end
   if _G.GetCurrentKeyBoardFocus() then return false end
@@ -4416,7 +4409,10 @@ function FrameUtil.HandleEditModeKeyDown(key)
     else
       FrameUtil._NudgeSelected(step, 0)
     end
+  else
+    return false
   end
+  return true
 end
 
 function FrameUtil.EnsureEditCoordinates()
@@ -4462,6 +4458,7 @@ function FrameUtil.EnsureEditCoordinates()
   local function AddCoordinate(labelText, xOffset)
     local box = AceGUI:Create("PUI_EditBox")
     box:SetLabel("")
+    box:SetUserData("path", { "editMode", "coordinates", labelText })
     box:SetWidth(100)
     box:SetCallback("OnEnterPressed", FrameUtil._ApplyNudgeFromInputs)
     box.frame:SetParent(popup)
@@ -6540,7 +6537,7 @@ function FrameUtil.SetKeyboardMovementEnabled(enable, noPersist)
     FrameUtil._GetEditModeDB().keyboardMoveEnabled = enable
   end
 
-  FrameUtil._UpdateEditDialogKeyboardState()
+  ns.KeyboardNavigation.RefreshWindows()
   ns.TestMode:QueueToolbarRefresh()
 end
 
@@ -6707,7 +6704,7 @@ function FrameUtil.OnEditModeChanged(enable)
 
     ShowEditDialog(true)
     EnsureSelectionSurface():SetShown(true)
-    FrameUtil._UpdateEditDialogKeyboardState()
+    ns.KeyboardNavigation.RefreshWindows()
   else
     PlayDimmerFade(false)
 
@@ -6718,14 +6715,15 @@ function FrameUtil.OnEditModeChanged(enable)
 
     if FrameUtil._keyboardMoveTempSession then
       FrameUtil._keyboardMoveTempSession = nil
-      FrameUtil.SetKeyboardMovementEnabled(false, true)
+      FrameUtil.SetKeyboardMovementEnabled(FrameUtil._GetEditModeDB().keyboardMoveEnabled == true, true)
     else
-      FrameUtil._UpdateEditDialogKeyboardState()
+      ns.KeyboardNavigation.RefreshWindows()
     end
   end
 
   if enable then
     ns.TestMode:SetActive(true, "edit-mode")
+    FrameUtil._coordinatePanel:SetParent(ns.TestMode.toolbar)
     FrameUtil._RefreshSelectionVisuals()
   end
 end
@@ -6734,10 +6732,14 @@ function Addon:IsEditMode()
   return ns.Flags.IsEditing
 end
 
-function Addon:SetEditMode(enable)
+function Addon:SetEditMode(enable, keyboardOverride)
   enable = not not enable
 
   if enable == ns.Flags.IsEditing then
+    if enable and keyboardOverride == true and not InCombatLockdown() then
+      FrameUtil._keyboardMoveTempSession = true
+      FrameUtil.SetKeyboardMovementEnabled(true, true)
+    end
     return
   end
 
@@ -6752,11 +6754,14 @@ function Addon:SetEditMode(enable)
   end
 
   if enable then
-    if FrameUtil._keyboardMoveTempSession then
-      FrameUtil.SetKeyboardMovementEnabled(true, true)
-    else
-      FrameUtil.SetKeyboardMovementEnabled(false)
+    FrameUtil._InitEditModeConfig()
+    if keyboardOverride ~= true and self:GetGlobalOptionsDB().editModeInputExplained ~= true then
+      self:ShowEditModeInputChoice()
+      return
     end
+    if self._EditModeInputChoice then self._EditModeInputChoice:Hide() end
+    FrameUtil._keyboardMoveTempSession = keyboardOverride == true or nil
+    FrameUtil.SetKeyboardMovementEnabled(keyboardOverride == true or FrameUtil._GetEditModeDB().keyboardMoveEnabled == true, true)
   end
 
   ns.Flags.IsEditing = enable
@@ -6782,24 +6787,12 @@ do
       return
     end
 
-    FrameUtil._UpdateEditDialogKeyboardState()
+    ns.KeyboardNavigation.RefreshWindows()
     SchedulePendingSmartSnapRelayouts()
   end)
 end
 
 SLASH_PUIEDITMODEKEYBOARD1 = "/pek"
-SlashCmdList["PUIEDITMODEKEYBOARD"] = function(msg)
-  if Addon:IsEditMode() then
-    Addon:SetEditMode(false)
-    return
-  end
-
-  if InCombatLockdown() then
-    Addon:Print("Cannot enable Edit Mode while in combat.")
-    return
-  end
-
-  FrameUtil._keyboardMoveTempSession = true
-  FrameUtil.SetKeyboardMovementEnabled(true, true)
-  Addon:SetEditMode(true)
+SlashCmdList["PUIEDITMODEKEYBOARD"] = function()
+  Addon:SetEditMode(true, true)
 end
