@@ -83,43 +83,47 @@ local function InstallDisabledHover(widget)
   RefreshDisabledHover(widget)
 end
 
-local function _PUI_IsPleebUIAceTooltipOwner(owner)
-  if not owner then
-    return false
-  end
+local function _PUI_IsPleebUIOptionsTooltipOwner(owner)
+  while owner and not owner:IsForbidden() do
+    if owner == ns.Addon._OptionsWindow or owner.__puiAceGUIOwnedByPleebUI == true then
+      return true
+    end
 
-  if owner.__puiAceGUIOwnedByPleebUI == true then
-    return true
+    local widget = owner.obj
+    if widget and widget.__puiAceGUIOwnedByPleebUI == true then
+      return true
+    end
+    owner = owner:GetParent()
   end
-
-  local widget = owner.obj
-  return widget and widget.__puiAceGUIOwnedByPleebUI == true
+  return false
 end
 
-local function _PUI_RefreshAceTooltipBackground(tooltip)
-  ns.Theme.SetAceTooltipSolidBackground(
+local function _PUI_RefreshOptionsTooltip(tooltip)
+  if tooltip:IsForbidden() then return end
+  ns.Theme.SetOptionsTooltipSkin(
     tooltip,
-    _PUI_IsPleebUIAceTooltipOwner(tooltip:GetOwner())
+    _PUI_IsPleebUIOptionsTooltipOwner(tooltip:GetOwner())
   )
 end
 
-local function _PUI_HideAceTooltipBackground(tooltip)
-  ns.Theme.SetAceTooltipSolidBackground(tooltip, false)
+local function _PUI_RestoreOptionsTooltip(tooltip)
+  ns.Theme.SetOptionsTooltipSkin(tooltip, false)
 end
 
-local function _PUI_InstallAceTooltipHook(tooltip)
-  if not tooltip or tooltip.__puiAceTooltipBackgroundHooked == true then
+local function _PUI_InstallOptionsTooltipHook(tooltip)
+  if tooltip.__puiOptionsTooltipHooked == true then
     return
   end
 
-  tooltip.__puiAceTooltipBackgroundHooked = true
-  tooltip:HookScript("OnShow", _PUI_RefreshAceTooltipBackground)
-  tooltip:HookScript("OnHide", _PUI_HideAceTooltipBackground)
+  tooltip.__puiOptionsTooltipHooked = true
+  hooksecurefunc(tooltip, "SetOwner", _PUI_RefreshOptionsTooltip)
+  tooltip:HookScript("OnShow", _PUI_RefreshOptionsTooltip)
+  tooltip:HookScript("OnHide", _PUI_RestoreOptionsTooltip)
 end
 
 local function _PUI_InstallAceGUIHooks()
   local AceGUI = LibStub("AceGUI-3.0")
-  _PUI_InstallAceTooltipHook(AceGUI.tooltip)
+  _PUI_InstallOptionsTooltipHook(AceGUI.tooltip)
 
   local function ClearOwnership(widget)
     if not widget then
@@ -320,7 +324,7 @@ end
 
 local function _PUI_InstallAceConfigDialogHooks()
   local AceConfigDialog = LibStub("AceConfigDialog-3.0")
-  _PUI_InstallAceTooltipHook(AceConfigDialog.tooltip)
+  _PUI_InstallOptionsTooltipHook(AceConfigDialog.tooltip)
 
   hooksecurefunc("StaticPopup_Show", function(which, _, _, data)
     local popup = StaticPopup_FindVisible(which, data)
@@ -341,6 +345,11 @@ end
 
 function AceHooks.RefreshOwnedWidgets()
   ns.KeyboardNavigation.QueueRestore()
+  for _, tooltip in ipairs({ GameTooltip, LibStub("AceGUI-3.0").tooltip, LibStub("AceConfigDialog-3.0").tooltip }) do
+    if not tooltip:IsForbidden() and tooltip:IsShown() then
+      _PUI_RefreshOptionsTooltip(tooltip)
+    end
+  end
   for widget in pairs(PUI_OWNED_WIDGETS) do
     if widget.__puiAceGUIOwnedByPleebUI == true and widget.isQueuedForRelease ~= true then
       ns.Theme.ApplyCreatedWidgetSizing(widget)
@@ -359,4 +368,5 @@ end
 function AceHooks.Install()
   _PUI_InstallAceGUIHooks()
   _PUI_InstallAceConfigDialogHooks()
+  _PUI_InstallOptionsTooltipHook(GameTooltip)
 end
