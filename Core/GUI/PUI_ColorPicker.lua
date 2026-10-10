@@ -98,7 +98,13 @@ local function RefreshPalette()
   local db = GetPaletteDB()
   local height = math.max(24, Theme.GetOptionsFontHeight("body") + 10, Theme.GetOptionsFontHeight("button") + 10)
   local width = math.max(320, height * COLOR_LIMIT + 36)
-  palette:SetSize(width, height * 7 + 24)
+  local opacityHeight = session.widget.HasAlpha and (Theme.GetWidgetRowGeometry(palette.opacity).rowHeight + 8) or 0
+  palette:SetSize(width, height * 6 + 24 + opacityHeight)
+  palette.opacity.frame:ClearAllPoints()
+  palette.opacity.frame:SetPoint("TOPLEFT", palette, "TOPLEFT", 12, -12 - height * 6)
+  palette.opacity:SetWidth(width - 24)
+  palette.opacity.frame:SetShown(session.widget.HasAlpha)
+  palette.opacity:SetValue(ColorPickerFrame:GetColorAlpha())
   local colors = Theme.GetColors()
   palette:SetBackdropColor(unpack(colors.background))
   palette:SetBackdropBorderColor(unpack(colors.controlBorder))
@@ -149,6 +155,16 @@ local function EnsurePalette()
   palette:SetPoint("TOPLEFT", ColorPickerFrame, "TOPRIGHT", 8, 0)
   palette:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8x8", edgeFile = "Interface\\Buttons\\WHITE8x8",
     edgeSize = Theme.ControlBorderSize })
+  local AceGUI = LibStub("AceGUI-3.0")
+  palette.opacity = AceGUI:Create("PUI_Slider")
+  palette.opacity:SetLabel("Opacity")
+  palette.opacity:SetSliderValues(0, 1, 0.01)
+  palette.opacity:SetIsPercent(true)
+  palette.opacity:SetCallback("OnValueChanged", function(_, _, value)
+    if session then ColorPickerFrame.Content.ColorPicker:SetColorAlpha(value) end
+  end)
+  palette.opacity.frame:SetParent(palette)
+  ns.AceHooks.TakeOwnership(palette.opacity)
   palette.actions = {}
   for index, text in ipairs({ "Copy color", "Paste color" }) do
     local button = CreateFrame("Button", nil, palette, "UIPanelButtonTemplate")
@@ -207,6 +223,7 @@ local function FinishColorSession()
   if not finished then return end
   session = nil
   palette:Hide()
+  ns.KeyboardNavigation.RefreshWindows()
   local widget = finished.widget
   widget.__puiColorOpen = nil
   if widget.__puiAceGUIOwnedByPleebUI then
@@ -244,11 +261,22 @@ local function OpenColorSession(widget)
   RefreshPalette()
   palette:SetFrameLevel(ColorPickerFrame:GetFrameLevel() + 10)
   palette:Show()
+  ns.KeyboardNavigation.RegisterFrame(ColorPickerFrame.Content.HexBox, "text", "colorHex")
+  ns.KeyboardNavigation.RegisterFrame(ColorPickerFrame.Footer.OkayButton, "button", "colorAccept")
+  ns.KeyboardNavigation.RegisterFrame(ColorPickerFrame.Footer.CancelButton, "button", "colorCancel")
+  ns.KeyboardNavigation.BindWindow(ColorPickerFrame, false, function()
+    ColorPickerFrame.Footer.CancelButton:Click("LeftButton")
+  end, function() return session ~= nil end)
+  ns.KeyboardNavigation.ActivateWindow(ColorPickerFrame)
+  ns.KeyboardNavigation.HandleKey("TAB")
   if not palette.pickerHooked then
     palette.pickerHooked = true
     ColorPickerFrame:HookScript("OnHide", FinishColorSession)
     ColorPickerFrame.Content.ColorPicker:HookScript("OnColorSelect", function()
-      if session then RefreshFavoriteState() end
+      if session then
+        palette.opacity:SetValue(ColorPickerFrame:GetColorAlpha())
+        RefreshFavoriteState()
+      end
     end)
     hooksecurefunc(ColorPickerFrame, "SetupColorPickerAndShow", function()
       if session and ColorPickerFrame.swatchFunc ~= session.swatch then
