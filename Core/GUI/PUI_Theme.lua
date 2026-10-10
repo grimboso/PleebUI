@@ -906,6 +906,7 @@ function Theme.GetOptionsFontSignature(role, size)
   local settings = Theme.GetOptionsFontSettings(role)
   return table.concat({
     settings.font, settings.outline, tostring(settings.shadow), tostring(settings.fontSlug == true), tostring(settings.size), tostring(size),
+    tostring(Addon:GetOptionsDB().optionsFontSlug == true),
     tostring(_PUI_GetOptionsFontSizeDelta()),
     tostring(Theme.ResolveFontSize(12, "options")),
   }, "|")
@@ -982,7 +983,10 @@ end
 
 Theme.ApplyCreatedWidgetFonts = _PUI_ApplyCreatedWidgetFonts
 
+local runtimeFonts = setmetatable({}, { __mode = "k" })
+
 function Theme.ApplyFont(fs, role, size, outline, scope)
+  runtimeFonts[fs] = nil
   local meta = Theme._AppliedFonts[fs]
   if not meta then
     meta = {}
@@ -996,7 +1000,7 @@ function Theme.ApplyFont(fs, role, size, outline, scope)
 
   local roleMeta = role == "label" and Theme.FontRoles.body or Theme.FontRoles[role]
   local font = Theme.GetFont()
-  local fontSlug = false
+  local fontSlug = Addon:GetMediaDB().runtimeFontSlug == true
   size = size or roleMeta.size or 12
   outline = outline or roleMeta.outline or "OUTLINE"
 
@@ -1005,7 +1009,7 @@ function Theme.ApplyFont(fs, role, size, outline, scope)
     font = settings.font
     size = GetOptionsOwnedFontSize(role, size)
     outline = (settings.shadow and "SHADOW" or "") .. settings.outline
-    fontSlug = settings.fontSlug == true
+    fontSlug = Addon:GetOptionsDB().optionsFontSlug == true or settings.fontSlug == true
     scope = "options"
   end
 
@@ -1033,7 +1037,7 @@ function Theme.ApplyFont(fs, role, size, outline, scope)
     style = style:gsub(",$", "")
   end
 
-  if fontSlug then style = style == "" and "SLUG" or style .. ", SLUG" end
+  if fontSlug and not style:find("SLUG", 1, true) then style = style == "" and "SLUG" or style .. ", SLUG" end
 
   fs:SetFont(LSM:Fetch("font", font, true), size, style)
 
@@ -1044,6 +1048,49 @@ function Theme.ApplyFont(fs, role, size, outline, scope)
     else
       fs:SetShadowColor(0, 0, 0, 0)
       fs:SetShadowOffset(0, 0)
+    end
+  end
+end
+
+local function RuntimeFontFlags(flags)
+  flags = flags or ""
+  if Addon:GetMediaDB().runtimeFontSlug == true and not flags:find("SLUG", 1, true) then
+    return flags == "" and "SLUG" or flags .. ", SLUG"
+  end
+  return flags
+end
+
+function Theme.SetRuntimeFont(target, path, size, flags)
+  Theme._AppliedFonts[target] = nil
+  local font = runtimeFonts[target]
+  if not font then
+    font = {}
+    runtimeFonts[target] = font
+  end
+  font.path, font.size, font.flags = path, size, flags or ""
+  font.appliedFlags = RuntimeFontFlags(font.flags)
+  return target:SetFont(path, size, font.appliedFlags)
+end
+
+function Theme.GetRuntimeFont(target)
+  local path, size, flags = target:GetFont()
+  local font = runtimeFonts[target]
+  if font and canaccessallvalues(path, size, flags) and path == font.path and flags == font.appliedFlags then
+    flags = font.flags
+  end
+  return path, size, flags
+end
+
+function Theme.RestoreRuntimeFont(target, path, size, flags)
+  runtimeFonts[target] = nil
+  target:SetFont(path, size, flags)
+end
+
+function Theme.RefreshRuntimeFonts()
+  for target, font in pairs(runtimeFonts) do
+    if not target.IsForbidden or not target:IsForbidden() then
+      font.appliedFlags = RuntimeFontFlags(font.flags)
+      target:SetFont(font.path, font.size, font.appliedFlags)
     end
   end
 end
@@ -2664,8 +2711,10 @@ local function OptionsFontGroup(role, order)
       },
       fontSlug = {
         type = "toggle", name = "SLUG rendering", order = 5,
-        desc = "Use Slug rendering for this text category.",
-        get = function() return Theme.GetOptionsFontSettings(role).fontSlug == true end,
+        desc = "Use SLUG rendering for this text category. The all-options toggle takes precedence while enabled.",
+        disabled = function() return Addon:GetOptionsDB().optionsFontSlug == true end,
+        arg = { puiDisabledReason = "SLUG is enabled for all options text." },
+        get = function() return Addon:GetOptionsDB().optionsFontSlug == true or Theme.GetOptionsFontSettings(role).fontSlug == true end,
         set = function(_, value) Theme.SetOptionsFontSetting(role, "fontSlug", value == true) end,
       },
       shadow = {
@@ -3289,6 +3338,15 @@ local function UIThemeOptionsProvider()
     sections.fonts.args = {
       font = fonts.iconTextGlobalFont,
       outline = fonts.iconTextGlobalFlags,
+      fontSlug = {
+        type = "toggle", name = "SLUG rendering: runtime text", order = 30,
+        desc = "Use SLUG for all text styled by PleebUI outside options, including custom fonts. Turning this off preserves individual SLUG settings.",
+        get = function() return Addon:GetMediaDB().runtimeFontSlug == true end,
+        set = function(_, enabled)
+          Addon:GetMediaDB().runtimeFontSlug = enabled == true
+          Addon:RefreshIconFonts()
+        end,
+      },
       fontSizeOffset = fonts.fontSizeOffset,
       applyTo = fonts.fontSizeScopes,
     }
@@ -3302,7 +3360,6 @@ local function UIThemeOptionsProvider()
     sections.optionsLayout.args = {
       window = { type = "group", name = "Options window", order = 10, inline = true, arg = { puiExplicit = true }, args = window },
       colors = sections.themeColors,
-      text = sections.fonts,
     }
     local minWidth, minHeight, maxWidth, maxHeight = Addon:GetOptionsWindowResizeBounds()
     local _, _, _, _, maxX, maxY = Addon:GetOptionsWindowGeometry()
@@ -3346,9 +3403,8 @@ local function UIThemeOptionsProvider()
         },
       },
     }
-    window.fontSize = optionsText
-    window.fontSize.name = "Overall text size"
-    window.fontSize.desc = "Scale all options text categories together. At 14, each category uses its configured base size."
+    optionsText.name = "Overall text size"
+    optionsText.desc = "Scale all options text categories together. At 14, each category uses its configured base size."
     window.optionsUIScale.name = "Scale"
     sections.themeColors.name, sections.themeColors.order = "Colors", 20
     sections.fonts.name, sections.fonts.order = "Global text", 30
@@ -3361,16 +3417,34 @@ local function UIThemeOptionsProvider()
         combatReadability = sections.combatReadability,
       } },
       layout = sections.optionsLayout,
+      text = { type = "group", name = "Text", order = 30, args = {
+        global = sections.fonts,
+        options = { type = "group", name = "Options text", order = 35, inline = true,
+          arg = { puiExplicit = true }, args = {
+            size = optionsText,
+            fontSlug = {
+              type = "toggle", name = "SLUG rendering: all options text", order = 20,
+              desc = "Use SLUG for every options text category. Turning this off restores each category's rendering setting.",
+              get = function() return Addon:GetOptionsDB().optionsFontSlug == true end,
+              set = function(_, enabled)
+                Addon:GetOptionsDB().optionsFontSlug = enabled == true
+                RefreshOptionsTypography()
+              end,
+            },
+          },
+        },
+      } },
     }
     options.args.layout.inline = nil
     for index, role in ipairs(Theme.OptionsFontRoleOrder) do
-      options.args.layout.args["font_" .. role] = OptionsFontGroup(role, 40 + index)
+      options.args.text.args["font_" .. role] = OptionsFontGroup(role, 40 + index)
     end
-    options.args.layout.args.resetOptionsFonts = {
+    options.args.text.args.resetOptionsFonts = {
       type = "execute", name = "Reset all options text", order = 50,
       func = function()
         local optionsDB = Addon:GetOptionsDB()
         optionsDB.optionsFonts = nil
+        optionsDB.optionsFontSlug = false
         optionsDB.puiOptionsFontSize = 14
         RefreshOptionsTypography()
       end,
@@ -3530,7 +3604,7 @@ ThemeFontsProvider = function()
         fontSizeOffset = {
           type = "range",
           name = "Global font size adjustment",
-          desc = "Adds or removes text size in the selected PleebUI areas of the current profile. Options font size is configured separately under Layout and appearance > Options window.",
+          desc = "Adds or removes text size in the selected PleebUI areas of the current profile. Options font size is configured separately under Text > Options text.",
           order = 4,
           min = Theme.FontSizeOffsetRange.min,
           max = Theme.FontSizeOffsetRange.max,
