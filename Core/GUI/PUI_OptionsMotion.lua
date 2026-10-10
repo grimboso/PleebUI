@@ -25,7 +25,6 @@ local function GetState(region, owner, restingAlpha)
 
   local group = region:CreateAnimationGroup()
   local alpha = group:CreateAnimation("Alpha")
-  alpha:SetSmoothing("OUT")
   state = { region = region, group = group, alpha = alpha, target = restingAlpha, restingAlpha = restingAlpha }
   states[region] = state
   group:SetScript("OnFinished", function()
@@ -36,7 +35,7 @@ local function GetState(region, owner, restingAlpha)
   return state
 end
 
-local function Play(state, fromAlpha, targetAlpha, duration)
+local function Play(state, fromAlpha, targetAlpha, duration, smoothing)
   state.group:Stop()
   state.from = fromAlpha
   state.target = targetAlpha
@@ -48,6 +47,7 @@ local function Play(state, fromAlpha, targetAlpha, duration)
   state.alpha:SetFromAlpha(fromAlpha)
   state.alpha:SetToAlpha(targetAlpha)
   state.alpha:SetDuration(duration)
+  state.alpha:SetSmoothing(smoothing)
   active[state] = true
   state.group:Play()
 end
@@ -61,12 +61,17 @@ end
 function Motion.Reveal(region)
   FinishReveals()
   if not region:IsShown() or not Motion.IsEnabled() then return end
-  Play(GetState(region, region, 1), 0, 1, 0.15)
+  Play(GetState(region, region, 1), 0, 1, 0.15, "OUT")
 end
 
 function Motion.Stop(region)
   local state = states[region]
   if state then Finish(state, state.restingAlpha) end
+end
+
+function Motion.SetHoverColor(texture, color)
+  -- Vertex color also writes opacity; recoloring must preserve the fade state.
+  texture:SetVertexColor(color[1], color[2], color[3], texture:GetAlpha())
 end
 
 function Motion.Hover(owner, texture, hovered)
@@ -80,7 +85,7 @@ function Motion.Hover(owner, texture, hovered)
     local progress = state.alpha:GetSmoothProgress()
     fromAlpha = state.from + (state.target - state.from) * progress
   end
-  Play(state, fromAlpha, targetAlpha, 0.09)
+  Play(state, fromAlpha, targetAlpha, hovered and 0.18 or 0.22, "IN_OUT")
 end
 
 function Motion.StyleTreeHover(button)
@@ -104,7 +109,7 @@ function Motion.StyleTreeHover(button)
     end)
   end
   local accent = ns.Theme.GetColors().accent
-  texture:SetVertexColor(accent[1], accent[2], accent[3], 1)
+  Motion.SetHoverColor(texture, accent)
   texture:Show()
 end
 
