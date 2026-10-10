@@ -4837,8 +4837,10 @@ local function _PCM_BuildCustomIconGroup(GetCfg, RebuildRuntime, kind, order)
     },
     activeAuraHideViewerIcon = {
       type = "toggle",
-      name = "Hide from buff icon viewer",
-      desc = "Hide the aura used for this glow from the Buff Icon Viewer.",
+      name = auraKind and "Hide tracked buff from Buff Icon Viewer" or "Hide glow buff from Buff Icon Viewer",
+      desc = auraKind
+        and "Hide this icon's tracked buff from the Buff Icon Viewer when its active glow is enabled."
+        or "Hide the buff selected for the active glow from the Buff Icon Viewer. The cooldown icon stays visible.",
       order = 25.45,
       hidden = function()
         local _, icon = GetIcon()
