@@ -1290,7 +1290,7 @@ function _customBarsAuraDriver:ApplyFont(target, fontKey, fontSize, fontFlags)
     target.__puiFontPath = fontPath
     target.__puiFontSize = fontSize
     target.__puiFontFlags = fontFlags
-    target:SetFont(fontPath, fontSize, fontFlags)
+    ns.Theme.SetRuntimeFont(target, fontPath, fontSize, fontFlags)
   end
 
   target:SetTextColor(1, 1, 1, 1)
