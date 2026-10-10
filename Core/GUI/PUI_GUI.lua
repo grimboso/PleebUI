@@ -3044,6 +3044,7 @@ function Addon:RefreshOptionsTheme()
 
   ns.PCMPreview.Refresh()
   ns.UFPreview.RefreshAuraManagerPreview()
+  ns.KeyboardNavigation.RefreshWindows()
 end
 
 
@@ -3507,6 +3508,7 @@ _PUI_RefreshCustomPageShell = function(frame, path)
       btn.text:SetJustifyV("MIDDLE")
       btn.text:SetWordWrap(false)
       ns.Theme.ApplyFont(btn.text, "button", 11)
+      ns.KeyboardNavigation.RegisterFrame(btn, "button", "previewToggle")
       frame.__puiPreviewToggleButton = btn
     end
 
