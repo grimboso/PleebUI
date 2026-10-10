@@ -3,6 +3,7 @@
   <Script file="PUI_FrameUtil.lua"/>
   <Script file="PUI_AuraSlotDriver.lua"/>
   <Script file="GUI\PUI_Theme.lua"/>
+  <Script file="GUI\PUI_OptionsMotion.lua"/>
   <Script file="GUI\PUI_KeyboardNavigation.lua"/>
   <Script file="GUI\PUI_Button.lua"/>
   <Script file="GUI\PUI_Checkbox.lua"/>
