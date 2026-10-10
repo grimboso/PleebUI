@@ -1108,14 +1108,10 @@ local function PUI_Dropdown_RefreshVisualState(widget)
   local colors = Theme.GetColors()
   local disabled = widget.disabled == true
   local hovered = widget.button.__puiHovered == true
-  local textColor = disabled and colors.disabledText or colors.text
-  local controlColor = disabled and colors.disabledControl or colors.control
-  local borderColor = disabled and colors.disabledControlBorder or colors.controlBorder
+  local controlColor, borderColor, textColor = Theme.GetControlStateColors(
+    disabled, hovered, false, widget.open == true
+  )
   local arrowColor = disabled and colors.disabledText or colors.accent
-
-  if hovered and not disabled then
-    borderColor = colors.accent
-  end
 
   PUI_Dropdown_SetChromeColors(widget.chrome, controlColor, borderColor, 1)
 
@@ -1324,6 +1320,7 @@ local function PUI_Dropdown_OnPulloutOpen(pullout)
   end
 
   widget.open = true
+  PUI_Dropdown_RefreshVisualState(widget)
   WatchDropdownOutsideClicks(widget, pullout.frame, widget.button)
   widget:Fire("OnOpened")
 end
@@ -1331,6 +1328,7 @@ end
 local function PUI_Dropdown_OnPulloutClose(pullout)
   local widget = pullout.userdata.obj
   widget.open = nil
+  PUI_Dropdown_RefreshVisualState(widget)
   PUI_Dropdown_ResetSearch(widget)
   widget:Fire("OnClosed")
 end
