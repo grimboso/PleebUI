@@ -657,6 +657,9 @@ local function _PUI_CopyOptionsNode(src, seen)
   elseif out.type == "range" and (control == nil or control == "Slider") then
     out.dialogControl = "PUI_Slider"
     out.control = nil
+  elseif out.type == "select" and control == "LSM30_Font" then
+    out.dialogControl = "PUI_FontDropdown"
+    out.control = nil
   elseif (out.type == "select" and out.style ~= "radio" or out.type == "multiselect")
     and (control == nil or control == "Dropdown")
   then
