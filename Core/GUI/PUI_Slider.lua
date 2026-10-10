@@ -6,7 +6,7 @@ local AceGUI = LibStub("AceGUI-3.0")
 local AceConfigDialog = LibStub("AceConfigDialog-3.0")
 
 local TYPE = "PUI_Slider"
-local VERSION = 6
+local VERSION = 7
 local WHITE8 = "Interface\\Buttons\\WHITE8x8"
 
 local math_floor = math.floor
@@ -216,16 +216,18 @@ local function LayoutWidget(self, width)
   Pixel.Point(self.label, "TOPRIGHT", self.frame, "TOPRIGHT", -geom.labelRight, -geom.labelTop)
   Pixel.Height(self.label, geom.labelHeight)
 
-  self.slider:ClearAllPoints()
-  Pixel.Point(self.slider, "TOPLEFT", self.frame, "TOPLEFT", geom.controlLeft, -geom.controlTop)
-  Pixel.Point(self.slider,
-    "TOPRIGHT",
-    self.frame,
-    "TOPRIGHT",
-    -(geom.controlRight + valueWidth + buttonWidth * 2 + valueGap * 3),
-    -geom.controlTop
-  )
-  Pixel.Height(self.slider, geom.controlHeight)
+  if not self.slider.__puiDragGeometry then
+    self.slider:ClearAllPoints()
+    Pixel.Point(self.slider, "TOPLEFT", self.frame, "TOPLEFT", geom.controlLeft, -geom.controlTop)
+    Pixel.Point(self.slider,
+      "TOPRIGHT",
+      self.frame,
+      "TOPRIGHT",
+      -(geom.controlRight + valueWidth + buttonWidth * 2 + valueGap * 3),
+      -geom.controlTop
+    )
+    Pixel.Height(self.slider, geom.controlHeight)
+  end
 
   self.plusButton:ClearAllPoints()
   Pixel.Point(self.plusButton, "TOPRIGHT", self.frame, "TOPRIGHT", -geom.controlRight, -geom.controlTop)
@@ -332,7 +334,33 @@ local function FireSliderCommit(self)
   self:Fire("OnMouseUp", self.value)
 end
 
-local function SliderOnMouseUp(frame)
+local function SliderOnMouseDown(frame, button)
+  if button ~= "LeftButton" or frame.obj.disabled then return end
+  local option = frame.obj:GetUserData("option")
+  local optionArg = option and option.arg
+  if type(optionArg) ~= "table" or optionArg.puiStableDrag ~= true then return end
+
+  -- Native slider input needs a stationary track while its value resizes the window.
+  local left, bottom = frame:GetLeft(), frame:GetBottom()
+  local width, height = frame:GetSize()
+  frame.__puiDragGeometry = true
+  frame:ClearAllPoints()
+  frame:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", left, bottom)
+  frame:SetSize(width, height)
+end
+
+local function RestoreSliderDragLayout(frame)
+  if not frame.__puiDragGeometry then return end
+  frame.__puiDragGeometry = nil
+  frame.setup = true
+  LayoutWidget(frame.obj, frame.obj.frame:GetWidth())
+  frame:SetValue(frame.obj.value)
+  frame.setup = nil
+end
+
+local function SliderOnMouseUp(frame, button)
+  if button ~= "LeftButton" then return end
+  RestoreSliderDragLayout(frame)
   FireSliderCommit(frame.obj)
 end
 
@@ -383,6 +411,7 @@ end
 
 local function SliderOnHide(frame)
   local self = frame.obj
+  RestoreSliderDragLayout(self.slider)
   self.slider:UnregisterEvent("MODIFIER_STATE_CHANGED")
   self.slider:EnableMouseWheel(false)
   self.slider.__puiHovered = nil
@@ -590,6 +619,7 @@ local function Constructor()
   slider:SetScript("OnValueChanged", SliderOnValueChanged)
   slider:SetScript("OnEnter", ControlOnEnter)
   slider:SetScript("OnLeave", ControlOnLeave)
+  slider:SetScript("OnMouseDown", SliderOnMouseDown)
   slider:SetScript("OnMouseUp", SliderOnMouseUp)
   slider:SetScript("OnMouseWheel", SliderOnMouseWheel)
   slider:SetScript("OnEvent", SliderModifierChanged)
