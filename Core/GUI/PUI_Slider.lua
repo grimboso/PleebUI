@@ -101,7 +101,7 @@ local function RefreshValidationMessage(self)
   message:SetText(self.inputError or "")
   message:SetShown(self.inputError ~= nil)
   local height = geom.rowHeight + (self.inputError and message:GetStringHeight() + 4 or 0)
-  if self.frame:GetHeight() ~= height then
+  if self.frame.height ~= height then
     self:SetHeight(height)
     if self.parent then self.parent:DoLayout() end
   end
@@ -493,10 +493,6 @@ local methods = {
 
   OnWidthSet = function(self, width)
     LayoutWidget(self, width)
-  end,
-
-  OnHeightSet = function(self)
-    LayoutWidget(self, self.frame:GetWidth())
   end,
 
   SetCommitOnRelease = function(self, enabled)
