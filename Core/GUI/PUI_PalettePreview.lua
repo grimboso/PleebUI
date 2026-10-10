@@ -8,9 +8,9 @@ local WHITE8 = "Interface\\Buttons\\WHITE8x8"
 local function SampleText(parent, text, role)
   local label = parent:CreateFontString(nil, "OVERLAY")
   label.__puiOptionsFontOwned = true
-  label:SetText(text)
   label:SetJustifyH("LEFT")
   Theme.ApplyFont(label, role)
+  label:SetText(text)
   return label
 end
 
@@ -244,6 +244,7 @@ local function Constructor()
   local function Input()
     local control = SampleControl(widget, "EditBox")
     control:SetAutoFocus(false)
+    Theme.ApplyFont(control, "body")
     control:SetTextInsets(8, 8, 0, 0)
     control:SetScript("OnEditFocusGained", function(self) self.focused = true; StyleSampleControl(self) end)
     control:SetScript("OnEditFocusLost", function(self) self.focused = nil; StyleSampleControl(self) end)
