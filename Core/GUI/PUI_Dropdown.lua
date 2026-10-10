@@ -477,6 +477,7 @@ local function RefreshDropdownPulloutLayout(pullout)
   if not pullout or not pullout.items or not pullout.itemFrame or not pullout.frame then
     return
   end
+  if pullout.__puiDropdownBuildingList then return end
 
   local rowHeight, _, itemStep, maxHeight, searchHeaderHeight = GetDropdownPulloutMetrics(pullout)
 
@@ -556,6 +557,8 @@ local function EnsureDropdownPulloutLayout(pullout)
 
     local originalOpen = pullout.Open
     pullout.Open = function(self, ...)
+      local owner = self.userdata.obj
+      if owner and owner.type == "PUI_FontDropdown" then owner:PopulateFontList() end
       local result = originalOpen(self, ...)
       RefreshDropdownPulloutLayout(self)
       return result
@@ -1533,6 +1536,7 @@ local PUI_Dropdown_Methods = {
     self.button.__puiHovered = nil
     self.list = nil
     self.listItemCount = nil
+    self.pendingFontList = nil
     self.value = nil
     self.open = nil
     self.hasClose = nil
@@ -1614,6 +1618,7 @@ local PUI_Dropdown_Methods = {
   end,
 
   SetItemDisabled = function(self, value, disabled)
+    self:PopulateFontList()
     for _, item in self.pullout:IterateItems() do
       if item.userdata.value == value then
         item:SetDisabled(disabled)
@@ -1626,6 +1631,7 @@ local PUI_Dropdown_Methods = {
     self.list = list or {}
     self.listItemCount = 0
     self.pullout:Clear()
+    self.pendingFontList = nil
     self.hasClose = nil
 
     if not list then
@@ -1662,7 +1668,13 @@ local PUI_Dropdown_Methods = {
     end
 
     self.listItemCount = #keys
+    if self.type == "PUI_FontDropdown" and not self.multiselect and not self.open then
+      self.pendingFontList = { keys = keys, itemType = itemType }
+      PUI_Dropdown_UpdateSearchAvailability(self)
+      return
+    end
 
+    self.pullout.__puiDropdownBuildingList = true
     for i = 1, #keys do
       local key = keys[i]
       PUI_Dropdown_AddListItem(self, key, list[key], itemType)
@@ -1672,11 +1684,25 @@ local PUI_Dropdown_Methods = {
       PUI_Dropdown_ShowMultiselectText(self)
       PUI_Dropdown_AddCloseButton(self)
     end
+    self.pullout.__puiDropdownBuildingList = nil
 
     PUI_Dropdown_UpdateSearchAvailability(self)
   end,
 
+  PopulateFontList = function(self)
+    local pending = self.pendingFontList
+    if not pending then return end
+    self.pendingFontList = nil
+    self.pullout.__puiDropdownBuildingList = true
+    for _, key in ipairs(pending.keys) do
+      PUI_Dropdown_AddListItem(self, key, self.list[key], pending.itemType)
+    end
+    self.pullout.__puiDropdownBuildingList = nil
+    PUI_Dropdown_UpdateSearchAvailability(self)
+  end,
+
   AddItem = function(self, value, text, itemType)
+    self:PopulateFontList()
     local isNewValue = self.list[value] == nil
     self.list[value] = text
     PUI_Dropdown_AddListItem(self, value, text, itemType)
@@ -1689,6 +1715,7 @@ local PUI_Dropdown_Methods = {
   end,
 
   SetMultiselect = function(self, multiselect)
+    if multiselect then self:PopulateFontList() end
     self.multiselect = multiselect == true
 
     if self.multiselect then
