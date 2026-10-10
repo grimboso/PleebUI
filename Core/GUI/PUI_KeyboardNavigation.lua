@@ -99,6 +99,173 @@ local function DrawFocus(control)
   outline:Show()
 end
 
+local GUIDE_TEXT = {
+  movers = "Tab Select mover · Arrows Move · 1-9 Step · F6 Controls",
+  options = "Tab Next · Shift+Tab Previous · Enter/Space Activate",
+  dropdown = "Up/Down Browse · Enter Select · Esc Cancel",
+}
+local HELP_TEXT = [[Moving between controls
+Tab moves forward; Shift+Tab moves backward. Focus does not change a setting.
+
+Trees and tabs
+Up/Down browses tree entries. Left/Right expands or collapses tree branches, or browses tabs. Enter opens the focused page; Space also selects a tab.
+
+Buttons and checkboxes
+Enter or Space activates the focused control. Disabled controls stay read-only and show their dependency explanation.
+
+Dropdowns
+Enter or Space opens the list. Type in its search field to filter choices. Up/Down browses; Enter selects; Escape closes without selecting. Tab moves through the list and back to controls.
+
+Sliders and text
+Arrow keys adjust a focused slider. Tab reaches its minus button, numeric field and plus button. Enter commits numeric input; Escape restores it. In text fields, arrow keys move the caret.
+
+Scrolling
+Focus scrolls controls into view. Page Up/Down scrolls the focused control's containing area.
+
+Leaving navigation
+Escape closes a dropdown or cancels an edit first, then leaves keyboard navigation. Use the window's Close button or Escape afterward to close it.
+
+Keyboard Edit Mode
+Tab and Shift+Tab cycle movers. Arrow keys move the selection; keys 1-9 choose the movement step. F6 switches between movers and toolbar controls. Ctrl+Z undoes; Ctrl+Y redoes outside text fields.
+
+/pe uses your saved Mouse or Keyboard preference. /pek opens keyboard Edit Mode for this session. Change your preference with Keyboard movement in the toolbar.
+
+Help
+F1 or the Keyboard help button toggles this guide. While it is open, Up/Down and Page Up/Down scroll the guide. Escape closes help first and returns to your control. Keyboard navigation pauses during combat.]]
+
+local function GuideContext(state)
+  if popup then return "dropdown" end
+  if state.movers and not state.active then return "movers" end
+  return "options"
+end
+
+local function RefreshGuide(root, state)
+  local guide = state.guide
+  if not guide then return end
+  local visible = root == activeWindow and root:IsVisible() and not InCombatLockdown()
+    and (state.active or state.helpShown or (state.movers and ns.FrameUtil._keyboardMoveEnabled == true))
+    and not (current and current.widget and current.widget.waitingForKey == true)
+    and (not guide.settings.visible or guide.settings.visible())
+  local height = 0
+  if visible then
+    local Theme = ns.Theme
+    local colors = Theme.GetColors()
+    local width = math.max(1, root:GetWidth() - 24)
+    Theme.WidgetSkins.UIButton(guide.button)
+    Navigation.RegisterFrame(guide.button, "help", "keyboardHelp")
+    Theme.ApplyFont(guide.label, "body")
+    guide.label:SetJustifyH("LEFT")
+    guide.label:SetWordWrap(true)
+    guide.label:SetWidth(math.max(1, width - 16))
+    for _, text in pairs(GUIDE_TEXT) do
+      guide.label:SetText("Keyboard help · F1  |  " .. text)
+      height = math.max(height, guide.label:GetStringHeight() + 12)
+    end
+    height = math.max(height, Theme.GetOptionsPointerTargetSize(24))
+    guide.label:SetText("Keyboard help · F1  |  " .. GUIDE_TEXT[GuideContext(state)])
+    guide.label:SetTextColor(colors.text[1], colors.text[2], colors.text[3], 0.9)
+    guide.button:SetSize(width, height)
+  end
+  guide.button:SetShown(visible)
+  if guide.height ~= height then
+    guide.height = height
+    guide.settings.layout(height)
+  end
+  if not state.helpShown then guide.overlay:Hide(); return end
+  local Theme = ns.Theme
+  local colors = Theme.GetColors()
+  local help = guide.help
+  guide.overlay:SetFrameLevel(math.max(root:GetFrameLevel() + 100, popup and popup.frame:GetFrameLevel() + 200 or 0))
+  Theme.SetSquareBackdrop(help, { bg = colors.background, border = colors.controlBorder }, Theme.ControlBorderSize)
+  Theme.ApplyFont(help.title, "header")
+  Theme.ApplyFont(help.text, "body")
+  help.title:SetTextColor(unpack(colors.text))
+  help.text:SetTextColor(unpack(colors.text))
+  Theme.WidgetSkins.UIButton(help.close)
+  local width = math.max(1, root:GetWidth() - 24)
+  help:SetWidth(width)
+  help.text:SetWidth(math.max(1, width - 56))
+  local titleHeight = help.title:GetStringHeight()
+  local buttonHeight = math.max(24, Theme.GetOptionsPointerTargetSize(0), Theme.GetOptionsFontHeight("button") + 8)
+  local available = math.max(1, root:GetHeight() - guide.settings.bottom - height - 20)
+  help:SetHeight(math.min(available, titleHeight + help.text:GetStringHeight() + buttonHeight + 48))
+  help.title:SetHeight(titleHeight)
+  help.close:SetSize(width - 24, buttonHeight)
+  help.scroll:ClearAllPoints()
+  help.scroll:SetPoint("TOPLEFT", help, "TOPLEFT", 12, -titleHeight - 22)
+  help.scroll:SetPoint("BOTTOMRIGHT", help.close, "TOPRIGHT", -22, 8)
+  help.content:SetSize(width - 56, math.max(1, help.text:GetStringHeight()))
+  help.scroll:UpdateScrollChildRect()
+  Theme.WidgetSkins.Scrollbar(help.scroll.ScrollBar)
+  help:ClearAllPoints()
+  help:SetPoint("BOTTOMLEFT", root, "BOTTOMLEFT", 12, guide.settings.bottom + height + 8)
+  guide.overlay:Show()
+end
+
+function Navigation.GetGuideHeight(root)
+  local state = windows[root]
+  return state and state.guide and state.guide.height or 0
+end
+
+function Navigation.AttachGuide(root, settings)
+  local state = windows[root] or pendingWindows[root]
+  if state.guide then return end
+  local button = CreateFrame("Button", nil, root, "UIPanelButtonTemplate")
+  button:Hide()
+  button.__puiOptionsFontRole = "body"
+  button:SetPoint("BOTTOMLEFT", root, "BOTTOMLEFT", 12, settings.bottom)
+  button:SetFrameLevel(root:GetFrameLevel() + 90)
+  local label = button:GetFontString()
+  label:ClearAllPoints()
+  label:SetPoint("LEFT", button, "LEFT", 8, 0)
+  label:SetPoint("RIGHT", button, "RIGHT", -8, 0)
+  button:SetScript("OnClick", function() Navigation.ToggleHelp(root) end)
+  local overlay = CreateFrame("Frame", nil, root)
+  overlay:Hide()
+  overlay:SetAllPoints(root)
+  overlay:EnableMouse(true)
+  overlay:SetFrameStrata("TOOLTIP")
+  overlay:SetFrameLevel(root:GetFrameLevel() + 100)
+  local help = CreateFrame("Frame", nil, overlay, "BackdropTemplate")
+  help:EnableMouse(true)
+  help.title = help:CreateFontString(nil, "OVERLAY")
+  help.title:SetPoint("TOPLEFT", 12, -12)
+  help.title:SetPoint("TOPRIGHT", -12, -12)
+  help.title:SetJustifyH("LEFT")
+  help.title:SetText("Keyboard help")
+  help.close = CreateFrame("Button", nil, help, "UIPanelButtonTemplate")
+  help.close.__puiKeyboardHelpAccessory = true
+  help.close:SetText("Close help · F1 / Escape")
+  help.close:SetPoint("BOTTOMLEFT", 12, 12)
+  help.close:SetScript("OnClick", function() Navigation.ToggleHelp(root) end)
+  help.scroll = CreateFrame("ScrollFrame", nil, help, "UIPanelScrollFrameTemplate")
+  help.scroll:EnableMouseWheel(true)
+  help.scroll:SetScript("OnMouseWheel", function(self, delta)
+    self:SetVerticalScroll(math.max(0, math.min(self:GetVerticalScrollRange(), self:GetVerticalScroll() - delta * 32)))
+  end)
+  help.content = CreateFrame("Frame", nil, help.scroll)
+  help.scroll:SetScrollChild(help.content)
+  help.text = help.content:CreateFontString(nil, "OVERLAY")
+  help.text:SetPoint("TOPLEFT")
+  help.text:SetJustifyH("LEFT")
+  help.text:SetWordWrap(true)
+  help.text:SetText(HELP_TEXT)
+  state.guide = { button = button, label = label, overlay = overlay, help = help, height = 0, settings = settings }
+  root:HookScript("OnSizeChanged", function() Navigation.RefreshWindows() end)
+  Navigation.RefreshWindows()
+end
+
+function Navigation.ToggleHelp(root)
+  if InCombatLockdown() or root ~= activeWindow then return end
+  local state = windows[root]
+  if not state or not state.guide or (current and current.widget and current.widget.waitingForKey == true) then return end
+  if not state.helpShown and state.guide.settings.prepare then state.guide.settings.prepare() end
+  state.helpShown = not state.helpShown
+  if state.helpShown then state.guide.help.scroll:SetVerticalScroll(0) end
+  Navigation.RefreshWindows()
+  if not state.helpShown then Navigation.QueueRestore() end
+end
+
 local function HookTextInput(frame)
   if frame.__puiKeyboardTextHooked then return end
   frame.__puiKeyboardTextHooked = true
@@ -128,7 +295,8 @@ local function HookTextInput(frame)
     if controls[self] and self:HasFocus() then self:ClearFocus() end
   end)
   frame:HookScript("OnKeyDown", function(self, key)
-    if key == "F6" and controls[self] and activeWindow and BelongsTo(self, activeWindow) then
+    if (key == "F6" or key == "F1") and controls[self] and activeWindow
+      and (BelongsTo(self, activeWindow) or (popup and current and current.frame == self)) then
       Navigation.HandleKey(key)
     end
   end)
@@ -228,6 +396,7 @@ local function Collect(root)
   local result = {}
   for frame, control in pairs(controls) do
     if frame:IsVisible() and BelongsTo(frame, root)
+      and not frame.__puiKeyboardHelpAccessory
       and not (frame.__puiNode and frame.__puiNode.meta.navHeader == true)
       and (not control.widget or control.widget.__puiAceGUIOwnedByPleebUI == true)
     then
@@ -420,6 +589,18 @@ function Navigation.HandleKey(key)
   if state.enabled and not state.enabled() then return false end
   local text = GetCurrentKeyBoardFocus()
   if text and not BelongsTo(text, activeWindow) and not (popup and current and current.frame == text) then return false end
+  if key == "F1" and state.guide then Navigation.ToggleHelp(activeWindow); return true end
+  if state.helpShown then
+    if key == "ESCAPE" or key == "ENTER" or key == "SPACE" then Navigation.ToggleHelp(activeWindow)
+    elseif key == "TAB" then Navigation.ToggleHelp(activeWindow); MoveFocus(IsShiftKeyDown() and -1 or 1)
+    elseif key == "UP" or key == "DOWN" or key == "PAGEUP" or key == "PAGEDOWN" then
+      local scroll = state.guide.help.scroll
+      local step = (key == "PAGEUP" or key == "PAGEDOWN") and scroll:GetHeight() * 0.8 or 32
+      local direction = (key == "UP" or key == "PAGEUP") and -1 or 1
+      scroll:SetVerticalScroll(math.max(0, math.min(scroll:GetVerticalScrollRange(), scroll:GetVerticalScroll() + direction * step)))
+    end
+    return true
+  end
   if key == "F6" and state.movers then
     if state.active then
       HideFocus()
@@ -501,7 +682,10 @@ function Navigation.RefreshWindows()
   for root, state in pairs(windows) do
     local shown = root:IsVisible() and (root == activeWindow) and not InCombatLockdown()
     local text = GetCurrentKeyBoardFocus()
-    state.receiver:SetShown(shown and not (text and BelongsTo(text, root))
+    RefreshGuide(root, state)
+    state.receiver:SetFrameStrata(state.helpShown and "TOOLTIP" or "FULLSCREEN_DIALOG")
+    state.receiver:SetFrameLevel(state.helpShown and state.guide.overlay:GetFrameLevel() + 200 or 2000)
+    state.receiver:SetShown(shown and (state.helpShown or not (text and BelongsTo(text, root)))
       and not (current and current.widget and current.widget.waitingForKey == true)
       and (not state.enabled or state.enabled()))
   end
@@ -514,6 +698,7 @@ function Navigation.ActivateWindow(root)
     state.previousWindow = activeWindow
     if current then windows[activeWindow].restoreKey = ControlKey(current) end
     HideFocus()
+    windows[activeWindow].helpShown = false
     current = nil
   end
   activeWindow = root
@@ -526,6 +711,7 @@ function Navigation.BindWindow(root, movers, cancel, enabled)
     pendingWindows[root] = { movers = movers, cancel = cancel, enabled = enabled }
     return
   end
+  local pending = pendingWindows[root]
   pendingWindows[root] = nil
   local receiver = CreateFrame("Frame", nil, UIParent)
   receiver:SetAllPoints(root)
@@ -535,10 +721,11 @@ function Navigation.BindWindow(root, movers, cancel, enabled)
   receiver:EnableKeyboard(true)
   receiver:SetPropagateKeyboardInput(true)
   receiver:Hide()
-  local state = { receiver = receiver, movers = movers, cancel = cancel, enabled = enabled }
+  local state = { receiver = receiver, movers = movers, cancel = cancel, enabled = enabled, guide = pending and pending.guide }
   windows[root] = state
   receiver:SetScript("OnKeyDown", function(self, key)
     if InCombatLockdown() then self:Hide(); return end
+    if state.helpShown then self:SetPropagateKeyboardInput(false) end
     self:SetPropagateKeyboardInput(not Navigation.HandleKey(key))
   end)
   receiver:SetScript("OnKeyUp", function(self)
@@ -554,6 +741,7 @@ function Navigation.BindWindow(root, movers, cancel, enabled)
       state.previousWindow = nil
       Navigation.QueueRestore()
     end
+    state.helpShown = false
     state.receiver:Hide()
     Navigation.RefreshWindows()
   end)
@@ -566,7 +754,7 @@ function Navigation.QueueRestore()
   C_Timer.After(0, function()
     restorePending = nil
     local state = activeWindow and windows[activeWindow]
-    if not state or not state.active or not activeWindow:IsVisible() or InCombatLockdown()
+    if not state or not state.active or state.helpShown or not activeWindow:IsVisible() or InCombatLockdown()
       or (state.enabled and not state.enabled()) then return end
     local key = state.restoreKey or (current and ControlKey(current))
     local list = Collect(activeWindow)
@@ -591,7 +779,11 @@ events:SetScript("OnEvent", function(_, event)
   if event == "PLAYER_REGEN_DISABLED" then
     HideFocus()
     current, popup = nil, nil
-    for _, state in pairs(windows) do state.receiver:Hide(); state.active = false end
+    for root, state in pairs(windows) do
+      state.receiver:Hide()
+      state.active, state.helpShown = false, false
+      RefreshGuide(root, state)
+    end
   else
     for root, state in pairs(pendingWindows) do Navigation.BindWindow(root, state.movers, state.cancel, state.enabled) end
     Navigation.RefreshWindows()
