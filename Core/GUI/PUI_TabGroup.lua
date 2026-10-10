@@ -142,12 +142,7 @@ _PUI_StyleCustomTabButton = function(btn, isSelected)
     border = { border[1], border[2], border[3], borderAlpha },
   }, math.max(Theme.GetEdgeSize(), 1))
 
-  btn.__puiHover:SetVertexColor(
-    colors.accent[1],
-    colors.accent[2],
-    colors.accent[3],
-    1
-  )
+  ns.OptionsMotion.SetHoverColor(btn.__puiHover, colors.accent)
   ns.OptionsMotion.Hover(btn, btn.__puiHover, hovered and not btn.__puiDisabled)
 
   btn.__puiAccent:SetVertexColor(
