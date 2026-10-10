@@ -14,6 +14,7 @@ local OptionsUtil = ns.OptionsUtil
 local UF       = ns.UnitFrames
 local CastBar  = ns.Modules.CastBar
 local FrameUtil = ns.FrameUtil
+local _, PLAYER_CLASS = UnitClass("player")
 local USE_SECRET_ROLE_ICONS = select(4, _G.GetBuildInfo()) >= 120105
 local UFConfigDebug = ns.UFConfigDebug or {}
 ns.UFConfigDebug = UFConfigDebug
@@ -6571,7 +6572,7 @@ local function UFCB_BuildCastbarArgs(unitKey)
     useCustomColor = BuildCastbarToggle(cfg, "useCustomColor", "Use custom color", 8),
     barColor = BuildCastbarColor(cfg, "customColor", "Bar color", 9),
     backgroundColor = BuildCastbarColor(cfg, "bgColor", "Background color", 10, { hasAlpha = true, alphaDefault = 0.40 }),
-    empowerStageColors = UFCB_BuildEmpowerStageColorArgs(unitKey, cfg, refresh),
+    empowerStageColors = PLAYER_CLASS == "EVOKER" and UFCB_BuildEmpowerStageColorArgs(unitKey, cfg, refresh) or nil,
     fonts = {
       type = "group",
       name = "Fonts",
@@ -6711,17 +6712,19 @@ local function UFCB_BuildCastbarArgs(unitKey)
   }
 
   if unitKey == "player" then
-    args.toggles.args.showEmpowerPips = BuildCastbarToggle(cfg, "showEmpowerPips", "Show empower pips", 8, {  defaultTrue = true })
+    if PLAYER_CLASS == "EVOKER" then
+      args.toggles.args.showEmpowerPips = BuildCastbarToggle(cfg, "showEmpowerPips", "Show empower pips", 8, {  defaultTrue = true })
 
-    args.toggles.args.showEmpowerHold = BuildCastbarToggle(cfg, "showEmpowerHold", "Show empower hold area", 9, {  defaultTrue = true })
+      args.toggles.args.showEmpowerHold = BuildCastbarToggle(cfg, "showEmpowerHold", "Show empower hold area", 9, {  defaultTrue = true })
 
-    args.toggles.args.empowerHoldColor = BuildCastbarColor(cfg, "empowerHoldColor", "Empower hold color", 10, {
-      hasAlpha = true,
-      alphaDefault = 1,
-      disabled = function()
-        return InCombatLockdown() or cfg.showEmpowerHold == false
-      end,
-    })
+      args.toggles.args.empowerHoldColor = BuildCastbarColor(cfg, "empowerHoldColor", "Empower hold color", 10, {
+        hasAlpha = true,
+        alphaDefault = 1,
+        disabled = function()
+          return InCombatLockdown() or cfg.showEmpowerHold == false
+        end,
+      })
+    end
 
     args.toggles.args.showChannelTicks = BuildCastbarToggle(cfg, "showChannelTicks", "Show channel tick markers", 11, {  defaultTrue = true })
 
@@ -7010,7 +7013,9 @@ local function UFCB_BuildCastbarArgs(unitKey)
   args.appearance.args.barColor.desc = "Enable Use custom color to choose a bar color."
 
   if unitKey == "player" then
-    args.appearance.args.empowerHoldColor.desc = "Enable Show empower hold area to choose its color."
+    if PLAYER_CLASS == "EVOKER" then
+      args.appearance.args.empowerHoldColor.desc = "Enable Show empower hold area to choose its color."
+    end
     args.appearance.args.channelTickThickness.desc = "Enable Show channel tick markers to change their thickness."
     args.appearance.args.disintegrateClipWarningText.desc = "Enable Disintegrate clip warning to change its text."
   end
@@ -7148,12 +7153,16 @@ local function UFCB_BuildCastbarArgs(unitKey)
     shield = appearance.uninterruptShieldMode, texture = appearance.uninterruptTextureMode,
   })
   args.empowerStageColors = appearance.empowerStageColors
-  args.empowerStageColors.order = 10
+  if PLAYER_CLASS == "EVOKER" then
+    args.empowerStageColors.order = 10
+  end
   if unitKey == "player" then
-    args.empower = UFCB_BuildInlineArgsGroup("Empowered casts", 9, {
-      showPips = appearance.showEmpowerPips, showHold = appearance.showEmpowerHold,
-      holdColor = appearance.empowerHoldColor,
-    })
+    if PLAYER_CLASS == "EVOKER" then
+      args.empower = UFCB_BuildInlineArgsGroup("Empowered casts", 9, {
+        showPips = appearance.showEmpowerPips, showHold = appearance.showEmpowerHold,
+        holdColor = appearance.empowerHoldColor,
+      })
+    end
     args.channel = UFCB_BuildInlineArgsGroup("Channels", 11, {
       showTicks = appearance.showChannelTicks, thickness = appearance.channelTickThickness,
       showClipWarning = appearance.showDisintegrateClipWarning, clipWarningText = appearance.disintegrateClipWarningText,
@@ -7197,7 +7206,20 @@ local function UFCB_BuildCastbarArgs(unitKey)
   end
   args.feature.args.reset.order = 900
 
-  return args
+  local instantArgs
+  if unitKey == "player" then
+    instantArgs = { instantCast = args.instantCast }
+    args.instantCast = nil
+  end
+
+  local empowerArgs
+  if PLAYER_CLASS == "EVOKER" then
+    empowerArgs = { empower = args.empower, empowerStageColors = args.empowerStageColors }
+    args.empower = nil
+    args.empowerStageColors = nil
+  end
+
+  return args, instantArgs, empowerArgs
 end
 
 local function UFCB_BuildTreeGroupLeaf(name, order, args, childGroups)
@@ -7511,7 +7533,14 @@ local function UFCB_BuildUnitBaseLeafSpecs(unitKey, opts)
     specs[#specs + 1] = { key = "portrait", name = "Portrait", order = 7, args = UFCB_BuildUnitPortraitArgs(unitKey) }
   end
   if opts.includeCastbar ~= false then
-    specs[#specs + 1] = { key = "castbar", name = "Castbar", order = 8, args = UFCB_BuildCastbarArgs(opts.castbarUnit or unitKey) }
+    local castbar, instantCast, empower = UFCB_BuildCastbarArgs(opts.castbarUnit or unitKey)
+    specs[#specs + 1] = { key = "castbar", name = "Castbar", order = 8, args = castbar }
+    if instantCast then
+      specs[#specs + 1] = { key = "instantCast", name = "Instant Castbar", order = 8.1, args = instantCast }
+    end
+    if empower then
+      specs[#specs + 1] = { key = "empower", name = "Empower", order = 8.2, args = empower }
+    end
   end
   return specs
 end
