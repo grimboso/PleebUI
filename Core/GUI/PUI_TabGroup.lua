@@ -135,15 +135,7 @@ _PUI_StyleCustomTabButton = function(btn, isSelected)
   local bg = colors.control
   local bgAlpha = isSelected and 0.94 or 0.62
   local borderAlpha = isSelected and 0.90 or 0.36
-  local border = (isSelected or hovered) and colors.accent or colors.border
-
-  if hovered and not isSelected then
-    bgAlpha = 0.76
-    borderAlpha = 0.70
-  elseif hovered then
-    bgAlpha = 1
-    borderAlpha = 1
-  end
+  local border = isSelected and colors.accent or colors.border
 
   Theme.SetSquareBackdrop(btn, {
     bg = { bg[1], bg[2], bg[3], bgAlpha },
@@ -154,9 +146,9 @@ _PUI_StyleCustomTabButton = function(btn, isSelected)
     colors.accent[1],
     colors.accent[2],
     colors.accent[3],
-    hovered and 0.10 or 0
+    1
   )
-  btn.__puiHover:SetShown(hovered)
+  ns.OptionsMotion.Hover(btn, btn.__puiHover, hovered and not btn.__puiDisabled)
 
   btn.__puiAccent:SetVertexColor(
     colors.accent[1],
