@@ -3293,6 +3293,44 @@ local function UIThemeOptionsProvider()
       colors = sections.themeColors,
       text = sections.fonts,
     }
+    local minWidth, minHeight, maxWidth, maxHeight = Addon:GetOptionsWindowResizeBounds()
+    local _, _, _, _, maxX, maxY = Addon:GetOptionsWindowGeometry()
+    sections.optionsLayout.args.windowGeometry = {
+      type = "group", name = "Window size and position (all profiles)", order = 15, inline = true,
+      arg = { puiExplicit = true },
+      args = {
+        width = {
+          type = "range", name = "Width", order = 1, min = minWidth, max = maxWidth, step = 1,
+          arg = { puiRefreshOnRelease = true },
+          get = function() local width = Addon:GetOptionsWindowGeometry(); return width end,
+          set = function(_, value) Addon:SetOptionsWindowGeometry(value) end,
+        },
+        height = {
+          type = "range", name = "Height", order = 2, min = minHeight, max = maxHeight, step = 1,
+          arg = { puiRefreshOnRelease = true },
+          get = function() local _, height = Addon:GetOptionsWindowGeometry(); return height end,
+          set = function(_, value) Addon:SetOptionsWindowGeometry(nil, value) end,
+        },
+        x = {
+          type = "range", name = "Horizontal position", order = 3, min = -maxX, max = maxX, step = 1,
+          desc = "Offset from the screen center. Positive values move right.",
+          arg = { puiRefreshOnRelease = true },
+          get = function() local _, _, x = Addon:GetOptionsWindowGeometry(); return x end,
+          set = function(_, value) Addon:SetOptionsWindowGeometry(nil, nil, value) end,
+        },
+        y = {
+          type = "range", name = "Vertical position", order = 4, min = -maxY, max = maxY, step = 1,
+          desc = "Offset from the screen center. Positive values move up.",
+          arg = { puiRefreshOnRelease = true },
+          get = function() local _, _, _, y = Addon:GetOptionsWindowGeometry(); return y end,
+          set = function(_, value) Addon:SetOptionsWindowGeometry(nil, nil, nil, value) end,
+        },
+        center = {
+          type = "execute", name = "Center window", order = 5,
+          func = function() Addon:SetOptionsWindowGeometry(nil, nil, 0, 0) end,
+        },
+      },
+    }
     window.fontSize = optionsText
     window.fontSize.name = "Overall text size"
     window.fontSize.desc = "Scale all options text categories together. At 14, each category uses its configured base size."
