@@ -2490,12 +2490,18 @@ local function _PUI_GetOptionsWindowSize()
     tonumber(db.optionsWindowHeight) or PUI_OPTIONS_WINDOW_DEFAULT_HEIGHT
 end
 
+local function _PUI_GetOptionsWindowScreenSize(frame)
+  frame = frame or Addon._OptionsWindow
+  local parentScale = UIParent:GetEffectiveScale()
+  local scale = frame and frame:GetEffectiveScale() or parentScale * ns.Theme.GetOptionsUIScale()
+  local ratio = parentScale / scale
+  return GetScreenWidth() * ratio, GetScreenHeight() * ratio, ratio
+end
+
 function Addon:GetOptionsWindowResizeBounds(frame)
-  frame = frame or self._OptionsWindow
-  local screenWidth, screenHeight = UIParent:GetSize()
-  local scale = frame and frame:GetScale() or ns.Theme.GetOptionsUIScale()
-  local maxWidth = math.max(1, (screenWidth - PUI_OPTIONS_WINDOW_SCREEN_MARGIN) / scale)
-  local maxHeight = math.max(1, (screenHeight - PUI_OPTIONS_WINDOW_SCREEN_MARGIN) / scale)
+  local screenWidth, screenHeight, ratio = _PUI_GetOptionsWindowScreenSize(frame or self._OptionsWindow)
+  local maxWidth = math.max(1, screenWidth - PUI_OPTIONS_WINDOW_SCREEN_MARGIN * ratio)
+  local maxHeight = math.max(1, screenHeight - PUI_OPTIONS_WINDOW_SCREEN_MARGIN * ratio)
   local minWidth = math.min(PUI_OPTIONS_WINDOW_MIN_WIDTH, maxWidth)
   local minHeight = math.min(PUI_OPTIONS_WINDOW_MIN_HEIGHT, maxHeight)
 
@@ -2540,9 +2546,9 @@ local function _PUI_SaveOptionsWindowState(frame)
   db.optionsWindowHeight = height
   local x, y = frame:GetCenter()
   if x and y then
-    local scale = frame:GetScale()
-    db.offsetX = x - UIParent:GetWidth() / (2 * scale)
-    db.offsetY = y - UIParent:GetHeight() / (2 * scale)
+    local screenWidth, screenHeight = _PUI_GetOptionsWindowScreenSize(frame)
+    db.offsetX = x - screenWidth * 0.5
+    db.offsetY = y - screenHeight * 0.5
   end
 end
 
@@ -2553,15 +2559,15 @@ function Addon:GetOptionsWindowGeometry()
     frame and frame:GetWidth() or db.optionsWindowWidth,
     frame and frame:GetHeight() or db.optionsWindowHeight, frame
   )
-  local scale = ns.Theme.GetOptionsUIScale()
-  local maxX = math.max(0, (UIParent:GetWidth() / scale - width) * 0.5)
-  local maxY = math.max(0, (UIParent:GetHeight() / scale - height) * 0.5)
+  local screenWidth, screenHeight = _PUI_GetOptionsWindowScreenSize(frame)
+  local maxX = math.max(0, (screenWidth - width) * 0.5)
+  local maxY = math.max(0, (screenHeight - height) * 0.5)
   local x, y = tonumber(db.offsetX) or 0, tonumber(db.offsetY) or 0
   if frame then
     local centerX, centerY = frame:GetCenter()
     if centerX and centerY then
-      x = centerX - UIParent:GetWidth() / (2 * scale)
-      y = centerY - UIParent:GetHeight() / (2 * scale)
+      x = centerX - screenWidth * 0.5
+      y = centerY - screenHeight * 0.5
     end
   end
   return width, height, math.max(-maxX, math.min(maxX, x)), math.max(-maxY, math.min(maxY, y)), maxX, maxY
@@ -2575,15 +2581,25 @@ function Addon:PreviewOptionsWindowSize(width, height)
 
   width, height = _PUI_ClampOptionsWindowBounds(width or frame:GetWidth(), height or frame:GetHeight(), frame)
   frame:SetSize(width, height)
+
+  local screenWidth, screenHeight = _PUI_GetOptionsWindowScreenSize(frame)
+  local centerX, centerY = frame:GetCenter()
+  if centerX < width * 0.5 or centerX > screenWidth - width * 0.5
+    or centerY < height * 0.5 or centerY > screenHeight - height * 0.5
+  then
+    local _, _, x, y = self:GetOptionsWindowGeometry()
+    frame:ClearAllPoints()
+    frame:SetPoint("CENTER", UIParent, "CENTER", x, y)
+  end
 end
 
 function Addon:SetOptionsWindowGeometry(width, height, x, y)
   local currentWidth, currentHeight, currentX, currentY = self:GetOptionsWindowGeometry()
   local frame = self._OptionsWindow
   width, height = _PUI_ClampOptionsWindowBounds(width or currentWidth, height or currentHeight, frame)
-  local scale = ns.Theme.GetOptionsUIScale()
-  local maxX = math.max(0, (UIParent:GetWidth() / scale - width) * 0.5)
-  local maxY = math.max(0, (UIParent:GetHeight() / scale - height) * 0.5)
+  local screenWidth, screenHeight = _PUI_GetOptionsWindowScreenSize(frame)
+  local maxX = math.max(0, (screenWidth - width) * 0.5)
+  local maxY = math.max(0, (screenHeight - height) * 0.5)
   x = math.max(-maxX, math.min(maxX, x or currentX))
   y = math.max(-maxY, math.min(maxY, y or currentY))
   local db = _PUI_GetOptionsWindowDB()
