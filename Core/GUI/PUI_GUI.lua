@@ -2786,7 +2786,7 @@ local function _PUI_EnsurePleebUIOptionsChrome(frame)
 
   local outerPad = 8
   local topHeaderHeight = 78
-  local footerHeight = 62
+  local footerHeight = 62 + ns.KeyboardNavigation.GetGuideHeight(frame)
   local navWidth = 258
   local gutter = 12
 
@@ -3376,6 +3376,10 @@ local function _PUI_EnsureCustomOptionsFrame()
 
     Addon._OptionsWindow = frame
     ns.KeyboardNavigation.BindWindow(frame)
+    ns.KeyboardNavigation.AttachGuide(frame, {
+      bottom = 62,
+      layout = function() _PUI_EnsurePleebUIOptionsChrome(frame) end,
+    })
 
     Addon:ApplyOptionsUIScale()
     _PUI_RestoreOptionsWindowState(frame)
