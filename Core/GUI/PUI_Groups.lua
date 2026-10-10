@@ -453,6 +453,7 @@ local function _PUI_SkinPCMTrackerTreeButton(button, isSelected, data)
 end
 
 function WidgetSkins.TreeButton(button, isSelected)
+  ns.OptionsMotion.StyleTreeHover(button)
   _PUI_ConfigureTreeExpandTarget(button.toggle, button.__puiCompactPCMTree == true and 26 or 12)
   local trackerData = _PUI_GetPCMTrackerTreeData(button)
   if button.__puiUseTreeCards == true and trackerData then
