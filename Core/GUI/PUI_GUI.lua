@@ -1744,6 +1744,7 @@ local function _PUI_EnsureRootNavButton(btn)
   btn.__puiRootNavHover:SetAllPoints(btn)
   btn.__puiRootNavHover:SetTexture("Interface\\Buttons\\WHITE8x8")
   btn.__puiRootNavHover:SetAlpha(0)
+  btn:HookScript("OnHide", function(self) self.__puiRootNavHovered = nil end)
 
   btn.__puiRootNavSelected = btn:CreateTexture(nil, "ARTWORK")
   btn.__puiRootNavSelected.__puiRootNavOwned = true
@@ -1816,6 +1817,7 @@ local function _PUI_StyleRootNavButton(btn, node, isSelected)
     btn:SetAlpha(1)
 
     btn.__puiRootNavSelected:Hide()
+    ns.OptionsMotion.Stop(btn.__puiRootNavHover)
     btn.__puiRootNavHover:Hide()
     btn.__puiRootNavIconBack:Hide()
     btn.__puiRootNavIcon:Hide()
@@ -1834,12 +1836,7 @@ local function _PUI_StyleRootNavButton(btn, node, isSelected)
   local hovered = btn.__puiRootNavHovered == true
   local bgAlpha = isSelected and 0.92 or 0.58
   local borderAlpha = isSelected and 0.92 or 0.34
-  local borderColor = (isSelected or (hovered and not disabled)) and accent or border
-
-  if hovered and not disabled then
-    bgAlpha = isSelected and 0.98 or 0.74
-    borderAlpha = isSelected and 1.0 or 0.70
-  end
+  local borderColor = isSelected and accent or border
 
   ns.Theme.SetSquareBackdrop(btn, {
     bg = { fill[1], fill[2], fill[3], bgAlpha },
@@ -1853,8 +1850,8 @@ local function _PUI_StyleRootNavButton(btn, node, isSelected)
   btn.__puiRootNavSelected:SetVertexColor(accent[1], accent[2], accent[3], isSelected and 1 or 0)
   btn.__puiRootNavSelected:SetShown(isSelected)
 
-  btn.__puiRootNavHover:SetVertexColor(accent[1], accent[2], accent[3], hovered and 0.10 or 0)
-  btn.__puiRootNavHover:SetShown(hovered and not disabled)
+  btn.__puiRootNavHover:SetVertexColor(accent[1], accent[2], accent[3], 1)
+  ns.OptionsMotion.Hover(btn, btn.__puiRootNavHover, hovered and not disabled)
 
   btn.__puiRootNavIconBack:SetVertexColor(accent[1], accent[2], accent[3], isSelected and 0.26 or 0.11)
 
@@ -3009,6 +3006,7 @@ function Addon:ApplyOptionsUIScale()
 end
 
 function Addon:RefreshOptionsTheme()
+  ns.OptionsMotion.Reset()
   local frame = self._OptionsWindow
   if not frame then
     return
@@ -3354,6 +3352,7 @@ local function _PUI_EnsureCustomOptionsFrame()
     end)
 
     frame:SetScript("OnHide", function(self)
+      ns.OptionsMotion.Reset()
       self:UnregisterEvent("GLOBAL_MOUSE_DOWN")
 
       _PUI_RememberLastSectionFromPath(_PUI_GetCurrentOptionsPath())
@@ -3842,6 +3841,8 @@ local function _PUI_RenderCustomOptionsPath(frame, AceConfigDialog, APP, path)
   frame.__puiQueuedOptionsPath = nil
 
   local pathKey = table.concat(requestedPath, "\031")
+  local revealContent = frame.__puiSelectedOptionsPathKey ~= pathKey
+  ns.OptionsMotion.Reset()
   local previousOptionsRootPathKey = _PUI_GetOptionsRootPathKey(State.currentOptionsPath)
   local nextOptionsRootPathKey = _PUI_GetOptionsRootPathKey(requestedPath)
 
@@ -3906,6 +3907,8 @@ local function _PUI_RenderCustomOptionsPath(frame, AceConfigDialog, APP, path)
   frame.__puiLastRenderedOptionsPathKey = pathKey
   frame.__puiSelectedOptionsPathKey = pathKey
   frame.__puiRenderingOptionsPath = nil
+
+  if revealContent then ns.OptionsMotion.Reveal(shell.body) end
 
   local queuedPath = frame.__puiQueuedOptionsPath
   frame.__puiQueuedOptionsPath = nil
