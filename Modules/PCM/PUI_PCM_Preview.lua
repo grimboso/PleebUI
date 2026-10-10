@@ -212,7 +212,7 @@ local function PCMPreview_ApplyFont(fontString, config, role, fallbackSize, zoom
     local path = ns.LSM:Fetch("font", font, true)
 
     if path then
-      fontString:SetFont(path, size, flags or "OUTLINE")
+      ns.Theme.SetRuntimeFont(fontString, path, size, flags or "OUTLINE")
     else
       Theme.ApplyFont(fontString, role, size, flags or "OUTLINE")
     end
