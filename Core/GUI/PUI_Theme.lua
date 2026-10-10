@@ -2340,31 +2340,33 @@ function Theme.SetSquareBackdrop(frame, preset, edgeSize)
   end
 end
 
-function Theme.SetAceTooltipSolidBackground(tooltip, enabled)
-  if not tooltip then
-    return
-  end
-
-  local background = tooltip.__puiAceTooltipSolidBackground
+function Theme.SetOptionsTooltipSkin(tooltip, enabled)
+  if tooltip:IsForbidden() then return end
 
   if enabled ~= true then
-    if background then
-      background:Hide()
+    local backdrop = tooltip.__puiTextureBackdrop
+    if backdrop then
+      for _, texture in pairs(backdrop) do texture:Hide() end
+    end
+    if tooltip.__puiOptionsTooltipNineSliceAlpha ~= nil then
+      tooltip.NineSlice:SetAlpha(tooltip.__puiOptionsTooltipNineSliceAlpha)
+      tooltip.__puiOptionsTooltipNineSliceAlpha = nil
     end
     return
   end
 
-  if not background then
-    background = tooltip:CreateTexture(nil, "BACKGROUND", nil, -8)
-    Pixel.Point(background, "TOPLEFT", tooltip, "TOPLEFT", 2, -2)
-    Pixel.Point(background, "BOTTOMRIGHT", tooltip, "BOTTOMRIGHT", -2, 2)
-    tooltip.__puiAceTooltipSolidBackground = background
+  if tooltip.__puiOptionsTooltipNineSliceAlpha == nil then
+    tooltip.__puiOptionsTooltipNineSliceAlpha = tooltip.NineSlice:GetAlpha()
   end
+  -- Blizzard reapplies its NineSlice layout when tooltip content changes.
+  tooltip.NineSlice:SetAlpha(0)
 
   local colors = Theme.GetColors()
   local color = colors.background
-  Pixel.SetColorTexture(background, color[1], color[2], color[3], 1)
-  background:Show()
+  _PUI_SetTextureBackdrop(tooltip, {
+    bg = { color[1], color[2], color[3], 1 },
+    border = colors.border,
+  }, Theme.GetEdgeSize())
 end
 
 
