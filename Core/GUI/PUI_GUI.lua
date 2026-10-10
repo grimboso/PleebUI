@@ -2567,6 +2567,16 @@ function Addon:GetOptionsWindowGeometry()
   return width, height, math.max(-maxX, math.min(maxX, x)), math.max(-maxY, math.min(maxY, y)), maxX, maxY
 end
 
+function Addon:PreviewOptionsWindowSize(width, height)
+  local frame = self._OptionsWindow
+  if not frame then
+    return
+  end
+
+  width, height = _PUI_ClampOptionsWindowBounds(width or frame:GetWidth(), height or frame:GetHeight(), frame)
+  frame:SetSize(width, height)
+end
+
 function Addon:SetOptionsWindowGeometry(width, height, x, y)
   local currentWidth, currentHeight, currentX, currentY = self:GetOptionsWindowGeometry()
   local frame = self._OptionsWindow
@@ -2584,9 +2594,9 @@ function Addon:SetOptionsWindowGeometry(width, height, x, y)
     frame:ClearAllPoints()
     frame:SetPoint("CENTER", UIParent, "CENTER", x, y)
     _PUI_UpdateOptionsWindowSize(frame, PUI_OPTIONS_APP)
-    self:RefreshOptionsTheme()
   end
-  self:NotifyOptionsTreeChanged(nil, ns._PUIActiveOptionsPath)
+  -- AceConfig refreshes the controls after committing; only their geometry bounds changed.
+  self:InvalidateOptionsRender("UITheme")
 end
 
 local function _PUI_RestoreOptionsWindowState(frame)
