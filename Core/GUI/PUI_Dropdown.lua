@@ -118,7 +118,7 @@ end
 
 local function CreateBox(widget, frame, geom)
   local colors = Theme.GetColors()
-  local edge = math_max(Theme.GetEdgeSize(), 2)
+  local edge = Theme.ControlBorderSize
   local box = widget.__puiDropdownBox
 
   if not box then
@@ -138,7 +138,7 @@ local function CreateBox(widget, frame, geom)
 
   Theme.SetSquareBackdrop(box, {
     bg = colors.control,
-    border = colors.border,
+    border = colors.controlBorder,
   }, edge)
 
   box._puiBg:ClearAllPoints()
@@ -359,7 +359,7 @@ end
 local function EnsurePulloutBackground(frame, colors, edge)
   Theme.SetSquareBackdrop(frame, {
     bg = colors.control,
-    border = colors.border,
+    border = colors.controlBorder,
   }, edge)
 
   frame._puiBg:Show()
@@ -569,7 +569,7 @@ local function SkinPulloutFrame(frame, slider, colors, edge)
   StripFrame(slider, thumb)
   Theme.SetSquareBackdrop(slider, {
     bg = colors.control,
-    border = colors.border,
+    border = colors.controlBorder,
   }, edge)
 
   slider:SetThumbTexture(WHITE8)
@@ -903,7 +903,7 @@ local function SkinDropdown(widget, isLSM)
           return
         end
 
-        SkinDropdownPullout(widget, isLSM, Theme.GetColors(), math_max(Theme.GetEdgeSize(), 2))
+        SkinDropdownPullout(widget, isLSM, Theme.GetColors(), Theme.ControlBorderSize)
       end
 
       RefreshPullout()
@@ -921,7 +921,7 @@ local function SkinDropdown(widget, isLSM)
 end
 
 function WidgetSkins.DropdownPullout(widget)
-  SkinPulloutFrame(widget.frame, widget.slider, Theme.GetColors(), math_max(Theme.GetEdgeSize(), 2))
+  SkinPulloutFrame(widget.frame, widget.slider, Theme.GetColors(), Theme.ControlBorderSize)
 end
 
 function WidgetSkins.Dropdown(widget)
@@ -1037,7 +1037,7 @@ local function PUI_Dropdown_CreateChrome(parent)
 end
 
 local function PUI_Dropdown_LayoutChrome(parent, chrome)
-  local edge = Theme.GetEdgeSize()
+  local edge = Theme.ControlBorderSize
   local border = chrome.border
 
   chrome.background:ClearAllPoints()
@@ -1110,7 +1110,7 @@ local function PUI_Dropdown_RefreshVisualState(widget)
   local hovered = widget.button.__puiHovered == true
   local textColor = disabled and colors.disabledText or colors.text
   local controlColor = disabled and colors.disabledControl or colors.control
-  local borderColor = disabled and colors.disabledBorder or colors.border
+  local borderColor = disabled and colors.disabledControlBorder or colors.controlBorder
   local arrowColor = disabled and colors.disabledText or colors.accent
 
   if hovered and not disabled then
