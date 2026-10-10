@@ -1191,6 +1191,7 @@ function PlayerBuffs:GetOptions()
         },
         textColor = {
           type = "color", name = "Text color", order = 70, width = "relative", relWidth = 1 / 2, hasAlpha = true,
+          arg = { puiDisabledReason = "Uses the theme text color. Turn off Use theme text color to choose a custom color." },
           disabled = function()
             return GetAuraFrameDB(GetProfileDB(), kind).textColor == nil
           end,
