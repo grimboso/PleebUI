@@ -221,7 +221,7 @@ function FrameUtil.ApplyGlobalEditFont(fs, sizeOverride, flagsOverride)
     return
   end
 
-  local fontPath, size, flags = fs:GetFont()
+  local fontPath, size, flags = ns.Theme.GetRuntimeFont(fs)
   local globalFontKey, globalFlags = ns.Theme.GetIconTextGlobal()
 
   size = sizeOverride or size or 14
@@ -237,7 +237,7 @@ function FrameUtil.ApplyGlobalEditFont(fs, sizeOverride, flagsOverride)
   end
 
   if fontPath then
-    fs:SetFont(fontPath, size, flags)
+    ns.Theme.SetRuntimeFont(fs, fontPath, size, flags)
   end
 end
 
@@ -4659,7 +4659,7 @@ local function EnsureOverlay(entry)
 
   local font, size, flags = labelFS:GetFont()
   if font and size then
-    labelFS:SetFont(font, size, "OUTLINE")
+    ns.Theme.SetRuntimeFont(labelFS, font, size, "OUTLINE")
   end
   local textColor = ns.Theme.GetColors().text
   labelFS:SetTextColor(textColor[1], textColor[2], textColor[3], textColor[4])
