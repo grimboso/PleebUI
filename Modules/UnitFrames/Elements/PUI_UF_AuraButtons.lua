@@ -194,7 +194,8 @@ local function ApplyAuraTextFont(fontString, fontKey, size, outline)
     flags = flags:gsub("^SHADOW", "")
   end
 
-  fontString:SetFont(
+  ns.Theme.SetRuntimeFont(
+    fontString,
     OptionsUtil.FetchFontPath(fontKey, false),
     Theme.ResolveFontSize(tonumber(size) or 11, "unitFrames"),
     flags
