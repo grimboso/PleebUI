@@ -3,9 +3,10 @@ local _, ns = ...
 local Theme = ns.Theme
 local Pixel = ns.Pixel
 local AceGUI = LibStub("AceGUI-3.0")
+local AceConfigDialog = LibStub("AceConfigDialog-3.0")
 
 local TYPE = "PUI_Slider"
-local VERSION = 4
+local VERSION = 5
 local WHITE8 = "Interface\\Buttons\\WHITE8x8"
 
 local math_floor = math.floor
@@ -81,27 +82,49 @@ local function SetControlChromeColors(chrome, backgroundColor, borderColor, alph
   end
 end
 
-local function UpdateText(self)
-  local value = self.value or 0
-
-  if self.ispercent then
-    self.editbox:SetText(("%s%%"):format(math_floor(value * 1000 + 0.5) / 10))
-  else
-    self.editbox:SetText(math_floor(value * 100 + 0.5) / 100)
-  end
+local function FormatValue(self, value)
+  local text = ("%.2f"):format(self.ispercent and value * 100 or value)
+  text = text:gsub("(%..-)0+$", "%1"):gsub("%.$", "")
+  return self.ispercent and text .. "%" or text
 end
 
-local function UpdateLabels(self)
-  local minValue = self.min or 0
-  local maxValue = self.max or 100
+local function UpdateText(self)
+  self.inputError = nil
+  self.editbox:SetText(FormatValue(self, self.value or 0))
+end
 
-  if self.ispercent then
-    self.lowtext:SetFormattedText("%s%%", minValue * 100)
-    self.hightext:SetFormattedText("%s%%", maxValue * 100)
-  else
-    self.lowtext:SetText(minValue)
-    self.hightext:SetText(maxValue)
+local function GetAdjustmentStep(self)
+  local minimumStep = self.ispercent and 0.0001 or 0.01
+  if self.step and self.step > 0 then return math_max(self.step, minimumStep) end
+  return self.ispercent and 0.01 or 1
+end
+
+local function HideSliderTooltip(self)
+  local tooltip = self.hintTooltip
+  if tooltip and tooltip:GetOwner() == self.frame then tooltip:Hide() end
+  self.hintTooltip = nil
+end
+
+local function ShowSliderTooltip(self)
+  HideSliderTooltip(self)
+  self:Fire("OnEnter")
+  local tooltip = AceConfigDialog.tooltip
+  if not tooltip:IsShown() or tooltip:GetOwner() ~= self.frame then
+    tooltip = GameTooltip
+    if not tooltip:IsShown() or tooltip:GetOwner() ~= self.frame then
+      tooltip:SetOwner(self.frame, "ANCHOR_RIGHT")
+      tooltip:SetText(self.label:GetText() or "")
+    end
   end
+  local colors = Theme.GetColors()
+  tooltip:AddLine("Range: " .. FormatValue(self, self.min or 0) .. " - " .. FormatValue(self, self.max or 100),
+    colors.text[1], colors.text[2], colors.text[3], true)
+  local step = GetAdjustmentStep(self)
+  tooltip:AddLine("Step: " .. FormatValue(self, step), colors.mutedText[1], colors.mutedText[2], colors.mutedText[3], true)
+  tooltip:AddLine("Shift + mouse wheel to adjust.", colors.mutedText[1], colors.mutedText[2], colors.mutedText[3], true)
+  if self.inputError then tooltip:AddLine(self.inputError, colors.accent[1], colors.accent[2], colors.accent[3], true) end
+  tooltip:Show()
+  self.hintTooltip = tooltip
 end
 
 local function RefreshVisualState(self)
@@ -131,6 +154,18 @@ local function RefreshVisualState(self)
     thumbColor[3],
     thumbColor[4]
   )
+  for _, button in ipairs({ self.minusButton, self.plusButton }) do
+    local atLimit = button == self.minusButton
+      and (self.value or 0) <= (self.min or 0)
+      or button == self.plusButton and (self.value or 0) >= (self.max or 100)
+    local buttonDisabled = disabled or atLimit
+    if buttonDisabled then button:Disable() else button:Enable() end
+    local background, border, text = Theme.GetControlStateColors(
+      buttonDisabled, button.__puiHovered == true, button.__puiPressed == true
+    )
+    SetControlChromeColors(button.chrome, background, border, 1)
+    button.text:SetTextColor(text[1], text[2], text[3], text[4])
+  end
   self.editbox:SetTextColor(
     textColor[1],
     textColor[2],
@@ -140,33 +175,18 @@ local function RefreshVisualState(self)
 end
 
 local function GetValueGeometry(frameWidth, geom)
-  local availableWidth = math_max(0, frameWidth - geom.controlLeft - geom.controlRight)
-  local minSliderWidth = 36
-  local minValueWidth = 40
-  local valueGap
-  local valueWidth
-
-  if availableWidth >= minSliderWidth + minValueWidth then
-    valueGap = math_min(
-      geom.valueGap,
-      availableWidth - minSliderWidth - minValueWidth
-    )
-    valueWidth = math_min(
-      geom.valueWidth,
-      availableWidth - valueGap - minSliderWidth
-    )
-  else
-    valueGap = math_min(4, math_max(0, availableWidth - 2))
-    valueWidth = math_max(1, math_floor((availableWidth - valueGap) * 0.58))
-  end
-
-  return valueWidth, valueGap
+  local availableWidth = math_max(4, frameWidth - geom.controlLeft - geom.controlRight)
+  local gap = math_min(geom.valueGap, math_max(0, (availableWidth - 4) / 3))
+  local buttonWidth = math_min(geom.controlHeight, math_max(1, math_floor((availableWidth - gap * 3 - 2) / 4)))
+  local remainingWidth = math_max(2, availableWidth - buttonWidth * 2 - gap * 3)
+  local valueWidth = math_min(geom.valueWidth, math_max(1, remainingWidth - math_min(36, remainingWidth * 0.4)))
+  return valueWidth, gap, buttonWidth
 end
 
 local function LayoutWidget(self, width)
   local geom = Theme.GetWidgetRowGeometry(self)
   local frameWidth = tonumber(width) or self.frame:GetWidth() or 200
-  local valueWidth, valueGap = GetValueGeometry(frameWidth, geom)
+  local valueWidth, valueGap, buttonWidth = GetValueGeometry(frameWidth, geom)
 
   self.label:ClearAllPoints()
   Pixel.Point(self.label, "TOPLEFT", self.frame, "TOPLEFT", geom.labelLeft, -geom.labelTop)
@@ -179,14 +199,23 @@ local function LayoutWidget(self, width)
     "TOPRIGHT",
     self.frame,
     "TOPRIGHT",
-    -(geom.controlRight + valueWidth + valueGap),
+    -(geom.controlRight + valueWidth + buttonWidth * 2 + valueGap * 3),
     -geom.controlTop
   )
   Pixel.Height(self.slider, geom.controlHeight)
 
+  self.plusButton:ClearAllPoints()
+  Pixel.Point(self.plusButton, "TOPRIGHT", self.frame, "TOPRIGHT", -geom.controlRight, -geom.controlTop)
+  Pixel.Size(self.plusButton, buttonWidth, geom.controlHeight)
   self.editbox:ClearAllPoints()
-  Pixel.Point(self.editbox, "TOPRIGHT", self.frame, "TOPRIGHT", -geom.controlRight, -geom.controlTop)
+  Pixel.Point(self.editbox, "TOPRIGHT", self.plusButton, "TOPLEFT", -valueGap, 0)
   Pixel.Size(self.editbox, valueWidth, geom.controlHeight)
+
+  self.minusButton:ClearAllPoints()
+  Pixel.Point(self.minusButton, "TOPRIGHT", self.editbox, "TOPLEFT", -valueGap, 0)
+  Pixel.Size(self.minusButton, buttonWidth, geom.controlHeight)
+  LayoutControlChrome(self.minusButton, self.minusButton.chrome)
+  LayoutControlChrome(self.plusButton, self.plusButton.chrome)
 
   local thumbSize = geom.controlHeight - 4
   Pixel.Size(self.thumb, thumbSize, thumbSize)
@@ -194,21 +223,26 @@ local function LayoutWidget(self, width)
   LayoutControlChrome(self.editbox, self.editboxChrome)
 end
 
+local function SliderModifierChanged(frame)
+  frame:EnableMouseWheel(not frame.obj.disabled and frame.__puiHovered == true and IsShiftKeyDown())
+end
+
 local function ControlOnEnter(frame)
-  frame.obj:Fire("OnEnter")
+  frame.__puiHovered = true
+  frame:RegisterEvent("MODIFIER_STATE_CHANGED")
+  SliderModifierChanged(frame)
+  ShowSliderTooltip(frame.obj)
 end
 
 local function ControlOnLeave(frame)
+  frame.__puiHovered = nil
+  frame:UnregisterEvent("MODIFIER_STATE_CHANGED")
+  frame:EnableMouseWheel(false)
+  HideSliderTooltip(frame.obj)
   frame.obj:Fire("OnLeave")
 end
 
-local function FrameOnMouseDown(frame)
-  local self = frame.obj
-
-  if not self.disabled then
-    self.slider:EnableMouseWheel(true)
-  end
-
+local function FrameOnMouseDown()
   AceGUI:ClearFocus()
 end
 
@@ -232,9 +266,15 @@ local function SliderOnValueChanged(frame, newValue)
     return
   end
 
-  if self.step and self.step > 0 then
+  if self.step and self.step > 0 and newValue ~= self.min and newValue ~= self.max then
     local minValue = self.min or 0
     newValue = math_floor((newValue - minValue) / self.step + 0.5) * self.step + minValue
+  end
+  newValue = math_max(self.min or 0, math_min(self.max or 100, newValue))
+  if frame:GetValue() ~= newValue then
+    frame.setup = true
+    frame:SetValue(newValue)
+    frame.setup = nil
   end
 
   if newValue ~= self.value and not self.disabled then
@@ -254,9 +294,8 @@ local function SliderOnValueChanged(frame, newValue)
     end
   end
 
-  if self.value then
-    UpdateText(self)
-  end
+  UpdateText(self)
+  RefreshVisualState(self)
 end
 
 local function FireSliderCommit(self)
@@ -273,27 +312,63 @@ local function SliderOnMouseUp(frame)
   FireSliderCommit(frame.obj)
 end
 
-local function SliderOnMouseWheel(frame, delta)
-  local self = frame.obj
-
-  if self.disabled then
-    return
-  end
-
-  local value = self.value
-  local step = self.step or 1
-
-  if delta > 0 then
-    value = math_min(value + step, self.max)
-  else
-    value = math_max(value - step, self.min)
-  end
-
+local function AdjustValue(self, direction)
+  if self.disabled then return end
+  AceGUI:ClearFocus()
+  local step = GetAdjustmentStep(self)
+  local value = math_max(self.min, math_min(self.max, self.value + direction * step))
+  if value == self.value then return end
   self.slider:SetValue(value)
+  FireSliderCommit(self)
+end
 
-  if ShouldCommitOnRelease(self) then
-    FireSliderCommit(self)
+local function SliderOnMouseWheel(frame, delta)
+  if not IsShiftKeyDown() or frame.__puiHovered ~= true then return end
+  AdjustValue(frame.obj, delta > 0 and 1 or -1)
+end
+
+local function StepButtonOnClick(button)
+  AdjustValue(button.obj, button.direction)
+end
+
+local function StepButtonOnEnter(button)
+  button.__puiHovered = true
+  RefreshVisualState(button.obj)
+  ShowSliderTooltip(button.obj)
+end
+
+local function StepButtonOnLeave(button)
+  button.__puiHovered = nil
+  button.__puiPressed = nil
+  RefreshVisualState(button.obj)
+  HideSliderTooltip(button.obj)
+  button.obj:Fire("OnLeave")
+end
+
+local function StepButtonOnMouseDown(button, mouseButton)
+  if mouseButton ~= "LeftButton" then return end
+  button.__puiPressed = true
+  RefreshVisualState(button.obj)
+end
+
+local function StepButtonOnMouseUp(button, mouseButton)
+  if mouseButton ~= "LeftButton" then return end
+  button.__puiPressed = nil
+  RefreshVisualState(button.obj)
+end
+
+local function SliderOnHide(frame)
+  local self = frame.obj
+  self.slider:UnregisterEvent("MODIFIER_STATE_CHANGED")
+  self.slider:EnableMouseWheel(false)
+  self.slider.__puiHovered = nil
+  self.editbox:ClearFocus()
+  self.editbox.__puiHovered = nil
+  for _, button in ipairs({ self.minusButton, self.plusButton }) do
+    button.__puiHovered = nil
+    button.__puiPressed = nil
   end
+  HideSliderTooltip(self)
 end
 
 local function EditBoxOnEscapePressed(editbox)
@@ -307,7 +382,7 @@ local function EditBoxOnEnterPressed(editbox)
   local value
 
   if self.ispercent then
-    value = tonumber(text:gsub("%%", ""))
+    value = tonumber((text:gsub("%%", "")))
     if value then
       value = value / 100
     end
@@ -315,9 +390,16 @@ local function EditBoxOnEnterPressed(editbox)
     value = tonumber(text)
   end
 
-  if not value then
-    UpdateText(self)
-    editbox:ClearFocus()
+  if not value or value ~= value or value == math.huge or value == -math.huge then
+    self.inputError = "Enter a number."
+  elseif value < self.min or value > self.max then
+    self.inputError = "Enter a value between " .. FormatValue(self, self.min) .. " and " .. FormatValue(self, self.max) .. "."
+  else
+    self.inputError = nil
+  end
+  if self.inputError then
+    editbox:HighlightText()
+    ShowSliderTooltip(self)
     return
   end
 
@@ -330,11 +412,14 @@ end
 local function EditBoxOnEnter(editbox)
   editbox.__puiHovered = true
   RefreshVisualState(editbox.obj)
+  ShowSliderTooltip(editbox.obj)
 end
 
 local function EditBoxOnLeave(editbox)
   editbox.__puiHovered = nil
   RefreshVisualState(editbox.obj)
+  HideSliderTooltip(editbox.obj)
+  editbox.obj:Fire("OnLeave")
 end
 
 local function EditBoxOnFocusGained(editbox)
@@ -343,6 +428,8 @@ local function EditBoxOnFocusGained(editbox)
 end
 
 local function EditBoxOnFocusLost(editbox)
+  UpdateText(editbox.obj)
+  HideSliderTooltip(editbox.obj)
   RefreshVisualState(editbox.obj)
 end
 
@@ -358,8 +445,8 @@ local methods = {
     self:SetSliderValues(0, 100, 1)
     self:SetValue(0)
     self.slider:EnableMouseWheel(false)
-    self.lowtext:Hide()
-    self.hightext:Hide()
+    self.inputError = nil
+    self.slider.__puiHovered = nil
     LayoutWidget(self, self.frame:GetWidth())
     RefreshVisualState(self)
   end,
@@ -369,9 +456,7 @@ local methods = {
       self.livePreview(nil)
       self.livePreview = nil
     end
-    self.editbox:ClearFocus()
-    self.editbox.__puiHovered = nil
-    self.slider:EnableMouseWheel(false)
+    SliderOnHide(self.frame)
     self.commitOnRelease = nil
   end,
 
@@ -398,8 +483,9 @@ local methods = {
     self.editbox:EnableMouse(not disabled)
 
     if disabled then
-      self.editbox.__puiHovered = nil
-      self.editbox:ClearFocus()
+      SliderOnHide(self.frame)
+    elseif self.slider.__puiHovered == true then
+      SliderModifierChanged(self.slider)
     end
 
     RefreshVisualState(self)
@@ -412,6 +498,7 @@ local methods = {
     self.value = self.slider:GetValue()
     UpdateText(self)
     self.slider.setup = nil
+    RefreshVisualState(self)
   end,
 
   GetValue = function(self)
@@ -435,7 +522,6 @@ local methods = {
     self.step = step
     slider:SetMinMaxValues(minValue, maxValue)
     slider:SetValueStep(step)
-    UpdateLabels(self)
 
     if self.value then
       slider:SetValue(self.value)
@@ -443,18 +529,18 @@ local methods = {
     end
 
     slider.setup = nil
+    RefreshVisualState(self)
   end,
 
   SetIsPercent = function(self, isPercent)
     self.ispercent = isPercent == true
-    UpdateLabels(self)
     UpdateText(self)
   end,
 
   RefreshTheme = function(self)
     Theme.ApplyFont(self.label, "body")
-    Theme.ApplyFont(self.lowtext, "body")
-    Theme.ApplyFont(self.hightext, "body")
+    Theme.ApplyFont(self.minusButton.text, "body")
+    Theme.ApplyFont(self.plusButton.text, "body")
     Theme.ApplyFont(self.editbox, "body")
     LayoutWidget(self, self.frame:GetWidth())
     RefreshVisualState(self)
@@ -465,6 +551,7 @@ local function Constructor()
   local frame = CreateFrame("Frame", nil, UIParent)
   frame:EnableMouse(true)
   frame:SetScript("OnMouseDown", FrameOnMouseDown)
+  frame:SetScript("OnHide", SliderOnHide)
 
   local label = frame:CreateFontString(nil, "OVERLAY")
   label.__puiOptionsFontOwned = true
@@ -481,19 +568,10 @@ local function Constructor()
   slider:SetScript("OnLeave", ControlOnLeave)
   slider:SetScript("OnMouseUp", SliderOnMouseUp)
   slider:SetScript("OnMouseWheel", SliderOnMouseWheel)
+  slider:SetScript("OnEvent", SliderModifierChanged)
 
   local thumb = slider:GetThumbTexture()
   Pixel.SetTexCoord(thumb, 0, 1, 0, 1)
-
-  local lowtext = slider:CreateFontString(nil, "ARTWORK")
-  lowtext.__puiOptionsFontOwned = true
-  Theme.ApplyFont(lowtext, "body")
-  lowtext:Hide()
-
-  local hightext = slider:CreateFontString(nil, "ARTWORK")
-  hightext.__puiOptionsFontOwned = true
-  Theme.ApplyFont(hightext, "body")
-  hightext:Hide()
 
   local editbox = CreateFrame("EditBox", nil, frame)
   editbox.__puiOptionsFontOwned = true
@@ -509,15 +587,35 @@ local function Constructor()
   editbox:SetScript("OnEditFocusGained", EditBoxOnFocusGained)
   editbox:SetScript("OnEditFocusLost", EditBoxOnFocusLost)
 
+  local minusButton = CreateFrame("Button", nil, frame)
+  local plusButton = CreateFrame("Button", nil, frame)
+  for index, button in ipairs({ minusButton, plusButton }) do
+    button.direction = index == 1 and -1 or 1
+    button:RegisterForClicks("LeftButtonUp")
+    button.chrome = CreateControlChrome(button)
+    button.text = button:CreateFontString(nil, "OVERLAY")
+    button.text.__puiOptionsFontOwned = true
+    Pixel.AllPoints(button.text, button)
+    button.text:SetJustifyH("CENTER")
+    button.text:SetJustifyV("MIDDLE")
+    button.text:SetText(index == 1 and "-" or "+")
+    Theme.ApplyFont(button.text, "body")
+    button:SetScript("OnClick", StepButtonOnClick)
+    button:SetScript("OnEnter", StepButtonOnEnter)
+    button:SetScript("OnLeave", StepButtonOnLeave)
+    button:SetScript("OnMouseDown", StepButtonOnMouseDown)
+    button:SetScript("OnMouseUp", StepButtonOnMouseUp)
+  end
+
   local widget = {
     label = label,
     slider = slider,
     thumb = thumb,
     sliderChrome = CreateControlChrome(slider),
-    lowtext = lowtext,
-    hightext = hightext,
     editbox = editbox,
     editboxChrome = CreateControlChrome(editbox),
+    minusButton = minusButton,
+    plusButton = plusButton,
     alignoffset = 0,
     frame = frame,
     type = TYPE,
@@ -530,6 +628,8 @@ local function Constructor()
   frame.obj = widget
   slider.obj = widget
   editbox.obj = widget
+  minusButton.obj = widget
+  plusButton.obj = widget
 
   LayoutWidget(widget, 200)
   RefreshVisualState(widget)
