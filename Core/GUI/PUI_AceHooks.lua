@@ -7,6 +7,7 @@ local PUI_SELF_OWNED_WIDGET_TYPES = {
   PUI_Button = true,
   PUI_Checkbox = true,
   PUI_Dropdown = true,
+  PUI_FontDropdown = true,
   PUI_EditBox = true,
   PUI_Heading = true,
   PUI_Label = true,
