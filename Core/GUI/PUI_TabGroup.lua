@@ -399,9 +399,7 @@ function WidgetSkins.TabGroup(widget, forceLayout)
   widget.border:SetBackdropColor(0, 0, 0, 0)
   widget.border:SetBackdropBorderColor(0, 0, 0, 0)
 
-  local fontSignature = table.concat({
-    Theme.GetFont(), Theme.GetGlobalUIOutline(), tostring(Theme.GetOptionsFontHeight("tab", 12)),
-  }, "|")
+  local fontSignature = Theme.GetOptionsFontSignature("tab", 12)
   if forceLayout or not widget.__puiTabChromeHooked or widget.__puiTabFontSignature ~= fontSignature then
     widget.__puiTabFontSignature = fontSignature
     widget.__puiTabChromeHooked = true
