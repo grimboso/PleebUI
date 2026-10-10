@@ -1204,6 +1204,7 @@ local PUI_WIDGET_ROW_TYPES = {
   PUI_Button = true,
   PUI_Checkbox = true,
   PUI_Dropdown = true,
+  PUI_FontDropdown = true,
   PUI_EditBox = true,
   PUI_MultiLineEditBox = true,
   PUI_Slider = true,
@@ -2373,6 +2374,7 @@ end
 local PUI_SELF_SKINNING_WIDGET_TYPES = {
   PUI_Button = true,
   PUI_Dropdown = true,
+  PUI_FontDropdown = true,
   PUI_EditBox = true,
   PUI_MultiLineEditBox = true,
   PUI_Slider = true,
