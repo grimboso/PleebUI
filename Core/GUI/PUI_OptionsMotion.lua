@@ -71,7 +71,7 @@ end
 function Motion.Reveal(region)
   FinishReveals()
   if not region:IsShown() or not Motion.IsEnabled() then return end
-  Play(GetState(region, region, 1), 0, 1, 0.15, "OUT")
+  Play(GetState(region, region, 1), 0, 1, 0.30, "OUT")
 end
 
 function Motion.Stop(region)
