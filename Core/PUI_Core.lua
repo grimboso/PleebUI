@@ -168,6 +168,7 @@ local DB_DEFAULTS = {
       options = {
         puiOptionsFontSize = 14,
         optionsScale       = 1.0,
+        largerPointerTargets = false,
 
         skin = {
           widgetRowBackgrounds = true,
