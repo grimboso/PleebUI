@@ -1030,7 +1030,7 @@ local function CS_RefreshStatCategory(category, title)
   if not category then
     return
   end
-  category:SetSize(187, 22)
+  category:SetSize(187, 16)
   local text = category.Title or category.Text
   if not text then
     return
@@ -4307,6 +4307,7 @@ local function SetupCharacterFrameSkinning()
 
     -- Keep item level clean: the category header and value are enough.
     if CharacterStatsPane.ItemLevelFrame then
+      CharacterStatsPane.ItemLevelFrame:SetHeight(15)
       StripTextures(CharacterStatsPane.ItemLevelFrame, true)
       local itemLevelBackdrop = CharacterStatsPane.ItemLevelFrame._puiBg
       if itemLevelBackdrop and itemLevelBackdrop.SetBackdrop then
