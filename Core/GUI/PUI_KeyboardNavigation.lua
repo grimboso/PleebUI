@@ -49,7 +49,9 @@ end
 local function Activate(control)
   if IsDisabled(control) then return end
   local frame = control.frame
-  if control.mouseUp then
+  if control.actions and control.actions.activate then
+    control.actions.activate(frame)
+  elseif control.mouseUp then
     RunControlScript(frame, "OnMouseUp", "LeftButton")
   else
     frame:Click("LeftButton")
@@ -111,6 +113,9 @@ Tab moves forward; Shift+Tab moves backward. Focus does not change a setting.
 
 Trees and tabs
 Up/Down browses tree entries. Left/Right expands or collapses tree branches, or browses tabs. Enter opens the focused page; Space also selects a tab.
+
+Preview regions
+Tab reaches clickable preview regions. Focus shows the region label and explanation; Enter or Space opens its settings.
 
 Buttons and checkboxes
 Enter or Space activates the focused control. Disabled controls stay read-only and show their dependency explanation.
@@ -328,6 +333,9 @@ function Navigation.RegisterFrame(frame, kind, part, group, widget, mouseUp, act
     serial = serial + 1
     control = { frame = frame, serial = serial }
     controls[frame] = control
+  end
+  if not frame.__puiKeyboardHideHooked then
+    frame.__puiKeyboardHideHooked = true
     frame:HookScript("OnHide", function(self)
       if current and current.frame == self then
         local state = activeWindow and windows[activeWindow]
@@ -353,6 +361,20 @@ function Navigation.RegisterFrame(frame, kind, part, group, widget, mouseUp, act
     end)
   end
   return control
+end
+
+function Navigation.UnregisterFrame(frame)
+  local control = controls[frame]
+  if not control then return end
+  if current == control then
+    local state = activeWindow and windows[activeWindow]
+    if state and state.active then state.restoreKey = ControlKey(control) end
+    HideFocus()
+    current = nil
+    if control.kind == "text" and frame:HasFocus() then frame:ClearFocus() end
+  end
+  controls[frame] = nil
+  Navigation.QueueRestore()
 end
 
 function Navigation.RegisterWidget(widget)
@@ -411,15 +433,7 @@ function Navigation.ReleaseWidget(widget)
   widgets[widget] = nil
   for frame, control in pairs(controls) do
     if control.widget == widget then
-      if current == control then
-        local state = activeWindow and windows[activeWindow]
-        if state and state.active then
-          state.restoreKey = ControlKey(control)
-        end
-        HideFocus()
-        current = nil
-      end
-      controls[frame] = nil
+      Navigation.UnregisterFrame(frame)
     end
   end
   if popup and popup.widget == widget then popup = nil end
@@ -463,6 +477,19 @@ local function Collect(root)
     return a.serial < b.serial
   end)
   return result
+end
+
+function Navigation.FocusWidget(widget)
+  local state = activeWindow and windows[activeWindow]
+  if not state or not state.active or state.helpShown or InCombatLockdown()
+    or (state.enabled and not state.enabled()) then return end
+  for _, control in ipairs(Collect(activeWindow)) do
+    if control.widget == widget then
+      state.restoreKey = nil
+      FocusControl(control)
+      return
+    end
+  end
 end
 
 FocusControl = function(control)
