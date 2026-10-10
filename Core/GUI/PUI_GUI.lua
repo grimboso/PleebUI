@@ -1850,7 +1850,7 @@ local function _PUI_StyleRootNavButton(btn, node, isSelected)
   btn.__puiRootNavSelected:SetVertexColor(accent[1], accent[2], accent[3], isSelected and 1 or 0)
   btn.__puiRootNavSelected:SetShown(isSelected)
 
-  btn.__puiRootNavHover:SetVertexColor(accent[1], accent[2], accent[3], 1)
+  ns.OptionsMotion.SetHoverColor(btn.__puiRootNavHover, accent)
   ns.OptionsMotion.Hover(btn, btn.__puiRootNavHover, hovered and not disabled)
 
   btn.__puiRootNavIconBack:SetVertexColor(accent[1], accent[2], accent[3], isSelected and 0.26 or 0.11)
