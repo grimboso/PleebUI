@@ -23,6 +23,25 @@ end
 
 
 
+local function RefreshScrollbarState(scrollbar)
+  local owner = scrollbar.__puiScrollbarOwner
+  if owner and owner.__puiAceGUIOwnedByPleebUI ~= true then return end
+
+  local hovered = scrollbar.__puiScrollbarHovered == true
+  local pressed = scrollbar.__puiScrollbarPressed == true
+  local fill, border = Theme.GetControlStateColors(false, hovered, pressed)
+  Theme.SetSquareBackdrop(scrollbar, { bg = fill, border = border }, Theme.ControlBorderSize)
+
+  local accent = Theme.GetColors().accent
+  local highlight = pressed and 0.16 or hovered and 0.08 or 0
+  scrollbar:GetThumbTexture():SetVertexColor(
+    accent[1] + (1 - accent[1]) * highlight,
+    accent[2] + (1 - accent[2]) * highlight,
+    accent[3] + (1 - accent[3]) * highlight,
+    (hovered or pressed) and 1 or 0.90
+  )
+end
+
 function WidgetSkins.Scrollbar(widget)
   local scrollbar = widget.ScrollBar or widget
   local colors = Theme.GetColors()
@@ -33,6 +52,16 @@ function WidgetSkins.Scrollbar(widget)
   local upButton = scrollbar.ScrollUpButton
   local downButton = scrollbar.ScrollDownButton
   local thumb = scrollbar:GetThumbTexture()
+  local parent = scrollbar
+  local owner
+  while parent do
+    if parent.obj and parent.obj.AceGUIWidgetVersion then
+      owner = parent.obj
+      break
+    end
+    parent = parent:GetParent()
+  end
+  scrollbar.__puiScrollbarOwner = owner
 
   scrollbar:SetWidth(Theme.ScrollbarWidth)
   scrollbar:SetHitRectInsets(0, 0, 0, 0)
@@ -56,10 +85,7 @@ function WidgetSkins.Scrollbar(widget)
     button:SetSize(Theme.ScrollbarWidth, Theme.ScrollbarWidth)
     button:SetHitRectInsets(0, 0, 0, 0)
 
-    Theme.SetSquareBackdrop(button, {
-      bg = fill,
-      border = border,
-    }, edge)
+    WidgetSkins.Button(button, owner)
 
     local arrow = button.__puiArrow
     if not arrow then
@@ -95,6 +121,36 @@ function WidgetSkins.Scrollbar(widget)
   thumb:SetVertexColor(accent[1], accent[2], accent[3], 0.90)
   thumb:SetSize(Theme.ScrollbarWidth - 2, 24)
   thumb:Show()
+
+  if not scrollbar.__puiScrollbarStateHooked then
+    scrollbar.__puiScrollbarStateHooked = true
+    scrollbar:HookScript("OnEnter", function(self)
+      self.__puiScrollbarHovered = true
+      RefreshScrollbarState(self)
+    end)
+    scrollbar:HookScript("OnLeave", function(self)
+      self.__puiScrollbarHovered = nil
+      RefreshScrollbarState(self)
+    end)
+    scrollbar:HookScript("OnMouseDown", function(self, mouseButton)
+      if mouseButton == "LeftButton" then
+        self.__puiScrollbarPressed = true
+        RefreshScrollbarState(self)
+      end
+    end)
+    scrollbar:HookScript("OnMouseUp", function(self, mouseButton)
+      if mouseButton == "LeftButton" then
+        self.__puiScrollbarPressed = nil
+        RefreshScrollbarState(self)
+      end
+    end)
+    scrollbar:HookScript("OnHide", function(self)
+      self.__puiScrollbarHovered = nil
+      self.__puiScrollbarPressed = nil
+    end)
+    scrollbar:HookScript("OnShow", RefreshScrollbarState)
+  end
+  RefreshScrollbarState(scrollbar)
 end
 
 function WidgetSkins.Frame(frame)
