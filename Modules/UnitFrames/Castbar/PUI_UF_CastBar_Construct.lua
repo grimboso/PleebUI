@@ -35,7 +35,7 @@ local function CB_SetFont(fs, fontKey, size, flags)
     return
   end
 
-  fs:SetFont(fontPath, Theme.ResolveFontSize(tonumber(size) or 14, "unitFrames"), flags or "")
+  ns.Theme.SetRuntimeFont(fs, fontPath, Theme.ResolveFontSize(tonumber(size) or 14, "unitFrames"), flags or "")
 end
 
 local function CB_GetBorder(frame, cfg)
