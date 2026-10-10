@@ -474,8 +474,8 @@ function MovementWarning:RefreshOptionsPreview()
   local db = Addon.db.profile.movementWarning
   local fontKey, flags = ns.Theme.GetIconTextGlobal()
   local font = ns.LSM:Fetch("font", fontKey)
-  local cellHeight = math.max(1, (root:GetHeight() - 64) / math.max(1, count))
-  local cellWidth = math.max(1, root:GetWidth() - 40)
+  local cellHeight = math.max(1, root:GetHeight() - 64)
+  local cellWidth = math.max(1, (root:GetWidth() - 40) / math.max(1, count))
   for index, spellID in ipairs(knownSpells) do
     local preview = root.samples[index]
     if not preview then
@@ -503,7 +503,7 @@ function MovementWarning:RefreshOptionsPreview()
     preview.title:SetScale(math.min(1, cellWidth / math.max(1, preview.title:GetStringWidth())))
     preview:SetSize(cellWidth, cellHeight)
     preview:ClearAllPoints()
-    preview:SetPoint("TOP", root, "TOP", 0, -32 - (index - 1) * cellHeight)
+    preview:SetPoint("TOPLEFT", root, "TOPLEFT", 20 + (index - 1) * cellWidth, -32)
     ns.Theme.SetRuntimeFont(preview.label, font, size, flags)
     preview.label:SetTextColor(config.color.r, config.color.g, config.color.b, config.color.a)
     preview.label:SetText(config.showCountdown and ("No " .. name .. " for") or (name .. " unavailable"))
