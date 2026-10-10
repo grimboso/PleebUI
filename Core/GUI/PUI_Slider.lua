@@ -45,7 +45,7 @@ local function CreateControlChrome(parent)
 end
 
 local function LayoutControlChrome(parent, chrome)
-  local edge = Theme.GetEdgeSize()
+  local edge = Theme.ControlBorderSize
   local border = chrome.border
 
   chrome.background:ClearAllPoints()
@@ -109,7 +109,7 @@ local function RefreshVisualState(self)
   local disabled = self.disabled == true
   local textColor = disabled and colors.disabledText or colors.text
   local controlColor = disabled and colors.disabledControl or colors.control
-  local borderColor = disabled and colors.disabledBorder or colors.border
+  local borderColor = disabled and colors.disabledControlBorder or colors.controlBorder
   local editBorder = self.editbox.__puiHovered and not disabled and colors.accent or borderColor
   local thumbColor = disabled and colors.disabledText or colors.accent
 
