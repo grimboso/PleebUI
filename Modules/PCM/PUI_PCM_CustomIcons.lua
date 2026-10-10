@@ -57,7 +57,7 @@ local function ApplyFont(fontString, parent, icon, count)
   local x = count and icon.countTextX or icon.durationTextX
   local y = count and icon.countTextY or icon.durationTextY
 
-  fontString:SetFont(ResolveFont(icon.font), baseSize * scale / 100, icon.outline)
+  ns.Theme.SetRuntimeFont(fontString, ResolveFont(icon.font), baseSize * scale / 100, icon.outline)
   fontString:SetTextColor(color[1], color[2], color[3], color[4])
   fontString:SetShadowColor(0, 0, 0, 1)
   fontString:SetShadowOffset(1, -1)
