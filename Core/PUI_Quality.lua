@@ -2562,7 +2562,7 @@ local function Quality_RefreshPreview()
   local warnings = Quality_GetPreviewWarnings()
   root.Title:SetText("Combat warnings and displays")
   root.PreviewHelp:SetText("Samples use your current settings")
-  local columns = 2
+  local columns = 3
   local rowCount = math.ceil(#warnings / columns)
   local cellWidth = math.max(1, (root:GetWidth() - 32) / columns)
   local cellHeight = math.max(1, (root:GetHeight() - 64) / rowCount)
