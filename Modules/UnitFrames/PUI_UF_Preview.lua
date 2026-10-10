@@ -2703,8 +2703,8 @@ local CASTBAR_PREVIEW_COLORS = {
 local function RenderCastbarSettingsPreview(box, context)
   local path = context.optionsPath
   local nestedPet = path[2] == "player" and path[3] == "pet"
-  local castbarPage = nestedPet and path[4] == "castbar"
-    or (not nestedPet and path[3] == "castbar")
+  local pageKey = nestedPet and path[4] or path[3]
+  local castbarPage = pageKey == "castbar" or pageKey == "instantCast" or pageKey == "empower"
   local bars = box.__puiSettingsCastbarSamples
 
   if bars then
