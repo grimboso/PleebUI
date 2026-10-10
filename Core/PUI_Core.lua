@@ -151,6 +151,7 @@ local DB_DEFAULTS = {
       media = {
         iconTextGlobalFont  = "FiraSans Heavy",
         iconTextGlobalFlags = "OUTLINE",
+        runtimeFontSlug     = false,
         fontSizeOffset      = 0,
         fontSizeScopes = {
           general         = true,
@@ -168,6 +169,7 @@ local DB_DEFAULTS = {
       options = {
         puiOptionsFontSize = 14,
         optionsScale       = 1.0,
+        optionsFontSlug    = false,
         largerPointerTargets = false,
 
         skin = {
@@ -926,6 +928,7 @@ function Addon:RefreshIconFonts(atWorldEntry)
   ns.Modules.MovementWarning:RefreshFonts()
   ns.Registry.Minimap:RefreshFonts()
   ns.Modules.Quality:RefreshFonts()
+  ns.Theme.RefreshRuntimeFonts()
 end
 
 Addon:RegisterEvent("PLAYER_ENTERING_WORLD", function()
