@@ -986,7 +986,7 @@ function PlayerBuffs:EnsureMovers()
             },
             {
               type = "slider",
-              label = "Text size",
+              label = "Font size",
               min = 8,
               max = 32,
               step = 1,
@@ -1000,7 +1000,7 @@ function PlayerBuffs:EnsureMovers()
             },
             {
               type = "slider",
-              label = "Border size",
+              label = "Border thickness",
               min = 0,
               max = 8,
               step = 1,
@@ -1165,7 +1165,7 @@ function PlayerBuffs:GetOptions()
           get = GetValue, set = SetValue,
         },
         font = {
-          type = "select", name = "Font", order = 40, width = "relative", relWidth = 1 / 3, dialogControl = "LSM30_Font",
+          type = "select", name = "Font", order = 40, width = "relative", relWidth = 1 / 2, dialogControl = "LSM30_Font",
           values = function() return ns.OptionsUtil.BuildFontValues(true) end,
           get = function() return GetAuraFrameDB(GetProfileDB(), kind).font or ns.FontDropdown.STANDARD_FONT_KEY end,
           set = function(_, value)
@@ -1173,8 +1173,27 @@ function PlayerBuffs:GetOptions()
             self:ApplySettings({ playerBuffsStyle = true })
           end,
         },
+        useThemeTextColor = {
+          type = "toggle", name = "Use theme text color", order = 60, width = "relative", relWidth = 1 / 2,
+          desc = "Follow the UI theme text color. Turn off to choose a custom color.",
+          get = function()
+            return GetAuraFrameDB(GetProfileDB(), kind).textColor == nil
+          end,
+          set = function(_, value)
+            local frameDB = GetAuraFrameDB(GetProfileDB(), kind)
+            if value then
+              frameDB.textColor = nil
+            else
+              frameDB.textColor = CopyTable(Theme.GetColors().text)
+            end
+            self:ApplySettings({ playerBuffsStyle = true })
+          end,
+        },
         textColor = {
-          type = "color", name = "Text color", order = 50, width = "relative", relWidth = 1 / 3, hasAlpha = true,
+          type = "color", name = "Text color", order = 70, width = "relative", relWidth = 1 / 2, hasAlpha = true,
+          disabled = function()
+            return GetAuraFrameDB(GetProfileDB(), kind).textColor == nil
+          end,
           get = function()
             local color = GetAuraFrameDB(GetProfileDB(), kind).textColor or Theme.GetColors().text
             return color[1], color[2], color[3], color[4] or 1
@@ -1185,7 +1204,7 @@ function PlayerBuffs:GetOptions()
           end,
         },
         fontOutline = {
-          type = "select", name = "Outline", order = 60, width = "relative", relWidth = 1 / 3,
+          type = "select", name = "Outline", order = 50, width = "relative", relWidth = 1 / 2,
           values = Theme.GetOutlineList(), get = GetValue, set = SetValue,
         },
       },
@@ -1204,7 +1223,7 @@ function PlayerBuffs:GetOptions()
         args = {
           enabled = {
             type = "toggle",
-            name = "Enable player buffs",
+            name = "Enable buffs and debuffs",
             order = 10,
             get = GetValue,
             set = function(_, value)
