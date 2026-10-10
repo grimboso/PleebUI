@@ -922,10 +922,10 @@ function Theme.GetOptionsFontHeight(role, size)
       optionsFontMeasure = frame:CreateFontString(nil, "OVERLAY")
       optionsFontMeasure.__puiOptionsFontOwned = true
       optionsFontMeasure:SetWordWrap(false)
-      optionsFontMeasure:SetText("Agj0123456789")
     end
 
     Theme.ApplyFont(optionsFontMeasure, role, size)
+    optionsFontMeasure:SetText("Agj0123456789")
     local _, fontSize = optionsFontMeasure:GetFont()
     cached = { signature = signature, height = math.ceil(math.max(fontSize, optionsFontMeasure:GetStringHeight()) + 2) }
     optionsFontHeights[key] = cached
