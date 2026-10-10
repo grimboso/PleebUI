@@ -3205,6 +3205,13 @@ local function UIThemeOptionsProvider()
       end,
     }
 
+    layoutArgs.animateOptions = {
+      type = "toggle", name = "Animate options", order = 6,
+      desc = "Fade in pages and categories, and soften navigation highlights. Turn off for instant transitions.",
+      get = ns.OptionsMotion.IsEnabled,
+      set = function(_, enabled) ns.OptionsMotion.SetEnabled(enabled) end,
+    }
+
     options.args.themeColors.order = 2
     options.args.fonts.name = "Fonts and global text (current profile)"
     options.args.fonts.order = 3
