@@ -2212,6 +2212,7 @@ do
           name = "Custom color",
           order = 2,
           hasAlpha = true,
+          arg = { puiDisabledReason = "Choose Custom color in Color mode first." },
           disabled = function()
             PRD_NormalizeBarColorConfig(cfg, role)
             return cfg.colorMode ~= "CUSTOM"
@@ -2433,6 +2434,7 @@ do
               name = "Font",
               order = 2,
               values = OptionsUtil.BuildFontValues,
+              arg = { puiDisabledReason = "Turn off Use global font to choose a font for this bar." },
               disabled = function()
                 return PRD_UseGlobalFont(appearanceText)
               end,
@@ -2872,6 +2874,7 @@ do
         Addon:ApplyOptionsChange("PRD", { layout = true, mover = true })
       end,
     }
+    layout.width.arg = { puiDisabledReason = "Available when detached." }
     layout.width.disabled = function()
       return not layout.detached.get()
     end
@@ -2905,6 +2908,7 @@ do
       args.feature.args.usePlayerHealth = {
         type = "toggle", name = "Use Player health", order = 10, width = "relative", relWidth = 0.5,
         desc = "Uses the Player unit frame in the PRD health position.",
+        arg = { puiDisabledReason = "Available outside combat." },
         disabled = InCombatLockdown,
         get = function() return state.db.usePlayerHealth == true end,
         set = function(_, value) state.M:SetUsePlayerHealth(value) end,
@@ -2977,6 +2981,7 @@ do
         },
         copy = {
           type = "execute", name = "Copy appearance", order = 3,
+          arg = { puiDisabledReason = "Choose a different destination bar." },
           disabled = function() return sourceKey == targetKey end,
           func = function()
             local source = targets[sourceKey]
@@ -3082,6 +3087,7 @@ do
             min = 0,
             max = 12,
             step = 1,
+            arg = { puiDisabledReason = "Enable Show outer border first." },
             disabled = function()
               return outerBorder.enabled ~= true
             end,
@@ -3098,6 +3104,7 @@ do
             name = "Outer border color",
             order = 3,
             hasAlpha = true,
+            arg = { puiDisabledReason = "Enable Show outer border first." },
             disabled = function()
               return outerBorder.enabled ~= true
             end,
@@ -3335,6 +3342,7 @@ do
             name = "Custom color",
             order = 3,
             hasAlpha = true,
+            arg = { puiDisabledReason = "Choose Custom color in Color mode first." },
             disabled = function()
               return config.colorMode ~= "CUSTOM"
             end,
@@ -3463,6 +3471,7 @@ do
         hidden = function()
           return tickConfig.enabled ~= true
         end,
+        arg = { puiDisabledReason = "Set a manual maximum or wait for the detected maximum outside combat." },
         disabled = function()
           return GetMaximum() == nil
         end,
@@ -3836,6 +3845,7 @@ do
           name = "Completion animation",
           desc = "Changes the effect shown when a segment finishes recharging.",
           order = 3,
+          arg = { puiDisabledReason = "Enable Show ready glow first." },
           disabled = resourceKey == "RUNES" and function() return behavior.showReadyGlow == false end or nil,
           values = RESOURCE_COMPLETION_ANIMATION_VALUES,
           get = function()
@@ -3996,6 +4006,7 @@ do
             type = "input",
             name = "Start at stack",
             order = 2,
+            arg = { puiDisabledReason = "Enable this color shift first." },
             disabled = function()
               return threshold.enabled ~= true
             end,
@@ -4021,6 +4032,7 @@ do
             name = "Color",
             order = 3,
             values = STACK_THRESHOLD_COLOR_VALUES,
+            arg = { puiDisabledReason = "Enable this color shift first." },
             disabled = function()
               return threshold.enabled ~= true
             end,
@@ -4037,6 +4049,10 @@ do
             name = "Custom color",
             order = 4,
             hasAlpha = true,
+            arg = { puiDisabledReason = function()
+              if threshold.enabled ~= true then return "Enable this color shift first." end
+              return "Choose Custom color first."
+            end },
             disabled = function()
               return threshold.enabled ~= true or threshold.colorMode ~= "CUSTOM"
             end,
@@ -4081,6 +4097,7 @@ do
         type = "execute",
         name = "Add stack color shift",
         order = #stackColorThresholds + 1,
+        arg = { puiDisabledReason = "The limit is 30 color shifts. Delete a shift to add another." },
         disabled = #stackColorThresholds >= 30,
         func = function()
           if AuraWidget.AddStackColorThreshold(settings, 30) then
@@ -4160,6 +4177,7 @@ do
             min = 120,
             max = 600,
             step = 1,
+            arg = { puiDisabledReason = "Available when detached." },
             disabled = function()
               return settings.detached ~= true
             end,
@@ -4177,6 +4195,7 @@ do
             name = "Anchor point",
             order = 4,
             values = RESOURCE_ANCHOR_VALUES,
+            arg = { puiDisabledReason = "Available when detached." },
             disabled = function()
               return settings.detached ~= true
             end,
@@ -4195,6 +4214,7 @@ do
             min = -2000,
             max = 2000,
             step = 1,
+            arg = { puiDisabledReason = "Available when detached." },
             disabled = function()
               return settings.detached ~= true
             end,
@@ -4213,6 +4233,7 @@ do
             min = -2000,
             max = 2000,
             step = 1,
+            arg = { puiDisabledReason = "Available when detached." },
             disabled = function()
               return settings.detached ~= true
             end,
@@ -4281,6 +4302,7 @@ do
             desc = "Use All for every stack, or enter specific stack values separated by commas.",
             order = 2.5,
             hidden = resource.category ~= "TRACKED_EFFECT",
+            arg = { puiDisabledReason = "Enable Show tick separators first." },
             disabled = function()
               return settings.showDividers == false
             end,
@@ -4302,6 +4324,7 @@ do
             min = 1,
             max = 6,
             step = 1,
+            arg = { puiDisabledReason = "Enable Show tick separators first." },
             disabled = function()
               return settings.showDividers == false
             end,
@@ -4321,6 +4344,7 @@ do
             end,
             order = 4,
             hasAlpha = true,
+            arg = { puiDisabledReason = "Enable Show tick separators first." },
             disabled = function()
               return settings.showDividers == false
             end,
@@ -4375,6 +4399,7 @@ do
             max = 20,
             step = 1,
             hidden = resource.category ~= "TRACKED_EFFECT",
+            arg = { puiDisabledReason = "Enable Show spell icon first." },
             disabled = function()
               return settings.showSpellIcon ~= true
             end,
@@ -4413,6 +4438,7 @@ do
             name = "Custom color",
             order = 2,
             hasAlpha = true,
+            arg = { puiDisabledReason = "Choose Custom color in Color mode first." },
             disabled = function()
               return PRD_GetResourceColorMode(settings) ~= "CUSTOM"
             end,
@@ -4494,6 +4520,7 @@ do
             order = 3,
             hasAlpha = true,
             hidden = resource.category == "TRACKED_EFFECT",
+            arg = { puiDisabledReason = "Choose Custom color in Color mode first." },
             disabled = function()
               return PRD_GetResourceColorMode(settings) ~= "CUSTOM"
             end,
@@ -4552,6 +4579,7 @@ do
             name = "Font",
             order = 3,
             values = OptionsUtil.BuildFontValues,
+            arg = { puiDisabledReason = "Turn off Use global font to choose a font for this resource." },
             disabled = function()
               return PRD_UseGlobalFont(text)
             end,
@@ -4679,6 +4707,7 @@ do
             hidden = function()
               return not supportsNumericCues
             end,
+            arg = { puiDisabledReason = "Choose a Desaturate threshold mode first." },
             disabled = DesaturateThresholdDisabled,
             get = function()
               return Clamp(cues.desaturateThreshold or 0, 0, 50)
@@ -4714,6 +4743,7 @@ do
             hidden = function()
               return not supportsNumericCues
             end,
+            arg = { puiDisabledReason = "Choose a Threshold glow mode first." },
             disabled = GlowThresholdDisabled,
             get = function()
               return Clamp(cues.glowThreshold or 0, 0, 50)
@@ -4731,6 +4761,7 @@ do
             hidden = function()
               return not supportsNumericCues
             end,
+            arg = { puiDisabledReason = "Choose a Threshold glow mode first." },
             disabled = GlowThresholdDisabled,
             get = function()
               return cues.glowType or "PIXEL"
@@ -4748,6 +4779,7 @@ do
             hidden = function()
               return not supportsNumericCues
             end,
+            arg = { puiDisabledReason = "Choose a Threshold glow mode first." },
             disabled = GlowThresholdDisabled,
             get = function()
               local color = cues.glowColor or { 1, 0.82, 0, 1 }
@@ -4782,6 +4814,7 @@ do
             name = "Buff spell ID",
             desc = "Enter the spell ID of a player buff. The selected spell is shown below; switching the glow off keeps your selection.",
             order = 10,
+            arg = { puiDisabledReason = "Enable Glow while a buff is active first." },
             disabled = function() return cues.buffGlowEnabled ~= true end,
             validate = function(_, value)
               local spellID = tonumber(value)
@@ -4806,6 +4839,10 @@ do
             name = "Buff glow color",
             order = 11,
             hasAlpha = true,
+            arg = { puiDisabledReason = function()
+              if cues.buffGlowEnabled ~= true then return "Enable Glow while a buff is active first." end
+              return "Enter a buff spell ID first."
+            end },
             disabled = BuffGlowDisabled,
             get = function()
               local color = cues.buffGlowColor or { 0.25, 0.75, 1, 1 }
@@ -4877,6 +4914,7 @@ do
         visibility = {
           type = "select", name = "Show", order = 10, width = "relative", relWidth = 0.333,
           values = { ALWAYS = "Always", COMBAT = "In combat", TARGET = "With a target", COMBAT_OR_TARGET = "In combat or with a target" },
+          arg = { puiDisabledReason = "Enable resources and tracked effects first." },
           disabled = function() return config.enabled == false end,
           get = function() return config.visibilityMode or "ALWAYS" end,
           set = function(_, value)
