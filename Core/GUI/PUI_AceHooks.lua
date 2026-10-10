@@ -30,16 +30,18 @@ local function ShowDisabledTooltip(widget)
   if not tooltip:IsShown() or tooltip:GetOwner() ~= widget.frame then
     tooltip = GameTooltip
     if not tooltip:IsShown() or tooltip:GetOwner() ~= widget.frame then
-      if not reason then return end
+      if not reason and widget.type ~= "ColorPicker" then return end
       tooltip:SetOwner(widget.frame, "ANCHOR_RIGHT")
       local option = widget:GetUserData("option")
-      tooltip:SetText(type(option.name) == "string" and option.name or "Unavailable setting")
+      tooltip:SetText(widget.type == "ColorPicker" and widget.text:GetText()
+        or (type(option.name) == "string" and option.name or "Unavailable setting"))
     end
   end
   if reason and reason ~= "" then
     local colors = ns.Theme.GetColors()
     tooltip:AddLine(reason, colors.text[1], colors.text[2], colors.text[3], true)
   end
+  if widget.type == "ColorPicker" then ns.ColorControls.AppendTooltip(widget, tooltip) end
   tooltip:Show()
   widget.__puiDisabledTooltip = tooltip
 end
@@ -74,7 +76,6 @@ local function InstallDisabledHover(widget)
     widget.__puiDisabledHoverHooked = true
     hooksecurefunc(widget, "SetDisabled", function(self)
       if self.__puiAceGUIOwnedByPleebUI then
-        if self.type == "ColorPicker" then ns.Theme.WidgetSkins.ColorPicker(self) end
         RefreshDisabledHover(self)
       end
     end)
@@ -126,6 +127,7 @@ local function _PUI_InstallAceGUIHooks()
     end
 
     PUI_OWNED_WIDGETS[widget] = nil
+    if widget.type == "ColorPicker" then ns.ColorControls.Release(widget) end
     if widget.__puiDisabledHover then widget.__puiDisabledHover:Hide() end
     HideDisabledTooltip(widget)
 
