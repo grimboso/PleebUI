@@ -16,14 +16,14 @@ local PUI_SELF_OWNED_WIDGET_TYPES = {
 
 local PUI_OWNED_WIDGETS = setmetatable({}, { __mode = "k" })
 
-local function HideDisabledTooltip(widget)
+function AceHooks.HideDisabledTooltip(widget)
   local tooltip = widget.__puiDisabledTooltip
   if tooltip and tooltip:GetOwner() == widget.frame then tooltip:Hide() end
   widget.__puiDisabledTooltip = nil
 end
 
-local function ShowDisabledTooltip(widget)
-  HideDisabledTooltip(widget)
+function AceHooks.ShowDisabledTooltip(widget)
+  AceHooks.HideDisabledTooltip(widget)
   widget:Fire("OnEnter")
   local reason = ns.OptionsSchema.GetDisabledReason(widget:GetUserDataTable())
   local tooltip = LibStub("AceConfigDialog-3.0").tooltip
@@ -58,12 +58,12 @@ local function RefreshDisabledHover(widget)
     hover:SetAllPoints(widget.frame)
     hover:EnableMouse(true)
     hover:EnableMouseWheel(false)
-    hover:SetScript("OnEnter", function() ShowDisabledTooltip(widget) end)
+    hover:SetScript("OnEnter", function() AceHooks.ShowDisabledTooltip(widget) end)
     hover:SetScript("OnLeave", function()
-      HideDisabledTooltip(widget)
+      AceHooks.HideDisabledTooltip(widget)
       widget:Fire("OnLeave")
     end)
-    hover:SetScript("OnHide", function() HideDisabledTooltip(widget) end)
+    hover:SetScript("OnHide", function() AceHooks.HideDisabledTooltip(widget) end)
     widget.__puiDisabledHover = hover
   end
   hover:SetFrameLevel(widget.frame:GetFrameLevel() + 20)
@@ -126,10 +126,11 @@ local function _PUI_InstallAceGUIHooks()
       return
     end
 
+    ns.KeyboardNavigation.ReleaseWidget(widget)
     PUI_OWNED_WIDGETS[widget] = nil
     if widget.type == "ColorPicker" then ns.ColorControls.Release(widget) end
     if widget.__puiDisabledHover then widget.__puiDisabledHover:Hide() end
-    HideDisabledTooltip(widget)
+    AceHooks.HideDisabledTooltip(widget)
 
     widget.__puiAceGUIOwnershipSerial = (widget.__puiAceGUIOwnershipSerial or 0) + 1
     widget.__puiAceGUIOwnedByPleebUI = nil
@@ -189,6 +190,8 @@ local function _PUI_InstallAceGUIHooks()
     widget.frame.__puiAceGUIOwnedByPleebUI = true
     PUI_OWNED_WIDGETS[widget] = true
     InstallDisabledHover(widget)
+    ns.KeyboardNavigation.RegisterWidget(widget)
+    ns.KeyboardNavigation.QueueRestore()
 
     if PUI_SELF_OWNED_WIDGET_TYPES[widget.type] then
       widget.__puiCreatedWidgetInitialized = true
@@ -335,6 +338,7 @@ local function _PUI_InstallAceConfigDialogHooks()
 end
 
 function AceHooks.RefreshOwnedWidgets()
+  ns.KeyboardNavigation.QueueRestore()
   for widget in pairs(PUI_OWNED_WIDGETS) do
     if widget.__puiAceGUIOwnedByPleebUI == true and widget.isQueuedForRelease ~= true then
       ns.Theme.ApplyCreatedWidgetSizing(widget)
