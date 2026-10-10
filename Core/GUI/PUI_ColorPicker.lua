@@ -17,7 +17,8 @@ function WidgetSkins.ColorPicker(widget)
   local controlRight = geom.controlRight
   local controlYOffset = geom.controlYOffset
   local controlGap = geom.controlGap
-  local edge = math.max(Theme.GetEdgeSize(), 2)
+  local edge = Theme.ControlBorderSize
+  local borderColor = widget.disabled and colors.disabledControlBorder or colors.controlBorder
 
   local swatchBG = frame.__puiColorSwatchBg
   if not swatchBG then
@@ -37,7 +38,7 @@ function WidgetSkins.ColorPicker(widget)
     insets = { left = 1, right = 1, top = 1, bottom = 1 },
   })
   swatchBG:SetBackdropColor(colors.background[1], colors.background[2], colors.background[3], colors.background[4])
-  swatchBG:SetBackdropBorderColor(colors.border[1], colors.border[2], colors.border[3], colors.border[4])
+  swatchBG:SetBackdropBorderColor(borderColor[1], borderColor[2], borderColor[3], borderColor[4])
   swatchBG:Show()
 
   background:Hide()
@@ -58,7 +59,7 @@ function WidgetSkins.ColorPicker(widget)
   swatch:SetDrawLayer("ARTWORK")
   swatch:Show()
 
-  local textColor = colors.text
+  local textColor = widget.disabled and colors.disabledText or colors.text
   Theme.ApplyFont(label, "body")
   label:SetTextColor(textColor[1], textColor[2], textColor[3], textColor[4])
   label:ClearAllPoints()
