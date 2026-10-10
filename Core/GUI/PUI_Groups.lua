@@ -5,60 +5,18 @@ local Theme = ns.Theme
 local WidgetSkins = Theme.WidgetSkins
 
 local PUI_TREE_BUTTON_DESCRIPTIONS = {
-  ["General"] = "Core size, texture, and behavior.",
-  ["General settings"] = "Shared baseline options.",
-  ["Name"] = "Name text and visibility rules.",
-  ["Health"] = "Health text and health display.",
-  ["Power"] = "Power text and power display.",
   ["Auras"] = "Buffs, debuffs, filters, and layout.",
-  ["Castbar"] = "Castbar size, text, and behavior.",
-  ["Pet"] = "Pet frame appearance and layout.",
-  ["Target of Target"] = "Target target frame settings.",
-  ["Focus Target"] = "Focus target frame settings.",
-  ["Boss Stack Info"] = "Shared boss stack notes.",
-  ["Party Pets"] = "Party pet frame settings.",
   ["Unit Frame Appearance"] = "Borders, colors, and shared visuals.",
-  ["Global Text and Fonts"] = "Fonts, text scale, and style.",
-  ["Unit Frame Textures"] = "Health, power, and absorb textures.",
-  ["Anchors"] = "Frame anchors and offsets.",
-  ["Behaviour"] = "Visibility and runtime behavior.",
-  ["Size"] = "Width, height, and spacing.",
-  ["Anchoring"] = "Attachment point and offsets.",
-  ["Cooldowns"] = "Cooldown viewer settings.",
-  ["Buffs"] = "Buff viewer settings.",
-  ["Bars"] = "Bar layout and display.",
-  ["Icons"] = "Icon layout and display.",
-
-  ["Essential Cooldowns"] = "Primary cooldown viewer styling.",
-  ["Utility Cooldowns"] = "Utility cooldown viewer styling.",
-  ["Buff Icons"] = "Buff icon viewer layout and text.",
-  ["Buff Bars"] = "Tracked buff bar layout and style.",
-  ["Groups"] = "Choose a group to edit its layout and entries.",
-  ["Custom trackers"] = "Create and edit custom tracked icons and bars.",
-  ["Items & racials"] = "Tracked items, racials, and their display settings.",
-  ["Advanced"] = "Diagnostics and reset controls.",
-
-  ["Size and rows"] = "Width, icon size, rows, and spacing.",
-  ["Borders"] = "Icon border and frame border styling.",
-  ["Toggles"] = "Swipe, count, keybind, and display rules.",
-  ["Cooldown Font"] = "Cooldown timer font and offsets.",
-  ["Keybind Font"] = "Keybind font and offsets.",
-  ["Charge Font"] = "Charge count font and offsets.",
-  ["Buff Bar"] = "Tracked buff bar visuals.",
-  ["Glow"] = "Glow animation and color settings.",
-
-  ["Create Bar"] = "Add a new custom tracked bar.",
+  ["Essential Cooldowns"] = "Primary cooldown viewer.",
+  ["Utility Cooldowns"] = "Utility cooldown viewer.",
+  ["Groups"] = "Arrange groups and their entries.",
+  ["Custom trackers"] = "Duration, cooldown, charge, and stack trackers.",
+  ["Items & racials"] = "Consumables, trinkets, and racial abilities.",
+  ["Advanced"] = "Diagnostics and resets.",
   ["Controls"] = "Enable, rename, or delete this bar.",
   ["Spell Settings"] = "Tracked spell and visibility rules.",
-  ["Bar Design"] = "Bar size, texture, and color.",
-  ["Fonts"] = "Text font, outline, and offsets.",
-  ["Indicator"] = "Duration or stack indicator behavior.",
-  ["Indicator Settings"] = "Indicator size, spacing, and color.",
+  ["Indicator"] = "Duration or stack display.",
   ["No custom bars yet"] = "Create a bar to begin tracking.",
-
-  ["Top box"] = "Top minimap data panel.",
-  ["Second Wind"] = "Second Wind display settings.",
-  ["Whirling Surge"] = "Whirling Surge display settings.",
 }
 
 local function _PUI_NormalizeTreeButtonLabel(label)
@@ -232,7 +190,7 @@ local function _PUI_SkinGenericTreeButton(button, isSelected)
       or { colors.border[1], colors.border[2], colors.border[3], 0.28 },
   }, Theme.GetEdgeSize())
 
-  for _, key in ipairs({ "__puiTreeIconBack", "__puiTreeGlyph", "__puiSelectedAccent", "__puiTreeDescription" }) do
+  for _, key in ipairs({ "__puiSelectedAccent", "__puiTreeDescription" }) do
     local region = button[key]
     if region then
       region:Hide()
@@ -302,11 +260,8 @@ local function _PUI_SkinPCMTrackerTreeButton(button, isSelected, data)
       or { colors.border[1], colors.border[2], colors.border[3], 0.38 },
   }, edge)
 
-  for _, key in ipairs({ "__puiTreeIconBack", "__puiTreeGlyph", "__puiTreeDescription" }) do
-    local region = button[key]
-    if region then
-      region:Hide()
-    end
+  if button.__puiTreeDescription then
+    button.__puiTreeDescription:Hide()
   end
 
   if not button.__puiSelectedAccent then
@@ -543,7 +498,6 @@ function WidgetSkins.TreeButton(button, isSelected)
 
   local labelText = _PUI_GetTreeButtonText(button)
   local description = _PUI_GetTreeButtonDescription(labelText)
-  local glyph = string.sub(labelText ~= "" and labelText or "?", 1, 1)
   local buttonWidth = math.floor((tonumber(button:GetWidth()) or 0) + 0.5)
 
   local layoutKey = table.concat({
@@ -565,54 +519,6 @@ function WidgetSkins.TreeButton(button, isSelected)
       and { colors.accent[1], colors.accent[2], colors.accent[3], 1 }
       or { colors.border[1], colors.border[2], colors.border[3], 0.38 },
   }, edge)
-
-  if not button.__puiTreeIconBack then
-    button.__puiTreeIconBack = button:CreateTexture(nil, "ARTWORK")
-    button.__puiTreeIconBack:SetTexture("Interface\\Buttons\\WHITE8x8")
-    Theme.MarkCreatedWidgetChrome(button.__puiTreeIconBack)
-    layoutChanged = true
-  end
-
-  if layoutChanged then
-    button.__puiTreeIconBack:ClearAllPoints()
-    button.__puiTreeIconBack:SetPoint("LEFT", button, "LEFT", 10, 0)
-    button.__puiTreeIconBack:SetSize(22, 22)
-  end
-
-  button.__puiTreeIconBack:SetVertexColor(
-    colors.accent[1],
-    colors.accent[2],
-    colors.accent[3],
-    isSelected and 0.28 or 0.12
-  )
-  button.__puiTreeIconBack:Show()
-
-  if not button.__puiTreeGlyph then
-    button.__puiTreeGlyph = button:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    button.__puiTreeGlyph.__puiOptionsFontOwned = true
-    Theme.MarkCreatedWidgetChrome(button.__puiTreeGlyph)
-    button.__puiTreeGlyph:SetJustifyH("CENTER")
-    button.__puiTreeGlyph:SetJustifyV("MIDDLE")
-    Theme.ApplyFont(button.__puiTreeGlyph, "nav", 10)
-    layoutChanged = true
-  end
-
-  if layoutChanged then
-    button.__puiTreeGlyph:ClearAllPoints()
-    button.__puiTreeGlyph:SetPoint("CENTER", button.__puiTreeIconBack, "CENTER", 0, 0)
-  end
-
-  if button.__puiTreeGlyph:GetText() ~= glyph then
-    button.__puiTreeGlyph:SetText(glyph)
-  end
-
-  button.__puiTreeGlyph:SetTextColor(
-    colors.accent[1],
-    colors.accent[2],
-    colors.accent[3],
-    isSelected and 1 or 0.84
-  )
-  button.__puiTreeGlyph:Show()
 
   if not button.__puiSelectedAccent then
     button.__puiSelectedAccent = button:CreateTexture(nil, "ARTWORK")
@@ -652,18 +558,16 @@ function WidgetSkins.TreeButton(button, isSelected)
 
   if layoutChanged then
     text:ClearAllPoints()
-    text:SetPoint("TOPLEFT", button, "TOPLEFT", 42, -6)
-    text:SetPoint("RIGHT", button, "RIGHT", -10, 0)
+    if description ~= "" then
+      text:SetPoint("TOPLEFT", button, "TOPLEFT", 12, -6)
+    else
+      text:SetPoint("LEFT", button, "LEFT", 12, 0)
+    end
+    text:SetPoint("RIGHT", button.toggle, "LEFT", -8, 0)
     text:SetHeight(Theme.GetOptionsFontHeight("nav", 12))
   end
 
   text:SetJustifyH("LEFT")
-
-  if text.__puiTreeCardShadowApplied ~= true then
-    text.__puiTreeCardShadowApplied = true
-    text:SetShadowColor(0, 0, 0, 1)
-    text:SetShadowOffset(1, -1)
-  end
 
   if not button.__puiTreeDescription then
     button.__puiTreeDescription = button:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
@@ -675,6 +579,8 @@ function WidgetSkins.TreeButton(button, isSelected)
     Theme.ApplyFont(button.__puiTreeDescription, "tiny", 9)
     layoutChanged = true
   end
+
+  Theme.ApplyFont(button.__puiTreeDescription, "tiny", 9)
 
   if layoutChanged then
     button.__puiTreeDescription:ClearAllPoints()
