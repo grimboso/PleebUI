@@ -93,7 +93,7 @@ local function SetCheckboxChromeShown(chrome, shown)
 end
 
 local function LayoutCheckboxChrome(frame, chrome, left, yOffset, size)
-  local edge = Theme.GetEdgeSize()
+  local edge = Theme.ControlBorderSize
   local border = chrome.border
 
   chrome.background:ClearAllPoints()
@@ -226,7 +226,7 @@ local function RefreshCheckbox(widget)
     LayoutCheckboxChrome(frame, chrome, geom.controlLeft, geom.controlYOffset, visualSize)
 
     local backgroundColor = widget.disabled and colors.disabledControl or colors.control
-    local borderColor = widget.disabled and colors.disabledBorder or colors.border
+    local borderColor = widget.disabled and colors.disabledControlBorder or colors.controlBorder
     if widget.__puiCheckboxHovered and not widget.disabled then
       borderColor = colors.accent
     end
