@@ -3,6 +3,7 @@ local _, ns = ...
 local Theme = ns.Theme
 local WHITE8 = "Interface\\Buttons\\WHITE8x8"
 local WidgetSkins = Theme.WidgetSkins
+Theme.ScrollbarWidth = 18
 
 function Theme.StripACDFrameTextures(frame)
   ns.IconSkin.StripNineSliceAndBackdrop(frame)
@@ -25,13 +26,20 @@ end
 function WidgetSkins.Scrollbar(widget)
   local scrollbar = widget.ScrollBar or widget
   local colors = Theme.GetColors()
-  local edge = math.max(Theme.GetEdgeSize(), 2)
+  local edge = Theme.ControlBorderSize
   local border = colors.border
   local fill = colors.control
   local accent = colors.accent
   local upButton = scrollbar.ScrollUpButton
   local downButton = scrollbar.ScrollDownButton
   local thumb = scrollbar:GetThumbTexture()
+
+  scrollbar:SetWidth(Theme.ScrollbarWidth)
+  scrollbar:SetHitRectInsets(0, 0, 0, 0)
+  upButton:ClearAllPoints()
+  upButton:SetPoint("BOTTOM", scrollbar, "TOP", 0, 0)
+  downButton:ClearAllPoints()
+  downButton:SetPoint("TOP", scrollbar, "BOTTOM", 0, 0)
 
   local function StripTextures(frame, keep)
     for _, region in ipairs({ frame:GetRegions() }) do
@@ -45,6 +53,8 @@ function WidgetSkins.Scrollbar(widget)
 
   local function SkinArrowButton(button, texture)
     StripTextures(button)
+    button:SetSize(Theme.ScrollbarWidth, Theme.ScrollbarWidth)
+    button:SetHitRectInsets(0, 0, 0, 0)
 
     Theme.SetSquareBackdrop(button, {
       bg = fill,
@@ -61,7 +71,7 @@ function WidgetSkins.Scrollbar(widget)
     arrow:SetTexture(texture)
     arrow:ClearAllPoints()
     arrow:SetPoint("CENTER")
-    arrow:SetSize(16, 16)
+    arrow:SetSize(12, 12)
     arrow:SetVertexColor(accent[1], accent[2], accent[3], 0.95)
     arrow:Show()
   end
@@ -75,8 +85,7 @@ function WidgetSkins.Scrollbar(widget)
 
   local bg = scrollbar._puiBg
   bg:ClearAllPoints()
-  bg:SetPoint("TOPLEFT", upButton, "BOTTOMLEFT", 0, 1)
-  bg:SetPoint("BOTTOMRIGHT", downButton, "TOPRIGHT", 0, -1)
+  bg:SetAllPoints(scrollbar)
 
   SkinArrowButton(upButton, "Interface\\ChatFrame\\UI-ChatIcon-ScrollUp-Up")
   SkinArrowButton(downButton, "Interface\\ChatFrame\\UI-ChatIcon-ScrollDown-Up")
@@ -84,7 +93,7 @@ function WidgetSkins.Scrollbar(widget)
   thumb:SetTexture(WHITE8)
   thumb:SetTexCoord(0, 1, 0, 1)
   thumb:SetVertexColor(accent[1], accent[2], accent[3], 0.90)
-  thumb:SetSize(math.max(scrollbar:GetWidth() - 4, 6), 24)
+  thumb:SetSize(Theme.ScrollbarWidth - 2, 24)
   thumb:Show()
 end
 
