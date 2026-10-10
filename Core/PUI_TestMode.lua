@@ -1120,10 +1120,12 @@ function TestMode:EnsureToolbar()
   end
 
   panel.resizeGrip = CreateFrame("Button", nil, panel)
-  panel.resizeGrip:SetSize(18, 18)
+  local gripSize = ns.Theme.GetOptionsPointerTargetSize(18)
+  panel.resizeGrip:SetSize(gripSize, gripSize)
   panel.resizeGrip:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", -2, 2)
   local gripTexture = panel.resizeGrip:CreateTexture(nil, "ARTWORK")
-  gripTexture:SetAllPoints()
+  gripTexture:SetPoint("BOTTOMRIGHT", panel.resizeGrip, "BOTTOMRIGHT")
+  gripTexture:SetSize(18, 18)
   gripTexture:SetTexture("Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Up")
   panel.resizeGrip:SetScript("OnMouseDown", function(_, button)
     if button == "LeftButton" and not InCombatLockdown() then
@@ -1774,6 +1776,8 @@ function TestMode:RebuildToolbar()
     panel:SetHeight(panel.expandedHeight)
     panel.expandedHeight = nil
   end
+  local gripSize = ns.Theme.GetOptionsPointerTargetSize(18)
+  panel.resizeGrip:SetSize(gripSize, gripSize)
   panel.resizeGrip:SetShown(not self.toolbarCollapsed)
   panel.scroll:SetShown(not self.toolbarCollapsed)
   panel.undoButton:SetShown(not self.toolbarCollapsed)
@@ -1786,12 +1790,14 @@ function TestMode:RebuildToolbar()
   ns.KeyboardNavigation.RefreshWindows()
 end
 
-local function RefreshToolbarTheme()
-  local panel = TestMode.toolbar
+function TestMode:RefreshToolbarTheme()
+  local panel = self.toolbar
   if not panel then
     return
   end
 
+  local gripSize = ns.Theme.GetOptionsPointerTargetSize(18)
+  panel.resizeGrip:SetSize(gripSize, gripSize)
   StylePanel(panel)
   StyleText(panel.title, "header", 14)
   StyleText(panel.setLabel, "body", 11)
@@ -1853,7 +1859,7 @@ local function RefreshToolbarTheme()
 end
 
 function TestMode:RefreshTheme()
-  RefreshToolbarTheme()
+  self:RefreshToolbarTheme()
 
   if self.active then
     self:Refresh(nil, "theme")
@@ -1921,6 +1927,7 @@ TestMode.SetActive = P:Def("TestMode:SetActive", TestMode.SetActive)
 TestMode.EnsureToolbar = P:Def("TestMode:EnsureToolbar", TestMode.EnsureToolbar)
 TestMode.RebuildToolbar = P:Def("TestMode:RebuildToolbar", TestMode.RebuildToolbar)
 TestMode.QueueToolbarRefresh = P:Def("TestMode:QueueToolbarRefresh", TestMode.QueueToolbarRefresh)
+TestMode.RefreshToolbarTheme = P:Def("TestMode:RefreshToolbarTheme", TestMode.RefreshToolbarTheme)
 TestMode.RefreshTheme = P:Def("TestMode:RefreshTheme", TestMode.RefreshTheme)
 TestMode.ShowToolbar = P:Def("TestMode:ShowToolbar", TestMode.ShowToolbar)
 TestMode.HideToolbar = P:Def("TestMode:HideToolbar", TestMode.HideToolbar)
