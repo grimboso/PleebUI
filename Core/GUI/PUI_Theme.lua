@@ -3312,7 +3312,7 @@ local function UIThemeOptionsProvider()
       args = {
         width = {
           type = "range", name = "Width", order = 1, min = minWidth, max = maxWidth, step = 1,
-          arg = { puiRefreshOnRelease = true, puiLivePreview = function(value)
+          arg = { puiRefreshOnRelease = true, puiStableDrag = true, puiLivePreview = function(value)
             if value ~= nil then Addon:PreviewOptionsWindowSize(value) end
           end },
           get = function() local width = Addon:GetOptionsWindowGeometry(); return width end,
@@ -3320,7 +3320,7 @@ local function UIThemeOptionsProvider()
         },
         height = {
           type = "range", name = "Height", order = 2, min = minHeight, max = maxHeight, step = 1,
-          arg = { puiRefreshOnRelease = true, puiLivePreview = function(value)
+          arg = { puiRefreshOnRelease = true, puiStableDrag = true, puiLivePreview = function(value)
             if value ~= nil then Addon:PreviewOptionsWindowSize(nil, value) end
           end },
           get = function() local _, height = Addon:GetOptionsWindowGeometry(); return height end,
