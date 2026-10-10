@@ -47,13 +47,30 @@ function WidgetSkins.UIEditBox(edit)
   end
 
   local colors = Theme.GetColors()
+  local controlColor, borderColor, textColor = Theme.GetControlStateColors(
+    edit.obj and edit.obj.disabled == true, edit.__puiHovered == true, false, edit:HasFocus()
+  )
   Theme.SetSquareBackdrop(edit, {
-    bg = colors.control,
-    border = colors.controlBorder,
+    bg = controlColor,
+    border = borderColor,
   }, Theme.ControlBorderSize)
 
   Theme.ApplyFont(edit, "body")
-  edit:SetTextColor(colors.text[1], colors.text[2], colors.text[3], colors.text[4])
+  edit:SetTextColor(textColor[1], textColor[2], textColor[3], textColor[4])
+
+  if not edit.__puiEditStateHooked then
+    edit.__puiEditStateHooked = true
+    local function Refresh(self, hovered)
+      if self.obj and self.obj.__puiAceGUIOwnedByPleebUI ~= true then return end
+      if hovered ~= nil then self.__puiHovered = hovered end
+      WidgetSkins.UIEditBox(self)
+    end
+    edit:HookScript("OnEnter", function(self) Refresh(self, true) end)
+    edit:HookScript("OnLeave", function(self) Refresh(self, false) end)
+    edit:HookScript("OnHide", function(self) Refresh(self, false) end)
+    edit:HookScript("OnEditFocusGained", function(self) Refresh(self) end)
+    edit:HookScript("OnEditFocusLost", function(self) Refresh(self) end)
+  end
 
   if edit.Instructions then
     Theme.ApplyFont(edit.Instructions, "body")
@@ -191,6 +208,40 @@ local function PUI_EditBox_SetTextureColor(texture, color, alphaMultiplier)
   )
 end
 
+local function PUI_EditBox_InstallButtonStateHooks(widget, refresh)
+  local button = widget.button
+  button:HookScript("OnEnter", function(self)
+    self.__puiHovered = true
+    refresh(widget)
+  end)
+  button:HookScript("OnLeave", function(self)
+    self.__puiHovered = nil
+    self.__puiPressed = nil
+    refresh(widget)
+  end)
+  button:HookScript("OnMouseDown", function(self, mouseButton)
+    if mouseButton ~= "LeftButton" then return end
+    self.__puiPressed = true
+    refresh(widget)
+  end)
+  button:HookScript("OnMouseUp", function(self, mouseButton)
+    if mouseButton ~= "LeftButton" then return end
+    self.__puiPressed = nil
+    refresh(widget)
+  end)
+  button:HookScript("OnHide", function(self)
+    self.__puiHovered = nil
+    self.__puiPressed = nil
+    refresh(widget)
+  end)
+  button:HookScript("OnEnable", function() refresh(widget) end)
+  button:HookScript("OnDisable", function(self)
+    self.__puiHovered = nil
+    self.__puiPressed = nil
+    refresh(widget)
+  end)
+end
+
 local function PUI_EditBox_CreateChrome(parent)
   local background = parent:CreateTexture(nil, "BACKGROUND")
   Pixel.SetTexture(background, WHITE8)
@@ -320,28 +371,24 @@ local function PUI_EditBox_Layout(widget, width)
 end
 
 local function PUI_EditBox_RefreshVisualState(widget)
-  local colors = Theme.GetColors()
-  local disabled = widget.disabled == true
-  local hovered = widget.editbox.__puiHovered == true
-  local textColor = disabled and colors.disabledText or colors.text
-  local controlColor = disabled and colors.disabledControl or colors.control
-  local borderColor = disabled and colors.disabledControlBorder or colors.controlBorder
-
-  if hovered and not disabled then
-    borderColor = colors.accent
-  end
+  local controlColor, borderColor, textColor = Theme.GetControlStateColors(
+    widget.disabled == true, widget.editbox.__puiHovered == true, false, widget.editbox:HasFocus()
+  )
+  local buttonColor, buttonBorder, buttonTextColor = Theme.GetControlStateColors(
+    not widget.button:IsEnabled(), widget.button.__puiHovered == true, widget.button.__puiPressed == true
+  )
 
   PUI_EditBox_SetChromeColors(widget.editboxChrome, controlColor, borderColor, 1)
   PUI_EditBox_SetChromeColors(
     widget.buttonChrome,
-    controlColor,
-    disabled and colors.disabledControlBorder or colors.controlBorder,
+    buttonColor,
+    buttonBorder,
     1
   )
 
   widget.label:SetTextColor(textColor[1], textColor[2], textColor[3], textColor[4])
   widget.editbox:SetTextColor(textColor[1], textColor[2], textColor[3], textColor[4])
-  widget.buttonText:SetTextColor(textColor[1], textColor[2], textColor[3], textColor[4])
+  widget.buttonText:SetTextColor(buttonTextColor[1], buttonTextColor[2], buttonTextColor[3], buttonTextColor[4])
 end
 
 local function PUI_EditBox_OnEnter(editbox)
@@ -386,6 +433,11 @@ end
 
 local function PUI_EditBox_OnFocusGained(editbox)
   AceGUI:SetFocus(editbox.obj)
+  PUI_EditBox_RefreshVisualState(editbox.obj)
+end
+
+local function PUI_EditBox_OnFocusLost(editbox)
+  PUI_EditBox_RefreshVisualState(editbox.obj)
 end
 
 local function PUI_EditBox_OnReceiveDrag(editbox)
@@ -440,6 +492,8 @@ local PUI_EditBox_Methods = {
     self:ClearFocus()
     self.editbox.__puiHovered = nil
     self.buttonPending = nil
+    self.button.__puiHovered = nil
+    self.button.__puiPressed = nil
   end,
 
   OnWidthSet = function(self, width)
@@ -555,6 +609,7 @@ local function PUI_EditBox_Constructor()
   editbox:SetScript("OnReceiveDrag", PUI_EditBox_OnReceiveDrag)
   editbox:SetScript("OnMouseDown", PUI_EditBox_OnReceiveDrag)
   editbox:SetScript("OnEditFocusGained", PUI_EditBox_OnFocusGained)
+  editbox:SetScript("OnEditFocusLost", PUI_EditBox_OnFocusLost)
 
   local button = CreateFrame("Button", nil, frame)
   button:RegisterForClicks("LeftButtonUp")
@@ -588,6 +643,7 @@ local function PUI_EditBox_Constructor()
   editbox.obj = widget
   button.obj = widget
 
+  PUI_EditBox_InstallButtonStateHooks(widget, PUI_EditBox_RefreshVisualState)
   PUI_EditBox_Layout(widget, 200)
   PUI_EditBox_RefreshVisualState(widget)
   PUI_EditBox_HideButton(widget)
@@ -637,18 +693,19 @@ local function PUI_MultiLine_UpdateHeight(widget)
 end
 
 local function PUI_MultiLine_RefreshVisualState(widget)
-  local colors = Theme.GetColors()
-  local disabled = widget.disabled == true
-  local textColor = disabled and colors.disabledText or colors.text
-  local controlColor = disabled and colors.disabledControl or colors.control
-  local borderColor = disabled and colors.disabledControlBorder or colors.controlBorder
+  local controlColor, borderColor, textColor = Theme.GetControlStateColors(
+    widget.disabled == true, widget.entered == true, false, widget.editBox:HasFocus()
+  )
+  local buttonColor, buttonBorder, buttonTextColor = Theme.GetControlStateColors(
+    not widget.button:IsEnabled(), widget.button.__puiHovered == true, widget.button.__puiPressed == true
+  )
 
   PUI_EditBox_SetChromeColors(widget.scrollChrome, controlColor, borderColor, 1)
-  PUI_EditBox_SetChromeColors(widget.buttonChrome, controlColor, borderColor, 1)
+  PUI_EditBox_SetChromeColors(widget.buttonChrome, buttonColor, buttonBorder, 1)
 
   widget.label:SetTextColor(textColor[1], textColor[2], textColor[3], textColor[4])
   widget.editBox:SetTextColor(textColor[1], textColor[2], textColor[3], textColor[4])
-  widget.buttonText:SetTextColor(textColor[1], textColor[2], textColor[3], textColor[4])
+  widget.buttonText:SetTextColor(buttonTextColor[1], buttonTextColor[2], buttonTextColor[3], buttonTextColor[4])
 end
 
 local function PUI_MultiLine_OnButtonClick(button)
@@ -679,11 +736,13 @@ end
 
 local function PUI_MultiLine_OnEditFocusLost(editbox)
   editbox:HighlightText(0, 0)
+  PUI_MultiLine_RefreshVisualState(editbox.obj)
   editbox.obj:Fire("OnEditFocusLost")
 end
 
 local function PUI_MultiLine_OnEditFocusGained(editbox)
   AceGUI:SetFocus(editbox.obj)
+  PUI_MultiLine_RefreshVisualState(editbox.obj)
   editbox.obj:Fire("OnEditFocusGained")
 end
 
@@ -692,6 +751,7 @@ local function PUI_MultiLine_OnEnter(frame)
 
   if not widget.entered then
     widget.entered = true
+    PUI_MultiLine_RefreshVisualState(widget)
     widget:Fire("OnEnter")
   end
 end
@@ -701,6 +761,7 @@ local function PUI_MultiLine_OnLeave(frame)
 
   if widget.entered then
     widget.entered = nil
+    PUI_MultiLine_RefreshVisualState(widget)
     widget:Fire("OnLeave")
   end
 end
@@ -802,6 +863,8 @@ local PUI_MultiLine_Methods = {
     self:ClearFocus()
     self.entered = nil
     self.buttonPending = nil
+    self.button.__puiHovered = nil
+    self.button.__puiPressed = nil
   end,
 
   OnWidthSet = function(self)
@@ -999,6 +1062,7 @@ local function PUI_MultiLine_Constructor()
   editBox.obj = widget
   scrollFrame.obj = widget
 
+  PUI_EditBox_InstallButtonStateHooks(widget, PUI_MultiLine_RefreshVisualState)
   widget = AceGUI:RegisterAsWidget(widget)
   PUI_MultiLine_UpdateHeight(widget)
   PUI_MultiLine_Layout(widget)
