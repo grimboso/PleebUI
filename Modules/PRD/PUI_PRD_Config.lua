@@ -2898,7 +2898,7 @@ do
       type = "group", name = "Feature", inline = true, order = 0,
       arg = { puiExplicit = true }, args = {
         enabled = {
-          type = "toggle", name = "Enable", order = 0, width = "relative", relWidth = 0.5,
+          type = "toggle", name = "Enable", order = role == "health" and 5 or 0, width = "relative", relWidth = 0.5,
           get = function() return PRD:GetQuickSetupValue(role == "health" and "showHealth" or "showPrimary") end,
           set = function(_, value) PRD:SetQuickSetupValue(role == "health" and "showHealth" or "showPrimary", value) end,
         },
