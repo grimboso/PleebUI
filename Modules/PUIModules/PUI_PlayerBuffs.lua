@@ -32,10 +32,9 @@ local tostring = _G.tostring
 local type = _G.type
 
 local Theme = ns.Theme
-local LSM = ns.LSM
 local FrameUtil = ns.FrameUtil
 
-local PLAYER_BUFFS_DEFAULTS_VERSION = 1
+local PLAYER_BUFFS_DEFAULTS_VERSION = 2
 local PLAYER_BUFFS_MOVER_KEY = "PlayerBuffs"
 local PLAYER_DEBUFFS_MOVER_KEY = "PlayerDebuffs"
 local PLAYER_BUFFS_GROUP_KEY = "pui_player_buffs"
@@ -51,11 +50,11 @@ local FRAME_KIND_BY_KEY = {
 
 local DEFAULTS = {
   enabled = true,
-  textSize = 12,
-  fontOutline = "OUTLINE",
-  borderSize = 1,
   buffs = {
     iconSize = 30,
+    textSize = 12,
+    fontOutline = "OUTLINE",
+    borderSize = 1,
     anchor = {
       moved = false,
       x = 0,
@@ -64,6 +63,9 @@ local DEFAULTS = {
   },
   debuffs = {
     iconSize = 30,
+    textSize = 12,
+    fontOutline = "OUTLINE",
+    borderSize = 1,
     anchor = {
       moved = false,
       x = 0,
@@ -72,7 +74,10 @@ local DEFAULTS = {
   },
 }
 
-local playerAuraFont = CreateFont("PUI_PlayerAuraFont")
+local playerAuraFonts = {
+  buffs = CreateFont("PUI_PlayerBuffFont"),
+  debuffs = CreateFont("PUI_PlayerDebuffFont"),
+}
 local blizzardAuraParent = CreateFrame("Frame", nil, UIParent)
 local buttonParts = setmetatable({}, { __mode = "k" })
 
@@ -133,6 +138,13 @@ local function GetProfileDB()
   local db = profile.playerBuffs
 
   if db.__puiDefaultsVersion ~= PLAYER_BUFFS_DEFAULTS_VERSION then
+    for _, kind in ipairs({ "buffs", "debuffs" }) do
+      if type(db[kind]) ~= "table" then db[kind] = {} end
+      for _, key in ipairs({ "textSize", "fontOutline", "borderSize" }) do
+        if db[kind][key] == nil then db[kind][key] = db[key] end
+      end
+    end
+    db.textSize, db.fontOutline, db.borderSize = nil, nil, nil
     MergeDefaults(db, DEFAULTS)
     db.__puiDefaultsVersion = PLAYER_BUFFS_DEFAULTS_VERSION
   end
@@ -210,7 +222,7 @@ end
 local function GetDisplayMetrics(db, kind)
   local frameDB = GetAuraFrameDB(db, kind)
   local iconSize = Round(Clamp(frameDB.iconSize, 24, 64))
-  local textHeight = Round(math_max(10, Clamp(db.textSize, 8, 32) + 2))
+  local textHeight = Round(math_max(10, Clamp(frameDB.textSize, 8, 32) + 2))
   local spacing = Round(ICON_SPACING)
   local elementHeight = iconSize + textHeight
   local width = (iconSize * ICONS_PER_ROW) + (spacing * (ICONS_PER_ROW - 1))
@@ -221,35 +233,10 @@ local function GetDisplayMetrics(db, kind)
 end
 
 local puiStyleSerial = 0
-local puiStyleCache = {
-  serial = 0,
-  fontPath = _G.STANDARD_TEXT_FONT,
-  fontSize = DEFAULTS.textSize,
-  fontFlags = DEFAULTS.fontOutline,
-  textR = 1,
-  textG = 1,
-  textB = 1,
-  textA = 1,
-  borderSize = DEFAULTS.borderSize,
-  borderThickness = DEFAULTS.borderSize,
-  borderR = 0,
-  borderG = 0,
-  borderB = 0,
-  borderA = 1,
+local puiStyleCaches = {
+  buffs = { serial = 0, textColorCurve = _G.C_CurveUtil.CreateColorCurve() },
+  debuffs = { serial = 0, textColorCurve = _G.C_CurveUtil.CreateColorCurve() },
 }
-
-local function GetFontPath()
-  local fontKey = select(1, Theme.GetIconTextGlobal())
-
-  if fontKey then
-    local fetched = LSM:Fetch(LSM.MediaType.FONT, fontKey, true)
-    if fetched then
-      return fetched
-    end
-  end
-
-  return _G.STANDARD_TEXT_FONT
-end
 
 local function GetFontFlags(db)
   local flags = db and db.fontOutline or "OUTLINE"
@@ -263,9 +250,9 @@ local function GetFontFlags(db)
   return flags
 end
 
-local function GetThemeStyleColors()
+local function GetThemeStyleColors(frameDB)
   local colors = Theme.GetColors()
-  local text = colors.text
+  local text = frameDB.textColor or colors.text
   local border = colors.border
 
   return text[1] or 1,
@@ -278,19 +265,22 @@ local function GetThemeStyleColors()
     border[4] or 1
 end
 
-local function ApplyFontObject(style)
+local function ApplyFontObject(style, kind)
+  local playerAuraFont = playerAuraFonts[kind]
   playerAuraFont:SetFont(style.fontPath, style.fontSize, style.fontFlags)
   playerAuraFont:SetTextColor(style.textR, style.textG, style.textB, style.textA)
   playerAuraFont:SetShadowColor(0, 0, 0, 0.9)
   playerAuraFont:SetShadowOffset(1, -1)
 end
 
-local function RefreshStyleCache(db)
-  local fontPath = GetFontPath()
-  local fontSize = Theme.ResolveFontSize(Clamp(db and db.textSize, 8, 32), "playerBuffs")
-  local fontFlags = GetFontFlags(db)
-  local textR, textG, textB, textA, borderR, borderG, borderB, borderA = GetThemeStyleColors()
-  local borderSize = Clamp(db and db.borderSize, 0, 8)
+local function RefreshStyleCache(db, kind)
+  local frameDB = GetAuraFrameDB(db, kind)
+  local puiStyleCache = puiStyleCaches[kind]
+  local fontPath = ns.OptionsUtil.FetchFontPath(frameDB.font, frameDB.font == nil)
+  local fontSize = Theme.ResolveFontSize(Clamp(frameDB.textSize, 8, 32), "playerBuffs")
+  local fontFlags = GetFontFlags(frameDB)
+  local textR, textG, textB, textA, borderR, borderG, borderB, borderA = GetThemeStyleColors(frameDB)
+  local borderSize = Clamp(frameDB.borderSize, 0, 8)
   local borderThickness = math_max(
     0,
     Round(borderSize * ns.Pixel.GetOnePixel())
@@ -332,7 +322,9 @@ local function RefreshStyleCache(db)
   puiStyleCache.borderB = borderB
   puiStyleCache.borderA = borderA
 
-  ApplyFontObject(puiStyleCache)
+  puiStyleCache.textColorCurve:ClearPoints()
+  puiStyleCache.textColorCurve:AddPoint(0, _G.CreateColor(textR, textG, textB, textA))
+  ApplyFontObject(puiStyleCache, kind)
   return true
 end
 
@@ -395,7 +387,7 @@ end
 
 local function BuildRuntimeVariantKey(db, kind)
   local iconSize, textHeight, _, spacing = GetDisplayMetrics(db, kind)
-  local style = puiStyleCache
+  local style = puiStyleCaches[kind]
 
   return tostring(iconSize)
     .. ":" .. tostring(textHeight)
@@ -424,6 +416,8 @@ local function ConfigureAuraButton(runtime, button)
   local parts = GetButtonParts(button)
   local iconSize = runtime.iconSize
   local textHeight = runtime.textHeight
+  local style = puiStyleCaches[runtime.kind]
+  local playerAuraFont = playerAuraFonts[runtime.kind]
 
   button:SetSize(iconSize, runtime.elementHeight)
 
@@ -478,7 +472,17 @@ local function ConfigureAuraButton(runtime, button)
   parts.borderRight:SetPoint("TOPRIGHT", parts.icon, "TOPRIGHT", 0, 0)
   parts.borderRight:SetPoint("BOTTOMRIGHT", parts.icon, "BOTTOMRIGHT", 0, 0)
 
-  ApplyBorder(parts, puiStyleCache)
+  ApplyBorder(parts, style)
+  if runtime.kind == "debuffs" and style.borderThickness > 0 then
+    for _, texture in ipairs({ parts.borderTop, parts.borderBottom, parts.borderLeft, parts.borderRight }) do
+      button:AddDispelTypeTexture(texture, {
+        style = _G.Enum.CustomAuraButtonDispelTypeTextureStyle.PreserveAsset,
+        showWhenHarmful = true,
+        showWhenHelpful = false,
+        showWithoutDispelType = true,
+      })
+    end
+  end
 
   parts.icon:Show()
   parts.applicationHolder:Show()
@@ -497,7 +501,12 @@ local function ConfigureAuraButton(runtime, button)
   button:SetIcon(parts.icon)
   button:SetApplicationCount(parts.applicationText)
   button:SetDurationCooldown(parts.durationCooldown)
-  button:SetDurationText(parts.durationText)
+  button:SetDurationText(parts.durationText, {
+    textColor = {
+      curve = style.textColorCurve,
+      property = _G.Enum.DurationTextBindingProperty.RemainingDuration,
+    },
+  })
 end
 
 
@@ -786,14 +795,15 @@ local function PreviewAuraIconSize(kind, value)
   GetRoot(kind):SetScale(iconSize / runtime.iconSize)
 end
 
-local function PreviewAuraTextSize(value)
+local function PreviewAuraTextSize(kind, value)
   if not PlayerBuffs.runtimeEnabled or InCombatLockdown() then
     return
   end
 
+  local puiStyleCache = puiStyleCaches[kind]
   local size = value and Theme.ResolveFontSize(Clamp(value, 8, 32), "playerBuffs")
     or puiStyleCache.fontSize
-  playerAuraFont:SetFont(puiStyleCache.fontPath, size, puiStyleCache.fontFlags)
+  playerAuraFonts[kind]:SetFont(puiStyleCache.fontPath, size, puiStyleCache.fontFlags)
 end
 
 local function ResolveApplyFlags(flags)
@@ -981,10 +991,10 @@ function PlayerBuffs:EnsureMovers()
               max = 32,
               step = 1,
               commitOnRelease = true,
-              liveSet = PreviewAuraTextSize,
-              get = function() return db.textSize end,
+              liveSet = function(value) PreviewAuraTextSize(kind, value) end,
+              get = function() return frameDB.textSize end,
               set = function(value)
-                db.textSize = Round(Clamp(value, 8, 32))
+                frameDB.textSize = Round(Clamp(value, 8, 32))
                 PlayerBuffs:ApplySettings({ playerBuffsStyle = true })
               end,
             },
@@ -994,9 +1004,9 @@ function PlayerBuffs:EnsureMovers()
               min = 0,
               max = 8,
               step = 1,
-              get = function() return db.borderSize end,
+              get = function() return frameDB.borderSize end,
               set = function(value)
-                db.borderSize = Round(Clamp(value, 0, 8))
+                frameDB.borderSize = Round(Clamp(value, 0, 8))
                 PlayerBuffs:ApplySettings({ playerBuffsStyle = true })
               end,
             },
@@ -1033,9 +1043,12 @@ function PlayerBuffs:ApplySettings(flags)
     return
   end
 
-  local styleChanged = applyStyle and RefreshStyleCache(db)
-  if puiStyleCache.serial == 0 then
-    styleChanged = RefreshStyleCache(db)
+  local buffStyleChanged, debuffStyleChanged
+  if applyStyle or puiStyleCaches.buffs.serial == 0 then
+    buffStyleChanged = RefreshStyleCache(db, "buffs")
+  end
+  if applyStyle or puiStyleCaches.debuffs.serial == 0 then
+    debuffStyleChanged = RefreshStyleCache(db, "debuffs")
   end
 
   local runtimeCreated = EnsureRuntime()
@@ -1055,11 +1068,11 @@ function PlayerBuffs:ApplySettings(flags)
     self:EnsureMovers()
     self:RefreshMover()
   else
-    if applyBuffSize or styleChanged then
+    if applyBuffSize or buffStyleChanged then
       self:RefreshMover("buffs")
     end
 
-    if applyDebuffSize or styleChanged then
+    if applyDebuffSize or debuffStyleChanged then
       self:RefreshMover("debuffs")
     end
   end
@@ -1071,7 +1084,8 @@ function PlayerBuffs:RefreshFonts()
     return
   end
 
-  RefreshStyleCache(db)
+  RefreshStyleCache(db, "buffs")
+  RefreshStyleCache(db, "debuffs")
 end
 
 function PlayerBuffs:UpdateUnit(event, unit)
@@ -1118,9 +1132,64 @@ function PlayerBuffs:GetOptions()
     return GetProfileDB()[info[#info]]
   end
 
-  local function SetValue(info, value)
-    GetProfileDB()[info[#info]] = value
-    self:ApplySettings({ playerBuffsStyle = true })
+  local function BuildAuraOptions(kind, name, order)
+    local function GetValue(info)
+      return GetAuraFrameDB(GetProfileDB(), kind)[info[#info]]
+    end
+    local function SetValue(info, value)
+      GetAuraFrameDB(GetProfileDB(), kind)[info[#info]] = value
+      self:ApplySettings({ playerBuffsStyle = true })
+    end
+    return {
+      type = "group", name = name, order = order, inline = true,
+      arg = { puiExplicit = true },
+      args = {
+        iconSize = {
+          type = "range", name = "Icon size", order = 10, width = "relative", relWidth = 1 / 3,
+          min = 24, max = 64, step = 1,
+          arg = { puiRefreshOnRelease = true, puiLivePreview = function(value) PreviewAuraIconSize(kind, value) end },
+          get = GetValue, set = function(_, value)
+            GetAuraFrameDB(GetProfileDB(), kind).iconSize = value
+            self:ApplySettings({ playerBuffsBuffSize = kind == "buffs", playerBuffsDebuffSize = kind == "debuffs" })
+          end,
+        },
+        borderSize = {
+          type = "range", name = "Border thickness", order = 20, width = "relative", relWidth = 1 / 3,
+          desc = kind == "debuffs" and "Uses Blizzard's debuff-type colors. Zero hides the border." or "Uses the UI theme border color. Zero hides the border.",
+          min = 0, max = 8, step = 1, get = GetValue, set = SetValue,
+        },
+        textSize = {
+          type = "range", name = "Font size", order = 30, width = "relative", relWidth = 1 / 3,
+          min = 8, max = 32, step = 1,
+          arg = { puiRefreshOnRelease = true, puiLivePreview = function(value) PreviewAuraTextSize(kind, value) end },
+          get = GetValue, set = SetValue,
+        },
+        font = {
+          type = "select", name = "Font", order = 40, width = "relative", relWidth = 1 / 3, dialogControl = "LSM30_Font",
+          values = function() return ns.OptionsUtil.BuildFontValues(true) end,
+          get = function() return GetAuraFrameDB(GetProfileDB(), kind).font or ns.FontDropdown.STANDARD_FONT_KEY end,
+          set = function(_, value)
+            GetAuraFrameDB(GetProfileDB(), kind).font = value ~= ns.FontDropdown.STANDARD_FONT_KEY and value or nil
+            self:ApplySettings({ playerBuffsStyle = true })
+          end,
+        },
+        textColor = {
+          type = "color", name = "Text color", order = 50, width = "relative", relWidth = 1 / 3, hasAlpha = true,
+          get = function()
+            local color = GetAuraFrameDB(GetProfileDB(), kind).textColor or Theme.GetColors().text
+            return color[1], color[2], color[3], color[4] or 1
+          end,
+          set = function(_, r, g, b, a)
+            GetAuraFrameDB(GetProfileDB(), kind).textColor = { r, g, b, a }
+            self:ApplySettings({ playerBuffsStyle = true })
+          end,
+        },
+        fontOutline = {
+          type = "select", name = "Outline", order = 60, width = "relative", relWidth = 1 / 3,
+          values = Theme.GetOutlineList(), get = GetValue, set = SetValue,
+        },
+      },
+    }
   end
 
   return {
@@ -1174,96 +1243,8 @@ function PlayerBuffs:GetOptions()
           },
         },
       },
-      iconSize = {
-        type = "group",
-        name = "Icon size",
-        order = 20,
-        inline = true,
-        args = {
-          buffIconSize = {
-            type = "range",
-            name = "Buff icon size",
-            order = 10,
-            min = 24,
-            max = 64,
-            step = 1,
-            arg = {
-              puiRefreshOnRelease = true,
-              puiLivePreview = function(value)
-                PreviewAuraIconSize("buffs", value)
-              end,
-            },
-            get = function()
-              return GetAuraFrameDB(GetProfileDB(), "buffs").iconSize
-            end,
-            set = function(_, value)
-              GetAuraFrameDB(GetProfileDB(), "buffs").iconSize = value
-              self:ApplySettings({ playerBuffsBuffSize = true })
-            end,
-          },
-          debuffIconSize = {
-            type = "range",
-            name = "Debuff icon size",
-            order = 20,
-            min = 24,
-            max = 64,
-            step = 1,
-            arg = {
-              puiRefreshOnRelease = true,
-              puiLivePreview = function(value)
-                PreviewAuraIconSize("debuffs", value)
-              end,
-            },
-            get = function()
-              return GetAuraFrameDB(GetProfileDB(), "debuffs").iconSize
-            end,
-            set = function(_, value)
-              GetAuraFrameDB(GetProfileDB(), "debuffs").iconSize = value
-              self:ApplySettings({ playerBuffsDebuffSize = true })
-            end,
-          },
-        },
-      },
-      textAndBorder = {
-        type = "group",
-        name = "Text and border",
-        order = 30,
-        inline = true,
-        args = {
-          textSize = {
-            type = "range",
-            name = "Text size",
-            order = 10,
-            min = 8,
-            max = 32,
-            step = 1,
-            arg = {
-              puiRefreshOnRelease = true,
-              puiLivePreview = PreviewAuraTextSize,
-            },
-            get = GetValue,
-            set = SetValue,
-          },
-          fontOutline = {
-            type = "select",
-            name = "Text outline",
-            order = 20,
-            values = Theme.GetOutlineList(),
-            get = GetValue,
-            set = SetValue,
-          },
-          borderSize = {
-            type = "range",
-            name = "Border size",
-            order = 30,
-            min = 0,
-            max = 8,
-            step = 1,
-            get = GetValue,
-            set = SetValue,
-          },
-        },
-      },
+      buffs = BuildAuraOptions("buffs", "Buffs", 20),
+      debuffs = BuildAuraOptions("debuffs", "Debuffs", 30),
     },
   }
 end
@@ -1322,7 +1303,6 @@ end
   GetRoot = P:Def("GetRoot", GetRoot)
   GetMaximumFrameCount = P:Def("GetMaximumFrameCount", GetMaximumFrameCount)
   GetDisplayMetrics = P:Def("GetDisplayMetrics", GetDisplayMetrics)
-  GetFontPath = P:Def("GetFontPath", GetFontPath)
   GetFontFlags = P:Def("GetFontFlags", GetFontFlags)
   GetThemeStyleColors = P:Def("GetThemeStyleColors", GetThemeStyleColors)
   ApplyFontObject = P:Def("ApplyFontObject", ApplyFontObject)
