@@ -185,13 +185,13 @@ function Theme.GetFontRoleInfo(role)
 end
 
 Theme.OptionsFontRoles = {
-  body = { name = "Body and controls", font = "FiraSans Medium", size = 14, outline = "", shadow = false },
-  title = { name = "Titles", font = "FiraSans Heavy", size = 18, outline = "", shadow = false },
-  header = { name = "Group headings", font = "FiraSans Heavy", size = 16, outline = "", shadow = false },
-  nav = { name = "Navigation and trees", font = "FiraSans Medium", size = 14, outline = "", shadow = false },
-  tab = { name = "Tabs", font = "FiraSans Medium", size = 14, outline = "", shadow = false },
-  button = { name = "Buttons", font = "FiraSans Medium", size = 14, outline = "", shadow = false },
-  tiny = { name = "Small text", font = "FiraSans Medium", size = 12, outline = "", shadow = false },
+  body = { name = "Body and controls", font = "FiraSans Medium", size = 14, outline = "OUTLINE", shadow = false, fontSlug = false },
+  title = { name = "Titles", font = "FiraSans Heavy", size = 18, outline = "OUTLINE", shadow = false, fontSlug = false },
+  header = { name = "Group headings", font = "FiraSans Heavy", size = 16, outline = "OUTLINE", shadow = false, fontSlug = false },
+  nav = { name = "Navigation and trees", font = "FiraSans Medium", size = 14, outline = "OUTLINE", shadow = false, fontSlug = false },
+  tab = { name = "Tabs", font = "FiraSans Medium", size = 14, outline = "OUTLINE", shadow = false, fontSlug = false },
+  button = { name = "Buttons", font = "FiraSans Medium", size = 14, outline = "OUTLINE", shadow = false, fontSlug = false },
+  tiny = { name = "Small text", font = "FiraSans Medium", size = 12, outline = "OUTLINE", shadow = false, fontSlug = false },
 }
 Theme.OptionsFontRoleOrder = { "body", "title", "header", "nav", "tab", "button", "tiny" }
 
@@ -893,7 +893,7 @@ local optionsFontHeights = {}
 function Theme.GetOptionsFontSignature(role, size)
   local settings = Theme.GetOptionsFontSettings(role)
   return table.concat({
-    settings.font, settings.outline, tostring(settings.shadow), tostring(settings.size), tostring(size),
+    settings.font, settings.outline, tostring(settings.shadow), tostring(settings.fontSlug == true), tostring(settings.size), tostring(size),
     tostring(_PUI_GetOptionsFontSizeDelta()),
     tostring(Theme.ResolveFontSize(12, "options")),
   }, "|")
@@ -984,6 +984,7 @@ function Theme.ApplyFont(fs, role, size, outline, scope)
 
   local roleMeta = role == "label" and Theme.FontRoles.body or Theme.FontRoles[role]
   local font = Theme.GetFont()
+  local fontSlug = false
   size = size or roleMeta.size or 12
   outline = outline or roleMeta.outline or "OUTLINE"
 
@@ -992,6 +993,7 @@ function Theme.ApplyFont(fs, role, size, outline, scope)
     font = settings.font
     size = GetOptionsOwnedFontSize(role, size)
     outline = (settings.shadow and "SHADOW" or "") .. settings.outline
+    fontSlug = settings.fontSlug == true
     scope = "options"
   end
 
@@ -1018,6 +1020,8 @@ function Theme.ApplyFont(fs, role, size, outline, scope)
     style = style:gsub("^,", "")
     style = style:gsub(",$", "")
   end
+
+  if fontSlug then style = style == "" and "SLUG" or style .. ", SLUG" end
 
   fs:SetFont(LSM:Fetch("font", font, true), size, style)
 
@@ -2582,7 +2586,7 @@ function Theme.SetOptionsFontDefaults(role, enabled)
   else
     local defaults = Theme.OptionsFontRoles[role]
     options.optionsFonts[role] = {
-      font = defaults.font, size = defaults.size, outline = defaults.outline, shadow = defaults.shadow,
+      font = defaults.font, size = defaults.size, outline = defaults.outline, shadow = defaults.shadow, fontSlug = defaults.fontSlug,
     }
   end
   RefreshOptionsTypography()
@@ -2594,7 +2598,7 @@ function Theme.SetOptionsFontSetting(role, key, value)
   if not options.optionsFonts[role] then
     local defaults = Theme.OptionsFontRoles[role]
     options.optionsFonts[role] = {
-      font = defaults.font, size = defaults.size, outline = defaults.outline, shadow = defaults.shadow,
+      font = defaults.font, size = defaults.size, outline = defaults.outline, shadow = defaults.shadow, fontSlug = defaults.fontSlug,
     }
   end
   options.optionsFonts[role][key] = value
@@ -2609,7 +2613,7 @@ local function OptionsFontGroup(role, order)
     args = {
       defaults = {
         type = "toggle", name = "Use defaults", order = 1,
-        desc = "Restore the curated font, base size, outline, and shadow for this category. Editing a setting turns this off.",
+        desc = "Restore the curated font, base size, outline, shadow, and rendering for this category. Editing a setting turns this off.",
         get = function()
           local fonts = Addon:GetOptionsDB().optionsFonts
           return not (fonts and fonts[role])
@@ -2635,8 +2639,14 @@ local function OptionsFontGroup(role, order)
         get = function() return Theme.GetOptionsFontSettings(role).outline end,
         set = function(_, value) Theme.SetOptionsFontSetting(role, "outline", value) end,
       },
+      fontSlug = {
+        type = "toggle", name = "SLUG rendering", order = 5,
+        desc = "Use Slug rendering for this text category.",
+        get = function() return Theme.GetOptionsFontSettings(role).fontSlug == true end,
+        set = function(_, value) Theme.SetOptionsFontSetting(role, "fontSlug", value == true) end,
+      },
       shadow = {
-        type = "toggle", name = "Shadow", order = 5,
+        type = "toggle", name = "Shadow", order = 6,
         get = function() return Theme.GetOptionsFontSettings(role).shadow end,
         set = function(_, value) Theme.SetOptionsFontSetting(role, "shadow", value) end,
       },
