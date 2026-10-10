@@ -24,7 +24,6 @@ local TOOLBAR_MIN_WIDTH = 360
 local TOOLBAR_MIN_HEIGHT = 320
 local TOOLBAR_PADDING = 12
 local TOOLBAR_TITLE_HEIGHT = 40
-local TOOLBAR_COLLAPSED_HEIGHT = 38
 local SECTION_GAP = 10
 local TOGGLE_WIDTH = 136
 local TOGGLE_HEIGHT = 30
@@ -445,10 +444,23 @@ local function StyleText(fontString, role, size)
   fontString:SetTextColor(colors.text[1], colors.text[2], colors.text[3], colors.text[4] or 1)
 end
 
+local function WidgetHeight(widget, minimum)
+  local geometry = ns.Theme.GetWidgetRowGeometry(widget)
+  if widget.type == "PUI_Checkbox" then
+    return math_max(minimum, geometry.controlHeight + 10, widget.text:GetStringHeight() + 10)
+  end
+  return math_max(minimum, geometry.rowHeight, widget.inputError and widget.frame:GetHeight() or 0)
+end
+
 local function StyleButton(button, selected)
   local Theme = ns.Theme
   Theme:ApplyButton(button, selected and "primary" or "secondary")
   ns.KeyboardNavigation.RegisterFrame(button, "button", "toolbarButton")
+  local text = button:GetFontString()
+  text:SetWordWrap(true)
+  text:SetWidth(math_max(1, button:GetWidth() - 16))
+  button:SetHeight(math_max(button.__puiToolbarMinHeight or TOGGLE_HEIGHT, Theme.GetOptionsPointerTargetSize(0),
+    text:GetStringHeight() + 10, Theme.GetOptionsFontHeight("button") + 8))
 
   local colors = Theme.GetColors()
   local bg = colors.control
@@ -495,7 +507,10 @@ local function ConfigureRangeControl(row, control, value, yOffset)
   row.widget:SetSliderValues(tonumber(control.min) or 0, tonumber(control.max) or 100, tonumber(control.step) or 1)
   row.widget:SetValue(value)
   row.widget:SetWidth(math_max(160, row:GetParent():GetWidth() - TOOLBAR_PADDING * 2))
+  local height = WidgetHeight(row.widget, RANGE_HEIGHT)
+  row:SetHeight(height)
   row:Show()
+  return height
 end
 
 local function CreateChoiceControl(parent)
@@ -531,8 +546,10 @@ local function ConfigureChoiceControl(row, control, value, yOffset)
   row.widget:SetList(choices)
   row.widget:SetValue(value)
   row.widget:SetWidth(math_max(160, row:GetParent():GetWidth() - TOOLBAR_PADDING * 2))
+  local height = WidgetHeight(row.widget, 58)
+  row:SetHeight(height)
   row:Show()
-  return 58
+  return height
 end
 
 local function CreateToolbarSection(parent)
@@ -564,6 +581,7 @@ local function AcquireToggleButton(section, index)
     return widget
   end
   widget = AceGUI:Create("PUI_Checkbox")
+  widget.__puiWrapLabel = true
   ns.AceHooks.TakeOwnership(widget)
   widget.frame:SetParent(section)
   widget.frame:Show()
@@ -597,6 +615,14 @@ local function AcquireRangeControl(section, index)
 end
 
 local function StyleVisibilityCheckbox(check, state)
+  local geometry = ns.Theme.GetWidgetRowGeometry(check.widget)
+  local size = math_max(24, geometry.controlHeight)
+  local width = math_max(28, geometry.controlLeft + geometry.controlHeight + geometry.controlRight)
+  check:SetSize(width, size)
+  check.widget:SetWidth(width)
+  check.widget:SetHeight(size)
+  check.widget.frame:ClearAllPoints()
+  check.widget.frame:SetPoint("TOPLEFT", check, "TOPLEFT")
   if state == "mixed" then
     check.widget:SetValue(nil)
   else
@@ -606,20 +632,15 @@ end
 
 local function CreateVisibilityCheckbox(parent, onClick)
   local check = CreateFrame("Frame", nil, parent)
-  check:SetSize(24, 24)
   local widget = AceGUI:Create("PUI_Checkbox")
   widget:SetLabel("")
-  widget:SetWidth(28)
   widget:SetTriState(true)
   widget.frame:SetParent(check)
   widget.frame:ClearAllPoints()
   widget.frame:Show()
   ns.AceHooks.TakeOwnership(widget)
-  widget:SetHeight(24)
-  local geometry = ns.Theme.GetWidgetRowGeometry(widget)
-  local metrics = ns.Theme.GetControlMetrics(widget)
-  widget.frame:SetPoint("LEFT", check, "LEFT", (24 - metrics.checkboxBoxSize) / 2 - geometry.controlLeft, 0)
   check.widget = widget
+  StyleVisibilityCheckbox(check, "off")
   check.GetChecked = function() return widget:GetValue() == true end
   widget:SetCallback("OnValueChanged", function()
     onClick(check)
@@ -667,6 +688,29 @@ function TestMode:QueueToolbarRefresh()
   end)
 end
 
+local function SetToolbarWindow(panel, field, value)
+  if InCombatLockdown() then return end
+  local width, height = panel:GetWidth(), panel.expandedHeight or panel:GetHeight()
+  local left, top = panel:GetLeft() - UIParent:GetLeft(), UIParent:GetTop() - panel:GetTop()
+  if field == "width" then width = value
+  elseif field == "height" then height = value
+  elseif field == "x" then left = value
+  elseif field == "y" then top = value
+  elseif field == "center" then
+    left = (UIParent:GetWidth() - width) / 2
+    top = (UIParent:GetHeight() - height) / 2
+  end
+  width = math_min(math_max(TOOLBAR_MIN_WIDTH, UIParent:GetWidth() - 30), math_max(TOOLBAR_MIN_WIDTH, width))
+  height = math_min(math_max(TOOLBAR_MIN_HEIGHT, UIParent:GetHeight() - 60), math_max(TOOLBAR_MIN_HEIGHT, height))
+  left = math_min(math_max(0, UIParent:GetWidth() - width), math_max(0, left))
+  top = math_min(math_max(0, UIParent:GetHeight() - height), math_max(0, top))
+  panel:SetSize(width, height)
+  panel:ClearAllPoints()
+  panel:SetPoint("TOPLEFT", UIParent, "TOPLEFT", left, -top)
+  panel.SaveWindow(panel)
+  TestMode:QueueToolbarRefresh()
+end
+
 local function BuildEditControls(panel)
   local host = CreateFrame("Frame", nil, panel.content)
   panel.editControls = host
@@ -678,6 +722,7 @@ local function BuildEditControls(panel)
     { "snapping", "Snapping & grid" },
     { "appearance", "Appearance" },
     { "session", "Temporary visibility" },
+    { "window", "Toolbar window" },
   }) do
     local heading = host:CreateFontString(nil, "OVERLAY")
     heading:SetJustifyH("LEFT")
@@ -688,6 +733,7 @@ local function BuildEditControls(panel)
 
   local function Checkbox(key, label, value, setter)
     local widget = AceGUI:Create("PUI_Checkbox")
+    widget.__puiWrapLabel = true
     widget:SetLabel(label)
     widget:SetCallback("OnValueChanged", function(_, _, checked)
       local history = ns.FrameUtil.BeginEditHistory("Change " .. label)
@@ -856,6 +902,30 @@ local function BuildEditControls(panel)
   end)
   StyleButton(panel.blizzardSettingsButton, false)
 
+  panel.windowWidgets = {}
+  for _, definition in ipairs({ { "width", "Width" }, { "height", "Height" },
+    { "x", "From left" }, { "y", "From top" } }) do
+    local field = definition[1]
+    local widget = AceGUI:Create("PUI_Slider")
+    widget:SetLabel(definition[2])
+    widget:SetSliderValues(0, 1, 1)
+    widget:SetCallback("OnValueChanged", function(_, _, value)
+      SetToolbarWindow(panel, field, value)
+    end)
+    widget.frame:SetParent(host)
+    ns.AceHooks.TakeOwnership(widget)
+    local hadError = false
+    widget.frame:HookScript("OnSizeChanged", function()
+      if widget.inputError or hadError then TestMode:QueueToolbarRefresh() end
+      hadError = widget.inputError ~= nil
+    end)
+    panel.windowWidgets[#panel.windowWidgets + 1] = { field = field, widget = widget }
+  end
+  panel.centerWindowButton = CreateToolbarButton(host, "Center toolbar", 230, function()
+    SetToolbarWindow(panel, "center")
+  end)
+  StyleButton(panel.centerWindowButton, false)
+
   panel.sessionButtons = {}
   for _, spec in ipairs({
     { "Hide selected", util.HideSelectedMoversForEditSession },
@@ -958,6 +1028,7 @@ function TestMode:EnsureToolbar()
   panel:SetScript("OnDragStop", function(self)
     self:StopMovingOrSizing()
     SaveWindow(self)
+    TestMode:QueueToolbarRefresh()
   end)
   panel.SaveWindow = SaveWindow
 
@@ -1140,10 +1211,11 @@ function TestMode:EnsureToolbar()
     end
   end)
   panel:SetScript("OnSizeChanged", function(self, newWidth)
-    panel.content:SetWidth(math_max(1, newWidth - 30))
+    panel.content:SetWidth(math_max(1, newWidth - ns.Theme.GetOptionsPointerTargetSize(18) - 12))
+    TestMode:QueueToolbarRefresh()
   end)
   ns.KeyboardNavigation.BindWindow(panel, true)
-  ns.KeyboardNavigation.AttachGuide(panel, {
+  panel.guideSettings = {
     bottom = 42,
     visible = function() return not TestMode.toolbarCollapsed end,
     prepare = function()
@@ -1154,11 +1226,12 @@ function TestMode:EnsureToolbar()
     end,
     layout = function(height)
       panel.scroll:ClearAllPoints()
-      panel.scroll:SetPoint("TOPLEFT", panel, "TOPLEFT", 0, -TOOLBAR_TITLE_HEIGHT)
-      panel.scroll:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", -27, 42 + height)
+      panel.scroll:SetPoint("TOPLEFT", panel, "TOPLEFT", 0, -(panel.titleHeight or TOOLBAR_TITLE_HEIGHT))
+      panel.scroll:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", -(ns.Theme.GetOptionsPointerTargetSize(18) + 9), panel.guideSettings.bottom + height)
       panel.scroll:UpdateScrollChildRect()
     end,
-  })
+  }
+  ns.KeyboardNavigation.AttachGuide(panel, panel.guideSettings)
   ns.KeyboardNavigation.RegisterFrame(panel.search, "text", "moverSearch")
   panel:SetScript("OnHide", function()
     if ns.Flags.IsEditing and TestMode.active then
@@ -1320,6 +1393,7 @@ local function AcquireMoverRow(panel, index)
   local expand = CreateToolbarButton(row, "+", 22, function()
     ToggleMoverRowExpansion(panel, row)
   end)
+  expand.__puiToolbarMinHeight = 22
   expand:SetHeight(22)
   row.expand = expand
 
@@ -1370,13 +1444,18 @@ local function ShowMoverRow(panel, index, y, kind, key, label, depth, state, exp
   StyleVisibilityCheckbox(row.check, state)
   row.check:SetShown(kind ~= "preview")
   row.label:ClearAllPoints()
-  row.label:SetPoint("LEFT", row, "LEFT", expansionKey and 27 or 8, 0)
+  row.expand:SetWidth(ns.Theme.GetOptionsPointerTargetSize(22))
+  StyleButton(row.expand, false)
+  row.label:SetPoint("LEFT", row, "LEFT", expansionKey and (row.expand:GetWidth() + 5) or 8, 0)
   row.label:SetPoint("RIGHT", row.check, "LEFT", -5, 0)
   row.label:SetText(label)
   local accent = ns.Theme.GetColors().accent
   row.hoverHighlight:SetColorTexture(accent[1], accent[2], accent[3], 0.10)
   StyleText(row.label, depth == 0 and "header" or "body", 12)
+  row.label:SetWordWrap(true)
+  row:SetHeight(math_max(25, row.label:GetStringHeight() + 8, row.check:GetHeight(), row.expand:GetHeight()))
   row:Show()
+  return row:GetHeight()
 end
 
 function TestMode:RebuildToolbar()
@@ -1397,6 +1476,35 @@ function TestMode:RebuildToolbar()
     panel.content:SetWidth(panel:GetWidth() - 30)
   end
   local content = panel.content
+  local Theme = ns.Theme
+  content:SetWidth(math_max(1, panel:GetWidth() - Theme.GetOptionsPointerTargetSize(18) - 12))
+  StyleText(panel.title, "header", 14)
+  panel.exitButton:SetWidth(math_max(62, Theme.GetOptionsFontHeight("button") * 3 + 16))
+  panel.minimizeButton:SetWidth(Theme.GetOptionsPointerTargetSize(28))
+  StyleButton(panel.exitButton, false)
+  StyleButton(panel.minimizeButton, false)
+  local titleWidth = panel:GetWidth() - TOOLBAR_PADDING * 2 - panel.exitButton:GetWidth() - panel.minimizeButton:GetWidth() - 12
+  panel.title:ClearAllPoints()
+  panel.title:SetPoint("TOPLEFT", panel, "TOPLEFT", TOOLBAR_PADDING, -10)
+  panel.title:SetWordWrap(true)
+  panel.title:SetWidth(math_max(1, titleWidth))
+  panel.titleHeight = math_max(TOOLBAR_TITLE_HEIGHT, panel.title:GetStringHeight() + 20, panel.exitButton:GetHeight() + 14)
+  panel.exitButton:ClearAllPoints()
+  panel.exitButton:SetPoint("TOPRIGHT", panel, "TOPRIGHT", -TOOLBAR_PADDING, -7)
+  local footerHeight = 42
+  local footerWidth = (panel:GetWidth() - TOOLBAR_PADDING * 2 - 12 - Theme.GetOptionsPointerTargetSize(18)) / 3
+  for _, button in ipairs({ panel.undoButton, panel.redoButton, panel.overlapButton }) do
+    button:SetWidth(footerWidth)
+    StyleButton(button, false)
+    footerHeight = math_max(footerHeight, button:GetHeight() + 14)
+  end
+  panel.guideSettings.bottom = footerHeight
+  panel.scroll:ClearAllPoints()
+  panel.scroll:SetPoint("TOPLEFT", panel, "TOPLEFT", 0, -panel.titleHeight)
+  panel.scroll:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", -(Theme.GetOptionsPointerTargetSize(18) + 9),
+    footerHeight + ns.KeyboardNavigation.GetGuideHeight(panel))
+  panel.scroll.ScrollBar.scrollStep = math_max(26, Theme.GetOptionsFontHeight("body") + 10)
+  local headingHeight = math_max(26, Theme.GetOptionsFontHeight("header", 12) + 10)
   local config = ns.FrameUtil.GetMoverVisibilityConfig()
   HideToolbarSections(panel)
   for _, row in ipairs(panel.moverRows) do row:Hide() end
@@ -1416,7 +1524,7 @@ function TestMode:RebuildToolbar()
     button:SetText((open and "-  " or "+  ") .. title)
     StyleButton(button, false)
     button:Show()
-    y = y - 34
+    y = y - button:GetHeight() - 4
     return open
   end
   local uf = ns.Modules.UnitFrames
@@ -1449,7 +1557,8 @@ function TestMode:RebuildToolbar()
         frame:ClearAllPoints()
         frame:SetPoint("TOPLEFT", host, "TOPLEFT", 4, controlY)
         spec.widget:SetWidth(available)
-        frame:SetHeight(spec.height)
+        local height = WidgetHeight(spec.widget, spec.height)
+        frame:SetHeight(height)
         if key == "positionOverride" then
           spec.widget:SetLabel("Use a separate " .. editContext .. " position")
         end
@@ -1458,7 +1567,7 @@ function TestMode:RebuildToolbar()
           spec.widget:SetDisabled(ns.FrameUtil.HasSmartSnapLinks("UF_" .. panel.positionUnit)
             and not spec.value())
         end
-        controlY = controlY - spec.height - 4
+        controlY = controlY - height - 4
       end
     end
     local existing = positions and positions[editContext]
@@ -1467,7 +1576,8 @@ function TestMode:RebuildToolbar()
     panel.removePositionButton:SetWidth(available)
     panel.removePositionButton:SetShown(editContext ~= "Shared" and existing ~= nil)
     if panel.removePositionButton:IsShown() then
-      controlY = controlY - 34
+      StyleButton(panel.removePositionButton, false)
+      controlY = controlY - panel.removePositionButton:GetHeight() - 4
     end
     host:SetHeight(-controlY)
     y = y + controlY - SECTION_GAP
@@ -1486,27 +1596,41 @@ function TestMode:RebuildToolbar()
     panel.setLabel:SetText("Editing: " .. config.selectedSet)
     panel.setLabel:SetPoint("TOPLEFT", content, "TOPLEFT", TOOLBAR_PADDING, y)
     panel.resetButton:SetPoint("TOPRIGHT", content, "TOPRIGHT", -TOOLBAR_PADDING, y + 4)
-    y = y - 36
-    local previous
-    local tabWidth = math_floor((content:GetWidth() - TOOLBAR_PADDING * 2 - 18) / 4)
-    for _, name in ipairs(ns.FrameUtil.GetMoverVisibilitySetNames()) do
+    panel.resetButton:SetWidth(math_max(112, Theme.GetOptionsFontHeight("button") * 6 + 16))
+    StyleButton(panel.resetButton, false)
+    panel.setLabel:SetWidth(math_max(1, content:GetWidth() - TOOLBAR_PADDING * 2 - panel.resetButton:GetWidth() - 8))
+    panel.setLabel:SetWordWrap(true)
+    y = y - math_max(36, panel.setLabel:GetStringHeight() + 8, panel.resetButton:GetHeight() + 8)
+    local names = ns.FrameUtil.GetMoverVisibilitySetNames()
+    local usable = content:GetWidth() - TOOLBAR_PADDING * 2
+    local columns = math_max(1, math_min(#names, math_floor((usable + 6) / math_max(70, Theme.GetOptionsFontHeight("button") * 5))))
+    local tabWidth = (usable - (columns - 1) * 6) / columns
+    local tabHeight = 30
+    for _, name in ipairs(names) do
       local button = panel.setButtons[name]
+      button:ClearAllPoints()
       button:SetWidth(tabWidth)
-      button:SetPoint("TOPLEFT", previous or content, previous and "TOPRIGHT" or "TOPLEFT",
-        previous and 6 or TOOLBAR_PADDING, previous and 0 or y)
       StyleButton(button, name == config.selectedSet)
-      previous = button
+      tabHeight = math_max(tabHeight, button:GetHeight())
     end
-    y = y - 35
+    for index, name in ipairs(names) do
+      local button = panel.setButtons[name]
+      button:SetHeight(tabHeight)
+      button:SetPoint("TOPLEFT", content, "TOPLEFT", TOOLBAR_PADDING + ((index - 1) % columns) * (tabWidth + 6),
+        y - math_floor((index - 1) / columns) * (tabHeight + 5))
+    end
+    y = y - math.ceil(#names / columns) * (tabHeight + 5)
     StyleVisibilityCheckbox(panel.followCheck, config.followGroup and "on" or "off")
     panel.followCheck:SetPoint("TOPLEFT", content, "TOPLEFT", TOOLBAR_PADDING, y)
     panel.followLabel:ClearAllPoints()
     panel.followLabel:SetPoint("LEFT", panel.followCheck, "RIGHT", 3, 0)
     panel.followLabel:SetPoint("RIGHT", content, "RIGHT", -TOOLBAR_PADDING, 0)
-    y = y - 34
+    panel.followLabel:SetWordWrap(true)
+    y = y - math_max(34, panel.followCheck:GetHeight() + 8, panel.followLabel:GetStringHeight() + 8)
+    panel.search:SetHeight(math_max(24, Theme.GetOptionsPointerTargetSize(0), Theme.GetOptionsFontHeight("body") + 8))
     panel.search:SetPoint("TOPLEFT", content, "TOPLEFT", TOOLBAR_PADDING + 6, y)
     panel.search:SetPoint("TOPRIGHT", content, "TOPRIGHT", -TOOLBAR_PADDING - 6, y)
-    y = y - 38
+    y = y - panel.search:GetHeight() - 14
   end
 
   local search = (panel.search:GetText() or ""):lower()
@@ -1517,8 +1641,8 @@ function TestMode:RebuildToolbar()
   local rowIndex = 0
   local function AddRow(kind, key, label, depth, state, expansionKey, expanded)
     rowIndex = rowIndex + 1
-    ShowMoverRow(panel, rowIndex, y, kind, key, label, depth, state, expansionKey, expanded)
-    y = y - 26
+    local height = ShowMoverRow(panel, rowIndex, y, kind, key, label, depth, state, expansionKey, expanded)
+    y = y - height - 1
   end
 
   if moversOpen then
@@ -1610,7 +1734,22 @@ function TestMode:RebuildToolbar()
         local enabled = self:IsParticipantEnabled(key)
         section.enabledButton.__puiParticipantKey = key
         section.enabledButton:SetText(enabled and "Enabled" or "Disabled")
+        section.enabledButton:SetWidth(math_max(78, Theme.GetOptionsFontHeight("button") * 5 + 16))
         StyleButton(section.enabledButton, enabled)
+        StyleText(section.heading, "header", 12)
+        section.heading:SetWordWrap(true)
+        local headingWidth = section:GetWidth() - section.enabledButton:GetWidth() - 24
+        section.enabledButton:ClearAllPoints()
+        local sectionTop
+        if section.heading:GetUnboundedStringWidth() <= headingWidth then
+          section.heading:SetWidth(headingWidth)
+          section.enabledButton:SetPoint("TOPRIGHT", section, "TOPRIGHT", -7, -5)
+          sectionTop = math_max(32, section.heading:GetStringHeight() + 14, section.enabledButton:GetHeight() + 10)
+        else
+          section.heading:SetWidth(math_max(1, section:GetWidth() - 16))
+          section.enabledButton:SetPoint("TOPLEFT", section, "TOPLEFT", 8, -section.heading:GetStringHeight() - 12)
+          sectionTop = section.heading:GetStringHeight() + section.enabledButton:GetHeight() + 20
+        end
 
         local toggleControls = {}
         local choiceControls = {}
@@ -1629,31 +1768,40 @@ function TestMode:RebuildToolbar()
           end
         end
 
-        local toggleY = -32
+        local toggleY = -sectionTop
         local toggleX = 8
         local usableWidth = content:GetWidth() - (TOOLBAR_PADDING * 2) - 16
 
+        local toggleWidth = math_min(usableWidth - 8, math_max(TOGGLE_WIDTH, Theme.GetOptionsFontHeight("body") * 9))
+        local toggleHeight = TOGGLE_HEIGHT
         for index, control in ipairs(toggleControls) do
-          if toggleX + TOGGLE_WIDTH > usableWidth then
+          local widget = AcquireToggleButton(section, index)
+          widget:SetLabel(control.label or control.key)
+          widget:SetWidth(toggleWidth)
+          toggleHeight = math_max(toggleHeight, WidgetHeight(widget, TOGGLE_HEIGHT))
+        end
+        for index, control in ipairs(toggleControls) do
+          if toggleX + toggleWidth > usableWidth then
             toggleX = 8
-            toggleY = toggleY - (TOGGLE_HEIGHT + TOGGLE_GAP)
+            toggleY = toggleY - (toggleHeight + TOGGLE_GAP)
           end
 
           local widget = AcquireToggleButton(section, index)
           widget.__puiControl = control
           widget:SetLabel(control.label or control.key)
-          widget:SetWidth(TOGGLE_WIDTH)
+          widget:SetWidth(toggleWidth)
+          widget:SetHeight(toggleHeight)
           widget.frame:ClearAllPoints()
           widget.frame:SetPoint("TOPLEFT", section, "TOPLEFT", toggleX, toggleY)
           widget:SetValue(self:GetValue(control.key) == true)
           widget.frame:Show()
-          toggleX = toggleX + TOGGLE_WIDTH + TOGGLE_GAP
+          toggleX = toggleX + toggleWidth + TOGGLE_GAP
         end
 
         local rowsUsed = #toggleControls > 0
-          and (math_floor((#toggleControls - 1) / math_max(1, math_floor((usableWidth - 8) / (TOGGLE_WIDTH + TOGGLE_GAP)))) + 1)
+          and (math_floor((#toggleControls - 1) / math_max(1, math_floor((usableWidth - 8 + TOGGLE_GAP) / (toggleWidth + TOGGLE_GAP)))) + 1)
           or 0
-        local sectionHeight = 31 + (rowsUsed * (TOGGLE_HEIGHT + TOGGLE_GAP))
+        local sectionHeight = sectionTop + (rowsUsed * (toggleHeight + TOGGLE_GAP))
         local controlY = -(sectionHeight + 2)
 
         for index, control in ipairs(choiceControls) do
@@ -1668,14 +1816,14 @@ function TestMode:RebuildToolbar()
         end
 
         for index, control in ipairs(rangeControls) do
-          ConfigureRangeControl(
+          local rowHeight = ConfigureRangeControl(
             AcquireRangeControl(section, index),
             control,
             self:GetValue(control.key),
             controlY
           )
-          controlY = controlY - RANGE_HEIGHT
-          sectionHeight = sectionHeight + RANGE_HEIGHT
+          controlY = controlY - rowHeight
+          sectionHeight = sectionHeight + rowHeight
         end
 
         sectionHeight = math_max(58, sectionHeight + 8)
@@ -1707,37 +1855,76 @@ function TestMode:RebuildToolbar()
         heading:ClearAllPoints()
         heading:SetPoint("TOPLEFT", host, "TOPLEFT", 4, controlY)
         heading:Show()
-        controlY = controlY - 26
+        controlY = controlY - headingHeight
       end
       local spec = panel.editWidgets[key]
       local frame = spec.widget.frame
       frame:ClearAllPoints()
       frame:SetPoint("TOPLEFT", host, "TOPLEFT", 4, controlY)
       spec.widget:SetWidth(available)
-      frame:SetHeight(spec.height)
+      local height = WidgetHeight(spec.widget, spec.height)
+      frame:SetHeight(height)
       spec.widget:SetValue(spec.value())
       frame:Show()
-      controlY = controlY - spec.height - 4
+      controlY = controlY - height - 4
     end
     local sessionHeading = panel.editHeadings.session
     StyleText(sessionHeading, "header", 12)
     sessionHeading:ClearAllPoints()
     sessionHeading:SetPoint("TOPLEFT", host, "TOPLEFT", 4, controlY)
     sessionHeading:Show()
-    controlY = controlY - 26
+    controlY = controlY - headingHeight
     for index, button in ipairs(panel.sessionButtons) do
       button:ClearAllPoints()
       button:SetPoint("TOPLEFT", host, "TOPLEFT", 4 + (index - 1) * (available - 8) / 3, controlY)
       button:SetWidth((available - 14) / 3)
+      StyleButton(button, false)
       button:Show()
     end
     TestMode:RefreshEditControlButtons()
-    controlY = controlY - 38
+    local sessionHeight = 30
+    for _, button in ipairs(panel.sessionButtons) do sessionHeight = math_max(sessionHeight, button:GetHeight()) end
+    for _, button in ipairs(panel.sessionButtons) do button:SetHeight(sessionHeight) end
+    controlY = controlY - sessionHeight - 8
     panel.blizzardSettingsButton:ClearAllPoints()
     panel.blizzardSettingsButton:SetPoint("TOPLEFT", host, "TOPLEFT", 4, controlY)
     panel.blizzardSettingsButton:SetWidth(available)
+    StyleButton(panel.blizzardSettingsButton, false)
     panel.blizzardSettingsButton:Show()
-    controlY = controlY - 32
+    controlY = controlY - panel.blizzardSettingsButton:GetHeight() - 4
+    local windowHeading = panel.editHeadings.window
+    windowHeading:ClearAllPoints()
+    windowHeading:SetPoint("TOPLEFT", host, "TOPLEFT", 4, controlY)
+    windowHeading:Show()
+    controlY = controlY - headingHeight
+    for _, spec in ipairs(panel.windowWidgets) do
+      local field, widget = spec.field, spec.widget
+      local maximum, minimum, value = 0, 0, 0
+      if field == "width" then
+        minimum, maximum, value = TOOLBAR_MIN_WIDTH, math_max(TOOLBAR_MIN_WIDTH, UIParent:GetWidth() - 30), panel:GetWidth()
+      elseif field == "height" then
+        minimum, maximum, value = TOOLBAR_MIN_HEIGHT, math_max(TOOLBAR_MIN_HEIGHT, UIParent:GetHeight() - 60), panel.expandedHeight or panel:GetHeight()
+      elseif field == "x" then
+        maximum, value = math_max(0, UIParent:GetWidth() - panel:GetWidth()), panel:GetLeft() - UIParent:GetLeft()
+      else
+        maximum, value = math_max(0, UIParent:GetHeight() - (panel.expandedHeight or panel:GetHeight())), UIParent:GetTop() - panel:GetTop()
+      end
+      widget.frame:ClearAllPoints()
+      widget.frame:SetPoint("TOPLEFT", host, "TOPLEFT", 4, controlY)
+      widget:SetWidth(available)
+      widget:SetSliderValues(minimum, maximum, 1)
+      if not widget.editbox:HasFocus() and not widget.inputError then widget:SetValue(value) end
+      local height = WidgetHeight(widget, RANGE_HEIGHT)
+      widget.frame:SetHeight(height)
+      widget.frame:Show()
+      controlY = controlY - height - 4
+    end
+    panel.centerWindowButton:ClearAllPoints()
+    panel.centerWindowButton:SetPoint("TOPLEFT", host, "TOPLEFT", 4, controlY)
+    panel.centerWindowButton:SetWidth(available)
+    StyleButton(panel.centerWindowButton, false)
+    panel.centerWindowButton:Show()
+    controlY = controlY - panel.centerWindowButton:GetHeight() - 4
     host:SetHeight(-controlY)
     y = y + controlY - 6
   end
@@ -1768,10 +1955,10 @@ function TestMode:RebuildToolbar()
   local contentHeight = math_max(60, -y + 2)
   content:SetHeight(contentHeight)
   if self.toolbarCollapsed then
-    if panel:GetHeight() ~= TOOLBAR_COLLAPSED_HEIGHT then
+    if not panel.expandedHeight then
       panel.expandedHeight = panel:GetHeight()
-      panel:SetHeight(TOOLBAR_COLLAPSED_HEIGHT)
     end
+    panel:SetHeight(panel.titleHeight)
   elseif panel.expandedHeight then
     panel:SetHeight(panel.expandedHeight)
     panel.expandedHeight = nil
@@ -1784,10 +1971,11 @@ function TestMode:RebuildToolbar()
   panel.redoButton:SetShown(not self.toolbarCollapsed)
   panel.overlapButton:SetShown(not self.toolbarCollapsed)
   panel.scroll:SetVerticalScroll(math_min(panel.scroll:GetVerticalScroll(),
-    math_max(0, contentHeight - (panel:GetHeight() - TOOLBAR_TITLE_HEIGHT - 42 - ns.KeyboardNavigation.GetGuideHeight(panel)))))
+    math_max(0, contentHeight - (panel:GetHeight() - panel.titleHeight - footerHeight - ns.KeyboardNavigation.GetGuideHeight(panel)))))
   ns.Theme.ApplyExpandCollapseButton(panel.minimizeButton, not self.toolbarCollapsed)
   StylePanel(panel)
   ns.KeyboardNavigation.RefreshWindows()
+  ns.KeyboardNavigation.QueueRestore()
 end
 
 function TestMode:RefreshToolbarTheme()
@@ -1856,6 +2044,8 @@ function TestMode:RefreshToolbarTheme()
       end
     end
   end
+  StyleButton(panel.centerWindowButton, false)
+  self:RebuildToolbar()
 end
 
 function TestMode:RefreshTheme()
