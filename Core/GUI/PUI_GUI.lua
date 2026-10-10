@@ -97,6 +97,7 @@ local function _PUI_CreateConfirmDialog()
   end)
 
   f:Hide()
+  ns.KeyboardNavigation.BindWindow(f, false, function() f._btnNo:Click("LeftButton") end)
   return f
 end
 
@@ -128,6 +129,7 @@ function Addon:PUI_ConfirmAction(opts)
   f:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
   f:Show()
   f:Raise()
+  ns.KeyboardNavigation.HandleKey("TAB")
 end
 
 function Addon:PUI_ConfirmResetAndReload(opts)
@@ -1792,6 +1794,9 @@ end
 
 local function _PUI_StyleRootNavButton(btn, node, isSelected)
   _PUI_EnsureRootNavButton(btn)
+  if node.meta.navHeader ~= true then
+    ns.KeyboardNavigation.RegisterFrame(btn, "tree", "root:" .. node.key, btn:GetParent())
+  end
 
   local colors = ns.Theme.GetColors()
   local fill = colors.control
@@ -2085,6 +2090,7 @@ local function _PUI_RefreshRootRegistryNav(frame)
   local searchColors = ns.Theme.GetColors()
 
   ns.Theme.WidgetSkins.UIEditBox(search)
+  ns.KeyboardNavigation.RegisterFrame(search, "text", "search")
   local searchHeight = ns.Theme.GetOptionsPointerTargetSize(30)
   search:SetHeight(searchHeight)
 
@@ -3369,6 +3375,7 @@ local function _PUI_EnsureCustomOptionsFrame()
     end)
 
     Addon._OptionsWindow = frame
+    ns.KeyboardNavigation.BindWindow(frame)
 
     Addon:ApplyOptionsUIScale()
     _PUI_RestoreOptionsWindowState(frame)
