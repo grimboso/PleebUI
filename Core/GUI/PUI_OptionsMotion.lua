@@ -7,6 +7,7 @@ ns.OptionsMotion = Motion
 local states = setmetatable({}, { __mode = "k" })
 local active = {}
 local groupTypes = { TreeGroup = true, TabGroup = true, DropdownGroup = true }
+local HOVER_ALPHA = 0.26
 
 function Motion.IsEnabled()
   return Addon:GetOptionsDB().animateOptions ~= false
@@ -16,7 +17,25 @@ local function Finish(state, alpha)
   state.group:Stop()
   active[state] = nil
   state.target = alpha
+  state.hovered = nil
+  state.hoverPending = nil
   state.region:SetAlpha(alpha)
+end
+
+local function Play(state, fromAlpha, targetAlpha, duration, smoothing)
+  state.group:Stop()
+  state.target = targetAlpha
+  state.region:SetAlpha(fromAlpha)
+  if not Motion.IsEnabled() or fromAlpha == targetAlpha then
+    Finish(state, targetAlpha)
+    return
+  end
+  state.alpha:SetFromAlpha(fromAlpha)
+  state.alpha:SetToAlpha(targetAlpha)
+  state.alpha:SetDuration(duration)
+  state.alpha:SetSmoothing(smoothing)
+  active[state] = true
+  state.group:Play()
 end
 
 local function GetState(region, owner, restingAlpha)
@@ -30,26 +49,17 @@ local function GetState(region, owner, restingAlpha)
   group:SetScript("OnFinished", function()
     active[state] = nil
     region:SetAlpha(state.target)
+    if restingAlpha == 0 then
+      if state.target == 0 and state.hoverPending then
+        state.hoverPending = nil
+        Play(state, 0, HOVER_ALPHA, 0.18, "IN_OUT")
+      elseif state.target ~= 0 and state.hovered == false then
+        Play(state, state.target, 0, 0.22, "IN_OUT")
+      end
+    end
   end)
   owner:HookScript("OnHide", function() Finish(state, restingAlpha) end)
   return state
-end
-
-local function Play(state, fromAlpha, targetAlpha, duration, smoothing)
-  state.group:Stop()
-  state.from = fromAlpha
-  state.target = targetAlpha
-  state.region:SetAlpha(fromAlpha)
-  if not Motion.IsEnabled() or fromAlpha == targetAlpha then
-    Finish(state, targetAlpha)
-    return
-  end
-  state.alpha:SetFromAlpha(fromAlpha)
-  state.alpha:SetToAlpha(targetAlpha)
-  state.alpha:SetDuration(duration)
-  state.alpha:SetSmoothing(smoothing)
-  active[state] = true
-  state.group:Play()
 end
 
 local function FinishReveals()
@@ -76,16 +86,18 @@ end
 
 function Motion.Hover(owner, texture, hovered)
   local state = GetState(texture, owner, 0)
-  local targetAlpha = hovered and 0.18 or 0
+  local wasHovered = state.hovered
+  state.hovered = hovered == true
+  local targetAlpha = hovered and HOVER_ALPHA or 0
   texture:Show()
-  if state.target == targetAlpha then return end
-
-  local fromAlpha = texture:GetAlpha()
-  if state.group:IsPlaying() then
-    local progress = state.alpha:GetSmoothProgress()
-    fromAlpha = state.from + (state.target - state.from) * progress
+  if state.group:IsPlaying() and Motion.IsEnabled() then
+    if hovered and not wasHovered and state.target == 0 then
+      state.hoverPending = true
+    end
+    return
   end
-  Play(state, fromAlpha, targetAlpha, hovered and 0.18 or 0.22, "IN_OUT")
+  if state.target == targetAlpha then return end
+  Play(state, texture:GetAlpha(), targetAlpha, hovered and 0.18 or 0.22, "IN_OUT")
 end
 
 function Motion.StyleTreeHover(button)
@@ -166,6 +178,9 @@ end
 function Motion.SetEnabled(enabled)
   Addon:GetOptionsDB().animateOptions = enabled == true
   if not enabled then
-    for state in pairs(active) do Finish(state, state.target) end
+    for state in pairs(active) do
+      local alpha = state.restingAlpha == 0 and (state.hovered and HOVER_ALPHA or 0) or state.target
+      Finish(state, alpha)
+    end
   end
 end
