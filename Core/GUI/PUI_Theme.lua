@@ -244,6 +244,18 @@ local function _PUI_CopyColors(src)
   return out
 end
 
+local function DeriveControlColors(colors)
+  colors.mutedText = _PUI_CopyColorWithAlpha(colors.text, 0.72)
+  colors.disabledText = _PUI_CopyColorWithAlpha(colors.text, 0.52)
+  colors.disabledControl = _PUI_CopyColorWithAlpha(colors.control, 0.45)
+  colors.disabledBorder = _PUI_CopyColorWithAlpha(colors.border, 0.45)
+  colors.disabledControlBorder = _PUI_CopyColorWithAlpha(colors.controlBorder, 0.45)
+  colors.selection = _PUI_CopyColor(colors.accent)
+  colors.hoverBorder = _PUI_BlendControlColor(colors.controlBorder, colors.accent, 0.35)
+  colors.hoverControl = _PUI_BlendControlColor(colors.control, colors.accent, 0.08)
+  colors.pressedControl = _PUI_BlendControlColor(colors.control, colors.accent, 0.16)
+end
+
 -- Direct skin settings only.
 local _PUI_ThemeColorsCache
 local _PUI_ThemeColorsCacheSignature
@@ -277,15 +289,7 @@ function Theme.GetColors()
   ApplyColorOverride("controlBorder", "borderColor")
   ApplyColorOverride("text", "textColor")
 
-  colors.mutedText = _PUI_CopyColorWithAlpha(colors.text, 0.72)
-  colors.disabledText = _PUI_CopyColorWithAlpha(colors.text, 0.52)
-  colors.disabledControl = _PUI_CopyColorWithAlpha(colors.control, 0.45)
-  colors.disabledBorder = _PUI_CopyColorWithAlpha(colors.border, 0.45)
-  colors.disabledControlBorder = _PUI_CopyColorWithAlpha(colors.controlBorder, 0.45)
-  colors.selection = _PUI_CopyColor(colors.accent)
-  colors.hoverBorder = _PUI_BlendControlColor(colors.controlBorder, colors.accent, 0.35)
-  colors.hoverControl = _PUI_BlendControlColor(colors.control, colors.accent, 0.08)
-  colors.pressedControl = _PUI_BlendControlColor(colors.control, colors.accent, 0.16)
+  DeriveControlColors(colors)
 
   colors.borderSize = 3
 
@@ -295,8 +299,8 @@ function Theme.GetColors()
   return colors
 end
 
-function Theme.GetControlStateColors(disabled, hovered, pressed, active)
-  local colors = Theme.GetColors()
+function Theme.GetControlStateColors(disabled, hovered, pressed, active, palette)
+  local colors = palette or Theme.GetColors()
   if disabled then
     return colors.disabledControl, colors.disabledControlBorder, colors.disabledText
   end
@@ -2347,6 +2351,7 @@ local PUI_SELF_SKINNING_WIDGET_TYPES = {
   PUI_EditBox = true,
   PUI_MultiLineEditBox = true,
   PUI_Slider = true,
+  PUI_PalettePreview = true,
 }
 
 local PUI_ACE3_SKIN_METHODS = {
@@ -2773,11 +2778,13 @@ function Theme.GetColorPresetPreviewColors(key)
   end
 
   local source = preset.colors or {}
-  local colors = {}
+  local colors = _PUI_CopyColors(Theme.DefaultColors)
 
   for dbKey, runtimeKey in pairs(COLOR_PRESET_PREVIEW_KEYS) do
     colors[runtimeKey] = _PUI_CopyColor(source[dbKey] or Theme.DefaultColors[runtimeKey])
   end
+  if source.borderColor then colors.controlBorder = _PUI_CopyColor(source.borderColor) end
+  DeriveControlColors(colors)
 
   return colors
 end
@@ -2946,14 +2953,6 @@ local function GeneralOptionsProvider()
 end
 
 local selectedAccessibilityPreset = "default"
-
-local function PresetColorHex(color)
-  return string.format("%02x%02x%02x",
-    math.floor((color[1] or 1) * 255 + 0.5),
-    math.floor((color[2] or 1) * 255 + 0.5),
-    math.floor((color[3] or 1) * 255 + 0.5)
-  )
-end
 
 local function PresetLuminance(color)
   local function LinearChannel(value)
@@ -3191,54 +3190,21 @@ local function UIThemeOptionsProvider()
         },
         sample = {
           type = "description",
-          name = function()
-            local definition = Theme.GetColorPresetDefinition(selectedAccessibilityPreset)
-            local preview = Theme.GetColorPresetPreviewColors(selectedAccessibilityPreset)
-            local textColor = PresetColorHex(preview.text)
-            local accentColor = PresetColorHex(preview.accent)
-            local ratio = PresetTextContrast(preview)
-
-            return string.format(
-              "%s\n|cff%sSample text: The quick brown fox 12345|r\n|cff%sAccent: Selected option|r\nText/background contrast: %.2f:1",
-              definition.description or "",
-              textColor,
-              accentColor,
-              ratio
-            )
-          end,
+          dialogControl = "PUI_PalettePreview",
+          name = function() return selectedAccessibilityPreset end,
           order = 3,
           width = "full",
         },
-        background = {
-          type = "color",
-          name = "Preview background",
+        contrast = {
+          type = "description",
+          name = function()
+            local definition = Theme.GetColorPresetDefinition(selectedAccessibilityPreset)
+            local preview = Theme.GetColorPresetPreviewColors(selectedAccessibilityPreset)
+            return string.format("%s. Text/background contrast: %.2f:1",
+              definition.description, PresetTextContrast(preview))
+          end,
           order = 4,
-          disabled = true,
-          hasAlpha = true,
-          get = function()
-            local color = Theme.GetColorPresetPreviewColors(selectedAccessibilityPreset).background
-            return color[1], color[2], color[3], color[4]
-          end,
-        },
-        accent = {
-          type = "color",
-          name = "Preview accent",
-          order = 5,
-          disabled = true,
-          hasAlpha = true,
-          get = function()
-            local color = Theme.GetColorPresetPreviewColors(selectedAccessibilityPreset).accent
-            return color[1], color[2], color[3], color[4]
-          end,
-        },
-        sampleControl = {
-          type = "toggle",
-          name = "Sample checked control",
-          order = 6,
-          disabled = true,
-          get = function()
-            return true
-          end,
+          width = "full",
         },
         apply = {
           type = "execute",
