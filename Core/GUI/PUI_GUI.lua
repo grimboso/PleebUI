@@ -1233,7 +1233,7 @@ local PUI_ROOT_NAV_ITEM_ORDER = {
   Profiles = 10000,
 }
 
-local PUI_ROOT_NAV_GLYPH_BY_KEY = {
+local PUI_ROOT_NAV_SEARCH_ALIAS_BY_KEY = {
   GeneralOptions = "Sc",
   UITheme = "Th",
   unitframes = "UF",
@@ -1399,7 +1399,7 @@ local function _PUI_GetRootNavNodeSearchText(node)
     _PUI_SearchValue(node and node.key),
     _PUI_SearchValue(node and node.name),
     _PUI_SearchValue(node and node.label),
-    _PUI_SearchValue(node and PUI_ROOT_NAV_GLYPH_BY_KEY[node.key]),
+    _PUI_SearchValue(node and PUI_ROOT_NAV_SEARCH_ALIAS_BY_KEY[node.key]),
     _PUI_SearchValue(meta.navDescription),
     _PUI_SearchValue(meta.pageDescription),
     _PUI_SearchValue(meta.description),
@@ -1762,12 +1762,6 @@ local function _PUI_EnsureRootNavButton(btn)
   btn.__puiRootNavIcon:SetPoint("CENTER", btn.__puiRootNavIconBack, "CENTER", 0, 0)
   btn.__puiRootNavIcon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
 
-  btn.__puiRootNavGlyph = btn:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-  btn.__puiRootNavGlyph.__puiOptionsFontOwned = true
-  btn.__puiRootNavGlyph:SetPoint("CENTER", btn.__puiRootNavIconBack, "CENTER", 0, 0)
-  btn.__puiRootNavGlyph:SetJustifyH("CENTER")
-  btn.__puiRootNavGlyph:SetJustifyV("MIDDLE")
-
   btn.__puiRootNavLabel = btn:CreateFontString(nil, "OVERLAY", "GameFontNormal")
   btn.__puiRootNavLabel.__puiOptionsFontOwned = true
   btn.__puiRootNavLabel:SetJustifyH("LEFT")
@@ -1791,7 +1785,6 @@ local function _PUI_EnsureRootNavButton(btn)
   btn.__puiRootNavBadge:SetJustifyH("RIGHT")
   btn.__puiRootNavBadge:SetJustifyV("MIDDLE")
 
-  ns.Theme.ApplyFont(btn.__puiRootNavGlyph, "nav", 11)
   ns.Theme.ApplyFont(btn.__puiRootNavLabel, "nav", 12)
   ns.Theme.ApplyFont(btn.__puiRootNavDescription, "tiny", 10)
   ns.Theme.ApplyFont(btn.__puiRootNavBadge, "tiny", 9)
@@ -1821,7 +1814,6 @@ local function _PUI_StyleRootNavButton(btn, node, isSelected)
     btn.__puiRootNavHover:Hide()
     btn.__puiRootNavIconBack:Hide()
     btn.__puiRootNavIcon:Hide()
-    btn.__puiRootNavGlyph:Hide()
     btn.__puiRootNavDescription:Hide()
     btn.__puiRootNavBadge:Hide()
 
@@ -1869,22 +1861,21 @@ local function _PUI_StyleRootNavButton(btn, node, isSelected)
     btn.__puiRootNavIcon:SetSize(18, 18)
     btn.__puiRootNavIcon:SetVertexColor(1, 1, 1, disabled and 0.45 or 0.95)
     btn.__puiRootNavIcon:Show()
-    btn.__puiRootNavGlyph:Hide()
   elseif iconPath then
     btn.__puiRootNavIcon:SetTexture(iconPath)
     btn.__puiRootNavIcon:SetSize(18, 18)
     btn.__puiRootNavIcon:SetVertexColor(1, 1, 1, disabled and 0.45 or 0.95)
     btn.__puiRootNavIcon:Show()
-    btn.__puiRootNavGlyph:Hide()
   else
     btn.__puiRootNavIcon:SetTexture(nil)
     btn.__puiRootNavIcon:Hide()
-    btn.__puiRootNavGlyph:SetText(meta.navGlyph or PUI_ROOT_NAV_GLYPH_BY_KEY[node.key] or string.sub(node.label, 1, 2))
-    btn.__puiRootNavGlyph:SetTextColor(accent[1], accent[2], accent[3], disabled and 0.45 or 0.95)
-    btn.__puiRootNavGlyph:Show()
   end
 
-  local desc = meta.navDescription or meta.description or ""
+  local hasIcon = iconAtlas ~= nil or iconPath ~= nil
+  btn.__puiRootNavIconBack:SetShown(hasIcon)
+  local labelLeft = hasIcon and 46 or 12
+  local desc = meta.navDescription or ""
+  if desc == node.label then desc = "" end
   local badgeText = meta.comingSoon and "Soon" or (meta.navBadge or "")
   local badgeShown = badgeText ~= ""
 
@@ -1893,7 +1884,8 @@ local function _PUI_StyleRootNavButton(btn, node, isSelected)
   btn.__puiRootNavDescription:SetShown(desc ~= "")
 
   btn.__puiRootNavLabel:SetTextColor(text[1], text[2], text[3], disabled and 0.45 or (isSelected and text[4] or text[4] * 0.84))
-  btn.__puiRootNavDescription:SetTextColor(text[1], text[2], text[3], disabled and 0.32 or text[4] * 0.48)
+  local muted = disabled and colors.disabledText or colors.mutedText
+  btn.__puiRootNavDescription:SetTextColor(muted[1], muted[2], muted[3], muted[4])
   btn.__puiRootNavBadge:SetTextColor(accent[1], accent[2], accent[3], disabled and 0.40 or 0.78)
   btn.__puiRootNavBadge:SetText(badgeText)
   btn.__puiRootNavBadge:SetShown(badgeShown)
@@ -1908,21 +1900,26 @@ local function _PUI_StyleRootNavButton(btn, node, isSelected)
   local rightPoint = badgeShown and "LEFT" or "RIGHT"
   local rightOffset = badgeShown and -6 or -10
 
+  btn.__puiRootNavLabel:SetHeight(ns.Theme.GetOptionsFontHeight("nav", 12))
+
   if desc ~= "" then
-    btn.__puiRootNavLabel:SetPoint("TOPLEFT", btn.__puiRootNavIconBack, "TOPRIGHT", 10, 4)
+    btn.__puiRootNavLabel:SetPoint("TOPLEFT", btn, "TOPLEFT", labelLeft, -8)
     btn.__puiRootNavLabel:SetPoint("RIGHT", rightAnchor, rightPoint, rightOffset, 0)
     btn.__puiRootNavDescription:SetPoint("TOPLEFT", btn.__puiRootNavLabel, "BOTTOMLEFT", 0, -2)
     btn.__puiRootNavDescription:SetPoint("RIGHT", btn.__puiRootNavLabel, "RIGHT", 0, 0)
-    btn.__puiRootNavDescription:SetHeight(26)
+    btn.__puiRootNavDescription:SetHeight(ns.Theme.GetOptionsFontHeight("tiny", 10))
   else
-    btn.__puiRootNavLabel:SetPoint("LEFT", btn.__puiRootNavIconBack, "RIGHT", 10, 0)
+    btn.__puiRootNavLabel:SetPoint("LEFT", btn, "LEFT", labelLeft, 0)
     btn.__puiRootNavLabel:SetPoint("RIGHT", rightAnchor, rightPoint, rightOffset, 0)
     btn.__puiRootNavDescription:Hide()
   end
 end
 
 local function _PUI_GetRootNavSignature(nodes)
-  local parts = {}
+  local parts = {
+    ns.Theme.GetOptionsFontSignature("nav", 12),
+    ns.Theme.GetOptionsFontSignature("tiny", 10),
+  }
 
   for i = 1, #nodes do
     local node = nodes[i]
@@ -2266,6 +2263,15 @@ local function _PUI_RefreshRootRegistryNav(frame)
     local node = nodes[i]
     local meta = _PUI_GetRootNavMeta(node)
     local navHeight = tonumber(meta.navHeight) or 54
+    local titleHeight = ns.Theme.GetOptionsFontHeight("nav", 12)
+    local description = meta.navDescription or ""
+    if meta.navHeader then
+      navHeight = math.max(navHeight, titleHeight + 6)
+    elseif description ~= "" and description ~= node.label then
+      navHeight = math.max(navHeight, titleHeight + ns.Theme.GetOptionsFontHeight("tiny", 10) + 18)
+    else
+      navHeight = math.max(navHeight, titleHeight + 16)
+    end
     local navGap = tonumber(meta.navGap) or 5
     local btn = host.__puiButtons[i]
 
@@ -2310,7 +2316,9 @@ local function _PUI_RefreshRootRegistryNav(frame)
       local description = meta.pageDescription or meta.navDescription or meta.description or ""
       local help = meta.pageHelp or meta.helpText or meta.help or ""
 
-      if description == "" and help == "" then
+      if description == "" and help == ""
+        and self.__puiRootNavLabel:GetUnboundedStringWidth() <= self.__puiRootNavLabel:GetWidth()
+      then
         return
       end
 
