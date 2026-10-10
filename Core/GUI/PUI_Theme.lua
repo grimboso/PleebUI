@@ -267,6 +267,7 @@ function Theme.GetColors()
     .. "|" .. tostring(sdb.controlBgColor)
     .. "|" .. tostring(sdb.accentColor)
     .. "|" .. tostring(sdb.borderColor)
+    .. "|" .. tostring(sdb.controlBorderColor)
     .. "|" .. tostring(sdb.textColor)
 
   if _PUI_ThemeColorsCache and _PUI_ThemeColorsCacheSignature == signature then
@@ -286,7 +287,7 @@ function Theme.GetColors()
   ApplyColorOverride("control", "controlBgColor")
   ApplyColorOverride("accent", "accentColor")
   ApplyColorOverride("border", "borderColor")
-  ApplyColorOverride("controlBorder", "borderColor")
+  ApplyColorOverride("controlBorder", "controlBorderColor")
   ApplyColorOverride("text", "textColor")
 
   DeriveControlColors(colors)
@@ -352,11 +353,21 @@ function Theme.ApplyExpandCollapseButton(button, expanded)
   if normal then
     normal:SetAlpha(1)
     _PUI_StyleExpandCollapseTexture(normal)
+    if button.__puiExpandIconSize then
+      normal:ClearAllPoints()
+      normal:SetPoint("CENTER", button, "CENTER", 0, 0)
+      normal:SetSize(button.__puiExpandIconSize, button.__puiExpandIconSize)
+    end
   end
   local pushed = button:GetPushedTexture()
   if pushed then
     pushed:SetAlpha(1)
     _PUI_StyleExpandCollapseTexture(pushed)
+    if button.__puiExpandIconSize then
+      pushed:ClearAllPoints()
+      pushed:SetPoint("CENTER", button, "CENTER", 0, 0)
+      pushed:SetSize(button.__puiExpandIconSize, button.__puiExpandIconSize)
+    end
   end
 end
 
@@ -864,6 +875,7 @@ function Theme.ReleaseCreatedWidget(widget)
     object.__puiTreeCardHitRectSet = nil
     object.__puiTreeCardLayoutKey = nil
     object.__puiTreeButtonLayoutKey = nil
+    object.__puiExpandIconSize = nil
     object.__puiNativeTabHidden = nil
   end
 
@@ -1929,13 +1941,20 @@ local PUI_COMPACT_INLINE_WIDGET_ROW_GEOMETRY = {
   buttonWidth = 32,
 }
 
-local optionsWidgetGeometryHeight
+function Theme.GetOptionsPointerTargetSize(baseSize)
+  if Addon:GetOptionsDB().largerPointerTargets ~= true then return baseSize end
+  return math.max(baseSize, math.ceil(24 / Theme.GetOptionsUIScale()))
+end
+
+local optionsWidgetGeometrySignature
 local optionsWidgetGeometry = {}
 
 local function GetOptionsWidgetGeometry(widget)
   local fontHeight = math.max(Theme.GetOptionsFontHeight("body"), Theme.GetOptionsFontHeight("button"))
-  if optionsWidgetGeometryHeight ~= fontHeight then
-    optionsWidgetGeometryHeight = fontHeight
+  local pointerSize = Theme.GetOptionsPointerTargetSize(0)
+  local signature = fontHeight .. "|" .. pointerSize
+  if optionsWidgetGeometrySignature ~= signature then
+    optionsWidgetGeometrySignature = signature
     wipe(optionsWidgetGeometry)
   end
 
@@ -1955,13 +1974,13 @@ local function GetOptionsWidgetGeometry(widget)
   for key, value in pairs(baseGeometry) do geometry[key] = value end
 
   geometry.labelHeight = math.max(geometry.labelHeight, fontHeight)
-  geometry.controlHeight = math.max(geometry.controlHeight, fontHeight + (density == "inline" and 0 or 4))
+  geometry.controlHeight = math.max(geometry.controlHeight, fontHeight + (density == "inline" and 0 or 4), pointerSize)
   if density ~= "inline" then
     geometry.controlTop = geometry.controlTop + geometry.labelHeight - baseGeometry.labelHeight
   end
   geometry.rowHeight = geometry.controlTop + geometry.controlHeight + geometry.controlBottom
   geometry.valueWidth = math.max(geometry.valueWidth, fontHeight * 4 + 10)
-  geometry.buttonWidth = math.max(geometry.buttonWidth, fontHeight * 2 + 8)
+  geometry.buttonWidth = math.max(geometry.buttonWidth, fontHeight * 2 + 8, pointerSize)
 
   metrics.controlHeight = geometry.controlHeight
   metrics.widgetBoxHeight = geometry.rowHeight
@@ -1996,7 +2015,7 @@ function Theme.GetOptionsWidgetColumns(availableWidth)
   end
 
   local fontSize = math.max(Theme.GetOptionsFontHeight("body"), Theme.GetOptionsFontHeight("button")) - 2
-  local minimumWidth = 205 + math.max(0, fontSize - 14) * 12
+  local minimumWidth = math.max(205 + math.max(0, fontSize - 14) * 12, Theme.GetOptionsPointerTargetSize(0) * 7 + 32)
   local fittingColumns = math.floor(availableWidth / minimumWidth)
 
   return math.max(1, math.min(maxColumns, fittingColumns))
@@ -2397,7 +2416,7 @@ local function _PUI_ApplyAce3Skin(widget)
   end
 
   if widget.type == "ScrollFrame" then
-    skins.Scrollbar(widget.scrollbar or widget)
+    skins.ScrollFrame(widget)
     return
   end
 
@@ -2681,6 +2700,7 @@ function Theme.SetOptionsUIScale(value)
 
   Addon:GetOptionsDB().optionsScale = value
   Addon:ApplyOptionsUIScale()
+  Addon:RefreshOptionsTheme()
   ns.UFPreview.RefreshAuraManagerPreview()
   Addon:NotifyOptionsTreeChanged(nil, ns._PUIActiveOptionsPath)
 end
@@ -2698,6 +2718,7 @@ Theme.ColorPresets = {
       controlBgColor = { 0.000000, 0.000000, 0.000000, 1.00 },
       accentColor = { 0.000000, 1.000000, 1.000000, 1.00 },
       borderColor = { 1.000000, 1.000000, 1.000000, 1.00 },
+      controlBorderColor = { 1.000000, 1.000000, 1.000000, 1.00 },
       textColor = { 1.000000, 1.000000, 1.000000, 1.00 },
     },
   },
@@ -2709,6 +2730,7 @@ Theme.ColorPresets = {
       controlBgColor = { 0.000000, 0.000000, 0.000000, 1.00 },
       accentColor = { 1.000000, 1.000000, 0.000000, 1.00 },
       borderColor = { 1.000000, 1.000000, 0.000000, 1.00 },
+      controlBorderColor = { 1.000000, 1.000000, 0.000000, 1.00 },
       textColor = { 1.000000, 1.000000, 0.000000, 1.00 },
     },
   },
@@ -2720,6 +2742,7 @@ Theme.ColorPresets = {
       controlBgColor = { 0.007843, 0.039216, 0.062745, 1.00 },
       accentColor = { 0.337255, 0.705882, 0.913725, 1.00 },
       borderColor = { 0.941176, 0.894118, 0.258824, 1.00 },
+      controlBorderColor = { 0.941176, 0.894118, 0.258824, 1.00 },
       textColor = { 1.000000, 1.000000, 1.000000, 1.00 },
     },
   },
@@ -2731,6 +2754,7 @@ Theme.ColorPresets = {
       controlBgColor = { 0.031373, 0.023529, 0.000000, 1.00 },
       accentColor = { 0.901961, 0.623529, 0.000000, 1.00 },
       borderColor = { 0.337255, 0.705882, 0.913725, 1.00 },
+      controlBorderColor = { 0.337255, 0.705882, 0.913725, 1.00 },
       textColor = { 1.000000, 1.000000, 1.000000, 1.00 },
     },
   },
@@ -2742,6 +2766,7 @@ Theme.ColorPresets = {
       controlBgColor = { 0.035294, 0.011765, 0.027451, 1.00 },
       accentColor = { 0.800000, 0.474510, 0.654902, 1.00 },
       borderColor = { 0.835294, 0.368627, 0.000000, 1.00 },
+      controlBorderColor = { 0.835294, 0.368627, 0.000000, 1.00 },
       textColor = { 1.000000, 1.000000, 1.000000, 1.00 },
     },
   },
@@ -2757,6 +2782,7 @@ Theme.ColorPresetOrder = {
 }
 
 local COLOR_PRESET_DB_KEYS = {
+  "controlBorderColor",
   "backgroundColor",
   "controlBgColor",
   "accentColor",
@@ -2774,6 +2800,7 @@ function Theme.GetColorPresetDefinition(key)
 end
 
 local COLOR_PRESET_PREVIEW_KEYS = {
+  controlBorderColor = "controlBorder",
   backgroundColor = "background",
   controlBgColor = "control",
   accentColor = "accent",
@@ -2793,7 +2820,6 @@ function Theme.GetColorPresetPreviewColors(key)
   for dbKey, runtimeKey in pairs(COLOR_PRESET_PREVIEW_KEYS) do
     colors[runtimeKey] = _PUI_CopyColor(source[dbKey] or Theme.DefaultColors[runtimeKey])
   end
-  if source.borderColor then colors.controlBorder = _PUI_CopyColor(source.borderColor) end
   DeriveControlColors(colors)
 
   return colors
@@ -2829,6 +2855,7 @@ local function _PUI_ThemeRegistry_GetColorFallback(key)
     controlBgColor = "control",
     accentColor = "accent",
     borderColor = "border",
+    controlBorderColor = "controlBorder",
     textColor = "text",
   }
 
@@ -3167,6 +3194,16 @@ local function UIThemeOptionsProvider()
 
     layoutArgs.widgetRowBackgrounds.name = "Shaded backgrounds"
     layoutArgs.widgetRowBackgrounds.order = 4
+    layoutArgs.largerPointerTargets = {
+      type = "toggle", name = "Larger pointer targets", order = 5,
+      desc = "Make small options controls easier to click. Expands controls and spacing while keeping small icons compact.",
+      get = function() return Addon:GetOptionsDB().largerPointerTargets == true end,
+      set = function(_, enabled)
+        Addon:GetOptionsDB().largerPointerTargets = enabled == true
+        Addon:RefreshOptionsTheme()
+        Addon:NotifyOptionsTreeChanged(nil, ns._PUIActiveOptionsPath)
+      end,
+    }
 
     options.args.themeColors.order = 2
     options.args.fonts.name = "Fonts and global text (current profile)"
@@ -3310,7 +3347,12 @@ local PUI_THEME_COLOR_OPTIONS = {
   {
     key = "borderColor",
     name = "Border",
-    desc = "Outline color used throughout PleebUI.\n\nAffects: window and panel borders, widget borders, tabs and tree entries, dialogs, preview frames, Character and Inspect panels, Damage Meter frames, Unit Frame quick-settings, and Player Buff icon borders.",
+    desc = "Decorative outline color for windows, panels, tabs, tree entries, dialogs, previews, and icon borders. Interactive controls use Control border.",
+  },
+  {
+    key = "controlBorderColor",
+    name = "Control border",
+    desc = "Border color for inputs, dropdowns, sliders, buttons, and scrollbars. Separate from decorative window borders.",
   },
   {
     key = "textColor",
