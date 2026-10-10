@@ -357,7 +357,7 @@ local function RestoreNativeVisuals()
       region:SetVertexColor(texture.r, texture.g, texture.b, texture.a)
     end
     if state.mouse ~= nil and CanChangeChatLayout(region) then region:EnableMouse(state.mouse) end
-    if state.font then region:SetFont(unpack(state.font)) end
+    if state.font then ns.Theme.RestoreRuntimeFont(region, unpack(state.font)) end
     if state.textStyle then
       local style = state.textStyle
       region:SetTextColor(style[1], style[2], style[3], style[4])
@@ -1545,7 +1545,7 @@ local function _PUI_SkinTypographyFont(fontObject, area)
 
   SaveNativeVisual(fontObject)
   local fontPath, outline = _PUI_GetTypographyFont(area)
-  fontObject:SetFont(fontPath, currentSize, outline)
+  ns.Theme.SetRuntimeFont(fontObject, fontPath, currentSize, outline)
 end
 
 local function _PUI_ApplyTypographyToChatFrame(chatFrame)
@@ -2025,10 +2025,12 @@ end
   CopySearchBox:SetPoint("TOPRIGHT", -260, -34)
   CopySearchBox:SetAutoFocus(false)
   CopySearchBox:SetFontObject(GameFontHighlightSmall)
+  Theme.SetRuntimeFont(CopySearchBox, CopySearchBox:GetFont())
   CopySearchBox:SetTextInsets(6, 6, 0, 0)
 
   local searchHint = CopySearchBox:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
   searchHint:SetPoint("LEFT", 7, 0)
+  Theme.SetRuntimeFont(searchHint, searchHint:GetFont())
   searchHint:SetText("Search chat...")
   CopySearchBox:SetScript("OnTextChanged", function(self)
     searchHint:SetShown(self:GetText() == "")
@@ -2073,6 +2075,7 @@ end
 
   local copyHint = CopyFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
   copyHint:SetPoint("BOTTOMLEFT", 16, 12)
+  Theme.SetRuntimeFont(copyHint, copyHint:GetFont())
   copyHint:SetText("Press Ctrl+C to copy the selected text.")
 
   local scroll = CreateFrame("ScrollFrame", "PleebUIChatCopyScrollFrame", CopyFrame, "UIPanelScrollFrameTemplate")
@@ -2086,6 +2089,7 @@ end
   CopyEditBox:EnableMouse(true)
   CopyEditBox:SetAutoFocus(false)
   CopyEditBox:SetFontObject(ChatFontNormal)
+  Theme.SetRuntimeFont(CopyEditBox, CopyEditBox:GetFont())
   CopyEditBox:SetTextColor(1, 1, 1)
   CopyEditBox:SetWidth(540)
 
@@ -2502,9 +2506,9 @@ function ChatLinks:OpenCopyWindow(chatFrame)
 
   local frame = chatFrame or _G.DEFAULT_CHAT_FRAME
   CopySourceLines = GetChatFrameLines(frame)
-  local font, size, flags = frame:GetFont()
+  local font, size, flags = ns.Theme.GetRuntimeFont(frame)
   if canaccessallvalues(font, size, flags) and font and size then
-    CopyEditBox:SetFont(font, size, flags)
+    ns.Theme.SetRuntimeFont(CopyEditBox, font, size, flags)
   end
   CopySearchBox:SetText("")
   ChatLinks:RefreshCopyWindow()
@@ -2620,7 +2624,7 @@ local function SkinChatTab(chatFrame)
     icon:SetPoint("RIGHT", text, "LEFT", -2, 0)
   end
   local fontPath, outline = _PUI_GetTypographyFont(_PUI_GetTypographyDB().tab)
-  text:SetFont(fontPath, 12, outline)
+  ns.Theme.SetRuntimeFont(text, fontPath, 12, outline)
   text:SetWordWrap(false)
   if _PUI_IsTemporaryChatFrame(chatFrame) and canaccessvalue(chatFrame.chatType) then
     local info = ChatTypeInfo[chatFrame.chatType]
