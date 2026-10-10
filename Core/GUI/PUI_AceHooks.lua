@@ -16,6 +16,72 @@ local PUI_SELF_OWNED_WIDGET_TYPES = {
 
 local PUI_OWNED_WIDGETS = setmetatable({}, { __mode = "k" })
 
+local function HideDisabledTooltip(widget)
+  local tooltip = widget.__puiDisabledTooltip
+  if tooltip and tooltip:GetOwner() == widget.frame then tooltip:Hide() end
+  widget.__puiDisabledTooltip = nil
+end
+
+local function ShowDisabledTooltip(widget)
+  HideDisabledTooltip(widget)
+  widget:Fire("OnEnter")
+  local reason = ns.OptionsSchema.GetDisabledReason(widget:GetUserDataTable())
+  local tooltip = LibStub("AceConfigDialog-3.0").tooltip
+  if not tooltip:IsShown() or tooltip:GetOwner() ~= widget.frame then
+    tooltip = GameTooltip
+    if not tooltip:IsShown() or tooltip:GetOwner() ~= widget.frame then
+      if not reason then return end
+      tooltip:SetOwner(widget.frame, "ANCHOR_RIGHT")
+      local option = widget:GetUserData("option")
+      tooltip:SetText(type(option.name) == "string" and option.name or "Unavailable setting")
+    end
+  end
+  if reason and reason ~= "" then
+    local colors = ns.Theme.GetColors()
+    tooltip:AddLine(reason, colors.text[1], colors.text[2], colors.text[3], true)
+  end
+  tooltip:Show()
+  widget.__puiDisabledTooltip = tooltip
+end
+
+local function RefreshDisabledHover(widget)
+  local hover = widget.__puiDisabledHover
+  if not widget.__puiAceGUIOwnedByPleebUI or not widget.disabled then
+    if hover then hover:Hide() end
+    return
+  end
+  if not hover then
+    -- A separate hover surface keeps disabled inputs and buttons non-interactive.
+    hover = CreateFrame("Frame", nil, widget.frame)
+    hover:SetAllPoints(widget.frame)
+    hover:EnableMouse(true)
+    hover:EnableMouseWheel(false)
+    hover:SetScript("OnEnter", function() ShowDisabledTooltip(widget) end)
+    hover:SetScript("OnLeave", function()
+      HideDisabledTooltip(widget)
+      widget:Fire("OnLeave")
+    end)
+    hover:SetScript("OnHide", function() HideDisabledTooltip(widget) end)
+    widget.__puiDisabledHover = hover
+  end
+  hover:SetFrameLevel(widget.frame:GetFrameLevel() + 20)
+  hover:Show()
+end
+
+local function InstallDisabledHover(widget)
+  if not widget.SetDisabled then return end
+  if not widget.__puiDisabledHoverHooked then
+    widget.__puiDisabledHoverHooked = true
+    hooksecurefunc(widget, "SetDisabled", function(self)
+      if self.__puiAceGUIOwnedByPleebUI then
+        if self.type == "ColorPicker" then ns.Theme.WidgetSkins.ColorPicker(self) end
+        RefreshDisabledHover(self)
+      end
+    end)
+  end
+  RefreshDisabledHover(widget)
+end
+
 local function _PUI_IsPleebUIAceTooltipOwner(owner)
   if not owner then
     return false
@@ -60,6 +126,8 @@ local function _PUI_InstallAceGUIHooks()
     end
 
     PUI_OWNED_WIDGETS[widget] = nil
+    if widget.__puiDisabledHover then widget.__puiDisabledHover:Hide() end
+    HideDisabledTooltip(widget)
 
     widget.__puiAceGUIOwnershipSerial = (widget.__puiAceGUIOwnershipSerial or 0) + 1
     widget.__puiAceGUIOwnedByPleebUI = nil
@@ -118,6 +186,7 @@ local function _PUI_InstallAceGUIHooks()
     widget.__puiAceGUIOwnedByPleebUI = true
     widget.frame.__puiAceGUIOwnedByPleebUI = true
     PUI_OWNED_WIDGETS[widget] = true
+    InstallDisabledHover(widget)
 
     if PUI_SELF_OWNED_WIDGET_TYPES[widget.type] then
       widget.__puiCreatedWidgetInitialized = true
