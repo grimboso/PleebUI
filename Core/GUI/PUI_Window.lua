@@ -204,6 +204,7 @@ function WidgetSkins.Frame(frame)
 end
 
 function WidgetSkins.CloseButton(button)
+  ns.KeyboardNavigation.RegisterFrame(button, "button", "close")
   local colors = Theme.GetColors()
 
   button:SetNormalTexture("")
