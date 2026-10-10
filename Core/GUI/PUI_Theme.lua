@@ -208,6 +208,15 @@ local function _PUI_CopyColorWithAlpha(src, alphaMultiplier)
   }
 end
 
+local function _PUI_BlendControlColor(base, accent, amount)
+  return {
+    base[1] + (accent[1] - base[1]) * amount,
+    base[2] + (accent[2] - base[2]) * amount,
+    base[3] + (accent[3] - base[3]) * amount,
+    base[4],
+  }
+end
+
 local function _PUI_CopyColors(src)
   local out = {}
   for k, v in pairs(src) do
@@ -255,6 +264,9 @@ function Theme.GetColors()
   colors.disabledBorder = _PUI_CopyColorWithAlpha(colors.border, 0.45)
   colors.disabledControlBorder = _PUI_CopyColorWithAlpha(colors.controlBorder, 0.45)
   colors.selection = _PUI_CopyColor(colors.accent)
+  colors.hoverBorder = _PUI_BlendControlColor(colors.controlBorder, colors.accent, 0.35)
+  colors.hoverControl = _PUI_BlendControlColor(colors.control, colors.accent, 0.08)
+  colors.pressedControl = _PUI_BlendControlColor(colors.control, colors.accent, 0.16)
 
   colors.borderSize = 3
 
@@ -262,6 +274,23 @@ function Theme.GetColors()
   _PUI_ThemeColorsCacheSignature = signature
 
   return colors
+end
+
+function Theme.GetControlStateColors(disabled, hovered, pressed, active)
+  local colors = Theme.GetColors()
+  if disabled then
+    return colors.disabledControl, colors.disabledControlBorder, colors.disabledText
+  end
+  if pressed then
+    return colors.pressedControl, colors.accent, colors.text
+  end
+  if active then
+    return colors.control, colors.accent, colors.text
+  end
+  if hovered then
+    return colors.hoverControl, colors.hoverBorder, colors.text
+  end
+  return colors.control, colors.controlBorder, colors.text
 end
 
 local PUI_EXPAND_ATLAS = "ui-questtrackerbutton-secondary-expand"
