@@ -1088,7 +1088,8 @@ end
 
 function Theme.RefreshRuntimeFonts()
   for target, font in pairs(runtimeFonts) do
-    if not target.IsForbidden or not target:IsForbidden() then
+    local canAccess = target:CanBeAccessedInContext()
+    if canaccessvalue(canAccess) and canAccess then
       font.appliedFlags = RuntimeFontFlags(font.flags)
       target:SetFont(font.path, font.size, font.appliedFlags)
     end
