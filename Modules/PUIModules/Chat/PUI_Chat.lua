@@ -1248,7 +1248,7 @@ local function ChatProvider(AddonObj)
     fade.windowFadeInDuration.name = "Fade-in time (seconds)"
     fade.windowFadeOutDuration.name = "Fade-out time (seconds)"
     fade.idleDelay.name = "Inactivity time (seconds)"
-    options.childGroups = "tab"
+    options.childGroups = "tree"
     options.arg = { puiExplicit = true }
     options.args = {
       general = { type = "group", name = "General", order = 10, args = {
