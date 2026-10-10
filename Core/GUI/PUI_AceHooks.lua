@@ -127,6 +127,7 @@ local function _PUI_InstallAceGUIHooks()
     end
 
     ns.KeyboardNavigation.ReleaseWidget(widget)
+    ns.OptionsMotion.ReleaseWidget(widget)
     PUI_OWNED_WIDGETS[widget] = nil
     if widget.type == "ColorPicker" then ns.ColorControls.Release(widget) end
     if widget.__puiDisabledHover then widget.__puiDisabledHover:Hide() end
@@ -203,6 +204,7 @@ local function _PUI_InstallAceGUIHooks()
 
     ns.Theme.BeginCreatedWidgetLease(widget)
     ns.Theme.InitializeCreatedWidget(widget)
+    ns.OptionsMotion.BindGroup(widget)
     if widget.type == "DropdownGroup" and not widget.__puiGroupSelectionHooked then
       widget.__puiGroupSelectionHooked = true
       local originalOnWidthSet = widget.OnWidthSet
