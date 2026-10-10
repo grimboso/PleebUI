@@ -76,7 +76,7 @@ end
 
 function Motion.Hover(owner, texture, hovered)
   local state = GetState(texture, owner, 0)
-  local targetAlpha = hovered and 0.10 or 0
+  local targetAlpha = hovered and 0.18 or 0
   texture:Show()
   if state.target == targetAlpha then return end
 
