@@ -337,6 +337,17 @@ function Navigation.RegisterFrame(frame, kind, part, group, widget, mouseUp, act
     control = { frame = frame, serial = serial }
     controls[frame] = control
   end
+  if control.widget and control.widget ~= widget then
+    control.widget.__puiKeyboardControls[frame] = nil
+  end
+  if widget then
+    local ownedControls = widget.__puiKeyboardControls
+    if not ownedControls then
+      ownedControls = {}
+      widget.__puiKeyboardControls = ownedControls
+    end
+    ownedControls[frame] = true
+  end
   if not frame.__puiKeyboardHideHooked then
     frame.__puiKeyboardHideHooked = true
     frame:HookScript("OnHide", function(self)
@@ -376,6 +387,7 @@ function Navigation.UnregisterFrame(frame)
     current = nil
     if control.kind == "text" and frame:HasFocus() then frame:ClearFocus() end
   end
+  if control.widget then control.widget.__puiKeyboardControls[frame] = nil end
   controls[frame] = nil
   Navigation.QueueRestore()
 end
@@ -434,10 +446,12 @@ end
 
 function Navigation.ReleaseWidget(widget)
   widgets[widget] = nil
-  for frame, control in pairs(controls) do
-    if control.widget == widget then
+  local ownedControls = widget.__puiKeyboardControls
+  if ownedControls then
+    for frame in pairs(ownedControls) do
       Navigation.UnregisterFrame(frame)
     end
+    widget.__puiKeyboardControls = nil
   end
   if popup and popup.widget == widget then popup = nil end
   Navigation.QueueRestore()
