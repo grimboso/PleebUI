@@ -31,13 +31,14 @@ local function ControlKey(control)
     return table.concat(parts, "\001") .. "\002" .. tostring(key) .. "\002" .. control.part
   end
   local frame = control.frame
-  return control.part .. "\002" .. tostring(frame.uniquevalue or frame.__puiValue or frame.__puiSectionKey or frame:GetName() or frame:GetText() or control.serial)
+  return control.part .. "\002" .. tostring(frame.uniquevalue or frame.__puiValue or frame.__puiSectionKey or frame:GetName() or control.serial)
 end
 
 local function IsDisabled(control)
   local frame, widget = control.frame, control.widget
+  local kind = frame:GetObjectType()
   return (widget and widget.disabled == true) or frame.__puiDisabled == true
-    or ((frame:GetObjectType() == "Button" or frame:GetObjectType() == "CheckButton") and not frame:IsEnabled())
+    or ((kind == "Button" or kind == "CheckButton" or kind == "Slider") and not frame:IsEnabled())
     or (frame.treeline and frame.treeline.disabled == true)
 end
 
@@ -308,7 +309,7 @@ local function HookTextInput(frame)
     local control = controls[self]
     local state = activeWindow and windows[activeWindow]
     if not control or not state or not (BelongsTo(self, activeWindow) or (popup and BelongsTo(self, popup.frame)))
-      or (state.enabled and not state.enabled()) then return end
+      or InCombatLockdown() or (state.enabled and not state.enabled()) then return end
     HideFocus()
     current = control
     windows[activeWindow].active = true
