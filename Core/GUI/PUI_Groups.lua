@@ -685,10 +685,10 @@ function WidgetSkins.TreeButton(button, isSelected)
   end
 
   button.__puiTreeDescription:SetTextColor(
-    colors.text[1],
-    colors.text[2],
-    colors.text[3],
-    isSelected and colors.text[4] * 0.52 or colors.text[4] * 0.38
+    colors.mutedText[1],
+    colors.mutedText[2],
+    colors.mutedText[3],
+    colors.mutedText[4]
   )
   button.__puiTreeDescription:SetShown(description ~= "")
   button.__puiTreeCardLayoutKey = layoutKey
