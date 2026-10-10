@@ -96,7 +96,7 @@ end
 
 local function RefreshPalette()
   local db = GetPaletteDB()
-  local height = math.max(24, Theme.GetOptionsFontHeight("body") + 10)
+  local height = math.max(24, Theme.GetOptionsFontHeight("body") + 10, Theme.GetOptionsFontHeight("button") + 10)
   local width = math.max(320, height * COLOR_LIMIT + 36)
   palette:SetSize(width, height * 7 + 24)
   local colors = Theme.GetColors()
@@ -152,6 +152,7 @@ local function EnsurePalette()
   palette.actions = {}
   for index, text in ipairs({ "Copy color", "Paste color" }) do
     local button = CreateFrame("Button", nil, palette, "UIPanelButtonTemplate")
+    button:GetFontString().__puiOptionsFontOwned = true
     button:SetText(text)
     palette.actions[index] = button
   end
@@ -159,6 +160,7 @@ local function EnsurePalette()
   palette.actions[1]:SetScript("OnClick", function() copiedColor = CurrentColor(); RefreshPalette() end)
   palette.paste:SetScript("OnClick", function() ApplyPaletteColor(copiedColor); RefreshPalette() end)
   palette.favorite = CreateFrame("Button", nil, palette, "UIPanelButtonTemplate")
+  palette.favorite:GetFontString().__puiOptionsFontOwned = true
   palette.favorite:SetScript("OnClick", function()
     local favorites, color = GetPaletteDB().favorites, CurrentColor()
     for index, favorite in ipairs(favorites) do
@@ -169,6 +171,7 @@ local function EnsurePalette()
   end)
   for _, key in ipairs({ "recent", "favorites" }) do
     palette[key .. "Title"] = palette:CreateFontString(nil, "OVERLAY")
+    palette[key .. "Title"].__puiOptionsFontOwned = true
     palette[key] = {}
     for index = 1, COLOR_LIMIT do
       local button = CreateFrame("Button", nil, palette, "UIPanelButtonTemplate")
