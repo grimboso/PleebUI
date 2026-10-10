@@ -354,6 +354,17 @@ function PreviewBox.CreateZoomControl(parent, options)
   control.label = label
   control.valueText = valueText
   control:SetZoom(options.value or 1)
+  ns.KeyboardNavigation.RegisterFrame(slider, "slider", "previewZoom", nil, nil, nil, {
+    adjust = function(direction)
+      local previous = slider:GetValue()
+      local value = math_min(maximum, math_max(minimum, previous + direction * step))
+      if value == previous then return end
+      slider:SetValue(value)
+      if type(options.onValueCommitted) == "function" then
+        options.onValueCommitted(control, math_floor(slider:GetValue() + 0.5) / 100)
+      end
+    end,
+  })
 
   return control
 end
