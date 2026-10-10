@@ -457,8 +457,13 @@ local function StyleButton(button, selected)
   Theme:ApplyButton(button, selected and "primary" or "secondary")
   ns.KeyboardNavigation.RegisterFrame(button, "button", "toolbarButton")
   local text = button:GetFontString()
-  text:SetWordWrap(true)
-  text:SetWidth(math_max(1, button:GetWidth() - 16))
+  local symbol = button.__puiToolbarSymbol == true
+  local padding = symbol and 8 or 16
+  text:SetWordWrap(not symbol)
+  if symbol then
+    button:SetWidth(math_max(Theme.GetOptionsPointerTargetSize(22), math.ceil(text:GetUnboundedStringWidth()) + padding))
+  end
+  text:SetWidth(math_max(1, button:GetWidth() - padding))
   button:SetHeight(math_max(button.__puiToolbarMinHeight or TOGGLE_HEIGHT, Theme.GetOptionsPointerTargetSize(0),
     text:GetStringHeight() + 10, Theme.GetOptionsFontHeight("button") + 8))
 
@@ -1393,6 +1398,7 @@ local function AcquireMoverRow(panel, index)
   local expand = CreateToolbarButton(row, "+", 22, function()
     ToggleMoverRowExpansion(panel, row)
   end)
+  expand.__puiToolbarSymbol = true
   expand.__puiToolbarMinHeight = 22
   expand:SetHeight(22)
   row.expand = expand
