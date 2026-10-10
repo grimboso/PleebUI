@@ -8,7 +8,7 @@ local windows = setmetatable({}, { __mode = "k" })
 local current, activeWindow, popup, serial = nil, nil, nil, 0
 local restorePending
 local pendingWindows = setmetatable({}, { __mode = "k" })
-local MoveFocus, FocusControl
+local MoveFocus, FocusControl, AdoptPopup
 
 local function BelongsTo(frame, root)
   while frame do
@@ -78,6 +78,7 @@ end
 local function HideFocus()
   if not current then return end
   local frame = current.frame
+  if current.actions and current.actions.blur then current.actions.blur(frame) end
   if frame.__puiKeyboardOutline then frame.__puiKeyboardOutline:Hide() end
   if current.widget then ns.AceHooks.HideDisabledTooltip(current.widget) end
 end
@@ -168,7 +169,10 @@ local function RefreshGuide(root, state)
     guide.button:SetSize(width, height)
   end
   guide.button:SetShown(visible)
-  if guide.height ~= height then
+  if guide.height ~= height or guide.bottom ~= guide.settings.bottom then
+    guide.bottom = guide.settings.bottom
+    guide.button:ClearAllPoints()
+    guide.button:SetPoint("BOTTOMLEFT", root, "BOTTOMLEFT", 12, guide.bottom)
     guide.height = height
     guide.settings.layout(height)
   end
@@ -335,6 +339,19 @@ function Navigation.RegisterFrame(frame, kind, part, group, widget, mouseUp, act
   end
   control.kind, control.part, control.group, control.widget, control.mouseUp, control.actions = kind, part, group, widget, mouseUp, actions
   if kind == "text" then HookTextInput(frame) end
+  if kind == "dropdown" and not frame.__puiKeyboardDropdownHooked then
+    frame.__puiKeyboardDropdownHooked = true
+    frame:HookScript("OnClick", function(self)
+      local entry = controls[self]
+      local state = activeWindow and windows[activeWindow]
+      if entry and entry.kind == "dropdown" and state and not state.helpShown
+        and BelongsTo(self, activeWindow) and not InCombatLockdown()
+        and entry.widget.__puiAceGUIOwnedByPleebUI == true
+        and (not state.enabled or state.enabled()) then
+        AdoptPopup(entry)
+      end
+    end)
+  end
   return control
 end
 
@@ -470,6 +487,7 @@ FocusControl = function(control)
   elseif control.kind == "text" and not control.frame:HasFocus() then
     control.frame:SetFocus()
   end
+  if not IsDisabled(control) and control.actions and control.actions.focus then control.actions.focus(control.frame) end
   Navigation.RefreshWindows()
 end
 
@@ -581,8 +599,7 @@ local function MoveInPopup(direction)
   FocusControl(control)
 end
 
-local function OpenPopup(control)
-  Activate(control)
+AdoptPopup = function(control)
   local widget = control.widget
   local custom = control.actions and control.actions.popup
   local frame = custom and custom.frame or (widget.pullout and widget.pullout.frame or widget.dropdown)
@@ -713,7 +730,7 @@ function Navigation.HandleKey(key)
     end
   end
   if key == "ENTER" or key == "SPACE" then
-    if current.kind == "dropdown" then OpenPopup(current)
+    if current.kind == "dropdown" then Activate(current)
     elseif current.kind ~= "text" and current.kind ~= "slider" then Activate(current); Navigation.QueueRestore() end
     return true
   end
