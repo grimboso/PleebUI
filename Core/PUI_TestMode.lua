@@ -448,6 +448,7 @@ end
 local function StyleButton(button, selected)
   local Theme = ns.Theme
   Theme:ApplyButton(button, selected and "primary" or "secondary")
+  ns.KeyboardNavigation.RegisterFrame(button, "button", "toolbarButton")
 
   local colors = Theme.GetColors()
   local bg = colors.control
@@ -774,7 +775,7 @@ local function BuildEditControls(panel)
     function() return util._dimAlpha end, util.SetEditDimAlpha)
 
   local help = {
-    keyboard = "Use Tab to cycle movers, arrow keys to move them, and keys 1–9 to change the step.",
+    keyboard = "Use Tab to cycle movers, arrow keys to move them, and keys 1-9 to change the step. F6 switches between movers and toolbar controls. This is your preferred mode for /pe; /pek always opens keyboard mode.",
     nudge = "Distance moved by each arrow press, in pixels.",
     snap = "Align a mover with nearby frame edges while dragging.",
     smart = "Link supported movers so they move and arrange together.",
@@ -1139,10 +1140,8 @@ function TestMode:EnsureToolbar()
   panel:SetScript("OnSizeChanged", function(self, newWidth)
     panel.content:SetWidth(math_max(1, newWidth - 30))
   end)
-  panel:SetPropagateKeyboardInput(true)
-  panel:SetScript("OnKeyDown", function(self, key)
-    self:SetPropagateKeyboardInput(not ns.FrameUtil.HandleEditModeKeyDown(key))
-  end)
+  ns.KeyboardNavigation.BindWindow(panel, true)
+  ns.KeyboardNavigation.RegisterFrame(panel.search, "text", "moverSearch")
   panel:SetScript("OnHide", function()
     if ns.Flags.IsEditing and TestMode.active then
       Addon:SetEditMode(false)
@@ -1850,7 +1849,7 @@ end
 function TestMode:ShowToolbar()
   local panel = self:EnsureToolbar()
   panel:Show()
-  ns.FrameUtil._UpdateEditDialogKeyboardState()
+  ns.KeyboardNavigation.RefreshWindows()
   self:RebuildToolbar()
 end
 
