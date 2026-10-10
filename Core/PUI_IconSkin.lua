@@ -515,7 +515,7 @@ local function ApplyFontStringStyle(fs, opts)
       state.fontPath = fontPath
       state.fontSize = fontSize
       state.fontFlags = flags
-      fs:SetFont(fontPath, fontSize, flags)
+      ns.Theme.SetRuntimeFont(fs, fontPath, fontSize, flags)
     end
   elseif size then
     local fallbackFont = STANDARD_TEXT_FONT or "Fonts\\FRIZQT__.TTF"
@@ -526,7 +526,7 @@ local function ApplyFontStringStyle(fs, opts)
       state.fontPath = fallbackFont
       state.fontSize = fontSize
       state.fontFlags = flags
-      fs:SetFont(fallbackFont, fontSize, flags)
+      ns.Theme.SetRuntimeFont(fs, fallbackFont, fontSize, flags)
     end
   end
 
