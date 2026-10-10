@@ -110,7 +110,9 @@ local function RefreshVisualState(self)
   local textColor = disabled and colors.disabledText or colors.text
   local controlColor = disabled and colors.disabledControl or colors.control
   local borderColor = disabled and colors.disabledControlBorder or colors.controlBorder
-  local editBorder = self.editbox.__puiHovered and not disabled and colors.accent or borderColor
+  local editControl, editBorder = Theme.GetControlStateColors(
+    disabled, self.editbox.__puiHovered == true, false, self.editbox:HasFocus()
+  )
   local thumbColor = disabled and colors.disabledText or colors.accent
 
   self.label:SetTextColor(
@@ -121,7 +123,7 @@ local function RefreshVisualState(self)
   )
 
   SetControlChromeColors(self.sliderChrome, controlColor, borderColor, 1)
-  SetControlChromeColors(self.editboxChrome, controlColor, editBorder, 1)
+  SetControlChromeColors(self.editboxChrome, editControl, editBorder, 1)
 
   Pixel.SetVertexColor(self.thumb,
     thumbColor[1],
@@ -335,6 +337,15 @@ local function EditBoxOnLeave(editbox)
   RefreshVisualState(editbox.obj)
 end
 
+local function EditBoxOnFocusGained(editbox)
+  AceGUI:SetFocus(editbox.obj)
+  RefreshVisualState(editbox.obj)
+end
+
+local function EditBoxOnFocusLost(editbox)
+  RefreshVisualState(editbox.obj)
+end
+
 local methods = {
   OnAcquire = function(self)
     local metrics = Theme.GetControlMetrics()
@@ -362,6 +373,10 @@ local methods = {
     self.editbox.__puiHovered = nil
     self.slider:EnableMouseWheel(false)
     self.commitOnRelease = nil
+  end,
+
+  ClearFocus = function(self)
+    self.editbox:ClearFocus()
   end,
 
   OnWidthSet = function(self, width)
@@ -491,6 +506,8 @@ local function Constructor()
   editbox:SetScript("OnLeave", EditBoxOnLeave)
   editbox:SetScript("OnEnterPressed", EditBoxOnEnterPressed)
   editbox:SetScript("OnEscapePressed", EditBoxOnEscapePressed)
+  editbox:SetScript("OnEditFocusGained", EditBoxOnFocusGained)
+  editbox:SetScript("OnEditFocusLost", EditBoxOnFocusLost)
 
   local widget = {
     label = label,
