@@ -50,26 +50,24 @@ local function StripButtonTextures(button)
   end
 end
 
-local function ApplyButtonText(button, fallbackText, alpha)
+local function ApplyButtonText(button, fallbackText, textColor)
   local text = button:GetFontString() or fallbackText
   if not text then
     return
   end
 
-  local textColor = Theme.GetColors().text
-
   Theme.ApplyFont(text, "button")
   text:SetAlpha(1)
   text:SetDrawLayer("OVERLAY", 7)
-  text:SetTextColor(textColor[1], textColor[2], textColor[3], alpha)
+  text:SetTextColor(textColor[1], textColor[2], textColor[3], textColor[4])
   text:Show()
 end
 
 local function ApplyButtonVisual(button, fallbackText)
-  local colors = Theme.GetColors()
   local enabled = button:IsEnabled()
-  local bg = enabled and colors.control or colors.disabledControl
-  local border = enabled and colors.controlBorder or colors.disabledControlBorder
+  local bg, border, textColor = Theme.GetControlStateColors(
+    not enabled, button.__puiHovered == true, button.__puiPressed == true
+  )
 
   Theme.SetSquareBackdrop(button, {
     bg = bg,
@@ -82,7 +80,7 @@ local function ApplyButtonVisual(button, fallbackText)
   backdrop:SetFrameLevel(math.max(button:GetFrameLevel() - 1, 0))
   backdrop:Show()
 
-  ApplyButtonText(button, fallbackText, enabled and 1 or 0.68)
+  ApplyButtonText(button, fallbackText, textColor)
 end
 
 local function HookButtonState(button, fallbackText, owner)
@@ -92,17 +90,34 @@ local function HookButtonState(button, fallbackText, owner)
 
   button.__puiButtonStateHooked = true
 
-  local function Refresh(self)
+  local function Refresh(self, state, value)
     if owner and owner.__puiAceGUIOwnedByPleebUI ~= true then
       return
     end
 
+    if state then self[state] = value end
+    if state == "__puiHovered" and not value then self.__puiPressed = nil end
+    if not self:IsEnabled() or not self:IsShown() then
+      self.__puiHovered = nil
+      self.__puiPressed = nil
+    end
     ApplyButtonVisual(self, fallbackText)
   end
 
-  button:HookScript("OnShow", Refresh)
-  button:HookScript("OnEnable", Refresh)
-  button:HookScript("OnDisable", Refresh)
+  button:HookScript("OnShow", function(self) Refresh(self) end)
+  button:HookScript("OnEnable", function(self) Refresh(self) end)
+  button:HookScript("OnDisable", function(self) Refresh(self) end)
+  button:HookScript("OnHide", function(self) Refresh(self) end)
+  button:HookScript("OnEnter", function(self) Refresh(self, "__puiHovered", true) end)
+  button:HookScript("OnLeave", function(self)
+    Refresh(self, "__puiHovered", nil)
+  end)
+  button:HookScript("OnMouseDown", function(self, mouseButton)
+    if mouseButton == "LeftButton" then Refresh(self, "__puiPressed", true) end
+  end)
+  button:HookScript("OnMouseUp", function(self, mouseButton)
+    if mouseButton == "LeftButton" then Refresh(self, "__puiPressed", nil) end
+  end)
 end
 
 function WidgetSkins.UIButton(button)
@@ -181,32 +196,17 @@ local function PUI_Button_Layout(widget, width)
 end
 
 local function PUI_Button_RefreshVisualState(widget)
-  local colors = Theme.GetColors()
-  local disabled = widget.disabled == true
-  local hovered = widget.button.__puiHovered == true and not disabled
-  local pressed = widget.button.__puiPressed == true and not disabled
-  local background = disabled and colors.disabledControl or colors.control
-  local backgroundAlpha = background[4]
-  local border = disabled and colors.disabledControlBorder or colors.controlBorder
-
-  if pressed then
-    background = colors.accent
-    backgroundAlpha = background[4] * 0.32
-    border = colors.accent
-  elseif hovered then
-    background = colors.accent
-    backgroundAlpha = background[4] * 0.20
-    border = colors.accent
-  end
+  local background, border, textColor = Theme.GetControlStateColors(
+    widget.disabled == true, widget.button.__puiHovered == true, widget.button.__puiPressed == true
+  )
 
   Theme.SetSquareBackdrop(widget.button, {
-    bg = { background[1], background[2], background[3], backgroundAlpha },
+    bg = background,
     border = border,
   }, Theme.ControlBorderSize)
 
   widget.button._puiBg:SetAlpha(1)
 
-  local textColor = disabled and colors.disabledText or colors.text
   widget.text:SetTextColor(
     textColor[1],
     textColor[2],
