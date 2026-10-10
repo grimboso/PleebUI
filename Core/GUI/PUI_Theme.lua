@@ -187,6 +187,7 @@ end
 Theme.DefaultColors = Theme.DefaultColors or {
   background = { 0.12, 0.12, 0.16, 0.92 },
   control    = { 0.070, 0.070, 0.090, 0.96 },
+  controlBorder = { 0.48, 0.48, 0.52, 1.00 },
   accent     = { 0.20, 0.65, 1.00, 1.00 },
   border     = { 0.20, 0.20, 0.24, 1.00 },
   text       = { 0.96, 0.96, 0.96, 1.00 },
@@ -245,12 +246,14 @@ function Theme.GetColors()
   ApplyColorOverride("control", "controlBgColor")
   ApplyColorOverride("accent", "accentColor")
   ApplyColorOverride("border", "borderColor")
+  ApplyColorOverride("controlBorder", "borderColor")
   ApplyColorOverride("text", "textColor")
 
   colors.mutedText = _PUI_CopyColorWithAlpha(colors.text, 0.72)
   colors.disabledText = _PUI_CopyColorWithAlpha(colors.text, 0.52)
   colors.disabledControl = _PUI_CopyColorWithAlpha(colors.control, 0.45)
   colors.disabledBorder = _PUI_CopyColorWithAlpha(colors.border, 0.45)
+  colors.disabledControlBorder = _PUI_CopyColorWithAlpha(colors.controlBorder, 0.45)
   colors.selection = _PUI_CopyColor(colors.accent)
 
   colors.borderSize = 3
@@ -1098,6 +1101,8 @@ end
 
 Theme.SyncBackdropFrame = SyncBackdropFrame
 ns.Theme.EnsureBackdropFrame = EnsureBackdropFrame
+
+Theme.ControlBorderSize = 1
 
 function ns.Theme.GetEdgeSize()
   return 3
