@@ -334,7 +334,7 @@ local function ApplyMinimapClockFont(db)
     return
   end
 
-  fs:SetFont(original.font, appliedSize, original.flags)
+  ns.Theme.SetRuntimeFont(fs, original.font, appliedSize, original.flags)
   btn.__pui_clockFontAppliedSize = appliedSize
 end
 
@@ -641,7 +641,7 @@ local function ApplyClockCoordsBox(db)
     local f, s, fl = nil, nil, nil
 
     if btn and btn.__pui_clockFS and btn.__pui_clockFS.GetFont then
-      f, s, fl = btn.__pui_clockFS:GetFont()
+      f, s, fl = ns.Theme.GetRuntimeFont(btn.__pui_clockFS)
     end
 
     if (not f or not s) and _G.GameFontNormalSmall and _G.GameFontNormalSmall.GetFont then
@@ -653,7 +653,7 @@ local function ApplyClockCoordsBox(db)
       if want < 8 then want = 8 end
       if want > 20 then want = 20 end
       local appliedSize = Theme.ResolveFontSize(want, "minimap")
-      coordsFS:SetFont(f, math.floor(appliedSize + 0.5), fl)
+      ns.Theme.SetRuntimeFont(coordsFS, f, math.floor(appliedSize + 0.5), fl)
     end
   end
 
@@ -850,13 +850,13 @@ local function ApplyClockCoordsBox(db)
     box.__pui_zoneFS = zoneFS
 
     if btn and btn.__pui_clockFS then
-      local f, s, fl = btn.__pui_clockFS:GetFont()
+      local f, s, fl = ns.Theme.GetRuntimeFont(btn.__pui_clockFS)
       if f and s then
         local want = tonumber(db.zoneTextFontSize) or 14
         if want < 8 then want = 8 end
         if want > 32 then want = 32 end
         local appliedSize = Theme.ResolveFontSize(want, "minimap")
-        zoneFS:SetFont(f, math.floor(appliedSize + 0.5), fl)
+        ns.Theme.SetRuntimeFont(zoneFS, f, math.floor(appliedSize + 0.5), fl)
       end
 
       local r, g, b, a = btn.__pui_clockFS:GetTextColor()
@@ -1406,7 +1406,7 @@ function MinimapModule:RefreshFonts()
     return
   end
 
-  local fontPath, _, flags = sourceFontString:GetFont()
+  local fontPath, _, flags = ns.Theme.GetRuntimeFont(sourceFontString)
   if not fontPath then
     return
   end
@@ -1417,7 +1417,8 @@ function MinimapModule:RefreshFonts()
     if baseSize < 8 then baseSize = 8 end
     if baseSize > 20 then baseSize = 20 end
 
-    coordsFS:SetFont(
+    ns.Theme.SetRuntimeFont(
+      coordsFS,
       fontPath,
       math.floor(Theme.ResolveFontSize(baseSize, "minimap") + 0.5),
       flags or ""
@@ -1430,7 +1431,8 @@ function MinimapModule:RefreshFonts()
     if baseSize < 8 then baseSize = 8 end
     if baseSize > 32 then baseSize = 32 end
 
-    zoneFS:SetFont(
+    ns.Theme.SetRuntimeFont(
+      zoneFS,
       fontPath,
       math.floor(Theme.ResolveFontSize(baseSize, "minimap") + 0.5),
       flags or ""
