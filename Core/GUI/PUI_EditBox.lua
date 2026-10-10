@@ -49,8 +49,8 @@ function WidgetSkins.UIEditBox(edit)
   local colors = Theme.GetColors()
   Theme.SetSquareBackdrop(edit, {
     bg = colors.control,
-    border = colors.border,
-  }, math.max(Theme.GetEdgeSize(), 2))
+    border = colors.controlBorder,
+  }, Theme.ControlBorderSize)
 
   Theme.ApplyFont(edit, "body")
   edit:SetTextColor(colors.text[1], colors.text[2], colors.text[3], colors.text[4])
@@ -76,8 +76,8 @@ function WidgetSkins.EditBox(widget)
     background:SetBackdrop(nil)
     Theme.SetSquareBackdrop(background, {
       bg = colors.control,
-      border = colors.border,
-    }, math.max(Theme.GetEdgeSize(), 2))
+      border = colors.controlBorder,
+    }, Theme.ControlBorderSize)
 
     Theme.ApplyFont(edit, "body")
     edit:SetTextColor(colors.text[1], colors.text[2], colors.text[3], colors.text[4])
@@ -108,7 +108,7 @@ function WidgetSkins.EditBox(widget)
     Pixel.Height(edit, controlHeight)
 
     local bg = Theme.EnsureBackdropFrame(edit)
-    local edge = math.max(Theme.GetEdgeSize(), 2)
+    local edge = Theme.ControlBorderSize
 
     bg:SetBackdrop({
       bgFile = "Interface\\Buttons\\WHITE8x8",
@@ -117,7 +117,7 @@ function WidgetSkins.EditBox(widget)
       insets = { left = 1, right = 1, top = 1, bottom = 1 },
     })
     bg:SetBackdropColor(colors.control[1], colors.control[2], colors.control[3], colors.control[4])
-    bg:SetBackdropBorderColor(colors.border[1], colors.border[2], colors.border[3], colors.border[4])
+    bg:SetBackdropBorderColor(colors.controlBorder[1], colors.controlBorder[2], colors.controlBorder[3], colors.controlBorder[4])
 
     bg:ClearAllPoints()
     if edit.NineSlice then
@@ -213,7 +213,7 @@ local function PUI_EditBox_CreateChrome(parent)
 end
 
 local function PUI_EditBox_LayoutChrome(parent, chrome)
-  local edge = Theme.GetEdgeSize()
+  local edge = Theme.ControlBorderSize
   local border = chrome.border
 
   chrome.background:ClearAllPoints()
@@ -325,7 +325,7 @@ local function PUI_EditBox_RefreshVisualState(widget)
   local hovered = widget.editbox.__puiHovered == true
   local textColor = disabled and colors.disabledText or colors.text
   local controlColor = disabled and colors.disabledControl or colors.control
-  local borderColor = disabled and colors.disabledBorder or colors.border
+  local borderColor = disabled and colors.disabledControlBorder or colors.controlBorder
 
   if hovered and not disabled then
     borderColor = colors.accent
@@ -335,7 +335,7 @@ local function PUI_EditBox_RefreshVisualState(widget)
   PUI_EditBox_SetChromeColors(
     widget.buttonChrome,
     controlColor,
-    disabled and colors.disabledBorder or colors.border,
+    disabled and colors.disabledControlBorder or colors.controlBorder,
     1
   )
 
@@ -641,7 +641,7 @@ local function PUI_MultiLine_RefreshVisualState(widget)
   local disabled = widget.disabled == true
   local textColor = disabled and colors.disabledText or colors.text
   local controlColor = disabled and colors.disabledControl or colors.control
-  local borderColor = disabled and colors.disabledBorder or colors.border
+  local borderColor = disabled and colors.disabledControlBorder or colors.controlBorder
 
   PUI_EditBox_SetChromeColors(widget.scrollChrome, controlColor, borderColor, 1)
   PUI_EditBox_SetChromeColors(widget.buttonChrome, controlColor, borderColor, 1)
