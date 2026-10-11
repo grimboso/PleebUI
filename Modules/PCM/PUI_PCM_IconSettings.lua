@@ -211,6 +211,50 @@ function IconSettings:GetRecordForEntry(entry, create)
   return record
 end
 
+function IconSettings:GetInheritedCountVisibility(entry, inherited)
+  local resourceKey = ns.PRDSecondary:GetCooldownCountResourceKey(entry)
+  local root = GetProfileRoot(false)
+  local resourceCounts = root and root.resourceCounts
+  if resourceKey and resourceCounts and resourceCounts[resourceKey] ~= nil then
+    return resourceCounts[resourceKey]
+  end
+  return inherited
+end
+
+function IconSettings:ResolveCountVisibility(entry, inherited)
+  local record = self:GetRecordForEntry(entry, false)
+  local show = record and record.charge and record.charge.show
+  if show ~= nil then
+    return show
+  end
+  return self:GetInheritedCountVisibility(entry, inherited)
+end
+
+function IconSettings:GetResourceCountEnabled(resourceKey)
+  local entries = ns.PCMCatalog:GetEntries()
+  local found = false
+  for index = 1, #entries do
+    local entry = entries[index]
+    if entry.viewerKey and ns.PRDSecondary:GetCooldownCountResourceKey(entry) == resourceKey then
+      found = true
+      if self:ResolveCountVisibility(entry, ns.Modules.CooldownManager:GetChargeCountEnabled(entry.viewerKey)) then
+        return true
+      end
+    end
+  end
+  if found then
+    return false
+  end
+
+  local root = GetProfileRoot(false)
+  local resourceCounts = root and root.resourceCounts
+  if resourceCounts and resourceCounts[resourceKey] ~= nil then
+    return resourceCounts[resourceKey]
+  end
+  return ns.Modules.CooldownManager:GetChargeCountEnabled("EssentialCooldownViewer")
+    or ns.Modules.CooldownManager:GetChargeCountEnabled("UtilityCooldownViewer")
+end
+
 local function ResolveOwnedFont(record, role, viewerOptions, destination)
   local override = record and record[role]
   if not override then
@@ -310,7 +354,11 @@ function IconSettings:ResolveOwnedStyle(entry, viewerKey, viewerStyle)
   )
   style.appearance = record and record.appearance or nil
   style.cooldown = record and record.cooldown or nil
-  style.charge = record and record.charge or nil
+  style.charge = style.charge or {}
+  style.charge.show = self:ResolveCountVisibility(
+    entry,
+    viewerStyle.counts == nil or viewerStyle.counts.charge ~= false
+  )
   style.viewerCounts = viewerStyle.counts
   local isBuff = viewerKey == "BuffIconCooldownViewer"
   style.resolvedSwipe = self:ResolveSwipeSettings(record and record.swipe, viewerStyle.swipe, isBuff, style.resolvedSwipe)
@@ -487,6 +535,32 @@ local function PruneRecord(store, entry, record)
   end
 end
 
+function IconSettings:SetResourceCountEnabled(resourceKey, enabled)
+  local root = GetProfileRoot(true)
+  root.resourceCounts = root.resourceCounts or {}
+  root.resourceCounts[resourceKey] = enabled == true
+
+  local store = GetSpecializationStore(SETTINGS_FAMILY_COOLDOWN, false)
+  if store then
+    local entries = ns.PCMCatalog:GetEntries()
+    for index = 1, #entries do
+      local entry = entries[index]
+      if ns.PRDSecondary:GetCooldownCountResourceKey(entry) == resourceKey then
+        local record = store[entry.settingsKey]
+        if record and record.charge then
+          record.charge.show = nil
+          PruneRecord(store, entry, record)
+        end
+      end
+    end
+  end
+
+  self:InvalidateSettings()
+  ns.Modules.CooldownManager:RefreshIndividualIconSettings("EssentialCooldownViewer")
+  ns.Modules.CooldownManager:RefreshIndividualIconSettings("UtilityCooldownViewer")
+  ns.PCMPreview.Refresh()
+end
+
 function IconSettings:SetField(entry, section, field, value)
   if not entry then
     return
@@ -542,6 +616,10 @@ IconSettings.InvalidateCatalog = P:Def("IconSettings:InvalidateCatalog", IconSet
 IconSettings.InvalidateSettings = P:Def("IconSettings:InvalidateSettings", IconSettings.InvalidateSettings)
 IconSettings.GetViewerEntries = P:Def("IconSettings:GetViewerEntries", IconSettings.GetViewerEntries)
 IconSettings.GetRecordForEntry = P:Def("IconSettings:GetRecordForEntry", IconSettings.GetRecordForEntry)
+IconSettings.GetInheritedCountVisibility = P:Def("IconSettings:GetInheritedCountVisibility", IconSettings.GetInheritedCountVisibility)
+IconSettings.ResolveCountVisibility = P:Def("IconSettings:ResolveCountVisibility", IconSettings.ResolveCountVisibility)
+IconSettings.GetResourceCountEnabled = P:Def("IconSettings:GetResourceCountEnabled", IconSettings.GetResourceCountEnabled)
+IconSettings.SetResourceCountEnabled = P:Def("IconSettings:SetResourceCountEnabled", IconSettings.SetResourceCountEnabled)
 IconSettings.ResolveSwipeSettings = P:Def("IconSettings:ResolveSwipeSettings", IconSettings.ResolveSwipeSettings)
 IconSettings.ResolveOwnedStyle = P:Def("IconSettings:ResolveOwnedStyle", IconSettings.ResolveOwnedStyle)
 IconSettings.PrimeRuntimeCache = P:Def("IconSettings:PrimeRuntimeCache", IconSettings.PrimeRuntimeCache)
