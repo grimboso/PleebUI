@@ -4883,7 +4883,24 @@ do
       type = "group", name = "Feature", inline = true, order = 0,
       arg = { puiExplicit = true }, args = { enabled = args.enabled },
     }
-    args.feature.args.enabled.name = "Enable"
+    if ns.PRDSecondary:GetCooldownCountSpellIDs(resource.key) then
+      args.feature.args.enabled = {
+        type = "select",
+        name = "Show on",
+        desc = "Choose where to track this resource. Icons only and Nothing disable the resource bar.",
+        order = 1,
+        values = { ICONS = "Icons only", BAR = "Bar only", BOTH = "Both", NONE = "Nothing" },
+        sorting = { "ICONS", "BAR", "BOTH", "NONE" },
+        get = function()
+          return ns.PRDSecondary:GetResourceDisplayMode(resource.key)
+        end,
+        set = function(_, value)
+          ns.PRDSecondary:SetResourceDisplayMode(resource.key, value)
+        end,
+      }
+    else
+      args.feature.args.enabled.name = "Enable"
+    end
     args.feature.args.enabled.width, args.feature.args.enabled.relWidth = "relative", 0.5
     args.enabled = nil
     local arranged = PRD_ArrangePresentationArgs(args, "layout")
