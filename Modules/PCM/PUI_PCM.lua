@@ -1060,8 +1060,8 @@ function Cooldowns:_OnDataRestrictionsCleared()
     _PCM_QueueTransitionFlush()
   end
 
-  if self.__puiPCMCustomTrackerStartupPending then
-    self:_ReconcileCustomTrackerStartupAvailability()
+  if self.__puiPCMCustomTrackerLayoutPending then
+    self:_RefreshCustomTrackerLayout()
   end
 
   if PCMNativePolicy.ReconcilePending then
@@ -1659,7 +1659,7 @@ function Cooldowns:_PCM_RunDisableTeardown()
   PCMHooks.SetRuntimeEnabled(false)
   self.__puiPCM_EditModeOn = false
   self.__puiPCM_BlizzardEditModeRetakePending = nil
-  self.__puiPCMCustomTrackerStartupPending = nil
+  self.__puiPCMCustomTrackerLayoutPending = nil
 
   PCMTransitionFlushFrame:Hide()
   PCMTransitionState.Queued = false
@@ -1750,6 +1750,23 @@ local function _RunPCMStartupRefresh(self)
   return true
 end
 
+local function _PCM_RunViewerLayoutPass(owner)
+  ns.PCMAbilityCatalog:Invalidate("viewer-layout-pass")
+  ns.PCMAbilityCatalog:Refresh()
+  if ns.PCMAbilityCatalog:GetGeneration() == 0 then
+    return false
+  end
+
+  owner:_RefreshCustomTrackerLayout()
+  ns.PCMAbilityRuntime:RebuildLayout()
+  ns.PCMAuraRuntime:RebuildLayout()
+  ns.PCMAbilityRuntime:Flush()
+  ns.PCMAuraRuntime:Flush()
+  ns.PCMGroupManager:RequestLayout()
+  ns.PCMGroupManager:Flush()
+  return true
+end
+
 _PCM_RunInitialViewerPass = function(owner)
   if owner.__puiPCMStartupComplete == true then
     return true
@@ -1807,11 +1824,10 @@ _PCM_RunInitialViewerPass = function(owner)
     end
   end
 
-  ns.PCMAbilityCatalog:Invalidate("initial-viewer-pass")
-  ns.PCMAbilityCatalog:Refresh()
-  ns.PCMAbilityRuntime:Flush()
-  ns.PCMAuraRuntime:Flush()
-  ns.PCMGroupManager:Flush()
+  if not _PCM_RunViewerLayoutPass(owner) then
+    owner.__puiPCMStartupPending = true
+    return false
+  end
 
   if not ns.PCMAbilityRuntime:IsReady() or not ns.PCMAuraRuntime:IsReady() then
     owner.__puiPCMStartupPending = true
@@ -1827,7 +1843,6 @@ _PCM_RunInitialViewerPass = function(owner)
   end
 
   _PCM_ReconcileNativeCDM()
-  owner:_ReconcileCustomTrackerStartupAvailability()
   owner.__puiPCMStartupPending = nil
   owner.__puiPCMStartupComplete = true
   PCMRuntime:FinishInitialization()
@@ -1914,25 +1929,20 @@ function Cooldowns:OnDisable()
   self:_PCM_RunDisableTeardown()
 end
 
-function Cooldowns:_ReconcileCustomTrackerStartupAvailability()
-  if self.__puiPCMCustomTrackerStartupReconciled == true then
-    return
-  end
-
+function Cooldowns:_RefreshCustomTrackerLayout()
   if InCombatLockdown() then
-    self.__puiPCMCustomTrackerStartupPending = true
+    self.__puiPCMCustomTrackerLayoutPending = true
+    self:CooldownStackBars_RefreshAfterTalentSwap()
     return
   end
 
-  self.__puiPCMCustomTrackerStartupPending = nil
+  self.__puiPCMCustomTrackerLayoutPending = nil
 
   self:ClearSavedSpellKnownCache()
-  self:SpellBars_ReconcileAvailability()
+  self:SpellBars_Rebuild()
   self:CooldownStackBars_RefreshAfterTalentSwap()
   ns.Modules.PCM_BB.RefreshAfterTalentSwap()
   ns.PCM_RefreshCustomBarsOptionsAfterSpecializationChange()
-
-  self.__puiPCMCustomTrackerStartupReconciled = true
 end
 
 
@@ -1942,12 +1952,14 @@ function Cooldowns:_OnPlayerEnteringWorld(isInitialLogin, isReloadingUi)
     return
   end
 
-  _PCM_RunInitialViewerPass(self)
-  _PCM_CompleteRendererSettingsMigration(self)
-  self:_ReconcileCustomTrackerStartupAvailability()
-  if not isInitialLogin and not isReloadingUi then
-    ns.PCMAbilityRuntime:RefreshAfterZoneTransition()
+  if self.__puiPCMStartupComplete == true
+    and not isInitialLogin and not isReloadingUi
+  then
+    _PCM_RunViewerLayoutPass(self)
+  else
+    _PCM_RunInitialViewerPass(self)
   end
+  _PCM_CompleteRendererSettingsMigration(self)
 end
 
 function Cooldowns:_OnPlayerSpecializationChanged(_, unit)
@@ -2330,10 +2342,11 @@ end
   Cooldowns.SetModuleEnabled = P:Def('Cooldowns:SetModuleEnabled', Cooldowns.SetModuleEnabled)
   Cooldowns.IsModuleEnabledByUser = P:Def('Cooldowns:IsModuleEnabledByUser', Cooldowns.IsModuleEnabledByUser)
   _RunPCMStartupRefresh = P:Def('_RunPCMStartupRefresh', _RunPCMStartupRefresh)
+  _PCM_RunViewerLayoutPass = P:Def('_PCM_RunViewerLayoutPass', _PCM_RunViewerLayoutPass)
   _PCM_RunInitialViewerPass = P:Def('_PCM_RunInitialViewerPass', _PCM_RunInitialViewerPass)
   Cooldowns.OnEnable = P:Def('Cooldowns:OnEnable', Cooldowns.OnEnable)
   Cooldowns.OnDisable = P:Def('Cooldowns:OnDisable', Cooldowns.OnDisable)
-  Cooldowns._ReconcileCustomTrackerStartupAvailability = P:Def('Cooldowns:_ReconcileCustomTrackerStartupAvailability', Cooldowns._ReconcileCustomTrackerStartupAvailability)
+  Cooldowns._RefreshCustomTrackerLayout = P:Def('Cooldowns:_RefreshCustomTrackerLayout', Cooldowns._RefreshCustomTrackerLayout)
   Cooldowns._OnPlayerEnteringWorld = P:Def('Cooldowns:_OnPlayerEnteringWorld', Cooldowns._OnPlayerEnteringWorld)
   Cooldowns._OnPlayerSpecializationChanged = P:Def('Cooldowns:_OnPlayerSpecializationChanged', Cooldowns._OnPlayerSpecializationChanged)
   Cooldowns._OnTraitConfigUpdated = P:Def('Cooldowns:_OnTraitConfigUpdated', Cooldowns._OnTraitConfigUpdated)
