@@ -67,65 +67,93 @@ end
 local GUIDE_STEPS = {
   {
     title = "Before you start",
-    text = "Use /pui to change settings and /pe to arrange frames. /pe uses your saved Mouse or Keyboard preference; /pek opens keyboard Edit Mode for one session.\n\nThis guide explains the controls without changing your layout or input preference. Close it before trying a step in the game, then replay it from /pui > Edit Mode.\n\nEdit Mode is unavailable during combat and while Blizzard Edit Mode is open.",
+    sections = {
+      { "Two places to work", "Use /pui to change settings. Use /pe to arrange frames on your screen." },
+      { "Choose how you interact", "/pe uses your saved Mouse or Keyboard preference. /pek opens keyboard Edit Mode for one session." },
+      { "A safe place to learn", "The next pages include sample menus and movers. Try them here: they do not change your real layout or saved settings.\n\nYou can close and replay this guide from /pui > Edit Mode. Edit Mode is unavailable during combat or while Blizzard Edit Mode is open." },
+    },
   },
   {
-    mode = "mouse", title = "Mouse: navigating /pui",
-    text = "1. Open /pui and click a main category.\n\n2. Click a tab or subcategory, then the setting you want to change. Use the mouse wheel or scrollbar to reach more controls.\n\n3. Click a checkbox to toggle it. Open a dropdown and choose a value. Drag a slider, use its minus or plus buttons, or enter a number.\n\nMouse clicks clear keyboard navigation focus. Clicking a new page should not leave an old control active.",
+    mode = "mouse", title = "Mouse: navigating /pui", practice = "navigation",
+    sections = {
+      { "Choose a page", "Click a sample category on the left, then General or Text on the right." },
+      { "Try a control", "Click Show sample text to turn it on and off. Your choice only affects the practice area below." },
+      { "In your real options", "Use the mouse wheel or scrollbar to reach more settings. Mouse clicks clear keyboard navigation focus." },
+    },
   },
   {
-    mode = "keyboard", title = "Keyboard: navigating /pui",
-    text = "1. Enable Keyboard navigation in Accessibility or Edit Mode settings, then open /pui.\n\n2. Press Tab to move forward and Shift+Tab to move backward. Focus alone does not change a setting.\n\n3. In category lists, use Up/Down to browse, Left/Right to expand or collapse, and Enter to open a page. On tabs, use Left/Right to browse and Enter or Space to select.\n\n4. Press Enter or Space to activate a button, checkbox, or dropdown. Use arrow keys on a slider. In text fields, arrows move the caret and Enter commits numeric input.\n\nEscape cancels an edit or closes a dropdown first, then leaves navigation. F1 opens keyboard help.",
+    mode = "keyboard", title = "Keyboard: navigating /pui", practice = "navigation",
+    sections = {
+      { "Reach the practice menu", "Press Tab until a sample category has a focus outline. Shift+Tab moves backward." },
+      { "Browse, then select", "Use Up/Down to browse sample categories, then Enter to open one. On General and Text, use Left/Right to browse tabs and Enter or Space to select." },
+      { "Try a control", "Tab to Show sample text and press Enter or Space. Focus alone does not change a setting.\n\nIn /pui, enable Keyboard navigation to use these controls. Escape cancels an edit or leaves navigation; F1 opens keyboard help." },
+    },
   },
   {
-    mode = "mouse", title = "Mouse: select and move",
-    text = "1. Open /pe. Left-click a mover to select it and open its quick settings.\n\n2. Drag a mover to change its position. Ctrl+click adds or removes movers from the selection. Drag a selected mover to move the selection together.\n\n3. Drag empty space to box-select movers. Use the arrows or X/Y coordinate fields for precise positioning.\n\nRight-click a mover to open its module settings. Shift+right-click hides its editing handle for this session; Show all restores it. Hiding a handle does not disable the live widget.",
+    mode = "mouse", title = "Mouse: select and move", practice = "movers",
+    sections = {
+      { "Move a sample frame", "Click Player, Target, or Resources below. Drag it to another position inside the practice area." },
+      { "Move frames together", "Ctrl+click to add or remove a sample frame from the selection. Drag a selected frame to move the selected group together." },
+      { "In your real Edit Mode", "Left-click a mover opens quick settings. Right-click opens its module settings. Use arrows or X/Y fields for precise positioning. Practice here does not move live frames." },
+    },
   },
   {
-    mode = "keyboard", title = "Keyboard: select and move",
-    text = "1. Open /pek to try keyboard Edit Mode without changing your saved preference.\n\n2. Press Tab to select the next mover, or Shift+Tab for the previous mover.\n\n3. Press 1 to use a one-pixel step, then use the arrow keys to move the selected mover. Keys 1-9 choose other movement steps.\n\n4. Press F6 to switch to toolbar controls. Tab and Shift+Tab move between controls; Enter or Space activates them. Press F6 again to return to mover selection.\n\nWhen typing in a field, arrow keys edit the text rather than moving a frame. F1 opens keyboard help.",
+    mode = "keyboard", title = "Keyboard: select and move", practice = "movers",
+    sections = {
+      { "Enter mover practice", "Press F6 to switch from guide controls to the sample movers. The practice status shows which mode is active." },
+      { "Select and move", "Tab selects the next mover; Shift+Tab selects the previous one. Press 1 for a one-pixel step, then move it with the arrow keys. Try keys 2-9 for a larger step." },
+      { "Return to the guide", "Press F6 again to return to guide controls, then Tab to Next.\n\nIn the game, /pek opens keyboard Edit Mode for one session. F6 switches between real movers and toolbar controls." },
+    },
   },
   {
     title = "Snapping and readability",
-    text = "Snap to frames aligns nearby edges while dragging. Smart Snap links supported movers so they move and arrange together. Snap distance controls how close they must be.\n\nSnap to grid and Show grid are separate settings: showing a grid does not enable snapping.\n\nWith the mouse, Shift-drag detaches a mover and moves it freely. Alt+right-click disconnects Smart Snap links.\n\nIf handles are hard to read, turn off Compact movers. Adjust screen dimming in Edit Mode settings. Accessibility also contains text size, larger pointer targets, and color presets.",
+    sections = {
+      { "Align frames", "Snap to frames aligns nearby edges. Smart Snap links supported movers. Snap distance controls how close frames must be." },
+      { "Grid and free movement", "Show grid and Snap to grid are separate settings. With the mouse, Shift-drag detaches a real mover and moves it freely; Alt+right-click disconnects Smart Snap links." },
+      { "Make editing easier to see", "Turn off Compact movers for clearer labels and borders. Adjust screen dimming in Edit Mode settings. Accessibility contains text size, larger pointer targets, and color presets." },
+    },
   },
   {
-    title = "Undo and finish",
-    text = "Undo reverses the last edit; Redo reapplies it. Ctrl+Z and Ctrl+Y also work outside text fields.\n\nHistory belongs to the current Edit Mode session and clears when you leave or switch profiles. Close quick settings or help before using Escape to leave Edit Mode. Your layout changes remain saved.\n\nYou can now open Edit Mode using your saved preference, or close this guide. Replay the Mouse, Keyboard, or Both guide from /pui > Edit Mode whenever you need it.",
+    title = "Undo and finish", practice = "history",
+    sections = {
+      { "Make a change", "Drag a sample mover below, or press F6 and move it with the arrow keys." },
+      { "Undo, then redo", "Press Ctrl+Z to restore its previous position. Press Ctrl+Y to apply the move again. The Undo and Redo buttons do the same thing.\n\nMake another move after undoing: it starts a new history and clears Redo." },
+      { "Finish when you are ready", "This practice history belongs only to the guide. In real Edit Mode, history clears when you leave or switch profiles, while your saved layout remains.\n\nPress F6 to leave mover practice before using Tab to reach Open Edit Mode or Close." },
+    },
   },
 }
 
 local function RenderEditModeGuide(guide)
   local panel, Theme = guide.panel, ns.Theme
   local colors = Theme.GetColors()
+  panel.practice:StopDrag(true)
+  panel.practice.frame:Hide()
   Theme.SetSquareBackdrop(panel, { bg = colors.background, border = colors.controlBorder }, Theme.ControlBorderSize)
-  Theme.ApplyFont(panel.title, "header")
-  Theme.ApplyFont(panel.text, "body")
-  panel.title:SetTextColor(unpack(colors.text))
-  panel.text:SetTextColor(unpack(colors.text))
-  local labels
+  ns.EditModeGuidePractice.ApplyReadingFont(panel.title, "title", 26)
+  local labels, sections, exercise
   if guide.stage == "offer" then
     panel.title:SetText("Would you like an Edit Mode guide?")
-    panel.text:SetText("Learn how to navigate /pui and arrange frames in /pe. You can choose Mouse, Keyboard, or Both.\n\nThe guide does not change your layout. You can replay it later from /pui > Edit Mode.")
+    sections = {
+      { "Learn at your own pace", "Choose Mouse, Keyboard, or Both. Short instructions and sample controls let you practice /pui navigation and /pe movement." },
+      { "Your settings stay safe", "The practice area does not change your real layout. You can replay this guide from /pui > Edit Mode." },
+    }
     labels = { "Take the guide", "Skip and open Edit Mode", "Close" }
   elseif guide.stage == "choose" then
     panel.title:SetText("Choose your guide")
-    panel.text:SetText("Choose Mouse, Keyboard, or Both. This choice only selects the instructions; it does not change your saved input preference.\n\nUse Tab and Shift+Tab to reach the buttons, then Enter or Space to choose. During the guide, focus the text and use Up/Down or Page Up/Down to scroll. Escape closes the guide.")
+    sections = {
+      { "Mouse, Keyboard, or Both", "Choose the instructions you want to try. This choice does not change your saved input preference." },
+      { "Moving through the guide", "Use Tab and Shift+Tab to reach controls, then Enter or Space to activate them. Focus the reading area and use Up/Down or Page Up/Down to scroll. Escape closes the guide." },
+    }
     labels = { "Mouse", "Keyboard", "Both" }
   else
     local step = guide.steps[guide.index]
-    panel.title:SetText(string.format("%d / %d · %s", guide.index, #guide.steps, step.title))
-    panel.text:SetText(step.text)
+    panel.title:SetText(string.format("%d / %d  ·  %s", guide.index, #guide.steps, step.title))
+    sections, exercise = step.sections, step.practice
     labels = { "Back", guide.index == #guide.steps and "Open Edit Mode" or "Next", "Close" }
   end
-  local width = math.max(1, math.min(640, UIParent:GetWidth() - 40))
-  local height = math.max(1, math.min(540, UIParent:GetHeight() - 60))
-  local buttonHeight = math.max(30, Theme.GetOptionsPointerTargetSize(0), Theme.GetOptionsFontHeight("button") + 10)
-  local buttonWidth = (width - 56) / 3
-  local stacked = false
-  panel:SetSize(width, height)
-  panel.text:SetWidth(math.max(1, width - 66))
-  panel.content:SetSize(math.max(1, width - 66), math.max(1, panel.text:GetStringHeight()))
+  local width = math.max(1, math.min(820, UIParent:GetWidth() - 40))
+  local buttonHeight = math.max(36, Theme.GetOptionsPointerTargetSize(0), Theme.GetOptionsFontHeight("button") + 12)
+  local buttonWidth, stacked = (width - 56) / 3, false
   for index, button in ipairs(panel.buttons) do
     button:SetText(labels[index])
     button:SetEnabled(guide.stage ~= "steps" or index ~= 1 or guide.index > 1)
@@ -135,20 +163,52 @@ local function RenderEditModeGuide(guide)
   local footerHeight = stacked and buttonHeight * 3 + 16 or buttonHeight
   if stacked then buttonWidth = width - 40 end
   for index, button in ipairs(panel.buttons) do
-    local x = stacked and 20 or 20 + (index - 1) * (buttonWidth + 8)
-    local y = stacked and 20 + (3 - index) * (buttonHeight + 8) or 20
     button:SetSize(buttonWidth, buttonHeight)
     button:ClearAllPoints()
-    button:SetPoint("BOTTOMLEFT", panel, "BOTTOMLEFT", x, y)
+    button:SetPoint("BOTTOMLEFT", panel, "BOTTOMLEFT",
+      stacked and 20 or 20 + (index - 1) * (buttonWidth + 8),
+      stacked and 20 + (3 - index) * (buttonHeight + 8) or 20)
   end
+  Theme.WidgetSkins.UIButton(panel.close)
   panel.close:SetSize(math.max(80, panel.close:GetFontString():GetUnboundedStringWidth() + 24), buttonHeight)
   panel.close:SetShown(guide.stage == "choose")
   panel.title:ClearAllPoints()
-  panel.title:SetPoint("TOPLEFT", 20, -20)
-  panel.title:SetPoint("TOPRIGHT", panel, "TOPRIGHT", guide.stage == "choose" and -panel.close:GetWidth() - 32 or -20, -20)
+  panel.title:SetPoint("TOPLEFT", 24, -24)
+  panel.title:SetPoint("TOPRIGHT", panel, "TOPRIGHT", guide.stage == "choose" and -panel.close:GetWidth() - 36 or -24, -24)
+  local contentWidth = width - 72
+  local y = 0
+  for index, section in ipairs(sections) do
+    local row = panel.sections[index]
+    if not row then
+      row = { heading = panel.content:CreateFontString(nil, "OVERLAY"), body = panel.content:CreateFontString(nil, "OVERLAY") }
+      panel.sections[index] = row
+      for _, text in pairs(row) do text:SetJustifyH("LEFT"); text:SetWordWrap(true) end
+    end
+    for _, text in pairs(row) do text:Show(); text:SetWidth(contentWidth); text:ClearAllPoints() end
+    ns.EditModeGuidePractice.ApplyReadingFont(row.heading, "header", 22)
+    ns.EditModeGuidePractice.ApplyReadingFont(row.body, "body", 18)
+    row.heading:SetText(section[1])
+    row.heading:SetPoint("TOPLEFT", 0, -y)
+    y = y + row.heading:GetStringHeight() + 10
+    row.body:SetText(section[2])
+    row.body:SetPoint("TOPLEFT", 0, -y)
+    y = y + row.body:GetStringHeight() + 28
+  end
+  for index = #sections + 1, #panel.sections do
+    panel.sections[index].heading:Hide(); panel.sections[index].body:Hide()
+  end
+  if exercise then
+    panel.practice.frame:ClearAllPoints()
+    panel.practice.frame:SetPoint("TOPLEFT", panel.content, "TOPLEFT", 0, -y)
+    panel.practice:Show(exercise, contentWidth)
+    y = y + panel.practice.frame:GetHeight() + 16
+  end
+  panel.content:SetSize(contentWidth, math.max(1, y))
+  local desiredHeight = y + panel.title:GetStringHeight() + footerHeight + 100
+  panel:SetSize(width, math.min(UIParent:GetHeight() - 60, desiredHeight))
   panel.scroll:ClearAllPoints()
-  panel.scroll:SetPoint("TOPLEFT", panel.title, "BOTTOMLEFT", 0, -16)
-  panel.scroll:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", -42, footerHeight + 36)
+  panel.scroll:SetPoint("TOPLEFT", panel.title, "BOTTOMLEFT", 0, -24)
+  panel.scroll:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", -44, footerHeight + 36)
   panel.scroll:SetVerticalScroll(0)
   panel.scroll:UpdateScrollChildRect()
   Theme.WidgetSkins.Scrollbar(panel.scroll.ScrollBar)
@@ -188,10 +248,8 @@ function Addon:ShowEditModeGuide(offer)
     panel.scroll:SetScript("OnMouseWheel", function(_, delta) Scroll(-delta) end)
     panel.content = CreateFrame("Frame", nil, panel.scroll)
     panel.scroll:SetScrollChild(panel.content)
-    panel.text = panel.content:CreateFontString(nil, "OVERLAY")
-    panel.text:SetPoint("TOPLEFT")
-    panel.text:SetJustifyH("LEFT")
-    panel.text:SetWordWrap(true)
+    panel.sections = {}
+    panel.practice = ns.EditModeGuidePractice.Create(panel.content)
     ns.KeyboardNavigation.RegisterFrame(panel.scroll, "slider", "guideText", nil, nil, nil, {
       adjust = function(direction) Scroll(-direction) end,
     })
@@ -221,10 +279,15 @@ function Addon:ShowEditModeGuide(offer)
       panel.buttons[index] = button
     end
     guide:SetScript("OnShow", function(self) self:RegisterEvent("PLAYER_REGEN_DISABLED") end)
-    guide:SetScript("OnHide", function(self) self:UnregisterEvent("PLAYER_REGEN_DISABLED") end)
+    guide:SetScript("OnHide", function(self)
+      self:UnregisterEvent("PLAYER_REGEN_DISABLED")
+      panel.practice:StopDrag(true)
+      panel.practice.keyboardMode = false
+    end)
     guide:SetScript("OnEvent", function(self) self:Hide() end)
     table.insert(UISpecialFrames, guide:GetName())
-    ns.KeyboardNavigation.BindWindow(guide, false, function() guide:Hide() end)
+    ns.KeyboardNavigation.BindWindow(guide, false, function() guide:Hide() end, nil,
+      function(key, keyboardInput) return panel.practice:HandleKey(key, keyboardInput) end)
   end
   guide.stage, guide.steps, guide.index = offer and "offer" or "choose", nil, nil
   RenderEditModeGuide(guide)
