@@ -170,6 +170,7 @@ local DEFINITIONS = {
         colorToken = "FURY",
         max = 6,
         castCountSpellID = 228477,
+        cooldownCountSpellIDs = { 228477, 247454 },
         forceContinuous = true,
       },
       [1480] = {
@@ -423,6 +424,53 @@ local function GetResolvedDefinitionCandidates()
   end
 
   return { resolvedEntry }, specID
+end
+
+function Secondary:GetCooldownCountSpellIDs(resourceKey)
+  local candidates, specID = GetResolvedDefinitionCandidates()
+  if not candidates then return nil end
+  for index = 1, #candidates do
+    local definition = candidates[index]
+    if definition.resourceKey == resourceKey
+      and (not definition.specIDs or definition.specIDs[specID] == true)
+    then
+      return definition.cooldownCountSpellIDs
+    end
+  end
+end
+
+function Secondary:GetCooldownCountResourceKey(entry)
+  if entry.settingsFamily ~= "cooldown" or not entry.identitySpellIDs then
+    return nil
+  end
+
+  local candidates, specID = GetResolvedDefinitionCandidates()
+  if not candidates then return nil end
+  for index = 1, #candidates do
+    local definition = candidates[index]
+    local spellIDs = definition.cooldownCountSpellIDs
+    if spellIDs and (not definition.specIDs or definition.specIDs[specID] == true) then
+      for spellIndex = 1, #spellIDs do
+        for identityIndex = 1, #entry.identitySpellIDs do
+          if entry.identitySpellIDs[identityIndex] == spellIDs[spellIndex] then
+            return definition.resourceKey
+          end
+        end
+      end
+    end
+  end
+end
+
+function Secondary:GetResourceDisplayMode(resourceKey)
+  local icons = ns.PCMIconSettings:GetResourceCountEnabled(resourceKey)
+  local bar = M:IsSecondaryResourceEnabled(resourceKey)
+  if icons then return bar and "BOTH" or "ICONS" end
+  return bar and "BAR" or "NONE"
+end
+
+function Secondary:SetResourceDisplayMode(resourceKey, mode)
+  ns.PCMIconSettings:SetResourceCountEnabled(resourceKey, mode == "ICONS" or mode == "BOTH")
+  M:SetSecondaryResourceEnabled(resourceKey, mode == "BAR" or mode == "BOTH")
 end
 
 local function DefinitionContainsResourceForSpec(entry, specID)
@@ -1080,6 +1128,10 @@ function M:ResolveSecondaryType()
 end
 
 Secondary.RegisterAdapter = P:Def("RegisterAdapter", Secondary.RegisterAdapter)
+Secondary.GetCooldownCountSpellIDs = P:Def("GetCooldownCountSpellIDs", Secondary.GetCooldownCountSpellIDs)
+Secondary.GetCooldownCountResourceKey = P:Def("GetCooldownCountResourceKey", Secondary.GetCooldownCountResourceKey)
+Secondary.GetResourceDisplayMode = P:Def("GetResourceDisplayMode", Secondary.GetResourceDisplayMode)
+Secondary.SetResourceDisplayMode = P:Def("SetResourceDisplayMode", Secondary.SetResourceDisplayMode)
 Secondary.HasResourceForCurrentSpec = P:Def("HasResourceForCurrentSpec", Secondary.HasResourceForCurrentSpec)
 Secondary.GetResourceOptionsForClass = P:Def("GetResourceOptionsForClass", Secondary.GetResourceOptionsForClass)
 Secondary.GetResourceSettings = P:Def("GetResourceSettings", Secondary.GetResourceSettings)
