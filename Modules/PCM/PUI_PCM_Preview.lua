@@ -647,6 +647,9 @@ local function PCMPreview_GetAbilityCapability(entry, index)
   if entry.charges == true then
     return "CHARGE"
   end
+  if ns.PRDSecondary:GetCooldownCountResourceKey(entry) then
+    return "RESOURCE_COUNT"
+  end
   if entry.hasAura == true then
     return index % 2 == 0 and "TOTEM" or "AURA"
   end
@@ -853,7 +856,7 @@ local function PCMPreview_ConfigureViewerPanel(box, panel, definition, root)
       "cooldown",
       cooldownFont
     )
-    local effectiveChargeFont, chargeShown = PCMPreview_GetEffectiveIconText(
+    local effectiveChargeFont = PCMPreview_GetEffectiveIconText(
       entry,
       "charge",
       chargeFont
@@ -969,7 +972,7 @@ local function PCMPreview_ConfigureViewerPanel(box, panel, definition, root)
     then
       showCooldownText = record.cooldown.rechargeShow == true
     end
-    local showChargeText = chargeShown == nil and counts.charge or chargeShown
+    local showChargeText = IconSettings:ResolveCountVisibility(entry, counts.charge)
     local showKeybindText = keybindShown == nil and counts.keybind or keybindShown
     showCooldownText = effectiveSwipe.cooldownEnabled and showCooldownText
     icon.__puiPCMPreviewCooldownTextEnabled = showCooldownText
@@ -977,7 +980,7 @@ local function PCMPreview_ConfigureViewerPanel(box, panel, definition, root)
     icon.cooldownText:SetShown(showCooldownText)
     icon.chargeText:SetShown(
       showChargeText
-        and (capability == "CHARGE" or capability == "AURA" or capability == "TOTEM")
+        and (capability == "CHARGE" or capability == "RESOURCE_COUNT" or capability == "AURA" or capability == "TOTEM")
     )
     icon.keybindText:SetShown(showKeybindText)
     icon.keybindText:SetText(index <= 4 and tostring(index) or "S" .. tostring(index - 4))
