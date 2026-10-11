@@ -1088,6 +1088,7 @@ function PCMPresentation.ApplyOwnedIconStyle(parts, style, isOnGCD)
   if chargeCount == nil then
     chargeCount = counts == nil or counts.charge ~= false
   end
+  parts.chargeHolder:SetFrameLevel(parts.frame:GetFrameLevel() + (style.resourceCountSpellID and 13 or 5))
   parts.chargeText:SetShown(chargeCount == true)
 
   parts.customTexture = style.appearance and style.appearance.texture or nil
@@ -1193,7 +1194,7 @@ function PCMPresentation.ConfigureOwnedAuraLayer(parts, button, unit, style)
   )
   if isTotem then
     auraParts.applicationHolder:Hide()
-  elseif showApplications then
+  elseif showApplications and not style.resourceCountSpellID then
     AuraWidget.ConfigureApplicationCount(auraParts)
   else
     AuraWidget.DisableApplicationCount(auraParts)
