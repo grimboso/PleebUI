@@ -90,19 +90,6 @@ local function FormatCoinText(amount)
   return table.concat(parts, ", ")
 end
 
-local function GetGuildRepairAllowance()
-  local allowance = tonumber(GetGuildBankWithdrawMoney())
-  if allowance == nil then
-    return nil
-  end
-
-  return allowance
-end
-
-local function PlayRepairCoinSound()
-  PlaySound(SOUNDKIT.ITEM_REPAIR, "Master")
-end
-
 local function TrustedUnits_NormalizeName(name)
   if not canaccessvalue(name) or name == nil then
     return nil
@@ -1138,81 +1125,8 @@ local function EnsureLootFrame()
 end
 
 local MerchantFrameDriver
-local MerchantActionToken = 0
-local MerchantPendingRepair
 
-local function Merchant_ShouldSkipAutomation()
-  return IsShiftKeyDown()
-end
-
-local function Merchant_ClearRepairWatch()
-  MerchantPendingRepair = nil
-
-  if MerchantFrameDriver then
-    MerchantFrameDriver:UnregisterEvent("PLAYER_MONEY")
-    MerchantFrameDriver:UnregisterEvent("GUILDBANK_UPDATE_MONEY")
-    MerchantFrameDriver:UnregisterEvent("GUILDBANK_UPDATE_WITHDRAWMONEY")
-    MerchantFrameDriver:UnregisterEvent("UPDATE_INVENTORY_DURABILITY")
-    MerchantFrameDriver:UnregisterEvent("UNIT_INVENTORY_CHANGED")
-  end
-end
-
-local function Merchant_PrintRepairSummary(pending)
-  if not pending or pending.token ~= MerchantActionToken then
-    return
-  end
-
-  local msg
-
-  if pending.usedGuild then
-    msg = "Repaired from guild funds for " .. FormatCoinText(pending.cost) .. "."
-
-    local allowance = GetGuildRepairAllowance()
-    if allowance ~= nil then
-      if allowance < 0 then
-        msg = msg .. " Guild repair allowance: unlimited."
-      else
-        msg = msg .. " Guild repair allowance left: " .. FormatCoinText(allowance) .. "."
-      end
-    end
-  else
-    msg = "Repaired from personal funds for " .. FormatCoinText(pending.cost) .. "."
-  end
-
-  Addon:Print(msg)
-end
-
-local function Merchant_TryFinishRepairWatch()
-  local pending = MerchantPendingRepair
-  if not pending or pending.token ~= MerchantActionToken then
-    Merchant_ClearRepairWatch()
-    return
-  end
-
-  local remainingCost, canRepair = GetRepairAllCost()
-  remainingCost = tonumber(remainingCost) or 0
-
-  if canRepair and remainingCost > 0 then
-    return
-  end
-
-  Merchant_PrintRepairSummary(pending)
-  Merchant_ClearRepairWatch()
-end
-
-local function Merchant_ProcessAutoRepair(q, token)
-  if token ~= MerchantActionToken then
-    return
-  end
-
-  if q.autoRepair ~= true then
-    return
-  end
-
-  if Merchant_ShouldSkipAutomation() then
-    return
-  end
-
+local function Merchant_ProcessAutoRepair(q)
   if not CanMerchantRepair() then
     return
   end
@@ -1226,38 +1140,16 @@ local function Merchant_ProcessAutoRepair(q, token)
 
   local guildRepairAllowed = q.guildRepairFirst == true and IsInGuild() and CanGuildBankRepair()
 
+  if guildRepairAllowed then
+    RepairAllItems(true)
+  end
+  RepairAllItems()
+  PlaySound(SOUNDKIT.ITEM_REPAIR, "Master")
+
   if q.autoRepairShowSummary == true then
-    Merchant_ClearRepairWatch()
-    MerchantPendingRepair = {
-      token = token,
-      cost = repairCost,
-      usedGuild = guildRepairAllowed,
-    }
-
-    MerchantFrameDriver:RegisterEvent("PLAYER_MONEY")
-    MerchantFrameDriver:RegisterEvent("GUILDBANK_UPDATE_MONEY")
-    MerchantFrameDriver:RegisterEvent("GUILDBANK_UPDATE_WITHDRAWMONEY")
-    MerchantFrameDriver:RegisterEvent("UPDATE_INVENTORY_DURABILITY")
-    MerchantFrameDriver:RegisterUnitEvent("UNIT_INVENTORY_CHANGED", "player")
+    local suffix = guildRepairAllowed and " (guild)" or ""
+    Addon:Print("Repaired for " .. FormatCoinText(repairCost) .. suffix .. ".")
   end
-
-  RepairAllItems(guildRepairAllowed)
-  if MerchantPendingRepair then
-    Merchant_TryFinishRepairWatch()
-  end
-  PlayRepairCoinSound()
-end
-
-local function Merchant_ProcessAutoSell(q, token)
-  if token ~= MerchantActionToken then
-    return
-  end
-
-  if not q.autoSellJunk then
-    return
-  end
-
-  C_MerchantFrame.SellAllJunkItems()
 end
 
 local function EnsureMerchantDriver()
@@ -1265,46 +1157,28 @@ local function EnsureMerchantDriver()
 
   local f = CreateFrame("Frame", "PleebUI_QualityMerchant")
   MerchantFrameDriver = f
-  f:SetScript("OnEvent", function(_, event)
-    if event == "MERCHANT_CLOSED" then
-      MerchantActionToken = MerchantActionToken + 1
-      Merchant_ClearRepairWatch()
+  f:SetScript("OnEvent", function()
+    if IsShiftKeyDown() then
       return
     end
 
-    if event == "PLAYER_MONEY"
-      or event == "GUILDBANK_UPDATE_MONEY"
-      or event == "GUILDBANK_UPDATE_WITHDRAWMONEY"
-      or event == "UPDATE_INVENTORY_DURABILITY"
-      or event == "UNIT_INVENTORY_CHANGED"
-    then
-      Merchant_TryFinishRepairWatch()
-      return
-    end
-
-    if Merchant_ShouldSkipAutomation() then
-      return
-    end
-
-    MerchantActionToken = MerchantActionToken + 1
-    local token = MerchantActionToken
     local q = GetQ()
 
-    Merchant_ProcessAutoRepair(q, token)
-    Merchant_ProcessAutoSell(q, token)
+    if q.autoRepair then
+      Merchant_ProcessAutoRepair(q)
+    end
+    if q.autoSellJunk then
+      C_MerchantFrame.SellAllJunkItems()
+    end
   end)
 
   function f:RefreshState()
     local q = GetQ()
 
     self:UnregisterAllEvents()
-    Merchant_ClearRepairWatch()
 
     if q.autoRepair or q.autoSellJunk then
       self:RegisterEvent("MERCHANT_SHOW")
-      self:RegisterEvent("MERCHANT_CLOSED")
-    else
-      MerchantActionToken = MerchantActionToken + 1
     end
   end
 
