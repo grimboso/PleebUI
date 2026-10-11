@@ -129,7 +129,7 @@ function Addon:PUI_ConfirmAction(opts)
   f:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
   f:Show()
   f:Raise()
-  ns.KeyboardNavigation.HandleKey("TAB")
+  ns.KeyboardNavigation.HandleKey("TAB", true)
 end
 
 function Addon:PUI_ConfirmResetAndReload(opts)
