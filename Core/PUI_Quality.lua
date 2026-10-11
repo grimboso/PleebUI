@@ -1153,6 +1153,7 @@ local function Merchant_ClearRepairWatch()
     MerchantFrameDriver:UnregisterEvent("GUILDBANK_UPDATE_MONEY")
     MerchantFrameDriver:UnregisterEvent("GUILDBANK_UPDATE_WITHDRAWMONEY")
     MerchantFrameDriver:UnregisterEvent("UPDATE_INVENTORY_DURABILITY")
+    MerchantFrameDriver:UnregisterEvent("UNIT_INVENTORY_CHANGED")
   end
 end
 
@@ -1237,9 +1238,13 @@ local function Merchant_ProcessAutoRepair(q, token)
     MerchantFrameDriver:RegisterEvent("GUILDBANK_UPDATE_MONEY")
     MerchantFrameDriver:RegisterEvent("GUILDBANK_UPDATE_WITHDRAWMONEY")
     MerchantFrameDriver:RegisterEvent("UPDATE_INVENTORY_DURABILITY")
+    MerchantFrameDriver:RegisterUnitEvent("UNIT_INVENTORY_CHANGED", "player")
   end
 
   RepairAllItems(guildRepairAllowed)
+  if MerchantPendingRepair then
+    Merchant_TryFinishRepairWatch()
+  end
   PlayRepairCoinSound()
 end
 
@@ -1271,6 +1276,7 @@ local function EnsureMerchantDriver()
       or event == "GUILDBANK_UPDATE_MONEY"
       or event == "GUILDBANK_UPDATE_WITHDRAWMONEY"
       or event == "UPDATE_INVENTORY_DURABILITY"
+      or event == "UNIT_INVENTORY_CHANGED"
     then
       Merchant_TryFinishRepairWatch()
       return
