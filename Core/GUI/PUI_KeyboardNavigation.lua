@@ -7,8 +7,19 @@ local controls = setmetatable({}, { __mode = "k" })
 local windows = setmetatable({}, { __mode = "k" })
 local current, activeWindow, popup, serial = nil, nil, nil, 0
 local restorePending
+local restoreGeneration = 0
+local keyboardInput = false
+local events = CreateFrame("Frame")
 local pendingWindows = setmetatable({}, { __mode = "k" })
 local MoveFocus, FocusControl, AdoptPopup
+
+function Navigation.IsEnabled()
+  return ns.Addon:GetOptionsDB().keyboardNavigation ~= false
+end
+
+local function WindowNavigationEnabled(state)
+  return (state.movers or Navigation.IsEnabled()) and (not state.enabled or state.enabled())
+end
 
 local function BelongsTo(frame, root)
   while frame do
@@ -86,6 +97,27 @@ local function HideFocus()
   if current.widget then ns.AceHooks.HideDisabledTooltip(current.widget) end
 end
 
+function Navigation.ClearKeyboardFocus()
+  HideFocus()
+  current, popup = nil, nil
+  keyboardInput = false
+  restoreGeneration = restoreGeneration + 1
+  for _, state in pairs(windows) do
+    state.active, state.restoreKey = false, nil
+  end
+  Navigation.RefreshWindows()
+end
+
+function Navigation.SetEnabled(enabled)
+  ns.Addon:GetOptionsDB().keyboardNavigation = enabled == true
+  if not enabled then
+    for _, state in pairs(windows) do
+      if not state.movers then state.helpShown = false end
+    end
+  end
+  Navigation.ClearKeyboardFocus()
+end
+
 local function DrawFocus(control)
   local frame = control.frame
   local outline = frame.__puiKeyboardOutline
@@ -131,7 +163,7 @@ Scrolling
 Focus scrolls controls into view. Page Up/Down scrolls the focused control's containing area.
 
 Leaving navigation
-Escape closes a dropdown or cancels an edit first, then leaves keyboard navigation. Use the window's Close button or Escape afterward to close it.
+Escape closes a dropdown or cancels an edit first, then leaves keyboard navigation. Use the window's Close button or Escape afterward to close it. Clicking with the mouse clears navigation focus; Tab resumes it.
 
 Keyboard Edit Mode
 Tab and Shift+Tab cycle movers. Arrow keys move the selection; keys 1-9 choose the movement step. F6 switches between movers and toolbar controls. Ctrl+Z undoes; Ctrl+Y redoes outside text fields.
@@ -214,7 +246,7 @@ local function RefreshGuide(root, state)
   help:ClearAllPoints()
   help:SetPoint("BOTTOMLEFT", root, "BOTTOMLEFT", 12, guide.settings.bottom + height + 8)
   guide.overlay:Show()
-  DrawFocus(guide.helpControls[state.helpIndex])
+  if keyboardInput then DrawFocus(guide.helpControls[state.helpIndex]) end
 end
 
 function Navigation.GetGuideHeight(root)
@@ -299,7 +331,7 @@ local function HookTextInput(frame)
     local state = activeWindow and windows[activeWindow]
     if control and state and (BelongsTo(self, activeWindow) or (popup and BelongsTo(self, popup.frame)))
       and not InCombatLockdown()
-      and (not state.enabled or state.enabled()) then
+      and WindowNavigationEnabled(state) then
       Navigation.HandleKey("TAB")
     elseif tab then
       tab(self)
@@ -309,7 +341,8 @@ local function HookTextInput(frame)
     local control = controls[self]
     local state = activeWindow and windows[activeWindow]
     if not control or not state or not (BelongsTo(self, activeWindow) or (popup and BelongsTo(self, popup.frame)))
-      or InCombatLockdown() or (state.enabled and not state.enabled()) then return end
+      or InCombatLockdown() or not WindowNavigationEnabled(state) then return end
+    if not state.active then Navigation.RefreshWindows(); return end
     HideFocus()
     current = control
     windows[activeWindow].active = true
@@ -366,10 +399,10 @@ function Navigation.RegisterFrame(frame, kind, part, group, widget, mouseUp, act
     frame:HookScript("OnClick", function(self)
       local entry = controls[self]
       local state = activeWindow and windows[activeWindow]
-      if entry and entry.kind == "dropdown" and state and not state.helpShown
+      if entry and entry.kind == "dropdown" and state and state.active and not state.helpShown
         and BelongsTo(self, activeWindow) and not InCombatLockdown()
         and entry.widget.__puiAceGUIOwnedByPleebUI == true
-        and (not state.enabled or state.enabled()) then
+        and WindowNavigationEnabled(state) then
         AdoptPopup(entry)
       end
     end)
@@ -385,8 +418,8 @@ function Navigation.UnregisterFrame(frame)
     if state and state.active then state.restoreKey = ControlKey(control) end
     HideFocus()
     current = nil
-    if control.kind == "text" and frame:HasFocus() then frame:ClearFocus() end
   end
+  if control.kind == "text" and frame:HasFocus() then frame:ClearFocus() end
   if control.widget then control.widget.__puiKeyboardControls[frame] = nil end
   controls[frame] = nil
   Navigation.QueueRestore()
@@ -499,7 +532,7 @@ end
 function Navigation.FocusWidget(widget)
   local state = activeWindow and windows[activeWindow]
   if not state or not state.active or state.helpShown or InCombatLockdown()
-    or (state.enabled and not state.enabled()) then return end
+    or not WindowNavigationEnabled(state) then return end
   for _, control in ipairs(Collect(activeWindow)) do
     if control.widget == widget then
       state.restoreKey = nil
@@ -533,6 +566,9 @@ FocusControl = function(control)
   end
   if not IsDisabled(control) and control.actions and control.actions.focus then control.actions.focus(control.frame) end
   Navigation.RefreshWindows()
+  if current == control and windows[activeWindow].active and not windows[activeWindow].helpShown then
+    ScrollIntoView(control.frame)
+  end
 end
 
 MoveFocus = function(direction)
@@ -680,12 +716,14 @@ local function ScrollPage(direction)
   return false
 end
 
-function Navigation.HandleKey(key)
+function Navigation.HandleKey(key, autoFocus)
   if not activeWindow or InCombatLockdown() then return false end
+  if autoFocus and not keyboardInput then return false end
   local state = windows[activeWindow]
-  if state.enabled and not state.enabled() then return false end
+  if not WindowNavigationEnabled(state) then return false end
   local text = GetCurrentKeyBoardFocus()
   if text and not BelongsTo(text, activeWindow) and not (popup and current and current.frame == text) then return false end
+  if key == "TAB" or key == "F1" or (key == "F6" and state.movers) then keyboardInput = true end
   if key == "F1" and state.guide then Navigation.ToggleHelp(activeWindow); return true end
   if state.helpShown then
     if key == "ESCAPE" or ((key == "ENTER" or key == "SPACE") and state.helpIndex == 2) then Navigation.ToggleHelp(activeWindow)
@@ -715,6 +753,7 @@ function Navigation.HandleKey(key)
   end
   if not state.active and state.movers then return ns.FrameUtil.HandleEditModeKeyDown(key) == true end
   if key == "TAB" then
+    if not state.active and text and controls[text] then current = controls[text] end
     if popup then
       if current and current.kind == "text" then MoveInPopup(IsShiftKeyDown() and -1 or 1)
       else ClosePopup(); MoveFocus(IsShiftKeyDown() and -1 or 1) end
@@ -782,7 +821,21 @@ function Navigation.HandleKey(key)
 end
 
 function Navigation.RefreshWindows()
+  local activeState = activeWindow and windows[activeWindow]
+  if activeState and not WindowNavigationEnabled(activeState) and (current or activeState.active) then
+    HideFocus()
+    current, popup = nil, nil
+    activeState.active, activeState.restoreKey = false, nil
+    restoreGeneration = restoreGeneration + 1
+    if not Navigation.IsEnabled() then keyboardInput = false end
+  end
+  if activeState and WindowNavigationEnabled(activeState) and activeWindow:IsVisible() and not InCombatLockdown() then
+    events:RegisterEvent("GLOBAL_MOUSE_DOWN")
+  else
+    events:UnregisterEvent("GLOBAL_MOUSE_DOWN")
+  end
   for root, state in pairs(windows) do
+    if not WindowNavigationEnabled(state) then state.helpShown = false end
     local shown = root:IsVisible() and (root == activeWindow) and not InCombatLockdown()
     local text = GetCurrentKeyBoardFocus()
     RefreshGuide(root, state)
@@ -791,16 +844,13 @@ function Navigation.RefreshWindows()
     state.receiver:SetShown(shown and (state.helpShown or not (text and (BelongsTo(text, root)
       or (popup and BelongsTo(text, popup.frame)))))
       and not (current and current.widget and current.widget.waitingForKey == true)
-      and (not state.enabled or state.enabled()))
+      and WindowNavigationEnabled(state))
   end
-  local state = activeWindow and windows[activeWindow]
-  if current and state and state.active and not state.helpShown and not InCombatLockdown()
-    and current.frame:IsVisible() then ScrollIntoView(current.frame) end
 end
 
 function Navigation.ActivateWindow(root)
   local state = windows[root]
-  if not state or not root:IsVisible() or (state.enabled and not state.enabled()) then return end
+  if not state or not root:IsVisible() then return end
   if activeWindow and activeWindow ~= root then
     state.previousWindow = activeWindow
     if current then windows[activeWindow].restoreKey = ControlKey(current) end
@@ -842,7 +892,7 @@ function Navigation.BindWindow(root, movers, cancel, enabled)
   root:HookScript("OnHide", function()
     if activeWindow == root then
       HideFocus()
-      current, popup, state.active = nil, nil, false
+      current, popup, state.active, state.restoreKey = nil, nil, false, nil
       local previous = state.previousWindow
       activeWindow = previous and previous:IsVisible() and previous or nil
       state.previousWindow = nil
@@ -856,13 +906,17 @@ function Navigation.BindWindow(root, movers, cancel, enabled)
 end
 
 function Navigation.QueueRestore()
+  local state = activeWindow and windows[activeWindow]
+  if not state or not state.active or not WindowNavigationEnabled(state) then return end
   if restorePending then return end
   restorePending = true
+  local generation = restoreGeneration
   C_Timer.After(0, function()
     restorePending = nil
+    if generation ~= restoreGeneration then return end
     local state = activeWindow and windows[activeWindow]
     if not state or not state.active or state.helpShown or not activeWindow:IsVisible() or InCombatLockdown()
-      or (state.enabled and not state.enabled()) then return end
+      or not WindowNavigationEnabled(state) then return end
     local key = state.restoreKey or (current and ControlKey(current))
     local list = Collect(activeWindow)
     for _, control in ipairs(list) do
@@ -879,16 +933,20 @@ function Navigation.QueueRestore()
   end)
 end
 
-local events = CreateFrame("Frame")
 events:RegisterEvent("PLAYER_REGEN_DISABLED")
 events:RegisterEvent("PLAYER_REGEN_ENABLED")
 events:SetScript("OnEvent", function(_, event)
-  if event == "PLAYER_REGEN_DISABLED" then
+  if event == "GLOBAL_MOUSE_DOWN" then
+    Navigation.ClearKeyboardFocus()
+  elseif event == "PLAYER_REGEN_DISABLED" then
+    events:UnregisterEvent("GLOBAL_MOUSE_DOWN")
+    keyboardInput = false
+    restoreGeneration = restoreGeneration + 1
     HideFocus()
     current, popup = nil, nil
     for root, state in pairs(windows) do
       state.receiver:Hide()
-      state.active, state.helpShown = false, false
+      state.active, state.helpShown, state.restoreKey = false, false, nil
       RefreshGuide(root, state)
     end
   else
