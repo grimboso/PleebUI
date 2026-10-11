@@ -4880,14 +4880,14 @@ do
     if args.behaviorGroup then args.behaviorGroup.order = 50 end
     args.cueGroup.name = "Cues"
     args.feature = {
-      type = "group", name = "Feature", inline = true, order = 0,
+      type = "group", name = resource.name, inline = true, order = 0,
       arg = { puiExplicit = true }, args = { enabled = args.enabled },
     }
     if ns.PRDSecondary:GetCooldownCountSpellIDs(resource.key) then
       args.feature.args.enabled = {
         type = "select",
-        name = "Show on",
-        desc = "Choose where to track this resource. Icons only and Nothing disable the resource bar.",
+        name = "Soul Fragment display",
+        desc = "Track Soul Fragments on the Soul Cleave and Spirit Bomb icons, the PRD bar, both, or neither.",
         order = 1,
         values = { ICONS = "Icons only", BAR = "Bar only", BOTH = "Both", NONE = "Nothing" },
         sorting = { "ICONS", "BAR", "BOTH", "NONE" },
@@ -4957,7 +4957,6 @@ do
         }
       end
       local args = PRD_BuildResourceLayoutArgs(state, resources[1])
-      args.header = { type = "header", name = resources[1].name, order = 0 }
       args.shared = shared
       return args
     end
@@ -4976,6 +4975,7 @@ do
     local provider = {}
 
     function provider:GetOptions()
+      local resources = ns.PRDSecondary:GetResourceOptionsForClass(PLAYER_CLASS)
       local options = {
         type = "group",
         name = "Personal Resource Display",
@@ -4995,7 +4995,7 @@ do
           },
           secondary = {
             type = "group",
-            name = "Resources & tracked effects",
+            name = #resources == 1 and resources[1].name or "Resources & tracked effects",
             order = 3,
             childGroups = "tree",
             hidden = function()
