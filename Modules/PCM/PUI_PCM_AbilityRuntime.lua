@@ -49,7 +49,8 @@ local STATE_EQUIPMENT = 0x040
 local STATE_ITEM = 0x080
 local STATE_KEYBIND = 0x100
 local STATE_GCD_ONLY = 0x200
-local STATE_ALL = 0x1FF
+local STATE_DISPLAY_COUNT = 0x400
+local STATE_ALL = 0x5FF
 local STATE_COOLDOWN_UPDATE = bit_bor(STATE_COOLDOWN, STATE_GCD_ONLY)
 
 local APPEARANCE_STYLE = 0x01
@@ -112,6 +113,7 @@ end
 
 buckets.cooldown = CreateBucket(STATE_COOLDOWN)
 buckets.charge = CreateBucket(STATE_CHARGE)
+buckets.displayCount = CreateBucket(STATE_DISPLAY_COUNT)
 buckets.usable = CreateBucket(STATE_USABLE)
 buckets.range = CreateBucket(STATE_RANGE)
 buckets.proc = CreateBucket(STATE_PROC)
@@ -526,7 +528,7 @@ local function RefreshRuntimeSpellIdentity(record, refreshKeybind)
   MarkRecordDirty(
     record,
     bit_bor(DIRTY_STATE, DIRTY_APPEARANCE),
-    bit_bor(STATE_COOLDOWN, STATE_CHARGE, STATE_USABLE, STATE_RANGE, STATE_PROC),
+    bit_bor(STATE_COOLDOWN, STATE_CHARGE, STATE_DISPLAY_COUNT, STATE_USABLE, STATE_RANGE, STATE_PROC),
     appearanceMask
   )
   return true
@@ -658,6 +660,7 @@ local function ConfigureRecordBuckets(record)
   AssignRuntimeSpellIDs(record)
   if entry.entryKind == "spell" then
     AddBucketRecord(buckets.cooldown, record)
+    AddBucketRecord(buckets.displayCount, record)
     AddBucketRecord(buckets.usable, record)
     AddBucketRecord(buckets.proc, record)
     AddBucketRecord(buckets.keybind, record)
@@ -811,15 +814,24 @@ local function RefreshChargeState(record)
   local chargeSpellID = record.runtimeChargeSpellID
   if not chargeSpellID then
     PCMPresentation.SetChargeDuration(record.parts, nil)
-    PCMPresentation.SetDisplayCount(record.parts, nil)
     return
   end
 
   local duration = C_Spell.GetSpellChargeDuration(chargeSpellID)
   PCMPresentation.SetChargeDuration(record.parts, duration)
+end
 
-  local displayCount = C_Spell.GetSpellDisplayCount(chargeSpellID)
-  PCMPresentation.SetDisplayCount(record.parts, displayCount)
+local function RefreshDisplayCount(record)
+  local spellID = record.runtimeSpellID
+  if record.entry.charges == true then
+    spellID = record.runtimeChargeSpellID
+  end
+  if not spellID then
+    PCMPresentation.SetDisplayCount(record.parts, nil)
+    return
+  end
+
+  PCMPresentation.SetDisplayCount(record.parts, C_Spell.GetSpellDisplayCount(spellID))
 end
 
 local function RefreshUsableState(record)
@@ -1110,6 +1122,12 @@ local function RefreshRecordState(record, stateMask)
   end
   if HasMask(stateMask, STATE_CHARGE) and entry.charges == true then
     RefreshChargeState(record)
+  end
+  if entry.entryKind == "spell"
+    and (HasMask(stateMask, STATE_DISPLAY_COUNT)
+      or entry.charges == true and HasMask(stateMask, STATE_CHARGE))
+  then
+    RefreshDisplayCount(record)
   end
   if HasMask(stateMask, STATE_USABLE) and entry.entryKind == "spell" then
     RefreshUsableState(record)
@@ -1515,7 +1533,9 @@ local function WantsEvent(event)
     return buckets.spellAppearance.count > 0
   elseif event == "SPELL_UPDATE_COOLDOWN" then
     return buckets.cooldown.count > 0 or buckets.item.count > 0
-  elseif event == "SPELL_UPDATE_USES" or event == "SPELL_UPDATE_CHARGES" then
+  elseif event == "SPELL_UPDATE_USES" then
+    return buckets.displayCount.count > 0
+  elseif event == "SPELL_UPDATE_CHARGES" then
     return buckets.charge.count > 0
   elseif event == "SPELL_UPDATE_ICON" then
     return buckets.spellAppearance.count > 0
@@ -1989,6 +2009,7 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1, arg2, arg3, arg4, arg5)
     MarkCooldownEventBucket("cooldown", STATE_COOLDOWN, arg1, arg2, arg4)
     MarkCooldownEventBucket("charge", STATE_CHARGE, arg1, arg2)
   elseif event == "SPELL_UPDATE_USES" then
+    MarkCooldownEventBucket("displayCount", STATE_DISPLAY_COUNT, arg1, arg2)
     MarkCooldownEventBucket("charge", STATE_CHARGE, arg1, arg2)
   elseif event == "SPELL_UPDATE_CHARGES" then
     MarkBucket("charge", DIRTY_STATE, STATE_CHARGE)
@@ -2023,6 +2044,7 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1, arg2, arg3, arg4, arg5)
     RefreshTotemBindings()
     MarkBucket("cooldown", DIRTY_STATE, STATE_COOLDOWN)
     MarkBucket("charge", DIRTY_STATE, STATE_CHARGE)
+    MarkBucket("displayCount", DIRTY_STATE, STATE_DISPLAY_COUNT)
     MarkBucket("usable", DIRTY_STATE, STATE_USABLE)
     MarkBucket("range", DIRTY_STATE, STATE_RANGE)
     MarkBucket("proc", DIRTY_STATE, STATE_PROC)
@@ -2058,6 +2080,8 @@ P.RefreshSpellCooldown = RefreshSpellCooldown
 RefreshSpellCooldown = P:SecDef("AbilityRuntime.RefreshSpellCooldown", P, "RefreshSpellCooldown")
 P.RefreshChargeState = RefreshChargeState
 RefreshChargeState = P:SecDef("AbilityRuntime.RefreshChargeState", P, "RefreshChargeState")
+P.RefreshDisplayCount = RefreshDisplayCount
+RefreshDisplayCount = P:SecDef("AbilityRuntime.RefreshDisplayCount", P, "RefreshDisplayCount")
 P.RefreshRangeState = RefreshRangeState
 RefreshRangeState = P:SecDef("AbilityRuntime.RefreshRangeState", P, "RefreshRangeState")
 P.RefreshStateAppearance = RefreshStateAppearance
