@@ -3067,13 +3067,10 @@ local function PresetTextContrast(preview)
     / (math.min(text, background) + 0.05)
 end
 
-local function UIThemeOptionsProvider()
+local function AccessibilityOptionsProvider()
   local provider = {}
 
   function provider:GetOptions()
-    local colorOptions = ThemeColorsProvider():GetOptions()
-    local fontOptions = ThemeFontsProvider():GetOptions()
-
     local presetValues = {}
     for i = 1, #Theme.ColorPresetOrder do
       local key = Theme.ColorPresetOrder[i]
@@ -3081,29 +3078,12 @@ local function UIThemeOptionsProvider()
     end
 
     local options = {
-      type = "group",
-      name = "UI Theme",
-      order = 15,
+      type = "group", name = "Accessibility", childGroups = "tab", order = 16,
       args = {
-        themeColors = {
-          type = "group",
-          name = colorOptions.name or "Colors",
-          order = 1,
-          inline = true,
-          args = _PUI_ThemeRegistry_CopyArgsWithoutHeader(colorOptions.args),
-        },
-        fonts = {
-          type = "group",
-          name = fontOptions.name or "Fonts",
-          order = 2,
-          inline = true,
-          args = _PUI_ThemeRegistry_CopyArgsWithoutHeader(fontOptions.args),
-        },
         combatReadability = {
           type = "group",
           name = "Combat readability",
-          order = 3,
-          inline = true,
+          order = 2,
           args = {
             description = {
               type = "description",
@@ -3153,6 +3133,139 @@ local function UIThemeOptionsProvider()
               end,
             },
           },
+        },
+        controls = {
+          type = "group", name = "Controls and motion", order = 3,
+          args = {
+            keyboardNavigation = {
+              type = "toggle", name = "Keyboard navigation", order = 1,
+              desc = "Use Tab, arrow keys, and Enter to navigate options and dialogs. Mouse clicks clear navigation focus. Keyboard Edit Mode keeps its own preference.",
+              get = ns.KeyboardNavigation.IsEnabled,
+              set = function(_, enabled) ns.KeyboardNavigation.SetEnabled(enabled) end,
+            },
+            keyboardMovement = {
+              type = "toggle", name = "Keyboard movement in Edit Mode", order = 2,
+              desc = "Prefer keyboard movement when opening Edit Mode with /pe. Use /pek to open keyboard Edit Mode for one session.",
+              get = function() return ns.FrameUtil._GetEditModeDB().keyboardMoveEnabled == true end,
+              set = function(_, enabled) ns.FrameUtil.SetKeyboardMovementEnabled(enabled) end,
+            },
+            help = {
+              type = "execute", name = "Keyboard help", order = 3,
+              func = function() ns.KeyboardNavigation.ToggleHelp(Addon._OptionsWindow) end,
+            },
+          },
+        },
+      },
+    }
+    options.args.colors = {
+      type = "group",
+      name = "Color presets",
+      order = 1,
+      args = {
+        description = {
+          type = "description",
+          name = "Preview a color palette, then apply it. The selected colors affect the current profile.",
+          order = 1,
+          width = "full",
+        },
+        selected = {
+          type = "select",
+          name = "Color preset",
+          order = 2,
+          values = presetValues,
+          get = function()
+            return selectedAccessibilityPreset
+          end,
+          set = function(_, key)
+            selectedAccessibilityPreset = key
+            LibStub("AceConfigRegistry-3.0"):NotifyChange(ADDON_NAME)
+          end,
+        },
+        sample = {
+          type = "description",
+          dialogControl = "PUI_PalettePreview",
+          name = function() return selectedAccessibilityPreset end,
+          order = 3,
+          width = "full",
+        },
+        contrast = {
+          type = "description",
+          name = function()
+            local definition = Theme.GetColorPresetDefinition(selectedAccessibilityPreset)
+            local preview = Theme.GetColorPresetPreviewColors(selectedAccessibilityPreset)
+            return string.format("%s. Text/background contrast: %.2f:1",
+              definition.description, PresetTextContrast(preview))
+          end,
+          order = 4,
+          width = "full",
+        },
+        apply = {
+          type = "execute",
+          name = "Apply selected preset",
+          order = 7,
+          func = function()
+            Theme.ApplyColorPreset(selectedAccessibilityPreset)
+          end,
+        },
+        guidance = {
+          type = "description",
+          name = "WCAG AA uses 4.5:1 for normal text and 3:1 for large text. The displayed ratio measures the preset text and background colors only; inspect the actual controls as well.",
+          order = 8,
+          width = "full",
+        },
+      },
+    }
+
+    local controls = options.args.controls.args
+    controls.largerPointerTargets = {
+      type = "toggle", name = "Larger pointer targets", order = 5,
+      desc = "Make small options controls easier to click. Expands controls and spacing while keeping small icons compact.",
+      get = function() return Addon:GetOptionsDB().largerPointerTargets == true end,
+      set = function(_, enabled)
+        Addon:GetOptionsDB().largerPointerTargets = enabled == true
+        Addon:RefreshOptionsTheme()
+        Addon:NotifyOptionsTreeChanged(nil, ns._PUIActiveOptionsPath)
+      end,
+    }
+
+    controls.animateOptions = {
+      type = "toggle", name = "Animate options", order = 6,
+      desc = "Fade in pages and categories, and soften navigation highlights. Turn off for instant transitions.",
+      get = ns.OptionsMotion.IsEnabled,
+      set = function(_, enabled) ns.OptionsMotion.SetEnabled(enabled) end,
+    }
+
+    return options
+  end
+
+  return provider
+end
+
+local function UIThemeOptionsProvider()
+  local provider = {}
+
+  function provider:GetOptions()
+    local colorOptions = ThemeColorsProvider():GetOptions()
+    local fontOptions = ThemeFontsProvider():GetOptions()
+
+    local options = {
+      type = "group",
+      name = "UI Theme",
+      order = 15,
+      args = {
+        themeColors = {
+          type = "group",
+          name = colorOptions.name or "Colors",
+          order = 1,
+          inline = true,
+          args = _PUI_ThemeRegistry_CopyArgsWithoutHeader(colorOptions.args),
+        },
+        fonts = {
+          type = "group",
+          name = fontOptions.name or "Fonts",
+          order = 2,
+          inline = true,
+          args = _PUI_ThemeRegistry_CopyArgsWithoutHeader(fontOptions.args),
         },
         optionsLayout = {
           type = "group",
@@ -3248,88 +3361,9 @@ local function UIThemeOptionsProvider()
 
     layoutArgs.widgetRowBackgrounds.name = "Shaded backgrounds"
     layoutArgs.widgetRowBackgrounds.order = 4
-    layoutArgs.largerPointerTargets = {
-      type = "toggle", name = "Larger pointer targets", order = 5,
-      desc = "Make small options controls easier to click. Expands controls and spacing while keeping small icons compact.",
-      get = function() return Addon:GetOptionsDB().largerPointerTargets == true end,
-      set = function(_, enabled)
-        Addon:GetOptionsDB().largerPointerTargets = enabled == true
-        Addon:RefreshOptionsTheme()
-        Addon:NotifyOptionsTreeChanged(nil, ns._PUIActiveOptionsPath)
-      end,
-    }
-
-    layoutArgs.animateOptions = {
-      type = "toggle", name = "Animate options", order = 6,
-      desc = "Fade in pages and categories, and soften navigation highlights. Turn off for instant transitions.",
-      get = ns.OptionsMotion.IsEnabled,
-      set = function(_, enabled) ns.OptionsMotion.SetEnabled(enabled) end,
-    }
-
     options.args.themeColors.order = 2
     options.args.fonts.name = "Fonts and global text (current profile)"
     options.args.fonts.order = 3
-    options.args.combatReadability.order = 4
-
-    options.args.accessibilityPresets = {
-      type = "group",
-      name = "Accessibility presets (current profile)",
-      order = 1,
-      inline = true,
-      args = {
-        description = {
-          type = "description",
-          name = "Preview a color palette, then apply it. The selected colors affect the current profile.",
-          order = 1,
-          width = "full",
-        },
-        selected = {
-          type = "select",
-          name = "Color preset",
-          order = 2,
-          values = presetValues,
-          get = function()
-            return selectedAccessibilityPreset
-          end,
-          set = function(_, key)
-            selectedAccessibilityPreset = key
-            LibStub("AceConfigRegistry-3.0"):NotifyChange(ADDON_NAME)
-          end,
-        },
-        sample = {
-          type = "description",
-          dialogControl = "PUI_PalettePreview",
-          name = function() return selectedAccessibilityPreset end,
-          order = 3,
-          width = "full",
-        },
-        contrast = {
-          type = "description",
-          name = function()
-            local definition = Theme.GetColorPresetDefinition(selectedAccessibilityPreset)
-            local preview = Theme.GetColorPresetPreviewColors(selectedAccessibilityPreset)
-            return string.format("%s. Text/background contrast: %.2f:1",
-              definition.description, PresetTextContrast(preview))
-          end,
-          order = 4,
-          width = "full",
-        },
-        apply = {
-          type = "execute",
-          name = "Apply selected preset",
-          order = 7,
-          func = function()
-            Theme.ApplyColorPreset(selectedAccessibilityPreset)
-          end,
-        },
-        guidance = {
-          type = "description",
-          name = "WCAG AA uses 4.5:1 for normal text and 3:1 for large text. The displayed ratio measures the preset text and background colors only; inspect the actual controls as well.",
-          order = 8,
-          width = "full",
-        },
-      },
-    }
 
     local sections = options.args
     local fonts = sections.fonts.args
@@ -3409,14 +3443,8 @@ local function UIThemeOptionsProvider()
     window.optionsUIScale.name = "Scale"
     sections.themeColors.name, sections.themeColors.order = "Colors", 20
     sections.fonts.name, sections.fonts.order = "Global text", 30
-    sections.accessibilityPresets.name = "Color presets"
-    sections.accessibilityPresets.order, sections.combatReadability.order = 10, 20
     options.childGroups = "tab"
     options.args = {
-      general = { type = "group", name = "General", order = 10, args = {
-        accessibilityPresets = sections.accessibilityPresets,
-        combatReadability = sections.combatReadability,
-      } },
       layout = sections.optionsLayout,
       text = { type = "group", name = "Text", order = 30, args = {
         global = sections.fonts,
@@ -3824,3 +3852,9 @@ Addon:RegisterOptionsSection("UITheme", UIThemeOptionsProvider, 15, "UI Theme", 
   preview = false,
 })
 
+Addon:RegisterOptionsSection("Accessibility", AccessibilityOptionsProvider, 16, "Accessibility", nil, {
+  preview = false,
+  navSection = "General",
+  navDescription = "Color presets, readability, and navigation.",
+  pageDescription = "Adjust colors, readability, controls, and keyboard navigation for the current profile.",
+})
