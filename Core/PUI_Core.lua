@@ -37,18 +37,10 @@ ns.Pixel = {}
 local Addon = AceAddon:NewAddon(ADDON_NAME, "NumyAceEvent-3.0")
 ns.Addon = Addon
 
-local MessageAPIFrame = CreateFrame("ScrollingMessageFrame")
-MessageAPIFrame:Hide()
-MessageAPIFrame:UnregisterAllEvents()
--- The chat mixin's Lua override bypasses the intrinsic secure display entry point.
-ns.AddChatMessage = MessageAPIFrame.AddMessage
-
 function Addon:Print(message)
   local text = "|cff33ff99" .. ADDON_NAME .. "|r: " .. tostring(message)
-  ns.AddChatMessage(DEFAULT_CHAT_FRAME, text)
-  if canaccessvalue(text) and DEFAULT_CHAT_FRAME.addMessageObserver then
-    DEFAULT_CHAT_FRAME.addMessageObserver(DEFAULT_CHAT_FRAME, text)
-  end
+  DEFAULT_CHAT_FRAME:AddMessage(text)
+  ns.Registry.ChatLinks:RevealChatForMessage()
 end
 
 function Addon:PUI_ResetAndReload(resetFn)
