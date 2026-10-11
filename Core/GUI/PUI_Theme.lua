@@ -3207,6 +3207,12 @@ local function AccessibilityOptionsProvider()
               type = "execute", name = "Keyboard help", order = 3,
               func = function() ns.KeyboardNavigation.ToggleHelp(Addon._OptionsWindow) end,
             },
+            editModeGuide = {
+              type = "execute", name = "Edit Mode guide", order = 4,
+              desc = "Learn mouse or keyboard controls for /pui and /pe.",
+              disabled = InCombatLockdown,
+              func = function() Addon:ShowEditModeGuide() end,
+            },
           },
         },
       },
