@@ -57,5 +57,5 @@ function Addon:ShowEditModeInputChoice()
     Theme.WidgetSkins.UIButton(button)
   end
   choice:Show()
-  ns.KeyboardNavigation.HandleKey("TAB")
+  ns.KeyboardNavigation.HandleKey("TAB", true)
 end
