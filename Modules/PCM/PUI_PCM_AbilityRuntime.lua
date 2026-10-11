@@ -822,6 +822,12 @@ local function RefreshChargeState(record)
 end
 
 local function RefreshDisplayCount(record)
+  local resourceCountSpellID = GetRecordStyle(record).resourceCountSpellID
+  if resourceCountSpellID then
+    PCMPresentation.SetDisplayCount(record.parts, C_Spell.GetSpellCastCount(resourceCountSpellID))
+    return
+  end
+
   local spellID = record.runtimeSpellID
   if record.entry.charges == true then
     spellID = record.runtimeChargeSpellID
@@ -1584,6 +1590,12 @@ local function MarkCooldownEventBucket(bucketName, stateMask, spellID, baseSpell
         spellID,
         hasSpecificBase and baseSpellID or spellID
       )
+      if not directMatch and bucketName == "displayCount" then
+        local resourceCountSpellID = GetRecordStyle(record).resourceCountSpellID
+        directMatch = resourceCountSpellID ~= nil
+          and (resourceCountSpellID == spellID
+            or hasSpecificBase and resourceCountSpellID == baseSpellID)
+      end
     end
 
     if refreshAll or directMatch then
