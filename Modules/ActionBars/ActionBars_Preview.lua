@@ -36,7 +36,9 @@ function Preview.RefreshIcons()
     sourceBar = nil
   end
 
+  local special = box.barKey == "pet" or box.barKey == "stance"
   local hasBindings = false
+  local hasMacros = false
   for index, button in ipairs(box.buttons) do
     local source = sourceBar and sourceBar.buttons[index]
     local key = source and source:GetHotkey()
@@ -51,11 +53,28 @@ function Preview.RefreshIcons()
       button.icon:SetTexture(nil)
       button.icon:Hide()
     end
+    if source and not special then
+      local macroName = source.Name:GetText()
+      button.macro:SetText(macroName)
+      -- Restricted text is forwarded unchanged; only ordinary text can be checked for emptiness.
+      if index <= box.previewCount
+        and (issecretvalue(macroName) or (macroName and macroName ~= ""))
+      then
+        hasMacros = true
+      end
+    else
+      button.macro:SetText("")
+    end
+  end
+
+  if not special and not hasMacros then
+    box.buttons[1].macro:SetText("Macro")
   end
 
   for index, button in ipairs(box.buttons) do
     button.hotkey:SetText(hasBindings and (button.previewHotkey or "")
       or Core.LibKeyBound:ToShortKey(SAMPLE_KEYS[index]))
+    button.macro:SetShown(not special and box.skin.showMacroText)
   end
 end
 
@@ -166,7 +185,6 @@ function Preview.Refresh()
       StyleSampleText(button.macro, skin, "macro")
       StyleSampleText(button.count, skin, "charge")
       button.hotkey:SetShown(skin.showHotkeyText)
-      button.macro:SetShown(not special and skin.showMacroText and index == 1)
       button.count:SetShown(not special and skin.showChargeText and index == math.min(count, 3))
     end
   end
@@ -249,7 +267,6 @@ function Preview.Build(addon, optionsFrame, shell, path)
       button.hotkey:SetPoint("TOPRIGHT", button, "TOPRIGHT", -2, -2)
       button.macro = button:CreateFontString(nil, "OVERLAY", "GameFontNormal")
       button.macro:SetPoint("BOTTOM", button, "BOTTOM", 0, 2)
-      button.macro:SetText("Macro")
       button.count = button:CreateFontString(nil, "OVERLAY", "GameFontNormal")
       button.count:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT", -2, 2)
       button.count:SetText("3")
