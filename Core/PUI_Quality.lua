@@ -1164,7 +1164,7 @@ local function Merchant_PrintRepairSummary(pending)
   local msg
 
   if pending.usedGuild then
-    msg = "Repaired for " .. FormatCoinText(pending.cost) .. "."
+    msg = "Repaired from guild funds for " .. FormatCoinText(pending.cost) .. "."
 
     local allowance = GetGuildRepairAllowance()
     if allowance ~= nil then
@@ -1181,24 +1181,10 @@ local function Merchant_PrintRepairSummary(pending)
   Addon:Print(msg)
 end
 
-local function Merchant_TryFinishRepairWatch(event)
+local function Merchant_TryFinishRepairWatch()
   local pending = MerchantPendingRepair
   if not pending or pending.token ~= MerchantActionToken then
     Merchant_ClearRepairWatch()
-    return
-  end
-
-  if pending.usedGuild then
-    if event == "GUILDBANK_UPDATE_MONEY"
-      or event == "GUILDBANK_UPDATE_WITHDRAWMONEY"
-    then
-      pending.sawLedgerUpdate = true
-    end
-  elseif event == "PLAYER_MONEY" then
-    pending.sawLedgerUpdate = true
-  end
-
-  if not pending.sawLedgerUpdate then
     return
   end
 
@@ -1245,7 +1231,6 @@ local function Merchant_ProcessAutoRepair(q, token)
       token = token,
       cost = repairCost,
       usedGuild = guildRepairAllowed,
-      sawLedgerUpdate = false,
     }
 
     MerchantFrameDriver:RegisterEvent("PLAYER_MONEY")
@@ -1287,7 +1272,7 @@ local function EnsureMerchantDriver()
       or event == "GUILDBANK_UPDATE_WITHDRAWMONEY"
       or event == "UPDATE_INVENTORY_DURABILITY"
     then
-      Merchant_TryFinishRepairWatch(event)
+      Merchant_TryFinishRepairWatch()
       return
     end
 
