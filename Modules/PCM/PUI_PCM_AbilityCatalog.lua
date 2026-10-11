@@ -871,6 +871,10 @@ function Catalog:GetGeneration()
   return state.generation
 end
 
+function Catalog:GetEntries()
+  return state.entries
+end
+
 function Catalog:GetViewerEntries(viewerKey)
   if IsSecretValue(viewerKey) or type(viewerKey) ~= "string" then
     return EMPTY, state.generation
@@ -936,6 +940,7 @@ local P = select(1, ns.Pleebug:DropIn(Catalog, { name = "PCM", bucket = "Ability
 Catalog.EntriesMatch = P:Def("Catalog:EntriesMatch", Catalog.EntriesMatch)
 Catalog.GetNativeConfiguration = P:Def("Catalog:GetNativeConfiguration", Catalog.GetNativeConfiguration)
 Catalog.GetGeneration = P:Def("Catalog:GetGeneration", Catalog.GetGeneration)
+Catalog.GetEntries = P:Def("Catalog:GetEntries", Catalog.GetEntries)
 Catalog.GetViewerEntries = P:Def("Catalog:GetViewerEntries", Catalog.GetViewerEntries)
 Catalog.AddAuraCandidates = P:Def("Catalog:AddAuraCandidates", Catalog.AddAuraCandidates)
 Catalog.RegisterListener = P:Def("Catalog:RegisterListener", Catalog.RegisterListener)
