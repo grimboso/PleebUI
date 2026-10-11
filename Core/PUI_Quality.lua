@@ -431,7 +431,7 @@ local function NormalizeDB()
   q.combatWarningAnchor = SeedAnchorDefaults(q.combatWarningAnchor, QUALITY_POSITION_DEFAULTS.combatWarning)
   q.petWarningAnchor = SeedAnchorDefaults(q.petWarningAnchor, QUALITY_POSITION_DEFAULTS.petWarning)
 
-  q.combatTimerFontSize = Clamp(q.combatTimerFontSize or 14, 10, 28)
+  q.combatTimerFontSize = Clamp(q.combatTimerFontSize or 14, 10, 72)
   q.combatMessageFontSize = Clamp(q.combatMessageFontSize or 18, 10, 40)
   q.combatWarningFontSize = Clamp(q.combatWarningFontSize or 32, 16, 60)
 
@@ -695,11 +695,11 @@ local function EnsureCombatTimer()
             type = "slider",
             label = "Font size",
             min = 10,
-            max = 28,
+            max = 72,
             step = 1,
             get = function() return qq.combatTimerFontSize end,
             set = function(value)
-              qq.combatTimerFontSize = Clamp(value, 10, 28)
+              qq.combatTimerFontSize = Clamp(value, 10, 72)
               ns.Theme.ApplyFont(fs, "body", qq.combatTimerFontSize, nil, "qualityOfLife")
             end,
           },
@@ -3266,7 +3266,7 @@ local function QualityProvider(AddonObj)
 
     combatStatus.args.combatTimerFontSize = RangeOption(
       "Timer font size", "combatTimerFontSize",
-      10, 28, 1, 4, DisabledWhenOff("combatTimer"),
+      10, 72, 1, 4, DisabledWhenOff("combatTimer"),
       function(qq)
         ns.Theme.ApplyFont(
           CombatTimerText,
