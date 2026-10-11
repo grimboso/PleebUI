@@ -6859,7 +6859,7 @@ local function UFCB_BuildCastbarArgs(unitKey)
   local fonts = args.fonts.args
   local toggles = args.toggles.args
 
-  args.spellName = UFCB_BuildInlineArgsGroup("Spell name", 1, {
+  args.spellName = UFCB_BuildInlineArgsGroup("Spell name", 5, {
     showName = toggles.showName,
     useGlobalFont = fonts.useGlobalFont,
     font = fonts.font,
@@ -6883,7 +6883,7 @@ local function UFCB_BuildCastbarArgs(unitKey)
   args.spellName.args.offsetY.order = 8
   args.spellName.args.maxWidth.order = 9
 
-  args.castTime = UFCB_BuildInlineArgsGroup("Cast time", 2, {
+  args.castTime = UFCB_BuildInlineArgsGroup("Cast time", 6, {
     showCast = toggles.showCast,
     showRemainingTime = toggles.showRemainingTime,
     showTotal = toggles.showTotal,
@@ -6946,7 +6946,7 @@ local function UFCB_BuildCastbarArgs(unitKey)
     return "Font used for the cast time."
   end
 
-  args.castTarget = UFCB_BuildInlineArgsGroup("Cast target", 3, {
+  args.castTarget = UFCB_BuildInlineArgsGroup("Cast target", 7, {
     displayTarget = toggles.displayTarget,
     anchor = args.targetLabel.args.anchor,
     offX = args.targetLabel.args.offX,
@@ -7132,8 +7132,8 @@ local function UFCB_BuildCastbarArgs(unitKey)
   args.feature = UFCB_BuildInlineArgsGroup("Feature", 0, {
     enabled = appearance.enabled, testMode = appearance.testMode, reset = appearance.reset,
   })
-  args.size = UFCB_BuildInlineArgsGroup("Size", 4, { width = appearance.width, height = appearance.height })
-  args.bar = UFCB_BuildInlineArgsGroup("Bar", 5, {
+  args.size = UFCB_BuildInlineArgsGroup("Size", 1, { width = appearance.width, height = appearance.height })
+  args.bar = UFCB_BuildInlineArgsGroup("Bar", 2, {
     useCustomColor = appearance.useCustomColor,
     texture = appearance.texture, color = appearance.barColor, backgroundColor = appearance.backgroundColor,
   })
@@ -7141,12 +7141,12 @@ local function UFCB_BuildCastbarArgs(unitKey)
   args.bar.args.texture.name, args.bar.args.texture.order = "Texture", 2
   args.bar.args.color.name, args.bar.args.color.order = "Color", 3
   args.bar.args.backgroundColor.order = 4
-  args.border = UFCB_BuildInlineArgsGroup("Border", 6, {
+  args.border = UFCB_BuildInlineArgsGroup("Border", 4, {
     thickness = appearance.borderSize,
     color = BuildCastbarColor(cfg, "borderColor", "Color", 2, { hasAlpha = true, alphaDefault = 1 }),
   })
   args.border.args.thickness.name, args.border.args.thickness.order = "Thickness", 1
-  args.appearance = UFCB_BuildInlineArgsGroup("Appearance", 7, {
+  args.appearance = UFCB_BuildInlineArgsGroup("Appearance", 3, {
     showIcon = appearance.showIcon, showPingOverlay = appearance.showPingOverlay,
   })
   args.uninterruptible = UFCB_BuildInlineArgsGroup("Uninterruptible casts", 8, {
