@@ -1937,7 +1937,7 @@ end
 
 
 
-function Cooldowns:_OnPlayerEnteringWorld()
+function Cooldowns:_OnPlayerEnteringWorld(isInitialLogin, isReloadingUi)
   if not _PCM_IsModuleEnabledFast() then
     return
   end
@@ -1945,6 +1945,9 @@ function Cooldowns:_OnPlayerEnteringWorld()
   _PCM_RunInitialViewerPass(self)
   _PCM_CompleteRendererSettingsMigration(self)
   self:_ReconcileCustomTrackerStartupAvailability()
+  if not isInitialLogin and not isReloadingUi then
+    ns.PCMAbilityRuntime:RefreshAfterZoneTransition()
+  end
 end
 
 function Cooldowns:_OnPlayerSpecializationChanged(_, unit)
@@ -2008,7 +2011,7 @@ local function _PCM_RuntimeLifecycleEvent(event, ...)
   local arg1, arg2 = ...
 
   if event == "PLAYER_ENTERING_WORLD" then
-    Cooldowns:_OnPlayerEnteringWorld()
+    Cooldowns:_OnPlayerEnteringWorld(arg1, arg2)
   elseif event == "PLAYER_REGEN_ENABLED" then
     Cooldowns:_OnDataRestrictionsCleared()
   elseif event == "ADDON_RESTRICTION_STATE_CHANGED" then
