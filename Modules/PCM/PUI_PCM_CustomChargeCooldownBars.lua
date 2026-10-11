@@ -1132,6 +1132,14 @@ PCMRuntime:RegisterSubscriber("CooldownStackBars", {
       then
         _CSB_RefreshSpellAvailability()
       end
+    elseif event == "PLAYER_ENTERING_WORLD" then
+      local isInitialLogin, isReloadingUi = ...
+      if not isInitialLogin and not isReloadingUi then
+        Cooldowns:CooldownStackBars_RefreshAfterTalentSwap()
+        if InCombatLockdown() then
+          _CSB_QueueUpdateAll()
+        end
+      end
     elseif event == "ADDON_RESTRICTION_STATE_CHANGED" then
       if __PUI_PCM_CooldownStackBars.pendingSpecTalentRefresh
         and not ns.PCM_IsTransitionPending()
