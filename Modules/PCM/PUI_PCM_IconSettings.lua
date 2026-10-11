@@ -354,6 +354,8 @@ function IconSettings:ResolveOwnedStyle(entry, viewerKey, viewerStyle)
   )
   style.appearance = record and record.appearance or nil
   style.cooldown = record and record.cooldown or nil
+  local _, resourceCountSpellID = ns.PRDSecondary:GetCooldownCountResourceKey(entry)
+  style.resourceCountSpellID = resourceCountSpellID
   style.charge = style.charge or {}
   style.charge.show = self:ResolveCountVisibility(
     entry,
