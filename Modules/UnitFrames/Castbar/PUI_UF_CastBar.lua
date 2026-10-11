@@ -599,6 +599,9 @@ end
 function CastBar:OnInitialize()
   self.db = Addon.db:RegisterNamespace("CastBar", self.defaults)
   self:NormalizeConfigProfile()
+  Addon.db.RegisterCallback(self, "OnProfileChanged", "NormalizeConfigProfile")
+  Addon.db.RegisterCallback(self, "OnProfileCopied", "NormalizeConfigProfile")
+  Addon.db.RegisterCallback(self, "OnProfileReset", "NormalizeConfigProfile")
 end
 
 function CastBar:OnEnable()
