@@ -478,14 +478,17 @@ local function ConfigureAuraSlots(record)
     return
   end
 
-  local canCreateSlots = not PCMRuntime:IsAuraRestricted()
+  if PCMRuntime:IsAuraRestricted() then
+    record.auraStylePending = true
+    for _, handle in pairs(record.auraSlots) do
+      AuraSlotDriver:SetSlotActive(handle, enabled and presentationActive)
+    end
+    return
+  end
+
   local candidates = BuildCandidateSet(record)
   for _, unit in ipairs(AURA_UNITS) do
-    if record.auraSlots[unit] or canCreateSlots then
-      ConfigureAuraSlot(record, unit, candidates)
-    else
-      record.auraStylePending = true
-    end
+    ConfigureAuraSlot(record, unit, candidates)
   end
 end
 
@@ -1279,6 +1282,7 @@ local function AcquireRecord(viewer, entry, generation)
   if record then
     retiredByCooldownID[entry.cooldownID] = nil
     parts = record.parts
+    parts.frame:SetParent(viewer.frame)
     record.entry = entry
     record.catalogGeneration = generation
     record.viewerKey = viewer.key
@@ -1818,20 +1822,28 @@ function AbilityRuntime:MarkBucketDirty(bucketName, dirtyMask)
   MarkBucket(bucketName, dirtyMask)
 end
 
-function AbilityRuntime:RefreshAfterZoneTransition()
+function AbilityRuntime:RebuildLayout()
   if not enabled then
     return
   end
 
-  RefreshTotemBindings()
-  for _, record in pairs(activeByCooldownID) do
-    RefreshRuntimeSpellIdentity(record)
-    MarkRecordDirty(record, bit_bor(DIRTY_STATE, DIRTY_VISIBILITY), STATE_ALL)
-  end
   for _, viewer in pairs(viewers) do
-    viewer.layoutDirty = true
+    for _, record in ipairs(viewer.orderedRuntimes) do
+      ReleaseRecord(record)
+    end
+    viewer.orderedRuntimes = {}
+    viewer.pendingEntries, viewer.pendingGeneration = AbilityCatalog:GetViewerEntries(viewer.key)
   end
-  QueuePendingAuraStyles()
+
+  for index = dirtyHead, dirtyTail do
+    dirtyQueue[index] = nil
+  end
+  dirtyHead = 1
+  dirtyTail = 0
+  wipe(totemBindings)
+  eventFrame:UnregisterAllEvents()
+  wipe(registeredEvents)
+  eventRegistrationsDirty = true
   ScheduleFlush()
 end
 
@@ -2065,7 +2077,7 @@ AbilityRuntime.ApplyViewerStyle = P:Def("AbilityRuntime:ApplyViewerStyle", Abili
 AbilityRuntime.ApplyEntrySettings = P:Def("AbilityRuntime:ApplyEntrySettings", AbilityRuntime.ApplyEntrySettings)
 AbilityRuntime.RefreshLayout = P:Def("AbilityRuntime:RefreshLayout", AbilityRuntime.RefreshLayout)
 AbilityRuntime.MarkBucketDirty = P:Def("AbilityRuntime:MarkBucketDirty", AbilityRuntime.MarkBucketDirty)
-AbilityRuntime.RefreshAfterZoneTransition = P:Def("AbilityRuntime:RefreshAfterZoneTransition", AbilityRuntime.RefreshAfterZoneTransition)
+AbilityRuntime.RebuildLayout = P:Def("AbilityRuntime:RebuildLayout", AbilityRuntime.RebuildLayout)
 AbilityRuntime.Flush = P:Def("AbilityRuntime:Flush", AbilityRuntime.Flush)
 AbilityRuntime.Enable = P:Def("AbilityRuntime:Enable", AbilityRuntime.Enable)
 AbilityRuntime.Disable = P:Def("AbilityRuntime:Disable", AbilityRuntime.Disable)
