@@ -634,6 +634,18 @@ local function StopCombatTimerTicker()
   end
 end
 
+local function RefreshCombatTimerVisibility()
+  if ns.Flags.IsEditing then
+    local previewVisible = ns.FrameUtil.IsMoverPreviewVisible("quality_combat_timer")
+    if previewVisible and not CombatTimerStart then
+      CombatTimerText:SetText("01:23")
+    end
+    CombatTimerFrame:SetAlpha(previewVisible and 1 or 0)
+  else
+    CombatTimerFrame:SetAlpha(GetQ().combatTimer and CombatTimerStart and 1 or 0)
+  end
+end
+
 local function EnsureCombatTimer()
   if CombatTimerFrame then return CombatTimerFrame end
 
@@ -656,6 +668,16 @@ local function EnsureCombatTimer()
   fs:SetPoint("CENTER", f, "CENTER", 0, 0)
   fs:SetText("00:00")
   CombatTimerText = fs
+
+  local function ResizeCombatTimer()
+    f:SetSize(
+      math.max(120, math.ceil(fs:GetStringWidth()) + 16),
+      math.max(22, math.ceil(fs:GetStringHeight()) + 8)
+    )
+  end
+
+  hooksecurefunc(fs, "SetFont", ResizeCombatTimer)
+  hooksecurefunc(fs, "SetText", ResizeCombatTimer)
   ns.Theme.ApplyFont(fs, "body", q.combatTimerFontSize, nil, "qualityOfLife")
 
   local function ApplyAnchor()
@@ -670,6 +692,7 @@ local function EnsureCombatTimer()
 
   ns.FrameUtil:RegisterMover("quality_combat_timer", f, {
     label = "Combat Timer",
+    onPreviewVisibilityChanged = RefreshCombatTimerVisibility,
     moduleKey = "quality",
     moduleLabel = "Quality of Life",
     optionsString = "Quality,combatTab",
@@ -745,7 +768,7 @@ local function EnsureCombatTimerEvents()
     if not q.combatTimer then
       CombatTimerStart = nil
       StopCombatTimerTicker()
-      ct:SetAlpha(0)
+      RefreshCombatTimerVisibility()
       return
     end
 
@@ -767,19 +790,19 @@ local function EnsureCombatTimerEvents()
         ns.Theme.ResolveFontSize(q.combatTimerFontSize or 14, "qualityOfLife"),
         flags or "OUTLINE"
       )
-      ct:SetAlpha(1)
       ct.__puiCombatTimerUpdate()
+      RefreshCombatTimerVisibility()
       CombatTimerTicker = C_Timer.NewTicker(1, ct.__puiCombatTimerUpdate)
     elseif event == "PLAYER_REGEN_ENABLED" then
       CombatTimerStart = nil
       StopCombatTimerTicker()
-      ct:SetAlpha(0)
+      RefreshCombatTimerVisibility()
     end
   end)
 
   function f:RefreshState()
     local q = GetQ()
-    local ct = EnsureCombatTimer()
+    EnsureCombatTimer()
 
     self:UnregisterAllEvents()
 
@@ -789,8 +812,8 @@ local function EnsureCombatTimerEvents()
     else
       CombatTimerStart = nil
       StopCombatTimerTicker()
-      ct:SetAlpha(0)
     end
+    RefreshCombatTimerVisibility()
   end
 
   return f
