@@ -453,7 +453,7 @@ function Secondary:GetCooldownCountResourceKey(entry)
       for spellIndex = 1, #spellIDs do
         for identityIndex = 1, #entry.identitySpellIDs do
           if entry.identitySpellIDs[identityIndex] == spellIDs[spellIndex] then
-            return definition.resourceKey
+            return definition.resourceKey, definition.castCountSpellID
           end
         end
       end
