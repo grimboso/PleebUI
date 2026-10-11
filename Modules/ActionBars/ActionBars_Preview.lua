@@ -5,6 +5,10 @@ local Theme = ns.Theme
 local Preview = {}
 ns.ActionBarsPreview = Preview
 local P = select(1, ns.Pleebug:DropIn(Preview))
+local SAMPLE_KEYS = {
+  "1", "SHIFT-2", "ALT-3", "CTRL-4", "SHIFT-ALT-5", "SHIFT-CTRL-6",
+  "ALT-CTRL-7", "SHIFT-ALT-CTRL-8", "9", "10", "1", "2",
+}
 
 local function StyleSampleText(text, skin, prefix)
   ns.Theme.SetRuntimeFont(
@@ -32,8 +36,14 @@ function Preview.RefreshIcons()
     sourceBar = nil
   end
 
+  local hasBindings = false
   for index, button in ipairs(box.buttons) do
     local source = sourceBar and sourceBar.buttons[index]
+    local key = source and source:GetHotkey()
+    button.previewHotkey = key
+    if index <= box.previewCount and key and key ~= "" then
+      hasBindings = true
+    end
     if source then
       button.icon:SetTexture(source.icon:GetTexture())
       button.icon:SetShown(source.icon:IsShown())
@@ -41,6 +51,11 @@ function Preview.RefreshIcons()
       button.icon:SetTexture(nil)
       button.icon:Hide()
     end
+  end
+
+  for index, button in ipairs(box.buttons) do
+    button.hotkey:SetText(hasBindings and (button.previewHotkey or "")
+      or Core.LibKeyBound:ToShortKey(SAMPLE_KEYS[index]))
   end
 end
 
@@ -85,8 +100,8 @@ function Preview.Refresh()
     or skin.iconsPerBar
   local columns = barKey == "stance" and count or math.min(skin.iconsPerRow, count)
   local rows = math.ceil(count / columns)
-  local paddingX = skin.showBarBackground and Core.PADDING_X or 0
-  local paddingY = skin.showBarBackground and Core.PADDING_Y or 0
+  local paddingX = skin.showBarBackground and ns.Pixel.Round(Core.PADDING_X) or 0
+  local paddingY = skin.showBarBackground and ns.Pixel.Round(Core.PADDING_Y) or 0
   local width = columns * skin.iconSize + (columns - 1) * skin.iconSpacing + paddingX * 2
   local height = rows * skin.iconSize + (rows - 1) * skin.iconSpacing + paddingY * 2
   local canvas = box:GetCanvas()
@@ -101,11 +116,13 @@ function Preview.Refresh()
   bar:SetFrameLevel(canvas:GetFrameLevel() + 2)
   Theme.SyncBackdropFrame(box, box._puiBg)
   Theme.SyncBackdropFrame(canvas, canvas._puiBg)
-  local scale = math.min(1, math.max(1, canvas:GetWidth() - 20) / width,
-    math.max(1, canvas:GetHeight() - 20) / height)
+  -- Live bars inherit UIParent scale; previews also inherit the options window scale.
+  local runtimeScale = UIParent:GetEffectiveScale() / canvas:GetEffectiveScale()
+  local fitScale = math.min(1, math.max(1, canvas:GetWidth() - 20) / (width * runtimeScale),
+    math.max(1, canvas:GetHeight() - 20) / (height * runtimeScale))
 
   bar:SetSize(width, height)
-  bar:SetScale(scale)
+  bar:SetScale(runtimeScale * fitScale)
   Core:ApplyBackdrop(box.sample, skin)
   box.sample.backdrop:SetFrameStrata(strata)
   box.sample.backdrop:SetFrameLevel(bar:GetFrameLevel() - 1)
@@ -117,18 +134,17 @@ function Preview.Refresh()
     or "Bar " .. barKey .. " preview"
   box:SetTitle(title)
   local description = override and override.useCustom == true and "Custom settings." or "Shared settings."
-  description = description .. (barKey == "shared" and " Main Action Bar icons. Sample text."
-    or " Live bar icons. Sample text.")
+  description = description .. (barKey == "shared" and " Main Action Bar icons and keybinds."
+    or " Live bar icons and keybinds.") .. " Unbound bars use sample keybinds."
   if barKey == "stance" and GetNumShapeshiftForms() == 0 then
     description = description .. " No stances available."
   end
-  if scale < 1 then
-    description = description .. " Scaled to " .. math.floor(scale * 100 + 0.5) .. "% to fit."
+  if fitScale < 1 then
+    description = description .. " Scaled to " .. math.floor(fitScale * 100 + 0.5) .. "% to fit."
   end
   box:SetDescription(description)
 
-  local showCooldown = skin.showCooldownText
-    and (barKey ~= "pet" or db.bars.pet.showCooldowns ~= false)
+  local showCooldown = barKey ~= "pet" or db.bars.pet.showCooldowns ~= false
   for index, button in ipairs(box.buttons) do
     button:SetFrameStrata(strata)
     button:SetFrameLevel(bar:GetFrameLevel() + 1)
@@ -149,17 +165,37 @@ function Preview.Refresh()
       StyleSampleText(button.hotkey, skin, "hotkey")
       StyleSampleText(button.macro, skin, "macro")
       StyleSampleText(button.count, skin, "charge")
-      StyleSampleText(button.cooldownText, skin, "cooldown")
       button.hotkey:SetShown(skin.showHotkeyText)
       button.macro:SetShown(not special and skin.showMacroText and index == 1)
       button.count:SetShown(not special and skin.showChargeText and index == math.min(count, 3))
-      button.cooldownText:SetShown(showCooldown and index == math.min(count, 4))
     end
   end
 
   box.skin = skin
   box.previewCount = count
   Preview.RefreshIcons()
+  local cooldown = box.sampleCooldown
+  cooldown.previewEnabled = false
+  cooldown:Clear()
+  local cooldownButton = box.buttons[math.min(count, 4)]
+  cooldown:SetParent(cooldownButton)
+  cooldown:SetFrameStrata(strata)
+  cooldown:SetFrameLevel(cooldownButton:GetFrameLevel() + 1)
+  ns.IconSkin.SquareCooldown(cooldown)
+  ns.IconSkin.StyleCooldownText(cooldown, {
+    font = Core:ResolveFont(skin.cooldownFontFace),
+    size = skin.cooldownFontSize,
+    flags = skin.cooldownFontOutline or "",
+    color = skin.cooldownFontColor,
+    scope = "actionBars",
+  })
+  cooldown:SetHideCountdownNumbers(not skin.showCooldownText)
+  cooldown.previewEnabled = showCooldown
+  if showCooldown then
+    cooldown:SetCooldown(GetTime(), 5)
+  else
+    cooldown:Hide()
+  end
   bar:SetAlpha(skin.fadeOutEnabled and not box.hovered and skin.fadeOutAlpha or skin.alpha)
 end
 
@@ -168,6 +204,7 @@ function Preview.Build(addon, optionsFrame, shell, path)
   local box = shell.__puiActionBarsPreviewBox
   if not box then
     box = ns.PreviewBox.Create(host)
+    box:Hide()
     shell.__puiActionBarsPreviewBox = box
     box.buttons = {}
     local canvas = box:GetCanvas()
@@ -186,8 +223,16 @@ function Preview.Build(addon, optionsFrame, shell, path)
       box.hovered = false
       bar:SetAlpha(box.skin.fadeOutEnabled and box.skin.fadeOutAlpha or box.skin.alpha)
     end)
-    box:SetScript("OnShow", Preview.Refresh)
+    box:SetScript("OnShow", function(self)
+      self:RegisterEvent("UPDATE_BINDINGS")
+      self:RegisterEvent("GAME_PAD_ACTIVE_CHANGED")
+      Preview.Refresh()
+    end)
+    box:SetScript("OnEvent", Preview.RefreshIcons)
     box:SetScript("OnHide", function(self)
+      self:UnregisterAllEvents()
+      self.sampleCooldown.previewEnabled = false
+      self.sampleCooldown:Clear()
       self.hovered = false
       self.iconsPending = nil
       self:SetScript("OnUpdate", nil)
@@ -202,18 +247,26 @@ function Preview.Build(addon, optionsFrame, shell, path)
       icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
       button.hotkey = button:CreateFontString(nil, "OVERLAY", "GameFontNormal")
       button.hotkey:SetPoint("TOPRIGHT", button, "TOPRIGHT", -2, -2)
-      button.hotkey:SetText(index == 1 and "S-1" or tostring(index))
       button.macro = button:CreateFontString(nil, "OVERLAY", "GameFontNormal")
       button.macro:SetPoint("BOTTOM", button, "BOTTOM", 0, 2)
       button.macro:SetText("Macro")
       button.count = button:CreateFontString(nil, "OVERLAY", "GameFontNormal")
       button.count:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT", -2, 2)
       button.count:SetText("3")
-      button.cooldownText = button:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-      button.cooldownText:SetPoint("CENTER", button, "CENTER")
-      button.cooldownText:SetText("8.5")
       box.buttons[index] = button
     end
+
+    local cooldown = CreateFrame("Cooldown", nil, box.buttons[4], "CooldownFrameTemplate")
+    cooldown:SetDrawSwipe(true)
+    cooldown:SetDrawEdge(false)
+    cooldown:SetDrawBling(false)
+    cooldown:SetMinimumCountdownDuration(0)
+    cooldown:SetScript("OnCooldownDone", function(self)
+      if self.previewEnabled and box:IsVisible() then
+        self:SetCooldown(GetTime(), 5)
+      end
+    end)
+    box.sampleCooldown = cooldown
   end
 
   box.barKey = path[2] == "special" and (path[3] or "pet")
