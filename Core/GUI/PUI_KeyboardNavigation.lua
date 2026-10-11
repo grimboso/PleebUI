@@ -105,6 +105,8 @@ function Navigation.ClearKeyboardFocus()
   for _, state in pairs(windows) do
     state.active, state.restoreKey = false, nil
   end
+  local state = activeWindow and windows[activeWindow]
+  if state and state.keyHandler then state.keyHandler("GLOBAL_MOUSE_DOWN", false) end
   Navigation.RefreshWindows()
 end
 
@@ -723,7 +725,7 @@ function Navigation.HandleKey(key, autoFocus)
   if not WindowNavigationEnabled(state) then return false end
   local text = GetCurrentKeyBoardFocus()
   if text and not BelongsTo(text, activeWindow) and not (popup and current and current.frame == text) then return false end
-  if key == "TAB" or key == "F1" or (key == "F6" and state.movers) then keyboardInput = true end
+  if key == "TAB" or key == "F1" or (key == "F6" and (state.movers or state.keyHandler)) then keyboardInput = true end
   if key == "F1" and state.guide then Navigation.ToggleHelp(activeWindow); return true end
   if state.helpShown then
     if key == "ESCAPE" or ((key == "ENTER" or key == "SPACE") and state.helpIndex == 2) then Navigation.ToggleHelp(activeWindow)
@@ -735,6 +737,14 @@ function Navigation.HandleKey(key, autoFocus)
       local step = (key == "PAGEUP" or key == "PAGEDOWN") and scroll:GetHeight() * 0.8 or 32
       local direction = (key == "UP" or key == "PAGEUP") and -1 or 1
       scroll:SetVerticalScroll(math.max(0, math.min(scroll:GetVerticalScrollRange(), scroll:GetVerticalScroll() + direction * step)))
+    end
+    return true
+  end
+  if state.keyHandler and not text and not popup and state.keyHandler(key, keyboardInput) then
+    if key == "F6" then
+      HideFocus()
+      current, state.active, state.restoreKey = nil, false, nil
+      Navigation.RefreshWindows()
     end
     return true
   end
@@ -783,7 +793,9 @@ function Navigation.HandleKey(key, autoFocus)
     end
     return false
   end
-  if current.kind == "tree" then
+  if current.kind == "list" then
+    if key == "UP" or key == "DOWN" then MoveInGroup(key == "UP" and -1 or 1); return true end
+  elseif current.kind == "tree" then
     if key == "UP" or key == "DOWN" then MoveInGroup(key == "UP" and -1 or 1); return true end
     if key == "LEFT" or key == "RIGHT" then
       if current.widget and current.frame.toggle:IsShown() and not IsDisabled(current) then
@@ -862,10 +874,10 @@ function Navigation.ActivateWindow(root)
   Navigation.RefreshWindows()
 end
 
-function Navigation.BindWindow(root, movers, cancel, enabled)
+function Navigation.BindWindow(root, movers, cancel, enabled, keyHandler)
   if windows[root] then return end
   if InCombatLockdown() then
-    pendingWindows[root] = { movers = movers, cancel = cancel, enabled = enabled }
+    pendingWindows[root] = { movers = movers, cancel = cancel, enabled = enabled, keyHandler = keyHandler }
     return
   end
   local pending = pendingWindows[root]
@@ -878,7 +890,8 @@ function Navigation.BindWindow(root, movers, cancel, enabled)
   receiver:EnableKeyboard(true)
   receiver:SetPropagateKeyboardInput(true)
   receiver:Hide()
-  local state = { receiver = receiver, movers = movers, cancel = cancel, enabled = enabled, guide = pending and pending.guide }
+  local state = { receiver = receiver, movers = movers, cancel = cancel, enabled = enabled,
+    keyHandler = keyHandler, guide = pending and pending.guide }
   windows[root] = state
   receiver:SetScript("OnKeyDown", function(self, key)
     if InCombatLockdown() then self:Hide(); return end
@@ -950,7 +963,7 @@ events:SetScript("OnEvent", function(_, event)
       RefreshGuide(root, state)
     end
   else
-    for root, state in pairs(pendingWindows) do Navigation.BindWindow(root, state.movers, state.cancel, state.enabled) end
+    for root, state in pairs(pendingWindows) do Navigation.BindWindow(root, state.movers, state.cancel, state.enabled, state.keyHandler) end
     Navigation.RefreshWindows()
   end
 end)
