@@ -347,8 +347,12 @@ end
 
 SetRecordTotem = function(record, binding)
   local wasActive = record.totemDuration ~= nil
+  local duration = binding and binding.duration or nil
+  if binding and binding.slot then
+    duration = GetTotemDuration(binding.slot)
+  end
   record.totemSlot = binding and binding.slot or nil
-  record.totemDuration = binding and binding.duration or nil
+  record.totemDuration = duration
   record.totemSpellID = binding and binding.spellID or nil
   if binding then
     PrepareTotemButton(record)
