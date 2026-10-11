@@ -863,6 +863,34 @@ function AuraRuntime:OnCatalogChanged(generation)
 
 end
 
+function AuraRuntime:RebuildLayout()
+  if not enabled then
+    return
+  end
+
+  local restricted = PCMRuntime:IsAuraRestricted()
+  for _, viewer in pairs(viewers) do
+    for _, record in ipairs(viewer.orderedRecords) do
+      if restricted then
+        -- Native aura widgets must keep their prepared configuration during restrictions.
+        record.stylePending = true
+        ConfigureRecordSlots(record)
+      else
+        ReleaseRecord(viewer, record)
+      end
+    end
+    if not restricted then
+      viewer.orderedRecords = {}
+    end
+  end
+
+  pendingCatalog = true
+  pendingAppearance = true
+  pendingVisibility = true
+  pendingTotems = true
+  ScheduleFlush()
+end
+
 function AuraRuntime:Flush()
   if not enabled then
     flushFrame:Hide()
@@ -1042,6 +1070,7 @@ AuraRuntime.SetBarGrowthPresentation = P:Def("AuraRuntime:SetBarGrowthPresentati
 AuraRuntime.RefreshLayoutBounds = P:Def("AuraRuntime:RefreshLayoutBounds", AuraRuntime.RefreshLayoutBounds)
 AuraRuntime.ApplySpellOverride = P:Def("AuraRuntime:ApplySpellOverride", AuraRuntime.ApplySpellOverride)
 AuraRuntime.OnCatalogChanged = P:Def("AuraRuntime:OnCatalogChanged", AuraRuntime.OnCatalogChanged)
+AuraRuntime.RebuildLayout = P:Def("AuraRuntime:RebuildLayout", AuraRuntime.RebuildLayout)
 AuraRuntime.Flush = P:Def("AuraRuntime:Flush", AuraRuntime.Flush)
 AuraRuntime.Enable = P:Def("AuraRuntime:Enable", AuraRuntime.Enable)
 AuraRuntime.Disable = P:Def("AuraRuntime:Disable", AuraRuntime.Disable)
