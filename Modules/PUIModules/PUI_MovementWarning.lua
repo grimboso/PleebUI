@@ -689,6 +689,10 @@ function MovementWarning:ShowEnablePrompt(onClosed)
 end
 
 function MovementWarning:OnInitialize()
+  Addon.db.RegisterCallback(self, "OnProfileChanged", NormalizeReminderSettings)
+  Addon.db.RegisterCallback(self, "OnProfileCopied", NormalizeReminderSettings)
+  Addon.db.RegisterCallback(self, "OnProfileReset", NormalizeReminderSettings)
+
   _G.PleebUIAPI:RegisterPlugin("PleebUI_MovementWarning", {
     name = "Movement Reminder",
   }):RegisterEditModeParticipant("runtime", {
