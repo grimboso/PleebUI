@@ -143,6 +143,7 @@ local RUNTIME_EVENTS = {
   "COOLDOWN_VIEWER_SPELL_OVERRIDE_UPDATED",
   "SPELL_UPDATE_COOLDOWN",
   "SPELL_UPDATE_USES",
+  "SPELL_UPDATE_CHARGES",
   "SPELL_UPDATE_ICON",
   "SPELL_UPDATE_USABLE",
   "SPELL_RANGE_CHECK_UPDATE",
@@ -909,6 +910,9 @@ local function RefreshTotemState(record)
   end
 
   local duration = binding.duration
+  if binding.slot then
+    duration = GetTotemDuration(binding.slot)
+  end
   PCMPresentation.SetTotemDuration(record.parts, duration)
   record.totemActive = duration ~= nil
   return record.totemActive
@@ -1507,7 +1511,7 @@ local function WantsEvent(event)
     return buckets.spellAppearance.count > 0
   elseif event == "SPELL_UPDATE_COOLDOWN" then
     return buckets.cooldown.count > 0 or buckets.item.count > 0
-  elseif event == "SPELL_UPDATE_USES" then
+  elseif event == "SPELL_UPDATE_USES" or event == "SPELL_UPDATE_CHARGES" then
     return buckets.charge.count > 0
   elseif event == "SPELL_UPDATE_ICON" then
     return buckets.spellAppearance.count > 0
@@ -1814,6 +1818,23 @@ function AbilityRuntime:MarkBucketDirty(bucketName, dirtyMask)
   MarkBucket(bucketName, dirtyMask)
 end
 
+function AbilityRuntime:RefreshAfterZoneTransition()
+  if not enabled then
+    return
+  end
+
+  RefreshTotemBindings()
+  for _, record in pairs(activeByCooldownID) do
+    RefreshRuntimeSpellIdentity(record)
+    MarkRecordDirty(record, bit_bor(DIRTY_STATE, DIRTY_VISIBILITY), STATE_ALL)
+  end
+  for _, viewer in pairs(viewers) do
+    viewer.layoutDirty = true
+  end
+  QueuePendingAuraStyles()
+  ScheduleFlush()
+end
+
 function AbilityRuntime:Flush()
   if not enabled then
     flushFrame:Hide()
@@ -1957,6 +1978,8 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1, arg2, arg3, arg4, arg5)
     MarkCooldownEventBucket("charge", STATE_CHARGE, arg1, arg2)
   elseif event == "SPELL_UPDATE_USES" then
     MarkCooldownEventBucket("charge", STATE_CHARGE, arg1, arg2)
+  elseif event == "SPELL_UPDATE_CHARGES" then
+    MarkBucket("charge", DIRTY_STATE, STATE_CHARGE)
   elseif event == "SPELL_UPDATE_ICON" then
     MarkBucket("spellAppearance", DIRTY_APPEARANCE, 0, APPEARANCE_ICON)
   elseif event == "SPELL_UPDATE_USABLE" then
@@ -2042,6 +2065,7 @@ AbilityRuntime.ApplyViewerStyle = P:Def("AbilityRuntime:ApplyViewerStyle", Abili
 AbilityRuntime.ApplyEntrySettings = P:Def("AbilityRuntime:ApplyEntrySettings", AbilityRuntime.ApplyEntrySettings)
 AbilityRuntime.RefreshLayout = P:Def("AbilityRuntime:RefreshLayout", AbilityRuntime.RefreshLayout)
 AbilityRuntime.MarkBucketDirty = P:Def("AbilityRuntime:MarkBucketDirty", AbilityRuntime.MarkBucketDirty)
+AbilityRuntime.RefreshAfterZoneTransition = P:Def("AbilityRuntime:RefreshAfterZoneTransition", AbilityRuntime.RefreshAfterZoneTransition)
 AbilityRuntime.Flush = P:Def("AbilityRuntime:Flush", AbilityRuntime.Flush)
 AbilityRuntime.Enable = P:Def("AbilityRuntime:Enable", AbilityRuntime.Enable)
 AbilityRuntime.Disable = P:Def("AbilityRuntime:Disable", AbilityRuntime.Disable)
