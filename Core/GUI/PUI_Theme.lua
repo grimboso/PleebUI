@@ -2985,6 +2985,26 @@ local ThemeColorsProvider
 local ThemeFontsProvider
 local UIScaleProvider
 
+local function OptionsWindowScaleOption()
+  return {
+    type = "range",
+    name = "Options window scale",
+    desc = "Resizes only the PleebUI options window.",
+    order = 1,
+    min = Theme.OptionsUIScaleRange.min,
+    max = Theme.OptionsUIScaleRange.max,
+    step = Theme.OptionsUIScaleRange.step,
+    isPercent = true,
+    arg = { puiRefreshOnRelease = true },
+    get = function()
+      return Theme.GetOptionsUIScale()
+    end,
+    set = function(_, value)
+      Theme.SetOptionsUIScale(value)
+    end,
+  }
+end
+
 local function _PUI_ThemeRegistry_CopyArgsWithoutHeader(args)
   local out = {}
 
@@ -3077,13 +3097,47 @@ local function AccessibilityOptionsProvider()
       presetValues[key] = Theme.GetColorPresetLabel(key)
     end
 
+    local fonts = ThemeFontsProvider():GetOptions().args
+    fonts.puiOptionsFontSize.name = "Options text size"
+    fonts.puiOptionsFontSize.desc = "Adjust all options text categories together. At 14, each category uses its configured base size."
+    fonts.puiOptionsFontSize.order = 1
+    local windowScale = OptionsWindowScaleOption()
+    windowScale.order = 2
+
     local options = {
       type = "group", name = "Accessibility", childGroups = "tab", order = 16,
       args = {
+        textSize = {
+          type = "group", name = "Text and size", order = 1,
+          args = {
+            description = {
+              type = "description", order = 1,
+              name = "These settings are also available in UI Theme. Changes in either page apply to the same current profile settings.",
+            },
+            optionsWindow = {
+              type = "group", name = "Options window", order = 2,
+              inline = true, arg = { puiExplicit = true },
+              args = {
+                textSize = fonts.puiOptionsFontSize,
+                scale = windowScale,
+              },
+            },
+            globalText = {
+              type = "group", name = "Global text", order = 3,
+              inline = true, arg = { puiExplicit = true },
+              args = {
+                font = fonts.iconTextGlobalFont,
+                outline = fonts.iconTextGlobalFlags,
+                sizeAdjustment = fonts.fontSizeOffset,
+                applyTo = fonts.fontSizeScopes,
+              },
+            },
+          },
+        },
         combatReadability = {
           type = "group",
           name = "Combat readability",
-          order = 2,
+          order = 3,
           args = {
             description = {
               type = "description",
@@ -3135,7 +3189,7 @@ local function AccessibilityOptionsProvider()
           },
         },
         controls = {
-          type = "group", name = "Controls and motion", order = 3,
+          type = "group", name = "Controls and motion", order = 4,
           args = {
             keyboardNavigation = {
               type = "toggle", name = "Keyboard navigation", order = 1,
@@ -3160,7 +3214,7 @@ local function AccessibilityOptionsProvider()
     options.args.colors = {
       type = "group",
       name = "Color presets",
-      order = 1,
+      order = 2,
       args = {
         description = {
           type = "description",
@@ -3273,23 +3327,7 @@ local function UIThemeOptionsProvider()
           order = 4,
           inline = true,
           args = {
-            optionsUIScale = {
-              type = "range",
-              name = "Options UI scale",
-              desc = "Scale the entire PleebUI options window.",
-              order = 1,
-              min = Theme.OptionsUIScaleRange.min,
-              max = Theme.OptionsUIScaleRange.max,
-              step = Theme.OptionsUIScaleRange.step,
-              isPercent = true,
-              arg = { puiRefreshOnRelease = true },
-              get = function()
-                return Theme.GetOptionsUIScale()
-              end,
-              set = function(_, value)
-                Theme.SetOptionsUIScale(value)
-              end,
-            },
+            optionsUIScale = OptionsWindowScaleOption(),
             optionsWidgetColumns = {
               type = "select",
               name = "Widget columns",
@@ -3633,7 +3671,7 @@ ThemeFontsProvider = function()
         fontSizeOffset = {
           type = "range",
           name = "Global font size adjustment",
-          desc = "Adds or removes text size in the selected PleebUI areas of the current profile. Options font size is configured separately under Text > Options text.",
+          desc = "Adds or removes text size in the selected PleebUI areas of the current profile. When Options is selected, this adjustment is added to the options text size.",
           order = 4,
           min = Theme.FontSizeOffsetRange.min,
           max = Theme.FontSizeOffsetRange.max,
@@ -3855,6 +3893,6 @@ Addon:RegisterOptionsSection("UITheme", UIThemeOptionsProvider, 15, "UI Theme", 
 Addon:RegisterOptionsSection("Accessibility", AccessibilityOptionsProvider, 16, "Accessibility", nil, {
   preview = false,
   navSection = "General",
-  navDescription = "Color presets, readability, and navigation.",
-  pageDescription = "Adjust colors, readability, controls, and keyboard navigation for the current profile.",
+  navDescription = "Text size, color presets, readability, and navigation.",
+  pageDescription = "Adjust text, size, colors, controls, and keyboard navigation for the current profile.",
 })
