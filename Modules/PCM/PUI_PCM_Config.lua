@@ -2615,6 +2615,24 @@ _PCM_BuildIconOverrideArgs = function(viewerKey, entry)
   _PCM_BuildIconTextSettingsArgs(args, viewerKey, entry, "charge", "Charge text", 30)
   _PCM_BuildIconTextSettingsArgs(args, viewerKey, entry, "keybind", "Keybind text", 50)
 
+  local resourceKey = ns.PRDSecondary:GetCooldownCountResourceKey(entry)
+  if resourceKey then
+    args.chargeDisplay = {
+      type = "select",
+      name = "Show on",
+      desc = "Choose where to track Soul Fragments. Applies to Soul Cleave, Spirit Bomb and the resource bar.",
+      order = 29,
+      values = { ICONS = "Icons only", BAR = "Bar only", BOTH = "Both", NONE = "Nothing" },
+      sorting = { "ICONS", "BAR", "BOTH", "NONE" },
+      get = function()
+        return ns.PRDSecondary:GetResourceDisplayMode(resourceKey)
+      end,
+      set = function(_, value)
+        ns.PRDSecondary:SetResourceDisplayMode(resourceKey, value)
+      end,
+    }
+  end
+
   local function Refresh()
     Cooldowns:RefreshIndividualIconSettings(viewerKey)
   end
@@ -8856,7 +8874,7 @@ local function _PCM_BuildGroupEntryArgs(groupID, record, order)
       durationText = function() return Cooldowns:GetDurationCountEnabled(record.viewerKey) end,
       chargeShow = function()
         if entry.settingsFamily == "buff" then return Cooldowns:GetBuffCountEnabled(record.viewerKey) end
-        return Cooldowns:GetChargeCountEnabled(record.viewerKey)
+        return IconSettings:GetInheritedCountVisibility(entry, Cooldowns:GetChargeCountEnabled(record.viewerKey))
       end,
       keybindShow = function() return Cooldowns:GetKeybindTextEnabled(record.viewerKey) end,
     }
@@ -8866,7 +8884,9 @@ local function _PCM_BuildGroupEntryArgs(groupID, record, order)
         local values = option.values
         option.values = function()
           local effective = resolveValue()
-          values[ICON_INHERIT] = "Use " .. inheritedNames[record.viewerKey] .. " settings ("
+          local source = key == "chargeShow" and ns.PRDSecondary:GetCooldownCountResourceKey(entry)
+            and "resource" or inheritedNames[record.viewerKey]
+          values[ICON_INHERIT] = "Use " .. source .. " settings ("
             .. (type(effective) == "boolean" and (effective and "Show" or "Hide") or effective) .. ")"
           return values
         end
