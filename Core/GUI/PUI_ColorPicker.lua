@@ -293,7 +293,7 @@ local function OpenColorSession(widget)
     ColorPickerFrame.Footer.CancelButton:Click("LeftButton")
   end, function() return session ~= nil end)
   ns.KeyboardNavigation.ActivateWindow(ColorPickerFrame)
-  ns.KeyboardNavigation.HandleKey("TAB")
+  ns.KeyboardNavigation.HandleKey("TAB", true)
   if not palette.pickerHooked then
     palette.pickerHooked = true
     ColorPickerFrame:HookScript("OnHide", FinishColorSession)
