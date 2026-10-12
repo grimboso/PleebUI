@@ -49,7 +49,7 @@ local function RefreshQuestLog(frame)
   Skins.Dropdown(frame.QuestsFrame.ScrollFrame.SettingsDropdown)
   for _, key in ipairs({ "QuestsTab", "EventsTab", "MapLegendTab" }) do
     local tab = frame[key]
-    Skins.Surface(tab, true)
+    Skins.Panel(tab)
     Skins.Icon(tab.Icon)
     Skins.Selection(tab.SelectedTexture)
     Skins.Selection(tab.HighlightTexture)
