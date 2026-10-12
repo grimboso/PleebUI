@@ -3,6 +3,23 @@ local _, ns = ...
 local DurationSource = {}
 ns.PCMCustomDurationSource = DurationSource
 
+DurationSource.sourceValues = {
+  automatic = "Automatic",
+  ground = "Ground effect / Totem / Summons",
+  aura = "Buff/debuff",
+}
+DurationSource.sourceHelp = "Automatic\nUses an available ground effect, totem or summon duration first, then the buff/debuff."
+  .. "\n\n" .. DurationSource.sourceValues.ground
+  .. "\nTracks the effect's remaining lifetime, even when you leave its area."
+  .. "\nPossible uses, when the game provides a matching duration:"
+  .. "\n- Ground effects, such as Consecration or Death and Decay."
+  .. "\n- Totems, such as Shaman totems."
+  .. "\n- Temporary summons, such as elementals and guardians."
+  .. "\n- Duplicates, such as Augmentation Evoker duplicates."
+  .. "\nStays inactive when no matching duration is available."
+  .. "\n\nBuff/debuff\nTracks the player buff or target debuff, including the buff from standing in a ground effect."
+  .. "\n\nCreate separate bars or icons for the effect's lifetime and its buff/debuff."
+
 local TotemTracker = ns.PCMTotemTracker
 local records = {}
 local listening = false
