@@ -1,5 +1,18 @@
 local _, ns = ...
 local Skins = ns.BlizzardSkins
+local spellRows = setmetatable({}, { __mode = "k" })
+local transparent = { 0, 0, 0, 0 }
+
+local function RefreshSpellHitArea(frame)
+  if not Skins.CanStyle() then return end
+  local button = frame.Button
+  local buttonWidth, buttonHeight = button:GetWidth(), button:GetHeight()
+  local width, height = frame:GetWidth(), frame:GetHeight()
+  if issecretvalue(buttonWidth) or issecretvalue(buttonHeight) or issecretvalue(width) or issecretvalue(height) then return end
+  local verticalInset = (buttonHeight - height) / 2
+  -- The native button stays anchored at LEFT; expand interaction without moving its flyout.
+  button:SetHitRectInsets(0, buttonWidth - width, verticalInset, verticalInset)
+end
 
 local function SkinSpell(frame)
   local button = frame.Button
@@ -7,16 +20,32 @@ local function SkinSpell(frame)
     Skins.Texts(frame)
     return
   end
-  local accent = ns.Theme.GetColors().accent
-  frame.Backplate:SetColorTexture(accent[1], accent[2], accent[3], 0.2)
-  frame.Backplate:SetAllPoints(frame)
-  button.IconHighlight:SetColorTexture(1, 1, 1, 0.12)
-  button.IconHighlight:SetAllPoints(button.Icon)
+  local state = spellRows[frame]
+  if not state then
+    local border = CreateFrame("Frame", nil, frame)
+    border:SetAllPoints(frame)
+    border:EnableMouse(false)
+    local highlight = button:CreateTexture(nil, "HIGHLIGHT")
+    highlight:SetAllPoints(frame)
+    button:SetHighlightTexture(highlight)
+    state = { border = border, highlight = highlight }
+    spellRows[frame] = state
+    frame:HookScript("OnSizeChanged", RefreshSpellHitArea)
+  end
+  ns.Theme.SetSquareBackdrop(state.border, {
+    bg = transparent,
+    border = ns.Theme.GetColors().border,
+  }, 1)
+  Skins.Selection(state.highlight, 0.08)
+  -- Native hover changes alpha; transparent color keeps its backplate unfilled.
+  frame.Backplate:SetColorTexture(0, 0, 0, 0)
+  button.IconHighlight:SetColorTexture(0, 0, 0, 0)
   Skins.Hide(button.Border)
   button.BorderSheen:SetTexture(nil)
   Skins.Hide(button.BorderSheen)
   button.Icon:RemoveMaskTexture(button.IconMask)
-  Skins.IconButton(button, button.Icon)
+  Skins.Icon(button.Icon)
+  RefreshSpellHitArea(frame)
   Skins.Font(frame.Name)
   Skins.Font(frame.SubName)
   ns.Theme.ApplyFont(frame.RequiredLevel, "body")
