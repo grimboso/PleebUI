@@ -623,6 +623,9 @@ local function EnsureResourceSettings(profile, resourceKey, resourceIndex)
   local behavior = settings.behavior
 
   if resourceKey == "RUNES" then
+    if behavior.rechargeAnimation ~= "FILL" and behavior.rechargeAnimation ~= "FADE" then
+      behavior.rechargeAnimation = "FILL"
+    end
     if behavior.showRechargeTime == nil then behavior.showRechargeTime = true end
     if behavior.showReadyGlow == nil then behavior.showReadyGlow = true end
     if behavior.completionAnimation == nil then behavior.completionAnimation = "FADE" end
@@ -644,7 +647,7 @@ local function EnsureResourceSettings(profile, resourceKey, resourceIndex)
     end
   end
 
-  if resourceKey == "ESSENCE"
+  if (resourceKey == "RUNES" or resourceKey == "ESSENCE")
     and behavior.rechargeDirection ~= "LTR"
     and behavior.rechargeDirection ~= "RTL"
     and behavior.rechargeDirection ~= "TTB"
@@ -847,6 +850,7 @@ local function BuildResourceConfigStateKey(config)
     buffGlowColor[1], buffGlowColor[2], buffGlowColor[3], buffGlowColor[4],
     behavior.showRechargeTime and 1 or 0,
     behavior.showReadyGlow and 1 or 0,
+    behavior.rechargeAnimation or "",
     behavior.completionAnimation or "",
     behavior.rechargeDirection or "",
     behavior.useSeverityColors and 1 or 0,
@@ -977,6 +981,7 @@ local function ResolveResourceConfig(profile, definition)
     behavior = {
       showRechargeTime = sourceBehavior.showRechargeTime ~= false,
       showReadyGlow = sourceBehavior.showReadyGlow ~= false,
+      rechargeAnimation = sourceBehavior.rechargeAnimation or "FILL",
       completionAnimation = sourceBehavior.completionAnimation or "FADE",
       rechargeDirection = sourceBehavior.rechargeDirection or "LTR",
       useSeverityColors = sourceBehavior.useSeverityColors ~= false,
