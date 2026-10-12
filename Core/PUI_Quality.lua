@@ -1418,6 +1418,7 @@ local function EnsureEntryCountdownDriver()
 
   local function StopDisplay(display)
     if display.ticker then display.ticker:Cancel(); display.ticker = nil end
+    display.lastSecond = nil
     display:Hide()
   end
 
@@ -1436,25 +1437,50 @@ local function EnsureEntryCountdownDriver()
         if not canaccessvalue(remaining) then StopDisplay(display); return end
       end
       if remaining <= 0 then StopDisplay(display); return end
-      display.text:SetText((display.kind == "dungeon" and "~" or "") .. math.ceil(remaining) .. "s to accept")
+      if not display.duration then
+        display.duration = display.kind == "dungeon" and 40 or remaining
+        display:SetMinMaxValues(0, display.duration)
+      end
+      display:SetValue(remaining)
+      local second = math.ceil(remaining)
+      if display.lastSecond ~= second then
+        display.lastSecond = second
+        display.text:SetText((display.kind == "dungeon" and "~" or "") .. second .. "s")
+      end
       display:Show()
     end
     Update()
-    if display:IsShown() then display.ticker = C_Timer.NewTicker(1, Update) end
+    if display:IsShown() then display.ticker = C_Timer.NewTicker(0.05, Update) end
   end
 
   local function AttachDisplay(parent, kind)
     if not parent or driver.displays[kind] then return end
-    local display = CreateFrame("Frame", nil, parent)
+    local display = CreateFrame("StatusBar", nil, parent, "BackdropTemplate")
     display.kind = kind
-    display:SetSize(180, 20)
-    display:SetPoint("TOP", parent, "BOTTOM", 0, -4)
+    display:SetSize(260, 22)
+    display:SetPoint("TOP", parent, "BOTTOM", 0, -6)
+    display:EnableMouse(false)
+    display:SetStatusBarTexture([[Interface\Buttons\WHITE8x8]])
+    display:SetStatusBarColor(0.85, 0.62, 0.16)
+    display:SetBackdrop({
+      bgFile = [[Interface\Buttons\WHITE8x8]],
+      edgeFile = [[Interface\Buttons\WHITE8x8]],
+      edgeSize = 1,
+    })
+    display:SetBackdropColor(0.08, 0.08, 0.08, 0.95)
+    display:SetBackdropBorderColor(0, 0, 0, 1)
+    display.label = display:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    display.label:SetPoint("LEFT", display, "LEFT", 8, 0)
+    display.label:SetText("Time to accept")
     display.text = display:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    display.text:SetAllPoints()
+    display.text:SetPoint("RIGHT", display, "RIGHT", -8, 0)
     display:Hide()
     driver.displays[kind] = display
     parent:HookScript("OnShow", function() StartDisplay(display) end)
-    parent:HookScript("OnHide", function() StopDisplay(display) end)
+    parent:HookScript("OnHide", function()
+      StopDisplay(display)
+      display.duration = nil
+    end)
   end
 
   function driver:RefreshState()
@@ -3426,8 +3452,8 @@ local function QualityProvider(AddonObj)
     automation.merchant.args.easyItemDestroy = automation.dialogs.args.easyItemDestroy
     automation.merchant.args.easyItemDestroy.order = 6
     interfaceSettings.name = "Interface and camera"
-    automation.loot.args.entryCountdown = ToggleOption("Show entry countdown", "entryCountdown", 5)
-    automation.loot.args.entryCountdown.desc = "Shows time to accept dungeon and PvP queue prompts. Dungeon time is a 40-second estimate."
+    automation.loot.args.entryCountdown = ToggleOption("Show entry countdown bar", "entryCountdown", 5)
+    automation.loot.args.entryCountdown.desc = "Shows a draining bar with time to accept dungeon and PvP queue prompts. Dungeon time is a 40-second estimate."
     local confirmations = {
       type = "group", name = "Summons and resurrection", inline = true, order = 35,
       args = {
