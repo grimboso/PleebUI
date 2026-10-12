@@ -133,12 +133,14 @@ end
 
 local function PreviewStateLabel(state)
   if state == "ACTIVE" then
-    return draft.kind == "duration" and draft.durationSource == "ground" and "Ground effect active" or "Aura active"
+    return draft.kind == "duration" and draft.durationSource == "ground"
+      and (ns.PCMCustomDurationSource.sourceValues.ground .. " active") or "Aura active"
   end
   if state == "READY" then return draft.kind == "charge" and "Full charges" or "Ready" end
   if state == "RECHARGING" then return "Recharging" end
   if state == "INACTIVE" then
-    return draft.kind == "duration" and draft.durationSource == "ground" and "Ground effect inactive" or "Aura inactive"
+    return draft.kind == "duration" and draft.durationSource == "ground"
+      and (ns.PCMCustomDurationSource.sourceValues.ground .. " inactive") or "Aura inactive"
   end
   return "On cooldown"
 end
@@ -341,7 +343,7 @@ local function SetPage(newPage)
     end)
   elseif page == 2 then
     AddHeading("What to track")
-    AddDescription("Cooldown tracks one spell cooldown. Charge cooldown also shows recharge progress and available charges. Aura stacks tracks stack count with optional duration. Duration tracks a buff, debuff or ground effect.")
+    AddDescription("Cooldown tracks one spell cooldown. Charge cooldown also shows recharge progress and available charges. Aura stacks tracks stack count with optional duration. Duration tracks a buff, debuff, ground effect, totem or summon.")
     AddButton("Cooldown", function() draft.kind = "cooldown" PreviewChanged(DefaultPreviewState()) SetPage(3) end)
     AddButton("Charge cooldown", function() draft.kind = "charge" PreviewChanged(DefaultPreviewState()) SetPage(3) end)
     AddButton("Aura stacks", function() draft.kind = "stack" draft.maximum = 3 PreviewChanged(DefaultPreviewState()) SetPage(3) end)
@@ -351,7 +353,7 @@ local function SetPage(newPage)
     if draft.kind == "cooldown" or draft.kind == "charge" then
       AddDescription("Choose a spell found by Blizzard's Cooldown Manager or enter a spell ID. This creates a PleebUI tracker; use /cd if you also want to change Blizzard's Cooldown Manager lists.")
     else
-      AddDescription("Choose a spell found by the Cooldown Manager or enter its spell ID. Create separate trackers for its ground effect and its buff if you want to see both.")
+      AddDescription("Choose a spell found by the Cooldown Manager or enter its spell ID. Create separate trackers for its effect or summon duration and its buff/debuff if you want to see both.")
     end
     local listKind = (draft.kind == "cooldown" or draft.kind == "charge") and "cooldown" or "aura"
     local values, sorting = Cooldowns:GetCustomBarSpellDropdown(listKind)
@@ -378,15 +380,27 @@ local function SetPage(newPage)
     controls:AddChild(spellID)
 
     if draft.kind == "duration" then
-      AddDropdown("Duration source", {
-        automatic = "Automatic",
-        ground = "Ground effect",
-        aura = "Buff/debuff",
-      }, { "automatic", "ground", "aura" }, draft.durationSource, function(value)
-        draft.durationSource = value
-        SetPage(3)
-      end, "ACTIVE")
-      AddDescription("Automatic prefers the ground duration when available. Ground effect tracks only the placed effect; it stays inactive when no ground duration is available.")
+      local source = AddDropdown("Duration source", ns.PCMCustomDurationSource.sourceValues,
+        { "automatic", "ground", "aura" }, draft.durationSource, function(value)
+          draft.durationSource = value
+          SetPage(3)
+        end, "ACTIVE")
+      source:SetFullWidth(true)
+      source:SetCallback("OnEnter", function(widget)
+        GameTooltip:SetOwner(widget.frame, "ANCHOR_RIGHT")
+        GameTooltip:SetText("Duration source")
+        GameTooltip:AddLine(ns.PCMCustomDurationSource.sourceHelp, 1, 1, 1, true)
+        GameTooltip:Show()
+      end)
+      source:SetCallback("OnLeave", function(widget)
+        if GameTooltip:GetOwner() == widget.frame then GameTooltip:Hide() end
+      end)
+      if not source.__puiDurationSourceTooltipHooked then
+        source.__puiDurationSourceTooltipHooked = true
+        source.frame:HookScript("OnHide", function(owner)
+          if GameTooltip:GetOwner() == owner then GameTooltip:Hide() end
+        end)
+      end
     end
     if draft.kind == "stack" or (draft.kind == "duration" and draft.durationSource ~= "ground") then
       AddDropdown("Track aura on", {
