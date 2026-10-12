@@ -2619,8 +2619,10 @@ _PCM_BuildIconOverrideArgs = function(viewerKey, entry)
   if resourceKey then
     args.chargeDisplay = {
       type = "select",
-      name = "Soul Fragment display",
-      desc = "Track Soul Fragments on the Soul Cleave and Spirit Bomb icons, the PRD bar, both, or neither.",
+      name = resourceKey == "BONE_SHIELD" and "Bone Shield display" or "Soul Fragment display",
+      desc = resourceKey == "BONE_SHIELD"
+        and "Track Bone Shield stacks on the Marrowrend and Death's Caress icons, the PRD bar, both, or neither."
+        or "Track Soul Fragments on the Soul Cleave and Spirit Bomb icons, the PRD bar, both, or neither.",
       order = 29,
       values = { ICONS = "Icons only", BAR = "Bar only", BOTH = "Both", NONE = "Nothing" },
       sorting = { "ICONS", "BAR", "BOTH", "NONE" },
