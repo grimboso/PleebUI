@@ -128,7 +128,7 @@ local function PRDPreview_ResolveResourceColor(config, definition)
     return unpack(PRDPreview_CopyColor(config.customColor, 1, 1, 1, 1))
   elseif config.useClassColor == true then
     return PRDPreview_ResolveClassColor()
-  elseif config.useBlizzardPowerColor == true then
+  elseif config.useBlizzardPowerColor == true and definition.useTextureColor ~= true then
     local token = definition.colorToken or definition.token
     local color = token and PowerBarColor[token]
 
