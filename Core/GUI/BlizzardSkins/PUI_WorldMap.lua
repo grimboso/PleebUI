@@ -3,9 +3,15 @@ local Skins = ns.BlizzardSkins
 
 local function RefreshMap(frame)
   Skins.Shell(frame.BorderFrame)
-  Skins.StripRegions(frame.NavBar)
-  Skins.StripRegions(frame.NavBar.overlay)
-  Skins.Button(frame.NavBar.homeButton)
+  Skins.Navigation(frame.NavBar)
+  Skins.Arrow(frame.BorderFrame.MaximizeMinimizeFrame.MaximizeButton, "+")
+  Skins.Arrow(frame.BorderFrame.MaximizeMinimizeFrame.MinimizeButton, "-")
+  if frame.SidePanelToggle then
+    Skins.StripRegions(frame.SidePanelToggle.OpenButton)
+    Skins.StripRegions(frame.SidePanelToggle.CloseButton)
+    Skins.Arrow(frame.SidePanelToggle.OpenButton, "<")
+    Skins.Arrow(frame.SidePanelToggle.CloseButton, ">")
+  end
   Skins.Apply(frame, {
     Panel = { "ScrollContainer" },
   })
