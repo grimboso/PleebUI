@@ -43,9 +43,7 @@ function ns.BlizzardSkins.StripDialogTextures(root, keepFrame, keepRegion)
           region:SetAlpha(1)
           region:Show()
         else
-          region:SetTexture(nil)
           region:SetAlpha(0)
-          region:Hide()
         end
       end
     end
