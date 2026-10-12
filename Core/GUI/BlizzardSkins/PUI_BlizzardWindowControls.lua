@@ -160,10 +160,14 @@ function Controls.Install(frame, visualRoot, name)
     end
   end
   if visualRoot then state.visualRoot = visualRoot end
-  state.drag:SetFrameLevel(frame:GetFrameLevel() + 100)
-  state.grip:SetFrameLevel(frame:GetFrameLevel() + 100)
+  local controlRoot = frame == _G.WorldMapFrame and frame.BorderFrame or frame
+  state.drag:SetFrameStrata(controlRoot:GetFrameStrata())
+  state.grip:SetFrameStrata(controlRoot:GetFrameStrata())
+  state.drag:SetFrameLevel(controlRoot:GetFrameLevel() + 100)
+  state.grip:SetFrameLevel(controlRoot:GetFrameLevel() + 100)
   state.grip:ClearAllPoints()
-  state.grip:SetPoint("BOTTOMRIGHT", state.visualRoot, "BOTTOMRIGHT", -4, 4)
+  local rightInset = frame == _G.WorldMapFrame and 28 or 4
+  state.grip:SetPoint("BOTTOMRIGHT", state.visualRoot, "BOTTOMRIGHT", -rightInset, 4)
   local accent = ns.Theme.GetColors().accent
   for _, line in ipairs(state.lines) do
     line:SetColorTexture(accent[1], accent[2], accent[3], 0.75)
