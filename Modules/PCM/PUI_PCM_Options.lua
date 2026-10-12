@@ -33,7 +33,7 @@ local function AssignFields(section, fields)
   end
 end
 
-AssignFields("general", "enabled name group auraTrackMode maxStacks powerInfusion bloodlust customBuffSpellIDs onlyOnUseTrinkets nativeTracking showSwipe swipeShow showTooltips showTooltip")
+AssignFields("general", "enabled name group auraTrackMode durationSource maxStacks powerInfusion bloodlust customBuffSpellIDs onlyOnUseTrinkets nativeTracking showSwipe swipeShow showTooltips showTooltip")
 AssignFields("layout", "size iconSize width height fixedWidth widthMode iconSpacing spacing columns iconsPerRow growUp growth rowGrowth growthDirection orientation rowSpacing wrap showIcon showSpellIconNextToBar iconPlacement iconAnchor durationHideIconFrame durationHideSpellIcon durationAnchor durationGap durationHeight durationIconSize borderThickness borderColor borderSize viewerBorderSize viewerBorderColor durationIconBorderSize durationIconBorderColor showSlotBorder slotBorderThickness slotBorderColor")
 AssignFields("timer", "forceCooldown cooldownTimerEnabled timerDisplay swipeSource durationSwipe durationText swipeGCD swipeCooldown swipeDuration countCooldown countDuration showCooldownText showDurationSwipe showDurationText rechargeCountdown barMode durationBarFillMode drainDirection fillDirection activeAuraSource activeAuraCDM activeAuraCustom source cdmBuff customBuff showActive hideDurationWhenMissing inheritedTimer swipeEdge swipeReverse swipeColorOverride swipeColor cooldownSwipeColor cooldownSwipeEdge cooldownSwipeEdgeColor durationSwipeColor durationSwipeEdge durationSwipeEdgeColor gcdSwipeColor gcdSwipeEdge gcdSwipeEdgeColor rechargeEdge")
 AssignFields("visibility", "visibility combatOnly hideOutOfCombat outOfCombatAlpha missingAlpha readyAlpha readyAlphaOverride cooldownAlpha cooldownAlphaOverride onCooldownAlpha activeAlpha activeAuraAlpha auraAlpha auraAlphaOverride alpha opacity showOnlyWhenActive hideWhenInactive hideViewerIcon activeAuraHideViewerIcon")
@@ -75,7 +75,7 @@ local function AssignInlineGroup(groups, group, fields)
   for field in fields:gmatch("%S+") do groups[field] = group end
 end
 AssignInlineGroup(GENERAL_GROUPS, "groupSettings", "enabled name group")
-AssignInlineGroup(GENERAL_GROUPS, "tracking", "nativeTracking auraTrackMode maxStacks powerInfusion bloodlust customBuffSpellIDs onlyOnUseTrinkets")
+AssignInlineGroup(GENERAL_GROUPS, "tracking", "nativeTracking auraTrackMode durationSource maxStacks powerInfusion bloodlust customBuffSpellIDs onlyOnUseTrinkets")
 AssignInlineGroup(GENERAL_GROUPS, "quickTimers", "showSwipe swipeShow")
 AssignInlineGroup(LAYOUT_GROUPS, "size", "size iconSize width height fixedWidth widthMode durationHeight durationIconSize")
 AssignInlineGroup(LAYOUT_GROUPS, "arrangement", "iconSpacing spacing columns iconsPerRow growUp growth rowGrowth growthDirection orientation rowSpacing wrap")
