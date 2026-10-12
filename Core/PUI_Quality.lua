@@ -1305,7 +1305,7 @@ local function EnsureWhisperInviteDriver()
   f:SetScript("OnEvent", function(self, event, message, sender, ...)
     if C_ChatInfo.InChatMessagingLockdown() or InCombatLockdown() then return end
     if not canaccessvalue(message) or not canaccessvalue(sender) then return end
-    if strtrim(message):lower() ~= self.keyword then return end
+    if not self.keywords[strtrim(message):lower()] then return end
     if IsPartyLFG() or IsQueueStatusActive() then return end
     if IsInGroup() and not UnitIsGroupLeader("player") and not UnitIsGroupAssistant("player") then return end
     if GetNumGroupMembers() >= (IsInRaid() and 40 or 5) then return end
@@ -1331,8 +1331,12 @@ local function EnsureWhisperInviteDriver()
   function f:RefreshState()
     self:UnregisterAllEvents()
     local q = GetQ()
-    self.keyword = q.whisperInviteKeyword:lower()
-    if q.whisperInvites and self.keyword ~= "" then
+    self.keywords = {}
+    for keyword in q.whisperInviteKeyword:gmatch("[^,]+") do
+      keyword = strtrim(keyword):lower()
+      if keyword ~= "" then self.keywords[keyword] = true end
+    end
+    if q.whisperInvites and next(self.keywords) then
       self:RegisterEvent("CHAT_MSG_WHISPER")
       if q.whisperInviteBattleNetFriends then self:RegisterEvent("CHAT_MSG_BN_WHISPER") end
     end
@@ -3436,8 +3440,8 @@ local function QualityProvider(AddonObj)
       type = "group", name = "Whisper invites", inline = true, order = 36,
       args = {
         enabled = ToggleOption("Invite by whisper keyword", "whisperInvites", 1),
-        keyword = InputOption("Keyword", "whisperInviteKeyword", 2, DisabledWhenOff("whisperInvites")),
-        help = DescriptionOption("Matches the whole message, ignoring case and surrounding spaces. Invites trusted senders while solo or able to invite to your group. Unavailable during combat or restricted chat.", 3),
+        keyword = InputOption("Keywords", "whisperInviteKeyword", 2, DisabledWhenOff("whisperInvites")),
+        help = DescriptionOption("Separate keywords with commas, for example: invite, inv, +. Each matches the whole message, ignoring case and surrounding spaces. Invites trusted senders while solo or able to invite to your group. Unavailable during combat or restricted chat.", 3),
         friends = ToggleOption("Friends", "whisperInviteFriends", 4, nil, DisabledWhenOff("whisperInvites")),
         battleNet = ToggleOption("Battle.net friends", "whisperInviteBattleNetFriends", 5, nil, DisabledWhenOff("whisperInvites")),
         guild = ToggleOption("Guild members", "whisperInviteGuildMembers", 6, nil, DisabledWhenOff("whisperInvites")),
