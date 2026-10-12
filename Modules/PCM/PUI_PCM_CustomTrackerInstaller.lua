@@ -53,7 +53,8 @@ local function NewDraft()
   return {
     presentation = "BUTTON",
     kind = "cooldown",
-    auraTrackMode = "player_buff",
+    auraTrackMode = "automatic",
+    durationSource = "automatic",
     spellID = nil,
     maximum = 3,
     width = 250,
@@ -131,10 +132,14 @@ local function PreviewStates()
 end
 
 local function PreviewStateLabel(state)
-  if state == "ACTIVE" then return "Aura active" end
+  if state == "ACTIVE" then
+    return draft.kind == "duration" and draft.durationSource == "ground" and "Ground effect active" or "Aura active"
+  end
   if state == "READY" then return draft.kind == "charge" and "Full charges" or "Ready" end
   if state == "RECHARGING" then return "Recharging" end
-  if state == "INACTIVE" then return "Aura inactive" end
+  if state == "INACTIVE" then
+    return draft.kind == "duration" and draft.durationSource == "ground" and "Ground effect inactive" or "Aura inactive"
+  end
   return "On cooldown"
 end
 
@@ -336,17 +341,17 @@ local function SetPage(newPage)
     end)
   elseif page == 2 then
     AddHeading("What to track")
-    AddDescription("Cooldown tracks one spell cooldown. Charge cooldown also shows recharge progress and available charges. Aura stacks tracks stack count with optional duration. Aura duration tracks the remaining time of a buff or debuff.")
+    AddDescription("Cooldown tracks one spell cooldown. Charge cooldown also shows recharge progress and available charges. Aura stacks tracks stack count with optional duration. Duration tracks a buff, debuff or ground effect.")
     AddButton("Cooldown", function() draft.kind = "cooldown" PreviewChanged(DefaultPreviewState()) SetPage(3) end)
     AddButton("Charge cooldown", function() draft.kind = "charge" PreviewChanged(DefaultPreviewState()) SetPage(3) end)
     AddButton("Aura stacks", function() draft.kind = "stack" draft.maximum = 3 PreviewChanged(DefaultPreviewState()) SetPage(3) end)
-    AddButton("Aura duration", function() draft.kind = "duration" PreviewChanged(DefaultPreviewState()) SetPage(3) end)
+    AddButton("Duration", function() draft.kind = "duration" PreviewChanged(DefaultPreviewState()) SetPage(3) end)
   elseif page == 3 then
     AddHeading("Spell")
     if draft.kind == "cooldown" or draft.kind == "charge" then
       AddDescription("Choose a spell found by Blizzard's Cooldown Manager or enter a spell ID. This creates a PleebUI tracker; use /cd if you also want to change Blizzard's Cooldown Manager lists.")
     else
-      AddDescription("Choose an aura found by the Cooldown Manager or enter its spell ID, then choose whether it belongs to you or your target.")
+      AddDescription("Choose a spell found by the Cooldown Manager or enter its spell ID. Create separate trackers for its ground effect and its buff if you want to see both.")
     end
     local listKind = (draft.kind == "cooldown" or draft.kind == "charge") and "cooldown" or "aura"
     local values, sorting = Cooldowns:GetCustomBarSpellDropdown(listKind)
@@ -372,12 +377,24 @@ local function SetPage(newPage)
     end)
     controls:AddChild(spellID)
 
-    if draft.kind == "duration" or draft.kind == "stack" then
+    if draft.kind == "duration" then
+      AddDropdown("Duration source", {
+        automatic = "Automatic",
+        ground = "Ground effect",
+        aura = "Buff/debuff",
+      }, { "automatic", "ground", "aura" }, draft.durationSource, function(value)
+        draft.durationSource = value
+        SetPage(3)
+      end, "ACTIVE")
+      AddDescription("Automatic prefers the ground duration when available. Ground effect tracks only the placed effect; it stays inactive when no ground duration is available.")
+    end
+    if draft.kind == "stack" or (draft.kind == "duration" and draft.durationSource ~= "ground") then
       AddDropdown("Track aura on", {
+        automatic = "Automatic",
         player_buff = "Player buff",
         target_debuff = "Target debuff",
-      }, { "player_buff", "target_debuff" }, draft.auraTrackMode, function(value)
-        draft.auraTrackMode = value == "target_debuff" and "target_debuff" or "player_buff"
+      }, { "automatic", "player_buff", "target_debuff" }, draft.auraTrackMode, function(value)
+        draft.auraTrackMode = value
       end, "ACTIVE")
     end
 
@@ -430,7 +447,7 @@ local function SetPage(newPage)
       local textures, textureOrder = BuildStatusbarList()
       AddDropdown("Bar texture", textures, textureOrder, draft.texture, function(value) draft.texture = value end)
       AddCheckbox("Show text", draft.showText, function(value) draft.showText = value end)
-      AddCheckbox(draft.kind == "duration" and "Show aura icon beside bar" or "Show icon beside bar", draft.showBarIcon, function(value) draft.showBarIcon = value end)
+      AddCheckbox("Show icon beside bar", draft.showBarIcon, function(value) draft.showBarIcon = value end)
     end
     if draft.kind == "stack" then
       AddCheckbox("Add stack color threshold", draft.addColorShift, function(value) draft.addColorShift = value end, "ACTIVE")
@@ -468,14 +485,14 @@ local function SetPage(newPage)
       AddDescription("Choose the active buff and glow on the Active glow page.")
     else
       draft.showActive = true
-      AddCheckbox("Show only while aura is active", draft.showOnlyWhenActive, function(value) draft.showOnlyWhenActive = value end, "ACTIVE")
+      AddCheckbox("Show only while active", draft.showOnlyWhenActive, function(value) draft.showOnlyWhenActive = value end, "ACTIVE")
       if draft.kind == "stack" then
         AddCheckbox("Hide tracked aura in Buff Icon Viewer", draft.hideViewerIcon, function(value) draft.hideViewerIcon = value end)
       end
       AddSlider("Inactive opacity", draft.readyAlpha, 0, 100, 1, function(value) draft.readyAlpha = value end, "INACTIVE")
       AddCheckbox("Desaturate while inactive", draft.desaturateReady, function(value) draft.desaturateReady = value end, "INACTIVE")
     end
-    AddSlider("Active aura opacity", draft.activeAlpha, 0, 100, 1, function(value) draft.activeAlpha = value end, "ACTIVE")
+    AddSlider("Active opacity", draft.activeAlpha, 0, 100, 1, function(value) draft.activeAlpha = value end, "ACTIVE")
     AddCheckbox("Desaturate while active", draft.desaturateActive, function(value) draft.desaturateActive = value end, "ACTIVE")
   elseif page == 6 then
     AddHeading("Active glow")
@@ -539,7 +556,7 @@ local function SetPage(newPage)
         draft.activeAuraSpellID = spellID and spellID > 0 and math.floor(spellID) or nil
       end, "ACTIVE")
     else
-      AddDescription("This tracker uses its tracked aura as the active state.")
+      AddDescription("This tracker follows its selected duration or stack source for the active state.")
     end
 
     AddCheckbox("Glow while active", draft.customGlowEnabled, function(value)
