@@ -1050,6 +1050,7 @@ function PCMPresentation.ApplyOwnedIconStyle(parts, style, isOnGCD)
   parts.qualityTexture:SetScale(size / 36)
 
   parts.tooltipsEnabled = style.tooltips == true
+  parts.frame:SetMouseClickEnabled(false)
   parts.frame:SetMouseMotionEnabled(parts.tooltipsEnabled)
 
   local swipe = style.resolvedSwipe
@@ -1204,6 +1205,7 @@ function PCMPresentation.ConfigureOwnedAuraLayer(parts, button, unit, style)
   local appearance = style.appearance or {}
   local auraAlpha = tonumber(appearance.auraAlpha) or 1
   button:SetAlpha(auraAlpha)
+  button:SetMouseClickEnabled(false)
   button:SetMouseMotionEnabled(style.tooltips == true and auraAlpha > 0)
   local saturation = tonumber(appearance.auraSaturation)
   local desaturation = saturation and (1 - math.max(0, math.min(1, saturation))) or 0
