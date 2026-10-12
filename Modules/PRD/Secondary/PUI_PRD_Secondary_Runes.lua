@@ -47,6 +47,7 @@ function M:BuildRuneBars()
   Secondary.EnsureSecondaryContainerBox(self)
 
   local content = Secondary.GetSecondaryContentFrame(self) or self.secondary
+  Secondary.EnsureSecondaryBuildBar(self, content)
   local config = self.secondaryResourceConfig
   local texturePath = Secondary.FetchStatusbarTexture(
     config.texture or self.secondaryTexture
