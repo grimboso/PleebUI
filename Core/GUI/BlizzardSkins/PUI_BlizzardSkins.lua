@@ -136,8 +136,9 @@ function Skins.Selection(texture)
   end
 end
 
-function Skins.Shell(frame)
-  Skins.Panel(frame)
+function Skins.Shell(frame, backgroundFrame)
+  Skins.Chrome(frame)
+  Skins.Surface(backgroundFrame or frame)
   Skins.Chrome(frame.Inset)
   if frame.TitleContainer then
     Skins.Font(frame.TitleContainer.TitleText, "title")
