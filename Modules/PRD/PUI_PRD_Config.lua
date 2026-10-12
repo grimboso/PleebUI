@@ -1006,7 +1006,13 @@ local function PRDPreview_ApplySegmentValues(
       or config.resourceKey == "ESSENCE" and behavior.completionAnimation == "FADE"
       or value > 0
     segment.frame:SetAlpha(fullAlpha and 1 or inactiveAlpha)
-    local direction = config.resourceKey == "ESSENCE" and behavior.rechargeDirection or "LTR"
+    if config.resourceKey == "RUNES" then
+      local fade = behavior.rechargeAnimation == "FADE"
+      segment.fill:SetValue(fade and 1 or value)
+      segment.fill:SetAlpha(fade and (inactiveAlpha + (1 - inactiveAlpha) * value) or 1)
+      segment.background:SetAlpha((fade or value >= 1) and 0 or inactiveAlpha)
+    end
+    local direction = timed and behavior.rechargeDirection or "LTR"
     segment.fill:SetOrientation((direction == "TTB" or direction == "BTT") and "VERTICAL" or "HORIZONTAL")
     segment.fill:SetReverseFill(direction == "RTL" or direction == "BTT")
     local full = value >= 1
@@ -3860,11 +3866,26 @@ do
         },
       }
 
-      if resourceKey == "ESSENCE" then
+      if resourceKey == "RUNES" then
+        args.rechargeAnimation = {
+          type = "select",
+          name = "Recharge animation",
+          order = 4,
+          values = { FILL = "Fill", FADE = "Fade in" },
+          get = function() return behavior.rechargeAnimation end,
+          set = function(_, value)
+            behavior.rechargeAnimation = value
+            Addon:ApplyOptionsChange("PRD", { secondaryUpdate = true })
+          end,
+        }
+      end
+
+      if resourceKey == "RUNES" or resourceKey == "ESSENCE" then
         args.rechargeDirection = {
           type = "select",
           name = "Recharge direction",
-          order = 4,
+          order = 5,
+          hidden = resourceKey == "RUNES" and function() return behavior.rechargeAnimation == "FADE" end or nil,
           values = RESOURCE_RECHARGE_DIRECTION_VALUES,
           get = function()
             return behavior.rechargeDirection or "LTR"
