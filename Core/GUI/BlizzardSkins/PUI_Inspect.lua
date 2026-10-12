@@ -97,6 +97,7 @@ local function EnsureInspectShellHost()
   host:SetPoint("BOTTOMRIGHT", InspectFrame, "BOTTOMRIGHT", 0, -40)
 
   ns.Theme.WidgetSkins.Frame(host)
+  ns.BlizzardWindowControls.Install(InspectFrame, host)
 end
 
 local function SetupInspectFrameSkinning()
