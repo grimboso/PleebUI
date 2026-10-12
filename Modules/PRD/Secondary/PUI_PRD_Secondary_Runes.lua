@@ -48,6 +48,7 @@ local function ApplyRuneCooldown(bar, start, duration, runeReady)
   local owner = bar._puiRuneOwner
   local behavior = owner.secondaryResourceConfig.behavior
   local showCooldown = behavior.showRechargeTime ~= false
+    and (start <= GetTime() or behavior.showQueuedRuneTime == true)
   local showGlow = behavior.showReadyGlow ~= false
   local animationMode = behavior.completionAnimation
   local inactiveAlpha = Secondary.GetInactiveAlpha(owner)
