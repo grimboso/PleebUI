@@ -6,7 +6,7 @@ Skins.Register("Blizzard_Communities", "CommunitiesFrame.RecruitmentDialog", fun
   Skins.Hide(frame.BG)
   Skins.Texts(frame)
   Skins.Apply(frame, {
-    StripRegions = { "RecruitmentMessageFrame.RecruitmentMessageInput" },
+    StripRegions = { "RecruitmentMessageFrame", "RecruitmentMessageFrame.RecruitmentMessageInput" },
     EditBox = { "RecruitmentMessageFrame.RecruitmentMessageInput.EditBox", "MinIlvlOnly.EditBox" },
     Dropdown = { "ClubFocusDropdown", "LookingForDropdown", "LanguageDropdown" },
     CheckBox = { "ShouldListClub.Button", "MaxLevelOnly.Button", "MinIlvlOnly.Button" },
