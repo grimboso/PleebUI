@@ -183,6 +183,15 @@ driver:SetScript("OnEvent", function(self, event)
   end
 end)
 
+function Controls.RefreshTheme()
+  local accent = ns.Theme.GetColors().accent
+  for _, state in pairs(windows) do
+    for _, line in ipairs(state.lines) do
+      line:SetColorTexture(accent[1], accent[2], accent[3], 0.75)
+    end
+  end
+end
+
 function Controls:GetOptions()
   return {
     type = "group", name = "Blizzard windows",
