@@ -7427,9 +7427,10 @@ local function _PCM_BuildBuffBarLeafArgs(id)
   args.durationSource = {
     type = "select",
     name = "Duration source",
-    desc = "Automatic prefers an available ground duration, then the buff or debuff. Ground effect tracks only the placed effect and stays inactive when no ground duration is available.",
+    desc = ns.PCMCustomDurationSource.sourceHelp,
     order = 10.4,
-    values = { automatic = "Automatic", ground = "Ground effect", aura = "Buff/debuff" },
+    width = "full",
+    values = ns.PCMCustomDurationSource.sourceValues,
     sorting = { "automatic", "ground", "aura" },
     hidden = function() return not IsDuration() end,
     get = function()
