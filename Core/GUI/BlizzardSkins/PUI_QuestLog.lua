@@ -31,7 +31,7 @@ local function RefreshHeaderTitle(row)
 end
 
 local function SkinQuestHeaderSurface(row, bottomInset)
-  local host = Skins.Surface(row, true)
+  local host = Skins.Surface(row, false, true)
   -- Campaign headers resize from their children; the backdrop must not affect layout.
   host.ignoreInLayout = true
   host:ClearAllPoints()
@@ -46,14 +46,14 @@ local function SkinQuestHeader(row)
   Skins.Hide(row.TopFiligree)
   Skins.Hide(row.Divider)
   if row:IsObjectType("Button") and row.CollapseButton then
-    Skins.Button(row)
+    Skins.Button(row, true)
     Skins.Hook(row, "CheckHighlightTitle", RefreshHeaderTitle)
   end
   local host = SkinQuestHeaderSurface(row, row.LoreButton and 10 or 0)
   if row.LoreButton then
-    Skins.Selection(row.SelectedHighlight)
+    Skins.Selection(row.SelectedHighlight, 0.07)
     row.SelectedHighlight:SetAllPoints(host)
-    Skins.Selection(row.HighlightTexture)
+    Skins.Selection(row.HighlightTexture, 0.05)
     row.HighlightTexture:SetAllPoints(host)
   end
   if row.CollapseButton then
@@ -91,8 +91,8 @@ local function RefreshQuestLog(frame)
     local tab = frame[key]
     Skins.Panel(tab)
     Skins.Icon(tab.Icon)
-    Skins.Selection(tab.SelectedTexture)
-    Skins.Selection(tab.HighlightTexture)
+    Skins.Selection(tab.SelectedTexture, 0.08)
+    Skins.Selection(tab.HighlightTexture, 0.05)
     Skins.Hide(tab.TabGlow)
   end
   SkinQuestHeader(QuestScrollFrame.Contents.StoryHeader)
