@@ -1034,7 +1034,7 @@ local function ConfigureAuraParts(record, button, parts, initializing)
   local glowColor = CopyColor(icon.activeAuraGlowColor, { 1, 0.55, 0.1, 1 })
   if glowStyle == "NONE"
     and record.cfg.buffGlowEnabled == true
-    and tonumber(record.cfg.buffGlowSpellID) == nil
+    and (record.cfg.buffGlowSpellID == nil or record.cfg.buffGlowSpellID == tonumber(record.cfg.trackedSpellID))
   then
     glowStyle = ResolveCueGlowStyle(record)
     glowColor = CopyColor(record.cfg.buffGlowColor, { 0.25, 0.75, 1, 1 })
@@ -1133,6 +1133,98 @@ local function ConfigureAuraParts(record, button, parts, initializing)
   button:SetAlpha(icon.activeAuraAlpha / 100)
 end
 
+local function ConfigureGroundIcon(record)
+  local icon = record.icon
+  local glowStyle = icon.activeAuraGlowStyle or "NONE"
+  local glowColor = CopyColor(icon.activeAuraGlowColor, { 1, 0.55, 0.1, 1 })
+  if glowStyle == "NONE"
+    and record.cfg.buffGlowEnabled == true
+    and (record.cfg.buffGlowSpellID == nil or record.cfg.buffGlowSpellID == tonumber(record.cfg.trackedSpellID))
+  then
+    glowStyle = ResolveCueGlowStyle(record)
+    glowColor = CopyColor(record.cfg.buffGlowColor, { 0.25, 0.75, 1, 1 })
+  end
+  if record.groundDuration == nil then glowStyle = "NONE" end
+  local parts = record.groundParts
+  if not parts then
+    local button = CreateFrame("Frame", nil, record.parts.frame, "PUI_AuraApplicationDurationTemplate")
+    parts = AuraWidget.BindApplicationDurationButton(button)
+    record.groundParts = parts
+    parts.durationBinding = BarWidget.CreateDurationBinding(parts.durationText)
+    parts.durationCooldown:SetScript("OnCooldownDone", function()
+      ns.PCMCustomDurationSource:Expire(record)
+    end)
+    parts.activeAuraGlow = AuraWidget.CreateSlotGlow(button, icon.size, icon.size,
+      glowStyle, glowColor, GetSlotGlowOptions(record))
+    button:Hide()
+  else
+    AuraWidget.ConfigureSlotGlow(parts.activeAuraGlow, icon.size, icon.size,
+      glowStyle, glowColor, GetSlotGlowOptions(record))
+  end
+  parts.groundGlowColor = glowColor
+  local button = parts.button
+  button:SetAllPoints(record.parts.frame)
+  button:SetFrameStrata(record.parts.frame:GetFrameStrata())
+  button:SetFrameLevel(record.parts.frame:GetFrameLevel() + 2)
+  ApplyChrome(button, icon)
+  SetTooltip(button, record)
+  parts.icon:SetAllPoints(button)
+  parts.icon:SetTexture(record.parts.icon:GetTexture())
+  ApplyIconCrop(parts.icon, icon)
+  parts.icon:SetDesaturated(icon.activeAuraDesaturate == true)
+  parts.icon:Show()
+  parts.durationCooldown:SetAllPoints(button)
+  parts.durationCooldown:SetReverse(true)
+  parts.durationCooldown:SetSwipeColor(0, 0, 0, 0.72)
+  parts.durationCooldown:SetDrawSwipe(icon.showSwipe == true)
+  parts.durationCooldown:SetDrawEdge(icon.showSwipe == true)
+  parts.durationCooldown:SetHideCountdownNumbers(true)
+  parts.durationCooldown:Show()
+  parts.durationTextHolder:SetAllPoints(button)
+  parts.durationTextHolder:SetFrameLevel(parts.durationCooldown:GetFrameLevel() + 2)
+  parts.durationTextHolder:SetShown(icon.showDuration == true)
+  ApplyFont(parts.durationText, button, icon, false)
+  button:SetAlpha(icon.activeAuraAlpha / 100)
+  if record.groundDuration then
+    parts.durationBinding:SetDuration(record.groundDuration)
+    if icon.showDuration then parts.durationBinding:Enable() else parts.durationBinding:Disable() end
+  end
+end
+
+local function ClearGroundIcon(record)
+  record.groundSelected = false
+  record.groundDuration = nil
+  local parts = record.groundParts
+  if not parts then return end
+  parts.button:Hide()
+  parts.durationCooldown:Clear()
+  parts.durationBinding:Disable()
+  parts.durationText:SetText("")
+  AuraWidget.ConfigureSlotGlow(parts.activeAuraGlow, record.icon.size, record.icon.size,
+    "NONE", parts.groundGlowColor)
+end
+
+local function RefreshAuraDurationSource(record, duration, useAura)
+  record.groundSelected = not useAura
+  record.groundDuration = duration
+  if not useAura then ConfigureGroundIcon(record) end
+  local parts = record.groundParts
+  if parts then
+    parts.button:SetShown(duration ~= nil)
+    if duration then
+      parts.durationCooldown:SetCooldownFromDurationObject(duration, true)
+    else
+      parts.durationCooldown:Clear()
+      parts.durationBinding:Disable()
+      parts.durationText:SetText("")
+      AuraWidget.ConfigureSlotGlow(parts.activeAuraGlow, record.icon.size, record.icon.size,
+        "NONE", parts.groundGlowColor)
+    end
+  end
+  AuraSlotDriver:SetSlotActive(record.auraSlot, useAura)
+  CustomIcons:RefreshVisibility(record.key, record.inCombat)
+end
+
 function CustomIcons:ConfigureAura(key, cfg, options)
   local record = self:Configure(key, cfg, {
     kind = "aura",
@@ -1149,6 +1241,8 @@ function CustomIcons:ConfigureAura(key, cfg, options)
   record.auraCandidateSpellIDs = options.candidateSpellIDs
   StopStateGlow(record)
   if not record.runtimeEnabled then
+    ns.PCMCustomDurationSource:Detach(record)
+    ClearGroundIcon(record)
     if record.auraSlot then AuraSlotDriver:SetSlotActive(record.auraSlot, false) end
     return
   end
@@ -1190,7 +1284,13 @@ function CustomIcons:ConfigureAura(key, cfg, options)
     options.candidateSpellIDs,
     cfg.__puiCooldownID
   )
-  AuraSlotDriver:SetSlotActive(record.auraSlot, true)
+  if options.auraKind == "duration" then
+    ns.PCMCustomDurationSource:Attach(record, cfg, options.candidateSpellIDs, RefreshAuraDurationSource)
+  else
+    ns.PCMCustomDurationSource:Detach(record)
+    ClearGroundIcon(record)
+    AuraSlotDriver:SetSlotActive(record.auraSlot, true)
+  end
   ConfigureCueAuraTrack(record)
   self:RefreshVisibility(key, record.inCombat)
   return record
@@ -1203,6 +1303,7 @@ function CustomIcons:RefreshStyle(key)
   end
 
   ApplyBaseStyle(record)
+  if record.groundParts then ConfigureGroundIcon(record) end
   if record.kind == "charge" and (record.pipCount or 0) > 0 then
     EnsurePips(record, record.pipCount)
   end
@@ -1222,6 +1323,12 @@ function CustomIcons:RefreshVisibility(key, inCombat)
     local visible = record.runtimeEnabled and contextAlpha > 0
     local baseAlpha = record.icon.visibility == "ALWAYS"
       and contextAlpha * record.icon.readyAlpha / 100 or contextAlpha
+    if record.groundDuration ~= nil then
+      baseAlpha = contextAlpha
+    elseif record.groundSelected and record.icon.visibility == "ACTIVE" then
+      visible = false
+    end
+    record.parts.icon:SetShown(record.icon.visibility == "ALWAYS" and record.groundDuration == nil)
     record.parts.frame:SetShown(visible)
     record.parts.frame:SetAlpha(baseAlpha)
     record.parts.frame:EnableMouse(
@@ -1244,6 +1351,7 @@ function CustomIcons:FlushAuraStyles()
   if C_Secrets.ShouldAurasBeSecret() == true then return end
   for _, record in pairs(records) do
     if record.runtimeEnabled then
+      if record.groundParts then ConfigureGroundIcon(record) end
       if record.auraParts then
         ConfigureAuraParts(record, record.auraParts.button, record.auraParts)
       end
@@ -1257,6 +1365,8 @@ function CustomIcons:Release(key)
   local record = records[key]
   if not record then return end
   record.runtimeEnabled = false
+  ns.PCMCustomDurationSource:Detach(record)
+  ClearGroundIcon(record)
   StopStateGlow(record)
   if record.auraSlot then
     AuraSlotDriver:SetSlotCandidates(record.auraSlot, retiredCandidates)
