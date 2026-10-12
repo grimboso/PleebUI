@@ -8,7 +8,7 @@ local math_max = _G.math.max
 
 local CURRENT_RELEASE_VERSION = _G.C_AddOns.GetAddOnMetadata(ns.Name, "Version")
 if CURRENT_RELEASE_VERSION == "@project-version@" then
-  CURRENT_RELEASE_VERSION = "1.5-beta"
+  CURRENT_RELEASE_VERSION = "1.5.1"
 end
 
 local RELEASE_1_4 = {
@@ -93,19 +93,49 @@ local RELEASE_1_4 = {
   },
 }
 
-local CURRENT_RELEASE = {
-  version = CURRENT_RELEASE_VERSION,
-  intro = "Version 1.5 beta makes PleebUI easier to edit: cleaner settings, better previews, and more control over your combat HUD.",
+local RELEASE_1_5 = {
+  version = "1.5",
+  intro = "Version 1.5 adds a rebuilt Edit Mode workflow, keyboard navigation, accessibility controls, expanded previews, and more combat display options.",
   items = {
     {
-      title = "A clearer Edit Mode and settings workflow",
-      description = "Enter PleebUI Edit Mode with /pe, select a frame to move it or change quick settings, and jump straight to its full options when you need more control. The reorganized settings pages group related controls and use clearer labels, so you spend less time hunting for an option.",
+      title = "Reorganized settings and quick settings",
+      description = "Related controls now share clearer sections, with consistent layout, appearance, visibility, and text settings. Mover quick settings include useful shortcuts, explanations for unavailable controls, and direct links to full module options. Chat and Damage Meter pages also use tree navigation.",
       location = "PleebUI Edit Mode (/pe) / PleebUI options",
     },
     {
+      title = "Searchable Edit Mode mover list",
+      description = "Find movers in a searchable tree grouped by module. Saved visibility presets and group-context filters help you focus on the frames you want to arrange, including supported external addon movers. Hidden samples pause their preview updates.",
+      location = "PleebUI Edit Mode (/pe) > mover list",
+    },
+    {
+      title = "Resizable Edit Mode controls",
+      description = "Edit Mode now uses a resizable panel with collapsible sections. Quick settings retain their scroll position, and width, height, and position controls let you arrange the panel without dragging it.",
+      location = "PleebUI Edit Mode (/pe) > toolbar",
+    },
+    {
+      title = "Edit Mode Undo and Redo",
+      description = "Undo and redo mover positions, supported quick-setting changes, and linked group moves during your editing session. Buttons and Ctrl+Z / Ctrl+Y include descriptions of the change. History clears when you leave Edit Mode or switch profiles.",
+      location = "PleebUI Edit Mode (/pe) > Undo / Redo",
+    },
+    {
+      title = "Easier mover selection and alignment",
+      description = "Snap guides show nearby frame edges, and Compact movers can soften idle labels and borders. Small and selected movers are easier to reach when frames overlap, with an Overlaps selector for choosing the intended frame.",
+      location = "PleebUI Edit Mode (/pe) > mover controls / Overlaps",
+    },
+    {
+      title = "Keyboard navigation and movement",
+      description = "Navigate options, dialogs, dropdowns, colors, and supported previews with Tab, arrow keys, Enter, and Space. F1 opens contextual help. Save a mouse or keyboard Edit Mode preference, use /pek for one keyboard session, and press F6 to switch between movers and toolbar controls. Mouse interaction clears keyboard focus.",
+      location = "PleebUI > Accessibility > Controls and motion / PleebUI Edit Mode (/pek)",
+    },
+    {
       title = "Action Bar previews and simpler setup",
-      description = "Shared settings and individual bars are easier to navigate, with live icon previews for Action Bars and dedicated settings for Bars 1-12, Pet, and Stance. Visibility and text controls are grouped where you need them.",
+      description = "Shared settings and individual bars are easier to navigate, with previews that show actual icons, cooldowns, counts, keybinds, and macro names. Dedicated pages cover Bars 1-12, Pet, and Stance. Inherited sizes and backdrop spacing now match the live bars more closely.",
       location = "PleebUI > Action Bars",
+    },
+    {
+      title = "Unit Frame positions by group context",
+      description = "Keep separate positions for supported Unit Frames in Solo, Party, and Raid layouts, or use Shared positions. Choose how group-context changes select a layout, and configure each context without replacing the rest of your frame settings.",
+      location = "PleebUI Edit Mode (/pe) > Unit Frame quick settings > More: group positions",
     },
     {
       title = "Unit Frame options and previews",
@@ -114,13 +144,23 @@ local CURRENT_RELEASE = {
     },
     {
       title = "More Cast Bar text control",
-      description = "Place cast target text independently, limit spell-name width, and choose how cast time is displayed. Spell and target text stay easier to read on narrow bars.",
-      location = "PleebUI > Combat frames > Unit Frames > Castbar",
+      description = "Place cast target text independently, limit spell-name width, choose cast-time display modes, and set a separate border color. Spell names stay on one line, and instant casts clear stale target text. Instant Cast and Evoker Empower controls have dedicated pages with castbar previews.",
+      location = "PleebUI > Combat frames > Unit Frames > select a frame > Cast Bar / Instant / Empower",
     },
     {
       title = "Clearer Resource Display setup",
-      description = "The Resource Display now separates class resources and tracked effects more clearly, with improved navigation, control labels, and previews for individual bars.",
+      description = "The Resource Display opens on Health and uses compact pages named for your class resources and tracked effects. Individual bar previews and direct preview navigation make setup easier. Turning off a glow cue preserves its selected buff.",
       location = "PleebUI > Combat frames > Personal Resource Display",
+    },
+    {
+      title = "Soul Fragment display choices",
+      description = "Choose whether Vengeance Soul Fragments appear on the Soul Cleave and Spirit Bomb cooldown icons, the Personal Resource Display bar, both, or neither. Both settings pages share the same choice, and previews follow it.",
+      location = "PleebUI > Combat frames > Personal Resource Display > Soul Fragments / Cooldown Manager > icon settings",
+    },
+    {
+      title = "Spell use counts on cooldown icons",
+      description = "Cooldown icons can show Blizzard's spell use counts as well as supported charge counts, with per-icon appearance settings.",
+      location = "PleebUI > Combat frames > Cooldown Manager > Essential / Utility > count settings",
     },
     {
       title = "Growing or fixed Buff Bar groups",
@@ -128,19 +168,141 @@ local CURRENT_RELEASE = {
       location = "PleebUI > Combat frames > Cooldown Manager > Buff Bars",
     },
     {
+      title = "Cooldown tracking after loading screens",
+      description = "Cooldown viewers and custom trackers refresh after zoning and loading transitions. Charge notifications, aura widgets, and totem bar durations reconnect to the current Blizzard state instead of retaining stale widgets or durations.",
+      location = "Applies automatically",
+    },
+    {
       title = "Quality of Life settings, organized",
-      description = "Find tools under Combat, Cursor, Group tools, Automation, and Interface. Pet warnings now have independent controls and improved previews.",
+      description = "Find tools under Combat, Position indicators, Group tools, and Convenience. Missing or dead pet, idle pet, and low-health warnings have independent appearance controls. Combat samples and movement reminders can be previewed together, and Emergency Salve is grouped with Hunter tools.",
       location = "PleebUI > Quality of Life",
     },
     {
+      title = "Independent movement reminders",
+      description = "Configure supported movement reminders separately, including their selected spell, display type, size, colors, and visibility. The options preview shows reminders side by side and follows the selected display settings.",
+      location = "PleebUI > Movement Reminder",
+    },
+    {
+      title = "Auto loot setting",
+      description = "Enable Blizzard auto loot from PleebUI's Convenience page, alongside Faster looting and the existing everyday conveniences.",
+      location = "PleebUI > Quality of Life > Convenience > Everyday conveniences",
+    },
+    {
+      title = "Separate buff and debuff appearance",
+      description = "Player buffs and debuffs have independent icon sizes, border thickness, fonts, outlines, and text colors. Debuff borders use Blizzard's debuff-type colors, while text can follow the UI theme or use a custom color.",
+      location = "PleebUI > Player Buffs",
+    },
+    {
+      title = "Character Sheet sockets and icon search",
+      description = "An optional socket strip shows equipped gems and empty sockets, with paging, tooltips, and clicks to open socketing outside combat. The icon selector supports searches by name or ID. More compact stat rows leave room for tank defenses above the settings button.",
+      location = "Character panel > settings button > Show socket strip / icon selector",
+    },
+    {
+      title = "Minimap controls in one place",
+      description = "Minimap settings now expose Blizzard border, tracking, calendar, clock, top-panel, and launcher visibility controls together. Hiding the PleebUI launcher is respected when addon buttons are arranged.",
+      location = "PleebUI > Minimap",
+    },
+    {
+      title = "Damage Meter setup and refresh controls",
+      description = "Damage Meter settings use consistent sections and tree navigation, with combat refresh rates up to 20 Hz. Deleting a saved meter window asks for confirmation, and unavailable history controls explain their dependencies.",
+      location = "PleebUI > Damage Meters",
+    },
+    {
       title = "Accessibility presets with Undo",
-      description = "New appearance presets and a combat readability option help improve text and visual contrast. Undo can restore changes from the readability option during the current session if those values have not been edited since.",
-      location = "PleebUI > General > UI Theme",
+      description = "A dedicated Accessibility category brings together color presets, an interactive palette preview, and combat readability settings. Combat readability includes a session Undo that restores values you have not subsequently edited. Larger pointer targets make controls easier to reach.",
+      location = "PleebUI > Accessibility",
     },
     {
       title = "Responsive settings and preview polish",
-      description = "Options columns adapt to available space, and improved preview scaling keeps Unit Frames, auras, and bars easier to inspect at different UI sizes.",
+      description = "Options columns adapt to available space, and controls, headings, tabs, and navigation rows scale with their fonts. Unit Frame, aura, and bar previews scale more consistently, with keyboard access to supported preview controls and zoom.",
       location = "PleebUI options",
+    },
+    {
+      title = "Saved options window size and position",
+      description = "The options window remembers its geometry across sessions. Width, height, horizontal position, vertical position, and Center window controls provide another way to arrange it, with sizing kept inside the scaled screen.",
+      location = "PleebUI > General > UI Theme > Layout and appearance",
+    },
+    {
+      title = "More options text and font controls",
+      description = "Set fonts, sizes, outlines, shadows, and SLUG rendering separately for options text categories, with curated defaults and resets. Font selectors preview the font itself. Separate SLUG settings apply to options text and supported runtime text.",
+      location = "PleebUI > General > UI Theme > Text",
+    },
+    {
+      title = "Color tools and clearer controls",
+      description = "Color controls now include numeric editing, opacity, copy and paste, recent colors, favorites, and saved palettes. Thin control borders, clearer hover and focus states, larger navigation targets, and opaque tooltips improve readability. Disabled controls retain explanations.",
+      location = "PleebUI options > color controls / PleebUI > General > UI Theme",
+    },
+    {
+      title = "More precise slider editing",
+      description = "Slider step buttons and validated numeric inputs make precise changes easier. Wheel adjustment is deliberate, and invalid values remain visible until corrected or cancelled. Reset and delete prompts describe the affected settings.",
+      location = "PleebUI options",
+    },
+    {
+      title = "Optional settings animations",
+      description = "Options pages and navigation highlights use smoother transitions. Turn Animate options off from Accessibility if you prefer immediate changes. Page construction, font choices, dropdown layouts, and window resizing also avoid repeated layout work.",
+      location = "PleebUI > Accessibility > Controls and motion",
+    },
+  },
+}
+
+local CURRENT_RELEASE = {
+  version = CURRENT_RELEASE_VERSION,
+  intro = "Version 1.5.1 adds an interactive Edit Mode guide, rune recharge improvements, queue countdowns, and optional group conveniences.",
+  items = {
+    {
+      title = "Interactive Edit Mode guide",
+      description = "Choose Mouse, Keyboard, or Both and practice settings navigation, mover selection, group movement, and Undo / Redo with sample controls. The practice area keeps its own layout and history, so your real settings stay untouched. Replay the guide whenever you need it.",
+      location = "PleebUI > Edit Mode > Getting started > Edit Mode guide / Accessibility > Controls and motion",
+    },
+    {
+      title = "Dedicated Edit Mode settings page",
+      description = "Set your preferred input, keyboard nudge step, frame snapping, Smart Snap, snap distance, grid, compact movers, and screen dimming from the main options. These controls share the toolbar's saved settings.",
+      location = "PleebUI > Edit Mode > Settings",
+    },
+    {
+      title = "Accessibility text and size shortcuts",
+      description = "Accessibility now includes options text size, window scale, and global text controls. Changes use the same profile settings as UI Theme, so either page updates the same appearance.",
+      location = "PleebUI > Accessibility > Text and size",
+    },
+    {
+      title = "Death Knight rune recharge",
+      description = "Rune segments now animate their recharge with selectable direction, optional recharge time, ready glow, and completion effects. Ready runes return to full opacity, countdowns appear only after recharge starts, and recharging runes do not retain ready glows. Rune artwork and resource colors follow Blood, Frost, or Unholy in both live frames and previews.",
+      location = "PleebUI > Combat frames > Personal Resource Display > Runes",
+    },
+    {
+      title = "Dungeon and PvP entry countdowns",
+      description = "Show the remaining acceptance time on supported dungeon and PvP queue prompts. The dungeon countdown uses a 40-second estimate.",
+      location = "PleebUI > Quality of Life > Convenience > Everyday conveniences > Show entry countdown",
+    },
+    {
+      title = "Optional summon and resurrection acceptance",
+      description = "Opt in to accept ordinary summons and resurrection outside combat. Special summon warnings, resurrection sickness, and recovery timers still require confirmation.",
+      location = "PleebUI > Quality of Life > Convenience > Summons and resurrection",
+    },
+    {
+      title = "Whisper keyword invites",
+      description = "Invite trusted friends, Battle.net friends, or guild members when they whisper one of your chosen keywords. Enter multiple keywords separated by commas, such as invite, inv, +. Matching ignores case and surrounding spaces; invites require permission to invite and stop during combat or restricted chat.",
+      location = "PleebUI > Quality of Life > Convenience > Whisper invites",
+    },
+    {
+      title = "Screen effects and weather controls",
+      description = "Disable screen glow, disable supported death and special screen effects, or choose weather density for regular and raid graphics. Turning these controls off restores their previous settings.",
+      location = "PleebUI > Quality of Life > Convenience > Accessibility",
+    },
+    {
+      title = "Larger combat timer and Edit Mode preview",
+      description = "The combat timer supports font sizes up to 72 and has an Edit Mode sample. Its mover resizes to fit the displayed text.",
+      location = "PleebUI > Quality of Life > Combat > Combat timer / PleebUI Edit Mode (/pe)",
+    },
+    {
+      title = "Repair summaries and profile refresh fixes",
+      description = "Repair summaries print through the normal chat window after repairs complete, with guild-first repair and personal-funds fallback. Movement reminder settings and castbar configuration refresh when profiles change, and missing reminder color components are restored.",
+      location = "PleebUI > Quality of Life > Convenience > Items and merchants / applies automatically",
+    },
+    {
+      title = "Cooldown count layering",
+      description = "Cooldown counts remain above active-aura duration icons, keeping the count readable when both displays are present.",
+      location = "PleebUI > Combat frames > Cooldown Manager",
     },
   },
 }
@@ -281,6 +443,7 @@ local RELEASE_1_2 = {
 
 local RELEASES = {
   CURRENT_RELEASE,
+  RELEASE_1_5,
   RELEASE_1_4,
   RELEASE_1_3,
   RELEASE_1_2,
