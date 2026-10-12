@@ -20,6 +20,13 @@ end
 
 Skins.Register("Blizzard_PVPUI", "PVPQueueFrame", function(frame)
   Skins.Apply(_G, layout)
+  for index = 1, 5 do
+    local button = frame["CategoryButton" .. index]
+    Skins.Hide(button.Ring)
+    button.Icon:RemoveMaskTexture(button.CircleMask)
+    Skins.IconButton(button, button.Icon)
+    Skins.Texts(button)
+  end
   for _, key in ipairs({ "RatedSoloShuffle", "RatedBGBlitz", "Arena2v2", "Arena3v3", "RatedBG" }) do
     SkinActivity(ConquestFrame[key])
   end
