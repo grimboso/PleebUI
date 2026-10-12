@@ -2,7 +2,7 @@ local _, ns = ...
 local Skins = ns.BlizzardSkins
 
 local function RefreshMap(frame)
-  Skins.Shell(frame.BorderFrame)
+  Skins.Shell(frame.BorderFrame, frame)
   Skins.Navigation(frame.NavBar)
   Skins.Arrow(frame.BorderFrame.MaximizeMinimizeFrame.MaximizeButton, "+")
   Skins.Arrow(frame.BorderFrame.MaximizeMinimizeFrame.MinimizeButton, "-")
