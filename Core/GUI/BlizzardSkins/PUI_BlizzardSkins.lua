@@ -513,7 +513,8 @@ end
 function Skins.Navigation(bar)
   navigationBars[bar] = true
   Skins.StripRegions(bar)
-  Skins.StripRegions(bar.overlay)
+  -- The level-50 overlay is decorative; a filled surface here covers navigation buttons.
+  Skins.Hide(bar.overlay)
   for _, button in ipairs(bar.navList) do
     for _, region in ipairs({ button:GetRegions() }) do
       if region:IsObjectType("Texture") and region ~= button.selected
