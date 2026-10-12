@@ -24,9 +24,19 @@ local function RefreshMap(frame)
       end
     end
   end
-  Skins.Hook(frame, "SetDisplayState", function(map)
-    if Skins.CanStyle() then RefreshMap(map) end
-  end)
 end
 
-Skins.Register("Blizzard_WorldMap", "WorldMapFrame", RefreshMap)
+-- SetDisplayState can run inside OnShow before Blizzard's protected reading emote.
+-- Repaint mode changes after the native button action has finished instead.
+Skins.Register("Blizzard_WorldMap", "WorldMapFrame", {
+  install = function(frame)
+    local function RefreshAfterClick()
+      if Skins.CanStyle() then RefreshMap(frame) end
+    end
+    local buttons = frame.BorderFrame.MaximizeMinimizeFrame
+    buttons.MaximizeButton:HookScript("OnClick", RefreshAfterClick)
+    buttons.MinimizeButton:HookScript("OnClick", RefreshAfterClick)
+  end,
+  onShow = RefreshMap,
+  onTheme = RefreshMap,
+})
