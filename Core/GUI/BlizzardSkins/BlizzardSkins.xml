@@ -17,6 +17,7 @@
   <Script file="PUI_Collections.lua"/>
   <Script file="PUI_AdventureGuide.lua"/>
   <Script file="PUI_SpellBook.lua"/>
+  <Script file="PUI_Talents.lua"/>
   <Script file="PUI_Communities.lua"/>
   <Script file="PUI_Achievements.lua"/>
   <Script file="PUI_CommunitySettings.lua"/>
