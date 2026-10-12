@@ -15,18 +15,42 @@ local layout = {
   Font = { "MapLegend.TitleText", "EventsFrame.TitleText", "QuestSessionManagement.CommandText", "QuestSessionManagement.HelpText" },
 }
 
+local function RefreshHeaderCollapse(button)
+  if not Skins.CanStyle() then return end
+  local collapsed = button.collapsed
+  if issecretvalue(collapsed) then return end
+  ns.Theme.ApplyExpandCollapseTexture(button.Icon, not collapsed)
+  local highlight = button:GetHighlightTexture()
+  highlight:SetColorTexture(1, 1, 1, 0.12)
+  highlight:SetAlpha(1)
+  highlight:SetAllPoints(button)
+end
+
+local function RefreshHeaderTitle(row)
+  if Skins.CanStyle() then Skins.Font(row:GetTitleRegion(), "header") end
+end
+
 local function SkinQuestHeader(row)
   Skins.Hide(row.Background)
   Skins.Hide(row.TopFiligree)
   Skins.Hide(row.Divider)
-  Skins.Surface(row, true)
+  if row:IsObjectType("Button") and row.CollapseButton then
+    Skins.Button(row)
+    Skins.Button(row.CollapseButton)
+    RefreshHeaderCollapse(row.CollapseButton)
+    Skins.Hook(row.CollapseButton, "UpdateCollapsedState", RefreshHeaderCollapse)
+    Skins.Hook(row, "CheckHighlightTitle", RefreshHeaderTitle)
+  else
+    Skins.Surface(row, true)
+  end
   Skins.Texts(row)
+  if row.CheckHighlightTitle then RefreshHeaderTitle(row) end
 end
 
 local function RefreshQuestRows()
   if not Skins.CanStyle() then return end
   for _, pool in ipairs({ QuestScrollFrame.headerFramePool, QuestScrollFrame.campaignHeaderFramePool,
-    QuestScrollFrame.campaignHeaderMinimalFramePool }) do
+    QuestScrollFrame.campaignHeaderMinimalFramePool, QuestScrollFrame.covenantCallingsHeaderFramePool }) do
     for header in pool:EnumerateActive() do SkinQuestHeader(header) end
   end
   for row in QuestScrollFrame.titleFramePool:EnumerateActive() do
