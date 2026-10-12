@@ -11,6 +11,7 @@ local styledTexts = setmetatable({}, { __mode = "k" })
 local styledButtons = setmetatable({}, { __mode = "k" })
 local selections = setmetatable({}, { __mode = "k" })
 local checkedTextures = setmetatable({}, { __mode = "k" })
+local styledTabs = setmetatable({}, { __mode = "k" })
 local scrollRows = setmetatable({}, { __mode = "k" })
 local hooks = setmetatable({}, { __mode = "k" })
 local driver = CreateFrame("Frame")
@@ -148,11 +149,31 @@ local function RefreshButtonState(button)
       border = enabled and colors.border or colors.disabledBorder,
     }, Theme.GetEdgeSize())
   end
-  local text = button:GetFontString()
+  local state = styledButtons[button]
+  local text = state.label or button:GetFontString()
   if text then
     local color = enabled and colors.text or colors.disabledText
     text:SetTextColor(color[1], color[2], color[3], color[4])
   end
+  if state.arrow then
+    local color = enabled and colors.text or colors.disabledText
+    state.arrow:SetTextColor(color[1], color[2], color[3], color[4])
+  end
+  if state.dropdown then
+    if state.label then Theme.ApplyFont(state.label, "body") end
+    Skins.Hide(button.Arrow)
+    Skins.Hide(button.Background)
+  end
+end
+
+local function InstallButtonState(button)
+  if not styledButtons[button] then
+    styledButtons[button] = {}
+    button:HookScript("OnEnable", RefreshButtonState)
+    button:HookScript("OnDisable", RefreshButtonState)
+    button:HookScript("OnShow", RefreshButtonState)
+  end
+  return styledButtons[button]
 end
 
 function Skins.Button(button)
@@ -162,20 +183,25 @@ function Skins.Button(button)
     Skins.Hide(button[key])
   end
   Skins.Hide(button:GetNormalTexture())
-  Skins.Hide(button:GetPushedTexture())
+  local pushed = button:GetPushedTexture()
+  if not pushed then
+    pushed = button:CreateTexture(nil, "ARTWORK")
+    button:SetPushedTexture(pushed)
+  end
+  pushed:SetColorTexture(1, 1, 1, 0.18)
+  pushed:SetAlpha(1)
+  pushed:SetAllPoints(button)
   Skins.Hide(button:GetDisabledTexture())
   local highlight = button:GetHighlightTexture()
-  if highlight then
-    highlight:SetColorTexture(1, 1, 1, 0.12)
-    highlight:SetAlpha(1)
-    highlight:SetAllPoints(button)
+  if not highlight then
+    highlight = button:CreateTexture(nil, "HIGHLIGHT")
+    button:SetHighlightTexture(highlight)
   end
+  highlight:SetColorTexture(1, 1, 1, 0.12)
+  highlight:SetAlpha(1)
+  highlight:SetAllPoints(button)
   Skins.Font(button:GetFontString(), "button")
-  if not styledButtons[button] then
-    styledButtons[button] = true
-    button:HookScript("OnEnable", RefreshButtonState)
-    button:HookScript("OnDisable", RefreshButtonState)
-  end
+  InstallButtonState(button)
   RefreshButtonState(button)
 end
 
@@ -203,56 +229,131 @@ end
 
 function Skins.CheckBox(button)
   if not button then return end
+  Skins.Chrome(button)
   Skins.Surface(button, true)
   Skins.Hide(button:GetNormalTexture())
   Skins.Hide(button:GetPushedTexture())
   Skins.Hide(button:GetDisabledTexture())
   Skins.Hide(button:GetHighlightTexture())
-  local color = Theme.GetColors().accent
-  local checked = button:GetCheckedTexture()
-  if checked then
-    checkedTextures[checked] = true
-    checked:SetVertexColor(color[1], color[2], color[3], 1)
+  local colors = Theme.GetColors()
+  -- Native checked slots render restricted checked state without reading it in Lua.
+  for _, disabled in ipairs({ false, true }) do
+    local texture
+    if disabled then texture = button:GetDisabledCheckedTexture() else texture = button:GetCheckedTexture() end
+    if not texture then
+      texture = button:CreateTexture(nil, "ARTWORK")
+      if disabled then button:SetDisabledCheckedTexture(texture) else button:SetCheckedTexture(texture) end
+    end
+    checkedTextures[texture] = disabled and "disabledText" or "accent"
+    texture:SetTexture("Interface\\Buttons\\UI-CheckBox-Check")
+    texture:SetTexCoord(0, 1, 0, 1)
+    texture:SetAllPoints(button)
+    texture:SetAlpha(1)
+    local color = colors[checkedTextures[texture]]
+    texture:SetVertexColor(color[1], color[2], color[3], color[4])
   end
   Skins.Font(button.Text)
+  InstallButtonState(button).label = button.Text
+  RefreshButtonState(button)
 end
 
 function Skins.Dropdown(dropdown)
   if not dropdown then return end
   Skins.Chrome(dropdown)
-  Skins.Hide(dropdown.Left)
-  Skins.Hide(dropdown.Middle)
-  Skins.Hide(dropdown.Right)
+  for _, key in ipairs({ "Left", "Middle", "Right" }) do Skins.Hide(dropdown[key]) end
   Skins.Surface(dropdown, true)
   Skins.Font(dropdown.Text)
+  if dropdown:IsObjectType("Button") then
+    Skins.Button(dropdown)
+    local state = InstallButtonState(dropdown)
+    state.dropdown = true
+    if dropdown.Arrow or dropdown.Text then
+      if not state.arrow then
+        state.arrow = dropdown:CreateFontString(nil, "OVERLAY")
+        if dropdown.Arrow then
+          state.arrow:SetPoint("CENTER", dropdown.Arrow, "CENTER")
+        else
+          state.arrow:SetPoint("RIGHT", dropdown, "RIGHT", -8, 0)
+        end
+        state.arrow:SetText("v")
+      end
+      Skins.Font(state.arrow, "button")
+    end
+    state.label = dropdown.Text
+    if dropdown.OnButtonStateChanged then
+      Skins.Hook(dropdown, "OnButtonStateChanged", RefreshButtonState)
+    end
+    RefreshButtonState(dropdown)
+    if dropdown.ResetButton then Skins.Button(dropdown.ResetButton) end
+  elseif dropdown.Button then
+    -- UIDropDownMenuTemplate owns a separate arrow button.
+    Skins.Arrow(dropdown.Button, "v")
+  end
+end
+
+local function RefreshTabState(tab)
+  if not Skins.CanStyle() then return end
+  local state = styledTabs[tab]
+  local selected = false
+  if tab.MiddleActive then selected = tab.MiddleActive:IsShown() end
+  local enabled = tab:IsEnabled()
+  if issecretvalue(selected) or issecretvalue(enabled) then return end
+  local available = enabled or selected
+  if tab.IsForceDisabled then
+    local disabled = tab:IsForceDisabled()
+    if issecretvalue(disabled) then return end
+    available = not disabled
+  end
+  local colors = Theme.GetColors()
+  state.selection:SetShown(selected)
+  local color = available and colors.text or colors.disabledText
+  local text = tab:GetFontString()
+  if text then
+    Theme.ApplyFont(text, "body")
+    text:SetTextColor(color[1], color[2], color[3], color[4])
+  end
+  Theme.SetSquareBackdrop(surfaces[tab], {
+    bg = available and colors.control or colors.disabledControl,
+    border = available and colors.border or colors.disabledBorder,
+  }, Theme.GetEdgeSize())
 end
 
 function Skins.Tab(tab)
   if not tab then return end
   Skins.Surface(tab, true)
-  for _, key in ipairs({ "Left", "Middle", "Right", "LeftActive", "RightActive",
-    "LeftHighlight", "RightHighlight" }) do
+  for _, key in ipairs({ "Left", "Middle", "Right", "LeftActive", "MiddleActive", "RightActive",
+    "LeftDisabled", "MiddleDisabled", "RightDisabled", "LeftHighlight", "MiddleHighlight", "RightHighlight" }) do
     Skins.Hide(tab[key])
   end
-  local active = tab.MiddleActive
-  if active then
-    selections[active] = 0.25
-    local color = Theme.GetColors().accent
-    active:SetColorTexture(color[1], color[2], color[3], 0.25)
-    active:ClearAllPoints()
-    active:SetPoint("TOPLEFT", tab, "TOPLEFT", 2, -2)
-    active:SetPoint("BOTTOMRIGHT", tab, "BOTTOMRIGHT", -2, 2)
+  Skins.Hide(tab:GetNormalTexture())
+  Skins.Hide(tab:GetDisabledTexture())
+  Skins.Hide(tab:GetHighlightTexture())
+  local state = styledTabs[tab]
+  if not state then
+    state = { selection = tab:CreateTexture(nil, "BACKGROUND"), highlight = tab:CreateTexture(nil, "HIGHLIGHT") }
+    styledTabs[tab] = state
+    state.selection:SetAllPoints(tab)
+    state.highlight:SetAllPoints(tab)
+    state.highlight:SetColorTexture(1, 1, 1, 0.12)
+    selections[state.selection] = 0.25
+    tab:HookScript("OnEnable", RefreshTabState)
+    tab:HookScript("OnDisable", RefreshTabState)
+    tab:HookScript("OnShow", RefreshTabState)
+    -- Both PanelTemplates and TabSystem templates own active artwork visibility.
+    -- Keep its geometry intact, including top-tab rotations, and mirror only visibility.
+    if tab.MiddleActive then
+      for _, method in ipairs({ "Show", "Hide", "SetShown" }) do
+        Skins.Hook(tab.MiddleActive, method, function() RefreshTabState(tab) end)
+      end
+    end
+    Skins.Hook(tab, "SetNormalFontObject", RefreshTabState)
+    Skins.Hook(tab, "SetDisabledFontObject", RefreshTabState)
+    if tab.SetTabEnabled then Skins.Hook(tab, "SetTabEnabled", RefreshTabState) end
   end
-  local highlight = tab.MiddleHighlight
-  if highlight then
-    highlight:SetColorTexture(1, 1, 1, 0.12)
-    highlight:SetAlpha(1)
-    highlight:SetAllPoints(tab)
-  end
+  local accent = Theme.GetColors().accent
+  state.selection:SetColorTexture(accent[1], accent[2], accent[3], 0.25)
   Skins.Font(tab:GetFontString())
-  Skins.Hook(tab, "SetNormalFontObject", function(button)
-    if Skins.CanStyle() then Skins.Font(button:GetFontString()) end
-  end)
+  RefreshTabState(tab)
 end
 
 function Skins.ScrollBar(scrollbar)
@@ -314,6 +415,8 @@ function Skins.Arrow(button, text)
   end
   host.label:SetText(text)
   Skins.Font(host.label)
+  InstallButtonState(button).label = host.label
+  RefreshButtonState(button)
 end
 
 function Skins.Paging(frame)
@@ -463,9 +566,11 @@ function Skins.RefreshTheme(refreshWindows)
   for texture, alpha in pairs(selections) do
     texture:SetColorTexture(colors.accent[1], colors.accent[2], colors.accent[3], alpha)
   end
-  for texture in pairs(checkedTextures) do
-    texture:SetVertexColor(colors.accent[1], colors.accent[2], colors.accent[3], 1)
+  for texture, role in pairs(checkedTextures) do
+    local color = colors[role]
+    texture:SetVertexColor(color[1], color[2], color[3], color[4])
   end
+  for tab in pairs(styledTabs) do RefreshTabState(tab) end
   for button in pairs(styledButtons) do RefreshButtonState(button) end
   ns.BlizzardWindowControls.RefreshTheme()
   if refreshWindows == false then return end
