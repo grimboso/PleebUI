@@ -6,10 +6,17 @@ ns.BlizzardSkins = Skins
 local windows = {}
 local navigationBars = setmetatable({}, { __mode = "k" })
 local surfaces = setmetatable({}, { __mode = "k" })
+local surfaceRoles = setmetatable({}, { __mode = "k" })
+local styledTexts = setmetatable({}, { __mode = "k" })
+local styledButtons = setmetatable({}, { __mode = "k" })
+local selections = setmetatable({}, { __mode = "k" })
+local checkedTextures = setmetatable({}, { __mode = "k" })
+local scrollRows = setmetatable({}, { __mode = "k" })
 local hooks = setmetatable({}, { __mode = "k" })
 local driver = CreateFrame("Frame")
 local loggedIn = false
 local pending = false
+local pendingTheme = false
 
 function Skins.CanStyle()
   if InCombatLockdown() then
@@ -28,6 +35,7 @@ end
 
 function Skins.Font(text, role)
   if text then
+    styledTexts[text] = true
     Theme.ApplyFont(text, role or "body")
     local color = Theme.GetColors().text
     text:SetTextColor(color[1], color[2], color[3], color[4])
@@ -64,6 +72,7 @@ function Skins.Surface(frame, control)
     host:EnableMouse(false)
     surfaces[frame] = host
   end
+  surfaceRoles[frame] = control and "control" or "background"
   local colors = Theme.GetColors()
   Theme.SetSquareBackdrop(host, {
     bg = control and colors.control or colors.background,
@@ -78,9 +87,11 @@ function Skins.Panel(frame)
   Skins.Surface(frame)
 end
 
-function Skins.StripRegions(frame)
+function Skins.StripRegions(frame, keep)
   for _, region in ipairs({ frame:GetRegions() }) do
-    if region:IsObjectType("Texture") then Skins.Hide(region) end
+    if region:IsObjectType("Texture") and not (keep and keep[region]) then
+      Skins.Hide(region)
+    end
   end
   Skins.Panel(frame)
 end
@@ -93,6 +104,7 @@ end
 
 function Skins.Selection(texture)
   if texture then
+    selections[texture] = 0.2
     local color = Theme.GetColors().accent
     texture:SetColorTexture(color[1], color[2], color[3], 0.2)
   end
@@ -124,6 +136,25 @@ function Skins.Shell(frame)
   end
 end
 
+local function RefreshButtonState(button)
+  if not Skins.CanStyle() then return end
+  local enabled = button:IsEnabled()
+  if issecretvalue(enabled) then return end
+  local colors = Theme.GetColors()
+  local host = surfaces[button]
+  if host then
+    Theme.SetSquareBackdrop(host, {
+      bg = enabled and colors.control or colors.disabledControl,
+      border = enabled and colors.border or colors.disabledBorder,
+    }, Theme.GetEdgeSize())
+  end
+  local text = button:GetFontString()
+  if text then
+    local color = enabled and colors.text or colors.disabledText
+    text:SetTextColor(color[1], color[2], color[3], color[4])
+  end
+end
+
 function Skins.Button(button)
   Skins.Chrome(button)
   Skins.Surface(button, true)
@@ -140,6 +171,12 @@ function Skins.Button(button)
     highlight:SetAllPoints(button)
   end
   Skins.Font(button:GetFontString(), "button")
+  if not styledButtons[button] then
+    styledButtons[button] = true
+    button:HookScript("OnEnable", RefreshButtonState)
+    button:HookScript("OnDisable", RefreshButtonState)
+  end
+  RefreshButtonState(button)
 end
 
 function Skins.EditBox(edit)
@@ -160,18 +197,8 @@ end
 
 function Skins.IconButton(button, icon)
   if not button then return end
-  Skins.Chrome(button)
-  Skins.Surface(button, true)
+  Skins.Button(button)
   Skins.Icon(icon)
-  Skins.Hide(button:GetNormalTexture())
-  Skins.Hide(button:GetPushedTexture())
-  Skins.Hide(button:GetDisabledTexture())
-  local highlight = button:GetHighlightTexture()
-  if highlight then
-    highlight:SetColorTexture(1, 1, 1, 0.12)
-    highlight:SetAlpha(1)
-    highlight:SetAllPoints(button)
-  end
 end
 
 function Skins.CheckBox(button)
@@ -184,6 +211,7 @@ function Skins.CheckBox(button)
   local color = Theme.GetColors().accent
   local checked = button:GetCheckedTexture()
   if checked then
+    checkedTextures[checked] = true
     checked:SetVertexColor(color[1], color[2], color[3], 1)
   end
   Skins.Font(button.Text)
@@ -208,6 +236,7 @@ function Skins.Tab(tab)
   end
   local active = tab.MiddleActive
   if active then
+    selections[active] = 0.25
     local color = Theme.GetColors().accent
     active:SetColorTexture(color[1], color[2], color[3], 0.25)
     active:ClearAllPoints()
@@ -244,6 +273,7 @@ function Skins.ScrollBar(scrollbar)
   if thumb then
     local colors = Theme.GetColors()
     local host = Skins.Surface(thumb, true)
+    surfaceRoles[thumb] = "accent"
     Theme.SetSquareBackdrop(host, { bg = colors.accent, border = colors.border }, Theme.GetEdgeSize())
     -- Blizzard sizes the thumb from its atlases; keep those assigned under our surface.
     for _, region in ipairs({ thumb:GetRegions() }) do
@@ -309,12 +339,28 @@ function Skins.Hook(object, method, callback)
   end
 end
 
-function Skins.ScrollRows(scrollBox, callback)
+function Skins.ScrollRows(scrollBox, skin, repaint)
   if not scrollBox then return end
-  Skins.Hook(scrollBox, "Update", function(box)
-    if Skins.CanStyle() then box:ForEachFrame(callback) end
-  end)
-  scrollBox:ForEachFrame(callback)
+  local state = scrollRows[scrollBox]
+  if not state then
+    local seen = setmetatable({}, { __mode = "k" })
+    local function SkinRow(row, elementData)
+      if not seen[row] then
+        skin(row, elementData)
+        seen[row] = true
+      elseif repaint == nil then
+        skin(row, elementData)
+      elseif repaint then
+        repaint(row, elementData)
+      end
+    end
+    state = function(box)
+      if Skins.CanStyle() then box:ForEachFrame(SkinRow) end
+    end
+    scrollRows[scrollBox] = state
+    Skins.Hook(scrollBox, "Update", state)
+  end
+  state(scrollBox)
 end
 
 function Skins.TabSystem(system)
@@ -350,30 +396,89 @@ function Skins.Navigation(bar)
   end)
 end
 
-function Skins.Register(addonName, frameName, refresh)
-  windows[#windows + 1] = { addon = addonName, name = frameName, refresh = refresh }
+function Skins.Register(addonName, frameName, callbacks)
+  local legacy = type(callbacks) == "function"
+  if legacy then
+    callbacks = { onShow = callbacks }
+  end
+  windows[#windows + 1] = {
+    addon = addonName,
+    name = frameName,
+    install = callbacks.install,
+    onShow = callbacks.onShow,
+    onTheme = callbacks.onTheme,
+    legacy = legacy,
+  }
 end
 
-local function RefreshWindow(window)
+local function SkinWindow(window, frame)
+  if not Skins.CanStyle() then return end
+  if not window.initialized then
+    if window.install then window.install(frame) end
+    window.initialized = true
+    ns.BlizzardWindowControls.Install(frame, nil, window.name)
+  end
+  if window.onShow then window.onShow(frame) end
+end
+
+local function ObserveWindow(window)
   local frame = _G
   for key in window.name:gmatch("[^.]+") do
     frame = frame[key]
     if not frame then return end
   end
-  if not window.installed then
-    window.installed = true
-    frame:HookScript("OnShow", function()
-      if Skins.CanStyle() then window.refresh(frame) end
+  if frame:IsForbidden() then return end
+  if window.frame ~= frame then
+    window.frame = frame
+    window.initialized = false
+    frame:HookScript("OnShow", function(shown)
+      if window.frame == shown then SkinWindow(window, shown) end
     end)
   end
-  window.refresh(frame)
-  ns.BlizzardWindowControls.Install(frame, nil, window.name)
+  local shown = frame:IsVisible()
+  if not issecretvalue(shown) and shown then SkinWindow(window, frame) end
 end
 
-function Skins.RefreshTheme()
-  if not loggedIn or not Skins.CanStyle() then return end
+function Skins.RefreshTheme(refreshWindows)
+  if not loggedIn then return end
+  if not Skins.CanStyle() then
+    pendingTheme = refreshWindows ~= false or pendingTheme
+    return
+  end
+  local colors = Theme.GetColors()
+  local edge = Theme.GetEdgeSize()
+  for frame, host in pairs(surfaces) do
+    if not styledButtons[frame] then
+      local role = surfaceRoles[frame]
+      Theme.SetSquareBackdrop(host, {
+        bg = role == "accent" and colors.accent or (role == "control" and colors.control or colors.background),
+        border = colors.border,
+      }, edge)
+    end
+  end
+  for text in pairs(styledTexts) do
+    local color = colors.text
+    text:SetTextColor(color[1], color[2], color[3], color[4])
+  end
+  for texture, alpha in pairs(selections) do
+    texture:SetColorTexture(colors.accent[1], colors.accent[2], colors.accent[3], alpha)
+  end
+  for texture in pairs(checkedTextures) do
+    texture:SetVertexColor(colors.accent[1], colors.accent[2], colors.accent[3], 1)
+  end
+  for button in pairs(styledButtons) do RefreshButtonState(button) end
+  ns.BlizzardWindowControls.RefreshTheme()
+  if refreshWindows == false then return end
   for _, window in ipairs(windows) do
-    RefreshWindow(window)
+    local frame = window.frame
+    if frame and window.initialized then
+      if window.onTheme then
+        window.onTheme(frame)
+      elseif window.legacy then
+        local shown = frame:IsVisible()
+        if not issecretvalue(shown) and shown then window.onShow(frame) end
+      end
+    end
   end
 end
 
@@ -383,17 +488,27 @@ driver:SetScript("OnEvent", function(self, event, addonName)
   if event == "PLAYER_LOGIN" then
     loggedIn = true
     self:UnregisterEvent("PLAYER_LOGIN")
-    Skins.RefreshTheme()
+    for _, window in ipairs(windows) do ObserveWindow(window) end
   elseif event == "ADDON_LOADED" and loggedIn then
     if not Skins.CanStyle() then return end
     for _, window in ipairs(windows) do
-      if window.addon == addonName then RefreshWindow(window) end
+      if window.addon == addonName then ObserveWindow(window) end
     end
   elseif event == "PLAYER_REGEN_ENABLED" then
     self:UnregisterEvent("PLAYER_REGEN_ENABLED")
     if pending then
       pending = false
-      Skins.RefreshTheme()
+      local refreshThemeCallbacks = pendingTheme
+      pendingTheme = false
+      for _, window in ipairs(windows) do ObserveWindow(window) end
+      Skins.RefreshTheme(false)
+      if refreshThemeCallbacks then
+        for _, window in ipairs(windows) do
+          if window.frame and window.initialized and window.onTheme then
+            window.onTheme(window.frame)
+          end
+        end
+      end
     end
   end
 end)
