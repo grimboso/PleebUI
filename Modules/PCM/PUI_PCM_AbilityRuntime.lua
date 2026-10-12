@@ -387,6 +387,25 @@ local function GetRecordStyle(record)
   return record.resolvedStyle or ResolveRecordStyle(record)
 end
 
+local function ConfigurePingReceiver(record, frame)
+  frame:SetAttribute("ping-receiver", true)
+  frame.GetIsPingable = function()
+    return enabled and presentationActive and activeByCooldownID[record.cooldownID] == record
+  end
+  frame.GetAllowRadialWheel = function()
+    return false
+  end
+  frame.GetTargetInfo = function()
+    local entry = record.entry
+    if entry.entryKind == "equipmentSlot" then
+      return { itemID = record.safeContent.equippedItemID }
+    elseif entry.entryKind == "spellCategory" then
+      return { spellCategoryID = entry.spellCategoryID }
+    end
+    return { spellID = record.runtimeSpellID }
+  end
+end
+
 local function GetAuraFilter(unit)
   if unit == "player" then
     return "HELPFUL|PLAYER"
@@ -452,6 +471,7 @@ local function ConfigureAuraSlot(record, unit, includeSpellIDs)
       },
       initializeFrame = function(button)
         record.auraButtons[unit] = button
+        ConfigurePingReceiver(record, button)
         ApplyAuraButtonStyle(record, button, unit, true)
       end,
     })
@@ -1414,6 +1434,7 @@ local function AcquireRecord(viewer, entry, generation)
   parts.chargeCooldown:SetScript("OnCooldownDone", OnCooldownDone)
 
   activeByCooldownID[record.cooldownID] = record
+  ConfigurePingReceiver(record, parts.frame)
   parts.frame:SetScript("OnEnter", function(frame)
     local owner = ns.Modules.CooldownManager
     if owner:GetViewerTooltipsEnabled(record.viewerKey) ~= true then
