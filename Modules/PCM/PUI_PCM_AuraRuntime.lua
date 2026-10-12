@@ -258,7 +258,8 @@ local function ConfigureRecordSlots(record)
     local handle = record.slots[unit]
     local filter
     if unit == "player" then
-      filter = record.entry.includeAnySource == true and "HELPFUL" or "HELPFUL|PLAYER"
+      filter = record.entry.includeAnySource == true
+        and "HELPFUL|INCLUDE_NAME_PLATE_ONLY" or "HELPFUL|PLAYER|INCLUDE_NAME_PLATE_ONLY"
     else
       filter = "HARMFUL|PLAYER"
     end
