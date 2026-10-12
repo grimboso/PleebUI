@@ -1455,25 +1455,22 @@ local function EnsureEntryCountdownDriver()
 
   local function AttachDisplay(parent, kind)
     if not parent or driver.displays[kind] then return end
-    local display = CreateFrame("StatusBar", nil, parent, "BackdropTemplate")
+    local display = CreateFrame("StatusBar", nil, parent)
     display.kind = kind
     display:SetSize(260, 22)
     display:SetPoint("TOP", parent, "BOTTOM", 0, -6)
     display:EnableMouse(false)
-    display:SetStatusBarTexture([[Interface\Buttons\WHITE8x8]])
+    display.bg = display:CreateTexture(nil, "BACKGROUND")
+    display.bg:SetAllPoints(display)
+    ns.Theme.SkinStatusBar(display)
     display:SetStatusBarColor(0.85, 0.62, 0.16)
-    display:SetBackdrop({
-      bgFile = [[Interface\Buttons\WHITE8x8]],
-      edgeFile = [[Interface\Buttons\WHITE8x8]],
-      edgeSize = 1,
-    })
-    display:SetBackdropColor(0.08, 0.08, 0.08, 0.95)
-    display:SetBackdropBorderColor(0, 0, 0, 1)
     display.label = display:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     display.label:SetPoint("LEFT", display, "LEFT", 8, 0)
     display.label:SetText("Time to accept")
     display.text = display:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     display.text:SetPoint("RIGHT", display, "RIGHT", -8, 0)
+    ns.Theme.ApplyFont(display.label, "body", nil, nil, "qualityOfLife")
+    ns.Theme.ApplyFont(display.text, "body", nil, nil, "qualityOfLife")
     display:Hide()
     driver.displays[kind] = display
     parent:HookScript("OnShow", function() StartDisplay(display) end)
