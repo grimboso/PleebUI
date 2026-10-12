@@ -32,6 +32,7 @@ function Addon:Theme_SkinGameMenu(menu)
     menu.NewExternalEventFrame:ClearAllPoints()
     menu.NewExternalEventFrame:SetPoint("RIGHT", externalEventText, "LEFT", -8, 0)
   end
+  ns.BlizzardWindowControls.Install(menu)
 end
 
 local gameMenuBaseHeight
