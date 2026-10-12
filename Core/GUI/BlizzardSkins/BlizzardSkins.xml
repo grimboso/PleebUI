@@ -18,6 +18,7 @@
   <Script file="PUI_AdventureGuide.lua"/>
   <Script file="PUI_SpellBook.lua"/>
   <Script file="PUI_Communities.lua"/>
+  <Script file="PUI_Achievements.lua"/>
   <Script file="PUI_CommunitySettings.lua"/>
   <Script file="PUI_CommunityAvatar.lua"/>
   <Script file="PUI_CommunityStream.lua"/>
