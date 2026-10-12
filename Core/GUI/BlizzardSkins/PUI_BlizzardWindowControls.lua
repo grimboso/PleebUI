@@ -8,6 +8,7 @@ local embedded = {
   ChallengesFrame = true,
   PVPQueueFrame = true,
   QuestMapFrame = true,
+  ["PlayerSpellsFrame.TalentsFrame"] = true,
   ["CommunitiesFrame.GuildFinderFrame"] = true,
   ["CommunitiesFrame.CommunityFinderFrame"] = true,
 }
