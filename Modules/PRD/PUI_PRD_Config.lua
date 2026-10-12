@@ -588,12 +588,12 @@ local function PRDPreview_EnsureSegment(bar, index)
   fill:SetValue(0)
   fill:SetFrameLevel(frame:GetFrameLevel() + 1)
 
-  local text = frame:CreateFontString(nil, "OVERLAY")
+  local text = fill:CreateFontString(nil, "OVERLAY")
   text:SetPoint("CENTER")
   text:SetJustifyH("CENTER")
   text:Hide()
 
-  local glow = frame:CreateTexture(nil, "OVERLAY")
+  local glow = fill:CreateTexture(nil, "OVERLAY")
   glow:SetAllPoints(fill)
   glow:SetBlendMode("ADD")
   glow:SetAlpha(0)
@@ -966,7 +966,9 @@ local function PRDPreview_UpdateSecondaryText(
       or percentage >= behavior.yellowThreshold and "MED" or "LOW"
     value = label .. "  " .. value
   end
-  if bar.__puiPreviewDefinition.adapter == "POWER_SECRET" then
+  if bar.__puiPreviewDefinition.adapter == "POWER_SECRET"
+    or bar.__puiPreviewDefinition.adapter == "RUNES"
+  then
     show = false
   end
   bar.centerText:SetText(value)
@@ -4904,6 +4906,9 @@ do
     args.feature.args.enabled.width, args.feature.args.enabled.relWidth = "relative", 0.5
     args.enabled = nil
     local arranged = PRD_ArrangePresentationArgs(args, "layout")
+    if resource.key == "RUNES" then
+      arranged.textGroup.args.textMode = nil
+    end
     arranged.cueGroup.inline = true
     arranged.display.inline = true
     return arranged
