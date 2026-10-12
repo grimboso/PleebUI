@@ -67,6 +67,7 @@ local RESOURCE_NAMES = {
   MAELSTROM_WEAPON = "Maelstrom Weapon",
   ESSENCE = "Essence",
   RUNES = "Runes",
+  BONE_SHIELD = "Bone Shield",
 }
 
 local NUMERIC_CUE_RESOURCES = {
@@ -331,21 +332,41 @@ local DEFINITIONS = {
   },
 
   DEATHKNIGHT = {
-    adapter = "RUNES",
-    resourceKey = "RUNES",
-    powerType = Enum.PowerType.RunicPower,
-    token = "RUNIC_POWER",
-    defaultColor = { 1, 0, 0, 1 },
-    defaultColorBySpec = {
-      [251] = { 0, 0.5, 1, 1 },
-      [252] = { 0, 1, 0, 1 },
+    resources = {
+      {
+        adapter = "RUNES",
+        resourceKey = "RUNES",
+        powerType = Enum.PowerType.RunicPower,
+        token = "RUNIC_POWER",
+        defaultColor = { 1, 0, 0, 1 },
+        defaultColorBySpec = {
+          [251] = { 0, 0.5, 1, 1 },
+          [252] = { 0, 1, 0, 1 },
+        },
+        texture = "PUI: Runes Blood",
+        textureBySpec = {
+          [251] = "PUI: Runes Frost",
+          [252] = "PUI: Runes Unholy",
+        },
+        max = 6,
+      },
+      {
+        adapter = "AURA_STACKS",
+        resourceKey = "BONE_SHIELD",
+        token = "BONE_SHIELD",
+        unit = "player",
+        filter = "HELPFUL|PLAYER",
+        texture = "Pleebar",
+        defaultColor = { 0.85, 0.82, 0.70, 1.00 },
+        max = 10,
+        maxAuraSpellID = 195181,
+        auraSpellIDs = { 195181 },
+        castCountSpellID = 195182,
+        cooldownCountSpellIDs = { 195182, 195292 },
+        forceContinuous = true,
+        specIDs = { [250] = true },
+      },
     },
-    texture = "PUI: Runes Blood",
-    textureBySpec = {
-      [251] = "PUI: Runes Frost",
-      [252] = "PUI: Runes Unholy",
-    },
-    max = 6,
   },
 }
 
@@ -554,6 +575,7 @@ local RESOURCE_OPTIONS_BY_CLASS = {
   },
   DEATHKNIGHT = {
     { key = "RUNES", name = "Runes", category = "CLASS_RESOURCE" },
+    { key = "BONE_SHIELD", name = "Bone Shield", category = "TRACKED_EFFECT", specIDs = { [250] = true } },
   },
 }
 
