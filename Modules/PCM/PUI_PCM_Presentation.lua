@@ -30,6 +30,7 @@ local WHITE_TEXTURE = "Interface\\Buttons\\WHITE8x8"
 local FALLBACK_BAR_TEXTURE = Theme.GetBarTexture()
 local InstanceIndex = 0
 local OWNED_PROC_GLOW_KEY = "PUI_PCM_OwnedProcGlow"
+local ICON_COUNT_FRAME_LEVEL_OFFSET = 13
 
 local CustomBarPresentation = setmetatable({}, { __mode = "k" })
 
@@ -870,7 +871,7 @@ function PCMIconAdapter.ApplyStyle(parts, state)
     parts.keybindHolder:SetFrameLevel(parts.frame:GetFrameLevel() + 12)
   end
   if parts.chargeHolder then
-    parts.chargeHolder:SetFrameLevel(parts.frame:GetFrameLevel() + 5)
+    parts.chargeHolder:SetFrameLevel(parts.frame:GetFrameLevel() + ICON_COUNT_FRAME_LEVEL_OFFSET)
   end
 
   if parts.qualityHolder then
@@ -937,7 +938,7 @@ function PCMPresentation.CreateOwnedIcon(parent)
   parts.cooldownText:Hide()
   parts.chargeCooldown:SetFrameLevel(parts.frame:GetFrameLevel() + 3)
   parts.cooldown:SetFrameLevel(parts.frame:GetFrameLevel() + 4)
-  parts.chargeHolder:SetFrameLevel(parts.frame:GetFrameLevel() + 5)
+  parts.chargeHolder:SetFrameLevel(parts.frame:GetFrameLevel() + ICON_COUNT_FRAME_LEVEL_OFFSET)
   parts.keybindHolder:SetFrameLevel(parts.frame:GetFrameLevel() + 12)
   parts.qualityHolder:SetFrameLevel(parts.frame:GetFrameLevel() + 2)
 
@@ -1088,7 +1089,7 @@ function PCMPresentation.ApplyOwnedIconStyle(parts, style, isOnGCD)
   if chargeCount == nil then
     chargeCount = counts == nil or counts.charge ~= false
   end
-  parts.chargeHolder:SetFrameLevel(parts.frame:GetFrameLevel() + (style.resourceCountSpellID and 13 or 5))
+  parts.chargeHolder:SetFrameLevel(parts.frame:GetFrameLevel() + ICON_COUNT_FRAME_LEVEL_OFFSET)
   parts.chargeText:SetShown(chargeCount == true)
 
   parts.customTexture = style.appearance and style.appearance.texture or nil
