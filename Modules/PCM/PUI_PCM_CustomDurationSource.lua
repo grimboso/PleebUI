@@ -12,7 +12,7 @@ DurationSource.sourceHelp = "Automatic\nUses an available ground effect, totem o
   .. "\n\n" .. DurationSource.sourceValues.ground
   .. "\nTracks the effect's remaining lifetime, even when you leave its area."
   .. "\nPossible uses, when the game provides a matching duration:"
-  .. "\n- Ground effects, such as Consecration or Death and Decay."
+  .. "\n- Ground effects, such as Consecration."
   .. "\n- Totems, such as Shaman totems."
   .. "\n- Temporary summons, such as elementals and guardians."
   .. "\n- Duplicates, such as Augmentation Evoker duplicates."
