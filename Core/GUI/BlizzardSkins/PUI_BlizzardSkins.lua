@@ -525,7 +525,7 @@ function Skins.Navigation(bar)
       end
     end
     Skins.Button(button)
-    Skins.Selection(button.selected)
+    Skins.Selection(button.selected, 0.06)
     if button.MenuArrowButton then
       local menu = button.MenuArrowButton
       Skins.Button(menu)
