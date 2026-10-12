@@ -8,7 +8,7 @@
   <Script file="Chat/PUI_ChatFocus.lua"/>
   <Script file="Chat/PUI_ChatWindows.lua"/>
   <Script file="Chat/PUI_ChatHistory.lua"/>
-  <Script file="PUI_CharacterSheet.lua"/>
+  <Include file="..\..\Core\GUI\BlizzardSkins\BlizzardSkins.xml"/>
   <Script file="PUI_Bags.lua"/>
   <Script file="PUI_PlayerBuffs.lua"/>
   <Script file="PUI_RaidUtility.lua"/>
