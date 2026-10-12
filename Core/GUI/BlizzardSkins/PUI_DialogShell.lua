@@ -15,7 +15,7 @@ function ns.BlizzardSkins.StripDialogTextures(root, keepFrame, keepRegion)
   local seen = {}
 
   local function StripFrame(frame)
-    if seen[frame] or frame.__puiIsBackdropFrame then
+    if seen[frame] or frame.__puiIsBackdropFrame or ns.BlizzardWindowControls.IsControl(frame) then
       return
     end
     seen[frame] = true
