@@ -1295,7 +1295,9 @@ function Secondary.ResolveResourceColor(config, definition)
   elseif useClass then
     local color = RAID_CLASS_COLORS[PLAYER_CLASS]
     r, g, b = color.r, color.g, color.b
-  elseif useBlizz and definition.useTextureColor ~= true then
+  elseif useBlizz and definition.defaultColorBySpec then
+    r, g, b, a = unpack(config.defaultColor)
+  elseif useBlizz then
     local color = PowerBarColor[token]
     if color then
       r, g, b, a = color.r, color.g, color.b, color.a or a
