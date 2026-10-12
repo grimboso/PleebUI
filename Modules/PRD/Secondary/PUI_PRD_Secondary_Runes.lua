@@ -31,7 +31,8 @@ local function ReflowRuneBars(owner)
 
   for i = 1, 6 do
     local bar = owner.runeBars[i]
-    bar:SetParent(content)
+    bar:SetParent(owner.secondaryBar)
+    bar:SetFrameLevel(owner.secondaryBar:GetFrameLevel() + 1)
     bar:ClearAllPoints()
     bar:SetSize(runeWidth, height)
 
@@ -47,7 +48,8 @@ function M:BuildRuneBars()
   Secondary.EnsureSecondaryContainerBox(self)
 
   local content = Secondary.GetSecondaryContentFrame(self) or self.secondary
-  Secondary.EnsureSecondaryBuildBar(self, content)
+  local runeContainer = Secondary.EnsureSecondaryBuildBar(self, content)
+  Secondary.SetSecondaryCenterText(runeContainer._puiText, nil, false)
   local config = self.secondaryResourceConfig
   local texturePath = Secondary.FetchStatusbarTexture(
     config.texture or self.secondaryTexture
@@ -59,15 +61,18 @@ function M:BuildRuneBars()
   for i = 1, 6 do
     local bar = self.runeBars[i]
     if not bar then
-      bar = CreateFrame("StatusBar", nil, content, "BackdropTemplate")
+      bar = CreateFrame("StatusBar", nil, runeContainer, "BackdropTemplate")
       self.runeBars[i] = bar
     end
 
-    bar:SetParent(content)
+    bar:SetParent(runeContainer)
+    bar:SetFrameLevel(runeContainer:GetFrameLevel() + 1)
+    bar:SetAlpha(1)
     bar:SetMinMaxValues(0, 1)
     bar:SetValue(1)
     bar._puiRuneTimer = bar._puiRuneTimer or C_DurationUtil.CreateDuration()
     bar:SetStatusBarTexture(texturePath)
+    bar:GetStatusBarTexture():SetDrawLayer("ARTWORK")
     bar:SetStatusBarColor(1, 1, 1, 1)
 
     if not bar._bg then
@@ -97,6 +102,9 @@ function M:BuildRuneBars()
       bar._puiRuneTextBinding = binding
     end
     Secondary.ApplyResourceFont(self, bar._timeText, config)
+    bar._puiRuneTextBinding:Disable()
+    bar._timeText:SetText("")
+    bar._timeText:Hide()
 
     if not bar._puiGlow then
       local glow = bar:CreateTexture(nil, "OVERLAY")
@@ -136,8 +144,9 @@ local function UpdateRuneBar(owner, index, showCooldown, showGlow, animationMode
     bar:Show()
   end
 
-  if runeReady or not duration or duration == 0 then
+  if runeReady then
     if bar._puiRuneState ~= "READY" then
+      bar:SetMinMaxValues(0, 1)
       bar:SetValue(1)
 
       if bar._puiRuneTextShown == true then
@@ -166,8 +175,9 @@ local function UpdateRuneBar(owner, index, showCooldown, showGlow, animationMode
     return false
   end
 
-  if not start or start == 0 then
+  if not start or start == 0 or not duration or duration == 0 then
     if bar._puiRuneState ~= "PAUSED" then
+      bar:SetMinMaxValues(0, 1)
       bar:SetValue(0)
 
       if bar._puiRuneTextShown == true then
@@ -186,14 +196,19 @@ local function UpdateRuneBar(owner, index, showCooldown, showGlow, animationMode
     return false
   end
 
-  local timerChanged = bar._puiRuneStart ~= start
+  local timerChanged = bar._puiRuneState ~= "CHARGING"
+    or bar._puiRuneStart ~= start
     or bar._puiRuneDuration ~= duration
 
   if timerChanged then
     bar._puiRuneStart = start
     bar._puiRuneDuration = duration
     bar._puiRuneTimer:SetTimeFromStart(start, duration)
-    bar:SetTimerDuration(bar._puiRuneTimer)
+    bar:SetTimerDuration(
+      bar._puiRuneTimer,
+      Enum.StatusBarInterpolation.Immediate,
+      Enum.StatusBarTimerDirection.ElapsedTime
+    )
   end
 
   if showCooldown then
@@ -277,20 +292,14 @@ function M:UpdateRunes()
   end
 
   ApplyRuneResourceCues(self, readyCount)
-
-  local text = Secondary.PrepareSecondaryText(self, self.secondaryBar)
-  local value, shouldShow = Secondary.FormatSecondaryText(
-    self,
-    readyCount,
-    6
-  )
-  Secondary.SetSecondaryCenterText(text, value, shouldShow)
 end
 
 local function Deactivate(owner)
   if owner.runeBars then
     for i = 1, #owner.runeBars do
       local bar = owner.runeBars[i]
+      bar:SetMinMaxValues(0, 1)
+      bar:SetValue(0)
       bar._puiRuneTextBinding:Disable()
       bar._timeText:SetText("")
       bar._timeText:Hide()
