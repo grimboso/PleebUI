@@ -13,6 +13,7 @@ local function SkinSpell(frame)
   button.IconHighlight:SetColorTexture(1, 1, 1, 0.12)
   button.IconHighlight:SetAllPoints(button.Icon)
   Skins.Hide(button.Border)
+  button.BorderSheen:SetTexture(nil)
   Skins.Hide(button.BorderSheen)
   button.Icon:RemoveMaskTexture(button.IconMask)
   Skins.IconButton(button, button.Icon)
@@ -33,6 +34,7 @@ local function RefreshSpellBook(frame)
   Skins.Shell(frame)
   Skins.TabSystem(frame.TabSystem)
   local book = frame.SpellBookFrame
+  book.BookCornerFlipbook:SetTexture(nil)
   Skins.Apply(book, {
     Hide = { "TopBar", "BookBGHalved", "BookBGLeft", "BookBGRight", "BookCornerFlipbook", "Bookmark" },
     EditBox = { "SearchBox" },
