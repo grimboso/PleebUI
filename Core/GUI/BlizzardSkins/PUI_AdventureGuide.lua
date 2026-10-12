@@ -5,7 +5,7 @@ local layout = {
   Panel = { "inset", "MonthlyActivitiesFrame.FilterList",
     "TutorialsFrame.Contents", "searchResults" },
   StripRegions = { "encounter.info", "LootJournal", "LootJournalItems", "JourneysFrame" },
-  Hide = { "instanceSelect.bg", "instanceSelect.evergreenBg", "encounter.info.leftShadow", "encounter.info.rightShadow",
+  Hide = { "searchResults.leftBorderBar", "instanceSelect.bg", "instanceSelect.evergreenBg", "encounter.info.leftShadow", "encounter.info.rightShadow",
     "encounter.info.model.dungeonBG", "encounter.instance.titleBG", "JourneysFrame.BorderFrame", "MonthlyActivitiesFrame.Bg",
     "MonthlyActivitiesFrame.Divider", "MonthlyActivitiesFrame.DividerVertical", "MonthlyActivitiesFrame.ThemeContainer",
     "MonthlyActivitiesFrame.ShadowLeft", "MonthlyActivitiesFrame.ShadowRight",
@@ -19,7 +19,7 @@ local layout = {
     "LootJournal.ScrollBar", "LootJournalItems.ItemSetsFrame.ScrollBar", "JourneysFrame.ScrollBar", "MonthlyActivitiesFrame.ScrollBar",
     "MonthlyActivitiesFrame.FilterList.ScrollBar", "searchResults.ScrollBar" },
   Tab = { "JourneysTab", "MonthlyActivitiesTab", "suggestTab", "dungeonsTab", "raidsTab", "LootJournalTab", "TutorialsTab" },
-  Button = { "navBar.home", "TutorialsFrame.Contents.StartButton", "suggestFrame.Suggestion1.button",
+  Button = { "TutorialsFrame.Contents.StartButton", "suggestFrame.Suggestion1.button",
     "suggestFrame.Suggestion2.centerDisplay.button", "suggestFrame.Suggestion3.centerDisplay.button",
     "JourneysFrame.JourneyProgress.OverviewBtn", "JourneysFrame.JourneyOverview.OverviewBtn",
     "JourneysFrame.JourneyProgress.LevelSkipButton" },
@@ -49,7 +49,7 @@ end
 local function RefreshGuide(frame)
   Skins.Shell(frame)
   Skins.Apply(frame, layout)
-  Skins.StripRegions(frame.navBar)
+  Skins.Navigation(frame.navBar)
   Skins.ScrollRows(frame.instanceSelect.ScrollBox, SkinGuideRow)
   Skins.ScrollRows(frame.encounter.info.BossesScrollBox, SkinGuideRow)
   Skins.ScrollRows(frame.encounter.info.LootContainer.ScrollBox, SkinLootRow)
