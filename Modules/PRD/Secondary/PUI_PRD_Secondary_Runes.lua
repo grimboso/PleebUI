@@ -8,6 +8,18 @@ local P = ns.Pleebug:DropIn({}, { name = "PRD_Secondary_Runes" })
 local RUNE_TIME_FORMATTER = C_StringUtil.CreateNumericRuleFormatter()
 RUNE_TIME_FORMATTER:AddBreakpoint({ threshold = 0, format = "%.0f" })
 
+local function RenderRuneRecharge(bar)
+  local progress = math.max(0, math.min(1, (GetTime() - bar._puiRuneStart) / bar._puiRuneDuration))
+  local fade = bar._puiRuneRechargeAnimation == "FADE"
+  bar:SetValue(fade and 1 or progress)
+  bar:GetStatusBarTexture():SetAlpha(fade and (bar._puiRuneInactiveAlpha + (1 - bar._puiRuneInactiveAlpha) * progress) or 1)
+  bar._bg:SetAlpha(fade and 0 or bar._puiRuneInactiveAlpha)
+  if progress == 1 then
+    bar._bg:SetAlpha(0)
+    bar:SetScript("OnUpdate", nil)
+  end
+end
+
 local function ReflowRuneBars(owner)
   local content = Secondary.GetSecondaryContentFrame(owner) or owner.secondary
   local config = owner.secondaryResourceConfig
@@ -67,12 +79,14 @@ function M:BuildRuneBars()
 
     bar:SetParent(runeContainer)
     bar:SetFrameLevel(runeContainer:GetFrameLevel() + 1)
+    bar:SetScript("OnUpdate", nil)
     bar:SetAlpha(1)
     bar:SetMinMaxValues(0, 1)
     bar:SetValue(1)
     bar._puiRuneTimer = bar._puiRuneTimer or C_DurationUtil.CreateDuration()
     bar:SetStatusBarTexture(texturePath)
     bar:GetStatusBarTexture():SetDrawLayer("ARTWORK")
+    bar:GetStatusBarTexture():SetAlpha(1)
     bar:SetStatusBarColor(1, 1, 1, 1)
 
     if not bar._bg then
@@ -135,16 +149,24 @@ function M:BuildRuneBars()
   ReflowRuneBars(self)
 end
 
-local function UpdateRuneBar(owner, index, showCooldown, showGlow, animationMode)
+local function UpdateRuneBar(owner, index, showCooldown, showGlow, animationMode, behavior, inactiveAlpha)
   local bar = owner.runeBars[index]
   local start, duration, runeReady = GetRuneCooldown(index)
   local wasOnCooldown = bar._wasOnCooldown == true
+  local direction = behavior.rechargeDirection
+  bar:SetOrientation((direction == "TTB" or direction == "BTT") and "VERTICAL" or "HORIZONTAL")
+  bar:SetReverseFill(direction == "RTL" or direction == "BTT")
+  bar._puiRuneRechargeAnimation = behavior.rechargeAnimation
+  bar._puiRuneInactiveAlpha = inactiveAlpha
 
   if not bar:IsShown() then
     bar:Show()
   end
 
   if runeReady then
+    bar:SetScript("OnUpdate", nil)
+    bar:GetStatusBarTexture():SetAlpha(1)
+    bar._bg:SetAlpha(0)
     if bar._puiRuneState ~= "READY" then
       bar:SetMinMaxValues(0, 1)
       bar:SetValue(1)
@@ -176,9 +198,14 @@ local function UpdateRuneBar(owner, index, showCooldown, showGlow, animationMode
   end
 
   if not start or start == 0 or not duration or duration == 0 then
+    bar:SetScript("OnUpdate", nil)
+    local fade = behavior.rechargeAnimation == "FADE"
+    bar:SetValue(fade and 1 or 0)
+    bar:GetStatusBarTexture():SetAlpha(fade and inactiveAlpha or 1)
+    bar._bg:SetAlpha(fade and 0 or inactiveAlpha)
     if bar._puiRuneState ~= "PAUSED" then
       bar:SetMinMaxValues(0, 1)
-      bar:SetValue(0)
+      bar:SetValue(fade and 1 or 0)
 
       if bar._puiRuneTextShown == true then
         bar._puiRuneTextBinding:Disable()
@@ -204,11 +231,12 @@ local function UpdateRuneBar(owner, index, showCooldown, showGlow, animationMode
     bar._puiRuneStart = start
     bar._puiRuneDuration = duration
     bar._puiRuneTimer:SetTimeFromStart(start, duration)
-    bar:SetTimerDuration(
-      bar._puiRuneTimer,
-      Enum.StatusBarInterpolation.Immediate,
-      Enum.StatusBarTimerDirection.ElapsedTime
-    )
+  end
+
+  -- Rune cooldown times are ordinary values; animate cached progress without polling the API.
+  RenderRuneRecharge(bar)
+  if GetTime() < start + duration then
+    bar:SetScript("OnUpdate", RenderRuneRecharge)
   end
 
   if showCooldown then
@@ -282,10 +310,11 @@ function M:UpdateRunes()
   local showGlow = behavior.showReadyGlow ~= false
   local animationMode = behavior.completionAnimation or "FADE"
 
+  local inactiveAlpha = Secondary.GetInactiveAlpha(self)
   local readyCount = 0
 
   for i = 1, 6 do
-    UpdateRuneBar(self, i, showCooldown, showGlow, animationMode)
+    UpdateRuneBar(self, i, showCooldown, showGlow, animationMode, behavior, inactiveAlpha)
     if self.runeBars[i]._puiRuneReady == true then
       readyCount = readyCount + 1
     end
@@ -298,6 +327,7 @@ local function Deactivate(owner)
   if owner.runeBars then
     for i = 1, #owner.runeBars do
       local bar = owner.runeBars[i]
+      bar:SetScript("OnUpdate", nil)
       bar:SetMinMaxValues(0, 1)
       bar:SetValue(0)
       bar._puiRuneTextBinding:Disable()
