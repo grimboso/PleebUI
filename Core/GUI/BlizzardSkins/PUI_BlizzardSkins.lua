@@ -4,6 +4,7 @@ local Skins = {}
 ns.BlizzardSkins = Skins
 
 local windows = {}
+local navigationBars = setmetatable({}, { __mode = "k" })
 local surfaces = setmetatable({}, { __mode = "k" })
 local hooks = setmetatable({}, { __mode = "k" })
 local driver = CreateFrame("Frame")
@@ -35,7 +36,16 @@ end
 
 function Skins.Chrome(frame)
   if not frame then return end
+  if frame.SetBackdrop then frame:SetBackdrop(nil) end
   Skins.Hide(frame.NineSlice)
+  Skins.Hide(frame.BorderBox)
+  Skins.Hide(frame.BG)
+  Skins.Hide(frame.Underlay)
+  Skins.Hide(frame.InsetBorderTop)
+  for _, key in ipairs({ "TopLeftCorner", "TopRightCorner", "BottomLeftCorner", "BottomRightCorner",
+    "TopBorder", "BottomBorder", "LeftBorder", "RightBorder" }) do
+    Skins.Hide(frame[key])
+  end
   Skins.Hide(frame.Border)
   Skins.Hide(frame.BorderFrame)
   Skins.Hide(frame.Background)
@@ -122,9 +132,11 @@ function Skins.Button(button)
   end
   Skins.Hide(button:GetNormalTexture())
   Skins.Hide(button:GetPushedTexture())
+  Skins.Hide(button:GetDisabledTexture())
   local highlight = button:GetHighlightTexture()
   if highlight then
     highlight:SetColorTexture(1, 1, 1, 0.12)
+    highlight:SetAlpha(1)
     highlight:SetAllPoints(button)
   end
   Skins.Font(button:GetFontString(), "button")
@@ -153,9 +165,11 @@ function Skins.IconButton(button, icon)
   Skins.Icon(icon)
   Skins.Hide(button:GetNormalTexture())
   Skins.Hide(button:GetPushedTexture())
+  Skins.Hide(button:GetDisabledTexture())
   local highlight = button:GetHighlightTexture()
   if highlight then
     highlight:SetColorTexture(1, 1, 1, 0.12)
+    highlight:SetAlpha(1)
     highlight:SetAllPoints(button)
   end
 end
@@ -165,6 +179,7 @@ function Skins.CheckBox(button)
   Skins.Surface(button, true)
   Skins.Hide(button:GetNormalTexture())
   Skins.Hide(button:GetPushedTexture())
+  Skins.Hide(button:GetDisabledTexture())
   Skins.Hide(button:GetHighlightTexture())
   local color = Theme.GetColors().accent
   local checked = button:GetCheckedTexture()
@@ -202,6 +217,7 @@ function Skins.Tab(tab)
   local highlight = tab.MiddleHighlight
   if highlight then
     highlight:SetColorTexture(1, 1, 1, 0.12)
+    highlight:SetAlpha(1)
     highlight:SetAllPoints(tab)
   end
   Skins.Font(tab:GetFontString())
@@ -213,6 +229,8 @@ end
 function Skins.ScrollBar(scrollbar)
   if not scrollbar then return end
   Skins.Chrome(scrollbar)
+  if scrollbar.Back then Skins.Arrow(scrollbar.Back, "^") end
+  if scrollbar.Forward then Skins.Arrow(scrollbar.Forward, "v") end
   local track = scrollbar.Track
   if track then
     Skins.Surface(track, true)
@@ -256,20 +274,24 @@ function Skins.Bar(bar)
   Theme.SkinStatusBar(bar)
 end
 
+function Skins.Arrow(button, text)
+  Skins.Button(button)
+  Skins.Hide(button.Texture)
+  local host = surfaces[button]
+  if not host.label then
+    host.label = button:CreateFontString(nil, "OVERLAY")
+    host.label:SetPoint("CENTER")
+  end
+  host.label:SetText(text)
+  Skins.Font(host.label)
+end
+
 function Skins.Paging(frame)
   if not frame then return end
   for _, entry in ipairs({ { frame.PrevPageButton, "<" }, { frame.NextPageButton, ">" } }) do
     local button = entry[1]
     if button then
-      Skins.Button(button)
-      local host = surfaces[button]
-      if not host then host = Skins.Surface(button, true) end
-      if not host.label then
-        host.label = button:CreateFontString(nil, "OVERLAY")
-        host.label:SetPoint("CENTER")
-        host.label:SetText(entry[2])
-      end
-      Skins.Font(host.label)
+      Skins.Arrow(button, entry[2])
     end
   end
   Skins.Font(frame.PageText)
@@ -299,6 +321,33 @@ function Skins.TabSystem(system)
   for _, tab in ipairs({ system:GetChildren() }) do
     if tab:IsObjectType("Button") then Skins.Tab(tab) end
   end
+end
+
+function Skins.Navigation(bar)
+  navigationBars[bar] = true
+  Skins.StripRegions(bar)
+  Skins.StripRegions(bar.overlay)
+  for _, button in ipairs(bar.navList) do
+    for _, region in ipairs({ button:GetRegions() }) do
+      if region:IsObjectType("Texture") and region ~= button.selected
+        and region ~= button:GetHighlightTexture() then
+        Skins.Hide(region)
+      end
+    end
+    Skins.Button(button)
+    Skins.Selection(button.selected)
+    if button.MenuArrowButton then
+      local menu = button.MenuArrowButton
+      Skins.Button(menu)
+      -- The native hover script restores alpha on these two square borders.
+      menu:GetNormalTexture():SetTexture(nil)
+      menu:GetPushedTexture():SetTexture(nil)
+    end
+  end
+  Skins.Arrow(bar.overflowButton, ">")
+  Skins.Hook(_G, "NavBar_AddButton", function(nav)
+    if navigationBars[nav] and Skins.CanStyle() then Skins.Navigation(nav) end
+  end)
 end
 
 function Skins.Register(addonName, frameName, refresh)
