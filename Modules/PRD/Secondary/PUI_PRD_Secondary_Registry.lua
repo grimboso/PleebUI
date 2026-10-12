@@ -335,7 +335,11 @@ local DEFINITIONS = {
     resourceKey = "RUNES",
     powerType = Enum.PowerType.RunicPower,
     token = "RUNIC_POWER",
-    useTextureColor = true,
+    defaultColor = { 1, 0, 0, 1 },
+    defaultColorBySpec = {
+      [251] = { 0, 0.5, 1, 1 },
+      [252] = { 0, 1, 0, 1 },
+    },
     texture = "PUI: Runes Blood",
     textureBySpec = {
       [251] = "PUI: Runes Frost",
@@ -815,6 +819,7 @@ local function BuildResourceConfigStateKey(config)
   local cues = config.cues
   local behavior = config.behavior
   local customColor = config.customColor
+  local defaultColor = config.defaultColor
   local borderColor = style.borderColor
   local backgroundColor = style.bgColor
   local dividerColor = config.dividerColor
@@ -834,6 +839,7 @@ local function BuildResourceConfigStateKey(config)
     config.useBlizzardPowerColor and 1 or 0,
     config.useClassColor and 1 or 0,
     customColor[1], customColor[2], customColor[3], customColor[4],
+    defaultColor[1], defaultColor[2], defaultColor[3], defaultColor[4],
     style.borderSize,
     borderColor[1], borderColor[2], borderColor[3], borderColor[4],
     backgroundColor[1], backgroundColor[2], backgroundColor[3], backgroundColor[4],
@@ -875,7 +881,7 @@ local function CopyColor(color, r, g, b, a)
   }
 end
 
-local function ResolveResourceConfig(profile, definition)
+local function ResolveResourceConfig(profile, definition, specID)
   if not definition then
     return nil
   end
@@ -886,6 +892,7 @@ local function ResolveResourceConfig(profile, definition)
   if cached
     and cached.profile == profile
     and cached.definition == definition
+    and cached.specID == specID
     and cached.revision == revision
   then
     return cached.config
@@ -997,7 +1004,10 @@ local function ResolveResourceConfig(profile, definition)
       buffGlowColor = CopyColor(sourceCues.buffGlowColor, 0.25, 0.75, 1, 1),
     },
     supportsNumericCues = NUMERIC_CUE_RESOURCES[definition.resourceKey] == true,
-    defaultColor = CopyColor(definition.defaultColor, 1, 1, 1, 1),
+    defaultColor = CopyColor(
+      definition.defaultColorBySpec and definition.defaultColorBySpec[specID] or definition.defaultColor,
+      1, 1, 1, 1
+    ),
   }
 
   config.stateKey = BuildResourceConfigStateKey(config)
@@ -1005,6 +1015,7 @@ local function ResolveResourceConfig(profile, definition)
   M._puiResourceConfigCache[cacheKey] = {
     profile = profile,
     definition = definition,
+    specID = specID,
     revision = revision,
     config = config,
   }
@@ -1051,7 +1062,7 @@ local function ResolveDefinitions()
           texture = resolvedTexture,
           precisePower = precisePower == true,
           currentDivisor = currentDivisor,
-          config = ResolveResourceConfig(profile, definition),
+          config = ResolveResourceConfig(profile, definition, specID),
         }
       end
     end
@@ -1107,6 +1118,7 @@ function M:GetSecondaryDefinition()
   self.secondaryDisplayFloor = definition and definition.displayFloor == true or false
   self.secondaryAdapter = primary and primary.adapter or nil
   self.secondaryResourceConfig = primary and primary.config or nil
+  self._puiSecColorDirty = true
 
   if self.secondary then
     self:AssignSecondaryResourceFrames()
