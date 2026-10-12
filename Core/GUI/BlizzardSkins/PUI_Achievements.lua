@@ -117,7 +117,29 @@ local function RefreshSearchPreview()
   Skins.Button(preview.ShowAllSearchResults, true)
 end
 
+local function RefreshAchievementTab(tab)
+  if not Skins.CanStyle() then return end
+  Skins.Font(tab.Text, "button")
+  tab.Text:ClearAllPoints()
+  tab.Text:SetPoint("CENTER", tab, "CENTER")
+  tab.Text:SetWidth(0)
+  local width = tab.Text:GetStringWidth()
+  if not issecretvalue(width) then tab:SetWidth(width + 32) end
+end
+
+local function RefreshAchievementControls()
+  if not Skins.CanStyle() then return end
+  local frame = AchievementFrame
+  for _, tab in ipairs({ frame.Tab1, frame.Tab2, frame.Tab3 }) do RefreshAchievementTab(tab) end
+  local dropdown = frame.HeaderDetails.Filters.FilterDropdown
+  Skins.Dropdown(dropdown)
+  dropdown.Text:ClearAllPoints()
+  dropdown.Text:SetPoint("LEFT", dropdown, "LEFT", 8, 0)
+  dropdown.Text:SetPoint("RIGHT", dropdown, "RIGHT", -24, 0)
+end
+
 local function RefreshRows()
+  RefreshAchievementControls()
   Skins.ScrollRows(AchievementFrame.Categories.ScrollBox, SkinCategoryRow)
   Skins.ScrollRows(AchievementFrameAchievements.ScrollBox, SkinAchievementCard)
   Skins.ScrollRows(AchievementFrameStats.ScrollBox, SkinStatRow)
@@ -134,16 +156,42 @@ local function InstallAchievements(frame)
     [AchievementFrameGuildEmblemLeft] = true,
     [AchievementFrameGuildEmblemRight] = true,
   })
-  Skins.Surface(frame)
+  local shell = Skins.Surface(frame)
+  shell:ClearAllPoints()
+  shell:SetPoint("TOPLEFT", frame, "TOPLEFT", 0, 40)
+  shell:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT")
   ns.Theme.WidgetSkins.CloseButton(AchievementFrameCloseButton)
+  AchievementFrameCloseButton:ClearAllPoints()
+  AchievementFrameCloseButton:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -4, 36)
   FadeArtwork(frame.Header, { [frame.Header.Shield] = true })
-  Skins.Surface(frame.Header, false, true)
+  frame.Header:ClearAllPoints()
+  frame.Header:SetPoint("TOPLEFT", frame, "TOPLEFT", 4, 36)
+  frame.Header:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -4, 36)
+  frame.Header:SetHeight(32)
+  frame.Header.Title:ClearAllPoints()
+  frame.Header.Title:SetPoint("LEFT", frame.Header, "LEFT", 12, 0)
+  frame.Header.Title:SetPoint("RIGHT", frame.Header, "RIGHT", -180, 0)
+  frame.Header.Title:SetHeight(24)
+  frame.Header.Title:SetMaxLines(1)
+  frame.Header.Title:SetWordWrap(false)
+  frame.Header.Title:SetJustifyH("LEFT")
+  frame.Header.Points:ClearAllPoints()
+  frame.Header.Points:SetPoint("RIGHT", frame.Header, "RIGHT", -60, 0)
+  frame.Header.Points:SetHeight(20)
   Skins.Texts(frame.Header)
   FadeArtwork(frame.HeaderDetails)
   Skins.Button(frame.HeaderDetails.Back)
-  Skins.Dropdown(frame.HeaderDetails.Filters.FilterDropdown)
+  local dropdown = frame.HeaderDetails.Filters.FilterDropdown
+  dropdown:SetHeight(26)
+  dropdown.topPadding = 2
   local search = frame.HeaderDetails.Filters.SearchBox
   Skins.EditBox(search)
+  search.searchIcon:ClearAllPoints()
+  search.searchIcon:SetPoint("LEFT", search, "LEFT", 7, 0)
+  search:SetTextInsets(23, 22, 0, 0)
+  search.Instructions:ClearAllPoints()
+  search.Instructions:SetPoint("LEFT", search, "LEFT", 23, 0)
+  search.Instructions:SetPoint("RIGHT", search, "RIGHT", -22, 0)
   Skins.Panel(search.SearchPreviewContainer)
   for _, pane in ipairs({ frame.Categories, AchievementFrameAchievements, AchievementFrameStats,
     AchievementFrameSummary, AchievementFrameComparison }) do
@@ -160,6 +208,11 @@ local function InstallAchievements(frame)
     Skins.Texts(header)
   end
   for _, tab in ipairs({ frame.Tab1, frame.Tab2, frame.Tab3 }) do Skins.Tab(tab) end
+  RefreshAchievementControls()
+  Skins.Hook(_G, "AchievementFrame_UpdateTabs", RefreshAchievementControls)
+  Skins.Hook(_G, "PanelTemplates_TabResize", function(tab)
+    if tab == frame.Tab1 or tab == frame.Tab2 or tab == frame.Tab3 then RefreshAchievementTab(tab) end
+  end)
   Skins.Shell(frame.SearchResults)
   FadeArtwork(frame.SearchResults)
   Skins.ScrollBar(frame.SearchResults.ScrollBar)
