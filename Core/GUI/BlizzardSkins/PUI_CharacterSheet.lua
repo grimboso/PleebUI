@@ -10,7 +10,6 @@ local C_Timer         = _G.C_Timer
 local hooksecurefunc  = _G.hooksecurefunc
 local Menu            = _G.Menu
 local MenuUtil        = _G.MenuUtil
-local GetCursorPosition = _G.GetCursorPosition
 local GetAverageItemLevel = _G.GetAverageItemLevel
 local InCombatLockdown = _G.InCombatLockdown
 local issecretvalue = _G.issecretvalue
@@ -42,8 +41,6 @@ CharacterSheet._inspectHost     = nil
 CharacterSheet._inspectInit     = false
 CharacterSheet._inspectSlotHook = false
 CharacterSheet._inspectReadyGUID = nil
-CharacterSheet._characterDragging = false
-CharacterSheet._characterResizeState = nil
 CharacterSheet._activeItemStatHighlight = false
 CharacterSheet._hoveredStatFrame = nil
 CharacterSheet._statFontFrames = {}
@@ -51,8 +48,6 @@ CharacterSheet._groupedStatFrames = {}
 CharacterSheet._attributeStatFrames = {}
 CharacterSheet._statTextWidgets = {}
 
-local CS_CHARACTER_SCALE_MIN = 0.75
-local CS_CHARACTER_SCALE_MAX = 1.50
 local CS_SHELL_BOTTOM_EXTENSION = 40
 local CS_CONFIG_TEXTURE = [[Interface\AddOns\PleebUI\Media\Textures\Config.png]]
 
@@ -170,7 +165,6 @@ local function _CS_GetDB()
         highlightStatGear = true,
         showMaxHealth = true,
         usePleebUIFont = false,
-        windowScale = 1,
       },
     })
   end
@@ -428,232 +422,6 @@ function CharacterSheet:SetShellExtended(extended)
 
   CharacterSheet._shellExtended = extended
   EnsureShellHost()
-end
-
-local function CS_ClampCharacterFrameScale(scale)
-  scale = tonumber(scale) or 1
-
-  if scale < CS_CHARACTER_SCALE_MIN then
-    return CS_CHARACTER_SCALE_MIN
-  end
-
-  if scale > CS_CHARACTER_SCALE_MAX then
-    return CS_CHARACTER_SCALE_MAX
-  end
-
-  return scale
-end
-
-local function CS_SetCharacterFrameScaledTopLeft(left, top, scale)
-  local uiScale = UIParent:GetEffectiveScale()
-
-  CharacterFrame:ClearAllPoints()
-  CharacterFrame:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", left / (uiScale * scale), top / (uiScale * scale))
-end
-
-local function CS_SaveCharacterFrameWindowState()
-  if not CharacterFrame then
-    return
-  end
-
-  local left, bottom, width, height = CharacterFrame:GetScaledRect()
-  if not (left and bottom and width and height) then
-    return
-  end
-
-  local db = _CS_GetDB()
-  db.windowScale = CS_ClampCharacterFrameScale(CharacterFrame:GetScale())
-  db.windowLeft = left
-  db.windowTop = bottom + height
-end
-
-local function CS_ApplyCharacterFrameWindowState()
-  if not CharacterFrame or CharacterSheet._characterDragging or CharacterSheet._characterResizeState then
-    return
-  end
-
-  local db = _CS_GetDB()
-  local scale = CS_ClampCharacterFrameScale(db.windowScale)
-
-  if CharacterFrame:GetScale() ~= scale then
-    CharacterFrame:SetScale(scale)
-  end
-
-  local left = tonumber(db.windowLeft)
-  local top = tonumber(db.windowTop)
-  if not (left and top) then
-    return
-  end
-
-  CS_SetCharacterFrameScaledTopLeft(left, top, scale)
-end
-
-local function CS_UpdateCharacterFrameResize(grip)
-  local state = CharacterSheet._characterResizeState
-  if not state then
-    grip:SetScript("OnUpdate", nil)
-    return
-  end
-
-  local cursorX, cursorY = GetCursorPosition()
-  local deltaX = cursorX - state.cursorX
-  local deltaY = cursorY - state.cursorY
-  local denominator = (state.width * state.width) + (state.height * state.height)
-  if denominator <= 0 then
-    return
-  end
-
-  local ratio = 1 + (((deltaX * state.width) - (deltaY * state.height)) / denominator)
-  local scale = CS_ClampCharacterFrameScale(state.scale * ratio)
-
-  CharacterFrame:SetScale(scale)
-  CS_SetCharacterFrameScaledTopLeft(state.left, state.top, scale)
-end
-
-local function CS_EndCharacterFrameResize()
-  local grip = CharacterFrame and CharacterFrame._puiCharacterResizeGrip
-  if grip then
-    grip:SetScript("OnUpdate", nil)
-  end
-
-  if not CharacterSheet._characterResizeState then
-    return
-  end
-
-  CharacterSheet._characterResizeState = nil
-  CS_SaveCharacterFrameWindowState()
-end
-
-local function CS_BeginCharacterFrameResize()
-  if not CharacterFrame then
-    return
-  end
-
-  local left, bottom, width, height = CharacterFrame:GetScaledRect()
-  if not (left and bottom and width and height) then
-    return
-  end
-
-  local scale = CS_ClampCharacterFrameScale(CharacterFrame:GetScale())
-  local cursorX, cursorY = GetCursorPosition()
-  local visualHeight = height
-
-  if CharacterSheet._shellExtended then
-    visualHeight = visualHeight + (CS_SHELL_BOTTOM_EXTENSION * CharacterFrame:GetEffectiveScale())
-  end
-
-  CharacterSheet._characterResizeState = {
-    cursorX = cursorX,
-    cursorY = cursorY,
-    scale = scale,
-    left = left,
-    top = bottom + height,
-    width = width,
-    height = visualHeight,
-  }
-
-  CS_SetCharacterFrameScaledTopLeft(left, bottom + height, scale)
-  CharacterFrame._puiCharacterResizeGrip:SetScript("OnUpdate", CS_UpdateCharacterFrameResize)
-end
-
-local function CS_BeginCharacterFrameDrag()
-  CS_EndCharacterFrameResize()
-  CharacterSheet._characterDragging = true
-  CharacterFrame:StartMoving()
-  CharacterFrame:SetUserPlaced(false)
-end
-
-local function CS_EndCharacterFrameDrag()
-  if not CharacterSheet._characterDragging then
-    return
-  end
-
-  CharacterFrame:StopMovingOrSizing()
-  CharacterSheet._characterDragging = false
-
-  CS_SaveCharacterFrameWindowState()
-  CS_ApplyCharacterFrameWindowState()
-end
-
-local function CS_StopCharacterFrameInteraction()
-  CS_EndCharacterFrameResize()
-  CS_EndCharacterFrameDrag()
-end
-
-local function CS_AfterUIPanelPositionsUpdated()
-  if CharacterFrame and CharacterFrame:IsShown() then
-    CS_ApplyCharacterFrameWindowState()
-  end
-end
-
-local function CS_EnsureCharacterFrameWindowControls()
-  if not CharacterFrame then
-    return
-  end
-
-  EnsureShellHost()
-
-  local drag = CharacterFrame.TitleContainer
-  if not drag._puiCharacterDragOwner then
-    drag:EnableMouse(true)
-    drag:RegisterForDrag("LeftButton")
-    drag:HookScript("OnDragStart", CS_BeginCharacterFrameDrag)
-    drag:HookScript("OnDragStop", CS_EndCharacterFrameDrag)
-    drag._puiCharacterDragOwner = true
-  end
-
-  local grip = CharacterFrame._puiCharacterResizeGrip
-  if not grip then
-    grip = CreateFrame("Frame", "PUI_CharacterFrameResizeGrip", CharacterFrame)
-    CharacterFrame._puiCharacterResizeGrip = grip
-
-    grip:SetFrameStrata("DIALOG")
-    grip:SetFrameLevel(CharacterFrame:GetFrameLevel() + 100)
-    grip:SetSize(18, 18)
-    grip:EnableMouse(true)
-    grip._puiLines = {}
-
-    for i = 0, 2 do
-      local length = 12 - (i * 4)
-      local offset = 2 + (i * 4)
-
-      local horizontal = grip:CreateTexture(nil, "OVERLAY")
-      horizontal:SetSize(length, 2)
-      horizontal:SetPoint("BOTTOMRIGHT", grip, "BOTTOMRIGHT", -2, offset)
-      grip._puiLines[#grip._puiLines + 1] = horizontal
-
-      local vertical = grip:CreateTexture(nil, "OVERLAY")
-      vertical:SetSize(2, length)
-      vertical:SetPoint("BOTTOMRIGHT", grip, "BOTTOMRIGHT", -offset, 2)
-      grip._puiLines[#grip._puiLines + 1] = vertical
-    end
-
-    grip:SetScript("OnMouseDown", function(_, button)
-      if button == "LeftButton" then
-        CS_BeginCharacterFrameResize()
-      end
-    end)
-    grip:SetScript("OnMouseUp", function(_, button)
-      if button == "LeftButton" then
-        CS_EndCharacterFrameResize()
-      end
-    end)
-  end
-
-  grip:ClearAllPoints()
-  grip:SetPoint("BOTTOMRIGHT", CharacterSheet._shellHost, "BOTTOMRIGHT", -4, 4)
-
-  local ar, ag, ab = CS_ACCENT()
-  for _, texture in ipairs(grip._puiLines) do
-    texture:SetColorTexture(ar, ag, ab, 0.75)
-  end
-
-  if not CharacterFrame._puiCharacterWindowHooks then
-    hooksecurefunc(CharacterFrame, "Show", CS_ApplyCharacterFrameWindowState)
-    hooksecurefunc(CharacterFrame, "Hide", CS_StopCharacterFrameInteraction)
-    hooksecurefunc("UpdateUIPanelPositions", CS_AfterUIPanelPositionsUpdated)
-    CharacterFrame._puiCharacterWindowHooks = true
-  end
 end
 
 local function EnsureCharacterAverageItemLevelText()
@@ -4136,8 +3904,7 @@ local function SetupCharacterFrameSkinning()
   if CharacterSheet._initialized then
     -- Already skinned once; just make sure shell and window controls are positioned.
     EnsureShellHost()
-    CS_EnsureCharacterFrameWindowControls()
-    CS_ApplyCharacterFrameWindowState()
+    ns.BlizzardWindowControls.Install(CharacterFrame, CharacterSheet._shellHost)
     return
   end
 
@@ -4342,8 +4109,7 @@ local function SetupCharacterFrameSkinning()
   -- Initial shell state: character page uses extended shell.
   CharacterSheet._shellExtended = true
   EnsureShellHost()
-  CS_EnsureCharacterFrameWindowControls()
-  CS_ApplyCharacterFrameWindowState()
+  ns.BlizzardWindowControls.Install(CharacterFrame, CharacterSheet._shellHost)
   UpdateCharacterAverageItemLevelText()
   CS_LayoutMaxHealthRow()
 
@@ -4462,7 +4228,7 @@ end
 function CharacterSheet:RefreshTheme()
   if CharacterFrame and self._initialized then
     EnsureShellHost()
-    CS_EnsureCharacterFrameWindowControls()
+    ns.BlizzardWindowControls.Install(CharacterFrame, CharacterSheet._shellHost)
     UpdateCharacterAverageItemLevelText()
     CS_LayoutMaxHealthRow()
     CS_RefreshCharacterStatFonts()
@@ -4730,18 +4496,6 @@ end
   SkinTitleEntry = P:Def("SkinTitleEntry", SkinTitleEntry)
   SkinTitleManagerPane = P:Def("SkinTitleManagerPane", SkinTitleManagerPane)
   CS_SuppressCoreBlizzardArt = P:Def("CS_SuppressCoreBlizzardArt", CS_SuppressCoreBlizzardArt)
-  CS_ClampCharacterFrameScale = P:Def("CS_ClampCharacterFrameScale", CS_ClampCharacterFrameScale)
-  CS_SetCharacterFrameScaledTopLeft = P:Def("CS_SetCharacterFrameScaledTopLeft", CS_SetCharacterFrameScaledTopLeft)
-  CS_SaveCharacterFrameWindowState = P:Def("CS_SaveCharacterFrameWindowState", CS_SaveCharacterFrameWindowState)
-  CS_ApplyCharacterFrameWindowState = P:Def("CS_ApplyCharacterFrameWindowState", CS_ApplyCharacterFrameWindowState)
-  CS_UpdateCharacterFrameResize = P:Def("CS_UpdateCharacterFrameResize", CS_UpdateCharacterFrameResize)
-  CS_EndCharacterFrameResize = P:Def("CS_EndCharacterFrameResize", CS_EndCharacterFrameResize)
-  CS_BeginCharacterFrameResize = P:Def("CS_BeginCharacterFrameResize", CS_BeginCharacterFrameResize)
-  CS_BeginCharacterFrameDrag = P:Def("CS_BeginCharacterFrameDrag", CS_BeginCharacterFrameDrag)
-  CS_EndCharacterFrameDrag = P:Def("CS_EndCharacterFrameDrag", CS_EndCharacterFrameDrag)
-  CS_StopCharacterFrameInteraction = P:Def("CS_StopCharacterFrameInteraction", CS_StopCharacterFrameInteraction)
-  CS_AfterUIPanelPositionsUpdated = P:Def("CS_AfterUIPanelPositionsUpdated", CS_AfterUIPanelPositionsUpdated)
-  CS_EnsureCharacterFrameWindowControls = P:Def("CS_EnsureCharacterFrameWindowControls", CS_EnsureCharacterFrameWindowControls)
   SetupCharacterFrameSkinning = P:Def("SetupCharacterFrameSkinning", SetupCharacterFrameSkinning)
   CharacterSheet.RefreshTheme = P:Def("CharacterSheet.RefreshTheme", CharacterSheet.RefreshTheme)
 
