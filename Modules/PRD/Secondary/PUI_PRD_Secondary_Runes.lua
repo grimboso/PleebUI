@@ -125,7 +125,7 @@ local function ApplyRuneCooldown(bar, start, duration, runeReady)
   bar._puiRuneTimer:SetTimeFromStart(start, duration)
   fill:SetTimerDuration(bar._puiRuneTimer)
 
-  if showCooldown and GetTime() >= start then
+  if showCooldown then
     if timerChanged or bar._puiRuneTextShown ~= true then
       bar._puiRuneTextBinding:SetDuration(bar._puiRuneTimer)
       bar._puiRuneTextBinding:Enable()
