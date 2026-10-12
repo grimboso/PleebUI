@@ -117,14 +117,19 @@ local function ApplyRuneCooldown(bar, start, duration, runeReady, recharging)
     return false
   end
 
-  local timerChanged = bar._puiRuneState ~= "CHARGING"
+  local runeState = recharging and "CHARGING" or "QUEUED"
+  local timerChanged = bar._puiRuneState ~= runeState
     or bar._puiRuneStart ~= start
     or bar._puiRuneDuration ~= duration
 
   bar._puiRuneStart = start
   bar._puiRuneDuration = duration
   bar._puiRuneTimer:SetTimeFromStart(start, duration)
-  fill:SetTimerDuration(bar._puiRuneTimer)
+  if recharging then
+    fill:SetTimerDuration(bar._puiRuneTimer)
+  else
+    fill:SetValue(0)
+  end
 
   if showCooldown then
     if timerChanged or bar._puiRuneTextShown ~= true then
@@ -142,8 +147,8 @@ local function ApplyRuneCooldown(bar, start, duration, runeReady, recharging)
 
   bar._puiRuneReady = false
   bar._wasOnCooldown = true
-  bar._puiRuneState = "CHARGING"
-  return true
+  bar._puiRuneState = runeState
+  return recharging == true
 end
 
 local function ApplyRuneResourceCues(owner, readyCount)
@@ -176,6 +181,12 @@ local function ApplyRuneResourceCues(owner, readyCount)
 end
 
 local function CompareRuneStart(left, right)
+  if left.ready ~= right.ready then
+    return left.ready
+  end
+  if (left.start == 0) ~= (right.start == 0) then
+    return right.start == 0
+  end
   return left.start < right.start
 end
 
@@ -195,10 +206,40 @@ local function RefreshRuneWidget(bar)
     if not cooldown.ready and cooldown.start ~= 0 then
       rechargingCount = rechargingCount + 1
       cooldown.recharging = rechargingCount <= 3
+      if cooldown.recharging then
+        cooldown.availableAt = cooldown.start + cooldown.duration
+      end
     end
   end
+
+  if bar._puiRuneOwner.secondaryResourceConfig.behavior.showQueuedRuneTime == true then
+    for index = 1, 6 do
+      local cooldown = cooldowns[index]
+      if not cooldown.ready and not cooldown.recharging then
+        local nextRecharge
+        for rechargeIndex = 1, 6 do
+          local recharge = cooldowns[rechargeIndex]
+          if recharge.recharging
+            and (not nextRecharge or recharge.availableAt < nextRecharge.availableAt)
+          then
+            nextRecharge = recharge
+          end
+        end
+        if nextRecharge then
+          cooldown.queuedReadyAt = nextRecharge.availableAt + cooldown.duration
+          nextRecharge.availableAt = cooldown.queuedReadyAt
+        end
+      end
+    end
+  end
+
   local cooldown = cooldowns[bar._puiRuneSlot]
-  ApplyRuneCooldown(bar, cooldown.start, cooldown.duration, cooldown.ready, cooldown.recharging)
+  local start, duration = cooldown.start, cooldown.duration
+  if cooldown.queuedReadyAt then
+    start = GetTime()
+    duration = math.max(0, cooldown.queuedReadyAt - start)
+  end
+  ApplyRuneCooldown(bar, start, duration, cooldown.ready, cooldown.recharging)
   ApplyRuneResourceCues(bar._puiRuneOwner, readyCount)
 end
 
