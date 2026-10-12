@@ -1147,8 +1147,7 @@ local function Merchant_ProcessAutoRepair(q)
   PlaySound(SOUNDKIT.ITEM_REPAIR, "Master")
 
   if q.autoRepairShowSummary == true then
-    local suffix = guildRepairAllowed and " (guild)" or ""
-    Addon:Print("Repaired for " .. FormatCoinText(repairCost) .. suffix .. ".")
+    Addon:Print("Repaired for " .. FormatCoinText(repairCost) .. ".")
   end
 end
 
