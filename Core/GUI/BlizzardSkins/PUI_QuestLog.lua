@@ -30,13 +30,13 @@ local function RefreshHeaderTitle(row)
   if Skins.CanStyle() then Skins.Font(row:GetTitleRegion(), "header") end
 end
 
-local function SkinQuestSurface(row, bottomInset, leftInset)
+local function SkinQuestHeaderSurface(row, bottomInset)
   local host = Skins.Surface(row, true)
   -- Campaign headers resize from their children; the backdrop must not affect layout.
   host.ignoreInLayout = true
   host:ClearAllPoints()
-  host:SetPoint("TOPLEFT", row, "TOPLEFT", leftInset or 0, 0)
-  host:SetPoint("BOTTOMLEFT", row, "BOTTOMLEFT", leftInset or 0, bottomInset)
+  host:SetPoint("TOPLEFT", row, "TOPLEFT", 0, 0)
+  host:SetPoint("BOTTOMLEFT", row, "BOTTOMLEFT", 0, bottomInset)
   host:SetWidth(QuestScrollFrame.Contents:GetWidth() - 4)
   return host
 end
@@ -49,7 +49,7 @@ local function SkinQuestHeader(row)
     Skins.Button(row)
     Skins.Hook(row, "CheckHighlightTitle", RefreshHeaderTitle)
   end
-  local host = SkinQuestSurface(row, row.LoreButton and 10 or 0)
+  local host = SkinQuestHeaderSurface(row, row.LoreButton and 10 or 0)
   if row.LoreButton then
     Skins.Selection(row.SelectedHighlight)
     row.SelectedHighlight:SetAllPoints(host)
@@ -75,9 +75,6 @@ local function RefreshQuestRows()
     for _, region in ipairs({ row:GetRegions() }) do
       if region:IsObjectType("FontString") then ns.Theme.ApplyFont(region, "body") end
     end
-    -- Blizzard overlaps quest frames by three pixels; inset the box to leave a gap.
-    SkinQuestSurface(row, 5, 2)
-    Skins.CheckBox(row.Checkbox)
   end
 end
 
