@@ -8,6 +8,9 @@ local navigationBars = setmetatable({}, { __mode = "k" })
 local surfaces = setmetatable({}, { __mode = "k" })
 local surfaceRoles = setmetatable({}, { __mode = "k" })
 local styledTexts = setmetatable({}, { __mode = "k" })
+local htmlFonts = setmetatable({}, { __mode = "k" })
+local htmlFontCount = 0
+local htmlTextTypes = { "p", "h1", "h2", "h3" }
 local styledButtons = setmetatable({}, { __mode = "k" })
 local selections = setmetatable({}, { __mode = "k" })
 local checkedTextures = setmetatable({}, { __mode = "k" })
@@ -34,12 +37,34 @@ function Skins.Hide(region)
   end
 end
 
+local function RefreshTextColor(text)
+  local color = Theme.GetColors().text
+  if htmlFonts[text] then
+    for _, textType in ipairs(htmlTextTypes) do
+      text:SetTextColor(textType, color[1], color[2], color[3], color[4])
+    end
+  else
+    text:SetTextColor(color[1], color[2], color[3], color[4])
+  end
+end
+
 function Skins.Font(text, role)
   if text then
     styledTexts[text] = true
-    Theme.ApplyFont(text, role or "body")
-    local color = Theme.GetColors().text
-    text:SetTextColor(color[1], color[2], color[3], color[4])
+    if text:IsObjectType("SimpleHTML") then
+      local font = htmlFonts[text]
+      if not font then
+        htmlFontCount = htmlFontCount + 1
+        font = CreateFont("PleebUIBlizzardHTMLFont" .. htmlFontCount)
+        htmlFonts[text] = font
+      end
+      -- Theme owns font settings; SimpleHTML binds them through typed font slots.
+      Theme.ApplyFont(font, role or "body")
+      for _, textType in ipairs(htmlTextTypes) do text:SetFontObject(textType, font) end
+    else
+      Theme.ApplyFont(text, role or "body")
+    end
+    RefreshTextColor(text)
   end
 end
 
@@ -275,9 +300,9 @@ function Skins.Dropdown(dropdown)
         else
           state.arrow:SetPoint("RIGHT", dropdown, "RIGHT", -8, 0)
         end
-        state.arrow:SetText("v")
       end
       Skins.Font(state.arrow, "button")
+      state.arrow:SetText("v")
     end
     state.label = dropdown.Text
     if dropdown.OnButtonStateChanged then
@@ -413,8 +438,8 @@ function Skins.Arrow(button, text)
     host.label = button:CreateFontString(nil, "OVERLAY")
     host.label:SetPoint("CENTER")
   end
-  host.label:SetText(text)
   Skins.Font(host.label)
+  host.label:SetText(text)
   InstallButtonState(button).label = host.label
   RefreshButtonState(button)
 end
@@ -559,10 +584,7 @@ function Skins.RefreshTheme(refreshWindows)
       }, edge)
     end
   end
-  for text in pairs(styledTexts) do
-    local color = colors.text
-    text:SetTextColor(color[1], color[2], color[3], color[4])
-  end
+  for text in pairs(styledTexts) do RefreshTextColor(text) end
   for texture, alpha in pairs(selections) do
     texture:SetColorTexture(colors.accent[1], colors.accent[2], colors.accent[3], alpha)
   end
