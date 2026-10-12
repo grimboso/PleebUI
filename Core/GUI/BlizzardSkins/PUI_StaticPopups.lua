@@ -94,5 +94,6 @@ function Addon:Theme_SkinStaticPopup(popup)
   WidgetSkins.UIEditBox(moneyInputFrame.gold)
   WidgetSkins.UIEditBox(moneyInputFrame.silver)
   WidgetSkins.UIEditBox(moneyInputFrame.copper)
+  ns.BlizzardWindowControls.Install(popup)
 end
 
