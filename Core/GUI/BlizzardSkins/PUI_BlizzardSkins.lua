@@ -254,6 +254,18 @@ end
 
 function Skins.CheckBox(button)
   if not button then return end
+  if button.CheckMark then
+    -- QuestLogTrackCheckboxTemplate is a Frame; Blizzard owns checkmark visibility.
+    local checked = button.CheckMark
+    Skins.StripRegions(button, { [checked] = true })
+    checkedTextures[checked] = "accent"
+    checked:SetTexture("Interface\\Buttons\\UI-CheckBox-Check")
+    checked:SetTexCoord(0, 1, 0, 1)
+    checked:SetAllPoints(button)
+    local color = Theme.GetColors().accent
+    checked:SetVertexColor(color[1], color[2], color[3], color[4])
+    return
+  end
   Skins.Chrome(button)
   Skins.Surface(button, true)
   Skins.Hide(button:GetNormalTexture())
