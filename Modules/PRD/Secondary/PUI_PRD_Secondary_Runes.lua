@@ -44,11 +44,11 @@ local function ReflowRuneBars(owner)
   end
 end
 
-local function ApplyRuneCooldown(bar, start, duration, runeReady)
+local function ApplyRuneCooldown(bar, start, duration, runeReady, recharging)
   local owner = bar._puiRuneOwner
   local behavior = owner.secondaryResourceConfig.behavior
   local showCooldown = behavior.showRechargeTime ~= false
-    and (start <= GetTime() or behavior.showQueuedRuneTime == true)
+    and (recharging or behavior.showQueuedRuneTime == true)
   local showGlow = behavior.showReadyGlow ~= false
   local animationMode = behavior.completionAnimation
   local inactiveAlpha = Secondary.GetInactiveAlpha(owner)
@@ -188,8 +188,17 @@ local function RefreshRuneWidget(bar)
     if ready then readyCount = readyCount + 1 end
   end
   table.sort(cooldowns, CompareRuneStart)
+  -- Only three runes can recharge at once; later cooldowns are queued.
+  local rechargingCount = 0
+  for index = 1, 6 do
+    local cooldown = cooldowns[index]
+    if not cooldown.ready and cooldown.start ~= 0 then
+      rechargingCount = rechargingCount + 1
+      cooldown.recharging = rechargingCount <= 3
+    end
+  end
   local cooldown = cooldowns[bar._puiRuneSlot]
-  ApplyRuneCooldown(bar, cooldown.start, cooldown.duration, cooldown.ready)
+  ApplyRuneCooldown(bar, cooldown.start, cooldown.duration, cooldown.ready, cooldown.recharging)
   ApplyRuneResourceCues(bar._puiRuneOwner, readyCount)
 end
 
