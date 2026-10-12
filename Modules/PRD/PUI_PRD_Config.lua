@@ -1029,14 +1029,17 @@ local function PRDPreview_ApplySegmentValues(
 
     if timed
       and behavior.showRechargeTime ~= false
-      and value > 0
+      and (value > 0
+        or config.resourceKey == "RUNES"
+          and behavior.showQueuedRuneTime == true
+          and (values[index] or 0) < 0)
       and value < 1
     then
       segment.text:SetText(
         tostring(
           math_max(
             1,
-            math_floor((1 - value) * 4 + 0.5)
+            math_floor((1 - (values[index] or 0)) * 4 + 0.5)
           )
         )
       )
@@ -1074,7 +1077,7 @@ local function PRDPreview_BuildRuneValues(
     elseif cycle < spendAt then
       value = 1
     elseif cycle < rechargeStart then
-      value = 0
+      value = (cycle - rechargeStart) / 3.2
     else
       value = PRDPreview_Clamp(
         (cycle - rechargeStart) / 3.2,
@@ -3862,6 +3865,24 @@ do
           end,
         },
       }
+
+      if resourceKey == "RUNES" then
+        args.showQueuedRuneTime = {
+          type = "toggle",
+          name = "Show queued rune timers",
+          desc = "Also show the estimated time until ready for runes waiting to recharge. When disabled, timers appear only on runes actively recharging.",
+          order = 1.5,
+          arg = { puiDisabledReason = "Enable Show recharge time first." },
+          disabled = function() return behavior.showRechargeTime == false end,
+          get = function()
+            return behavior.showQueuedRuneTime == true
+          end,
+          set = function(_, value)
+            behavior.showQueuedRuneTime = value and true or false
+            Addon:ApplyOptionsChange("PRD", { secondaryUpdate = true })
+          end,
+        }
+      end
 
       if resourceKey == "RUNES" or resourceKey == "ESSENCE" then
         args.rechargeDirection = {
