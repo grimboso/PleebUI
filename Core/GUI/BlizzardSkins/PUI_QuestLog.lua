@@ -30,18 +30,36 @@ local function RefreshHeaderTitle(row)
   if Skins.CanStyle() then Skins.Font(row:GetTitleRegion(), "header") end
 end
 
+local function SkinQuestSurface(row, bottomInset, leftInset)
+  local host = Skins.Surface(row, true)
+  -- Campaign headers resize from their children; the backdrop must not affect layout.
+  host.ignoreInLayout = true
+  host:ClearAllPoints()
+  host:SetPoint("TOPLEFT", row, "TOPLEFT", leftInset or 0, 0)
+  host:SetPoint("BOTTOMLEFT", row, "BOTTOMLEFT", leftInset or 0, bottomInset)
+  host:SetWidth(QuestScrollFrame.Contents:GetWidth() - 4)
+  return host
+end
+
 local function SkinQuestHeader(row)
   Skins.Hide(row.Background)
   Skins.Hide(row.TopFiligree)
   Skins.Hide(row.Divider)
   if row:IsObjectType("Button") and row.CollapseButton then
     Skins.Button(row)
+    Skins.Hook(row, "CheckHighlightTitle", RefreshHeaderTitle)
+  end
+  local host = SkinQuestSurface(row, row.LoreButton and 10 or 0)
+  if row.LoreButton then
+    Skins.Selection(row.SelectedHighlight)
+    row.SelectedHighlight:SetAllPoints(host)
+    Skins.Selection(row.HighlightTexture)
+    row.HighlightTexture:SetAllPoints(host)
+  end
+  if row.CollapseButton then
     Skins.Button(row.CollapseButton)
     RefreshHeaderCollapse(row.CollapseButton)
     Skins.Hook(row.CollapseButton, "UpdateCollapsedState", RefreshHeaderCollapse)
-    Skins.Hook(row, "CheckHighlightTitle", RefreshHeaderTitle)
-  else
-    Skins.Surface(row, true)
   end
   Skins.Texts(row)
   if row.CheckHighlightTitle then RefreshHeaderTitle(row) end
@@ -57,7 +75,8 @@ local function RefreshQuestRows()
     for _, region in ipairs({ row:GetRegions() }) do
       if region:IsObjectType("FontString") then ns.Theme.ApplyFont(region, "body") end
     end
-    Skins.Surface(row, true)
+    -- Blizzard overlaps quest frames by three pixels; inset the box to leave a gap.
+    SkinQuestSurface(row, 5, 2)
     Skins.CheckBox(row.Checkbox)
   end
 end
