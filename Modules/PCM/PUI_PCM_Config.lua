@@ -4140,8 +4140,10 @@ function ns.PCM_ApplyInstallerDraft(cfg, draft)
   end
 
   if draft.kind == "duration" or draft.kind == "stack" then
-    cfg.auraTrackMode = draft.auraTrackMode == "target_debuff"
-      and "target_debuff" or "player_buff"
+    cfg.auraTrackMode = draft.auraTrackMode or "automatic"
+    if draft.kind == "duration" then
+      cfg.durationSource = draft.durationSource or "automatic"
+    end
     cfg.hideViewerIcon = draft.kind == "stack" and draft.hideViewerIcon == true
     cfg.maxStacks = draft.kind == "stack" and (tonumber(draft.maximum) or 3) or 1
     if draft.kind == "stack" and draft.addColorShift == true then
@@ -6952,11 +6954,15 @@ _PCM_BuildCustomBarBuffGlowGroup = function(GetCfg, RebuildRuntime, trackKey, or
   end
 
   local function RefreshGlowStyle()
-    local cfg = GetGlowConfig()
+    local API, _, cfg, actualId = GetCfg()
     if not cfg then
       return
     end
-    PCMPresentation.RefreshCustomBarBuffGlowStyle(trackKey, cfg)
+    if cfg.kind == "duration" then
+      API.RefreshCustomBarStyle(actualId)
+    else
+      PCMPresentation.RefreshCustomBarBuffGlowStyle(trackKey, cfg)
+    end
   end
 
   return {
@@ -7420,23 +7426,49 @@ local function _PCM_BuildBuffBarLeafArgs(id)
     15
   )
 
+  args.durationSource = {
+    type = "select",
+    name = "Duration source",
+    desc = "Automatic prefers an available ground duration, then the buff or debuff. Ground effect tracks only the placed effect and stays inactive when no ground duration is available.",
+    order = 10.4,
+    values = { automatic = "Automatic", ground = "Ground effect", aura = "Buff/debuff" },
+    sorting = { "automatic", "ground", "aura" },
+    hidden = function() return not IsDuration() end,
+    get = function()
+      local API, root, cfg = GetCfg()
+      return cfg and ns.PCMCustomDurationSource:Normalize(cfg) or "aura"
+    end,
+    set = function(_, value)
+      local API, root, cfg = GetCfg()
+      if not cfg then return end
+      cfg.durationSource = value
+      NotifyAndRebuildName()
+    end,
+  }
+
   args.auraTrackMode = {
     type = "select",
     name = "Aura type",
     order = 10.5,
     values = {
+      automatic = "Automatic",
       player_buff = "Buff",
       target_debuff = "Debuff",
     },
+    sorting = { "automatic", "player_buff", "target_debuff" },
+    hidden = function()
+      local API, root, cfg = GetCfg()
+      return cfg and cfg.kind == "duration" and cfg.durationSource == "ground"
+    end,
     get = function()
       local API, root, cfg = GetCfg()
-      return cfg and cfg.auraTrackMode == "target_debuff" and "target_debuff" or "player_buff"
+      return cfg and cfg.auraTrackMode or "player_buff"
     end,
     set = function(_, v)
       local API, root, cfg = GetCfg()
       if not cfg then return end
 
-      cfg.auraTrackMode = v == "target_debuff" and "target_debuff" or "player_buff"
+      cfg.auraTrackMode = v
       NotifyAndRebuildName()
     end,
   }
@@ -8349,6 +8381,7 @@ local function _PCM_BuildBuffBarLeafArgs(id)
       args = {
         enabled = args.enabled,
         auraTrackMode = args.auraTrackMode,
+        durationSource = args.durationSource,
         maxStacks = args.maxStacks,
         hideViewerIcon = args.hideViewerIcon,
         deleteBar = args.deleteBar,
