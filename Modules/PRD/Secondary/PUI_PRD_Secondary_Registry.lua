@@ -335,6 +335,7 @@ local DEFINITIONS = {
     resourceKey = "RUNES",
     powerType = Enum.PowerType.RunicPower,
     token = "RUNIC_POWER",
+    colorToken = "RUNES",
     texture = "PUI: Runes Blood",
     textureBySpec = {
       [251] = "PUI: Runes Frost",
