@@ -778,6 +778,7 @@ local function EnsureResourceSettings(profile, resourceKey, resourceIndex)
   if resourceKey == "RUNES" then
     behavior.rechargeAnimation = nil
     if behavior.showRechargeTime == nil then behavior.showRechargeTime = true end
+    if behavior.showQueuedRuneTime == nil then behavior.showQueuedRuneTime = false end
     if behavior.showReadyGlow == nil then behavior.showReadyGlow = true end
     if behavior.completionAnimation == nil then behavior.completionAnimation = "FADE" end
   elseif resourceKey == "ESSENCE" then
@@ -1002,6 +1003,7 @@ local function BuildResourceConfigStateKey(config)
     cues.buffGlowSpellID,
     buffGlowColor[1], buffGlowColor[2], buffGlowColor[3], buffGlowColor[4],
     behavior.showRechargeTime and 1 or 0,
+    behavior.showQueuedRuneTime and 1 or 0,
     behavior.showReadyGlow and 1 or 0,
     behavior.completionAnimation or "",
     behavior.rechargeDirection or "",
@@ -1133,6 +1135,7 @@ local function ResolveResourceConfig(profile, definition, specID)
     iconSpellID = definition.auraSpellIDs and definition.auraSpellIDs[1] or nil,
     behavior = {
       showRechargeTime = sourceBehavior.showRechargeTime ~= false,
+      showQueuedRuneTime = sourceBehavior.showQueuedRuneTime == true,
       showReadyGlow = sourceBehavior.showReadyGlow ~= false,
       completionAnimation = sourceBehavior.completionAnimation or "FADE",
       rechargeDirection = sourceBehavior.rechargeDirection or "LTR",
