@@ -4891,8 +4891,10 @@ do
     if ns.PRDSecondary:GetCooldownCountSpellIDs(resource.key) then
       args.feature.args.enabled = {
         type = "select",
-        name = "Soul Fragment display",
-        desc = "Track Soul Fragments on the Soul Cleave and Spirit Bomb icons, the PRD bar, both, or neither.",
+        name = resource.key == "BONE_SHIELD" and "Bone Shield display" or "Soul Fragment display",
+        desc = resource.key == "BONE_SHIELD"
+          and "Track Bone Shield stacks on the Marrowrend and Death's Caress icons, the PRD bar, both, or neither."
+          or "Track Soul Fragments on the Soul Cleave and Spirit Bomb icons, the PRD bar, both, or neither.",
         order = 1,
         values = { ICONS = "Icons only", BAR = "Bar only", BOTH = "Both", NONE = "Nothing" },
         sorting = { "ICONS", "BAR", "BOTH", "NONE" },
