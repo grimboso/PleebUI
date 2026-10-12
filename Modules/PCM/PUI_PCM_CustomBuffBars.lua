@@ -30,6 +30,7 @@ local PCMRuntime = ns.PCMRuntime
 local Presentation = ns.Presentation
 local PCMPresentation = ns.PCMPresentation
 local CustomIcons = ns.PCMCustomIcons
+local DurationSource = ns.PCMCustomDurationSource
 local IsSecret = issecretvalue
 
 local UnitClass           = _G.UnitClass
@@ -131,6 +132,7 @@ local function _CustomBars_EnsureDefaults(cfg, id)
   ns.Modules.CooldownManager:NormalizeCustomBarBuffGlow(cfg)
   cfg.kind = (type(cfg.kind) == "string" and cfg.kind ~= "") and cfg.kind or "stack"
   ns.Modules.CooldownManager:NormalizeCustomTrackerPresentation(cfg, cfg.kind)
+  DurationSource:Normalize(cfg)
   if cfg.kind ~= "duration" then
     AuraWidget.EnsureStackColorThresholds(cfg)
   end
@@ -149,7 +151,7 @@ local function _CustomBars_EnsureDefaults(cfg, id)
 
   cfg.viewerName = (type(cfg.viewerName) == "string" and cfg.viewerName ~= "") and cfg.viewerName or VIEWER_KEY
 
-  if cfg.auraTrackMode ~= "target_debuff" then
+  if cfg.auraTrackMode ~= "target_debuff" and cfg.auraTrackMode ~= "automatic" then
     cfg.auraTrackMode = "player_buff"
   end
 
@@ -562,8 +564,8 @@ end
 local _CustomBars_ApplyVisibility
 local _CustomBars_IsTrackedSpellAvailable
 local _CustomBars_CompleteFrameRetirement
-local _CustomBars_GetAuraTrackUnitAndFilter
 local _customBarsAuraDriver
+local _CustomBars_RefreshDurationSource
 
 local function _CustomBars_CreateChrome(frame)
   local background = frame:CreateTexture(nil, "BACKGROUND", nil, -8)
@@ -1005,6 +1007,8 @@ local function _CustomBars_ApplyConfig(id, cfg)
   if not isLoaded then
     local f = _CustomBars.frames[id]
     if f then
+      DurationSource:Detach(f)
+      _customBarsAuraDriver:ClearGroundDuration(f)
       PCMPresentation.DisableCustomBarBuffGlow("buff:" .. tostring(id))
       CustomIcons:Release("aura:" .. tostring(id))
       _customBarsAuraDriver:Detach(f)
@@ -1046,19 +1050,31 @@ local function _CustomBars_ApplyConfig(id, cfg)
 
   _CustomBars_RebuildSegments(f, cfg)
   if cfg.presentation == "BAR" then
-    PCMPresentation.ConfigureCustomBarBuffGlow("buff:" .. tostring(id), f, cfg)
-    _customBarsAuraDriver:Attach(f, cfg)
+    if cfg.kind == "duration" then
+      local candidate = _customBarsAuraDriver:ResolveCandidate(cfg)
+      if DurationSource:Normalize(cfg) == "automatic" then
+        _customBarsAuraDriver:Attach(f, cfg)
+      end
+      DurationSource:Attach(f, cfg, candidate.spellIDs, _CustomBars_RefreshDurationSource)
+    else
+      DurationSource:Detach(f)
+      _customBarsAuraDriver:ClearGroundDuration(f)
+      PCMPresentation.ConfigureCustomBarBuffGlow("buff:" .. tostring(id), f, cfg)
+      _customBarsAuraDriver:Attach(f, cfg)
+    end
     f:Show()
     _CustomBars_RegisterMover(id, f, cfg)
   else
     PCMPresentation.DisableCustomBarBuffGlow("buff:" .. tostring(id))
+    DurationSource:Detach(f)
+    _customBarsAuraDriver:ClearGroundDuration(f)
     _customBarsAuraDriver:Detach(f)
     f:Hide()
     FrameUtil:UnregisterMover("PCM_CustomStackBar_" .. tostring(id))
   end
 
   if cfg.presentation == "BUTTON" then
-    local unit, filter = _CustomBars_GetAuraTrackUnitAndFilter(cfg)
+    local unit, filter = DurationSource:GetAuraUnitAndFilter(cfg)
     local candidate = _customBarsAuraDriver:ResolveCandidate(cfg)
     CustomIcons:ConfigureAura("aura:" .. tostring(id), cfg, {
       auraKind = cfg.kind,
@@ -1181,24 +1197,6 @@ _CustomBars_IsTrackedSpellAvailable = function(cfg)
   cfg.__puiCooldownID = cooldownID
   cfg.__puiTrackedAvailable = available
   return available
-end
-
-local function _CustomBars_NormalizeAuraTrackMode(mode)
-  if mode == "target_debuff" then
-    return "target_debuff"
-  end
-
-  return "player_buff"
-end
-
-_CustomBars_GetAuraTrackUnitAndFilter = function(cfg)
-  local mode = _CustomBars_NormalizeAuraTrackMode(type(cfg) == "table" and cfg.auraTrackMode or cfg)
-
-  if mode == "target_debuff" then
-    return "target", "HARMFUL|PLAYER", mode
-  end
-
-  return "player", "HELPFUL|PLAYER", "player_buff"
 end
 
 _customBarsAuraDriver = {
@@ -1898,6 +1896,9 @@ function _customBarsAuraDriver:ApplyCombinedStyle(sub, f, cfg)
 end
 
 function _customBarsAuraDriver:ApplyStyle(f, cfg)
+  if f.__puiGroundSelected == true then
+    self:ApplyGroundStyle(f, cfg, f.__puiGroundParts.groundDuration)
+  end
   local attachment = self.attachments[f]
   if not attachment then
     return
@@ -1973,6 +1974,161 @@ function _customBarsAuraDriver:WireCombinedButton(button, f, cfg, sub)
   button:EnableMouse(false)
 
   self:ApplyCombinedStyle(sub, f, cfg)
+end
+
+function _customBarsAuraDriver:ApplyGroundStyle(f, cfg, duration)
+  local parts = f.__puiGroundParts
+  if not parts then
+    local button = CreateFrame("Frame", nil, f, "PUI_AuraApplicationDurationTemplate")
+    parts = AuraWidget.BindApplicationDurationButton(button)
+    f.__puiGroundParts = parts
+    button:SetAllPoints(f)
+    button:SetFrameLevel(f:GetFrameLevel() + 1)
+    button:EnableMouse(false)
+    parts.durationChrome = self:CreateChrome(button)
+    parts.iconChrome = self:CreateChrome(button)
+    parts.frameChrome = self:CreateChrome(button)
+    parts.glow = AuraWidget.CreateSlotGlow(button, f:GetWidth(), f:GetHeight(), "NONE", cfg.buffGlowColor)
+    parts.durationBinding = BarWidget.CreateDurationBinding(parts.durationText)
+    parts.expiryCooldown = CreateFrame("Cooldown", nil, button, "CooldownFrameTemplate")
+    parts.expiryCooldown:SetAllPoints(f)
+    parts.expiryCooldown:SetDrawSwipe(false)
+    parts.expiryCooldown:SetDrawEdge(false)
+    parts.expiryCooldown:SetDrawBling(false)
+    parts.expiryCooldown:SetHideCountdownNumbers(true)
+    parts.expiryCooldown:SetScript("OnCooldownDone", function()
+      DurationSource:Expire(f)
+    end)
+    button:Hide()
+  end
+
+  parts.groundDuration = duration
+  local texture, orientation, reverse, r, g, b, a = self:GetBarAppearance(cfg, true)
+  parts.button:SetFrameStrata(f:GetFrameStrata())
+  local bar = parts.durationBar
+  bar:SetStatusBarTexture(texture)
+  bar:SetOrientation(orientation)
+  bar:SetReverseFill(reverse)
+  bar:SetStatusBarColor(r, g, b, a)
+  bar:ClearAllPoints()
+  bar:SetAllPoints(f.durFrame)
+  bar:SetFrameStrata(f.durFrame:GetFrameStrata())
+  bar:SetFrameLevel(f.durFrame:GetFrameLevel() + 1)
+  bar:Show()
+  parts.durationDirection = cfg.durationBarFillMode == "fill"
+    and Enum.StatusBarTimerDirection.ElapsedTime or Enum.StatusBarTimerDirection.RemainingTime
+  parts.durationTextHolder:ClearAllPoints()
+  parts.durationTextHolder:SetAllPoints(f.durFrame)
+  parts.durationTextHolder:SetFrameStrata(bar:GetFrameStrata())
+  parts.durationTextHolder:SetFrameLevel(bar:GetFrameLevel() + 2)
+  local textEnabled = cfg.showText ~= false and (tonumber(cfg.durationCountFontSize) or 0) > 0
+  parts.durationTextHolder:SetShown(textEnabled)
+  self:ApplyFont(parts.durationText, cfg.durationFont, cfg.durationCountFontSize, cfg.durationOutline)
+  parts.icon:ClearAllPoints()
+  parts.icon:SetAllPoints(f.durIconFrame)
+  parts.icon:SetTexture(C_Spell.GetSpellTexture(cfg.trackedSpellID))
+  parts.icon:SetShown(cfg.durationHideIconFrame ~= true and cfg.durationHideSpellIcon ~= true)
+  parts.durationCooldown:ClearAllPoints()
+  parts.durationCooldown:SetAllPoints(f.durIconFrame)
+  parts.durationCooldown:SetFrameStrata(f.durIconFrame:GetFrameStrata())
+  parts.durationCooldown:SetFrameLevel(f.durIconFrame:GetFrameLevel() + 2)
+  parts.durationCooldown:SetHideCountdownNumbers(not textEnabled)
+  self:ApplyFont(PUI_GetCooldownNumbersFontString(parts.durationCooldown),
+    cfg.durationFont, cfg.durationCountFontSize, cfg.durationOutline)
+  parts.durationCooldown:SetShown(cfg.durationHideIconFrame ~= true)
+
+  local bgR, bgG, bgB, bgA, edgeR, edgeG, edgeB, edgeA = self:GetChromeColors(cfg)
+  local activeOnly = f.__puiShowOnlyWhenActive == true
+  self:SetExternalChromeShown(f.bg, f.__puiBorderTop, f.__puiBorderBottom,
+    f.__puiBorderLeft, f.__puiBorderRight, not activeOnly)
+  self:SetExternalChromeShown(f.durBG, f.__puiDurBorderTop, f.__puiDurBorderBottom,
+    f.__puiDurBorderLeft, f.__puiDurBorderRight, false)
+  self:SetExternalChromeShown(f.durIconBG, f.__puiDurIconBorderTop, f.__puiDurIconBorderBottom,
+    f.__puiDurIconBorderLeft, f.__puiDurIconBorderRight, false)
+  f.durIconTex:Hide()
+  self:ApplyChrome(parts.frameChrome, f,
+    bgR, bgG, bgB, bgA, edgeR, edgeG, edgeB, edgeA, f.__puiBorderThickness, activeOnly)
+  self:ApplyChrome(parts.durationChrome, f.durFrame,
+    bgR, bgG, bgB, bgA, edgeR, edgeG, edgeB, edgeA, f.__puiBorderThickness, true)
+  local iconEdge = cfg.durationIconBorderColor or {}
+  local iconSize = tonumber(cfg.durationIconBorderSize) or 0
+  self:ApplyChrome(parts.iconChrome, f.durIconFrame,
+    bgR, bgG, bgB, bgA,
+    iconEdge[1] or iconEdge.r or edgeR, iconEdge[2] or iconEdge.g or edgeG,
+    iconEdge[3] or iconEdge.b or edgeB, iconEdge[4] or iconEdge.a or edgeA,
+    iconSize > 0 and iconSize or f.__puiBorderThickness, cfg.durationHideIconFrame ~= true)
+  local glowStyle = "NONE"
+  if duration ~= nil and cfg.buffGlowEnabled == true
+    and (cfg.buffGlowSpellID == nil or cfg.buffGlowSpellID == tonumber(cfg.trackedSpellID))
+  then
+    glowStyle = cfg.activeGlowStyle
+    if glowStyle == nil or glowStyle == "NONE" then glowStyle = "PIXEL" end
+  end
+  parts.glowColor = cfg.buffGlowColor
+  AuraWidget.ConfigureSlotGlow(parts.glow, f:GetWidth(), f:GetHeight(), glowStyle,
+    parts.glowColor, { pixelThickness = tonumber(cfg.buffGlowThickness) or 2 })
+  local appearanceEnabled = cfg.activeAuraEnabled == true
+  local desaturated = appearanceEnabled and cfg.desaturateActive == true
+  parts.icon:SetDesaturated(desaturated)
+  bar:GetStatusBarTexture():SetDesaturated(desaturated)
+  parts.button:SetAlpha(appearanceEnabled and (tonumber(cfg.activeAlpha) or 100) / 100 or 1)
+  if parts.groundDuration then
+    bar:SetTimerDuration(parts.groundDuration, Enum.StatusBarInterpolation.None, parts.durationDirection)
+    parts.durationBinding:SetDuration(parts.groundDuration)
+    if textEnabled then parts.durationBinding:Enable() else parts.durationBinding:Disable() end
+  end
+end
+
+function _customBarsAuraDriver:ClearGroundDuration(f)
+  f.__puiGroundSelected = nil
+  local parts = f.__puiGroundParts
+  if not parts then return end
+  parts.groundDuration = nil
+  parts.button:Hide()
+  parts.expiryCooldown:Clear()
+  parts.durationCooldown:Clear()
+  parts.durationBinding:Disable()
+  parts.durationText:SetText("")
+  AuraWidget.ConfigureSlotGlow(parts.glow, f:GetWidth(), f:GetHeight(), "NONE", parts.glowColor)
+  BarWidget.StopTimerBar(parts.durationBar)
+end
+
+_CustomBars_RefreshDurationSource = function(f, duration, useAura)
+  local cfg = f.__puiCfg
+  if useAura then
+    _customBarsAuraDriver:ClearGroundDuration(f)
+    PCMPresentation.ConfigureCustomBarBuffGlow("buff:" .. tostring(f.__puiBarId), f, cfg)
+    _customBarsAuraDriver:Attach(f, cfg)
+    return
+  end
+
+  if cfg.buffGlowSpellID == nil or cfg.buffGlowSpellID == tonumber(cfg.trackedSpellID) then
+    PCMPresentation.DisableCustomBarBuffGlow("buff:" .. tostring(f.__puiBarId))
+  else
+    PCMPresentation.ConfigureCustomBarBuffGlow("buff:" .. tostring(f.__puiBarId), f, cfg)
+  end
+  _customBarsAuraDriver:Detach(f)
+  f.__puiGroundSelected = true
+  _customBarsAuraDriver:ApplyGroundStyle(f, cfg, duration)
+  local parts = f.__puiGroundParts
+  local active = duration ~= nil
+  parts.button:SetShown(active)
+  f.durFrame:SetShown(active)
+  f.durIconFrame:SetShown(active and cfg.durationHideIconFrame ~= true)
+  f.__puiHasActiveAura = false
+  f.__puiHasActiveDurationObject = active
+  f.__puiIsActive = active
+  if active then
+    parts.durationCooldown:SetCooldownFromDurationObject(duration, true)
+    parts.expiryCooldown:SetCooldownFromDurationObject(duration, true)
+  else
+    parts.durationBinding:Disable()
+    parts.durationText:SetText("")
+    BarWidget.StopTimerBar(parts.durationBar)
+    parts.durationCooldown:Clear()
+    parts.expiryCooldown:Clear()
+  end
+  _CustomBars_ApplyVisibility(f, cfg, _CustomBars._lastCombatState)
 end
 
 function _customBarsAuraDriver:CreateSlot(unit, filter, candidate, f, cfg, applicationsEnabled, durationEnabled, mode, textEnabled)
@@ -2075,6 +2231,8 @@ function _customBarsAuraDriver:Detach(f)
 end
 
 function _customBarsAuraDriver:Release(f)
+  DurationSource:Detach(f)
+  self:ClearGroundDuration(f)
   self.styleDeferred[f] = nil
 
   local frameCache = self.slotCache[f]
@@ -2117,7 +2275,7 @@ function _customBarsAuraDriver:Attach(f, cfg)
     return
   end
 
-  local unit, filter = _CustomBars_GetAuraTrackUnitAndFilter(cfg)
+  local unit, filter = DurationSource:GetAuraUnitAndFilter(cfg)
   local candidate = self:ResolveCandidate(cfg)
   local mode = self:GetMode(f, cfg)
   local textEnabled = (tonumber(cfg.durationCountFontSize) or 0) > 0
@@ -2457,6 +2615,12 @@ function API.RefreshCustomBarStyle(id)
   end
 
   _customBarsAuraDriver:ApplyStyle(frame, frame.__puiCfg)
+  local cfg = frame.__puiCfg
+  if frame.__puiGroundSelected ~= true
+    or (cfg.buffGlowSpellID ~= nil and cfg.buffGlowSpellID ~= tonumber(cfg.trackedSpellID))
+  then
+    PCMPresentation.RefreshCustomBarBuffGlowStyle("buff:" .. tostring(id), cfg)
+  end
 end
 
 function BB:ApplySettings(flags)
@@ -2715,6 +2879,8 @@ function BB:OnDisable()
 
   for id, f in pairs(_CustomBars.frames) do
     if f then
+      DurationSource:Detach(f)
+      _customBarsAuraDriver:ClearGroundDuration(f)
       PCMPresentation.DisableCustomBarBuffGlow("buff:" .. tostring(id))
       CustomIcons:Release("aura:" .. tostring(id))
       if f.Hide then
@@ -2747,12 +2913,13 @@ local function EnsureStackBarDefaults(bar, id)
   ns.Modules.CooldownManager:NormalizeSpecAssignments(bar)
   ns.Modules.CooldownManager:NormalizeCustomBarBuffGlow(bar)
 
-  if bar.auraTrackMode ~= "target_debuff" then
+  if bar.auraTrackMode ~= "target_debuff" and bar.auraTrackMode ~= "automatic" then
     bar.auraTrackMode = "player_buff"
   end
 
   bar.kind = (type(bar.kind) == "string" and bar.kind ~= "") and bar.kind or "stack"
   ns.Modules.CooldownManager:NormalizeCustomTrackerPresentation(bar, bar.kind)
+  DurationSource:Normalize(bar)
 
   if type(bar.label) ~= "string" or bar.label == "" then
     if bar.kind == "duration" then
@@ -2911,6 +3078,8 @@ local function CreateNewDurationBar()
   }, nextId)
 
   cfg.kind = "duration"
+  cfg.durationSource = "automatic"
+  cfg.auraTrackMode = "automatic"
 
   -- Defaults requested for duration-only:
   cfg.width  = 250
@@ -2955,8 +3124,6 @@ _CustomBars_ApplyConfig = P:Def("_CustomBars_ApplyConfig", _CustomBars_ApplyConf
 _CustomBars_AddSourceIndex = P:Def("_CustomBars_AddSourceIndex", _CustomBars_AddSourceIndex)
 _CustomBars_RebuildAll = P:Def("_CustomBars_RebuildAll", _CustomBars_RebuildAll)
 _CustomBars_IsTrackedSpellAvailable = P:Def("_CustomBars_IsTrackedSpellAvailable", _CustomBars_IsTrackedSpellAvailable)
-_CustomBars_NormalizeAuraTrackMode = P:Def("_CustomBars_NormalizeAuraTrackMode", _CustomBars_NormalizeAuraTrackMode)
-_CustomBars_GetAuraTrackUnitAndFilter = P:Def("_CustomBars_GetAuraTrackUnitAndFilter", _CustomBars_GetAuraTrackUnitAndFilter)
 _BB_ApplyViewerIconHiddenState = P:Def("_BB_ApplyViewerIconHiddenState", _BB_ApplyViewerIconHiddenState)
 _CustomBars_DeleteRuntimeBar = P:Def("_CustomBars_DeleteRuntimeBar", _CustomBars_DeleteRuntimeBar)
 _BB_RebuildCustomBars = P:Def("_BB_RebuildCustomBars", _BB_RebuildCustomBars)
@@ -2992,6 +3159,9 @@ _customBarsAuraDriver.GetChromeColors = P:Def("_customBarsAuraDriver:GetChromeCo
 _customBarsAuraDriver.UpdateActivity = P:Def("_customBarsAuraDriver:UpdateActivity", _customBarsAuraDriver.UpdateActivity)
 _customBarsAuraDriver.ApplyCombinedStyle = P:Def("_customBarsAuraDriver:ApplyCombinedStyle", _customBarsAuraDriver.ApplyCombinedStyle)
 _customBarsAuraDriver.ApplyStyle = P:Def("_customBarsAuraDriver:ApplyStyle", _customBarsAuraDriver.ApplyStyle)
+_customBarsAuraDriver.ApplyGroundStyle = P:Def("_customBarsAuraDriver:ApplyGroundStyle", _customBarsAuraDriver.ApplyGroundStyle)
+_customBarsAuraDriver.ClearGroundDuration = P:Def("_customBarsAuraDriver:ClearGroundDuration", _customBarsAuraDriver.ClearGroundDuration)
+_CustomBars_RefreshDurationSource = P:Def("_CustomBars_RefreshDurationSource", _CustomBars_RefreshDurationSource)
 _customBarsAuraDriver.WireCombinedButton = P:Def("_customBarsAuraDriver:WireCombinedButton", _customBarsAuraDriver.WireCombinedButton)
 _customBarsAuraDriver.CreateSlot = P:Def("_customBarsAuraDriver:CreateSlot", _customBarsAuraDriver.CreateSlot)
 _customBarsAuraDriver.GetMode = P:Def("_customBarsAuraDriver:GetMode", _customBarsAuraDriver.GetMode)
