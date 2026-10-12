@@ -38,13 +38,22 @@ local specializationID = 0
 local spellbookDirty = true
 local optionsPreview
 
+local function NormalizeReminderColor(color, defaultGreen, defaultBlue)
+  color = color or {}
+  color.r = color.r or 1
+  color.g = color.g or defaultGreen
+  color.b = color.b or defaultBlue
+  color.a = color.a or 1
+  return color
+end
+
 local function NormalizeReminderSettings()
   local db = Addon.db.profile.movementWarning
   db.reminders = db.reminders or {}
   for _, spellID in ipairs(MOBILITY_SPELLS[playerClass]) do
     if not db.reminders[spellID] then
-      local color = db.color or { r = 1, g = 1, b = 1, a = 1 }
-      local countdownColor = db.countdownColor or { r = 1, g = 0.2, b = 0.2, a = 1 }
+      local color = NormalizeReminderColor(db.color, 1, 1)
+      local countdownColor = NormalizeReminderColor(db.countdownColor, 0.2, 0.2)
       db.reminders[spellID] = {
         combatOnly = db.combatOnly == true,
         displayMode = db.displayMode or "text",
@@ -56,6 +65,9 @@ local function NormalizeReminderSettings()
         countdownColor = { r = countdownColor.r, g = countdownColor.g, b = countdownColor.b, a = countdownColor.a },
       }
     end
+    local config = db.reminders[spellID]
+    config.color = NormalizeReminderColor(config.color, 1, 1)
+    config.countdownColor = NormalizeReminderColor(config.countdownColor, 0.2, 0.2)
   end
   db.combatOnly, db.displayMode, db.showDecimals, db.fontSize, db.color, db.countdownColor = nil, nil, nil, nil, nil, nil
 end
