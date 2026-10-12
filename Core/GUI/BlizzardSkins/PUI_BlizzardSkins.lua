@@ -367,6 +367,7 @@ local function RefreshWindow(window)
     end)
   end
   window.refresh(frame)
+  ns.BlizzardWindowControls.Install(frame, nil, window.name)
 end
 
 function Skins.RefreshTheme()
