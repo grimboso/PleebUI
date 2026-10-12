@@ -53,6 +53,11 @@ local function ApplyRuneCooldown(bar, start, duration, runeReady)
   local inactiveAlpha = Secondary.GetInactiveAlpha(owner)
   local fill = bar._fill
   local wasOnCooldown = bar._wasOnCooldown == true
+  if not runeReady or not showGlow then
+    bar._puiGlowPulseGroup:Stop()
+    bar._puiGlow:SetAlpha(0)
+    bar._puiGlow:Hide()
+  end
   local direction = behavior.rechargeDirection
   fill:SetOrientation((direction == "TTB" or direction == "BTT") and "VERTICAL" or "HORIZONTAL")
   fill:SetReverseFill(direction == "RTL" or direction == "TTB")
@@ -73,6 +78,7 @@ local function ApplyRuneCooldown(bar, start, duration, runeReady)
       end
 
       if showGlow and wasOnCooldown then
+        bar._puiGlow:Show()
         if animationMode == "PULSE" then
           bar._puiGlowPulseDuration = 0.25
           Secondary.PlaySecondaryGlowPulse(bar, "_puiGlow", 0.80)
@@ -270,6 +276,8 @@ function M:BuildRuneBars()
     bar._puiGlowBaseAlpha = 0
     bar._puiGlow:SetAlpha(0)
     Secondary.EnsureSecondaryGlowPulse(bar, "_puiGlow")
+    bar._puiGlowPulseGroup:Stop()
+    bar._puiGlow:Hide()
     bar._wasOnCooldown = false
     bar._puiRuneStart = nil
     bar._puiRuneDuration = nil
@@ -322,6 +330,7 @@ local function Deactivate(owner)
         bar._puiGlowPulseGroup:Stop()
       end
       bar._puiGlow:SetAlpha(0)
+      bar._puiGlow:Hide()
 
       bar._wasOnCooldown = false
       bar._puiRuneStart = nil
