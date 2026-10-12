@@ -1039,7 +1039,7 @@ local function PRDPreview_ApplySegmentValues(
         tostring(
           math_max(
             1,
-            math_floor((1 - (values[index] or 0)) * 4 + 0.5)
+            math_floor((1 - (values[index] or 0)) * (config.resourceKey == "RUNES" and 3.2 or 4) + 0.5)
           )
         )
       )
@@ -1069,12 +1069,11 @@ local function PRDPreview_BuildRuneValues(
 
   for index = 1, maximum do
     local spendAt = 1 + (index - 1) * 0.45
-    local rechargeStart = spendAt + 0.35
+    local rechargeStart = index <= 3 and spendAt
+      or 1 + (index - 4) * 0.45 + 3.2
     local value
 
-    if index > 4 then
-      value = 1
-    elseif cycle < spendAt then
+    if cycle < spendAt then
       value = 1
     elseif cycle < rechargeStart then
       value = (cycle - rechargeStart) / 3.2
