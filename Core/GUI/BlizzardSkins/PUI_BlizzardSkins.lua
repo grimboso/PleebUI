@@ -129,11 +129,12 @@ function Skins.Texts(frame)
   end
 end
 
-function Skins.Selection(texture)
+function Skins.Selection(texture, alpha)
   if texture then
-    selections[texture] = 0.2
+    alpha = alpha or 0.2
+    selections[texture] = alpha
     local color = Theme.GetColors().accent
-    texture:SetColorTexture(color[1], color[2], color[3], 0.2)
+    texture:SetColorTexture(color[1], color[2], color[3], alpha)
   end
 end
 
