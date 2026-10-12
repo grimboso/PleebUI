@@ -299,23 +299,6 @@ local function _GetSecondaryContentFrame(self)
   return content
 end
 
-local function _EnsureSecondaryBuildBar(self, content)
-  local bar = self.secondaryBar
-  if not bar then
-    bar = CreateFrame("Frame", nil, content, "BackdropTemplate")
-    self.secondaryBar = bar
-  elseif bar:GetParent() ~= content then
-    bar:SetParent(content)
-  end
-
-  bar:ClearAllPoints()
-  bar:SetAllPoints(content)
-  bar:SetClipsChildren(true)
-  bar:Show()
-
-  return bar
-end
-
 local function _EnsureSecondaryTextOverlay(bar)
   local overlay = bar._puiTextOverlay
   if not overlay then
@@ -349,6 +332,27 @@ local function _EnsureSecondaryTexts(bar, overlay)
   text:SetShadowOffset(1, -1)
   text:SetShadowColor(0, 0, 0, 1)
   Theme.ApplyFont(text, "header", 16, "OUTLINE")
+end
+
+local function _EnsureSecondaryBuildBar(self, content)
+  local bar = self.secondaryBar
+  if not bar then
+    bar = CreateFrame("Frame", nil, content, "BackdropTemplate")
+    self.secondaryBar = bar
+  elseif bar:GetParent() ~= content then
+    bar:SetParent(content)
+  end
+
+  bar:ClearAllPoints()
+  bar:SetAllPoints(content)
+  bar:SetClipsChildren(true)
+  bar:Show()
+
+  local overlay = _EnsureSecondaryTextOverlay(bar)
+  _EnsureSecondaryTexts(bar, overlay)
+  self._puiSecFontsDirty = true
+
+  return bar
 end
 
 _GetSecondaryInactiveAlpha = function(self)
@@ -778,10 +782,6 @@ local function _PrepareSecondaryBuild(self, buildMode, segmentCount, dividerCoun
   local content = _GetSecondaryContentFrame(self) or self.secondary
   content:SetAlpha(1)
   local bar = _EnsureSecondaryBuildBar(self, content)
-  local overlay = _EnsureSecondaryTextOverlay(bar)
-
-  _EnsureSecondaryTexts(bar, overlay)
-  self._puiSecFontsDirty = true
 
   return profile, secCfg, bar, texturePath, false
 end
@@ -1875,6 +1875,7 @@ Secondary.ApplySecondaryAppearance = _ApplySecondaryAppearance
 Secondary.GetSecondaryBorderThickness = _GetSecondaryBorderThickness
 Secondary.GetSecondaryContentFrame = _GetSecondaryContentFrame
 Secondary.ResolveSecondaryDividerColor = _ResolveSecondaryDividerColor
+Secondary.EnsureSecondaryBuildBar = _EnsureSecondaryBuildBar
 Secondary.EnsureSecondaryContainerBox = _EnsureSecondaryContainerBox
 Secondary.ReflowSecondaryGeometry = _ReflowSecondaryGeometry
 Secondary.ShouldShowApplicationCountdown = _ShouldShowApplicationCountdown
