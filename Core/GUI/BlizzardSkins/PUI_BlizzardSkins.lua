@@ -21,6 +21,7 @@ local driver = CreateFrame("Frame")
 local loggedIn = false
 local pending = false
 local pendingTheme = false
+local transparentBorder = { 0, 0, 0, 0 }
 
 function Skins.CanStyle()
   if InCombatLockdown() then
@@ -88,7 +89,7 @@ function Skins.Chrome(frame)
   Skins.Hide(frame.TitleBg)
 end
 
-function Skins.Surface(frame, control)
+function Skins.Surface(frame, control, borderless)
   if not frame then return end
   local host = surfaces[frame]
   if not host then
@@ -98,11 +99,11 @@ function Skins.Surface(frame, control)
     host:EnableMouse(false)
     surfaces[frame] = host
   end
-  surfaceRoles[frame] = control and "control" or "background"
+  surfaceRoles[frame] = borderless and (control and "flatControl" or "flatBackground") or (control and "control" or "background")
   local colors = Theme.GetColors()
   Theme.SetSquareBackdrop(host, {
     bg = control and colors.control or colors.background,
-    border = colors.border,
+    border = borderless and transparentBorder or colors.border,
   }, Theme.GetEdgeSize())
   return host
 end
@@ -168,14 +169,14 @@ local function RefreshButtonState(button)
   local enabled = button:IsEnabled()
   if issecretvalue(enabled) then return end
   local colors = Theme.GetColors()
+  local state = styledButtons[button]
   local host = surfaces[button]
   if host then
     Theme.SetSquareBackdrop(host, {
       bg = enabled and colors.control or colors.disabledControl,
-      border = enabled and colors.border or colors.disabledBorder,
+      border = state.borderless and transparentBorder or (enabled and colors.border or colors.disabledBorder),
     }, Theme.GetEdgeSize())
   end
-  local state = styledButtons[button]
   local text = state.label or button:GetFontString()
   if text then
     local color = enabled and colors.text or colors.disabledText
@@ -202,9 +203,9 @@ local function InstallButtonState(button)
   return styledButtons[button]
 end
 
-function Skins.Button(button)
+function Skins.Button(button, borderless)
   Skins.Chrome(button)
-  Skins.Surface(button, true)
+  Skins.Surface(button, true, borderless)
   for _, key in ipairs({ "Left", "Middle", "Right", "LeftDisabled", "MiddleDisabled", "RightDisabled" }) do
     Skins.Hide(button[key])
   end
@@ -227,7 +228,7 @@ function Skins.Button(button)
   highlight:SetAlpha(1)
   highlight:SetAllPoints(button)
   Skins.Font(button:GetFontString(), "button")
-  InstallButtonState(button)
+  InstallButtonState(button).borderless = borderless
   RefreshButtonState(button)
 end
 
@@ -247,9 +248,9 @@ function Skins.Icon(icon)
   icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
 end
 
-function Skins.IconButton(button, icon)
+function Skins.IconButton(button, icon, borderless)
   if not button then return end
-  Skins.Button(button)
+  Skins.Button(button, borderless)
   Skins.Icon(icon)
 end
 
@@ -593,8 +594,8 @@ function Skins.RefreshTheme(refreshWindows)
     if not styledButtons[frame] then
       local role = surfaceRoles[frame]
       Theme.SetSquareBackdrop(host, {
-        bg = role == "accent" and colors.accent or (role == "control" and colors.control or colors.background),
-        border = colors.border,
+        bg = role == "accent" and colors.accent or ((role == "control" or role == "flatControl") and colors.control or colors.background),
+        border = (role == "flatControl" or role == "flatBackground") and transparentBorder or colors.border,
       }, edge)
     end
   end
