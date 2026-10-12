@@ -16,6 +16,7 @@
   <Script file="GUI\PUI_Groups.lua"/>
   <Script file="GUI\PUI_Dropdown.lua"/>
   <Script file="GUI\BlizzardSkins\PUI_BlizzardSkins.lua"/>
+  <Script file="GUI\BlizzardSkins\PUI_BlizzardWindowControls.lua"/>
   <Script file="GUI\BlizzardSkins\PUI_DialogShell.lua"/>
   <Script file="GUI\BlizzardSkins\PUI_StaticPopups.lua"/>
   <Script file="GUI\BlizzardSkins\PUI_GameMenu.lua"/>
