@@ -367,6 +367,20 @@ local function NormalizeDB()
   q.acceptRoleCheckGuildMembers = NormalizeBool(q.acceptRoleCheckGuildMembers, true)
   q.acceptRoleCheckCommunityMembers = NormalizeBool(q.acceptRoleCheckCommunityMembers, false)
 
+  q.entryCountdown = NormalizeBool(q.entryCountdown, false)
+  q.disableScreenGlow = NormalizeBool(q.disableScreenGlow, false)
+  q.disableScreenEffects = NormalizeBool(q.disableScreenEffects, false)
+  q.customWeatherDensity = NormalizeBool(q.customWeatherDensity, false)
+  q.weatherDensity = Clamp(q.weatherDensity or 0, 0, 3)
+  q.accessibilityOriginalCVars = q.accessibilityOriginalCVars or {}
+  q.autoAcceptSummons = NormalizeBool(q.autoAcceptSummons, false)
+  q.autoAcceptResurrection = NormalizeBool(q.autoAcceptResurrection, false)
+  q.whisperInvites = NormalizeBool(q.whisperInvites, false)
+  q.whisperInviteKeyword = strtrim(tostring(q.whisperInviteKeyword or "invite"))
+  q.whisperInviteFriends = NormalizeBool(q.whisperInviteFriends, true)
+  q.whisperInviteBattleNetFriends = NormalizeBool(q.whisperInviteBattleNetFriends, true)
+  q.whisperInviteGuildMembers = NormalizeBool(q.whisperInviteGuildMembers, true)
+
   if q.easyItemDestroy == nil then q.easyItemDestroy = false end
   if q.fasterMovieSkip == nil then q.fasterMovieSkip = false end
 
@@ -1280,6 +1294,191 @@ local function EnsureInviteDriver()
   end
 
   return f
+end
+
+local WhisperInviteFrame
+
+local function EnsureWhisperInviteDriver()
+  if WhisperInviteFrame then return WhisperInviteFrame end
+  local f = CreateFrame("Frame", "PleebUI_QualityWhisperInvites")
+  WhisperInviteFrame = f
+  f:SetScript("OnEvent", function(self, event, message, sender, ...)
+    if C_ChatInfo.InChatMessagingLockdown() or InCombatLockdown() then return end
+    if not canaccessvalue(message) or not canaccessvalue(sender) then return end
+    if strtrim(message):lower() ~= self.keyword then return end
+    if IsPartyLFG() or IsQueueStatusActive() then return end
+    if IsInGroup() and not UnitIsGroupLeader("player") and not UnitIsGroupAssistant("player") then return end
+    if GetNumGroupMembers() >= (IsInRaid() and 40 or 5) then return end
+
+    local q = GetQ()
+    local guid, accountID = select(10, ...)
+    if event == "CHAT_MSG_BN_WHISPER" then
+      if not q.whisperInviteBattleNetFriends or not canaccessvalue(accountID) or not accountID then return end
+      local account = C_BattleNet.GetAccountInfoByID(accountID)
+      if not account or not account.isFriend then return end
+      local game = account.gameAccountInfo
+      if game.clientProgram ~= "WoW" or not game.isOnline or game.wowProjectID ~= WOW_PROJECT_ID then return end
+      C_BattleNet.InviteFriend(game.gameAccountID)
+    else
+      if not canaccessvalue(guid) or not guid or guid == "" then return end
+      -- GUID-only trust avoids treating a same-name character on another realm as a friend.
+      if TrustedUnits_IsTrusted(nil, guid, q.whisperInviteFriends,
+        q.whisperInviteBattleNetFriends, q.whisperInviteGuildMembers, false) then
+        C_PartyInfo.InviteUnit(sender)
+      end
+    end
+  end)
+  function f:RefreshState()
+    self:UnregisterAllEvents()
+    local q = GetQ()
+    self.keyword = q.whisperInviteKeyword:lower()
+    if q.whisperInvites and self.keyword ~= "" then
+      self:RegisterEvent("CHAT_MSG_WHISPER")
+      if q.whisperInviteBattleNetFriends then self:RegisterEvent("CHAT_MSG_BN_WHISPER") end
+    end
+  end
+  return f
+end
+
+local AccessibilityProfile
+
+local function ApplyAccessibility()
+  local q = GetQ()
+  if AccessibilityProfile and AccessibilityProfile ~= q then
+    for name, value in pairs(AccessibilityProfile.accessibilityOriginalCVars) do
+      C_CVar.SetCVar(name, value)
+      AccessibilityProfile.accessibilityOriginalCVars[name] = nil
+    end
+  end
+  AccessibilityProfile = q
+  local originals = q.accessibilityOriginalCVars
+  local function ApplyCVar(name, enabled, value)
+    local current = C_CVar.GetCVar(name)
+    if current == nil then return end
+    if enabled then
+      if originals[name] == nil then originals[name] = current end
+      if current ~= value then C_CVar.SetCVar(name, value) end
+    elseif originals[name] ~= nil then
+      C_CVar.SetCVar(name, originals[name])
+      originals[name] = nil
+    end
+  end
+  ApplyCVar("ffxGlow", q.disableScreenGlow, "0")
+  ApplyCVar("ffxDeath", q.disableScreenEffects, "0")
+  ApplyCVar("ffxNether", q.disableScreenEffects, "0")
+  ApplyCVar("ffxVenari", q.disableScreenEffects, "0")
+  ApplyCVar("ffxLingeringVenari", q.disableScreenEffects, "0")
+  local density = tostring(q.weatherDensity)
+  ApplyCVar("weatherDensity", q.customWeatherDensity, density)
+  ApplyCVar("RAIDweatherDensity", q.customWeatherDensity, density)
+end
+
+local ConfirmationHooksInstalled = false
+
+local function AcceptAutomaticConfirmation(popup)
+  if InCombatLockdown() then return end
+  local q = GetQ()
+  if popup.which == "CONFIRM_SUMMON" and q.autoAcceptSummons and PlayerCanTeleport() then
+    C_SummonInfo.ConfirmSummon()
+    StaticPopup_Hide("CONFIRM_SUMMON")
+  elseif popup.which == "RESURRECT_NO_TIMER" and q.autoAcceptResurrection then
+    AcceptResurrect()
+    StaticPopup_Hide("RESURRECT_NO_TIMER")
+  end
+end
+
+local function ApplyAutomaticConfirmations()
+  local q = GetQ()
+  if not q.autoAcceptSummons and not q.autoAcceptResurrection then return end
+  if not ConfirmationHooksInstalled then
+    hooksecurefunc("StaticPopup_Show", function(which)
+      if which ~= "CONFIRM_SUMMON" and which ~= "RESURRECT_NO_TIMER" then return end
+      local popup = StaticPopup_FindVisible(which)
+      if popup then AcceptAutomaticConfirmation(popup) end
+    end)
+    ConfirmationHooksInstalled = true
+  end
+  local summon = StaticPopup_FindVisible("CONFIRM_SUMMON")
+  if summon then AcceptAutomaticConfirmation(summon) end
+  local resurrection = StaticPopup_FindVisible("RESURRECT_NO_TIMER")
+  if resurrection then AcceptAutomaticConfirmation(resurrection) end
+end
+
+local EntryCountdownDriver
+
+local function EnsureEntryCountdownDriver()
+  if EntryCountdownDriver then return EntryCountdownDriver end
+  local driver = CreateFrame("Frame", "PleebUI_QualityEntryCountdown")
+  EntryCountdownDriver = driver
+  driver.displays = {}
+
+  local function StopDisplay(display)
+    if display.ticker then display.ticker:Cancel(); display.ticker = nil end
+    display:Hide()
+  end
+
+  local function StartDisplay(display)
+    StopDisplay(display)
+    if not GetQ().entryCountdown or not display:GetParent():IsShown() then return end
+    if display.kind == "dungeon" and not driver.dungeonDeadline then return end
+    local function Update()
+      local remaining
+      if display.kind == "dungeon" then
+        remaining = driver.dungeonDeadline - GetTime()
+      else
+        local index = display:GetParent().activeIndex
+        if not index then StopDisplay(display); return end
+        remaining = GetBattlefieldPortExpiration(index)
+        if not canaccessvalue(remaining) then StopDisplay(display); return end
+      end
+      if remaining <= 0 then StopDisplay(display); return end
+      display.text:SetText((display.kind == "dungeon" and "~" or "") .. math.ceil(remaining) .. "s to accept")
+      display:Show()
+    end
+    Update()
+    if display:IsShown() then display.ticker = C_Timer.NewTicker(1, Update) end
+  end
+
+  local function AttachDisplay(parent, kind)
+    if not parent or driver.displays[kind] then return end
+    local display = CreateFrame("Frame", nil, parent)
+    display.kind = kind
+    display:SetSize(180, 20)
+    display:SetPoint("TOP", parent, "BOTTOM", 0, -4)
+    display.text = display:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    display.text:SetAllPoints()
+    display:Hide()
+    driver.displays[kind] = display
+    parent:HookScript("OnShow", function() StartDisplay(display) end)
+    parent:HookScript("OnHide", function() StopDisplay(display) end)
+  end
+
+  function driver:RefreshState()
+    self:UnregisterAllEvents()
+    if GetQ().entryCountdown then
+      AttachDisplay(_G.LFGDungeonReadyDialog, "dungeon")
+      AttachDisplay(_G.PVPReadyDialog, "pvp")
+      self:RegisterEvent("LFG_PROPOSAL_SHOW")
+      self:RegisterEvent("LFG_PROPOSAL_DONE")
+      self:RegisterEvent("LFG_PROPOSAL_FAILED")
+      self:RegisterEvent("LFG_PROPOSAL_SUCCEEDED")
+      if not self.displays.dungeon or not self.displays.pvp then self:RegisterEvent("ADDON_LOADED") end
+      for _, display in pairs(self.displays) do StartDisplay(display) end
+    else
+      self.dungeonDeadline = nil
+      for _, display in pairs(self.displays) do StopDisplay(display) end
+    end
+  end
+
+  driver:SetScript("OnEvent", function(self, event)
+    if event == "ADDON_LOADED" then self:RefreshState(); return end
+    -- The proposal API has no expiry; this is the conventional 40-second estimate.
+    self.dungeonDeadline = event == "LFG_PROPOSAL_SHOW" and GetTime() + 40 or nil
+    if self.displays.dungeon then
+      if self.dungeonDeadline then StartDisplay(self.displays.dungeon) else StopDisplay(self.displays.dungeon) end
+    end
+  end)
+  return driver
 end
 
 local RoleCheckFrame
@@ -2332,6 +2531,10 @@ function Quality:ApplyAll()
   EnsureMerchantDriver():RefreshState()
   EnsureKeystoneDriver():RefreshState()
   EnsureInviteDriver():RefreshState()
+  EnsureWhisperInviteDriver():RefreshState()
+  EnsureEntryCountdownDriver():RefreshState()
+  ApplyAccessibility()
+  ApplyAutomaticConfirmations()
   EnsureRoleCheckDriver():RefreshState()
   EnsureDestroyDriver():RefreshState()
 
@@ -3219,10 +3422,44 @@ local function QualityProvider(AddonObj)
     automation.merchant.args.easyItemDestroy = automation.dialogs.args.easyItemDestroy
     automation.merchant.args.easyItemDestroy.order = 6
     interfaceSettings.name = "Interface and camera"
+    automation.loot.args.entryCountdown = ToggleOption("Show entry countdown", "entryCountdown", 5)
+    automation.loot.args.entryCountdown.desc = "Shows time to accept dungeon and PvP queue prompts. Dungeon time is a 40-second estimate."
+    local confirmations = {
+      type = "group", name = "Summons and resurrection", inline = true, order = 35,
+      args = {
+        summons = ToggleOption("Auto accept summons", "autoAcceptSummons", 1),
+        resurrection = ToggleOption("Auto accept resurrection", "autoAcceptResurrection", 2),
+        help = DescriptionOption("Opt in to accept ordinary summons and resurrection outside combat. Special summon warnings, resurrection sickness and recovery timers still require confirmation.", 3),
+      },
+    }
+    local whisperInvites = {
+      type = "group", name = "Whisper invites", inline = true, order = 36,
+      args = {
+        enabled = ToggleOption("Invite by whisper keyword", "whisperInvites", 1),
+        keyword = InputOption("Keyword", "whisperInviteKeyword", 2, DisabledWhenOff("whisperInvites")),
+        help = DescriptionOption("Matches the whole message, ignoring case and surrounding spaces. Invites trusted senders while solo or able to invite to your group. Unavailable during combat or restricted chat.", 3),
+        friends = ToggleOption("Friends", "whisperInviteFriends", 4, nil, DisabledWhenOff("whisperInvites")),
+        battleNet = ToggleOption("Battle.net friends", "whisperInviteBattleNetFriends", 5, nil, DisabledWhenOff("whisperInvites")),
+        guild = ToggleOption("Guild members", "whisperInviteGuildMembers", 6, nil, DisabledWhenOff("whisperInvites")),
+      },
+    }
+    local accessibility = {
+      type = "group", name = "Accessibility", inline = true, order = 45,
+      args = {
+        glow = ToggleOption("Disable screen glow", "disableScreenGlow", 1),
+        effects = ToggleOption("Disable screen effects", "disableScreenEffects", 2),
+        effectsHelp = DescriptionOption("Disables death desaturation, nether and Ven'ari screen effects.", 3),
+        weather = ToggleOption("Adjust weather density", "customWeatherDensity", 4),
+        density = RangeOption("Weather density", "weatherDensity", 0, 3, 1, 5, DisabledWhenOff("customWeatherDensity")),
+        help = DescriptionOption("Weather density: 0 hides weather, 3 shows full density. Applies to regular and raid graphics. Disabling a control restores its previous setting.", 6),
+      },
+    }
     options.args.automationTab.args = {
       loot = automation.loot, merchant = automation.merchant,
       roleCheck = automation.roleCheck, invites = automation.invites,
       uiAndCamera = interfaceSettings,
+      confirmations = confirmations, whisperInvites = whisperInvites,
+      accessibility = accessibility,
     }
     options.args.automationTab.name = "Convenience"
     options.args.automationTab.order = 4
