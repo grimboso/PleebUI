@@ -2615,14 +2615,12 @@ _PCM_BuildIconOverrideArgs = function(viewerKey, entry)
   _PCM_BuildIconTextSettingsArgs(args, viewerKey, entry, "charge", "Charge text", 30)
   _PCM_BuildIconTextSettingsArgs(args, viewerKey, entry, "keybind", "Keybind text", 50)
 
-  local resourceKey = ns.PRDSecondary:GetCooldownCountResourceKey(entry)
+  local resourceKey, _, countDefinition = ns.PRDSecondary:GetCooldownCountResourceKey(entry)
   if resourceKey then
     args.chargeDisplay = {
       type = "select",
-      name = resourceKey == "BONE_SHIELD" and "Bone Shield display" or "Soul Fragment display",
-      desc = resourceKey == "BONE_SHIELD"
-        and "Track Bone Shield stacks on the Marrowrend and Death's Caress icons, the PRD bar, both, or neither."
-        or "Track Soul Fragments on the Soul Cleave and Spirit Bomb icons, the PRD bar, both, or neither.",
+      name = countDefinition.countDisplayName,
+      desc = countDefinition.countDisplayDescription,
       order = 29,
       values = { ICONS = "Icons only", BAR = "Bar only", BOTH = "Both", NONE = "Nothing" },
       sorting = { "ICONS", "BAR", "BOTH", "NONE" },

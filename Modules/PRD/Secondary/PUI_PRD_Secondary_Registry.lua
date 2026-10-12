@@ -68,6 +68,12 @@ local RESOURCE_NAMES = {
   ESSENCE = "Essence",
   RUNES = "Runes",
   BONE_SHIELD = "Bone Shield",
+  FINGERS_OF_FROST = "Fingers of Frost",
+  HAILSTORM = "Hailstorm",
+  OVERFLOWING_MAELSTROM = "Overflowing Maelstrom",
+  SHEILUNS_GIFT = "Sheilun's Gift",
+  LIGHTWEAVER = "Lightweaver",
+  SWEEPING_STRIKES = "Sweeping Strikes",
 }
 
 local NUMERIC_CUE_RESOURCES = {
@@ -82,6 +88,8 @@ local NUMERIC_CUE_RESOURCES = {
 
 local STACK_COLOR_SHIFT_DISABLED_RESOURCES = {
   SHINING_LIGHT = true,
+  SHEILUNS_GIFT = true,
+  SWEEPING_STRIKES = true,
 }
 
 local APPLICATION_COUNTDOWN_MAX_BY_RESOURCE = {
@@ -155,7 +163,20 @@ local DEFINITIONS = {
         maxFromPowerType = Enum.PowerType.Chi,
         minRealMax = 2,
       },
-      [270] = false,
+      [270] = {
+        adapter = "SPELL_COUNT",
+        resourceKey = "SHEILUNS_GIFT",
+        token = "SHEILUNS_GIFT",
+        texture = "Pleebar",
+        defaultColor = { 0.30, 0.85, 0.65, 1.00 },
+        max = 10,
+        maxAuraSpellID = 399497,
+        castCountSpellID = 399491,
+        cooldownCountSpellIDs = { 399491 },
+        countDisplayName = "Sheilun's Gift display",
+        countDisplayDescription = "Show cloud count on the Sheilun's Gift icon, the PRD bar, both, or neither.",
+        forceContinuous = true,
+      },
     },
   },
 
@@ -172,6 +193,8 @@ local DEFINITIONS = {
         max = 6,
         castCountSpellID = 228477,
         cooldownCountSpellIDs = { 228477, 247454 },
+        countDisplayName = "Soul Fragment display",
+        countDisplayDescription = "Track Soul Fragments on the Soul Cleave and Spirit Bomb icons, the PRD bar, both, or neither.",
         forceContinuous = true,
       },
       [1480] = {
@@ -236,6 +259,10 @@ local DEFINITIONS = {
             auraSpellIDs = {
               1242974,
             },
+            castCountSpellID = 44425,
+            cooldownCountSpellIDs = { 44425 },
+            countDisplayName = "Arcane Salvo display",
+            countDisplayDescription = "Show Arcane Salvo stacks on the Arcane Barrage icon, the PRD bar, both, or neither.",
             forceContinuous = true,
           },
         },
@@ -270,6 +297,23 @@ local DEFINITIONS = {
               1221389,
             },
           },
+          {
+            adapter = "AURA_STACKS",
+            resourceKey = "FINGERS_OF_FROST",
+            token = "FINGERS_OF_FROST",
+            unit = "player",
+            filter = "HELPFUL|PLAYER",
+            texture = "Pleebar",
+            defaultColor = { 0.45, 0.80, 1.00, 1.00 },
+            max = 2,
+            maxAuraSpellID = 44544,
+            auraSpellIDs = { 44544 },
+            castCountSpellID = 30455,
+            cooldownCountSpellIDs = { 30455 },
+            countDisplayName = "Fingers of Frost display",
+            countDisplayDescription = "Show Fingers of Frost charges on the Ice Lance icon, the PRD bar, both, or neither.",
+            forceContinuous = true,
+          },
         },
       },
     },
@@ -296,6 +340,23 @@ local DEFINITIONS = {
 
   PRIEST = {
     bySpec = {
+      [257] = {
+        adapter = "AURA_STACKS",
+        resourceKey = "LIGHTWEAVER",
+        token = "LIGHTWEAVER",
+        unit = "player",
+        filter = "HELPFUL|PLAYER",
+        texture = "Pleebar",
+        defaultColor = { 1.00, 0.90, 0.55, 1.00 },
+        max = 4,
+        maxAuraSpellID = 390993,
+        auraSpellIDs = { 390993 },
+        castCountSpellID = 596,
+        cooldownCountSpellIDs = { 596 },
+        countDisplayName = "Lightweaver display",
+        countDisplayDescription = "Show Lightweaver charges on the Prayer of Healing icon, the PRD bar, both, or neither.",
+        forceContinuous = true,
+      },
       [258] = ALTERNATE_MANA,
     },
   },
@@ -304,17 +365,53 @@ local DEFINITIONS = {
     bySpec = {
       [262] = ALTERNATE_MANA,
       [263] = {
-        adapter = "AURA_STACKS",
-        resourceKey = "MAELSTROM_WEAPON",
-        token = "MAELSTROM_WEAPON",
-        unit = "player",
-        filter = "HELPFUL|PLAYER",
-        texture = "Pleebar",
-        colorToken = "MAELSTROM",
-        max = 10,
-        maxAuraSpellID = 344179,
-        auraSpellIDs = {
-          344179,
+        resources = {
+          {
+            adapter = "AURA_STACKS",
+            resourceKey = "MAELSTROM_WEAPON",
+            token = "MAELSTROM_WEAPON",
+            unit = "player",
+            filter = "HELPFUL|PLAYER",
+            texture = "Pleebar",
+            colorToken = "MAELSTROM",
+            max = 10,
+            maxAuraSpellID = 344179,
+            auraSpellIDs = { 344179 },
+          },
+          {
+            adapter = "AURA_STACKS",
+            resourceKey = "HAILSTORM",
+            token = "HAILSTORM",
+            unit = "player",
+            filter = "HELPFUL|PLAYER",
+            texture = "Pleebar",
+            defaultColor = { 0.45, 0.80, 1.00, 1.00 },
+            max = 5,
+            maxAuraSpellID = 334196,
+            auraSpellIDs = { 334196 },
+            castCountSpellID = 196840,
+            cooldownCountSpellIDs = { 196840 },
+            countDisplayName = "Hailstorm display",
+            countDisplayDescription = "Show Hailstorm stacks on the Frost Shock icon, the PRD bar, both, or neither.",
+            forceContinuous = true,
+          },
+          {
+            adapter = "AURA_STACKS",
+            resourceKey = "OVERFLOWING_MAELSTROM",
+            token = "OVERFLOWING_MAELSTROM",
+            unit = "player",
+            filter = "HELPFUL|PLAYER",
+            texture = "Pleebar",
+            defaultColor = { 0.30, 0.85, 0.65, 1.00 },
+            max = 20,
+            maxAuraSpellID = 410681,
+            auraSpellIDs = { 410681 },
+            castCountSpellID = 8004,
+            cooldownCountSpellIDs = { 8004, 1064 },
+            countDisplayName = "Overflowing Maelstrom display",
+            countDisplayDescription = "Show Overflowing Maelstrom stacks on the Healing Surge and Chain Heal icons, the PRD bar, both, or neither.",
+            forceContinuous = true,
+          },
         },
       },
     },
@@ -329,6 +426,24 @@ local DEFINITIONS = {
     defaultColor = { 100 / 255, 173 / 255, 206 / 255, 1.00 },
     maxFromPowerType = Enum.PowerType.Essence,
     minRealMax = 2,
+  },
+
+  WARRIOR = {
+    bySpec = {
+      [71] = {
+        adapter = "SPELL_COUNT",
+        resourceKey = "SWEEPING_STRIKES",
+        token = "SWEEPING_STRIKES",
+        texture = "Pleebar",
+        defaultColor = { 0.78, 0.61, 0.43, 1.00 },
+        max = 12,
+        castCountSpellID = 260708,
+        cooldownCountSpellIDs = { 260708 },
+        countDisplayName = "Sweeping Strikes display",
+        countDisplayDescription = "Show remaining Sweeping Strikes uses on its icon, the PRD bar, both, or neither.",
+        forceContinuous = true,
+      },
+    },
   },
 
   DEATHKNIGHT = {
@@ -363,6 +478,8 @@ local DEFINITIONS = {
         auraSpellIDs = { 195181 },
         castCountSpellID = 195182,
         cooldownCountSpellIDs = { 195182, 195292 },
+        countDisplayName = "Bone Shield display",
+        countDisplayDescription = "Track Bone Shield stacks on the Marrowrend and Death's Caress icons, the PRD bar, both, or neither.",
         forceContinuous = true,
         specIDs = { [250] = true },
       },
@@ -460,7 +577,7 @@ function Secondary:GetCooldownCountSpellIDs(resourceKey)
     if definition.resourceKey == resourceKey
       and (not definition.specIDs or definition.specIDs[specID] == true)
     then
-      return definition.cooldownCountSpellIDs
+      return definition.cooldownCountSpellIDs, definition
     end
   end
 end
@@ -479,7 +596,7 @@ function Secondary:GetCooldownCountResourceKey(entry)
       for spellIndex = 1, #spellIDs do
         for identityIndex = 1, #entry.identitySpellIDs do
           if entry.identitySpellIDs[identityIndex] == spellIDs[spellIndex] then
-            return definition.resourceKey, definition.castCountSpellID
+            return definition.resourceKey, definition.castCountSpellID, definition
           end
         end
       end
@@ -546,6 +663,7 @@ local RESOURCE_OPTIONS_BY_CLASS = {
   MONK = {
     { key = "STAGGER", name = "Stagger", category = "CLASS_RESOURCE", specIDs = { [268] = true } },
     { key = "CHI", name = "Chi", category = "CLASS_RESOURCE", specIDs = { [269] = true } },
+    { key = "SHEILUNS_GIFT", name = "Sheilun's Gift", category = "TRACKED_EFFECT", specIDs = { [270] = true } },
   },
   ROGUE = {
     { key = "COMBO_POINTS", name = "Combo Points", category = "CLASS_RESOURCE" },
@@ -562,16 +680,24 @@ local RESOURCE_OPTIONS_BY_CLASS = {
     { key = "ARCANE_SALVO", name = "Arcane Salvo", category = "TRACKED_EFFECT", specIDs = { [62] = true } },
     { key = "ICICLES", name = "Icicles", category = "TRACKED_EFFECT", specIDs = { [64] = true } },
     { key = "FREEZING", name = "Freezing", category = "TRACKED_EFFECT", specIDs = { [64] = true } },
+    { key = "FINGERS_OF_FROST", name = "Fingers of Frost", category = "TRACKED_EFFECT", specIDs = { [64] = true } },
   },
   HUNTER = {
     { key = "TIP_OF_THE_SPEAR", name = "Tip of the Spear", category = "TRACKED_EFFECT", specIDs = { [255] = true } },
   },
-  PRIEST = {},
+  PRIEST = {
+    { key = "LIGHTWEAVER", name = "Lightweaver", category = "TRACKED_EFFECT", specIDs = { [257] = true } },
+  },
   SHAMAN = {
     { key = "MAELSTROM_WEAPON", name = "Maelstrom Weapon", category = "TRACKED_EFFECT", specIDs = { [263] = true } },
+    { key = "HAILSTORM", name = "Hailstorm", category = "TRACKED_EFFECT", specIDs = { [263] = true } },
+    { key = "OVERFLOWING_MAELSTROM", name = "Overflowing Maelstrom", category = "TRACKED_EFFECT", specIDs = { [263] = true } },
   },
   EVOKER = {
     { key = "ESSENCE", name = "Essence", category = "CLASS_RESOURCE" },
+  },
+  WARRIOR = {
+    { key = "SWEEPING_STRIKES", name = "Sweeping Strikes", category = "TRACKED_EFFECT", specIDs = { [71] = true } },
   },
   DEATHKNIGHT = {
     { key = "RUNES", name = "Runes", category = "CLASS_RESOURCE" },
