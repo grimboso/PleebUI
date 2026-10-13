@@ -17,7 +17,7 @@ local function GetNativeFormatter(owner, track)
   local config = track.config
   local textConfig = config.text
   local mode = textConfig.mode or "CUR"
-  if mode == "PCT" or mode == "CURP" then
+  if config.resourceKey ~= "IGNORE_PAIN" and (mode == "PCT" or mode == "CURP") then
     mode = "CUR"
   end
 
@@ -57,7 +57,8 @@ local function GetNativeFormatter(owner, track)
       })
     end
   else
-    local format = mode == "BOTH" and ("%.0f / " .. track.maximum) or "%.0f"
+    local format = config.resourceKey == "IGNORE_PAIN" and (mode == "PCT" or mode == "CURP")
+      and "%.0f%%" or mode == "BOTH" and ("%.0f / " .. track.maximum) or "%.0f"
     formatter:AddBreakpoint({ threshold = 0, format = format })
   end
 
@@ -106,7 +107,9 @@ end
 local function LayoutNativeDividers(track)
   local config = track.config
   local maximum = tonumber(track.maximum) or 0
-  if config.showDividers == false or maximum <= 1 then
+  if config.showDividers == false or maximum <= 1
+    or config.behavior.fillMode == "DURATION" or config.behavior.fiveBarStyle
+  then
     HideNativeDividers(track)
     return
   end
@@ -348,6 +351,92 @@ local function GetNativeResourceView(owner, resource)
   return view
 end
 
+local function ConfigureFiveBarButton(track, entry, button, initializing)
+  if initializing ~= true and NativeButtonRestricted() then
+    track.owner._puiAuraStackButtonPending = true
+    return
+  end
+
+  local parts = AuraWidget.BindApplicationDurationButton(button)
+  entry.button = button
+  button:ClearAllPoints()
+  button:SetAllPoints(entry.parent)
+  button:SetFrameLevel(track.parent:GetFrameLevel() + (entry.overflow and 3 or 2))
+  button:EnableMouse(false)
+  parts.applicationBar:ClearAllPoints()
+  parts.applicationBar:SetAllPoints(button)
+  parts.applicationBar:SetFrameLevel(button:GetFrameLevel() + 1)
+  parts.applicationBar:SetStatusBarTexture(Secondary.FetchStatusbarTexture(track.config.texture))
+  local r, g, b, a = Secondary.ResolveResourceColor(track.config, track.definition)
+  if entry.overflow then
+    r, g, b, a = unpack(track.config.behavior.overflowColor)
+  end
+  parts.applicationBar:SetStatusBarColor(r, g, b, a)
+  parts.applicationBase:Hide()
+  parts.applicationHolder:Hide()
+  button:SetApplicationBar(parts.applicationBar, {
+    minApplications = entry.minimum,
+    maxApplications = entry.minimum + 1,
+    interpolation = Enum.StatusBarInterpolation.Immediate,
+  })
+  parts.applicationBar:Show()
+end
+
+local function LayoutFiveBarSegments(track)
+  local segments = track.fiveBarSegments
+  if not segments then return end
+  local width = track.parent:GetWidth()
+  local height = track.parent:GetHeight()
+  local gap = track.config.showDividers and Secondary.GetSecondaryDividerSize(track.config) or 0
+  local segmentWidth = math.max(1, (width - gap * 4) / 5)
+  for index = 1, 5 do
+    local segment = segments[index]
+    segment:ClearAllPoints()
+    segment:SetPoint("TOPLEFT", track.parent, "TOPLEFT", (index - 1) * (segmentWidth + gap), 0)
+    segment:SetSize(segmentWidth, height)
+    segment:SetShown(track.config.behavior.fiveBarStyle)
+  end
+end
+
+local function ConfigureFiveBarSlots(track)
+  local enabled = track.config.behavior.fiveBarStyle
+  if enabled and not track.fiveBarSlots then
+    track.fiveBarSegments = {}
+    track.fiveBarSlots = {}
+    for index = 1, 5 do
+      track.fiveBarSegments[index] = CreateFrame("Frame", nil, track.parent)
+    end
+    track.parent:HookScript("OnSizeChanged", function()
+      if track.auraSlot.active and track.config.behavior.fiveBarStyle then
+        LayoutFiveBarSegments(track)
+      end
+    end)
+    LayoutFiveBarSegments(track)
+    for index = 1, 10 do
+      local entry = {
+        parent = track.fiveBarSegments[(index - 1) % 5 + 1],
+        minimum = index - 1,
+        overflow = index > 5,
+      }
+      track.fiveBarSlots[index] = entry
+      entry.auraSlot = AuraSlotDriver:CreateSlot(track.unit, track.filter, {
+        candidateFilters = { includeSpellIDs = track.candidateSpellIDs },
+        templateNames = { "PUI_AuraApplicationDurationTemplate" },
+        initializeFrame = function(button)
+          ConfigureFiveBarButton(track, entry, button, true)
+        end,
+      })
+    end
+  end
+  for _, entry in ipairs(track.fiveBarSlots or {}) do
+    if enabled and entry.button then
+      ConfigureFiveBarButton(track, entry, entry.button)
+    end
+    AuraSlotDriver:SetSlotActive(entry.auraSlot, enabled)
+  end
+  LayoutFiveBarSegments(track)
+end
+
 local function ConfigureNativeButton(owner, track, button, initializing, textOnly)
   local onlyText = textOnly == true
     and track.parts ~= nil
@@ -369,7 +458,8 @@ local function ConfigureNativeButton(owner, track, button, initializing, textOnl
     parts = AuraWidget.BindApplicationDurationButton(button)
     track.parts = parts
   end
-  local engineBar = parts.applicationBar
+  local durationFill = track.config.behavior.fillMode == "DURATION"
+  local engineBar = durationFill and parts.durationBar or parts.applicationBar
   local textHolder = parts.applicationHolder
   local text = parts.applicationText
   local inset = 0
@@ -398,27 +488,44 @@ local function ConfigureNativeButton(owner, track, button, initializing, textOnl
     engineBar:SetStatusBarColor(r, g, b, a)
     engineBar:SetAlpha(1)
     parts.applicationThresholdParent = track.parent
-    AuraWidget.ConfigureApplicationThresholds(
-      parts,
-      track.config.stackColorThresholds,
-      texturePath,
-      "HORIZONTAL",
-      false,
-      PLAYER_CLASS_COLOR,
-      track.maximum
-    )
+    if durationFill or track.config.behavior.fiveBarStyle then
+      AuraWidget.ClearApplicationThresholdBar(parts)
+    else
+      AuraWidget.ConfigureApplicationThresholds(
+        parts,
+        track.config.stackColorThresholds,
+        texturePath,
+        "HORIZONTAL",
+        false,
+        PLAYER_CLASS_COLOR,
+        track.maximum
+      )
+    end
     track.applicationThresholdTopFrameLevel =
       engineBar:GetFrameLevel() + (parts.applicationThresholdLayerCount or 0)
-    AttachNativeDividers(owner, track)
-    AuraWidget.ConfigureApplicationBar(
-      parts,
-      track.maximum,
-      Enum.StatusBarInterpolation.ExponentialEaseOut
-    )
+    if durationFill then
+      AuraWidget.DisableApplicationBar(parts)
+      AuraWidget.ConfigureDurationBar(parts, Enum.StatusBarInterpolation.ExponentialEaseOut,
+        Enum.StatusBarTimerDirection.RemainingTime)
+      HideNativeDividers(track)
+    else
+      AuraWidget.DisableDurationBar(parts)
+      if track.config.behavior.fiveBarStyle then
+        AuraWidget.DisableApplicationBar(parts)
+        HideNativeDividers(track)
+      else
+        AuraWidget.ConfigureApplicationBar(parts, track.maximum, Enum.StatusBarInterpolation.ExponentialEaseOut)
+        AttachNativeDividers(owner, track)
+      end
+    end
     track.nativeButtonParent = track.parent
     track.nativeButtonMaximum = track.maximum
   elseif restricted and not onlyText then
-    AttachNativeDividers(owner, track)
+    if durationFill or track.config.behavior.fiveBarStyle then
+      HideNativeDividers(track)
+    else
+      AttachNativeDividers(owner, track)
+    end
   end
 
   if not restricted then
@@ -502,6 +609,7 @@ local function EnsureNativeTrack(owner, resource, view)
     ConfigureNativeButton(owner, track, track.button)
   else
     track.filter = filter
+    track.candidateSpellIDs = spellSet
     track.auraSlot = AuraSlotDriver:CreateSlot(unit, filter, {
       candidateFilters = { includeSpellIDs = spellSet },
       templateNames = { "PUI_AuraApplicationDurationTemplate" },
@@ -519,6 +627,7 @@ local function EnsureNativeTrack(owner, resource, view)
     spellSet
   )
   AuraSlotDriver:SetSlotActive(track.auraSlot, true)
+  ConfigureFiveBarSlots(track)
   return track
 end
 
@@ -528,6 +637,10 @@ local function DisableNativeTrack(track)
   end
 
   HideNativeDividers(track)
+  for _, segment in ipairs(track.fiveBarSegments or {}) do segment:Hide() end
+  for _, entry in ipairs(track.fiveBarSlots or {}) do
+    AuraSlotDriver:SetSlotActive(entry.auraSlot, false)
+  end
   AuraSlotDriver:SetSlotActive(track.auraSlot, false)
 end
 
@@ -580,7 +693,8 @@ end
 local function GetNativeEvents(owner)
   local resources = owner.secondaryResources or {}
   for index = 1, #resources do
-    local definition = resources[index].definition
+    local resource = resources[index]
+    local definition = resource.definition
     if resource.visible and definition.adapter == "AURA_STACKS"
       and (definition.knownMaxSpellID or definition.maxAuraSpellID)
     then
@@ -628,6 +742,7 @@ local function UpdateNative(owner, event)
     for _, track in pairs(owner._puiAuraStackTracks or {}) do
       if track.button and track.auraSlot and track.auraSlot.active == true then
         ConfigureNativeButton(owner, track, track.button)
+        ConfigureFiveBarSlots(track)
       end
     end
     return
@@ -719,6 +834,9 @@ AttachNativeDividers = P:Def("AuraStacks.AttachNativeDividers", AttachNativeDivi
 CreateNativeResourceView = P:Def("AuraStacks.CreateNativeResourceView", CreateNativeResourceView)
 GetNativeResourceView = P:Def("AuraStacks.GetNativeResourceView", GetNativeResourceView)
 ConfigureNativeCountdownFallback = P:Def("AuraStacks.ConfigureNativeCountdownFallback", ConfigureNativeCountdownFallback)
+ConfigureFiveBarButton = P:Def("AuraStacks.ConfigureFiveBarButton", ConfigureFiveBarButton)
+LayoutFiveBarSegments = P:Def("AuraStacks.LayoutFiveBarSegments", LayoutFiveBarSegments)
+ConfigureFiveBarSlots = P:Def("AuraStacks.ConfigureFiveBarSlots", ConfigureFiveBarSlots)
 ConfigureNativeButton = P:Def("AuraStacks.ConfigureNativeButton", ConfigureNativeButton)
 EnsureNativeTrack = P:Def("AuraStacks.EnsureNativeTrack", EnsureNativeTrack)
 DisableNativeTrack = P:Def("AuraStacks.DisableNativeTrack", DisableNativeTrack)
