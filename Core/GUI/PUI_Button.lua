@@ -189,7 +189,7 @@ function WidgetSkins.Keybinding(widget)
 end
 
 local function PUI_Button_Layout(widget, width)
-  local geom = Theme.GetWidgetRowGeometry()
+  local geom = Theme.GetWidgetRowGeometry(widget)
   local frameWidth = tonumber(width) or widget.frame:GetWidth() or 200
   local availableWidth = math_max(1, frameWidth - geom.controlLeft - geom.controlRight)
   local textWidth = tonumber(widget.text:GetUnboundedStringWidth()) or 0
@@ -199,7 +199,7 @@ local function PUI_Button_Layout(widget, width)
   )
 
   widget.button:ClearAllPoints()
-  Pixel.Point(widget.button, "CENTER", widget.frame, "CENTER", 0, geom.controlYOffset)
+  Pixel.Point(widget.button, "CENTER", widget.frame, "TOP", 0, -geom.controlTop - geom.controlHeight * 0.5)
   Pixel.Size(widget.button, buttonWidth, geom.controlHeight)
 end
 
