@@ -74,6 +74,9 @@ local RESOURCE_NAMES = {
   SHEILUNS_GIFT = "Sheilun's Gift",
   LIGHTWEAVER = "Lightweaver",
   SWEEPING_STRIKES = "Sweeping Strikes",
+  IRONFUR = "Ironfur",
+  WHIRLWIND_STACKS = "Whirlwind stacks",
+  IGNORE_PAIN = "Ignore Pain",
 }
 
 local NUMERIC_CUE_RESOURCES = {
@@ -223,6 +226,24 @@ local DEFINITIONS = {
       [0] = {
         bySpec = {
           [102] = ALTERNATE_MANA,
+        },
+      },
+      [DRUID_BEAR_FORM] = {
+        bySpec = {
+          [104] = {
+            adapter = "AURA_STACKS",
+            resourceKey = "IRONFUR",
+            configurableMaximum = true,
+            token = "IRONFUR",
+            unit = "player",
+            filter = "HELPFUL|PLAYER",
+            texture = "Pleebar",
+            defaultColor = { 0.70, 0.55, 0.30, 1 },
+            max = 10,
+            auraSpellIDs = { 192081 },
+            forceContinuous = true,
+            defaultEnabled = false,
+          },
         },
       },
       [DRUID_CAT_FORM] = COMBO_POINTS,
@@ -430,6 +451,32 @@ local DEFINITIONS = {
 
   WARRIOR = {
     bySpec = {
+      [72] = {
+        adapter = "AURA_STACKS",
+        resourceKey = "WHIRLWIND_STACKS",
+        token = "WHIRLWIND_STACKS",
+        unit = "player",
+        filter = "HELPFUL|PLAYER",
+        texture = "Pleebar",
+        defaultColor = { 0.78, 0.61, 0.43, 1 },
+        max = 4,
+        auraSpellIDs = { 85739 },
+        forceContinuous = true,
+        defaultEnabled = false,
+      },
+      [73] = {
+        adapter = "AURA_STACKS",
+        resourceKey = "IGNORE_PAIN",
+        token = "IGNORE_PAIN",
+        unit = "player",
+        filter = "HELPFUL|PLAYER",
+        texture = "Pleebar",
+        defaultColor = { 0.85, 0.65, 0.20, 1 },
+        max = 100,
+        auraSpellIDs = { 190456 },
+        forceContinuous = true,
+        defaultEnabled = false,
+      },
       [71] = {
         adapter = "SPELL_COUNT",
         resourceKey = "SWEEPING_STRIKES",
@@ -653,6 +700,7 @@ local RESOURCE_OPTIONS_BY_CLASS = {
   },
   DRUID = {
     { key = "COMBO_POINTS", name = "Combo Points", category = "CLASS_RESOURCE" },
+    { key = "IRONFUR", name = "Ironfur", category = "TRACKED_EFFECT", specIDs = { [104] = true } },
   },
   MAGE = {
     { key = "ARCANE_CHARGES", name = "Arcane Charges", category = "CLASS_RESOURCE", specIDs = { [62] = true } },
@@ -677,6 +725,8 @@ local RESOURCE_OPTIONS_BY_CLASS = {
   },
   WARRIOR = {
     { key = "SWEEPING_STRIKES", name = "Sweeping Strikes", category = "TRACKED_EFFECT", specIDs = { [71] = true } },
+    { key = "WHIRLWIND_STACKS", name = "Whirlwind stacks", category = "TRACKED_EFFECT", specIDs = { [72] = true } },
+    { key = "IGNORE_PAIN", name = "Ignore Pain", category = "TRACKED_EFFECT", specIDs = { [73] = true } },
   },
   DEATHKNIGHT = {
     { key = "RUNES", name = "Runes", category = "CLASS_RESOURCE" },
@@ -714,7 +764,9 @@ end
 local function ResolveMaximum(definition, deferSecretAuraMaximum)
   local resolvedMax = tonumber(definition.max) or 0
 
-  if definition.knownMaxSpellID then
+  if definition.configurableMaximum then
+    resolvedMax = M.db.profile.secondary.resourceSettings[PLAYER_CLASS][definition.resourceKey].behavior.stackCeiling
+  elseif definition.knownMaxSpellID then
     if C_SpellBook.IsSpellKnown(definition.knownMaxSpellID) then
       resolvedMax = tonumber(definition.maxWhenKnown) or resolvedMax
     else
@@ -757,14 +809,30 @@ local function EnsureResourceSettings(profile, resourceKey, resourceIndex, class
     classSettings[resourceKey] = settings
   end
 
-  if settings.enabled == nil then settings.enabled = true end
+  if settings.enabled == nil then
+    settings.enabled = RESOURCE_DEFINITIONS_BY_CLASS[classToken][resourceKey].defaultEnabled ~= false
+  end
   if settings.visibilityMode == nil then settings.visibilityMode = "ALWAYS" end
 
   settings.behavior = settings.behavior or {}
   local behavior = settings.behavior
+  if behavior.darkenPartial == nil then behavior.darkenPartial = false end
+  if resourceKey == "COMBO_POINTS" and classToken == "ROGUE" then
+    if behavior.colorChargedPoints == nil then behavior.colorChargedPoints = false end
+    if behavior.chargedColor == nil then behavior.chargedColor = { 0.44, 0.77, 1, 1 } end
+  elseif resourceKey == "MAELSTROM_WEAPON" then
+    if behavior.fiveBarStyle == nil then behavior.fiveBarStyle = false end
+    if behavior.overflowColor == nil then behavior.overflowColor = { 1, 0.6, 0.2, 1 } end
+  elseif resourceKey == "IRONFUR" then
+    if behavior.fillMode == nil then behavior.fillMode = "DURATION" end
+    behavior.stackCeiling = math.max(1, math.min(50, tonumber(behavior.stackCeiling) or 10))
+  end
 
   if resourceKey == "RUNES" then
     behavior.rechargeAnimation = nil
+    if behavior.simpleRunes == nil then behavior.simpleRunes = false end
+    if behavior.customRechargeColor == nil then behavior.customRechargeColor = false end
+    if behavior.rechargeColor == nil then behavior.rechargeColor = { 0.5, 0.5, 0.5, 1 } end
     if behavior.showRechargeTime == nil then behavior.showRechargeTime = true end
     if behavior.showQueuedRuneTime == nil then behavior.showQueuedRuneTime = false end
     if behavior.showReadyGlow == nil then behavior.showReadyGlow = true end
@@ -779,6 +847,7 @@ local function EnsureResourceSettings(profile, resourceKey, resourceIndex, class
     if behavior.showSeverityLabel == nil then behavior.showSeverityLabel = false end
     if behavior.yellowThreshold == nil then behavior.yellowThreshold = 30 end
     if behavior.redThreshold == nil then behavior.redThreshold = 60 end
+    behavior.fillCeiling = math.max(1, math.min(500, tonumber(behavior.fillCeiling) or 100))
   end
 
   if resourceKey == "RUNES" or resourceKey == "ESSENCE" then
@@ -832,7 +901,9 @@ local function EnsureResourceSettings(profile, resourceKey, resourceIndex, class
 
   settings.text = settings.text or {}
   local secondaryText = profile.text.secondary
-  if settings.text.mode == nil then settings.text.mode = secondaryText.mode or "CUR" end
+  if settings.text.mode == nil then
+    settings.text.mode = resourceKey == "IGNORE_PAIN" and "PCT" or secondaryText.mode or "CUR"
+  end
   if settings.text.showNumber == nil then settings.text.showNumber = secondaryText.showNumber ~= false end
   if settings.text.size == nil then settings.text.size = secondaryText.size or profile.appearance.text.size or 14 end
   if settings.text.flags == nil then settings.text.flags = secondaryText.flags or profile.appearance.text.flags or "" end
@@ -850,7 +921,9 @@ local function EnsureResourceSettings(profile, resourceKey, resourceIndex, class
   end
 
   if settings.inactiveAlpha == nil then settings.inactiveAlpha = secondary.inactiveAlpha or 0.15 end
-  if settings.showDividers == nil then settings.showDividers = secondary.showDividers ~= false end
+  if settings.showDividers == nil then
+    settings.showDividers = resourceKey ~= "IGNORE_PAIN" and secondary.showDividers ~= false
+  end
   if settings.stackTickValues == nil then settings.stackTickValues = "ALL" end
   if settings.dividerSize == nil then settings.dividerSize = secondary.dividerSize or 1 end
   if settings.dividerColor == nil then
@@ -933,7 +1006,11 @@ local function NormalizeDefinitionSettings(profile, entry, resourceIndex, seen, 
         local settings = classSettings[entry.resourceKey]
         if settings.enabled == nil then
           local enabled = profile.secondary.resourceEnabled
-          settings.enabled = not enabled or enabled[entry.resourceKey] ~= false
+          if enabled and enabled[entry.resourceKey] ~= nil then
+            settings.enabled = enabled[entry.resourceKey] ~= false
+          else
+            settings.enabled = entry.defaultEnabled ~= false
+          end
         end
         if settings.visibilityMode == nil then
           settings.visibilityMode = profile.secondary.visibilityMode or "ALWAYS"
@@ -1050,6 +1127,16 @@ local function BuildResourceConfigStateKey(config)
     behavior.showSeverityLabel and 1 or 0,
     behavior.yellowThreshold or "",
     behavior.redThreshold or "",
+    behavior.fillCeiling,
+    behavior.fillMode,
+    behavior.simpleRunes and 1 or 0,
+    behavior.customRechargeColor and 1 or 0,
+    behavior.rechargeColor[1], behavior.rechargeColor[2], behavior.rechargeColor[3], behavior.rechargeColor[4],
+    behavior.darkenPartial and 1 or 0,
+    behavior.colorChargedPoints and 1 or 0,
+    behavior.chargedColor[1], behavior.chargedColor[2], behavior.chargedColor[3], behavior.chargedColor[4],
+    behavior.fiveBarStyle and 1 or 0,
+    behavior.overflowColor[1], behavior.overflowColor[2], behavior.overflowColor[3], behavior.overflowColor[4],
   }, "|")
 end
 
@@ -1057,6 +1144,7 @@ local function BuildResourceConfigStructureKey(config)
   return table.concat({
     config.resourceKey,
     config.perSegment and 1 or 0,
+    config.behavior.fiveBarStyle and 1 or 0,
   }, "|")
 end
 
@@ -1183,6 +1271,16 @@ local function ResolveResourceConfig(profile, definition, specID)
       showSeverityLabel = sourceBehavior.showSeverityLabel == true,
       yellowThreshold = tonumber(sourceBehavior.yellowThreshold) or 30,
       redThreshold = tonumber(sourceBehavior.redThreshold) or 60,
+      fillCeiling = tonumber(sourceBehavior.fillCeiling) or 100,
+      fillMode = sourceBehavior.fillMode or "STACKS",
+      simpleRunes = sourceBehavior.simpleRunes == true,
+      customRechargeColor = sourceBehavior.customRechargeColor == true,
+      rechargeColor = CopyColor(sourceBehavior.rechargeColor, 0.5, 0.5, 0.5, 1),
+      darkenPartial = sourceBehavior.darkenPartial == true,
+      colorChargedPoints = PLAYER_CLASS == "ROGUE" and sourceBehavior.colorChargedPoints == true,
+      chargedColor = CopyColor(sourceBehavior.chargedColor, 0.44, 0.77, 1, 1),
+      fiveBarStyle = definition.resourceKey == "MAELSTROM_WEAPON" and sourceBehavior.fiveBarStyle == true,
+      overflowColor = CopyColor(sourceBehavior.overflowColor, 1, 0.6, 0.2, 1),
     },
     cues = {
       desaturateMode = sourceCues.desaturateMode or "NONE",
