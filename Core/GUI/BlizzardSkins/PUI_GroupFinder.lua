@@ -113,6 +113,7 @@ end
 Skins.Register("Blizzard_GroupFinder", "PVEFrame", {
   install = InstallGroupFinder,
   onShow = function()
+    RefreshCategoryFonts()
     RefreshShellArtwork()
     RefreshRewards(LFDQueueFrameRandomScrollFrameChildFrame)
     RefreshRewards(RaidFinderQueueFrameScrollFrameChildFrame)
