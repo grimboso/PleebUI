@@ -40,6 +40,16 @@ local function RefreshShellArtwork()
   end
 end
 
+local function RefreshQueueDropdown(dropdown)
+  if not Skins.CanStyle() then return end
+  Skins.Dropdown(dropdown)
+  dropdown.Text:ClearAllPoints()
+  dropdown.Text:SetPoint("LEFT", dropdown, "LEFT", 8, 0)
+  dropdown.Text:SetPoint("RIGHT", dropdown, "RIGHT", -28, 0)
+  dropdown.Arrow:ClearAllPoints()
+  dropdown.Arrow:SetPoint("RIGHT", dropdown, "RIGHT", -8, 0)
+end
+
 local function RefreshRewards(parentFrame)
   if not Skins.CanStyle() then return end
   if parentFrame == LFDQueueFrameRandomScrollFrameChildFrame or parentFrame == RaidFinderQueueFrameScrollFrameChildFrame then
@@ -51,7 +61,16 @@ local function RefreshRewards(parentFrame)
     Skins.Font(parentFrame.rewardsDescription)
     Skins.Font(parentFrame.xpLabel)
     ns.Theme.ApplyFont(parentFrame.xpAmount, "body")
-    Skins.Font(parentFrame.MoneyReward.Name)
+    for _, reward in ipairs({ parentFrame:GetChildren() }) do
+      if reward.NameFrame then
+        Skins.Hide(reward.NameFrame)
+        local host = Skins.Surface(reward, true, true)
+        host:ClearAllPoints()
+        host:SetPoint("TOPLEFT", reward.Icon, "TOPRIGHT", 0, 0)
+        host:SetPoint("BOTTOMRIGHT", reward, "BOTTOMRIGHT", 0, 0)
+        ns.Theme.ApplyFont(reward.Name, "body")
+      end
+    end
   end
 end
 
@@ -68,6 +87,10 @@ local function RefreshGroupFinder(frame)
   for index = 1, 3 do Skins.Tab(frame["tab" .. index]) end
   RefreshGroupButtons()
   Skins.Apply(_G, layout)
+  for _, dropdown in ipairs({ LFDQueueFrame.TypeDropdown, RaidFinderQueueFrame.SelectionDropdown }) do
+    RefreshQueueDropdown(dropdown)
+    Skins.Hook(dropdown, "OnMenuAssigned", RefreshQueueDropdown)
+  end
   RefreshCategoryFonts()
   RefreshRewards(LFDQueueFrameRandomScrollFrameChildFrame)
   RefreshRewards(RaidFinderQueueFrameScrollFrameChildFrame)
