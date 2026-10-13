@@ -2347,7 +2347,7 @@ local function RefreshPRDPreview(host)
     entries[resourceKey] = {
       bar = bar,
       height = math_max(18, math_floor((tonumber(config.height) or 15) * scale + 0.5)),
-      visible = secondaryCfg.enabled ~= false and config.enabled ~= false,
+      visible = config.enabled ~= false,
       resource = true,
       definition = definition,
       config = config,
@@ -2495,7 +2495,7 @@ local function RefreshPRDResourceWidgets(host, info)
 
     widget:SetLabel("Show " .. resourceName)
     widget:SetValue(PRD:IsSecondaryResourceEnabled(resourceKey))
-    widget:SetDisabled(PRD:GetQuickSetupValue("showSecondary") ~= true)
+    widget:SetDisabled(false)
     widget.frame:Show()
 
     local target = resource.category == "TRACKED_EFFECT" and trackedWidgets or classWidgets
@@ -2543,14 +2543,10 @@ RefreshPRDControls = function(host)
   local PRD = ns.Modules.PRD
   local info = GetPRDResourceInfo()
   local classWidgets, trackedWidgets = RefreshPRDResourceWidgets(host, info)
-  local hasSecondary = #info.resources > 0 or #info.resourceOptions > 0
 
   host.EnabledWidget:SetValue(PRD:IsModuleEnabled())
   host.HealthWidget:SetValue(PRD:GetQuickSetupValue("showHealth"))
   host.PrimaryWidget:SetValue(PRD:GetQuickSetupValue("showPrimary"))
-  host.SecondaryWidget:SetLabel("Enable class resources and tracked effects")
-  host.SecondaryWidget:SetValue(PRD:GetQuickSetupValue("showSecondary"))
-  host.SecondaryWidget:SetDisabled(not hasSecondary)
   host.TextureWidget:SetList(OptionsUtil.BuildStatusbarValues(false))
   host.TextureWidget:SetValue(PRD:GetQuickSetupValue("texture"))
   host.WidthWidget:SetValue(PRD:GetQuickSetupValue("width"))
@@ -2560,7 +2556,6 @@ RefreshPRDControls = function(host)
     host.EnabledWidget,
     host.HealthWidget,
     host.PrimaryWidget,
-    host.SecondaryWidget,
   }
   host.ClassResourceWidgets = classWidgets
   host.TrackedEffectWidgets = trackedWidgets
@@ -2635,13 +2630,6 @@ local function BuildPRDControls(frame, colors)
     SetStatus(value and "PRD primary resource shown." or "PRD primary resource hidden.")
   end)
 
-  host.SecondaryWidget = CreateInstallerWidget(host, "CheckBox", "Enable class resources and tracked effects", function(_, _, value)
-    local PRD = ns.Modules.PRD
-    PRD:SetQuickSetupValue("showSecondary", value)
-    RefreshPRDControls(host)
-    SetStatus(value and "PRD class resources and tracked effects enabled." or "PRD class resources and tracked effects disabled.")
-  end)
-
   host.ResourceWidgets = {}
   host.DisplayWidgets = {}
   host.ClassResourceWidgets = {}
@@ -2688,7 +2676,6 @@ local function BuildPRDControls(frame, colors)
     host.EnabledWidget,
     host.HealthWidget,
     host.PrimaryWidget,
-    host.SecondaryWidget,
   }
   host.ClassResourceWidgets = {}
   host.TrackedEffectWidgets = {}
@@ -2702,7 +2689,6 @@ local function BuildPRDControls(frame, colors)
     host.EnabledWidget,
     host.HealthWidget,
     host.PrimaryWidget,
-    host.SecondaryWidget,
     host.TextureWidget,
     host.WidthWidget,
     host.BorderWidget,
