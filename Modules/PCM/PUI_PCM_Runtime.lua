@@ -75,24 +75,37 @@ function Runtime:ResolveTrackedSpell(spellID)
   local cached = trackedSpells[spellID]
   if cached then return cached.spellID, cached.known end
 
-  local overrideSpellID = C_Spell.GetOverrideSpell(spellID)
+  local baseSpellID = C_Spell.GetBaseSpell(spellID)
+  if issecretvalue(baseSpellID) or type(baseSpellID) ~= "number" or baseSpellID <= 0 then
+    return nil, false
+  end
+  local overrideSpellID = C_Spell.GetOverrideSpell(baseSpellID)
   if issecretvalue(overrideSpellID) or type(overrideSpellID) ~= "number" or overrideSpellID <= 0 then
     return nil, false
   end
   local exists = C_Spell.DoesSpellExist(overrideSpellID)
   if issecretvalue(exists) or exists ~= true then return nil, false end
 
-  local known = IsTrackedSpellKnown(spellID) or IsTrackedSpellKnown(overrideSpellID)
+  local known = IsTrackedSpellKnown(spellID)
+    or IsTrackedSpellKnown(baseSpellID)
+    or IsTrackedSpellKnown(overrideSpellID)
   if not known then
     for _, entry in ipairs(ns.PCMAbilityCatalog:GetEntries()) do
       local equivalentSpellID
-      if entry.baseSpellID == spellID then
+      if entry.baseSpellID == spellID or entry.baseSpellID == baseSpellID then
         equivalentSpellID = entry.overrideSpellID
-      elseif entry.overrideSpellID == spellID then
+      elseif entry.overrideSpellID == spellID or entry.overrideSpellID == baseSpellID then
         equivalentSpellID = entry.baseSpellID
       end
       if equivalentSpellID and IsTrackedSpellKnown(equivalentSpellID) then
-        local resolvedSpellID = C_Spell.GetOverrideSpell(equivalentSpellID)
+        local equivalentBaseSpellID = C_Spell.GetBaseSpell(equivalentSpellID)
+        if issecretvalue(equivalentBaseSpellID)
+          or type(equivalentBaseSpellID) ~= "number"
+          or equivalentBaseSpellID <= 0
+        then
+          return nil, false
+        end
+        local resolvedSpellID = C_Spell.GetOverrideSpell(equivalentBaseSpellID)
         if not issecretvalue(resolvedSpellID) and type(resolvedSpellID) == "number" and resolvedSpellID > 0 then
           overrideSpellID = resolvedSpellID
           known = true
