@@ -1,5 +1,6 @@
 local _, ns = ...
 local Skins = ns.BlizzardSkins
+local rewardFrames = setmetatable({}, { __mode = "k" })
 
 local layout = {
   Chrome = { "LFDParentFrame", "LFDParentFrame.Inset", "RaidFinderFrame", "RaidFinderFrame.Inset",
@@ -42,7 +43,6 @@ end
 
 local function RefreshQueueDropdown(dropdown)
   if not Skins.CanStyle() then return end
-  Skins.Dropdown(dropdown)
   dropdown.Text:ClearAllPoints()
   dropdown.Text:SetPoint("LEFT", dropdown, "LEFT", 8, 0)
   dropdown.Text:SetPoint("RIGHT", dropdown, "RIGHT", -28, 0)
@@ -62,7 +62,8 @@ local function RefreshRewards(parentFrame)
     Skins.Font(parentFrame.xpLabel)
     ns.Theme.ApplyFont(parentFrame.xpAmount, "body")
     for _, reward in ipairs({ parentFrame:GetChildren() }) do
-      if reward.NameFrame then
+      if reward.NameFrame and not rewardFrames[reward] then
+        rewardFrames[reward] = true
         Skins.Hide(reward.NameFrame)
         local host = Skins.Surface(reward, true, true)
         host:ClearAllPoints()
@@ -81,7 +82,7 @@ local function RefreshCategoryFonts()
   end
 end
 
-local function RefreshGroupFinder(frame)
+local function InstallGroupFinder(frame)
   Skins.Shell(frame)
   RefreshShellArtwork()
   for index = 1, 3 do Skins.Tab(frame["tab" .. index]) end
@@ -109,4 +110,11 @@ local function RefreshGroupFinder(frame)
   end)
 end
 
-Skins.Register("Blizzard_GroupFinder", "PVEFrame", RefreshGroupFinder)
+Skins.Register("Blizzard_GroupFinder", "PVEFrame", {
+  install = InstallGroupFinder,
+  onShow = function()
+    RefreshShellArtwork()
+    RefreshRewards(LFDQueueFrameRandomScrollFrameChildFrame)
+    RefreshRewards(RaidFinderQueueFrameScrollFrameChildFrame)
+  end,
+})
