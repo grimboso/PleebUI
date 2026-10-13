@@ -47,9 +47,9 @@ end
 local function ApplyRuneCooldown(bar, start, duration, runeReady, recharging)
   local owner = bar._puiRuneOwner
   local behavior = owner.secondaryResourceConfig.behavior
-  local showCooldown = behavior.showRechargeTime ~= false
+  local showCooldown = behavior.simpleRunes ~= true and behavior.showRechargeTime ~= false
     and (recharging or behavior.showQueuedRuneTime == true)
-  local showGlow = behavior.showReadyGlow ~= false
+  local showGlow = behavior.simpleRunes ~= true and behavior.showReadyGlow ~= false
   local animationMode = behavior.completionAnimation
   local inactiveAlpha = Secondary.GetInactiveAlpha(owner)
   local fill = bar._fill
@@ -125,7 +125,7 @@ local function ApplyRuneCooldown(bar, start, duration, runeReady, recharging)
   bar._puiRuneStart = start
   bar._puiRuneDuration = duration
   bar._puiRuneTimer:SetTimeFromStart(start, duration)
-  if recharging then
+  if recharging and behavior.simpleRunes ~= true then
     fill:SetTimerDuration(bar._puiRuneTimer)
   else
     fill:SetValue(0)
@@ -168,15 +168,26 @@ local function ApplyRuneResourceCues(owner, readyCount)
     readyCount
   )
 
-  local colorKey = Secondary.PackResourceColor(r, g, b, a)
-
+  local behavior = config.behavior
   for i = 1, 6 do
     local bar = owner.runeBars[i]
+    local sr, sg, sb, sa = r, g, b, a
+    if bar._puiRuneReady ~= true and behavior.customRechargeColor then
+      sr, sg, sb, sa = unpack(behavior.rechargeColor)
+    end
+    local colorKey = Secondary.PackResourceColor(sr, sg, sb, sa)
     if bar._puiResourceColorKey ~= colorKey then
       bar._puiResourceColorKey = colorKey
-      bar._fill:SetStatusBarColor(r, g, b, a)
+      bar._fill:SetStatusBarColor(sr, sg, sb, sa)
       bar._puiGlow:SetVertexColor(r, g, b, 1)
     end
+  end
+  local text = Secondary.PrepareSecondaryText(owner, owner.secondaryBar)
+  if behavior.simpleRunes then
+    local value, show = Secondary.FormatSecondaryText(owner, readyCount, 6)
+    Secondary.SetSecondaryCenterText(text, value, show)
+  else
+    Secondary.SetSecondaryCenterText(text, nil, false)
   end
 end
 
