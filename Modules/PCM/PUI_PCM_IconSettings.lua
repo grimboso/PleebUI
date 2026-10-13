@@ -74,6 +74,42 @@ local function GetProfileRoot(create)
   return root
 end
 
+local function GetResourceCountStore(create)
+  local root = GetProfileRoot(create)
+  if not root then return nil end
+  local counts = root.resourceCounts
+  if not counts then
+    if not create then return nil end
+    counts = {}
+    root.resourceCounts = counts
+  end
+  if root.__puiSpecResourceCountsMigrated ~= true then
+    local legacy = {}
+    for key, value in pairs(counts) do
+      if type(key) == "string" then legacy[key] = value end
+    end
+    if next(legacy) then
+      for _, spec in ipairs(ns.PRDSecondary.Specializations) do
+        local settings = counts[spec.id] or {}
+        counts[spec.id] = settings
+        for key, value in pairs(legacy) do
+          if settings[key] == nil then settings[key] = value end
+        end
+      end
+      for key in pairs(legacy) do counts[key] = nil end
+    end
+    root.__puiSpecResourceCountsMigrated = true
+  end
+  local specID = GetCurrentSpecializationID()
+  if not specID then return nil end
+  local settings = counts[specID]
+  if not settings and create then
+    settings = {}
+    counts[specID] = settings
+  end
+  return settings
+end
+
 local function GetSpecializationStore(settingsFamily, create)
   if settingsFamily ~= SETTINGS_FAMILY_COOLDOWN and settingsFamily ~= SETTINGS_FAMILY_BUFF then
     return nil
@@ -213,8 +249,7 @@ end
 
 function IconSettings:GetInheritedCountVisibility(entry, inherited)
   local resourceKey = ns.PRDSecondary:GetCooldownCountResourceKey(entry)
-  local root = GetProfileRoot(false)
-  local resourceCounts = root and root.resourceCounts
+  local resourceCounts = GetResourceCountStore(false)
   if resourceKey and resourceCounts and resourceCounts[resourceKey] ~= nil then
     return resourceCounts[resourceKey]
   end
@@ -246,8 +281,7 @@ function IconSettings:GetResourceCountEnabled(resourceKey)
     return false
   end
 
-  local root = GetProfileRoot(false)
-  local resourceCounts = root and root.resourceCounts
+  local resourceCounts = GetResourceCountStore(false)
   if resourceCounts and resourceCounts[resourceKey] ~= nil then
     return resourceCounts[resourceKey]
   end
@@ -538,9 +572,8 @@ local function PruneRecord(store, entry, record)
 end
 
 function IconSettings:SetResourceCountEnabled(resourceKey, enabled)
-  local root = GetProfileRoot(true)
-  root.resourceCounts = root.resourceCounts or {}
-  root.resourceCounts[resourceKey] = enabled == true
+  local resourceCounts = GetResourceCountStore(true)
+  resourceCounts[resourceKey] = enabled == true
 
   local store = GetSpecializationStore(SETTINGS_FAMILY_COOLDOWN, false)
   if store then
@@ -614,6 +647,7 @@ end
 
 IconSettings.GetCurrentSpecializationID = P:Def("GetCurrentSpecializationID", GetCurrentSpecializationID)
 GetSettingsFamily = P:Def("GetSettingsFamily", GetSettingsFamily)
+GetResourceCountStore = P:Def("GetResourceCountStore", GetResourceCountStore)
 IconSettings.InvalidateCatalog = P:Def("IconSettings:InvalidateCatalog", IconSettings.InvalidateCatalog)
 IconSettings.InvalidateSettings = P:Def("IconSettings:InvalidateSettings", IconSettings.InvalidateSettings)
 IconSettings.GetViewerEntries = P:Def("IconSettings:GetViewerEntries", IconSettings.GetViewerEntries)
