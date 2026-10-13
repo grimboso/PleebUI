@@ -120,6 +120,7 @@ end
 local function RefreshAchievementControls()
   if not Skins.CanStyle() then return end
   local frame = AchievementFrame
+  for _, tab in ipairs({ frame.Tab1, frame.Tab2, frame.Tab3 }) do Skins.Tab(tab) end
   local dropdown = frame.HeaderDetails.Filters.FilterDropdown
   Skins.Dropdown(dropdown)
   dropdown.Text:ClearAllPoints()
@@ -157,17 +158,13 @@ local function InstallAchievements(frame)
   frame.Header:SetPoint("TOPLEFT", frame, "TOPLEFT", 4, 36)
   frame.Header:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -4, 36)
   frame.Header:SetHeight(32)
-  frame.Header.Title:ClearAllPoints()
-  frame.Header.Title:SetPoint("LEFT", frame.Header, "LEFT", 12, 0)
-  frame.Header.Title:SetPoint("RIGHT", frame.Header, "RIGHT", -180, 0)
-  frame.Header.Title:SetHeight(24)
-  frame.Header.Title:SetMaxLines(1)
-  frame.Header.Title:SetWordWrap(false)
-  frame.Header.Title:SetJustifyH("LEFT")
+  frame.Header.Title:SetAlpha(0)
   frame.Header.Points:ClearAllPoints()
-  frame.Header.Points:SetPoint("RIGHT", frame.Header, "RIGHT", -60, 0)
-  frame.Header.Points:SetHeight(20)
+  frame.Header.Points:SetPoint("CENTER", frame.Header, "CENTER")
+  frame.Header.Points:SetWidth(0)
+  frame.Header.Points:SetHeight(28)
   Skins.Texts(frame.Header)
+  ns.Theme.ApplyFont(frame.Header.Points, "title", 22)
   FadeArtwork(frame.HeaderDetails)
   Skins.Button(frame.HeaderDetails.Back)
   local dropdown = frame.HeaderDetails.Filters.FilterDropdown
