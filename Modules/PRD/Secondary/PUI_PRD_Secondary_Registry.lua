@@ -1413,6 +1413,10 @@ function M:GetSecondaryDefinition()
   if configReady then
     resources, specID = self.secondaryResources, self.secondarySpecID
   else
+    -- Spec events can reach the new profile before its deferred settings refresh.
+    if profile.secondary.__puiSpecResourcesMigrated ~= true then
+      Secondary:NormalizeProfile(profile)
+    end
     resources, specID = ResolveDefinitions()
     resources = resources or {}
   end
