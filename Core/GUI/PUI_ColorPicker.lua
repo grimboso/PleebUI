@@ -352,7 +352,7 @@ function WidgetSkins.ColorPicker(widget)
   local controlSize = geom.controlHeight
   local controlLeft = geom.controlLeft
   local controlRight = geom.controlRight
-  local controlYOffset = geom.controlYOffset
+  local controlYOffset = geom.rowHeight * 0.5 - geom.controlTop - controlSize * 0.5
   local controlGap = geom.controlGap
   local edge = Theme.ControlBorderSize
 
@@ -396,7 +396,7 @@ function WidgetSkins.ColorPicker(widget)
   Theme.ApplyFont(label, "body")
   label:ClearAllPoints()
   Pixel.Point(label, "LEFT", swatchBG, "RIGHT", controlGap, 0)
-  Pixel.Point(label, "RIGHT", frame, "RIGHT", -controlRight, 0)
+  Pixel.Point(label, "RIGHT", frame, "RIGHT", -controlRight, controlYOffset)
   Pixel.Height(label, controlSize)
   label:SetJustifyH("LEFT")
   label:SetJustifyV("MIDDLE")
