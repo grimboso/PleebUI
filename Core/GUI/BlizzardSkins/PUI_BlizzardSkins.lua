@@ -180,7 +180,7 @@ local function RefreshButtonState(button)
   end
   local text = state.label or button:GetFontString()
   if text then
-    local color = enabled and colors.text or colors.disabledText
+    local color = (enabled or state.navigation) and colors.text or colors.disabledText
     text:SetTextColor(color[1], color[2], color[3], color[4])
   end
   if state.arrow then
@@ -528,7 +528,11 @@ end
 
 function Skins.Navigation(bar)
   navigationBars[bar] = true
-  Skins.StripRegions(bar)
+  for _, region in ipairs({ bar:GetRegions() }) do
+    if region:IsObjectType("Texture") then Skins.Hide(region) end
+  end
+  Skins.Chrome(bar)
+  Skins.Surface(bar, false, true)
   -- The level-50 overlay is decorative; a filled surface here covers navigation buttons.
   Skins.Hide(bar.overlay)
   for _, button in ipairs(bar.navList) do
@@ -539,6 +543,10 @@ function Skins.Navigation(bar)
       end
     end
     Skins.Button(button)
+    InstallButtonState(button).navigation = true
+    RefreshButtonState(button)
+    button:GetFontString():SetDrawLayer("OVERLAY", 7)
+    if button.selected then button.selected:SetDrawLayer("BACKGROUND", 1) end
     Skins.Selection(button.selected, 0.06)
     if button.MenuArrowButton then
       local menu = button.MenuArrowButton
