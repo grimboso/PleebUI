@@ -340,7 +340,7 @@ local function PRDPreview_GetResourcePath(definition)
   if definition.isAlternatePower == true then
     return { "PRD", "primary" }
   end
-  return { "PRD", "secondary", PLAYER_CLASS, definition.resourceKey }
+  return { "PRD", "resources", definition.resourceKey }
 end
 
 local function PRDPreview_ConfigureBarInteractions(
@@ -1550,12 +1550,7 @@ local function PRDPreview_RefreshLayout(box)
     local definition = resource.definition
     local config = resource.config
     local maximum = math_floor(tonumber(resource.maximum) or 0)
-    local visible = config ~= nil
-      and maximum > 0
-      and (
-        definition.isAlternatePower == true
-        or profile.secondary.enabled ~= false
-      )
+    local visible = config ~= nil and maximum > 0
 
     if visible then
       local width = config.detached == true
@@ -2626,7 +2621,7 @@ do
     end
 
     PRD_EnsureDefaults(db)
-    if db.secondary.__puiClassResourcesMigrated ~= true then
+    if db.secondary.__puiSpecResourcesMigrated ~= true then
       ns.PRDSecondary:NormalizeProfile(db)
     end
     db.syncCVar = nil
@@ -2732,8 +2727,6 @@ do
       return db.hideHealth ~= true
     elseif key == "showPrimary" then
       return db.hidePrimary ~= true
-    elseif key == "showSecondary" then
-      return s.secondaryCfg.enabled ~= false
     elseif key == "texture" then
       local targets = PRD_GetMainStackAppearanceTargets(s)
       return targets[1].texture or "Pleebar"
@@ -2763,9 +2756,6 @@ do
       db.__puiHidePrimaryUserSet = true
       Addon:ApplyOptionsChange("PRD", { visibility = true })
       Addon:ApplyOptionsChange("PRD", { layout = true })
-    elseif key == "showSecondary" then
-      s.secondaryCfg.enabled = value and true or false
-      Addon:ApplyOptionsChange("PRD", { secondaryRebuild = true, secondaryText = true, layout = true })
     elseif key == "texture" then
       local targets = PRD_GetMainStackAppearanceTargets(s)
       for i = 1, #targets do
@@ -2969,7 +2959,7 @@ do
       targets[resource.key] = { config = config, font = config.text }
       labels[resource.key] = resource.name
     end
-    if ns.PRDSecondary.PlayerClassHasAlternatePower then
+    if ns.PRDSecondary.PlayerClassHasAlternatePower and ns.PRDSecondary.GetPlayerSpecialization() then
       local config = ns.PRDSecondary:GetResourceSettings(state.db, "ALTERNATE_MANA")
       targets.ALTERNATE_MANA = { config = config, font = config.text }
       labels.ALTERNATE_MANA = "Alternate Mana"
@@ -3057,6 +3047,15 @@ do
             end,
             set = function(_, val)
               PRD:SetQuickSetupValue("width", val)
+            end,
+          },
+          resourceGap = {
+            type = "range", name = "Gap between resources", order = 3,
+            min = 0, max = 20, step = 1,
+            get = function() return Clamp(state.secondaryCfg.gap or 2, 0, 20) end,
+            set = function(_, value)
+              state.secondaryCfg.gap = Clamp(value, 0, 20)
+              Addon:ApplyOptionsChange("PRD", { secondaryLayout = true })
             end,
           },
           stackGap = {
@@ -4130,7 +4129,9 @@ do
     local definition = ns.PRDSecondary:GetResourceDefinition(resource.key)
     local settings = ns.PRDSecondary:GetResourceSettings(
       state.db,
-      resource.key
+      resource.key,
+      PLAYER_CLASS,
+      resource.specID
     )
     local anchor = settings.anchor
     local style = settings.style
@@ -4145,7 +4146,7 @@ do
       or nil
 
     local function RefreshStackColorOptions()
-      Addon:NotifyOptionsTreeChanged("PRD", { "PRD", "secondary", PLAYER_CLASS, resource.key })
+      Addon:NotifyOptionsTreeChanged("PRD", { "PRD", "resources", resource.key })
     end
 
     local function BuildStackColorThresholdGroup(index)
@@ -4295,10 +4296,10 @@ do
         name = "Show " .. resource.name,
         order = 1,
         get = function()
-          return PRD:IsSecondaryResourceEnabled(resource.key)
+          return settings.enabled ~= false
         end,
         set = function(_, value)
-          PRD:SetSecondaryResourceEnabled(resource.key, value)
+          PRD:SetSecondaryResourceEnabled(resource.key, value, resource.specID)
         end,
       },
       behaviorGroup = PRD_BuildResourceBehaviorGroup(settings, resource.key),
@@ -4354,7 +4355,7 @@ do
             set = function(_, value)
               settings.width = Clamp(value, 120, 600)
               Addon:ApplyOptionsChange("PRD", { secondaryLayout = true })
-              FrameUtil.RefreshSmartSnapState("PRD_SECONDARY_" .. resource.key)
+              FrameUtil.RefreshSmartSnapState("PRD_SECONDARY_" .. resource.specID .. "_" .. resource.key)
             end,
           },
           point = {
@@ -5015,23 +5016,13 @@ do
       type = "group", name = resource.name, inline = true, order = 0,
       arg = { puiExplicit = true }, args = { enabled = args.enabled },
     }
+    args.feature.args.enabled.name = "Enable"
     if definition.cooldownCountSpellIDs then
-      args.feature.args.enabled = {
-        type = "select",
-        name = definition.countDisplayName,
-        desc = definition.countDisplayDescription,
-        order = 1,
-        values = { ICONS = "Icons only", BAR = "Bar only", BOTH = "Both", NONE = "Nothing" },
-        sorting = { "ICONS", "BAR", "BOTH", "NONE" },
-        get = function()
-          return ns.PRDSecondary:GetResourceDisplayMode(resource.key)
-        end,
-        set = function(_, value)
-          ns.PRDSecondary:SetResourceDisplayMode(resource.key, value)
-        end,
+      args.display.args.showIconCount = {
+        type = "toggle", name = "Show count on spell icons", order = 8,
+        get = function() return ns.PCMIconSettings:GetResourceCountEnabled(resource.key) end,
+        set = function(_, value) ns.PCMIconSettings:SetResourceCountEnabled(resource.key, value) end,
       }
-    else
-      args.feature.args.enabled.name = "Enable"
     end
     args.feature.args.enabled.width, args.feature.args.enabled.relWidth = "relative", 0.5
     args.feature.args.visibility = {
@@ -5098,7 +5089,7 @@ do
     return arranged
   end
 
-  local function PRD_BuildSecondaryArgs()
+  local function PRD_BuildSpecResourceArgs()
     local state = GetPRDState()
     if not state then
       return {
@@ -5107,28 +5098,8 @@ do
         },
       }
     end
-    local resources = ns.PRDSecondary:GetResourceOptionsForClass(PLAYER_CLASS, true)
-    local config = state.secondaryCfg
-    local shared = {
-      type = "group", name = "Secondary resource", inline = true, order = 1,
-      arg = { puiExplicit = true }, args = {
-        enabled = {
-          type = "toggle", name = "Enable resources and tracked effects", order = 0, width = "relative", relWidth = 0.5,
-          get = function() return PRD:GetQuickSetupValue("showSecondary") end,
-          set = function(_, value) PRD:SetQuickSetupValue("showSecondary", value) end,
-        },
-        spacing = {
-          type = "range", name = "Resource spacing", order = 20, width = "relative", relWidth = 0.5,
-          min = 0, max = 20, step = 1,
-          get = function() return Clamp(config.gap or 2, 0, 20) end,
-          set = function(_, value)
-            config.gap = Clamp(value, 0, 20)
-            Addon:ApplyOptionsChange("PRD", { secondaryLayout = true })
-          end,
-        },
-      },
-    }
     local resourceArgs = {}
+    local resources = ns.PRDSecondary:GetResourceOptionsForClass(PLAYER_CLASS)
     for index, resource in ipairs(resources) do
       resourceArgs[resource.key] = {
         type = "group", name = resource.name, order = index,
@@ -5136,16 +5107,13 @@ do
         args = PRD_BuildResourceLayoutArgs(state, resource),
       }
     end
-    return {
-      general = {
-        type = "group", name = "General", order = 1,
-        args = { shared = shared },
-      },
-      [PLAYER_CLASS] = {
-        type = "group", name = PLAYER_CLASS_NAME, order = 2,
-        args = resourceArgs,
-      },
-    }
+    if #resources == 0 then
+      resourceArgs.unavailable = {
+        type = "description", order = 1,
+        name = "There are no class resources or tracked effects for this specialization.",
+      }
+    end
+    return resourceArgs
   end
 
   local function PRDRootProvider()
@@ -5169,12 +5137,12 @@ do
             order = 2,
             args = PRD_BuildPrimaryArgs(),
           },
-          secondary = {
+          resources = {
             type = "group",
-            name = "Secondary resource",
+            name = select(2, ns.PRDSecondary.GetPlayerSpecialization()) or PLAYER_CLASS_NAME,
             order = 3,
             childGroups = "tree",
-            args = PRD_BuildSecondaryArgs(),
+            args = PRD_BuildSpecResourceArgs(),
           },
         },
       }
