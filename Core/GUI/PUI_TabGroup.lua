@@ -62,7 +62,6 @@ local function _PUI_EnsureCustomTabButton(host, index)
 
   btn = CreateFrame("Button", nil, host, "BackdropTemplate")
   btn.__puiTabStripOwned = true
-  btn.__puiUseTextureBackdrop = true
   Pixel.Height(btn, math.max(30, Theme.GetOptionsFontHeight("tab", 12) + 12, Theme.GetOptionsPointerTargetSize(0)))
   btn:EnableMouse(true)
 
@@ -71,11 +70,12 @@ local function _PUI_EnsureCustomTabButton(host, index)
   Pixel.SetTexture(btn.__puiHover, "Interface\\Buttons\\WHITE8x8")
   btn.__puiHover:SetAlpha(0)
 
-  btn.__puiAccent = btn:CreateTexture(nil, "ARTWORK")
-  Pixel.Point(btn.__puiAccent, "TOPLEFT", btn, "TOPLEFT", 0, 0)
-  Pixel.Point(btn.__puiAccent, "BOTTOMLEFT", btn, "BOTTOMLEFT", 0, 0)
-  Pixel.Width(btn.__puiAccent, 3)
-  Pixel.SetTexture(btn.__puiAccent, "Interface\\Buttons\\WHITE8x8")
+  btn.__puiSelection = btn:CreateTexture(nil, "ARTWORK")
+  Theme.MarkCreatedWidgetChrome(btn.__puiSelection)
+  Pixel.SetTexture(btn.__puiSelection, "Interface\\QuestFrame\\UI-QuestLogTitleHighlight")
+  btn.__puiSelection:SetBlendMode("ADD")
+  Pixel.SetVertexColor(btn.__puiSelection, 0.196, 0.388, 0.8, 1)
+  btn.__puiSelection:Hide()
 
   btn.__puiLabel = btn:CreateFontString(nil, "OVERLAY", "GameFontNormal")
   btn.__puiLabel.__puiOptionsFontOwned = true
@@ -133,25 +133,24 @@ _PUI_StyleCustomTabButton = function(btn, isSelected)
   local colors = Theme.GetColors()
   local hovered = btn.__puiHovered == true
   local bg = colors.control
-  local bgAlpha = isSelected and 0.92 or 0.56
+  local bgAlpha = isSelected and 0.82 or 0.42
   local border = isSelected and colors.accent or colors.controlBorder
   local borderAlpha = border[4] * (isSelected and 0.72 or 0.55)
+  local edge = Pixel.GetOnePixel() * UIParent:GetEffectiveScale() / btn:GetEffectiveScale()
 
   Theme.SetSquareBackdrop(btn, {
     bg = { bg[1], bg[2], bg[3], bgAlpha },
     border = { border[1], border[2], border[3], borderAlpha },
-  }, math.max(Theme.GetEdgeSize(), 1))
+  }, edge)
 
   ns.OptionsMotion.SetHoverColor(btn.__puiHover, colors.accent)
   ns.OptionsMotion.Hover(btn, btn.__puiHover, hovered and not btn.__puiDisabled)
 
-  btn.__puiAccent:SetVertexColor(
-    colors.accent[1],
-    colors.accent[2],
-    colors.accent[3],
-    isSelected and 1 or 0
-  )
-  btn.__puiAccent:SetShown(isSelected)
+  -- These insets are one physical pixel at the tab's scale, not UIParent's scale.
+  btn.__puiSelection:ClearAllPoints()
+  btn.__puiSelection:SetPoint("TOPLEFT", btn, "TOPLEFT", edge, -edge)
+  btn.__puiSelection:SetPoint("BOTTOMRIGHT", btn, "BOTTOMRIGHT", -edge, edge)
+  btn.__puiSelection:SetShown(isSelected)
 
   btn.__puiLabel:SetTextColor(
     colors.text[1],
