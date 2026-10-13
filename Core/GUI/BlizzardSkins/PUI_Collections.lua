@@ -68,6 +68,12 @@ local function SkinSetRow(row)
   RepaintSetRow(row)
 end
 
+local function RefreshCollectionRows()
+  Skins.ScrollRows(MountJournal.ScrollBox, SkinCollectionRow, RepaintCollectionRow)
+  Skins.ScrollRows(PetJournal.ScrollBox, SkinCollectionRow, RepaintCollectionRow)
+  Skins.ScrollRows(WardrobeCollectionFrame.SetsCollectionFrame.ListContainer.ScrollBox, SkinSetRow, RepaintSetRow)
+end
+
 local function SkinCollectionSpell(button)
   if not Skins.CanStyle() then return end
   Skins.Hide(button.slotFrameCollected)
@@ -150,9 +156,7 @@ local function InstallCollections(frame)
   Skins.Shell(frame)
   for index = 1, 6 do Skins.Tab(_G["CollectionsJournalTab" .. index]) end
   Skins.Apply(_G, layout)
-  Skins.ScrollRows(MountJournal.ScrollBox, SkinCollectionRow, RepaintCollectionRow)
-  Skins.ScrollRows(PetJournal.ScrollBox, SkinCollectionRow, RepaintCollectionRow)
-  Skins.ScrollRows(WardrobeCollectionFrame.SetsCollectionFrame.ListContainer.ScrollBox, SkinSetRow, RepaintSetRow)
+  RefreshCollectionRows()
   for index = 1, 18 do SkinCollectionSpell(ToyBox.iconsFrame["spellButton" .. index]) end
   RefreshCollectionModels()
   for _, spell in ipairs({ MountJournal.SummonRandomFavoriteSpellFrame.Button,
@@ -185,6 +189,7 @@ end
 Skins.Register("Blizzard_Collections", "CollectionsJournal", {
   install = InstallCollections,
   onShow = function()
+    RefreshCollectionRows()
     RefreshCollectionModels()
     RefreshCampsites()
   end,
