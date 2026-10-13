@@ -135,7 +135,7 @@ local function SetCheckboxChromeColors(chrome, backgroundColor, borderColor)
   end
 end
 
-local function LayoutCheckboxText(widget, visual, visualSize, text)
+local function LayoutCheckboxText(widget, visual, visualSize, text, yOffset)
   local frame = widget.frame
   local geom = Theme.GetWidgetRowGeometry(widget)
   local controlLeft = geom.controlLeft
@@ -164,8 +164,8 @@ local function LayoutCheckboxText(widget, visual, visualSize, text)
     text:SetWordWrap(true)
     text:SetNonSpaceWrap(true)
   else
-    Pixel.Point(text, "LEFT", frame, "LEFT", textLeft, geom.controlYOffset)
-    Pixel.Point(text, "RIGHT", frame, "RIGHT", -controlRight, geom.controlYOffset)
+    Pixel.Point(text, "LEFT", frame, "LEFT", textLeft, yOffset)
+    Pixel.Point(text, "RIGHT", frame, "RIGHT", -controlRight, yOffset)
     Pixel.Height(text, geom.controlHeight)
     text:SetWordWrap(false)
     text:SetNonSpaceWrap(false)
@@ -179,17 +179,18 @@ local function RefreshCheckbox(widget)
 
   local frame, check, anchor, text = ResolveCheckbox(widget)
   local colors = Theme.GetColors()
-  local metrics = Theme.GetControlMetrics(widget)
   local geom = Theme.GetWidgetRowGeometry(widget)
   local checkedColor = colors.accent
   local controlType = ResolveControlType(widget, anchor)
   local isRadio = controlType == "radio"
-  local visualSize = isRadio and 16 or metrics.checkboxBoxSize
+  local visualSize = isRadio and 16 or geom.controlHeight
+  local yOffset = widget.__puiWrapLabel == true and geom.controlYOffset
+    or (geom.rowHeight * 0.5 - geom.controlTop - geom.controlHeight * 0.5)
   local chrome = EnsureCheckboxChrome(widget, frame)
   local value = widget:GetValue()
 
   anchor:ClearAllPoints()
-  Pixel.Point(anchor, "LEFT", frame, "LEFT", geom.controlLeft, geom.controlYOffset)
+  Pixel.Point(anchor, "LEFT", frame, "LEFT", geom.controlLeft, yOffset)
   Pixel.Size(anchor, visualSize, visualSize)
 
   if isRadio then
@@ -223,7 +224,7 @@ local function RefreshCheckbox(widget)
     ClearTexture(anchor)
     ClearTexture(check)
     SetCheckboxChromeShown(chrome, true)
-    LayoutCheckboxChrome(frame, chrome, geom.controlLeft, geom.controlYOffset, visualSize)
+    LayoutCheckboxChrome(frame, chrome, geom.controlLeft, yOffset, visualSize)
 
     local backgroundColor = widget.disabled and colors.disabledControl or colors.control
     local borderColor = widget.disabled and colors.disabledControlBorder or colors.controlBorder
@@ -241,7 +242,7 @@ local function RefreshCheckbox(widget)
       frame,
       "LEFT",
       geom.controlLeft + fillInset,
-      geom.controlYOffset + visualSize * 0.5 - fillInset
+      yOffset + visualSize * 0.5 - fillInset
     )
     Pixel.Point(
       chrome.fill,
@@ -249,7 +250,7 @@ local function RefreshCheckbox(widget)
       frame,
       "LEFT",
       geom.controlLeft + visualSize - fillInset,
-      geom.controlYOffset - visualSize * 0.5 + fillInset
+      yOffset - visualSize * 0.5 + fillInset
     )
     Pixel.SetTexture(chrome.fill, WHITE8)
 
@@ -272,7 +273,7 @@ local function RefreshCheckbox(widget)
     ClearTexture(widget.highlight)
   end
 
-  LayoutCheckboxText(widget, anchor, visualSize, text)
+  LayoutCheckboxText(widget, anchor, visualSize, text, yOffset)
 
   Theme.ApplyFont(text, "body")
   if widget.desc then
