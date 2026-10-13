@@ -97,7 +97,6 @@ local function EnsureInspectShellHost()
   host:SetPoint("BOTTOMRIGHT", InspectFrame, "BOTTOMRIGHT", 0, -40)
 
   ns.Theme.WidgetSkins.Frame(host)
-  ns.BlizzardWindowControls.Install(InspectFrame, host)
 end
 
 local function SetupInspectFrameSkinning()
@@ -106,10 +105,7 @@ local function SetupInspectFrameSkinning()
     return
   end
 
-  if CharacterSheet._inspectInit then
-    EnsureInspectShellHost()
-    return
-  end
+  if CharacterSheet._inspectInit then return end
 
   CharacterSheet._inspectInit = true
 
@@ -327,7 +323,7 @@ end
 
 local function RefreshInspectTheme()
   if InspectFrame and CharacterSheet._inspectInit then
-    EnsureInspectShellHost()
+    ns.Theme.WidgetSkins.Frame(CharacterSheet._inspectHost)
 
     local tr, tg, tb, ta = GetTextColor()
     if InspectFrame.TitleText then
@@ -339,7 +335,10 @@ local function RefreshInspectTheme()
     CS_SkinCloseButton(InspectFrameCloseButton)
     CS_SkinButton(InspectPaperDollFrame and InspectPaperDollFrame.ViewButton)
     CS_SkinButton(InspectPaperDollItemsFrame and InspectPaperDollItemsFrame.InspectTalents)
-    CS_SkinInspectPvPFrame()
+    local pvp = _G.InspectPVPFrame
+    if pvp then
+      for index = 1, 3 do CS_ApplyBackdrop(pvp["TalentSlot" .. index], CS_CONTROL) end
+    end
 
     for i = 1, 3 do
       CS_ApplyBackdrop(_G["InspectFrameTab" .. i], CS_CONTROL)
@@ -354,7 +353,11 @@ local function RefreshInspectTheme()
   end
 end
 
-ns.BlizzardSkins.Register("Blizzard_InspectUI", "InspectFrame", function()
-  SetupInspectFrameSkinning()
-  RefreshInspectTheme()
-end)
+ns.BlizzardSkins.Register("Blizzard_InspectUI", "InspectFrame", {
+  install = function()
+    SetupInspectFrameSkinning()
+    RefreshInspectTheme()
+  end,
+  onTheme = RefreshInspectTheme,
+  controlsRoot = function() return CharacterSheet._inspectHost end,
+})
