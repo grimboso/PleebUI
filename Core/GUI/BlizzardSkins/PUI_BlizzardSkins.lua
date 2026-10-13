@@ -180,6 +180,7 @@ local function RefreshButtonState(button)
   end
   local text = state.label or button:GetFontString()
   if text then
+    if state.navigation then Theme.ApplyFont(text, "button") end
     local color = (enabled or state.navigation) and colors.text or colors.disabledText
     text:SetTextColor(color[1], color[2], color[3], color[4])
   end
@@ -527,36 +528,40 @@ function Skins.TabSystem(system)
 end
 
 function Skins.Navigation(bar)
-  navigationBars[bar] = true
-  for _, region in ipairs({ bar:GetRegions() }) do
-    if region:IsObjectType("Texture") then Skins.Hide(region) end
+  if not navigationBars[bar] then
+    navigationBars[bar] = true
+    for _, region in ipairs({ bar:GetRegions() }) do
+      if region:IsObjectType("Texture") then Skins.Hide(region) end
+    end
+    Skins.Chrome(bar)
+    Skins.Surface(bar, false, true)
+    -- The level-50 overlay is decorative and must not cover the navigation buttons.
+    Skins.Hide(bar.overlay)
+    Skins.Arrow(bar.overflowButton, ">")
   end
-  Skins.Chrome(bar)
-  Skins.Surface(bar, false, true)
-  -- The level-50 overlay is decorative; a filled surface here covers navigation buttons.
-  Skins.Hide(bar.overlay)
   for _, button in ipairs(bar.navList) do
-    for _, region in ipairs({ button:GetRegions() }) do
-      if region:IsObjectType("Texture") and region ~= button.selected
-        and region ~= button:GetHighlightTexture() then
-        Skins.Hide(region)
+    if not styledButtons[button] or not styledButtons[button].navigation then
+      for _, region in ipairs({ button:GetRegions() }) do
+        if region:IsObjectType("Texture") and region ~= button.selected
+          and region ~= button:GetHighlightTexture() then
+          Skins.Hide(region)
+        end
+      end
+      Skins.Button(button)
+      InstallButtonState(button).navigation = true
+      RefreshButtonState(button)
+      button:GetFontString():SetDrawLayer("OVERLAY", 7)
+      if button.selected then button.selected:SetDrawLayer("BACKGROUND", 1) end
+      Skins.Selection(button.selected, 0.06)
+      if button.MenuArrowButton then
+        local menu = button.MenuArrowButton
+        Skins.Button(menu)
+        -- Native hover restores alpha on these borders, so retain empty texture slots.
+        menu:GetNormalTexture():SetTexture(nil)
+        menu:GetPushedTexture():SetTexture(nil)
       end
     end
-    Skins.Button(button)
-    InstallButtonState(button).navigation = true
-    RefreshButtonState(button)
-    button:GetFontString():SetDrawLayer("OVERLAY", 7)
-    if button.selected then button.selected:SetDrawLayer("BACKGROUND", 1) end
-    Skins.Selection(button.selected, 0.06)
-    if button.MenuArrowButton then
-      local menu = button.MenuArrowButton
-      Skins.Button(menu)
-      -- The native hover script restores alpha on these two square borders.
-      menu:GetNormalTexture():SetTexture(nil)
-      menu:GetPushedTexture():SetTexture(nil)
-    end
   end
-  Skins.Arrow(bar.overflowButton, ">")
   Skins.Hook(_G, "NavBar_AddButton", function(nav)
     if navigationBars[nav] and Skins.CanStyle() then Skins.Navigation(nav) end
   end)
