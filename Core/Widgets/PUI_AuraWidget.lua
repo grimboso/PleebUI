@@ -19,7 +19,7 @@ applicationThresholdWork:Hide()
 local RefreshApplicationThresholdSource
 local QueueApplicationThresholdRefresh
 
-AuraWidget.MAX_STACK_COLOR_THRESHOLD = 50
+AuraWidget.MAX_STACK_COLOR_THRESHOLD = 100
 local STACK_COLOR_THRESHOLD_DEFAULT_COLOR = { 1, 0.82, 0, 1 }
 
 local function NormalizeStackColorThreshold(threshold, index)
