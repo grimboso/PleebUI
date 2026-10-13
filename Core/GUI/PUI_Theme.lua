@@ -1890,7 +1890,6 @@ local WHITE8 = "Interface\\Buttons\\WHITE8x8"
 local PUI_CONTROL_METRICS = {
   controlHeight = 20,
   sliderInputWidth = 74,
-  checkboxBoxSize = 18,
   widgetBoxHeight = 56,
   treeGroupWidth = 190,
   inlineGroupPaddingX = 8,
@@ -1902,7 +1901,6 @@ local PUI_CONTROL_METRICS = {
 local PUI_COMPACT_CONTROL_METRICS = {
   controlHeight = 18,
   sliderInputWidth = 58,
-  checkboxBoxSize = 14,
   widgetBoxHeight = 38,
   treeGroupWidth = 190,
   inlineGroupPaddingX = 8,
@@ -1914,7 +1912,6 @@ local PUI_COMPACT_CONTROL_METRICS = {
 local PUI_COMPACT_INLINE_CONTROL_METRICS = {
   controlHeight = 14,
   sliderInputWidth = 58,
-  checkboxBoxSize = 14,
   widgetBoxHeight = 24,
   treeGroupWidth = 190,
   inlineGroupPaddingX = 8,
@@ -2034,7 +2031,6 @@ local function GetOptionsWidgetGeometry(widget)
   metrics.controlHeight = geometry.controlHeight
   metrics.widgetBoxHeight = geometry.rowHeight
   metrics.sliderInputWidth = geometry.valueWidth
-  metrics.checkboxBoxSize = math.max(metrics.checkboxBoxSize, fontHeight)
   optionsWidgetGeometry[density] = { metrics = metrics, geometry = geometry }
   return metrics, geometry
 end
