@@ -731,7 +731,9 @@ local function PRDPreview_LayoutSegments(
     return
   end
 
-  local gap = maximum > 1 and (config.resourceKey == "RUNES" and 2 or PRD_PREVIEW_SEGMENT_GAP) or 0
+  local gap = maximum > 1 and (config.resourceKey == "RUNES" and 2
+    or config.behavior.fiveBarStyle and config.showDividers and ns.PRDSecondary.GetSecondaryDividerSize(config)
+    or PRD_PREVIEW_SEGMENT_GAP) or 0
   local width = bar.status:GetWidth()
   local height = bar.status:GetHeight()
 
@@ -894,7 +896,7 @@ local function PRDPreview_UpdateSecondaryText(
 )
   local text = config and config.text or {}
   local mode = text.mode or "CUR"
-  if bar.__puiPreviewDefinition.adapter == "AURA_STACKS" and (mode == "PCT" or mode == "CURP") then
+  if config.resourceKey ~= "IGNORE_PAIN" and bar.__puiPreviewDefinition.adapter == "AURA_STACKS" and (mode == "PCT" or mode == "CURP") then
     mode = "CUR"
   end
   local show = text.showNumber ~= false and mode ~= "HIDE"
@@ -943,7 +945,7 @@ local function PRDPreview_UpdateSecondaryText(
     value = label .. "  " .. value
   end
   if bar.__puiPreviewDefinition.adapter == "POWER_SECRET"
-    or bar.__puiPreviewDefinition.adapter == "RUNES"
+    or bar.__puiPreviewDefinition.adapter == "RUNES" and config.behavior.simpleRunes ~= true
     or bar.__puiPreviewDefinition.adapter == "SPELL_COUNT"
   then
     show = false
@@ -973,6 +975,9 @@ local function PRDPreview_ApplySegmentValues(
 
     local behavior = config.behavior
     local timed = config.resourceKey == "RUNES" or config.resourceKey == "ESSENCE"
+    if config.resourceKey == "RUNES" and behavior.simpleRunes then
+      value = value >= 1 and 1 or 0
+    end
     current = current + (timed and (value >= 1 and 1 or 0) or value)
 
     segment.fill:SetMinMaxValues(0, 1)
@@ -991,7 +996,7 @@ local function PRDPreview_ApplySegmentValues(
     end
     segment.fill:SetReverseFill(reverse)
     local full = value >= 1
-    local readyGlow = timed and behavior.showReadyGlow ~= false
+    local readyGlow = timed and behavior.showReadyGlow ~= false and behavior.simpleRunes ~= true
     local completionGlow = timed and (config.resourceKey == "ESSENCE" or readyGlow)
     local pulse = completionGlow and full and segment.__puiWasFull == false
     if pulse then
@@ -1006,6 +1011,7 @@ local function PRDPreview_ApplySegmentValues(
     segment.glow:SetAlpha(math_min(1, base + (completionGlow and full and age < duration and strength * (1 - age / duration) or 0)))
 
     if timed
+      and behavior.simpleRunes ~= true
       and behavior.showRechargeTime ~= false
       and (value > 0
         or config.resourceKey == "RUNES"
@@ -1031,7 +1037,19 @@ local function PRDPreview_ApplySegmentValues(
   ns.PRDSecondary.UpdateResourceThresholdCue(bar.frame, config, current)
   local r, g, b, a = ns.PRDSecondary.ResolveResourceCueColor(config, current, unpack(color))
   for index = 1, maximum do
-    bar.segments[index].fill:SetStatusBarColor(r, g, b, a)
+    local sr, sg, sb, sa = r, g, b, a
+    local value = values[index] or 0
+    if config.resourceKey == "RUNES" and value < 1 and config.behavior.customRechargeColor then
+      sr, sg, sb, sa = unpack(config.behavior.rechargeColor)
+    elseif config.behavior.darkenPartial and value > 0 and value < 1 then
+      sr, sg, sb = r * 0.75, g * 0.75, b * 0.75
+    end
+    if config.behavior.colorChargedPoints and index == math_min(3, maximum) then
+      sr, sg, sb, sa = unpack(config.behavior.chargedColor)
+      bar.segments[index].fill:SetValue(1)
+      bar.segments[index].frame:SetAlpha(value > 0 and 1 or 0.5)
+    end
+    bar.segments[index].fill:SetStatusBarColor(sr, sg, sb, sa)
     bar.segments[index].glow:SetVertexColor(r, g, b, 1)
   end
 
@@ -1143,7 +1161,14 @@ local function PRDPreview_UpdateSecondaryBar(
 
   local current
 
-  if adapter == "RUNES" then
+  if config.behavior.fiveBarStyle then
+    current = math_floor((sample or PRDPreview_Triangle(now, 7)) * maximum)
+    for index = 1, 5 do values[index] = index <= current and 1 or 0 end
+    PRDPreview_ApplySegmentValues(bar, values, 5, config, color, now)
+    for index = 1, math_min(5, math_max(0, current - 5)) do
+      bar.segments[index].fill:SetStatusBarColor(unpack(config.behavior.overflowColor))
+    end
+  elseif adapter == "RUNES" then
     PRDPreview_BuildRuneValues(
       now,
       maximum,
@@ -1262,8 +1287,14 @@ local function PRDPreview_UpdateSecondaryBar(
       end
     end
     bar.status:SetStatusBarColor(r, g, b, a)
-    bar.status:SetMinMaxValues(0, maximum)
-    bar.status:SetValue(current)
+    local barMaximum = adapter == "STAGGER" and maximum * config.behavior.fillCeiling / 100 or maximum
+    bar.status:SetMinMaxValues(0, barMaximum)
+    if config.behavior.fillMode == "DURATION" then
+      bar.status:SetMinMaxValues(0, 1)
+      bar.status:SetValue(sample or 1 - (now % 7) / 7)
+    else
+      bar.status:SetValue(current)
+    end
 
   end
 
@@ -1298,7 +1329,8 @@ local function PRDPreview_ConfigureSecondaryMode(
   }
 
   local segmented =
-    adapter == "RUNES"
+    config.behavior.fiveBarStyle
+    or adapter == "RUNES"
     or adapter == "ESSENCE"
     or (
       config.perSegment == true
@@ -1309,12 +1341,12 @@ local function PRDPreview_ConfigureSecondaryMode(
   if segmented then
     PRDPreview_LayoutSegments(
       bar,
-      maximum,
+      config.behavior.fiveBarStyle and 5 or maximum,
       config,
       config.texture,
       color
     )
-    if adapter == "RUNES" then
+    if adapter == "RUNES" or config.behavior.fiveBarStyle then
       PRDPreview_HideDividers(bar, 0)
     else
       PRDPreview_LayoutDividers(bar, maximum, config)
@@ -1325,13 +1357,13 @@ local function PRDPreview_ConfigureSecondaryMode(
     end
   else
     PRDPreview_SetContinuousMode(bar)
-    PRDPreview_LayoutDividers(
-      bar,
-      maximum,
-      config
-    )
+    if config.behavior.fillMode == "DURATION" then
+      PRDPreview_HideDividers(bar, 0)
+    else
+      PRDPreview_LayoutDividers(bar, maximum, config)
+    end
 
-    if adapter == "AURA_STACKS" then
+    if adapter == "AURA_STACKS" and config.behavior.fillMode ~= "DURATION" then
       PRDPreview_ConfigureStackColorSegments(bar, maximum, config)
     elseif bar.__puiStackColorParts then
       PRDPreview_ConfigureStackColorSegments(bar, maximum, nil)
@@ -3844,14 +3876,57 @@ do
         },
       }
 
+      if resourceKey == "ESSENCE" then
+        args.darkenPartial = {
+          type = "toggle", name = "Darken recharging Essence", order = 6,
+          get = function() return behavior.darkenPartial == true end,
+          set = function(_, value)
+            behavior.darkenPartial = value
+            Addon:ApplyOptionsChange("PRD", { secondaryUpdate = true })
+          end,
+        }
+      end
       if resourceKey == "RUNES" then
+        args.simpleRunes = {
+          type = "toggle", name = "Simple runes", order = 0,
+          desc = "Shows the ready rune count in the center, without recharge fill, timers or ready effects.",
+          get = function() return behavior.simpleRunes == true end,
+          set = function(_, value)
+            behavior.simpleRunes = value
+            Addon:ApplyOptionsChange("PRD", { secondaryAppearance = true })
+          end,
+        }
+        for _, key in ipairs({ "showRechargeTime", "showReadyGlow", "completionAnimation" }) do
+          args[key].disabled = function() return behavior.simpleRunes == true end
+        end
+        args.completionAnimation.disabled = function()
+          return behavior.simpleRunes == true or behavior.showReadyGlow == false
+        end
+        args.customRechargeColor = {
+          type = "toggle", name = "Custom recharge color", order = 6,
+          disabled = function() return behavior.simpleRunes == true end,
+          get = function() return behavior.customRechargeColor == true end,
+          set = function(_, value)
+            behavior.customRechargeColor = value
+            Addon:ApplyOptionsChange("PRD", { secondaryUpdate = true })
+          end,
+        }
+        args.rechargeColor = {
+          type = "color", name = "Recharge color", hasAlpha = true, order = 7,
+          disabled = function() return behavior.simpleRunes == true or behavior.customRechargeColor ~= true end,
+          get = function() return unpack(behavior.rechargeColor) end,
+          set = function(_, r, g, b, a)
+            behavior.rechargeColor = { r, g, b, a }
+            Addon:ApplyOptionsChange("PRD", { secondaryUpdate = true })
+          end,
+        }
         args.showQueuedRuneTime = {
           type = "toggle",
           name = "Show queued rune timers",
           desc = "Also show the estimated time until ready for runes waiting to recharge. When disabled, timers appear only on runes actively recharging.",
           order = 1.5,
           arg = { puiDisabledReason = "Enable Show recharge time first." },
-          disabled = function() return behavior.showRechargeTime == false end,
+          disabled = function() return behavior.simpleRunes == true or behavior.showRechargeTime == false end,
           get = function()
             return behavior.showQueuedRuneTime == true
           end,
@@ -3868,6 +3943,7 @@ do
           name = "Recharge direction",
           order = 5,
           values = RESOURCE_RECHARGE_DIRECTION_VALUES,
+          disabled = resourceKey == "RUNES" and function() return behavior.simpleRunes == true end or nil,
           get = function()
             return behavior.rechargeDirection or "LTR"
           end,
@@ -3892,6 +3968,16 @@ do
         order = 5,
         inline = true,
         args = {
+          fillCeiling = {
+            type = "range", name = "Fill ceiling", order = 5,
+            desc = "Stagger fills the bar at this percentage of maximum health. Severity colors still use the actual health percentage.",
+            min = 0.01, max = 5, step = 0.01, isPercent = true,
+            get = function() return behavior.fillCeiling / 100 end,
+            set = function(_, value)
+              behavior.fillCeiling = math_floor(Clamp(value, 0.01, 5) * 100 + 0.5)
+              Addon:ApplyOptionsChange("PRD", { secondaryUpdate = true })
+            end,
+          },
           useSeverityColors = {
             type = "toggle",
             name = "Use severity colors",
@@ -3962,7 +4048,82 @@ do
       }
     end
 
-    return nil
+    local args = {}
+    if resourceKey == "COMBO_POINTS" and PLAYER_CLASS == "ROGUE" then
+      args.colorChargedPoints = {
+        type = "toggle", name = "Color charged combo points", order = 1,
+        desc = "Highlights charged points in the segmented display, including points that are not filled yet.",
+        disabled = function() return settings.perSegment ~= true end,
+        get = function() return behavior.colorChargedPoints == true end,
+        set = function(_, value)
+          behavior.colorChargedPoints = value
+          Addon:ApplyOptionsChange("PRD", { secondaryAppearance = true })
+        end,
+      }
+      args.chargedColor = {
+        type = "color", name = "Charged point color", hasAlpha = true, order = 2,
+        disabled = function() return settings.perSegment ~= true or behavior.colorChargedPoints ~= true end,
+        get = function() return unpack(behavior.chargedColor) end,
+        set = function(_, r, g, b, a)
+          behavior.chargedColor = { r, g, b, a }
+          Addon:ApplyOptionsChange("PRD", { secondaryAppearance = true })
+        end,
+      }
+    elseif resourceKey == "SOUL_SHARDS" then
+      args.darkenPartial = {
+        type = "toggle", name = "Darken partial shards", order = 1,
+        desc = "Dims incomplete Soul Shards in the segmented display for Destruction.",
+        disabled = function() return settings.perSegment ~= true end,
+        get = function() return behavior.darkenPartial == true end,
+        set = function(_, value)
+          behavior.darkenPartial = value
+          Addon:ApplyOptionsChange("PRD", { secondaryAppearance = true })
+        end,
+      }
+    elseif resourceKey == "MAELSTROM_WEAPON" then
+      args.fiveBarStyle = {
+        type = "toggle", name = "Five-bar display", order = 1,
+        desc = "Stacks 1 to 5 fill five segments. Stacks 6 to 10 recolor them from left to right.",
+        get = function() return behavior.fiveBarStyle == true end,
+        set = function(_, value)
+          behavior.fiveBarStyle = value
+          Addon:ApplyOptionsChange("PRD", { secondaryAppearance = true })
+        end,
+      }
+      args.overflowColor = {
+        type = "color", name = "Overflow color", hasAlpha = true, order = 2,
+        disabled = function() return behavior.fiveBarStyle ~= true end,
+        get = function() return unpack(behavior.overflowColor) end,
+        set = function(_, r, g, b, a)
+          behavior.overflowColor = { r, g, b, a }
+          Addon:ApplyOptionsChange("PRD", { secondaryAppearance = true })
+        end,
+      }
+    elseif resourceKey == "IRONFUR" then
+      args.stackCeiling = {
+        type = "range", name = "Stack ceiling", order = 2,
+        desc = "The stack count that fills the bar in Stack count mode.",
+        min = 1, max = 50, step = 1,
+        disabled = function() return behavior.fillMode ~= "STACKS" end,
+        get = function() return behavior.stackCeiling end,
+        set = function(_, value)
+          behavior.stackCeiling = value
+          Addon:ApplyOptionsChange("PRD", { secondaryRebuild = true })
+        end,
+      }
+      args.fillMode = {
+        type = "select", name = "Bar fill", order = 1,
+        values = { DURATION = "Remaining duration", STACKS = "Stack count" },
+        get = function() return behavior.fillMode end,
+        set = function(_, value)
+          behavior.fillMode = value
+          Addon:ApplyOptionsChange("PRD", { secondaryAppearance = true })
+        end,
+      }
+    end
+    if next(args) then
+      return { type = "group", name = "Resource behaviour", order = 5, inline = true, args = args }
+    end
   end
 
   local function PRD_BuildResourceLayoutArgs(state, resource)
@@ -3977,6 +4138,7 @@ do
     local cues = settings.cues
     local supportsNumericCues = ns.PRDSecondary:ResourceSupportsNumericCues(resource.key)
     local applicationCountdownMax = ns.PRDSecondary:GetApplicationCountdownMax(resource.key)
+    local stackColorMaximum = math.max(50, tonumber(definition.max) or 0)
     local stackColorThresholds = resource.category == "TRACKED_EFFECT"
       and ns.PRDSecondary:ResourceSupportsStackColorShifts(resource.key)
       and AuraWidget.EnsureStackColorThresholds(settings)
@@ -3991,7 +4153,7 @@ do
 
       return {
         type = "group",
-        name = "Stack color shift " .. index,
+        name = (resource.key == "IGNORE_PAIN" and "Percent color shift " or "Stack color shift ") .. index,
         order = index,
         inline = true,
         args = {
@@ -4009,7 +4171,7 @@ do
           },
           value = {
             type = "input",
-            name = "Start at stack",
+            name = resource.key == "IGNORE_PAIN" and "Start at percent" or "Start at stack",
             order = 2,
             arg = { puiDisabledReason = "Enable this color shift first." },
             disabled = function()
@@ -4017,10 +4179,10 @@ do
             end,
             validate = function(_, value)
               local stack = tonumber(value)
-              if stack and stack >= 1 and stack <= AuraWidget.MAX_STACK_COLOR_THRESHOLD and stack == math.floor(stack) then
+              if stack and stack >= 1 and stack <= stackColorMaximum and stack == math.floor(stack) then
                 return true
               end
-              return "Enter a whole stack value from 1 to " .. AuraWidget.MAX_STACK_COLOR_THRESHOLD .. "."
+              return "Enter a whole stack value from 1 to " .. stackColorMaximum .. "."
             end,
             get = function()
               return tostring(threshold.value or 1)
@@ -4100,12 +4262,12 @@ do
 
       args.add = {
         type = "execute",
-        name = "Add stack color shift",
+        name = resource.key == "IGNORE_PAIN" and "Add percent color shift" or "Add stack color shift",
         order = #stackColorThresholds + 1,
         arg = { puiDisabledReason = "The limit is 30 color shifts. Delete a shift to add another." },
         disabled = #stackColorThresholds >= 30,
         func = function()
-          if AuraWidget.AddStackColorThreshold(settings, AuraWidget.MAX_STACK_COLOR_THRESHOLD) then
+          if AuraWidget.AddStackColorThreshold(settings, stackColorMaximum) then
             Addon:ApplyOptionsChange("PRD", { secondaryAppearance = true })
             RefreshStackColorOptions()
           end
@@ -4298,7 +4460,7 @@ do
           },
           stackTickValues = {
             type = "input",
-            name = "Stack ticks",
+            name = resource.key == "IGNORE_PAIN" and "Percent ticks" or "Stack ticks",
             desc = "Use All for every stack, or enter specific stack values separated by commas.",
             order = 2.5,
             arg = { puiDisabledReason = "Enable Show tick separators first." },
@@ -4444,7 +4606,7 @@ do
           },
           stackColorShifts = {
             type = "group",
-            name = "Stack color shifts",
+            name = resource.key == "IGNORE_PAIN" and "Percent color shifts" or "Stack color shifts",
             order = 3,
             inline = true,
             args = BuildStackColorThresholdArgs(),
@@ -4533,11 +4695,12 @@ do
             type = "select",
             name = "Text format",
             order = 1,
-            values = resource.category == "TRACKED_EFFECT"
+            values = resource.key == "IGNORE_PAIN" and { PCT = "Percent of cap (60%)", HIDE = "Hide" }
+              or resource.category == "TRACKED_EFFECT"
               and { CUR = "Current (3)", BOTH = "Current / Maximum (3 / 5)", HIDE = "Hide" }
               or { CUR = "Current (3)", BOTH = "Current / Maximum (3 / 5)", CURP = "Current / Percent (3 / 60%)", PCT = "Percent (60%)", HIDE = "Hide" },
             get = function()
-              if resource.category == "TRACKED_EFFECT" and (text.mode == "CURP" or text.mode == "PCT") then
+              if resource.key ~= "IGNORE_PAIN" and resource.category == "TRACKED_EFFECT" and (text.mode == "CURP" or text.mode == "PCT") then
                 return "CUR"
               end
               return text.mode or "CUR"
@@ -4883,8 +5046,8 @@ do
     args.enabled = nil
     local arranged = PRD_ArrangePresentationArgs(args, "layout")
     if resource.key == "RUNES" then
-      arranged.textGroup.args.textMode = nil
-      arranged.textGroup.name = "Timer font"
+      arranged.textGroup.name = "Rune text"
+      arranged.textGroup.args.textMode.disabled = function() return settings.behavior.simpleRunes ~= true end
     elseif definition.adapter == "SPELL_COUNT" then
       arranged.textGroup = nil
     end
@@ -4911,6 +5074,18 @@ do
     if not supportsNumericCues then
       for _, key in ipairs({ "desaturateMode", "desaturateThreshold", "glowMode", "glowThreshold", "glowType", "glowColor" }) do
         arranged.cueGroup.args[key] = nil
+      end
+    end
+    if resource.key == "IRONFUR" then
+      arranged.display.args.showDividers.disabled = function() return settings.behavior.fillMode == "DURATION" end
+      arranged.display.args.stackTickValues.disabled = function() return settings.behavior.fillMode == "DURATION" end
+      if arranged.stackColorsGroup then
+        arranged.stackColorsGroup.disabled = function() return settings.behavior.fillMode == "DURATION" end
+      end
+    elseif resource.key == "MAELSTROM_WEAPON" then
+      arranged.display.args.stackTickValues.disabled = function() return settings.behavior.fiveBarStyle == true end
+      if arranged.stackColorsGroup then
+        arranged.stackColorsGroup.disabled = function() return settings.behavior.fiveBarStyle == true end
       end
     end
     if not stackColorThresholds then
