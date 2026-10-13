@@ -1,7 +1,8 @@
 local _, ns = ...
 local Skins = ns.BlizzardSkins
+local mapOverlays = setmetatable({}, { __mode = "k" })
 
-local function RefreshMap(frame)
+local function InstallMap(frame)
   Skins.Shell(frame.BorderFrame, frame)
   Skins.Navigation(frame.NavBar)
   Skins.Arrow(frame.BorderFrame.MaximizeMinimizeFrame.MaximizeButton, "+")
@@ -15,8 +16,15 @@ local function RefreshMap(frame)
   Skins.Apply(frame, {
     Panel = { "ScrollContainer" },
   })
+end
+
+local function RefreshMapArtwork(frame)
+  Skins.Chrome(frame.BorderFrame)
+  Skins.Chrome(frame.BorderFrame.Inset)
+  Skins.Navigation(frame.NavBar)
   for _, overlay in ipairs(frame.overlayFrames) do
-    if overlay:IsObjectType("DropdownButton") then
+    if not mapOverlays[overlay] and overlay:IsObjectType("DropdownButton") then
+      mapOverlays[overlay] = true
       if overlay.Icon then
         Skins.IconButton(overlay, overlay.Icon)
       else
@@ -30,13 +38,13 @@ end
 -- Repaint mode changes after the native button action has finished instead.
 Skins.Register("Blizzard_WorldMap", "WorldMapFrame", {
   install = function(frame)
+    InstallMap(frame)
     local function RefreshAfterClick()
-      if Skins.CanStyle() then RefreshMap(frame) end
+      if Skins.CanStyle() then RefreshMapArtwork(frame) end
     end
     local buttons = frame.BorderFrame.MaximizeMinimizeFrame
     buttons.MaximizeButton:HookScript("OnClick", RefreshAfterClick)
     buttons.MinimizeButton:HookScript("OnClick", RefreshAfterClick)
   end,
-  onShow = RefreshMap,
-  onTheme = RefreshMap,
+  onShow = RefreshMapArtwork,
 })
