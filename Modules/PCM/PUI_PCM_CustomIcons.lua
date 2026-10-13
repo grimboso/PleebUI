@@ -19,6 +19,7 @@ local Round = ns.Pixel.Round
 local LCG = LibStub("LibCustomGlow-1.0")
 
 local records = {}
+local pendingAuraTracks = {}
 local retiredCandidates = { includeSpellIDs = { [0] = true } }
 local STATE_GLOW_KEY = "PUI_CustomIconState"
 local BLIZZARD_BORDER_TEXTURE = "Interface\\Buttons\\UI-Quickslot2"
@@ -695,6 +696,15 @@ local function ResolveButtonAuraSpellIDs(record, cueOnly)
 
   local spellIDs = {}
   ns.PCMCatalog:AddAuraCandidates(spellIDs, spellID)
+  if record.kind ~= "aura"
+    and (cfg.buffGlowSpellID == nil or tonumber(cfg.buffGlowSpellID) == tonumber(cfg.trackedSpellID))
+  then
+    local baseSpellID = C_Spell.GetBaseSpell(spellID)
+    if not issecretvalue(baseSpellID) and type(baseSpellID) == "number" and baseSpellID > 0 then
+      ns.PCMCatalog:AddAuraCandidates(spellIDs, baseSpellID)
+    end
+    if record.spellID then ns.PCMCatalog:AddAuraCandidates(spellIDs, record.spellID) end
+  end
   return spellIDs
 end
 
@@ -769,10 +779,24 @@ local function ConfigureActiveAuraTrack(record)
     return
   end
   if record.runtimeEnabled ~= true or record.icon.activeAuraEnabled ~= true then
+    pendingAuraTracks[record] = nil
+    if next(pendingAuraTracks) == nil then
+      ns.PCMRuntime:SetSubscriberEnabled("CustomIconAuraTracks", false)
+    end
     if record.activeAuraSlot then
       AuraSlotDriver:SetSlotActive(record.activeAuraSlot, false)
     end
     return
+  end
+
+  if ns.PCMRuntime:IsAuraRestricted() then
+    pendingAuraTracks[record] = true
+    ns.PCMRuntime:SetSubscriberEnabled("CustomIconAuraTracks", true)
+    return
+  end
+  pendingAuraTracks[record] = nil
+  if next(pendingAuraTracks) == nil then
+    ns.PCMRuntime:SetSubscriberEnabled("CustomIconAuraTracks", false)
   end
 
   local spellIDs = ResolveButtonAuraSpellIDs(record, false)
@@ -784,7 +808,6 @@ local function ConfigureActiveAuraTrack(record)
   end
 
   if not record.activeAuraSlot then
-    if ns.PCMRuntime:IsAuraRestricted() then return end
     record.activeAuraSlot = AuraSlotDriver:CreateSlot("player", "HELPFUL|PLAYER", {
       candidateFilters = { includeSpellIDs = spellIDs },
       templateNames = { "PUI_AuraApplicationDurationTemplate" },
@@ -969,8 +992,10 @@ end
 function CustomIcons:UpdateSpellIdentity(key, spellID)
   local record = records[key]
   if not record or not record.runtimeEnabled then return end
+  local changed = record.spellID ~= spellID
   record.spellID = spellID
   record.parts.icon:SetTexture(C_Spell.GetSpellTexture(spellID))
+  if changed then ConfigureActiveAuraTrack(record) end
 end
 
 function CustomIcons:UpdateCooldown(key, duration, active)
@@ -1381,6 +1406,10 @@ function CustomIcons:Release(key)
   local record = records[key]
   if not record then return end
   record.runtimeEnabled = false
+  pendingAuraTracks[record] = nil
+  if next(pendingAuraTracks) == nil then
+    ns.PCMRuntime:SetSubscriberEnabled("CustomIconAuraTracks", false)
+  end
   ns.PCMCustomDurationSource:Detach(record)
   ClearGroundIcon(record)
   StopStateGlow(record)
@@ -1409,6 +1438,18 @@ function CustomIcons:Delete(key)
   FrameUtil:UnregisterMover(record.moverKey)
   records[key] = nil
 end
+
+ns.PCMRuntime:RegisterSubscriber("CustomIconAuraTracks", {
+  OnLifecycleEvent = function(event)
+    if event ~= "PLAYER_REGEN_ENABLED" and event ~= "ADDON_RESTRICTION_STATE_CHANGED" then return end
+    if ns.PCMRuntime:IsAuraRestricted() then return end
+    for record in pairs(pendingAuraTracks) do
+      pendingAuraTracks[record] = nil
+      if record.runtimeEnabled then ConfigureActiveAuraTrack(record) end
+    end
+    ns.PCMRuntime:SetSubscriberEnabled("CustomIconAuraTracks", false)
+  end,
+})
 
 ns.PCMCatalog:RegisterListener(CustomIcons, function()
   for _, record in pairs(records) do
