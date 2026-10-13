@@ -114,8 +114,14 @@ function Controls.Install(frame, visualRoot, name)
     local drag = CreateFrame("Frame", nil, frame)
     state.drag = drag
     controlFrames[drag] = true
-    drag:SetPoint("TOPLEFT", frame, "TOPLEFT", 60, -4)
-    drag:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -80, -4)
+    if frame == _G.WorldMapFrame then
+      drag:SetPoint("LEFT", frame.BorderFrame.Tutorial, "RIGHT", 8, 0)
+      drag:SetPoint("RIGHT", frame, "RIGHT", -80, 0)
+      drag:SetPoint("TOP", frame, "TOP", 0, -4)
+    else
+      drag:SetPoint("TOPLEFT", frame, "TOPLEFT", 60, -4)
+      drag:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -80, -4)
+    end
     drag:SetHeight(24)
     drag:EnableMouse(true)
     drag:RegisterForDrag("LeftButton")
