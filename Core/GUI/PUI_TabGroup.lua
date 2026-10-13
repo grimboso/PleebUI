@@ -72,9 +72,9 @@ local function _PUI_EnsureCustomTabButton(host, index)
   btn.__puiHover:SetAlpha(0)
 
   btn.__puiAccent = btn:CreateTexture(nil, "ARTWORK")
-  Pixel.Point(btn.__puiAccent, "BOTTOMLEFT", btn, "BOTTOMLEFT", 7, 0)
-  Pixel.Point(btn.__puiAccent, "BOTTOMRIGHT", btn, "BOTTOMRIGHT", -7, 0)
-  Pixel.Height(btn.__puiAccent, 2)
+  Pixel.Point(btn.__puiAccent, "TOPLEFT", btn, "TOPLEFT", 0, 0)
+  Pixel.Point(btn.__puiAccent, "BOTTOMLEFT", btn, "BOTTOMLEFT", 0, 0)
+  Pixel.Width(btn.__puiAccent, 3)
   Pixel.SetTexture(btn.__puiAccent, "Interface\\Buttons\\WHITE8x8")
 
   btn.__puiLabel = btn:CreateFontString(nil, "OVERLAY", "GameFontNormal")
@@ -133,9 +133,9 @@ _PUI_StyleCustomTabButton = function(btn, isSelected)
   local colors = Theme.GetColors()
   local hovered = btn.__puiHovered == true
   local bg = colors.control
-  local bgAlpha = isSelected and 0.94 or 0.62
-  local borderAlpha = isSelected and 0.90 or 0.36
-  local border = isSelected and colors.accent or colors.border
+  local bgAlpha = isSelected and 0.92 or 0.56
+  local border = isSelected and colors.accent or colors.controlBorder
+  local borderAlpha = border[4] * (isSelected and 0.72 or 0.55)
 
   Theme.SetSquareBackdrop(btn, {
     bg = { bg[1], bg[2], bg[3], bgAlpha },
@@ -157,7 +157,7 @@ _PUI_StyleCustomTabButton = function(btn, isSelected)
     colors.text[1],
     colors.text[2],
     colors.text[3],
-    isSelected and 1 or 0.86
+    isSelected and colors.text[4] or colors.text[4] * 0.86
   )
 end
 
