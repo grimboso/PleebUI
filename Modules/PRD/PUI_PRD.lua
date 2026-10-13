@@ -138,8 +138,6 @@ local defaults = {
       useCustomColor        = false,
       useBlizzardPowerColor = true,
       customColor           = { 1, 1, 1, 1 },
-      visibilityMode        = "ALWAYS",
-      resourceEnabled       = {},
       resourceSettings      = {},
       inactiveAlpha         = 0.15,
       showDividers          = true,
@@ -241,12 +239,6 @@ local function PRD_ApplySmartSnapDesign(appearance, design)
   if type(design.backgroundColor) == "table" then
     style.bgColor = PRD_CopySmartSnapValue(design.backgroundColor)
   end
-end
-
-local function PRD_GetSecondaryAppearanceOwner(profile, resourceKey)
-  local secondary = profile.secondary
-  local settings = secondary.resourceSettings[resourceKey]
-  return settings
 end
 
 local function PRD_BuildCombatBarSmartSnap(owner, getState)
@@ -1094,7 +1086,7 @@ function M:OnPrimaryResourceChanged(event, unit)
       or activeOptionsPath[2] == "secondary"
     )
   then
-    targetOptionsPath = { "PRD", activeOptionsPath[2] }
+    targetOptionsPath = activeOptionsPath
   end
 
   ns.Addon:NotifyOptionsTreeChanged("PRD", targetOptionsPath)
@@ -1455,8 +1447,7 @@ function M:IsSecondaryResourceEnabled(resourceKey)
     return false
   end
 
-  local resourceEnabled = db.secondary.resourceEnabled
-  return not resourceEnabled or resourceEnabled[resourceKey] ~= false
+  return db.secondary.resourceSettings[PLAYER_CLASS][resourceKey].enabled ~= false
 end
 
 function M:SetSecondaryResourceEnabled(resourceKey, enabled)
@@ -1465,8 +1456,7 @@ function M:SetSecondaryResourceEnabled(resourceKey, enabled)
     return false
   end
 
-  db.secondary.resourceEnabled = db.secondary.resourceEnabled or {}
-  db.secondary.resourceEnabled[resourceKey] = enabled and true or false
+  db.secondary.resourceSettings[PLAYER_CLASS][resourceKey].enabled = enabled and true or false
   self:InvalidateRuntimeConfig()
   self:NormalizeStackOrder()
   self:RequestRefresh({ secondaryRebuild = true, secondaryText = true, layout = true })
@@ -1635,7 +1625,7 @@ function M:ApplyLayout()
 
     record.frame = resource.frame
     record.height = Pixel.Round(config and config.height or 15)
-    record.hidden = not secondaryOn
+    record.hidden = not secondaryOn or resource.visible ~= true
     record.detached = config and config.detached == true or false
   end
 
@@ -1755,7 +1745,7 @@ function M:ApplyLayout()
     local record = resourceRecords[resource.definition.resourceKey]
 
     if frame and config and config.detached == true then
-      if not secondaryOn then
+      if record.hidden then
         frame:Hide()
       else
         local resourceAnchor = config.anchor
@@ -1789,7 +1779,7 @@ function M:ApplyLayout()
   for index = 1, #resources do
     local resource = resources[index]
     if resource.frame then
-      resource.frame:SetShown(secondaryOn)
+      resource.frame:SetShown(secondaryOn and resource.visible == true)
     end
   end
 
@@ -2291,7 +2281,7 @@ function M:AttachMover()
         return
       end
 
-      local settings = p.secondary.resourceSettings[resourceKey]
+      local settings = p.secondary.resourceSettings[PLAYER_CLASS][resourceKey]
       SaveAnchor(movedFrame, settings.anchor, false)
       self:InvalidateRuntimeConfig()
     end
@@ -2309,7 +2299,7 @@ function M:AttachMover()
           return
         end
 
-        local settings = p.secondary.resourceSettings[resourceKey]
+        local settings = p.secondary.resourceSettings[PLAYER_CLASS][resourceKey]
         local anchor = settings.anchor
 
         anchor.point = "CENTER"
@@ -2321,15 +2311,15 @@ function M:AttachMover()
         movedFrame:SetPoint(anchor.point, UIParent, anchor.point, anchor.x, anchor.y)
       end,
 
-      optionsString = "PRD,secondary",
+      optionsString = "PRD,secondary," .. PLAYER_CLASS .. "," .. resourceKey,
       quickSettings = BuildQuickSettings,
       smartSnap = PRD_BuildCombatBarSmartSnap(self, function()
         local p = GetProfile()
         if not p then return nil end
-        local settings = p.secondary.resourceSettings[resourceKey]
+        local settings = p.secondary.resourceSettings[PLAYER_CLASS][resourceKey]
         return {
           widthOwner = settings,
-          appearance = PRD_GetSecondaryAppearanceOwner(p, resourceKey),
+          appearance = settings,
           sizeFlags = { layout = true, secondaryLayout = true, mover = true },
           designFlags = { secondaryAppearance = true, secondaryLayout = true },
         }
@@ -2340,7 +2330,9 @@ function M:AttachMover()
   if self.secondaryUsesCustom == true then
     for index = 1, #secondaryResources do
       local resource = secondaryResources[index]
-      RegisterSecondaryResourceMover(resource.frame, resource.config, index)
+      if resource.visible then
+        RegisterSecondaryResourceMover(resource.frame, resource.config, index)
+      end
     end
   end
 

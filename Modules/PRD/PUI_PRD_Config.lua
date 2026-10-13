@@ -10,7 +10,7 @@ local AuraWidget = ns.AuraWidget
 local LSM = ns.LSM
 
 local P = ns.Pleebug:DropIn({}, { name = "PRD_Config" })
-local _, PLAYER_CLASS = UnitClass("player")
+local PLAYER_CLASS_NAME, PLAYER_CLASS = UnitClass("player")
 local USE_NATIVE_APPLICATION_THRESHOLDS = select(4, GetBuildInfo()) >= 120105
 
 local PRDPreview = {}
@@ -169,11 +169,6 @@ local function PRDPreview_ConfigureStackColorSegments(bar, maximum, config)
     RAID_CLASS_COLORS[PLAYER_CLASS],
     maximum
   )
-end
-
-local function PRD_HasMultipleSecondaryResources(resourceOptions)
-  resourceOptions = resourceOptions or ns.PRDSecondary:GetResourceOptionsForClass(PLAYER_CLASS)
-  return #resourceOptions > 1
 end
 
 local function PRDPreview_Navigate(box, path, sectionKey, optionKey)
@@ -345,10 +340,7 @@ local function PRDPreview_GetResourcePath(definition)
   if definition.isAlternatePower == true then
     return { "PRD", "primary" }
   end
-  if PRD_HasMultipleSecondaryResources() then
-    return { "PRD", "secondary", definition.resourceKey }
-  end
-  return { "PRD", "secondary" }
+  return { "PRD", "secondary", PLAYER_CLASS, definition.resourceKey }
 end
 
 local function PRDPreview_ConfigureBarInteractions(
@@ -686,25 +678,10 @@ local function PRDPreview_LayoutDividers(bar, maximum, config)
     return
   end
 
-  local tickValues = {}
-  local pattern = config.stackTickValues or "ALL"
-  if pattern:upper():find("ALL", 1, true) then
-    for value = 1, maximum - 1 do
-      tickValues[#tickValues + 1] = value
-    end
-  else
-    local seen = {}
-    for token in pattern:gmatch("[^,]+") do
-      local value = tonumber(token:match("^%s*(.-)%s*$"))
-      if value then
-        value = math_floor(value + 0.5)
-        if value > 0 and value < maximum and not seen[value] then
-          seen[value] = true
-          tickValues[#tickValues + 1] = value
-        end
-      end
-    end
-    table.sort(tickValues)
+  local tickValues = ns.PRDSecondary.GetResourceTickValues(config, maximum)
+  if not tickValues then
+    PRDPreview_HideDividers(bar, 0)
+    return
   end
   local count = #tickValues
 
@@ -967,6 +944,7 @@ local function PRDPreview_UpdateSecondaryText(
   end
   if bar.__puiPreviewDefinition.adapter == "POWER_SECRET"
     or bar.__puiPreviewDefinition.adapter == "RUNES"
+    or bar.__puiPreviewDefinition.adapter == "SPELL_COUNT"
   then
     show = false
   end
@@ -2563,10 +2541,8 @@ do
     db.class.DRUID.forms.CASTER  = db.class.DRUID.forms.CASTER  or { primary = {} }
 
     if db.primary.hideAlternateMana == nil then db.primary.hideAlternateMana = false end
-    db.secondary.resourceEnabled = db.secondary.resourceEnabled or {}
     db.secondary.resourceSettings = db.secondary.resourceSettings or {}
 
-    if db.secondary.visibilityMode == nil then db.secondary.visibilityMode = "ALWAYS" end
     if db.secondary.inactiveAlpha == nil then db.secondary.inactiveAlpha = 0.15 end
     if db.secondary.showDividers == nil then db.secondary.showDividers = true end
     if db.secondary.dividerSize == nil then db.secondary.dividerSize = 1 end
@@ -2618,6 +2594,9 @@ do
     end
 
     PRD_EnsureDefaults(db)
+    if db.secondary.__puiClassResourcesMigrated ~= true then
+      ns.PRDSecondary:NormalizeProfile(db)
+    end
     db.syncCVar = nil
     PRD_NormalizeBarColorConfig(db.health, "health")
     PRD_NormalizeBarColorConfig(db.primary, "primary")
@@ -3944,14 +3923,14 @@ do
             name = "Yellow threshold",
             order = 3,
             min = 0,
-            max = 99,
-            step = 1,
+            max = 0.99,
+            step = 0.01,
             isPercent = true,
             get = function()
-              return Clamp(behavior.yellowThreshold or 30, 0, 99)
+              return Clamp(behavior.yellowThreshold or 30, 0, 99) / 100
             end,
             set = function(_, value)
-              value = Clamp(value, 0, 99)
+              value = math_floor(Clamp(value, 0, 0.99) * 100 + 0.5)
               behavior.yellowThreshold = value
               if behavior.redThreshold ~= nil and behavior.redThreshold < value then
                 behavior.redThreshold = value
@@ -3963,15 +3942,15 @@ do
             type = "range",
             name = "Red threshold",
             order = 4,
-            min = 1,
-            max = 100,
-            step = 1,
+            min = 0.01,
+            max = 1,
+            step = 0.01,
             isPercent = true,
             get = function()
-              return Clamp(behavior.redThreshold or 60, 1, 100)
+              return Clamp(behavior.redThreshold or 60, 1, 100) / 100
             end,
             set = function(_, value)
-              value = Clamp(value, 1, 100)
+              value = math_floor(Clamp(value, 0.01, 1) * 100 + 0.5)
               behavior.redThreshold = value
               if behavior.yellowThreshold ~= nil and behavior.yellowThreshold > value then
                 behavior.yellowThreshold = value
@@ -3987,6 +3966,7 @@ do
   end
 
   local function PRD_BuildResourceLayoutArgs(state, resource)
+    local definition = ns.PRDSecondary:GetResourceDefinition(resource.key)
     local settings = ns.PRDSecondary:GetResourceSettings(
       state.db,
       resource.key
@@ -4003,7 +3983,7 @@ do
       or nil
 
     local function RefreshStackColorOptions()
-      Addon:NotifyOptionsTreeChanged("PRD", { "PRD", "secondary" })
+      Addon:NotifyOptionsTreeChanged("PRD", { "PRD", "secondary", PLAYER_CLASS, resource.key })
     end
 
     local function BuildStackColorThresholdGroup(index)
@@ -4037,10 +4017,10 @@ do
             end,
             validate = function(_, value)
               local stack = tonumber(value)
-              if stack and stack >= 1 and stack <= 30 and stack == math.floor(stack) then
+              if stack and stack >= 1 and stack <= AuraWidget.MAX_STACK_COLOR_THRESHOLD and stack == math.floor(stack) then
                 return true
               end
-              return "Enter a whole stack value from 1 to 30."
+              return "Enter a whole stack value from 1 to " .. AuraWidget.MAX_STACK_COLOR_THRESHOLD .. "."
             end,
             get = function()
               return tostring(threshold.value or 1)
@@ -4125,7 +4105,7 @@ do
         arg = { puiDisabledReason = "The limit is 30 color shifts. Delete a shift to add another." },
         disabled = #stackColorThresholds >= 30,
         func = function()
-          if AuraWidget.AddStackColorThreshold(settings, 30) then
+          if AuraWidget.AddStackColorThreshold(settings, AuraWidget.MAX_STACK_COLOR_THRESHOLD) then
             Addon:ApplyOptionsChange("PRD", { secondaryAppearance = true })
             RefreshStackColorOptions()
           end
@@ -4281,7 +4261,6 @@ do
           segmentedMode = {
             type = "toggle",
             name = "Use segmented mode",
-            hidden = not supportsNumericCues or resource.key == "RUNES" or resource.key == "ESSENCE",
             order = 1,
             get = function()
               return settings.perSegment == true
@@ -4296,7 +4275,6 @@ do
             name = "Show casts remaining",
             desc = "Shows 3, 2, 1, then 0 while Shining Light is ready.",
             order = 1.5,
-            hidden = applicationCountdownMax == nil,
             get = function()
               return settings.showApplicationsRemaining == true
             end,
@@ -4308,9 +4286,6 @@ do
           showDividers = {
             type = "toggle",
             name = "Show tick separators",
-            hidden = function()
-              return resource.key == "RUNES" or resource.key == "STAGGER"
-            end,
             desc = "Draws separators for each possible stack or resource point.",
             order = 2,
             get = function()
@@ -4326,7 +4301,6 @@ do
             name = "Stack ticks",
             desc = "Use All for every stack, or enter specific stack values separated by commas.",
             order = 2.5,
-            hidden = resource.category ~= "TRACKED_EFFECT",
             arg = { puiDisabledReason = "Enable Show tick separators first." },
             disabled = function()
               return settings.showDividers == false
@@ -4342,9 +4316,6 @@ do
           dividerSize = {
             type = "range",
             name = "Tick thickness",
-            hidden = function()
-              return resource.key == "RUNES" or resource.key == "STAGGER"
-            end,
             order = 3,
             min = 1,
             max = 6,
@@ -4364,9 +4335,6 @@ do
           dividerColor = {
             type = "color",
             name = "Tick color",
-            hidden = function()
-              return resource.key == "RUNES" or resource.key == "STAGGER"
-            end,
             order = 4,
             hasAlpha = true,
             arg = { puiDisabledReason = "Enable Show tick separators first." },
@@ -4407,7 +4375,6 @@ do
             type = "toggle",
             name = "Show spell icon",
             order = 6,
-            hidden = resource.category ~= "TRACKED_EFFECT",
             get = function()
               return settings.showSpellIcon == true
             end,
@@ -4423,7 +4390,6 @@ do
             min = 0,
             max = 20,
             step = 1,
-            hidden = resource.category ~= "TRACKED_EFFECT",
             arg = { puiDisabledReason = "Enable Show spell icon first." },
             disabled = function()
               return settings.showSpellIcon ~= true
@@ -4443,7 +4409,6 @@ do
         name = "Bar color",
         order = 18,
         inline = true,
-        hidden = resource.category ~= "TRACKED_EFFECT",
         args = {
           colorMode = {
             type = "select",
@@ -4482,7 +4447,6 @@ do
             name = "Stack color shifts",
             order = 3,
             inline = true,
-            hidden = stackColorThresholds == nil,
             args = BuildStackColorThresholdArgs(),
           },
         },
@@ -4530,7 +4494,6 @@ do
             name = "Status bar color",
             order = 2,
             values = RESOURCE_COLOR_VALUES,
-            hidden = resource.category == "TRACKED_EFFECT",
             get = function()
               return PRD_GetResourceColorMode(settings)
             end,
@@ -4544,7 +4507,6 @@ do
             name = "Custom color",
             order = 3,
             hasAlpha = true,
-            hidden = resource.category == "TRACKED_EFFECT",
             arg = { puiDisabledReason = "Choose Custom color in Color mode first." },
             disabled = function()
               return PRD_GetResourceColorMode(settings) ~= "CUSTOM"
@@ -4711,9 +4673,6 @@ do
             name = "Desaturate",
             order = 2,
             values = RESOURCE_THRESHOLD_VALUES,
-            hidden = function()
-              return not supportsNumericCues
-            end,
             get = function()
               return cues.desaturateMode or "NONE"
             end,
@@ -4729,9 +4688,6 @@ do
             min = 0,
             max = 50,
             step = 1,
-            hidden = function()
-              return not supportsNumericCues
-            end,
             arg = { puiDisabledReason = "Choose a Desaturate threshold mode first." },
             disabled = DesaturateThresholdDisabled,
             get = function()
@@ -4747,9 +4703,6 @@ do
             name = "Threshold glow",
             order = 4,
             values = RESOURCE_THRESHOLD_VALUES,
-            hidden = function()
-              return not supportsNumericCues
-            end,
             get = function()
               return cues.glowMode or "NONE"
             end,
@@ -4765,9 +4718,6 @@ do
             min = 0,
             max = 50,
             step = 1,
-            hidden = function()
-              return not supportsNumericCues
-            end,
             arg = { puiDisabledReason = "Choose a Threshold glow mode first." },
             disabled = GlowThresholdDisabled,
             get = function()
@@ -4783,9 +4733,6 @@ do
             name = "Threshold glow style",
             order = 6,
             values = RESOURCE_GLOW_VALUES,
-            hidden = function()
-              return not supportsNumericCues
-            end,
             arg = { puiDisabledReason = "Choose a Threshold glow mode first." },
             disabled = GlowThresholdDisabled,
             get = function()
@@ -4801,9 +4748,6 @@ do
             name = "Threshold glow color",
             order = 7,
             hasAlpha = true,
-            hidden = function()
-              return not supportsNumericCues
-            end,
             arg = { puiDisabledReason = "Choose a Threshold glow mode first." },
             disabled = GlowThresholdDisabled,
             get = function()
@@ -4908,12 +4852,11 @@ do
       type = "group", name = resource.name, inline = true, order = 0,
       arg = { puiExplicit = true }, args = { enabled = args.enabled },
     }
-    local countSpellIDs, countDefinition = ns.PRDSecondary:GetCooldownCountSpellIDs(resource.key)
-    if countSpellIDs then
+    if definition.cooldownCountSpellIDs then
       args.feature.args.enabled = {
         type = "select",
-        name = countDefinition.countDisplayName,
-        desc = countDefinition.countDisplayDescription,
+        name = definition.countDisplayName,
+        desc = definition.countDisplayDescription,
         order = 1,
         values = { ICONS = "Icons only", BAR = "Bar only", BOTH = "Both", NONE = "Nothing" },
         sorting = { "ICONS", "BAR", "BOTH", "NONE" },
@@ -4928,13 +4871,55 @@ do
       args.feature.args.enabled.name = "Enable"
     end
     args.feature.args.enabled.width, args.feature.args.enabled.relWidth = "relative", 0.5
+    args.feature.args.visibility = {
+      type = "select", name = "Show bar", order = 2, width = "relative", relWidth = 0.5,
+      values = { ALWAYS = "Always", COMBAT = "In combat", TARGET = "With a target", COMBAT_OR_TARGET = "In combat or with a target" },
+      get = function() return settings.visibilityMode end,
+      set = function(_, value)
+        settings.visibilityMode = value
+        Addon:ApplyOptionsChange("PRD", { secondaryVisibility = true })
+      end,
+    }
     args.enabled = nil
     local arranged = PRD_ArrangePresentationArgs(args, "layout")
     if resource.key == "RUNES" then
       arranged.textGroup.args.textMode = nil
+      arranged.textGroup.name = "Timer font"
+    elseif definition.adapter == "SPELL_COUNT" then
+      arranged.textGroup = nil
     end
+    if definition.adapter ~= "POWER" or definition.forceContinuous == true then
+      arranged.display.args.segmentedMode = nil
+    end
+    if resource.key == "RUNES" or resource.key == "STAGGER" then
+      for _, key in ipairs({ "showDividers", "dividerSize", "dividerColor", "stackTickValues" }) do
+        arranged.display.args[key] = nil
+      end
+    elseif resource.category ~= "TRACKED_EFFECT" then
+      arranged.display.args.stackTickValues = nil
+    end
+    if not definition.auraSpellIDs then
+      arranged.display.args.showSpellIcon = nil
+      arranged.display.args.iconGap = nil
+    end
+    if applicationCountdownMax == nil then
+      arranged.display.args.showApplicationsRemaining = nil
+    end
+    if resource.category == "TRACKED_EFFECT" or resource.key == "STAGGER" then
+      arranged.display.args.inactiveAlpha = nil
+    end
+    if not supportsNumericCues then
+      for _, key in ipairs({ "desaturateMode", "desaturateThreshold", "glowMode", "glowThreshold", "glowType", "glowColor" }) do
+        arranged.cueGroup.args[key] = nil
+      end
+    end
+    if not stackColorThresholds then
+      arranged.stackColorsGroup = nil
+      arranged.stackRecolorCdmNotice = nil
+    end
+    if next(arranged.display.args) == nil then arranged.display = nil end
+    if arranged.display then arranged.display.inline = true end
     arranged.cueGroup.inline = true
-    arranged.display.inline = true
     return arranged
   end
 
@@ -4947,29 +4932,18 @@ do
         },
       }
     end
-    local resources = ns.PRDSecondary:GetResourceOptionsForClass(PLAYER_CLASS)
+    local resources = ns.PRDSecondary:GetResourceOptionsForClass(PLAYER_CLASS, true)
     local config = state.secondaryCfg
     local shared = {
-      type = "group", name = "Resources and tracked effects", inline = true, order = -10,
+      type = "group", name = "Secondary resource", inline = true, order = 1,
       arg = { puiExplicit = true }, args = {
         enabled = {
-          type = "toggle", name = "Enable resources and tracked effects", order = 0, width = "relative", relWidth = 0.333,
+          type = "toggle", name = "Enable resources and tracked effects", order = 0, width = "relative", relWidth = 0.5,
           get = function() return PRD:GetQuickSetupValue("showSecondary") end,
           set = function(_, value) PRD:SetQuickSetupValue("showSecondary", value) end,
         },
-        visibility = {
-          type = "select", name = "Show", order = 10, width = "relative", relWidth = 0.333,
-          values = { ALWAYS = "Always", COMBAT = "In combat", TARGET = "With a target", COMBAT_OR_TARGET = "In combat or with a target" },
-          arg = { puiDisabledReason = "Enable resources and tracked effects first." },
-          disabled = function() return config.enabled == false end,
-          get = function() return config.visibilityMode or "ALWAYS" end,
-          set = function(_, value)
-            config.visibilityMode = value
-            Addon:ApplyOptionsChange("PRD", { secondaryVisibility = true })
-          end,
-        },
         spacing = {
-          type = "range", name = "Resource spacing", order = 20, width = "relative", relWidth = 0.333,
+          type = "range", name = "Resource spacing", order = 20, width = "relative", relWidth = 0.5,
           min = 0, max = 20, step = 1,
           get = function() return Clamp(config.gap or 2, 0, 20) end,
           set = function(_, value)
@@ -4979,32 +4953,30 @@ do
         },
       },
     }
-    if not PRD_HasMultipleSecondaryResources(resources) then
-      if #resources == 0 then
-        return {
-          unavailable = { type = "description", name = "No class resources or tracked effects for this specialization.", order = 1 },
-        }
-      end
-      local args = PRD_BuildResourceLayoutArgs(state, resources[1])
-      args.shared = shared
-      return args
-    end
-    local args = { shared = shared }
+    local resourceArgs = {}
     for index, resource in ipairs(resources) do
-      args[resource.key] = {
+      resourceArgs[resource.key] = {
         type = "group", name = resource.name, order = index,
         desc = resource.category == "TRACKED_EFFECT" and "Tracked effect" or "Class resource",
         args = PRD_BuildResourceLayoutArgs(state, resource),
       }
     end
-    return args
+    return {
+      general = {
+        type = "group", name = "General", order = 1,
+        args = { shared = shared },
+      },
+      [PLAYER_CLASS] = {
+        type = "group", name = PLAYER_CLASS_NAME, order = 2,
+        args = resourceArgs,
+      },
+    }
   end
 
   local function PRDRootProvider()
     local provider = {}
 
     function provider:GetOptions()
-      local resources = ns.PRDSecondary:GetResourceOptionsForClass(PLAYER_CLASS)
       local options = {
         type = "group",
         name = "Personal Resource Display",
@@ -5024,12 +4996,9 @@ do
           },
           secondary = {
             type = "group",
-            name = #resources == 1 and resources[1].name or "Resources & tracked effects",
+            name = "Secondary resource",
             order = 3,
             childGroups = "tree",
-            hidden = function()
-              return not ns.PRDSecondary:HasResourceForCurrentSpec()
-            end,
             args = PRD_BuildSecondaryArgs(),
           },
         },

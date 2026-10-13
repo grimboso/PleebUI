@@ -27,6 +27,7 @@ local RescanButtons
 local SetRescanEventsEnabled
 local SetLibDBIconCallbackEnabled
 local InstallExpansionLandingButtonHook
+local _BucketSetExpanded
 
 -- Runtime state changes only through SetBucketEnabled().
 local _bucketEnabled
@@ -50,13 +51,6 @@ end
 
 local function _IsBucketEnabled()
   return _bucketEnabled == true
-end
-
-local function _SetBucketEnabledDB(enabled)
-  local p = _GetMinimapProfile()
-  if p then
-    p.bucketEnabled = enabled and true or false
-  end
 end
 
 local RestoreCapturedButtons
@@ -130,7 +124,9 @@ local function BuildQuickMenu(_, rootDescription)
     Addon:SetEditMode(not Addon:IsEditMode())
   end)
   pleebUI:CreateButton(_IsBucketEnabled() and "Disable addon button bucket" or "Enable addon button bucket", function()
-    MinimapData.SetBucketEnabled(not _IsBucketEnabled())
+    local profile = _GetMinimapProfile()
+    profile.bucketEnabled = not profile.bucketEnabled
+    MinimapData.Initialize()
   end)
   pleebUI:CreateButton("Reload UI", _G.ReloadUI)
 end
@@ -169,13 +165,14 @@ function MinimapData.SetBucketEnabled(enabled)
   local v = enabled and true or false
 
   if _bucketEnabled == v then
+    if v then LayoutButtons() end
     return
   end
 
   _bucketEnabled = v
-  _SetBucketEnabledDB(v)
-
   if not v then
+    MinimapData.SetButtonArrangement(false)
+    _BucketSetExpanded(false)
     SetRescanEventsEnabled(false)
     SetLibDBIconCallbackEnabled(false)
 
@@ -266,7 +263,13 @@ local buttons  = setmetatable({}, { __mode = "v" }) -- weak values (frames)
 local BTN_SIZE = 26
 local BTN_PAD = 6
 local MARGIN = 6
-local MAX_COLS = 6 -- 6 icons per row when expanded
+local pinnedButtons = {}
+local overflowButtons = {}
+local buttonsByName = {}
+local pinnedMembership = {}
+local _arrangingButtons = false
+local dragGhost
+local draggedButton
 
 local HANDLE_SIZE = 20
 local COLLAPSE_SECONDS = 20
@@ -284,7 +287,7 @@ end
 
 local function _BucketScheduleAutoCollapse()
   _BucketCancelAutoCollapse()
-  if not _bucketExpanded then
+  if not _bucketEnabled or not _bucketExpanded or _arrangingButtons then
     return
   end
   _bucketAutoCollapseTimer = C_Timer.NewTimer(COLLAPSE_SECONDS, function()
@@ -292,23 +295,23 @@ local function _BucketScheduleAutoCollapse()
       _BucketScheduleAutoCollapse()
       return
     end
-    if PUIBucket and PUIBucket.__puiPanel and PUIBucket.__puiPanel:IsMouseOver() then
+    if PUIBucket and PUIBucket.__puiAddonPanel and PUIBucket.__puiAddonPanel:IsMouseOver() then
       _BucketScheduleAutoCollapse()
       return
     end
-    _bucketExpanded = false
-    if PUIBucket then
-      if PUIBucket.__puiPanel then PUIBucket.__puiPanel:Hide() end
-      Theme.ApplyExpandCollapseButton(PUIBucket.__puiToggle, false)
-    end
+    _BucketSetExpanded(false)
   end)
 end
 
-local function _BucketSetExpanded(expanded)
+_BucketSetExpanded = function(expanded)
   _bucketExpanded = expanded and true or false
 
   if not PUIBucket then
     return
+  end
+
+  if not _bucketExpanded then
+    MinimapData.SetButtonArrangement(false)
   end
 
   if _bucketExpanded then
@@ -400,8 +403,7 @@ local function ShouldIgnore(frame)
     return true
   end
 
-  local p = _GetMinimapProfile()
-  if frame == MinimapData.IconButton and p and p.pleebUIButtonOnMinimap == true then
+  if frame == MinimapData.IconButton and _launcherOnMinimap then
     return true
   end
 
@@ -482,6 +484,10 @@ local function RestoreCapturedButton(btn)
   local orig = btn.__puiOrig
   local wasShown = btn:IsShown()
 
+  if btn.__puiArrangeOverlay then
+    btn.__puiArrangeOverlay:Hide()
+  end
+
   UnfreezeButton(btn)
 
   if orig then
@@ -518,6 +524,8 @@ local function RestoreCapturedButton(btn)
     if orig.hitRect and btn.SetHitRectInsets then
       btn:SetHitRectInsets(unpack(orig.hitRect))
     end
+    btn:SetScript("OnDragStart", orig.onDragStart)
+    btn:SetScript("OnDragStop", orig.onDragStop)
     if btn.__puiExpansionLandingBorder and orig.expansionBorderShown ~= nil then
       if orig.expansionBorderShown then
         btn.__puiExpansionLandingBorder:Show()
@@ -604,11 +612,134 @@ local function FreezeButton(btn)
   btn:SetFixedFrameLevel(false)
 end
 
+function MinimapData.IsArrangingButtons()
+  return _arrangingButtons
+end
+
+function MinimapData.SetButtonArrangement(enabled)
+  _arrangingButtons = enabled == true and _bucketEnabled == true
+    and _GetMinimapProfile().pinnedAddonRows > 0
+
+  if draggedButton then
+    dragGhost:StopMovingOrSizing()
+    dragGhost:Hide()
+    draggedButton = nil
+  end
+
+  if not _arrangingButtons then
+    for i = 1, #buttons do
+      local overlay = buttons[i].__puiArrangeOverlay
+      if overlay then overlay:Hide() end
+    end
+    if PUIBucket then
+      PUIBucket.__puiAddonPanel:SetBackdropBorderColor(0.12, 0.12, 0.12, 1)
+      _BucketScheduleAutoCollapse()
+    end
+    return
+  end
+
+  _BucketCancelAutoCollapse()
+  _BucketSetExpanded(true)
+end
+
+local function BeginButtonDrag(overlay)
+  if not _arrangingButtons then return end
+
+  draggedButton = overlay.__puiButton
+  local x, y = GetCursorPosition()
+  local scale = dragGhost:GetEffectiveScale()
+  dragGhost:ClearAllPoints()
+  dragGhost:SetPoint("CENTER", UIParent, "BOTTOMLEFT", x / scale, y / scale)
+  dragGhost.Text:SetText((draggedButton.__puiBucketKey:gsub("^LibDBIcon10_", "")))
+  dragGhost:Show()
+  dragGhost:StartMoving()
+  _G.GameTooltip:Hide()
+  _BucketCancelAutoCollapse()
+end
+
+local function FinishButtonDrag()
+  if not draggedButton then return end
+
+  local btn = draggedButton
+  draggedButton = nil
+  dragGhost:StopMovingOrSizing()
+  dragGhost:Hide()
+
+  local addonPanel = PUIBucket.__puiAddonPanel
+  local inToolbox = PUIBucket.__puiPanel:IsShown() and PUIBucket.__puiPanel:IsMouseOver()
+  local inPinned = _GetMinimapProfile().pinnedAddonRows > 0
+    and addonPanel:IsShown() and addonPanel:IsMouseOver() and not inToolbox
+  if not inPinned and not inToolbox then return end
+
+  local pins = _GetMinimapProfile().pinnedAddonButtons
+  local key = btn.__puiBucketKey
+  for i = #pins, 1, -1 do
+    if pins[i] == key then table.remove(pins, i) end
+  end
+
+  if inPinned then
+    local x, y = GetCursorPosition()
+    local scale = addonPanel:GetEffectiveScale()
+    local cols = PUIBucket.__puiColumns
+    local col = math.max(0, math.min(cols - 1,
+      math.floor((x / scale - addonPanel:GetLeft() - MARGIN + BTN_PAD / 2) / (BTN_SIZE + BTN_PAD))))
+    local row = math.max(0, math.min(_GetMinimapProfile().pinnedAddonRows - 1,
+      math.floor((addonPanel:GetTop() - y / scale - MARGIN + BTN_PAD / 2) / (BTN_SIZE + BTN_PAD))))
+    local slot = row * cols + col + 1
+    local visibleIndex = 0
+    local beforeKey
+    for i = 1, #pinnedButtons do
+      local other = pinnedButtons[i]
+      if other ~= btn then
+        visibleIndex = visibleIndex + 1
+        if visibleIndex == slot then
+          beforeKey = other.__puiBucketKey
+          break
+        end
+      end
+    end
+    local insertAt = #pins + 1
+    if beforeKey then
+      for i = 1, #pins do
+        if pins[i] == beforeKey then insertAt = i; break end
+      end
+    end
+    table.insert(pins, insertAt, key)
+  end
+
+  LayoutButtons()
+end
+
+local function EnsureArrangementOverlay(btn)
+  if btn.__puiArrangeOverlay or not btn.__puiBucketKey then return end
+
+  -- Addon click and tooltip scripts keep their original owner; only this overlay handles arranging.
+  local overlay = CreateFrame("Button", nil, btn, "BackdropTemplate")
+  btn.__puiArrangeOverlay = overlay
+  overlay.__puiButton = btn
+  overlay:SetAllPoints(btn)
+  overlay:SetBackdrop({ edgeFile = "Interface\\Buttons\\WHITE8x8", edgeSize = 1 })
+  overlay:SetBackdropBorderColor(0.3, 0.7, 1, 1)
+  overlay:RegisterForDrag("LeftButton")
+  overlay:SetScript("OnDragStart", BeginButtonDrag)
+  overlay:SetScript("OnDragStop", FinishButtonDrag)
+  overlay:SetScript("OnEnter", function(self)
+    _G.GameTooltip:SetOwner(self, "ANCHOR_LEFT")
+    _G.GameTooltip:AddLine(btn.__puiBucketKey:gsub("^LibDBIcon10_", ""), 1, 1, 1)
+    _G.GameTooltip:AddLine("Drag between Pinned addons and the toolbox.", 0.7, 0.7, 0.7)
+    _G.GameTooltip:AddLine("Right-click the toolbox arrow when finished.", 0.7, 0.7, 0.7)
+    _G.GameTooltip:Show()
+  end)
+  overlay:SetScript("OnLeave", function() _G.GameTooltip:Hide() end)
+  overlay:Hide()
+end
+
 local function GrabButton(btn)
   if not btn or captured[btn] then return end
   if ShouldIgnore(btn) then return end
 
   captured[btn] = true
+  btn.__puiBucketKey = btn:GetName()
 
   -- Capture original state so we can restore on disable
   local pts
@@ -635,12 +766,16 @@ local function GrabButton(btn)
     alpha  = btn:GetAlpha(),
     width  = w,
     height = h,
-    shown  = btn:IsShown() or nil,
+    shown  = btn:IsShown(),
+    onDragStart = btn:GetScript("OnDragStart"),
+    onDragStop = btn:GetScript("OnDragStop"),
     hitRect = hitRect,
     expansionBorderShown = btn.__puiExpansionLandingBorder and btn.__puiExpansionLandingBorder:IsShown() or nil,
   }
 
   FreezeButton(btn)
+  btn:SetScript("OnDragStart", nil)
+  btn:SetScript("OnDragStop", nil)
 
   -- Reparent into panel (icons live in the expandable area)
   local parent = (PUIBucket and PUIBucket.__puiPanel) or PUIBucket
@@ -657,6 +792,7 @@ local function GrabButton(btn)
   end
 
   buttons[#buttons + 1] = btn
+  EnsureArrangementOverlay(btn)
 end
 
 local function AnchorLauncherToMinimap()
@@ -687,8 +823,8 @@ function MinimapData.SetLauncherOnMinimap(enabled)
     return false
   end
 
-  local v = enabled and true or false
-  p.pleebUIButtonOnMinimap = v
+  local pinnedActive = p.enabled ~= false and p.bucketEnabled ~= false and p.pinnedAddonRows > 0
+  local v = enabled == true and not pinnedActive
 
   if not MinimapData.__puiLauncherInitialized and not MinimapData.InitializeLauncher() then
     return false
@@ -897,84 +1033,88 @@ end
 
 
 LayoutButtons = function()
-  if not PUIBucket then return end
+  if not _bucketEnabled or not PUIBucket then return end
 
-  -- Handle always exists and is same width as minimap
-  local mmw = (Minimap and Minimap.GetWidth and Minimap:GetWidth()) or 140
+  local profile = _GetMinimapProfile()
+  local mmw = Minimap:GetWidth()
+  local cols = math.max(1, math.floor((mmw - MARGIN * 2 + BTN_PAD) / (BTN_SIZE + BTN_PAD)))
+  local pinnedRows = profile.pinnedAddonRows
+  local capacity = cols * pinnedRows
+  local addonPanel = PUIBucket.__puiAddonPanel
+  local panel = PUIBucket.__puiPanel
+  PUIBucket.__puiColumns = cols
+  PUIBucket.__puiHandle:SetSize(HANDLE_SIZE, HANDLE_SIZE)
+  PUIBucket:SetSize(HANDLE_SIZE, HANDLE_SIZE)
 
-  -- Collapsed: small square toggle only (bottom-right of minimap)
-  if not _bucketExpanded then
-    if PUIBucket.__puiPanel then
-      PUIBucket.__puiPanel:Hide()
-      PUIBucket.__puiPanel:SetSize(mmw, 1)
-    end
-
-    if PUIBucket.__puiHandle then
-      PUIBucket.__puiHandle:SetSize(HANDLE_SIZE, HANDLE_SIZE)
-    end
-    PUIBucket:SetSize(HANDLE_SIZE, HANDLE_SIZE)
-    return
-  end
-
-  -- Expanded: keep handle square (no full-width top bar)
-  if PUIBucket.__puiHandle then
-    PUIBucket.__puiHandle:SetSize(HANDLE_SIZE, HANDLE_SIZE)
-  end
-
+  wipe(pinnedButtons)
+  wipe(overflowButtons)
+  wipe(buttonsByName)
+  wipe(pinnedMembership)
   local expansionButton = _G.ExpansionLandingPageMinimapButton
-  local visibleButtons = {}
+  for i = 1, #buttons do
+    local btn = buttons[i]
+    if btn.__puiBucketKey and (btn ~= expansionButton or btn:IsShown())
+      and (btn ~= MinimapData.IconButton or profile.hide ~= true)
+    then
+      buttonsByName[btn.__puiBucketKey] = btn
+    end
+  end
+
+  for i = 1, #profile.pinnedAddonButtons do
+    local btn = buttonsByName[profile.pinnedAddonButtons[i]]
+    if btn and not pinnedMembership[btn] and #pinnedButtons < capacity then
+      pinnedButtons[#pinnedButtons + 1] = btn
+      pinnedMembership[btn] = true
+    end
+  end
 
   for i = 1, #buttons do
     local btn = buttons[i]
-    if btn and (btn ~= expansionButton or btn:IsShown())
-      and (btn ~= MinimapData.IconButton or _GetMinimapProfile().hide ~= true)
+    if not pinnedMembership[btn] and (btn ~= expansionButton or btn:IsShown())
+      and (btn ~= MinimapData.IconButton or profile.hide ~= true)
     then
-      visibleButtons[#visibleButtons + 1] = btn
+      overflowButtons[#overflowButtons + 1] = btn
     end
   end
 
-  -- Expanded: size panel to fit visible icons, width matches minimap, rows expand down
-  local count = #visibleButtons
-  local cols = MAX_COLS
-  if cols < 1 then cols = 1 end
-
-  local rows = 0
-  if count > 0 then
-    rows = math.ceil(count / cols)
+  local pinnedHeight = 0
+  if pinnedRows > 0 then
+    pinnedHeight = MARGIN * 2 + pinnedRows * BTN_SIZE + (pinnedRows - 1) * BTN_PAD
   end
+  addonPanel:SetBackdropBorderColor(_arrangingButtons and 0.3 or 0.12,
+    _arrangingButtons and 0.7 or 0.12, _arrangingButtons and 1 or 0.12, 1)
 
-  local panelW = mmw
-  local panelH
-  if count == 0 then
-    panelH = (MARGIN * 2) + BTN_SIZE
-  else
-    panelH = (MARGIN * 2) + (rows * BTN_SIZE) + ((rows - 1) * BTN_PAD)
-  end
+  local overflowTop = pinnedHeight > 0 and pinnedHeight - MARGIN or 0
+  local rows = math.max(1, math.ceil(#overflowButtons / cols))
+  local overflowHeight = MARGIN * 2 + rows * BTN_SIZE + (rows - 1) * BTN_PAD
+  addonPanel:SetSize(mmw, _bucketExpanded and overflowTop + overflowHeight or pinnedHeight)
+  addonPanel:SetShown(pinnedRows > 0 or _bucketExpanded)
 
-  if PUIBucket.__puiPanel then
-    PUIBucket.__puiPanel:Show()
-    PUIBucket.__puiPanel:SetSize(panelW, panelH)
-  end
+  panel:ClearAllPoints()
+  panel:SetPoint("TOPLEFT", addonPanel, "TOPLEFT", 0, -overflowTop)
+  panel:SetSize(mmw, overflowHeight)
+  panel:SetShown(_bucketExpanded)
 
-  PUIBucket:SetSize(HANDLE_SIZE, HANDLE_SIZE)
-
-  -- Layout icons inside panel
-  local panel = PUIBucket.__puiPanel or PUIBucket
-  for i = 1, count do
-    local btn = visibleButtons[i]
-    local col = (i - 1) % cols
-    local row = math.floor((i - 1) / cols)
-
-    btn.__puiOrigFuncs.ClearAllPoints(btn)
-    btn.__puiOrigFuncs.SetPoint(btn, "TOPLEFT", panel, "TOPLEFT",
-      MARGIN + col * (BTN_SIZE + BTN_PAD),
-      -(MARGIN + row * (BTN_SIZE + BTN_PAD))
-    )
-    btn:SetFrameStrata(PUIBucket:GetFrameStrata())
-    btn:SetFrameLevel(panel:GetFrameLevel() + 1)
-
-    if btn ~= expansionButton then
-      btn:Show()
+  for group = 1, 2 do
+    local list = group == 1 and pinnedButtons or overflowButtons
+    local parent = group == 1 and addonPanel or panel
+    for i = 1, #list do
+      local btn = list[i]
+      local col = (i - 1) % cols
+      local row = math.floor((i - 1) / cols)
+      btn.__puiOrigFuncs.SetParent(btn, parent)
+      btn.__puiOrigFuncs.ClearAllPoints(btn)
+      btn.__puiOrigFuncs.SetPoint(btn, "TOPLEFT", parent, "TOPLEFT",
+        MARGIN + col * (BTN_SIZE + BTN_PAD), -(MARGIN + row * (BTN_SIZE + BTN_PAD)))
+      btn:SetFrameStrata(PUIBucket:GetFrameStrata())
+      btn:SetFrameLevel(parent:GetFrameLevel() + 1)
+      if btn ~= expansionButton then btn:Show() end
+      local overlay = btn.__puiArrangeOverlay
+      if overlay then
+        overlay:SetFrameStrata(btn:GetFrameStrata())
+        overlay:SetFrameLevel(btn:GetFrameLevel() + 10)
+        overlay:SetShown(_arrangingButtons)
+      end
     end
   end
 end
@@ -1019,7 +1159,7 @@ function MinimapData.InitializePUIBucket()
   if not _IsBucketEnabled() then return end
   if not Minimap then return end
 
-  PUIBucket = CreateFrame("Frame", "PleebUI_MinimapPUIBucket", UIParent)
+  PUIBucket = CreateFrame("Frame", "PleebUI_MinimapPUIBucket", _G.MinimapCluster)
   PUIBucket:SetFrameStrata("HIGH")
   PUIBucket:SetFrameLevel(1)
   PUIBucket:SetPoint("BOTTOMRIGHT", Minimap, "BOTTOMRIGHT", -2, 2)
@@ -1053,26 +1193,56 @@ function MinimapData.InitializePUIBucket()
   toggle:SetAllPoints(handle)
   toggle:SetFrameLevel(handle:GetFrameLevel() + 1)
   toggle:EnableMouse(true)
+  toggle:RegisterForClicks("LeftButtonUp", "RightButtonUp")
 
   Theme.ApplyExpandCollapseButton(toggle, false)
 
-  toggle:SetScript("OnClick", function()
-    _BucketSetExpanded(not _bucketExpanded)
+  toggle:SetScript("OnClick", function(_, button)
+    if button == "RightButton" then
+      MinimapData.SetButtonArrangement(not _arrangingButtons)
+    else
+      _BucketSetExpanded(not _bucketExpanded)
+    end
+  end)
+  toggle:SetScript("OnEnter", function(self)
+    _BucketCancelAutoCollapse()
+    _G.GameTooltip:SetOwner(self, "ANCHOR_LEFT")
+    _G.GameTooltip:AddLine("Addon toolbox", 1, 1, 1)
+    _G.GameTooltip:AddLine("Left-click: Open or close", 0.7, 0.7, 0.7)
+    _G.GameTooltip:AddLine(_arrangingButtons and "Right-click: Finish arranging" or "Right-click: Arrange buttons", 0.7, 0.7, 0.7)
+    _G.GameTooltip:Show()
+  end)
+  toggle:SetScript("OnLeave", function()
+    _G.GameTooltip:Hide()
+    _BucketScheduleAutoCollapse()
   end)
 
-  -- Panel (expandable, icons live here)
-  local panel = CreateFrame("Frame", nil, PUIBucket, "BackdropTemplate")
-  PUIBucket.__puiPanel = panel
-  panel:SetPoint("TOPLEFT", Minimap, "BOTTOMLEFT", 0, -2)
-  panel:SetPoint("TOPRIGHT", Minimap, "BOTTOMRIGHT", 0, -2)
-  panel:SetBackdrop({
+  local addonPanel = CreateFrame("Frame", nil, PUIBucket, "BackdropTemplate")
+  PUIBucket.__puiAddonPanel = addonPanel
+  addonPanel:SetPoint("TOPLEFT", Minimap, "BOTTOMLEFT", 0, 0)
+  addonPanel:SetBackdrop({
     bgFile = "Interface\\Buttons\\WHITE8x8",
     edgeFile = "Interface\\Buttons\\WHITE8x8",
     edgeSize = 1,
     insets = { left = 1, right = 1, top = 1, bottom = 1 },
   })
-  panel:SetBackdropColor(0.06, 0.06, 0.06, 0.90)
-  panel:SetBackdropBorderColor(0.12, 0.12, 0.12, 1)
+  addonPanel:SetBackdropColor(0.06, 0.06, 0.06, 0.90)
+  addonPanel:SetBackdropBorderColor(0.12, 0.12, 0.12, 1)
+
+  dragGhost = CreateFrame("Frame", nil, UIParent, "BackdropTemplate")
+  dragGhost:SetFrameStrata("TOOLTIP")
+  dragGhost:SetSize(160, 30)
+  dragGhost:SetMovable(true)
+  dragGhost:EnableMouse(false)
+  dragGhost:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8x8" })
+  dragGhost:SetBackdropColor(0.06, 0.06, 0.06, 0.95)
+  dragGhost.Text = dragGhost:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+  dragGhost.Text:SetPoint("LEFT", 4, 0)
+  dragGhost.Text:SetPoint("RIGHT", -4, 0)
+  dragGhost:Hide()
+
+  local panel = CreateFrame("Frame", nil, addonPanel)
+  PUIBucket.__puiPanel = panel
 
   panel:EnableMouse(true)
   panel:SetScript("OnEnter", function()
@@ -1097,8 +1267,19 @@ function MinimapData.Initialize()
 
   MinimapData.InitializeLauncher()
   MinimapData.InstallMinimapClicks()
+  if not p.pinnedAddonButtons then
+    -- Seed once, outside AceDB array defaults, so removed pins stay removed after reload.
+    p.pinnedAddonButtons = {
+      "LibDBIcon10_PleebUI Damage Meters",
+      "LibDBIcon10_PleebUI",
+      "LibDBIcon10_BugSack",
+      "LibDBIcon10_BigWigs",
+      "LibDBIcon10_DBM",
+    }
+  end
+  MinimapData.SetButtonArrangement(false)
   MinimapData.SetLauncherOnMinimap(p.pleebUIButtonOnMinimap == true)
-  MinimapData.SetBucketEnabled(p.bucketEnabled ~= false)
+  MinimapData.SetBucketEnabled(p.enabled ~= false and p.bucketEnabled ~= false)
 
   return true
 end
@@ -1106,7 +1287,6 @@ end
 
   _GetMinimapProfile = P:Def("_GetMinimapProfile", _GetMinimapProfile)
   _IsBucketEnabled = P:Def("_IsBucketEnabled", _IsBucketEnabled)
-  _SetBucketEnabledDB = P:Def("_SetBucketEnabledDB", _SetBucketEnabledDB)
   BuildQuickMenu = P:Def("BuildQuickMenu", BuildQuickMenu)
   Minimap_OnMouseUp = P:Def("Minimap_OnMouseUp", Minimap_OnMouseUp)
   MinimapData.InstallMinimapClicks = P:Def("MinimapData.InstallMinimapClicks", MinimapData.InstallMinimapClicks)
@@ -1123,6 +1303,11 @@ end
   RestoreCapturedButton = P:Def("RestoreCapturedButton", RestoreCapturedButton)
   RestoreCapturedButtons = P:Def("RestoreCapturedButtons", RestoreCapturedButtons)
   FreezeButton = P:Def("FreezeButton", FreezeButton)
+  MinimapData.IsArrangingButtons = P:Def("MinimapData.IsArrangingButtons", MinimapData.IsArrangingButtons)
+  MinimapData.SetButtonArrangement = P:Def("MinimapData.SetButtonArrangement", MinimapData.SetButtonArrangement)
+  BeginButtonDrag = P:Def("BeginButtonDrag", BeginButtonDrag)
+  FinishButtonDrag = P:Def("FinishButtonDrag", FinishButtonDrag)
+  EnsureArrangementOverlay = P:Def("EnsureArrangementOverlay", EnsureArrangementOverlay)
   GrabButton = P:Def("GrabButton", GrabButton)
   AnchorLauncherToMinimap = P:Def("AnchorLauncherToMinimap", AnchorLauncherToMinimap)
   QueueLauncherAnchor = P:Def("QueueLauncherAnchor", QueueLauncherAnchor)

@@ -2421,6 +2421,9 @@ _PCM_BuildIconOverrideArgs = function(viewerKey, entry)
         values.GCD = "Global cooldown"
         values.READY = entry.hasCharges and "Maximum charges" or "Ready"
         values.COOLDOWN = entry.hasCharges and "Recharging" or "Cooldown"
+        if entry.hasAura == true and entry.hideAura ~= true then
+          values.AURA = "Aura active"
+        end
       end
       return values
     end,
@@ -3100,6 +3103,51 @@ _PCM_BuildIconOverrideArgs = function(viewerKey, entry)
     set = function(_, r, g, b, a)
       IconSettings:SetField(entry, "appearance", "cooldownGlowColor", { r, g, b, a or 1 })
       Refresh()
+    end,
+  }
+
+  local function RefreshActiveAuraGlow()
+    IconSettings:SetPreviewState(viewerKey, "AURA", 3)
+    Refresh()
+    ns.PCMPreview.Refresh()
+  end
+
+  args.auraGlowStyle = {
+    type = "select",
+    name = "Glow",
+    desc = "Show a glow while the spell's aura is active, including buffs with no duration. Requires the duration timer to be enabled.",
+    order = 98.1,
+    hidden = entry.hasAura ~= true or entry.hideAura == true,
+    values = glowStyles,
+    get = function()
+      return IconSettings:GetField(entry, "appearance", "auraGlowStyle") or "NONE"
+    end,
+    set = function(_, value)
+      if value == "NONE" then
+        value = nil
+      end
+      IconSettings:SetField(entry, "appearance", "auraGlowStyle", value)
+      RefreshActiveAuraGlow()
+    end,
+  }
+
+  args.auraGlowColor = {
+    type = "color",
+    name = "Glow color",
+    order = 98.2,
+    hasAlpha = true,
+    hidden = entry.hasAura ~= true or entry.hideAura == true,
+    disabled = function()
+      return IconSettings:GetField(entry, "appearance", "auraGlowStyle") == nil
+    end,
+    get = function()
+      return _PCM_GetColorComponents(
+        IconSettings:GetField(entry, "appearance", "auraGlowColor") or { 1, 1, 1, 1 }
+      )
+    end,
+    set = function(_, r, g, b, a)
+      IconSettings:SetField(entry, "appearance", "auraGlowColor", { r, g, b, a or 1 })
+      RefreshActiveAuraGlow()
     end,
   }
 

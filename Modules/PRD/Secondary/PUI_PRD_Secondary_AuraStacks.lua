@@ -103,36 +103,6 @@ local function HideNativeDividers(track)
   end
 end
 
-local function GetNativeTickValues(config, maximum)
-  if config.showDividers == false or maximum <= 1 then
-    return nil
-  end
-
-  local pattern = config.stackTickValues or "ALL"
-  if pattern:upper():find("ALL", 1, true) then
-    local values = {}
-    for value = 1, maximum - 1 do
-      values[#values + 1] = value
-    end
-    return values
-  end
-
-  local values = {}
-  local seen = {}
-  for token in pattern:gmatch("[^,]+") do
-    local value = tonumber(token:match("^%s*(.-)%s*$"))
-    if value then
-      value = math.floor(value + 0.5)
-      if value > 0 and value < maximum and not seen[value] then
-        seen[value] = true
-        values[#values + 1] = value
-      end
-    end
-  end
-  table.sort(values)
-  return #values > 0 and values or nil
-end
-
 local function LayoutNativeDividers(track)
   local config = track.config
   local maximum = tonumber(track.maximum) or 0
@@ -143,7 +113,7 @@ local function LayoutNativeDividers(track)
 
   local pattern = config.stackTickValues or "ALL"
   if track.nativeTickPattern ~= pattern or track.nativeTickMaximum ~= maximum then
-    track.nativeTickValues = GetNativeTickValues(config, maximum)
+    track.nativeTickValues = Secondary.GetResourceTickValues(config, maximum)
     track.nativeTickPattern = pattern
     track.nativeTickMaximum = maximum
   end
@@ -569,7 +539,7 @@ local function BuildNative(owner)
     local resource = resources[index]
     local definition = resource.definition
 
-    if definition.adapter == "AURA_STACKS" then
+    if resource.visible and definition.adapter == "AURA_STACKS" then
       local view = GetNativeResourceView(owner, resource)
       view.secondaryUsesCustom = owner.secondaryUsesCustom
       view.secondaryCustomEnabled = owner.secondaryCustomEnabled
@@ -589,9 +559,6 @@ local function BuildNative(owner)
     for resourceKey, track in pairs(tracks) do
       if activeTracks[resourceKey] ~= true then
         DisableNativeTrack(track)
-        if track.resource and track.resource.frame then
-          track.resource.frame:Hide()
-        end
       end
     end
   end
@@ -614,7 +581,7 @@ local function GetNativeEvents(owner)
   local resources = owner.secondaryResources or {}
   for index = 1, #resources do
     local definition = resources[index].definition
-    if definition.adapter == "AURA_STACKS"
+    if resource.visible and definition.adapter == "AURA_STACKS"
       and (definition.knownMaxSpellID or definition.maxAuraSpellID)
     then
       return NATIVE_SPELL_EVENTS
@@ -635,7 +602,7 @@ local function UpdateNative(owner, event)
       local resource = resources[index]
       local definition = resource.definition
 
-      if definition.adapter == "AURA_STACKS"
+      if resource.visible and definition.adapter == "AURA_STACKS"
         and (definition.knownMaxSpellID or definition.maxAuraSpellID)
       then
         local maximum = Secondary.ResolveMaximum(definition, true)
@@ -724,7 +691,7 @@ local function IsNativeStructureReady(owner)
 
   for index = 1, #resources do
     local resource = resources[index]
-    if resource.definition.adapter == "AURA_STACKS" then
+    if resource.visible and resource.definition.adapter == "AURA_STACKS" then
       hasAuraResource = true
       local track = tracks and tracks[resource.definition.resourceKey]
       local view = resource.view or (index == 1 and owner or nil)

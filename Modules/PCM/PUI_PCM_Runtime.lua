@@ -8,6 +8,7 @@ local CreateFrame = CreateFrame
 local InCombatLockdown = InCombatLockdown
 local enabled = false
 local initializing = true
+local trackedSpells = {}
 local subscribers = {}
 local subscriberOrder = {}
 local eventFrame = CreateFrame("Frame")
@@ -29,6 +30,7 @@ local LIFECYCLE_EVENTS = {
   "ACTIVE_TALENT_GROUP_CHANGED",
   "TRAIT_CONFIG_UPDATED",
   "SPELLS_CHANGED",
+  "SPELL_UPDATE_ICON",
   "PLAYER_EQUIPMENT_CHANGED",
   "EDIT_MODE_LAYOUTS_UPDATED",
   "COOLDOWN_VIEWER_DATA_LOADED",
@@ -43,6 +45,70 @@ local function IsDataRestricted()
       or C_Secrets.ShouldCooldownsBeSecret()
     ))
 end
+
+local SPELL_IDENTITY_EVENTS = {
+  SPELLS_CHANGED = true,
+  COOLDOWN_VIEWER_SPELL_OVERRIDE_UPDATED = true,
+  PLAYER_SPECIALIZATION_CHANGED = true,
+  ACTIVE_PLAYER_SPECIALIZATION_CHANGED = true,
+  PLAYER_TALENT_UPDATE = true,
+  PLAYER_PVP_TALENT_UPDATE = true,
+  ACTIVE_TALENT_GROUP_CHANGED = true,
+  ACTIVE_COMBAT_CONFIG_CHANGED = true,
+  TRAIT_CONFIG_UPDATED = true,
+  PLAYER_ENTERING_WORLD = true,
+  COOLDOWN_VIEWER_DATA_LOADED = true,
+  COOLDOWN_VIEWER_TABLE_HOTFIXED = true,
+}
+
+local function IsTrackedSpellKnown(spellID)
+  local known = C_SpellBook.IsSpellKnownOrInSpellBook(spellID, Enum.SpellBookSpellBank.Player)
+  if not issecretvalue(known) and known == true then return true end
+  known = C_SpellBook.IsSpellKnownOrInSpellBook(spellID, Enum.SpellBookSpellBank.Pet)
+  return not issecretvalue(known) and known == true
+end
+
+function Runtime:ResolveTrackedSpell(spellID)
+  if issecretvalue(spellID) or type(spellID) ~= "number" or spellID <= 0 then
+    return nil, false
+  end
+  local cached = trackedSpells[spellID]
+  if cached then return cached.spellID, cached.known end
+
+  local overrideSpellID = C_Spell.GetOverrideSpell(spellID)
+  if issecretvalue(overrideSpellID) or type(overrideSpellID) ~= "number" or overrideSpellID <= 0 then
+    return nil, false
+  end
+  local exists = C_Spell.DoesSpellExist(overrideSpellID)
+  if issecretvalue(exists) or exists ~= true then return nil, false end
+
+  local known = IsTrackedSpellKnown(spellID) or IsTrackedSpellKnown(overrideSpellID)
+  if not known then
+    for _, entry in ipairs(ns.PCMAbilityCatalog:GetEntries()) do
+      local equivalentSpellID
+      if entry.baseSpellID == spellID then
+        equivalentSpellID = entry.overrideSpellID
+      elseif entry.overrideSpellID == spellID then
+        equivalentSpellID = entry.baseSpellID
+      end
+      if equivalentSpellID and IsTrackedSpellKnown(equivalentSpellID) then
+        local resolvedSpellID = C_Spell.GetOverrideSpell(equivalentSpellID)
+        if not issecretvalue(resolvedSpellID) and type(resolvedSpellID) == "number" and resolvedSpellID > 0 then
+          overrideSpellID = resolvedSpellID
+          known = true
+          break
+        end
+      end
+    end
+  end
+
+  trackedSpells[spellID] = { spellID = overrideSpellID, known = known }
+  return overrideSpellID, known
+end
+
+ns.PCMAbilityCatalog:RegisterListener(Runtime, function()
+  wipe(trackedSpells)
+end)
 
 local function DispatchLifecycleEvent(event, ...)
   for index = 1, #subscriberOrder do
@@ -93,6 +159,7 @@ end
 function Runtime:Enable()
   if enabled then return end
   enabled = true
+  wipe(trackedSpells)
   for index = 1, #LIFECYCLE_EVENTS do
     eventFrame:RegisterEvent(LIFECYCLE_EVENTS[index])
   end
@@ -101,6 +168,7 @@ end
 function Runtime:Disable()
   if not enabled then return end
   enabled = false
+  wipe(trackedSpells)
   eventFrame:UnregisterAllEvents()
   if initializing then
     eventFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
@@ -130,11 +198,13 @@ eventFrame:SetScript("OnEvent", function(_, event, ...)
     end
   end
 
+  if SPELL_IDENTITY_EVENTS[event] then wipe(trackedSpells) end
   DispatchLifecycleEvent(event, ...)
 end)
 
 local P = select(1, ns.Pleebug:DropIn(Runtime, { name = "PCM", bucket = "Runtime" }))
 DispatchLifecycleEvent = P:Def("Runtime.DispatchLifecycleEvent", DispatchLifecycleEvent)
+Runtime.ResolveTrackedSpell = P:Def("Runtime:ResolveTrackedSpell", Runtime.ResolveTrackedSpell)
 Runtime.RegisterSubscriber = P:Def("Runtime:RegisterSubscriber", Runtime.RegisterSubscriber)
 Runtime.SetSubscriberEnabled = P:Def("Runtime:SetSubscriberEnabled", Runtime.SetSubscriberEnabled)
 Runtime.IsDataRestricted = P:Def("Runtime:IsDataRestricted", Runtime.IsDataRestricted)

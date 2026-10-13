@@ -7,7 +7,7 @@ local layout = {
     "GuildBenefitsFrame.Rewards", "GuildDetailsFrame.Info", "GuildDetailsFrame.News", "InvitationFrame.InsetFrame",
     "ClubFinderInvitationFrame.InsetFrame", "TicketFrame.InsetFrame" },
   Hide = { "PortraitOverlay", "CommunitiesList.FilligreeOverlay", "CommunitiesList.TopFiligree", "CommunitiesList.BottomFiligree",
-    "MemberList.WatermarkFrame" },
+    "MemberList.WatermarkFrame", "ChatEditBox.Mid" },
   Button = { "InviteButton", "GuildLogButton", "CommunitiesControlFrame.GuildControlButton",
     "CommunitiesControlFrame.GuildRecruitmentButton", "CommunitiesControlFrame.CommunitiesSettingsButton",
     "InvitationFrame.AcceptButton", "InvitationFrame.DeclineButton", "ClubFinderInvitationFrame.AcceptButton",
@@ -67,12 +67,37 @@ end
 local function RefreshCommunities(frame)
   Skins.Shell(frame)
   Skins.Apply(frame, layout)
-  for _, pane in ipairs({ frame.CommunitiesList, frame.GuildBenefitsFrame, frame.GuildDetailsFrame, frame.MemberList.ColumnDisplay }) do
+  for _, pane in ipairs({ frame.CommunitiesList, frame.GuildBenefitsFrame, frame.GuildBenefitsFrame.Perks,
+    frame.GuildDetailsFrame, frame.MemberList.ColumnDisplay }) do
     for _, region in ipairs({ pane:GetRegions() }) do
       if region:IsObjectType("Texture") then Skins.Hide(region) end
     end
     Skins.Surface(pane, false, true)
   end
+  for _, pane in ipairs({ frame.Chat.MessageFrame, frame.GuildBenefitsFrame.Perks, frame.GuildBenefitsFrame.Rewards }) do
+    Skins.Surface(pane, true, true)
+  end
+
+  local faction = frame.GuildBenefitsFrame.FactionFrame
+  local bar = faction.Bar
+
+  for _, texture in ipairs({ bar.Left, bar.Middle, bar.Right, bar.BG, bar.Shadow }) do
+    Skins.Hide(texture)
+  end
+
+  Skins.Surface(bar, true)
+
+  bar.Progress:ClearAllPoints()
+  bar.Progress:SetPoint("LEFT", bar, "LEFT", 1, 0)
+  bar.Progress:SetHeight(bar:GetHeight() - 2)
+  bar.Progress:SetTexture(ns.Theme.GetBarTexture())
+
+  local accent = ns.Theme.GetColors().accent
+  bar.Progress:SetVertexColor(accent[1], accent[2], accent[3], accent[4])
+
+  Skins.Font(faction.Label)
+  Skins.Font(bar.Label)
+
   for _, key in ipairs({ "ChatTab", "RosterTab", "GuildBenefitsTab", "GuildInfoTab" }) do
     local tab = frame[key]
     for _, region in ipairs({ tab:GetRegions() }) do

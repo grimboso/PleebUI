@@ -15,26 +15,13 @@ local function BuildStateKey(owner, customEnabled)
     local config = resource.config
 
     parts[#parts + 1] = definition.resourceKey
+    parts[#parts + 1] = resource.visible and 1 or 0
     parts[#parts + 1] = definition.adapter or ""
     parts[#parts + 1] = tostring(resource.maximum or 0)
     parts[#parts + 1] = config and config.structureKey or ""
   end
 
   return table.concat(parts, "|")
-end
-
-local function IsVisibilityAllowed(owner)
-  local mode = owner._puiSecondaryVisibilityMode or "ALWAYS"
-
-  if mode == "COMBAT" then
-    return UnitAffectingCombat("player") == true
-  elseif mode == "TARGET" then
-    return UnitExists("target") == true
-  elseif mode == "COMBAT_OR_TARGET" then
-    return UnitAffectingCombat("player") == true or UnitExists("target") == true
-  end
-
-  return true
 end
 
 local function ResourceHasBuffCue(config)
@@ -95,7 +82,7 @@ local function ConfigureSecondaryCues(owner)
     local frame = resource.frame
     local config = resource.config
 
-    if owner.secondaryCustomEnabled == true and frame and config then
+    if owner.secondaryUsesCustom == true and resource.visible and frame and config then
       Secondary.ConfigureResourceBuffCue(owner, frame, config)
     elseif frame and config then
       Secondary.StopResourceCues(owner, frame, config)
@@ -213,8 +200,7 @@ function M:RebuildSecondary(forceBuild)
   local isAlternatePower = definition ~= nil and definition.isAlternatePower == true
   local customEnabled = hasSecondary and (isAlternatePower or secondaryConfig.enabled ~= false)
 
-  self._puiSecondaryVisibilityMode = secondaryConfig.visibilityMode or "ALWAYS"
-  local useCustom = customEnabled and (isAlternatePower or IsVisibilityAllowed(self))
+  local useCustom = customEnabled and self._puiSecondaryHasVisibleResources
 
   self.secondaryType = powerType
   self.secondaryToken = token
@@ -231,7 +217,6 @@ function M:RebuildSecondary(forceBuild)
   local eventParts = {
     tostring(secondaryConfig.enabled ~= false and 1 or 0),
     tostring(profile.primary.hideAlternateMana ~= true and 1 or 0),
-    tostring(secondaryConfig.visibilityMode or "ALWAYS"),
     tostring(customEnabled and 1 or 0),
     tostring(useCustom and 1 or 0),
   }
@@ -240,6 +225,7 @@ function M:RebuildSecondary(forceBuild)
     local resource = resources[index]
     eventParts[#eventParts + 1] = resource.definition.resourceKey
     eventParts[#eventParts + 1] = resource.definition.adapter or ""
+    eventParts[#eventParts + 1] = resource.config.visibilityMode
     eventParts[#eventParts + 1] = tostring(
       resource.config and resource.config.cues.buffGlowSpellID or 0
     )
@@ -262,7 +248,7 @@ function M:RebuildSecondary(forceBuild)
     SuspendSecondaryAdapters(self)
   end
 
-  self._puiSecondaryRuntimeResources = customEnabled and resources or {}
+  self._puiSecondaryRuntimeResources = useCustom and resources or {}
 
   if useCustom and not wasUsingCustom and self._puiSecondaryContent then
     self._puiSecondaryContent:SetAlpha(1)
@@ -284,7 +270,7 @@ function M:RebuildSecondary(forceBuild)
     self:SetBlizzardRootGhosted(ghostRoot)
   end
 
-  local structureReady = not customEnabled or AreSecondaryStructuresReady(self)
+  local structureReady = not useCustom or AreSecondaryStructuresReady(self)
 
   if (stateChanged or visibilityChanged)
     and (
@@ -300,7 +286,7 @@ function M:RebuildSecondary(forceBuild)
     self:AttachMover()
   end
 
-  if customEnabled
+  if useCustom
     and (self._puiSecondaryBuildPending == true or not structureReady)
   then
     structureReady = BuildSecondaryStructures(self)
@@ -313,7 +299,7 @@ function M:RebuildSecondary(forceBuild)
     return
   end
 
-  if customEnabled then
+  if useCustom then
     ConfigureSecondaryCues(self)
   else
     StopSecondaryCues(self, resources)
@@ -329,42 +315,13 @@ function M:RebuildSecondary(forceBuild)
 end
 
 function M:RefreshSecondaryVisibility()
-  local definition = self.secondaryDef
-  local isAlternatePower = definition ~= nil and definition.isAlternatePower == true
-  local useCustom = self.secondaryCustomEnabled == true
-    and (isAlternatePower or IsVisibilityAllowed(self))
-
-  if self.secondaryUsesCustom == useCustom then
-    return
-  end
-
-  self.secondaryUsesCustom = useCustom
-  self:RegisterSecondaryEvents()
-
-  if not useCustom then
-    SuspendSecondaryAdapters(self)
-    HideSecondaryResourceFrames(self)
-    self:ApplyLayout()
-    return
-  end
-
-  if self._puiSecondaryBuildPending == true
-    or not AreSecondaryStructuresReady(self)
-  then
-    self._puiSecondaryBuildPending = true
-    self:RegisterSecondaryEvents()
-    SuspendSecondaryAdapters(self)
-    HideSecondaryResourceFrames(self)
-    return
-  end
-
-  self:ApplyLayout()
-  ConfigureSecondaryCues(self)
-  self:UpdateSecondary()
+  self._puiSecondaryVisibilityDirty = true
+  self:RebuildSecondary()
+  ns.PRDPreview.MarkDirty()
 end
 
 function M:RefreshSecondaryAppearance()
-  if self.secondaryCustomEnabled ~= true or #((self.secondaryResources) or {}) == 0 then
+  if self.secondaryUsesCustom ~= true or #((self.secondaryResources) or {}) == 0 then
     return
   end
 
@@ -404,7 +361,7 @@ function M:RefreshSecondaryAppearance()
 end
 
 function M:RefreshSecondaryText()
-  if self.secondaryCustomEnabled ~= true or #((self.secondaryResources) or {}) == 0 then
+  if self.secondaryUsesCustom ~= true or #((self.secondaryResources) or {}) == 0 then
     return
   end
 
@@ -447,7 +404,7 @@ function M:UpdateSecondary()
     end
   end
 
-  if not adapter or adapter.directUpdate == true then
+  if not adapter or adapter.directUpdate == true or self.secondaryResources[1].visible ~= true then
     return
   end
 
@@ -526,8 +483,6 @@ end
 function M:RegisterSecondaryEvents()
   local profile = self.db.profile
   local secondaryConfig = profile.secondary
-  local definition = self.secondaryDef
-  local isAlternatePower = definition ~= nil and definition.isAlternatePower == true
   local keepAlternatePowerRuntime = profile.primary.hideAlternateMana ~= true
     and Secondary.PlayerClassHasAlternatePower == true
 
@@ -546,8 +501,12 @@ function M:RegisterSecondaryEvents()
   frame:UnregisterAllEvents()
   frame._puiAdapterEvents = nil
 
-  if definition and not isAlternatePower and secondaryConfig.enabled ~= false then
-    RegisterVisibilityEvents(frame, secondaryConfig.visibilityMode or "ALWAYS")
+  if secondaryConfig.enabled ~= false then
+    for _, resource in ipairs(self.secondaryResources or {}) do
+      if resource.definition.isAlternatePower ~= true then
+        RegisterVisibilityEvents(frame, resource.config.visibilityMode)
+      end
+    end
   end
 
   if self._puiSecondaryBuildPending
@@ -559,7 +518,7 @@ function M:RegisterSecondaryEvents()
 
   local hasBuffCue = false
   for index = 1, #(self.secondaryResources or {}) do
-    if ResourceHasBuffCue(self.secondaryResources[index].config) then
+    if self.secondaryResources[index].visible and ResourceHasBuffCue(self.secondaryResources[index].config) then
       hasBuffCue = true
       break
     end
@@ -611,7 +570,6 @@ function M:CompleteSecondaryShutdown()
 end
 
 BuildStateKey = P:Def("BuildStateKey", BuildStateKey)
-IsVisibilityAllowed = P:Def("IsVisibilityAllowed", IsVisibilityAllowed)
 ResourceHasBuffCue = P:Def("ResourceHasBuffCue", ResourceHasBuffCue)
 ForEachResourceAdapter = P:Def("ForEachResourceAdapter", ForEachResourceAdapter)
 ForEachSecondaryAdapter = P:Def("ForEachSecondaryAdapter", ForEachSecondaryAdapter)

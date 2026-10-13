@@ -920,6 +920,13 @@ local function PCMPreview_ConfigureViewerPanel(box, panel, definition, root)
     icon.__puiPCMPreviewDurationSwipeEnabled = effectiveSwipe.showDuration
     icon.__puiPCMPreviewReadyAlpha = appearance and appearance.readyAlpha or 1
     icon.__puiPCMPreviewCooldownAlpha = appearance and appearance.cooldownAlpha or 1
+    icon.__puiPCMPreviewReadyGlowStyle = appearance and appearance.readyGlowStyle or "NONE"
+    icon.__puiPCMPreviewReadyGlowColor = appearance and appearance.readyGlowColor or { 1, 1, 1, 1 }
+    icon.__puiPCMPreviewCooldownGlowStyle = appearance and appearance.cooldownGlowStyle or "NONE"
+    icon.__puiPCMPreviewCooldownGlowColor = appearance and appearance.cooldownGlowColor or { 1, 1, 1, 1 }
+    icon.__puiPCMPreviewAuraGlowStyle = appearance and appearance.auraGlowStyle or "NONE"
+    icon.__puiPCMPreviewAuraGlowColor = appearance and appearance.auraGlowColor or { 1, 1, 1, 1 }
+    icon.__puiPCMPreviewGlowState = nil
     icon.__puiPCMPreviewDuration = 7 + index * 2
     icon.__puiPCMPreviewPhaseOffset = index * 0.8
     icon.__puiPCMPreviewCooldownCycle = nil
@@ -1071,6 +1078,13 @@ local function PCMPreview_ConfigureBuffIconPanel(box, panel, root, pcmRoot)
     icon.__puiPCMPreviewAuraSaturation = appearance and appearance.auraSaturation or nil
     icon.__puiPCMPreviewReadySaturation = nil
     icon.__puiPCMPreviewCooldownSaturation = nil
+    icon.__puiPCMPreviewReadyGlowStyle = "NONE"
+    icon.__puiPCMPreviewReadyGlowColor = nil
+    icon.__puiPCMPreviewCooldownGlowStyle = "NONE"
+    icon.__puiPCMPreviewCooldownGlowColor = nil
+    icon.__puiPCMPreviewAuraGlowStyle = appearance and appearance.auraGlowStyle or "NONE"
+    icon.__puiPCMPreviewAuraGlowColor = appearance and appearance.auraGlowColor or { 1, 1, 1, 1 }
+    icon.__puiPCMPreviewGlowState = nil
     icon.__puiPCMPreviewResolvedSwipe = nil
     icon.cooldown:SetDrawEdge(swipe.showDuration and swipe.durationEdge)
     local er, eg, eb, ea = PCMPreview_ColorComponents(swipe.durationEdgeColor, { 1, 1, 1, 1 })

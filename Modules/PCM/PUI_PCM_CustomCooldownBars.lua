@@ -8,7 +8,6 @@ local UIParent = _G.UIParent
 local InCombatLockdown = _G.InCombatLockdown
 local CreateFrame = _G.CreateFrame
 local C_Spell = _G.C_Spell
-local C_SpellBook = _G.C_SpellBook
 local PCMRuntime = ns.PCMRuntime
 local FrameUtil = ns.FrameUtil
 local BarWidget = ns.BarWidget
@@ -24,8 +23,6 @@ local _SB_RuntimeEnabled = false
 local _SB_UpdateQueued = false
 local _SB_UpdateFrame = CreateFrame("Frame")
 _SB_UpdateFrame:Hide()
-local _SB_ClearKnownSpellCache
-local _SB_KnownSpellCache = {}
 local _SB_SpellAvailability = {}
 
 local Cooldowns = ns.Modules.CooldownManager
@@ -54,36 +51,9 @@ end
 local _PUI_SB_TimerInterpLinear = Enum.StatusBarInterpolation.None
 local _PUI_SB_TimerDirRemaining = Enum.StatusBarTimerDirection.RemainingTime
 
-_SB_ClearKnownSpellCache = function()
-  for key in pairs(_SB_KnownSpellCache) do
-    _SB_KnownSpellCache[key] = nil
-  end
-
-  Cooldowns:ClearSavedSpellKnownCache()
-end
-
 local function _SB_IsTrackedSpellKnown(cfg)
-  local spellID = Cooldowns:GetTrackedSpellIDForCurrentSpec(cfg)
-  if not spellID or not C_Spell.DoesSpellExist(spellID) then
-    return false
-  end
-
-  if cfg.forceShow == true then
-    return true
-  end
-
-  local currentSpecID = Cooldowns:GetCurrentSpecializationID() or 0
-  local cacheKey = tostring(spellID) .. ":" .. tostring(currentSpecID)
-
-  local cached = _SB_KnownSpellCache[cacheKey]
-  if cached ~= nil then
-    return cached == true
-  end
-
-  local known = C_SpellBook.IsSpellKnown(spellID, Enum.SpellBookSpellBank.Player)
-  _SB_KnownSpellCache[cacheKey] = known
-
-  return known
+  local spellID, known = PCMRuntime:ResolveTrackedSpell(Cooldowns:GetTrackedSpellIDForCurrentSpec(cfg))
+  return spellID ~= nil and (cfg.forceShow == true or known)
 end
 
 local function _SB_ClearTextDuration(bd)
@@ -406,7 +376,7 @@ local function _SB_ApplyPresentation(bd, cfg)
     cfg
   )
 
-  local spellID = cfg and tonumber(cfg.trackedSpellID) or nil
+  local spellID = PCMRuntime:ResolveTrackedSpell(cfg and tonumber(cfg.trackedSpellID))
   if showIcon and spellID and bd.icon and bd.__puiIconSpellID ~= spellID then
     bd.icon:SetTexture(C_Spell.GetSpellTexture(spellID))
     bd.__puiIconSpellID = spellID
@@ -507,10 +477,14 @@ local function _SB_ApplyStateAppearance(bd, cfg)
 end
 
 local function _SB_UpdateCooldownBar(bd, cfg)
-  local spellID = cfg and tonumber(cfg.trackedSpellID) or nil
+  local trackedSpellID = cfg and tonumber(cfg.trackedSpellID)
+  local spellID = PCMRuntime:ResolveTrackedSpell(trackedSpellID)
+  if trackedSpellID and not spellID then return end
 
   if bd.__puiTrackedSpellID ~= spellID then
+    bd.previousRuntimeSpellID = bd.__puiTrackedSpellID
     bd.__puiTrackedSpellID = spellID
+    __PUI_PCM_SpellBars._cooldownSpellIndexGen = nil
     bd.__puiIconSpellID = nil
     bd.__puiCooldownActive = nil
     bd.__puiCooldownStateKnown = nil
@@ -567,8 +541,9 @@ local function _SB_UpdateCooldownBar(bd, cfg)
     return
   end
 
-  if cfg.showIcon and bd.icon and bd.__puiIconSpellID ~= spellID then
-    bd.icon:SetTexture(C_Spell.GetSpellTexture(spellID))
+  if bd.__puiIconSpellID ~= spellID then
+    if cfg.showIcon and bd.icon then bd.icon:SetTexture(C_Spell.GetSpellTexture(spellID)) end
+    if not barEnabled then CustomIcons:UpdateSpellIdentity("cooldown:" .. tostring(bd.id), spellID) end
     bd.__puiIconSpellID = spellID
   end
 
@@ -746,8 +721,8 @@ _SB_RebuildAll = function()
           optionsString = "CooldownManager,customTrackers,spell:" .. tostring(bd.id),
           moverKey = "PCM_CustomCooldownIcon_" .. tostring(bd.id),
           defaultY = 120 - ((i - 1) * 50),
-          spellID = tonumber(cfg.trackedSpellID),
-          texture = C_Spell.GetSpellTexture(cfg.trackedSpellID),
+          spellID = PCMRuntime:ResolveTrackedSpell(cfg.trackedSpellID),
+          texture = C_Spell.GetSpellTexture((PCMRuntime:ResolveTrackedSpell(cfg.trackedSpellID))),
           inCombat = _SB_PlayerInCombat,
         })
       else
@@ -860,6 +835,15 @@ local function _SB_GetCooldownSpellIndex()
         spellIndex[trackedSpellID] = bucket
       end
       bucket[bd] = true
+
+      for _, runtimeSpellID in pairs({ bd.__puiTrackedSpellID, bd.previousRuntimeSpellID }) do
+        bucket = spellIndex[runtimeSpellID]
+        if not bucket then
+          bucket = {}
+          spellIndex[runtimeSpellID] = bucket
+        end
+        bucket[bd] = true
+      end
 
       local baseSpellID = C_Spell.GetBaseSpell(trackedSpellID)
       if not issecretvalue(baseSpellID)
@@ -1209,12 +1193,9 @@ local function _SB_RefreshSpellAvailability()
 
   __PUI_PCM_SpellBars.pendingSpellAvailabilityRefresh = nil
   for _, entry in pairs(_SB_SpellAvailability) do
-    local spellID = entry.spellID
-    local available = spellID ~= nil and C_Spell.DoesSpellExist(spellID)
-      and (entry.cfg.forceShow == true
-        or C_SpellBook.IsSpellKnown(spellID, Enum.SpellBookSpellBank.Player))
+    local available = _SB_IsTrackedSpellKnown(entry.cfg)
     if available ~= entry.available then
-      _SB_ClearKnownSpellCache()
+      Cooldowns:ClearSavedSpellKnownCache()
       Cooldowns:SpellBars_Rebuild()
       return true
     end
@@ -1237,7 +1218,7 @@ function Cooldowns:SpellBars_ReconcileAvailability()
   if currentSpecID ~= __PUI_PCM_SpellBars.activeSpecID then
     __PUI_PCM_SpellBars.pendingSpecTalentRefresh = false
     __PUI_PCM_SpellBars.pendingSpellAvailabilityRefresh = nil
-    _SB_ClearKnownSpellCache()
+    Cooldowns:ClearSavedSpellKnownCache()
     self:SpellBars_Rebuild()
     return
   end
@@ -1272,8 +1253,16 @@ PCMRuntime:RegisterSubscriber("SpellBars", {
       or event == "TRAIT_CONFIG_UPDATED"
     then
       Cooldowns:_SpellBars_OnTalentUpdate(event, ...)
-    elseif event == "SPELLS_CHANGED" then
-      _SB_RefreshSpellAvailability()
+    elseif event == "SPELLS_CHANGED"
+      or event == "COOLDOWN_VIEWER_SPELL_OVERRIDE_UPDATED"
+      or event == "SPELL_UPDATE_ICON"
+    then
+      for _, key in ipairs(__PUI_PCM_SpellBars._cooldownKeys or {}) do
+        local bd = __PUI_PCM_SpellBars.bars[key]
+        bd.__puiIconSpellID = nil
+      end
+      _SB_ScheduleCooldownUpdate()
+      if event == "SPELLS_CHANGED" then _SB_RefreshSpellAvailability() end
     end
   end,
 })
@@ -1328,7 +1317,7 @@ function Cooldowns:_SpellBars_ApplySettings(flags)
   end
 
   if flags.profile == true then
-    _SB_ClearKnownSpellCache()
+    Cooldowns:ClearSavedSpellKnownCache()
   end
 end
 

@@ -69,6 +69,13 @@ local function ApplyButtonVisual(button, fallbackText)
     not enabled, button.__puiHovered == true, button.__puiPressed == true
   )
 
+  if button.__puiKind == "close" then
+    local color = Theme.GetColors().text
+    local alpha = button.__puiPressed and 0.12 or button.__puiHovered and 0.07 or 0
+    bg = { color[1], color[2], color[3], alpha }
+    border = { 0, 0, 0, 0 }
+  end
+
   Theme.SetSquareBackdrop(button, {
     bg = bg,
     border = border,

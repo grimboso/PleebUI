@@ -1999,6 +1999,8 @@ local function CS_SkinScrollBar(scrollBar)
     return
   end
 
+  ns.BlizzardSkins.WidenScrollBar(scrollBar)
+
   if not scrollBar._puiCharScrollSkinned then
     if scrollBar.Track and scrollBar.Track.SetAlpha then
       scrollBar.Track:SetAlpha(0.25)
@@ -3969,11 +3971,7 @@ local function SetupCharacterFrameSkinning()
       CharacterFrame.TitleBg:SetAlpha(0)
     end
 
-    if CharacterFrame.TitleText then
-      ns.Theme.ApplyFont(CharacterFrame.TitleText, "title")
-      local tr, tg, tb, ta = GetTextColor()
-      CharacterFrame.TitleText:SetTextColor(tr, tg, tb, ta)
-    end
+    ns.BlizzardSkins.WindowTitle(CharacterFrame, CharacterFrame.TitleText)
 
     if CharacterModelScene then
       StripTextures(CharacterModelScene, true)
@@ -4087,32 +4085,8 @@ local function SetupCharacterFrameSkinning()
     CharacterFrame._puiCharCoreDecorHooked = true
   end
 
-  -- Kill tab borders/textures; we’ll restyle or leave minimal text only.
   for i = 1, 3 do
-    local tab = _G["CharacterFrameTab" .. i]
-    if tab then
-      StripTextures(tab, true)
-      if tab.SetNormalTexture   then tab:SetNormalTexture("")   end
-      if tab.SetPushedTexture   then tab:SetPushedTexture("")   end
-      if tab.SetDisabledTexture then tab:SetDisabledTexture("") end
-      if tab.SetHighlightTexture then tab:SetHighlightTexture("") end
-
-      local bg = EnsureBackdropFrame(tab)
-      if bg and bg.SetBackdrop then
-        local edgeSize = Theme.GetEdgeSize()
-        bg:SetBackdrop({
-          bgFile   = "Interface\\Buttons\\WHITE8x8",
-          edgeFile = "Interface\\Buttons\\WHITE8x8",
-          edgeSize = edgeSize,
-        })
-
-        local r, g, b, a = CS_CONTROL()
-        bg:SetBackdropColor(r, g, b, a)
-
-        local br, bgG, bB, bA = CS_B()
-        bg:SetBackdropBorderColor(br, bgG, bB, bA)
-      end
-    end
+    ns.BlizzardSkins.Tab(_G["CharacterFrameTab" .. i])
   end
 
 
@@ -4250,12 +4224,7 @@ function CharacterSheet:RefreshTheme()
     CS_LayoutStatGroups()
     CS_RefreshSlotDisplaySettings()
 
-    local tr, tg, tb, ta = GetTextColor()
-
-    if CharacterFrame.TitleText then
-      ns.Theme.ApplyFont(CharacterFrame.TitleText, "title")
-      CharacterFrame.TitleText:SetTextColor(tr, tg, tb, ta)
-    end
+    ns.BlizzardSkins.WindowTitle(CharacterFrame, CharacterFrame.TitleText)
 
     CS_ApplyBackdrop(CharacterFramePortraitFrame, CS_BG)
     CS_ApplyBackdrop(CharacterStatsPane, CS_BG)
@@ -4264,10 +4233,6 @@ function CharacterSheet:RefreshTheme()
     CS_RefreshStatCategory(CharacterStatsPane.AttributesCategory)
     CS_RefreshStatCategory(CharacterStatsPane.EnhancementsCategory)
     CharacterSheet:RefreshSocketStrip()
-
-    for i = 1, 3 do
-      CS_ApplyBackdrop(_G["CharacterFrameTab" .. i], CS_CONTROL)
-    end
 
     CS_SkinCloseButton(CharacterFrameCloseButton)
     CS_SkinButton(CharacterFrame.TalentsButton)

@@ -48,7 +48,7 @@ function WidgetSkins.Scrollbar(widget)
   local border = colors.border
   local fill = colors.control
   local accent = colors.accent
-  local scrollbarWidth = Theme.GetOptionsPointerTargetSize(18)
+  local scrollbarWidth = Theme.GetOptionsPointerTargetSize(20)
   local upButton = scrollbar.ScrollUpButton
   local downButton = scrollbar.ScrollDownButton
   local thumb = scrollbar:GetThumbTexture()
@@ -154,7 +154,7 @@ function WidgetSkins.Scrollbar(widget)
 end
 
 local function LayoutScrollFrameTargets(widget)
-  local width = Theme.GetOptionsPointerTargetSize(18)
+  local width = Theme.GetOptionsPointerTargetSize(20)
   local margin = widget.scrollBarShown and (width + 2) or 0
   local changed = widget.__puiScrollTargetMargin ~= margin
   widget.__puiScrollTargetMargin = margin
@@ -221,7 +221,8 @@ function WidgetSkins.CloseButton(button)
 
   local text = button._puiCloseText
   local color = colors.text
-  text:SetText("x")
+  Theme.ApplyFont(text, "button", 15, "NONE")
+  text:SetText("×")
   text:SetTextColor(color[1], color[2], color[3], color[4])
   text:Show()
 

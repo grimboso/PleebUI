@@ -437,6 +437,9 @@ local DEFINITIONS = {
         texture = "Pleebar",
         defaultColor = { 0.78, 0.61, 0.43, 1.00 },
         max = 12,
+        knownMaxSpellID = 1261049,
+        maxWhenKnown = 18,
+        maxWhenUnknown = 12,
         castCountSpellID = 260708,
         cooldownCountSpellIDs = { 260708 },
         countDisplayName = "Sweeping Strikes display",
@@ -489,6 +492,27 @@ local DEFINITIONS = {
 
 Secondary.Definitions = DEFINITIONS
 
+local RESOURCE_DEFINITIONS_BY_CLASS = {}
+
+local function IndexResourceDefinitions(entry, indexed)
+  if entry.adapter then
+    indexed[entry.resourceKey] = entry
+    return
+  end
+
+  for _, branch in ipairs({ "resources", "bySpec", "byForm" }) do
+    for _, definition in pairs(entry[branch] or {}) do
+      IndexResourceDefinitions(definition, indexed)
+    end
+  end
+end
+
+for classToken, entry in pairs(DEFINITIONS) do
+  local indexed = {}
+  IndexResourceDefinitions(entry, indexed)
+  RESOURCE_DEFINITIONS_BY_CLASS[classToken] = indexed
+end
+
 local function DefinitionContainsAlternatePower(entry)
   if type(entry) ~= "table" then
     return false
@@ -527,6 +551,10 @@ end
 
 local PLAYER_CLASS = select(2, UnitClass("player"))
 Secondary.PlayerClassHasAlternatePower = DefinitionContainsAlternatePower(DEFINITIONS[PLAYER_CLASS])
+
+function Secondary:GetResourceDefinition(resourceKey)
+  return RESOURCE_DEFINITIONS_BY_CLASS[PLAYER_CLASS][resourceKey]
+end
 
 local function GetPlayerSpecID()
   local specIndex = C_SpecializationInfo.GetSpecialization()
@@ -569,19 +597,6 @@ local function GetResolvedDefinitionCandidates()
   return { resolvedEntry }, specID
 end
 
-function Secondary:GetCooldownCountSpellIDs(resourceKey)
-  local candidates, specID = GetResolvedDefinitionCandidates()
-  if not candidates then return nil end
-  for index = 1, #candidates do
-    local definition = candidates[index]
-    if definition.resourceKey == resourceKey
-      and (not definition.specIDs or definition.specIDs[specID] == true)
-    then
-      return definition.cooldownCountSpellIDs, definition
-    end
-  end
-end
-
 function Secondary:GetCooldownCountResourceKey(entry)
   if entry.settingsFamily ~= "cooldown" or not entry.identitySpellIDs then
     return nil
@@ -614,42 +629,6 @@ end
 function Secondary:SetResourceDisplayMode(resourceKey, mode)
   ns.PCMIconSettings:SetResourceCountEnabled(resourceKey, mode == "ICONS" or mode == "BOTH")
   M:SetSecondaryResourceEnabled(resourceKey, mode == "BAR" or mode == "BOTH")
-end
-
-local function DefinitionContainsResourceForSpec(entry, specID)
-  if type(entry) ~= "table" then
-    return false
-  end
-
-  if entry.adapter then
-    return type(entry.specIDs) ~= "table" or entry.specIDs[specID] == true
-  end
-
-  if type(entry.resources) == "table" then
-    for _, definition in ipairs(entry.resources) do
-      if DefinitionContainsResourceForSpec(definition, specID) then
-        return true
-      end
-    end
-  end
-
-  if type(entry.bySpec) == "table" then
-    return DefinitionContainsResourceForSpec(entry.bySpec[specID], specID)
-  end
-
-  if type(entry.byForm) == "table" then
-    for _, definition in pairs(entry.byForm) do
-      if DefinitionContainsResourceForSpec(definition, specID) then
-        return true
-      end
-    end
-  end
-
-  return false
-end
-
-function Secondary:HasResourceForCurrentSpec()
-  return DefinitionContainsResourceForSpec(DEFINITIONS[PLAYER_CLASS], GetPlayerSpecID())
 end
 
 local RESOURCE_OPTIONS_BY_CLASS = {
@@ -729,7 +708,7 @@ IsDefinitionEnabled = function(definition, profile)
     return profile.primary.hideAlternateMana ~= true
   end
 
-  return profile.secondary.resourceEnabled[definition.resourceKey] ~= false
+  return profile.secondary.resourceSettings[PLAYER_CLASS][definition.resourceKey].enabled ~= false
 end
 
 local function ResolveMaximum(definition, deferSecretAuraMaximum)
@@ -762,15 +741,24 @@ local function ResolveMaximum(definition, deferSecretAuraMaximum)
   return resolvedMax
 end
 
-local function EnsureResourceSettings(profile, resourceKey, resourceIndex)
+local function EnsureResourceSettings(profile, resourceKey, resourceIndex, classToken)
   local secondary = profile.secondary
   secondary.resourceSettings = secondary.resourceSettings or {}
+  classToken = classToken or PLAYER_CLASS
+  local classSettings = secondary.resourceSettings[classToken]
+  if not classSettings then
+    classSettings = {}
+    secondary.resourceSettings[classToken] = classSettings
+  end
 
-  local settings = secondary.resourceSettings[resourceKey]
+  local settings = classSettings[resourceKey]
   if not settings then
     settings = {}
-    secondary.resourceSettings[resourceKey] = settings
+    classSettings[resourceKey] = settings
   end
+
+  if settings.enabled == nil then settings.enabled = true end
+  if settings.visibilityMode == nil then settings.visibilityMode = "ALWAYS" end
 
   settings.behavior = settings.behavior or {}
   local behavior = settings.behavior
@@ -908,11 +896,24 @@ local function EnsureResourceSettings(profile, resourceKey, resourceIndex)
   return settings
 end
 
-function Secondary:GetResourceSettings(profile, resourceKey)
-  return EnsureResourceSettings(profile, resourceKey, 1)
+function Secondary:GetResourceSettings(profile, resourceKey, classToken)
+  return EnsureResourceSettings(profile, resourceKey, 1, classToken)
 end
 
-local function NormalizeDefinitionSettings(profile, entry, resourceIndex, seen)
+local function CopyMissingResourceSettings(target, source)
+  for key, value in pairs(source) do
+    if type(value) == "table" then
+      if target[key] == nil then target[key] = {} end
+      if type(target[key]) == "table" then
+        CopyMissingResourceSettings(target[key], value)
+      end
+    elseif target[key] == nil then
+      target[key] = value
+    end
+  end
+end
+
+local function NormalizeDefinitionSettings(profile, entry, resourceIndex, seen, classToken, migrating)
   if type(entry) ~= "table" then
     return
   end
@@ -920,32 +921,70 @@ local function NormalizeDefinitionSettings(profile, entry, resourceIndex, seen)
   if entry.adapter and entry.resourceKey then
     if not seen[entry.resourceKey] then
       seen[entry.resourceKey] = true
-      EnsureResourceSettings(profile, entry.resourceKey, resourceIndex)
+      if migrating then
+        local allSettings = profile.secondary.resourceSettings
+        allSettings[classToken] = allSettings[classToken] or {}
+        local classSettings = allSettings[classToken]
+        classSettings[entry.resourceKey] = classSettings[entry.resourceKey] or {}
+        local legacySettings = allSettings[entry.resourceKey]
+        if legacySettings then
+          CopyMissingResourceSettings(classSettings[entry.resourceKey], legacySettings)
+        end
+        local settings = classSettings[entry.resourceKey]
+        if settings.enabled == nil then
+          local enabled = profile.secondary.resourceEnabled
+          settings.enabled = not enabled or enabled[entry.resourceKey] ~= false
+        end
+        if settings.visibilityMode == nil then
+          settings.visibilityMode = profile.secondary.visibilityMode or "ALWAYS"
+        end
+      end
+      EnsureResourceSettings(profile, entry.resourceKey, resourceIndex, classToken)
     end
     return
   end
 
   if type(entry.resources) == "table" then
     for index, definition in ipairs(entry.resources) do
-      NormalizeDefinitionSettings(profile, definition, index, seen)
+      NormalizeDefinitionSettings(profile, definition, index, seen, classToken, migrating)
     end
   end
 
   if type(entry.bySpec) == "table" then
     for _, definition in pairs(entry.bySpec) do
-      NormalizeDefinitionSettings(profile, definition, resourceIndex, seen)
+      NormalizeDefinitionSettings(profile, definition, resourceIndex, seen, classToken, migrating)
     end
   end
 
   if type(entry.byForm) == "table" then
     for _, definition in pairs(entry.byForm) do
-      NormalizeDefinitionSettings(profile, definition, resourceIndex, seen)
+      NormalizeDefinitionSettings(profile, definition, resourceIndex, seen, classToken, migrating)
     end
   end
 end
 
 function Secondary:NormalizeProfile(profile)
-  NormalizeDefinitionSettings(profile, DEFINITIONS[PLAYER_CLASS], 1, {})
+  local secondary = profile.secondary
+  local migrating = secondary.__puiClassResourcesMigrated ~= true
+  secondary.resourceSettings = secondary.resourceSettings or {}
+  for classToken, entry in pairs(DEFINITIONS) do
+    NormalizeDefinitionSettings(profile, entry, 1, {}, classToken, migrating)
+  end
+
+  if migrating then
+    -- Seed every class before removing shared entries used by multi-character profiles.
+    for _, definitions in pairs(RESOURCE_DEFINITIONS_BY_CLASS) do
+      for resourceKey in pairs(definitions) do
+        secondary.resourceSettings[resourceKey] = nil
+        if secondary.resourceEnabled then secondary.resourceEnabled[resourceKey] = nil end
+      end
+    end
+    if secondary.resourceEnabled and next(secondary.resourceEnabled) == nil then
+      secondary.resourceEnabled = nil
+    end
+    secondary.visibilityMode = nil
+    secondary.__puiClassResourcesMigrated = true
+  end
 end
 
 function Secondary:ResourceSupportsNumericCues(resourceKey)
@@ -1049,7 +1088,7 @@ local function ResolveResourceConfig(profile, definition, specID)
   end
 
   local shared = profile.secondary
-  local settings = shared.resourceSettings[definition.resourceKey]
+  local settings = shared.resourceSettings[PLAYER_CLASS][definition.resourceKey]
   local appearance = settings
   local text = settings.text
   local font = settings.text
@@ -1088,6 +1127,7 @@ local function ResolveResourceConfig(profile, definition, specID)
 
   local config = {
     resourceKey = definition.resourceKey,
+    visibilityMode = settings.visibilityMode,
     resourceName = RESOURCE_NAMES[definition.resourceKey] or definition.resourceKey,
     thresholdGlowKey = "PUI_PRD_THRESHOLD_" .. definition.resourceKey,
     detached = settings.detached == true,
@@ -1226,22 +1266,52 @@ local function ResolveDefinitions()
   return resources, specID
 end
 
+local function IsResourceVisibilityAllowed(resource, profile)
+  if resource.definition.isAlternatePower == true or profile.secondary.enabled == false then
+    return true
+  end
+
+  local mode = resource.config.visibilityMode
+  if mode == "COMBAT" then
+    return UnitAffectingCombat("player") == true
+  elseif mode == "TARGET" then
+    return UnitExists("target") == true
+  elseif mode == "COMBAT_OR_TARGET" then
+    return UnitAffectingCombat("player") == true or UnitExists("target") == true
+  end
+  return true
+end
+
 function M:GetSecondaryDefinition()
   local profile = self.db.profile
   local revision = self._puiRuntimeConfigRevision or 0
-  if self._puiSecondaryDefinitionReady == true
+  local configReady = self._puiSecondaryDefinitionReady == true
     and self._puiSecondaryDefinitionDirty ~= true
     and self._puiSecondaryDefinitionProfile == profile
     and self._puiSecondaryDefinitionRevision == revision
-  then
+  if configReady and self._puiSecondaryVisibilityDirty ~= true then
     return self.secondaryDef
   end
 
-  local resources, specID = ResolveDefinitions()
-  local primary = resources and resources[1] or nil
+  local resources, specID
+  if configReady then
+    resources, specID = self.secondaryResources, self.secondarySpecID
+  else
+    resources, specID = ResolveDefinitions()
+    resources = resources or {}
+  end
+
+  local hasVisibleResources = false
+  for index = 1, #resources do
+    local resource = resources[index]
+    resource.visible = IsResourceVisibilityAllowed(resource, profile)
+    hasVisibleResources = hasVisibleResources or resource.visible
+  end
+  self._puiSecondaryHasVisibleResources = hasVisibleResources
+  local primary = resources[1]
   local definition = primary and primary.definition or nil
 
-  self.secondaryResources = resources or {}
+  self.secondaryResources = resources
   self.secondaryResourceByKey = {}
   self.secondaryAdapters = {}
 
@@ -1254,7 +1324,7 @@ function M:GetSecondaryDefinition()
     resource.index = index
     self.secondaryResourceByKey[resourceKey] = resource
 
-    if adapter and seenAdapters[adapter] ~= true then
+    if resource.visible and adapter and seenAdapters[adapter] ~= true then
       seenAdapters[adapter] = true
       self.secondaryAdapters[#self.secondaryAdapters + 1] = adapter
     end
@@ -1278,6 +1348,7 @@ function M:GetSecondaryDefinition()
   self._puiSecondaryDefinitionProfile = profile
   self._puiSecondaryDefinitionRevision = revision
   self._puiSecondaryDefinitionDirty = nil
+  self._puiSecondaryVisibilityDirty = nil
   self._puiSecondaryDefinitionReady = true
 
   return definition
@@ -1293,11 +1364,10 @@ function M:ResolveSecondaryType()
 end
 
 Secondary.RegisterAdapter = P:Def("RegisterAdapter", Secondary.RegisterAdapter)
-Secondary.GetCooldownCountSpellIDs = P:Def("GetCooldownCountSpellIDs", Secondary.GetCooldownCountSpellIDs)
+Secondary.GetResourceDefinition = P:Def("GetResourceDefinition", Secondary.GetResourceDefinition)
 Secondary.GetCooldownCountResourceKey = P:Def("GetCooldownCountResourceKey", Secondary.GetCooldownCountResourceKey)
 Secondary.GetResourceDisplayMode = P:Def("GetResourceDisplayMode", Secondary.GetResourceDisplayMode)
 Secondary.SetResourceDisplayMode = P:Def("SetResourceDisplayMode", Secondary.SetResourceDisplayMode)
-Secondary.HasResourceForCurrentSpec = P:Def("HasResourceForCurrentSpec", Secondary.HasResourceForCurrentSpec)
 Secondary.GetResourceOptionsForClass = P:Def("GetResourceOptionsForClass", Secondary.GetResourceOptionsForClass)
 Secondary.GetResourceSettings = P:Def("GetResourceSettings", Secondary.GetResourceSettings)
 Secondary.NormalizeProfile = P:Def("NormalizeProfile", Secondary.NormalizeProfile)
@@ -1312,12 +1382,13 @@ GetResolvedDefinitionCandidates = P:Def(
   "GetResolvedDefinitionCandidates",
   GetResolvedDefinitionCandidates
 )
-DefinitionContainsResourceForSpec = P:Def("DefinitionContainsResourceForSpec", DefinitionContainsResourceForSpec)
 IsDefinitionEnabled = P:Def("IsDefinitionEnabled", IsDefinitionEnabled)
 ResolveMaximum = P:Def("ResolveMaximum", ResolveMaximum)
 Secondary.ResolveMaximum = ResolveMaximum
 EnsureResourceSettings = P:Def("EnsureResourceSettings", EnsureResourceSettings)
 NormalizeDefinitionSettings = P:Def("NormalizeDefinitionSettings", NormalizeDefinitionSettings)
+CopyMissingResourceSettings = P:Def("CopyMissingResourceSettings", CopyMissingResourceSettings)
+IsResourceVisibilityAllowed = P:Def("IsResourceVisibilityAllowed", IsResourceVisibilityAllowed)
 BuildResourceConfigStateKey = P:Def("BuildResourceConfigStateKey", BuildResourceConfigStateKey)
 BuildResourceConfigStructureKey = P:Def(
   "BuildResourceConfigStructureKey",

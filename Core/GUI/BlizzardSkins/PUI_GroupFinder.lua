@@ -93,6 +93,9 @@ local function InstallGroupFinder(frame)
     Skins.Hook(dropdown, "OnMenuAssigned", RefreshQueueDropdown)
   end
   RefreshCategoryFonts()
+  for _, rewards in ipairs({ LFDQueueFrameRandomScrollFrameChildFrame, RaidFinderQueueFrameScrollFrameChildFrame }) do
+    Skins.Surface(rewards:GetParent(), true, true)
+  end
   RefreshRewards(LFDQueueFrameRandomScrollFrameChildFrame)
   RefreshRewards(RaidFinderQueueFrameScrollFrameChildFrame)
   -- Applicant and search-result state stays entirely in Blizzard's restricted path.

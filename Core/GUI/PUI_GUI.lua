@@ -1805,7 +1805,6 @@ local function _PUI_StyleRootNavButton(btn, node, isSelected)
   local colors = ns.Theme.GetColors()
   local fill = colors.control
   local accent = colors.accent
-  local border = colors.border
   local text = colors.text
   local meta = node.meta
 
@@ -1838,8 +1837,8 @@ local function _PUI_StyleRootNavButton(btn, node, isSelected)
   local disabled = meta.disabled == true or meta.comingSoon == true
   local hovered = btn.__puiRootNavHovered == true
   local bgAlpha = isSelected and 0.92 or 0.58
-  local borderAlpha = isSelected and 0.92 or 0.34
-  local borderColor = isSelected and accent or border
+  local borderColor = isSelected and accent or colors.controlBorder
+  local borderAlpha = borderColor[4] * (isSelected and 0.72 or 0.55)
 
   ns.Theme.SetSquareBackdrop(btn, {
     bg = { fill[1], fill[2], fill[3], bgAlpha },
@@ -2184,8 +2183,8 @@ local function _PUI_RefreshRootRegistryNav(frame)
   local navShellWidth = math.floor(navShell:GetWidth() + 0.5)
   local navShellHeight = math.floor(navShell:GetHeight() + 0.5)
   local scrollFrameLevel = math.max(navShell:GetFrameLevel() + 40, frame:GetFrameLevel() + 90)
-  local scrollbarWidth = ns.Theme.GetOptionsPointerTargetSize(18)
-  local scrollRightInset = scrollbarWidth > 18 and scrollbarWidth + 12 or 12
+  local scrollbarWidth = ns.Theme.GetOptionsPointerTargetSize(20)
+  local scrollRightInset = scrollbarWidth > 20 and scrollbarWidth + 12 or 14
   local scrollChromeKey = table.concat({
     tostring(searchHeight),
     tostring(scrollRightInset),
@@ -2245,7 +2244,7 @@ local function _PUI_RefreshRootRegistryNav(frame)
   end
 
   ns.Theme.WidgetSkins.Scrollbar(scroll.ScrollBar)
-  local scrollbarInset = scrollbarWidth > 18 and scrollbarWidth or 16
+  local scrollbarInset = scrollbarWidth > 20 and scrollbarWidth or 18
   scroll.ScrollBar:ClearAllPoints()
   scroll.ScrollBar:SetPoint("TOPLEFT", scroll, "TOPRIGHT", 6, -scrollbarInset)
   scroll.ScrollBar:SetPoint("BOTTOMLEFT", scroll, "BOTTOMRIGHT", 6, scrollbarInset)
@@ -3054,13 +3053,13 @@ function Addon:RefreshOptionsTheme()
   local previewToggle = frame.__puiPreviewToggleButton
   if previewToggle then
     local bg = colors.control
-    local border = colors.border
+    local border = colors.controlBorder
 
     ns.Theme.ApplyFont(previewToggle.text, "button", 11)
     previewToggle.text:SetTextColor(colors.text[1], colors.text[2], colors.text[3], colors.text[4])
     ns.Theme.SetSquareBackdrop(previewToggle, {
       bg = { bg[1], bg[2], bg[3], 0.92 },
-      border = { border[1], border[2], border[3], 0.72 },
+      border = { border[1], border[2], border[3], border[4] * 0.72 },
     }, ns.Theme.GetEdgeSize())
   end
 
@@ -3566,10 +3565,10 @@ _PUI_RefreshCustomPageShell = function(frame, path)
     do
       local colors = ns.Theme.GetColors()
       local bg = colors.control
-      local border = colors.border
+      local border = colors.controlBorder
       ns.Theme.SetSquareBackdrop(btn, {
         bg = { bg[1], bg[2], bg[3], 0.92 },
-        border = { border[1], border[2], border[3], 0.72 },
+        border = { border[1], border[2], border[3], border[4] * 0.72 },
       }, ns.Theme.GetEdgeSize())
       btn.text:SetTextColor(colors.text[1], colors.text[2], colors.text[3], colors.text[4])
     end

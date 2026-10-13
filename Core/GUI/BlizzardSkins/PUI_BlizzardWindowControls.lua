@@ -5,14 +5,58 @@ ns.BlizzardWindowControls = Controls
 local windows = setmetatable({}, { __mode = "k" })
 local controlFrames = setmetatable({}, { __mode = "k" })
 local embedded = {
+  -- Loot's Edit Mode and loot-under-mouse paths own its anchors and scale.
+  LootFrame = true,
+  -- Hover/item anchoring, alert stacking and native history resizing retain ownership.
+  QueueStatusFrame = true,
+  StackSplitFrame = true,
+  GroupLootFrame1 = true,
+  GroupLootFrame2 = true,
+  GroupLootFrame3 = true,
+  GroupLootFrame4 = true,
+  GroupLootHistoryFrame = true,
+  -- These previews and warnings follow a native owner rather than an independent window.
+  SideDressUpFrame = true,
+  WeeklyRewardExpirationWarningDialog = true,
   ChallengesFrame = true,
   PVPQueueFrame = true,
   QuestMapFrame = true,
   ["PlayerSpellsFrame.TalentsFrame"] = true,
+  ["ProfessionsFrame.SpecPage"] = true,
+  ["ProfessionsFrame.OrdersPage"] = true,
+  ["ProfessionsCustomerOrdersFrame.Form"] = true,
+  ["AuctionHouseFrame.BrowseResultsFrame"] = true,
+  ["AuctionHouseFrame.ItemBuyFrame"] = true,
+  ["AuctionHouseFrame.CommoditiesBuyFrame"] = true,
+  ["AuctionHouseFrame.ItemSellFrame"] = true,
+  ["AuctionHouseFrame.ItemSellList"] = true,
+  ["AuctionHouseFrame.CommoditiesSellFrame"] = true,
+  ["AuctionHouseFrame.CommoditiesSellList"] = true,
+  ["AuctionHouseFrame.AuctionsFrame"] = true,
+  ["AuctionHouseFrame.WoWTokenResults"] = true,
+  ["AuctionHouseFrame.WoWTokenSellFrame"] = true,
+  -- The native bottom-managed progress display is a HUD surface.
+  AuctionHouseMultisellProgressFrame = true,
   ["CommunitiesFrame.GuildFinderFrame"] = true,
   ["CommunitiesFrame.CommunityFinderFrame"] = true,
 }
 local enabled = true
+local exteriorGrips = {
+  ItemInteractionFrame = true,
+  ItemSocketingFrame = true,
+  DressUpFrame = true,
+  TransmogFrame = true,
+  AuctionHouseFrame = true,
+  ["AuctionHouseFrame.BuyDialog"] = true,
+  ["ProfessionsFrame.CraftingPage.SchematicForm.QualityDialog"] = true,
+  ["ProfessionsFrame.OrdersPage.OrderView.OrderDetails.SchematicForm.QualityDialog"] = true,
+  ["InspectRecipeFrame.SchematicForm.QualityDialog"] = true,
+  ["ProfessionsCustomerOrdersFrame.Form.QualityDialog"] = true,
+  ["ProfessionsFrame.CraftingPage.CraftingOutputLog"] = true,
+  ["ProfessionsFrame.OrdersPage.OrderView.CraftingOutputLog"] = true,
+  ["ProfessionsFrame.CraftingPage.MinimizedSearchResults"] = true,
+  ["ProfessionsFrame.CraftingPage.GuildFrame"] = true,
+}
 local active
 local driver = CreateFrame("Frame")
 
@@ -173,6 +217,8 @@ function Controls.Install(frame, visualRoot, name)
   state.grip:SetFrameLevel(controlRoot:GetFrameLevel() + 100)
   state.grip:ClearAllPoints()
   local rightInset = frame == _G.WorldMapFrame and 28 or 4
+  -- These templates put buttons or scrollbars in the bottom-right corner.
+  if exteriorGrips[name] then rightInset = -20 end
   state.grip:SetPoint("BOTTOMRIGHT", state.visualRoot, "BOTTOMRIGHT", -rightInset, 4)
   local accent = ns.Theme.GetColors().accent
   for _, line in ipairs(state.lines) do

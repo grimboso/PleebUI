@@ -206,8 +206,8 @@ local function _PUI_SkinGenericTreeButton(button, isSelected)
       and { colors.control[1], colors.control[2], colors.control[3], 0.82 }
       or { colors.control[1], colors.control[2], colors.control[3], 0.42 },
     border = isSelected
-      and { colors.accent[1], colors.accent[2], colors.accent[3], 0.90 }
-      or { colors.border[1], colors.border[2], colors.border[3], 0.28 },
+      and { colors.accent[1], colors.accent[2], colors.accent[3], colors.accent[4] * 0.72 }
+      or { colors.controlBorder[1], colors.controlBorder[2], colors.controlBorder[3], colors.controlBorder[4] * 0.55 },
   }, Theme.GetEdgeSize())
 
   for _, key in ipairs({ "__puiSelectedAccent", "__puiTreeDescription" }) do
@@ -261,7 +261,7 @@ end
 
 local function _PUI_SkinPCMTrackerTreeButton(button, isSelected, data)
   local colors = Theme.GetColors()
-  local edge = math.max(Theme.GetEdgeSize(), 2)
+  local edge = Theme.GetEdgeSize()
 
   button.__puiUseTextureBackdrop = true
   button:SetNormalTexture("")
@@ -276,8 +276,8 @@ local function _PUI_SkinPCMTrackerTreeButton(button, isSelected, data)
       and { colors.control[1], colors.control[2], colors.control[3], 0.92 }
       or { colors.control[1], colors.control[2], colors.control[3], 0.56 },
     border = isSelected
-      and { colors.accent[1], colors.accent[2], colors.accent[3], 1 }
-      or { colors.border[1], colors.border[2], colors.border[3], 0.38 },
+      and { colors.accent[1], colors.accent[2], colors.accent[3], colors.accent[4] * 0.72 }
+      or { colors.controlBorder[1], colors.controlBorder[2], colors.controlBorder[3], colors.controlBorder[4] * 0.55 },
   }, edge)
 
   if button.__puiTreeDescription then
@@ -496,7 +496,7 @@ function WidgetSkins.TreeButton(button, isSelected)
   end
 
   local colors = Theme.GetColors()
-  local edge = math.max(Theme.GetEdgeSize(), 2)
+  local edge = Theme.GetEdgeSize()
 
   button:SetNormalTexture("")
   button:SetPushedTexture("")
@@ -534,8 +534,8 @@ function WidgetSkins.TreeButton(button, isSelected)
       and { colors.control[1], colors.control[2], colors.control[3], 0.92 }
       or { colors.control[1], colors.control[2], colors.control[3], 0.56 },
     border = isSelected
-      and { colors.accent[1], colors.accent[2], colors.accent[3], 1 }
-      or { colors.border[1], colors.border[2], colors.border[3], 0.38 },
+      and { colors.accent[1], colors.accent[2], colors.accent[3], colors.accent[4] * 0.72 }
+      or { colors.controlBorder[1], colors.controlBorder[2], colors.controlBorder[3], colors.controlBorder[4] * 0.55 },
   }, edge)
 
   if not button.__puiSelectedAccent then

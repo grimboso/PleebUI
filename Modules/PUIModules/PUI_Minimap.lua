@@ -64,6 +64,7 @@ function MinimapModule:OnInitialize()
 
       -- Minimap button bucket (PUI_MinimapData.lua)
       bucketEnabled         = true,
+      pinnedAddonRows       = 1,
       pleebUIButtonOnMinimap= false,
 
     },
@@ -1372,8 +1373,7 @@ end
 function MinimapModule:RefreshFromOptions(flags)
   local db = self.db.profile
 
-  ns.MinimapData.SetLauncherOnMinimap(db.pleebUIButtonOnMinimap == true)
-  ns.MinimapData.SetBucketEnabled(db.bucketEnabled ~= false)
+  ns.MinimapData.Initialize()
 
   if not db.enabled then
     local cluster = _G.MinimapCluster
@@ -1464,6 +1464,7 @@ function MinimapModule:OnEnable()
 end
 
 function MinimapModule:OnDisable()
+  ns.MinimapData.SetBucketEnabled(false)
   self:UnregisterEvent("PLAYER_MAP_CHANGED")
   self.playerMapID = nil
 
@@ -1526,8 +1527,12 @@ local function MinimapProvider(AddonObj)
               name = "Anchor PleebUI button to minimap",
               desc = "Pins the PleebUI button to the bottom-left corner of the minimap instead of placing it in the addon button bucket.",
               order = 30,
+              disabled = function()
+                return db.enabled ~= false and db.bucketEnabled ~= false and db.pinnedAddonRows > 0
+              end,
               get = function()
                 return db.pleebUIButtonOnMinimap == true
+                  and not (db.enabled ~= false and db.bucketEnabled ~= false and db.pinnedAddonRows > 0)
               end,
               set = function(_, v)
                 db.pleebUIButtonOnMinimap = not not v
@@ -1781,6 +1786,23 @@ local function MinimapProvider(AddonObj)
     local buttons = {
       bucketEnabled = map.bucketEnabled,
       pleebUIButtonOnMinimap = map.pleebUIButtonOnMinimap,
+      pinnedAddonRows = {
+        type = "select", name = "Pinned addons", order = 25,
+        desc = "Keep selected addon buttons below the minimap. Buttons that do not fit stay in the toolbox.",
+        values = { [0] = "Off", [1] = "1 row", [2] = "2 rows" },
+        disabled = function() return db.bucketEnabled == false or db.enabled == false end,
+        get = function() return db.pinnedAddonRows end,
+        set = function(_, value) db.pinnedAddonRows = value; Refresh() end,
+      },
+      arrangeButtons = {
+        type = "toggle", name = "Arrange buttons", order = 26,
+        desc = "Drag buttons between Pinned addons and the toolbox, or drag pinned buttons to change their order. You can also right-click the toolbox arrow.",
+        disabled = function()
+          return db.bucketEnabled == false or db.enabled == false or db.pinnedAddonRows == 0
+        end,
+        get = ns.MinimapData.IsArrangingButtons,
+        set = function(_, value) ns.MinimapData.SetButtonArrangement(value) end,
+      },
       hide = {
         type = "toggle", name = "Hide PleebUI button", order = 40,
         get = function() return db.hide == true end,

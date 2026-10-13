@@ -103,7 +103,7 @@ function Skins.Surface(frame, control, borderless)
   local colors = Theme.GetColors()
   Theme.SetSquareBackdrop(host, {
     bg = control and colors.control or colors.background,
-    border = borderless and transparentBorder or colors.border,
+    border = borderless and transparentBorder or (control and colors.controlBorder or colors.border),
   }, Theme.GetEdgeSize())
   return host
 end
@@ -138,13 +138,24 @@ function Skins.Selection(texture, alpha)
   end
 end
 
+function Skins.WindowTitle(frame, title)
+  title = title or (frame.TitleContainer and frame.TitleContainer.TitleText)
+  if not title then return end
+
+  Skins.Font(title, "title")
+  title:ClearAllPoints()
+  title:SetPoint("TOPLEFT", frame, "TOPLEFT", 56, -1)
+  title:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -56, -1)
+  title:SetHeight(20)
+  title:SetJustifyH("CENTER")
+  title:SetJustifyV("MIDDLE")
+end
+
 function Skins.Shell(frame, backgroundFrame)
   Skins.Chrome(frame)
   Skins.Surface(backgroundFrame or frame)
   Skins.Chrome(frame.Inset)
-  if frame.TitleContainer then
-    Skins.Font(frame.TitleContainer.TitleText, "title")
-  end
+  Skins.WindowTitle(frame)
   if frame.CloseButton then
     Theme.WidgetSkins.CloseButton(frame.CloseButton)
   end
@@ -175,7 +186,7 @@ local function RefreshButtonState(button)
   if host then
     Theme.SetSquareBackdrop(host, {
       bg = enabled and colors.control or colors.disabledControl,
-      border = state.borderless and transparentBorder or (enabled and colors.border or colors.disabledBorder),
+      border = state.borderless and transparentBorder or (enabled and colors.controlBorder or colors.disabledControlBorder),
     }, Theme.GetEdgeSize())
   end
   local text = state.label or button:GetFontString()
@@ -367,7 +378,7 @@ local function RefreshTabState(tab)
   end
   Theme.SetSquareBackdrop(surfaces[tab], {
     bg = available and colors.control or colors.disabledControl,
-    border = available and colors.border or colors.disabledBorder,
+    border = available and colors.controlBorder or colors.disabledControlBorder,
   }, Theme.GetEdgeSize())
 end
 
@@ -411,8 +422,26 @@ function Skins.Tab(tab)
   RefreshTabState(tab)
 end
 
+function Skins.WidenScrollBar(scrollbar)
+  if scrollbar.__puiWidthAdjusted then return end
+
+  scrollbar.__puiWidthAdjusted = true
+  scrollbar:SetWidth(scrollbar:GetWidth() + 2)
+
+  local track = scrollbar.Track
+  if track then
+    track:SetWidth(track:GetWidth() + 2)
+  end
+
+  local thumb = track and track.Thumb or scrollbar.Thumb
+  if thumb then
+    thumb:SetWidth(thumb:GetWidth() + 2)
+  end
+end
+
 function Skins.ScrollBar(scrollbar)
   if not scrollbar then return end
+  Skins.WidenScrollBar(scrollbar)
   Skins.Chrome(scrollbar)
   if scrollbar.Back then Skins.Arrow(scrollbar.Back, "^") end
   if scrollbar.Forward then Skins.Arrow(scrollbar.Forward, "v") end
@@ -623,9 +652,12 @@ function Skins.RefreshTheme(refreshWindows)
   for frame, host in pairs(surfaces) do
     if not styledButtons[frame] then
       local role = surfaceRoles[frame]
+      local isControl = role == "control" or role == "flatControl"
+      local isBorderless = role == "flatControl" or role == "flatBackground"
+
       Theme.SetSquareBackdrop(host, {
-        bg = role == "accent" and colors.accent or ((role == "control" or role == "flatControl") and colors.control or colors.background),
-        border = (role == "flatControl" or role == "flatBackground") and transparentBorder or colors.border,
+        bg = role == "accent" and colors.accent or (isControl and colors.control or colors.background),
+        border = isBorderless and transparentBorder or (isControl and colors.controlBorder or colors.border),
       }, edge)
     end
   end

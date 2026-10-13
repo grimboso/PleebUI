@@ -966,6 +966,13 @@ function CustomIcons:Configure(key, cfg, options)
   return record
 end
 
+function CustomIcons:UpdateSpellIdentity(key, spellID)
+  local record = records[key]
+  if not record or not record.runtimeEnabled then return end
+  record.spellID = spellID
+  record.parts.icon:SetTexture(C_Spell.GetSpellTexture(spellID))
+end
+
 function CustomIcons:UpdateCooldown(key, duration, active)
   local record = records[key]
   if not record or not record.runtimeEnabled then return end
@@ -990,6 +997,15 @@ function CustomIcons:UpdateCharge(key, duration, currentCharges, maximum, active
   local record = records[key]
   if not record or not record.runtimeEnabled then return end
   local cooldown = record.parts.cooldown
+  if not issecretvalue(currentCharges) and currentCharges == nil then
+    cooldown:Clear()
+    record.parts.chargeText:SetText("")
+    FeedPips(record, 0)
+    StopStateGlow(record)
+    record.parts.frame:Hide()
+    record.stateVisible = nil
+    return
+  end
   local cooldownShown = record.icon.showSwipe == true or record.icon.showDuration == true
   if record.cooldownShown ~= cooldownShown then
     record.cooldownShown = cooldownShown
@@ -1405,6 +1421,7 @@ end)
 
 local P = select(1, ns.Pleebug:DropIn(CustomIcons, { name = "PCM", bucket = "CustomIcons" }))
 CustomIcons.Configure = P:Def("CustomIcons:Configure", CustomIcons.Configure)
+CustomIcons.UpdateSpellIdentity = P:Def("CustomIcons:UpdateSpellIdentity", CustomIcons.UpdateSpellIdentity)
 CustomIcons.UpdateCooldown = P:Def("CustomIcons:UpdateCooldown", CustomIcons.UpdateCooldown)
 CustomIcons.UpdateCharge = P:Def("CustomIcons:UpdateCharge", CustomIcons.UpdateCharge)
 CustomIcons.ConfigureAura = P:Def("CustomIcons:ConfigureAura", CustomIcons.ConfigureAura)

@@ -2024,7 +2024,12 @@ function Quality:SetQuickSetupValue(key, value, deferApply)
   q[key] = not not value
 
   if not deferApply then
-    Addon:ApplyOptionsChange("Quality", {})
+    if key == "auctionHouseCurrentExpansionOnly" then
+      Quality:RefreshAuctionHousePreference()
+      Addon:NotifyOptionsTreeChanged("Quality", ns._PUIActiveOptionsPath)
+    else
+      Addon:ApplyOptionsChange("Quality", {})
+    end
   end
 
   return q
@@ -2493,39 +2498,25 @@ local function EnsureAuctionHouseCurrentExpansionOnly()
 
   local f = CreateFrame("Frame", "PleebUI_QualityAuctionHouseCurrentExpansionOnly")
   AuctionHouseQoLFrame = f
-  f:SetScript("OnEvent", function(self, event, addonName)
+  f:SetScript("OnEvent", function(_, event, addonName)
     if event == "ADDON_LOADED" and addonName ~= "Blizzard_AuctionHouseUI" then
       return
     end
-
-    if AuctionHouse_ApplyCurrentExpansionOnly() then
-      self:UnregisterEvent("ADDON_LOADED")
-
-      if GetQ().auctionHouseCurrentExpansionOnly then
-        self:RegisterEvent("AUCTION_HOUSE_SHOW")
-      else
-        self:UnregisterEvent("AUCTION_HOUSE_SHOW")
-      end
-    end
+    Quality:RefreshAuctionHousePreference()
   end)
-
-  function f:RefreshState()
-    self:UnregisterAllEvents()
-
-    if AuctionHouse_ApplyCurrentExpansionOnly() then
-      if GetQ().auctionHouseCurrentExpansionOnly then
-        self:RegisterEvent("AUCTION_HOUSE_SHOW")
-      end
-    else
-      self:RegisterEvent("ADDON_LOADED")
-    end
-  end
-
   return f
 end
 
-local function ApplyAuctionHouseCurrentExpansionOnly()
-  EnsureAuctionHouseCurrentExpansionOnly():RefreshState()
+function Quality:RefreshAuctionHousePreference()
+  local driver = EnsureAuctionHouseCurrentExpansionOnly()
+  driver:UnregisterAllEvents()
+  if AuctionHouse_ApplyCurrentExpansionOnly() then
+    if GetQ().auctionHouseCurrentExpansionOnly then
+      driver:RegisterEvent("AUCTION_HOUSE_SHOW")
+    end
+  else
+    driver:RegisterEvent("ADDON_LOADED")
+  end
 end
 
 function Quality:RefreshFonts()
@@ -2576,7 +2567,7 @@ function Quality:ApplyAll()
   ApplyHideElements()
 
   ApplyPetWarnings()
-  ApplyAuctionHouseCurrentExpansionOnly()
+  self:RefreshAuctionHousePreference()
 
   local raidUtilityModule = ns.RaidUtilityModule
   raidUtilityModule.ApplyAll()

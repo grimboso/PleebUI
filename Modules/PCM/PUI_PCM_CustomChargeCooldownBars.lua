@@ -8,7 +8,6 @@ local InCombatLockdown = _G.InCombatLockdown
 local PLAYER_CLASS = select(2, _G.UnitClass("player"))
 local C_ClassColor = _G.C_ClassColor
 local C_Spell = _G.C_Spell
-local C_SpellBook = _G.C_SpellBook
 local Cooldowns = ns.Modules.CooldownManager
 local PCMRuntime = ns.PCMRuntime
 local P = ns.Pleebug:DropIn(Cooldowns, { name = "PCM", bucket = "CustomChargeCooldownBars" })
@@ -23,7 +22,6 @@ local Pixel = ns.Pixel
 local Round = Pixel.Round
 local math_floor = _G.math.floor
 local tostring = _G.tostring
-local _CSB_KnownSpellCache = {}
 local _CSB_SpellAvailability = {}
 local _CSB_ClassColorR, _CSB_ClassColorG, _CSB_ClassColorB
 
@@ -70,31 +68,8 @@ local function _CSB_GetClassColor()
   return r, g, b
 end
 
-local function _CSB_ClearKnownSpellCache()
-  for spellID in pairs(_CSB_KnownSpellCache) do
-    _CSB_KnownSpellCache[spellID] = nil
-  end
-
-  Cooldowns:ClearSavedSpellKnownCache()
-end
-
 local function _CSB_IsTrackedSpellKnown(cfg)
-  local spellID = Cooldowns:GetTrackedSpellIDForCurrentSpec(cfg)
-  if not spellID then
-    return false
-  end
-
-  local currentSpecID = Cooldowns:GetCurrentSpecializationID() or 0
-  local cacheKey = tostring(spellID) .. ":" .. tostring(currentSpecID)
-
-  local cached = _CSB_KnownSpellCache[cacheKey]
-  if cached ~= nil then
-    return cached == true
-  end
-
-  local known = C_SpellBook.IsSpellKnown(spellID, Enum.SpellBookSpellBank.Player)
-  _CSB_KnownSpellCache[cacheKey] = known
-
+  local _, known = PCMRuntime:ResolveTrackedSpell(Cooldowns:GetTrackedSpellIDForCurrentSpec(cfg))
   return known
 end
 
@@ -395,7 +370,7 @@ local function _CSB_ApplyPresentation(barData, cfg)
     cfg
   )
 
-  local spellID = tonumber(cfg.trackedSpellID)
+  local spellID = PCMRuntime:ResolveTrackedSpell(tonumber(cfg.trackedSpellID))
   if cfg.showIcon and spellID and barData.icon and barData.__iconSpellID ~= spellID then
     barData.icon:SetTexture(C_Spell.GetSpellTexture(spellID))
     barData.__iconSpellID = spellID
@@ -586,7 +561,9 @@ _CSB_UpdateOneBar = function(barData, cfg, chargeInfo)
     return
   end
 
-  local spellID = tonumber(cfg.trackedSpellID)
+  local trackedSpellID = tonumber(cfg.trackedSpellID)
+  local spellID = PCMRuntime:ResolveTrackedSpell(trackedSpellID)
+  if trackedSpellID and not spellID then return end
   if not spellID then
     _CSB_ClearDurationState(barData)
     barData.frame:Hide()
@@ -604,6 +581,16 @@ _CSB_UpdateOneBar = function(barData, cfg, chargeInfo)
     chargeInfo = C_Spell.GetSpellCharges(spellID)
   end
 
+  if not chargeInfo then
+    _CSB_ClearDurationState(barData)
+    barData.frame:Hide()
+    if barEnabled then
+      PCMPresentation.ApplyChargeCount(barData, 0)
+    else
+      CustomIcons:UpdateCharge(barData.customIconKey, nil, nil, barData.maxCharges, false)
+    end
+    return
+  end
   local active = chargeInfo.isActive == true
   local activeChanged = barData.__puiChargeActive ~= active
   local duration
@@ -614,8 +601,9 @@ _CSB_UpdateOneBar = function(barData, cfg, chargeInfo)
 
   barData.frame:SetShown(barEnabled)
 
-  if cfg.showIcon and barData.icon and barData.__iconSpellID ~= spellID then
-    barData.icon:SetTexture(C_Spell.GetSpellTexture(spellID))
+  if barData.__iconSpellID ~= spellID then
+    if cfg.showIcon and barData.icon then barData.icon:SetTexture(C_Spell.GetSpellTexture(spellID)) end
+    if not barEnabled then CustomIcons:UpdateSpellIdentity(barData.customIconKey, spellID) end
     barData.__iconSpellID = spellID
   end
 
@@ -709,7 +697,7 @@ _CSB_RebuildAll = function()
     local chargeInfo
 
     if shouldShow then
-      chargeInfo = C_Spell.GetSpellCharges(cfg.trackedSpellID)
+      chargeInfo = C_Spell.GetSpellCharges((PCMRuntime:ResolveTrackedSpell(cfg.trackedSpellID)))
       shouldShow = chargeInfo ~= nil
     end
 
@@ -760,8 +748,8 @@ _CSB_RebuildAll = function()
           optionsString = "CooldownManager,customTrackers,chargeSpell:" .. tostring(barData.id),
           moverKey = "PCM_CustomChargeIcon_" .. tostring(barData.id),
           defaultY = 60 - ((i - 1) * 50),
-          spellID = tonumber(cfg.trackedSpellID),
-          texture = C_Spell.GetSpellTexture(cfg.trackedSpellID),
+          spellID = PCMRuntime:ResolveTrackedSpell(cfg.trackedSpellID),
+          texture = C_Spell.GetSpellTexture((PCMRuntime:ResolveTrackedSpell(cfg.trackedSpellID))),
           inCombat = __PUI_PCM_CooldownStackBars.inCombat,
         })
       else
@@ -1084,7 +1072,7 @@ function Cooldowns:CooldownStackBars_RefreshAfterTalentSwap()
 
   __PUI_PCM_CooldownStackBars.pendingSpecTalentRefresh = false
   __PUI_PCM_CooldownStackBars.pendingSpellAvailabilityRefresh = nil
-  _CSB_ClearKnownSpellCache()
+  Cooldowns:ClearSavedSpellKnownCache()
   self:CooldownStackBars_Rebuild()
 end
 
@@ -1096,9 +1084,8 @@ local function _CSB_RefreshSpellAvailability()
 
   __PUI_PCM_CooldownStackBars.pendingSpellAvailabilityRefresh = nil
   for key, entry in pairs(_CSB_SpellAvailability) do
-    local spellID = entry.spellID
-    local available = spellID ~= nil
-      and C_SpellBook.IsSpellKnown(spellID, Enum.SpellBookSpellBank.Player)
+    local spellID, known = PCMRuntime:ResolveTrackedSpell(entry.spellID)
+    local available = known
     local chargeInfo
     if available then
       chargeInfo = C_Spell.GetSpellCharges(spellID)
@@ -1146,8 +1133,15 @@ PCMRuntime:RegisterSubscriber("CooldownStackBars", {
       or event == "TRAIT_CONFIG_UPDATED"
     then
       Cooldowns:_CooldownStackBars_OnSpecTalentEvent(event, ...)
-    elseif event == "SPELLS_CHANGED" then
-      _CSB_RefreshSpellAvailability()
+    elseif event == "SPELLS_CHANGED"
+      or event == "COOLDOWN_VIEWER_SPELL_OVERRIDE_UPDATED"
+      or event == "SPELL_UPDATE_ICON"
+    then
+      for _, key in ipairs(__PUI_PCM_CooldownStackBars.keys) do
+        __PUI_PCM_CooldownStackBars.bars[key].__iconSpellID = nil
+      end
+      _CSB_QueueUpdateAll()
+      if event == "SPELLS_CHANGED" then _CSB_RefreshSpellAvailability() end
     end
   end,
 })
@@ -1167,7 +1161,7 @@ function Cooldowns:_CooldownStackBars_ApplySettings(flags)
 
   if flags.profile == true then
     _CSB_ClassColorR, _CSB_ClassColorG, _CSB_ClassColorB = nil, nil, nil
-    _CSB_ClearKnownSpellCache()
+    Cooldowns:ClearSavedSpellKnownCache()
   end
 end
 
@@ -1211,7 +1205,6 @@ end
   Cooldowns.CooldownStackBars_RefreshAfterTalentSwap = P:Def('Cooldowns:CooldownStackBars_RefreshAfterTalentSwap', Cooldowns.CooldownStackBars_RefreshAfterTalentSwap)
   Cooldowns._CooldownStackBars_ApplySettings = P:Def('Cooldowns:_CooldownStackBars_ApplySettings', Cooldowns._CooldownStackBars_ApplySettings)
   Cooldowns._CooldownStackBars_SoftRebuild = P:Def('Cooldowns:_CooldownStackBars_SoftRebuild', Cooldowns._CooldownStackBars_SoftRebuild)
-  _CSB_ClearKnownSpellCache = P:Def('_CSB_ClearKnownSpellCache', _CSB_ClearKnownSpellCache)
   _CSB_ClearDurationState = P:Def('_CSB_ClearDurationState', _CSB_ClearDurationState)
   _CSB_ApplyDurationState = P:Def('_CSB_ApplyDurationState', _CSB_ApplyDurationState)
   _CSB_UpdateOneBar = P:Def('_CSB_UpdateOneBar', _CSB_UpdateOneBar)

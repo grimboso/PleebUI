@@ -135,7 +135,7 @@ end
 
 Theme.FontRoles = {
   title = {
-    size    = 16,
+    size    = 18,
     outline = "OUTLINE",
   },
   nav = {
@@ -206,12 +206,12 @@ end
 Theme.DefaultColors = Theme.DefaultColors or {
   background = { 0.12, 0.12, 0.16, 0.92 },
   control    = { 0.070, 0.070, 0.090, 0.96 },
-  controlBorder = { 0.48, 0.48, 0.52, 1.00 },
+  controlBorder = { 1.00, 1.00, 1.00, 0.26 },
   accent     = { 0.20, 0.65, 1.00, 1.00 },
-  border     = { 0.20, 0.20, 0.24, 1.00 },
+  border     = { 1.00, 1.00, 1.00, 0.08 },
   text       = { 0.96, 0.96, 0.96, 1.00 },
 
-  borderSize = 3,
+  borderSize = 1,
 }
 
 local function _PUI_CopyColor(src)
@@ -292,7 +292,7 @@ function Theme.GetColors()
 
   DeriveControlColors(colors)
 
-  colors.borderSize = 3
+  colors.borderSize = 1
 
   _PUI_ThemeColorsCache = colors
   _PUI_ThemeColorsCacheSignature = signature
@@ -1217,7 +1217,7 @@ ns.Theme.EnsureBackdropFrame = EnsureBackdropFrame
 Theme.ControlBorderSize = 1
 
 function ns.Theme.GetEdgeSize()
-  return 3
+  return 1
 end
 
 function Theme.UnpackColor(color)

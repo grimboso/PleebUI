@@ -379,6 +379,34 @@ function Secondary.GetSecondaryDividerSize(secCfg)
   return size
 end
 
+function Secondary.GetResourceTickValues(config, maximum)
+  if config.showDividers == false or maximum <= 1 then
+    return nil
+  end
+
+  local pattern = config.stackTickValues or "ALL"
+  local values = {}
+  if pattern:upper():find("ALL", 1, true) then
+    for value = 1, maximum - 1 do
+      values[#values + 1] = value
+    end
+  else
+    local seen = {}
+    for token in pattern:gmatch("[^,]+") do
+      local value = tonumber(token:match("^%s*(.-)%s*$"))
+      if value then
+        value = math.floor(value + 0.5)
+        if value > 0 and value < maximum and not seen[value] then
+          seen[value] = true
+          values[#values + 1] = value
+        end
+      end
+    end
+    table.sort(values)
+  end
+  return #values > 0 and values or nil
+end
+
 local function _ResolveSecondaryDividerColor(secCfg)
   local divCol = { r = 0.20, g = 0.20, b = 0.24, a = 1.00 }
   local configured = secCfg.dividerColor
@@ -444,15 +472,28 @@ local function _ApplySecondaryDividers(self, bar, secCfg, segmentCount, width, u
     return
   end
 
+  local pattern = secCfg.stackTickValues or "ALL"
+  if self._puiSecondaryTickPattern ~= pattern or self._puiSecondaryDividerMaximum ~= segmentCount then
+    self._puiSecondaryTickValues = Secondary.GetResourceTickValues(secCfg, segmentCount)
+    self._puiSecondaryTickPattern = pattern
+    self._puiSecondaryDividerMaximum = segmentCount
+  end
+  local tickValues = self._puiSecondaryTickValues
+  if not tickValues then
+    _HideSecondaryDividerSet(self)
+    return
+  end
+
   local dividerFrame = _EnsureSecondaryDividerFrame(self, bar, levelOffset)
   local dividerW = Secondary.GetSecondaryDividerSize(secCfg)
   local divCol = _ResolveSecondaryDividerColor(secCfg)
 
   self.secondaryDividers = self.secondaryDividers or {}
-  local numDividers = segmentCount - 1
+  local numDividers = #tickValues
   self._puiSecondaryActiveDividerCount = numDividers
 
   for i = 1, numDividers do
+    local value = tickValues[i]
     local d = self.secondaryDividers[i]
     if not d then
       d = dividerFrame:CreateTexture(nil, "OVERLAY", nil, 7)
@@ -465,10 +506,10 @@ local function _ApplySecondaryDividers(self, bar, secCfg, segmentCount, width, u
     d:SetPoint("TOP", dividerFrame, "TOP", 0, 0)
     d:SetPoint("BOTTOM", dividerFrame, "BOTTOM", 0, 0)
 
-    if useSegmentAnchors and self.secondarySegments and self.secondarySegments[i] then
-      d:SetPoint("LEFT", self.secondarySegments[i], "RIGHT", -(dividerW / 2), 0)
+    if useSegmentAnchors and self.secondarySegments and self.secondarySegments[value] then
+      d:SetPoint("LEFT", self.secondarySegments[value], "RIGHT", -(dividerW / 2), 0)
     else
-      local xPos = (width * i / segmentCount) - dividerW / 2
+      local xPos = (width * value / segmentCount) - dividerW / 2
       d:SetPoint("LEFT", dividerFrame, "LEFT", xPos, 0)
     end
 
@@ -581,7 +622,7 @@ local function _UpdateTrackedSpellIcons(self)
           view,
           resource.frame,
           resource.config,
-          self.secondaryUsesCustom
+          self.secondaryUsesCustom and resource.visible == true
         )
       end
     end
@@ -1117,8 +1158,9 @@ local function _ReflowSecondaryGeometry(self)
       self.secondaryDividerFrame:SetFrameStrata(parent:GetFrameStrata())
       self.secondaryDividerFrame:SetFrameLevel(parent:GetFrameLevel() + 30)
 
-      local dividerCount = self._puiSecondaryActiveDividerCount or 0
-      local segments = dividerCount + 1
+      local segments = self._puiSecondaryDividerMaximum
+      local tickValues = self._puiSecondaryTickValues
+      local dividerCount = tickValues and #tickValues or 0
       if segments > 1 then
         local dividerW = Secondary.GetSecondaryDividerSize(secCfg)
         local dividerColor = _ResolveSecondaryDividerColor(secCfg)
@@ -1128,10 +1170,10 @@ local function _ReflowSecondaryGeometry(self)
         end
         if ww < 1 then ww = 1 end
 
-        local useSegAnchors = self.secondarySegments
-          and #self.secondarySegments >= segments
+        local useSegAnchors = self._puiSecondaryBuildMode == "SEGMENTED"
 
         for i = 1, dividerCount do
+          local value = tickValues[i]
           local divider = self.secondaryDividers[i]
           divider:SetColorTexture(dividerColor.r, dividerColor.g, dividerColor.b, dividerColor.a)
           divider:SetDrawLayer("OVERLAY", 7)
@@ -1140,10 +1182,10 @@ local function _ReflowSecondaryGeometry(self)
           divider:SetPoint("TOP", self.secondaryDividerFrame, "TOP", 0, 0)
           divider:SetPoint("BOTTOM", self.secondaryDividerFrame, "BOTTOM", 0, 0)
 
-          if useSegAnchors and self.secondarySegments[i] then
-            divider:SetPoint("LEFT", self.secondarySegments[i], "RIGHT", -(dividerW / 2), 0)
+          if useSegAnchors and self.secondarySegments[value] then
+            divider:SetPoint("LEFT", self.secondarySegments[value], "RIGHT", -(dividerW / 2), 0)
           else
-            local xPos = (ww * i / segments) - dividerW / 2
+            local xPos = (ww * value / segments) - dividerW / 2
             divider:SetPoint("LEFT", self.secondaryDividerFrame, "LEFT", xPos, 0)
           end
         end
@@ -1833,6 +1875,7 @@ end
   _EnsureSecondaryTexts = P:Def("_EnsureSecondaryTexts", _EnsureSecondaryTexts)
   _GetSecondaryInactiveAlpha = P:Def("_GetSecondaryInactiveAlpha", _GetSecondaryInactiveAlpha)
   Secondary.GetSecondaryDividerSize = P:Def("_GetSecondaryDividerSize", Secondary.GetSecondaryDividerSize)
+  Secondary.GetResourceTickValues = P:Def("GetResourceTickValues", Secondary.GetResourceTickValues)
   _ResolveSecondaryDividerColor = P:Def("_ResolveSecondaryDividerColor", _ResolveSecondaryDividerColor)
   _HideSecondaryDividerSet = P:Def("_HideSecondaryDividerSet", _HideSecondaryDividerSet)
   _EnsureSecondaryDividerFrame = P:Def("_EnsureSecondaryDividerFrame", _EnsureSecondaryDividerFrame)

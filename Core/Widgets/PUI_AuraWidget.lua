@@ -19,7 +19,7 @@ applicationThresholdWork:Hide()
 local RefreshApplicationThresholdSource
 local QueueApplicationThresholdRefresh
 
-local MAX_STACK_COLOR_THRESHOLD = 30
+AuraWidget.MAX_STACK_COLOR_THRESHOLD = 50
 local STACK_COLOR_THRESHOLD_DEFAULT_COLOR = { 1, 0.82, 0, 1 }
 
 local function NormalizeStackColorThreshold(threshold, index)
@@ -33,9 +33,9 @@ local function NormalizeStackColorThreshold(threshold, index)
     threshold.enabled = threshold.enabled == true
   end
 
-  local defaultValue = math.min(MAX_STACK_COLOR_THRESHOLD, (index or 1) + 1)
+  local defaultValue = math.min(AuraWidget.MAX_STACK_COLOR_THRESHOLD, (index or 1) + 1)
   threshold.value = math.floor((tonumber(threshold.value) or defaultValue) + 0.5)
-  threshold.value = math.max(1, math.min(MAX_STACK_COLOR_THRESHOLD, threshold.value))
+  threshold.value = math.max(1, math.min(AuraWidget.MAX_STACK_COLOR_THRESHOLD, threshold.value))
   threshold.colorMode = threshold.colorMode == "CLASS" and "CLASS" or "CUSTOM"
 
   local color = type(threshold.color) == "table" and threshold.color or {}
@@ -75,8 +75,8 @@ function AuraWidget.AddStackColorThreshold(config, maximum)
     return nil
   end
 
-  maximum = math.floor((tonumber(maximum) or MAX_STACK_COLOR_THRESHOLD) + 0.5)
-  maximum = math.max(1, math.min(MAX_STACK_COLOR_THRESHOLD, maximum))
+  maximum = math.floor((tonumber(maximum) or AuraWidget.MAX_STACK_COLOR_THRESHOLD) + 0.5)
+  maximum = math.max(1, math.min(AuraWidget.MAX_STACK_COLOR_THRESHOLD, maximum))
   if #thresholds >= maximum then
     return nil
   end

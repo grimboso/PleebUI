@@ -134,11 +134,7 @@ local function SetupInspectFrameSkinning()
       InspectFrame.TitleBg:SetAlpha(0)
     end
 
-    if InspectFrame.TitleText then
-      ns.Theme.ApplyFont(InspectFrame.TitleText, "title")
-      local tr, tg, tb, ta = GetTextColor()
-      InspectFrame.TitleText:SetTextColor(tr, tg, tb, ta)
-    end
+    ns.BlizzardSkins.WindowTitle(InspectFrame, InspectFrame.TitleText)
 
     if InspectModelScene then
       StripTextures(InspectModelScene, true)
@@ -230,26 +226,7 @@ local function SetupInspectFrameSkinning()
     local tab = _G["InspectFrameTab" .. index]
 
     while tab do
-      StripTextures(tab, true)
-      if tab.SetNormalTexture then tab:SetNormalTexture("") end
-      if tab.SetPushedTexture then tab:SetPushedTexture("") end
-      if tab.SetDisabledTexture then tab:SetDisabledTexture("") end
-      if tab.SetHighlightTexture then tab:SetHighlightTexture("") end
-
-      local bg = EnsureBackdropFrame(tab)
-      if bg and bg.SetBackdrop then
-        local edgeSize = Theme.GetEdgeSize()
-        bg:SetBackdrop({
-          bgFile   = "Interface\\Buttons\\WHITE8x8",
-          edgeFile = "Interface\\Buttons\\WHITE8x8",
-          edgeSize = edgeSize,
-        })
-
-        local r, g, b, a = CS_CONTROL()
-        local br, bgG, bB, bA = CS_B()
-        bg:SetBackdropColor(r, g, b, a)
-        bg:SetBackdropBorderColor(br, bgG, bB, bA)
-      end
+      ns.BlizzardSkins.Tab(tab)
 
       tab:ClearAllPoints()
       if index == 1 then
@@ -326,10 +303,7 @@ local function RefreshInspectTheme()
     ns.Theme.WidgetSkins.Frame(CharacterSheet._inspectHost)
 
     local tr, tg, tb, ta = GetTextColor()
-    if InspectFrame.TitleText then
-      ns.Theme.ApplyFont(InspectFrame.TitleText, "title")
-      InspectFrame.TitleText:SetTextColor(tr, tg, tb, ta)
-    end
+    ns.BlizzardSkins.WindowTitle(InspectFrame, InspectFrame.TitleText)
 
     CS_ApplyBackdrop(InspectModelFrame, CS_BG)
     CS_SkinCloseButton(InspectFrameCloseButton)
@@ -338,10 +312,6 @@ local function RefreshInspectTheme()
     local pvp = _G.InspectPVPFrame
     if pvp then
       for index = 1, 3 do CS_ApplyBackdrop(pvp["TalentSlot" .. index], CS_CONTROL) end
-    end
-
-    for i = 1, 3 do
-      CS_ApplyBackdrop(_G["InspectFrameTab" .. i], CS_CONTROL)
     end
 
     if InspectFrame._puiAvgItemLevelText then
