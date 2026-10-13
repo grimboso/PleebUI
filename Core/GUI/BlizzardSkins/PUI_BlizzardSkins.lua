@@ -351,6 +351,18 @@ local function RefreshTabState(tab)
   if text then
     Theme.ApplyFont(text, "body")
     text:SetTextColor(color[1], color[2], color[3], color[4])
+    text:ClearAllPoints()
+    text:SetPoint("CENTER", tab, "CENTER")
+    text:SetWidth(0)
+    local textWidth = text:GetStringWidth()
+    local _, fontSize = text:GetFont()
+    local oldWidth = tab:GetWidth()
+    if not issecretvalue(textWidth) and not issecretvalue(fontSize) and not issecretvalue(oldWidth) then
+      local width = textWidth + 32
+      tab:SetWidth(width)
+      tab:SetHeight(math.max(state.height, fontSize + 12))
+      if tab.GetTabSystem and oldWidth ~= width then tab:GetTabSystem():MarkDirty() end
+    end
   end
   Theme.SetSquareBackdrop(surfaces[tab], {
     bg = available and colors.control or colors.disabledControl,
@@ -370,7 +382,7 @@ function Skins.Tab(tab)
   Skins.Hide(tab:GetHighlightTexture())
   local state = styledTabs[tab]
   if not state then
-    state = { selection = tab:CreateTexture(nil, "BACKGROUND"), highlight = tab:CreateTexture(nil, "HIGHLIGHT") }
+    state = { selection = tab:CreateTexture(nil, "BACKGROUND"), highlight = tab:CreateTexture(nil, "HIGHLIGHT"), height = tab:GetHeight() }
     styledTabs[tab] = state
     state.selection:SetAllPoints(tab)
     state.highlight:SetAllPoints(tab)
@@ -389,6 +401,8 @@ function Skins.Tab(tab)
     Skins.Hook(tab, "SetNormalFontObject", RefreshTabState)
     Skins.Hook(tab, "SetDisabledFontObject", RefreshTabState)
     if tab.SetTabEnabled then Skins.Hook(tab, "SetTabEnabled", RefreshTabState) end
+    if tab.SetTabSelected then Skins.Hook(tab, "SetTabSelected", RefreshTabState) end
+    if tab.UpdateTabWidth then Skins.Hook(tab, "UpdateTabWidth", RefreshTabState) end
   end
   local accent = Theme.GetColors().accent
   state.selection:SetColorTexture(accent[1], accent[2], accent[3], 0.25)
@@ -654,6 +668,10 @@ driver:SetScript("OnEvent", function(self, event, addonName)
       end
     end
   end
+end)
+
+Skins.Hook(_G, "PanelTemplates_TabResize", function(tab)
+  if styledTabs[tab] then RefreshTabState(tab) end
 end)
 
 hooksecurefunc(Theme, "RefreshAppliedFonts", Skins.RefreshTheme)
