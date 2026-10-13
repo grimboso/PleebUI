@@ -125,7 +125,6 @@ local defaults = {
     },
 
     secondary = {
-      enabled               = true,
       detached              = false,
       height                = 15,
       perSegment            = false,
@@ -1083,10 +1082,13 @@ function M:OnPrimaryResourceChanged(event, unit)
     and activeOptionsPath[1] == "PRD"
     and (
       activeOptionsPath[2] == "primary"
-      or activeOptionsPath[2] == "secondary"
+      or activeOptionsPath[2] == "resources"
     )
   then
     targetOptionsPath = activeOptionsPath
+    if event == "PLAYER_SPECIALIZATION_CHANGED" and activeOptionsPath[2] == "resources" then
+      targetOptionsPath = { "PRD", "resources" }
+    end
   end
 
   ns.Addon:NotifyOptionsTreeChanged("PRD", targetOptionsPath)
@@ -1447,16 +1449,16 @@ function M:IsSecondaryResourceEnabled(resourceKey)
     return false
   end
 
-  return db.secondary.resourceSettings[PLAYER_CLASS][resourceKey].enabled ~= false
+  return ns.PRDSecondary:GetResourceSettings(db, resourceKey).enabled ~= false
 end
 
-function M:SetSecondaryResourceEnabled(resourceKey, enabled)
+function M:SetSecondaryResourceEnabled(resourceKey, enabled, specID)
   local db = self.db and self.db.profile
   if not db or not db.secondary or type(resourceKey) ~= "string" then
     return false
   end
 
-  db.secondary.resourceSettings[PLAYER_CLASS][resourceKey].enabled = enabled and true or false
+  ns.PRDSecondary:GetResourceSettings(db, resourceKey, PLAYER_CLASS, specID).enabled = enabled and true or false
   self:InvalidateRuntimeConfig()
   self:NormalizeStackOrder()
   self:RequestRefresh({ secondaryRebuild = true, secondaryText = true, layout = true })
@@ -1471,7 +1473,7 @@ function M:NormalizeStackOrder()
 
   local normalized = {}
   local seen = {}
-  local resourceOptions = ns.PRDSecondary:GetResourceOptionsForClass(PLAYER_CLASS, true)
+  local resourceOptions = ns.PRDSecondary:GetResourceOptionsForClass(PLAYER_CLASS)
   self:GetSecondaryDefinition()
   local resources = self.secondaryResources or {}
   local existing = db.stackOrder
@@ -2267,7 +2269,7 @@ function M:AttachMover()
     end
 
     local resourceKey = config.resourceKey
-    local moverKey = "PRD_SECONDARY_" .. resourceKey
+    local moverKey = "PRD_SECONDARY_" .. config.specID .. "_" .. resourceKey
     if config.detached ~= true then
       FrameUtil.ClearSmartSnapForKey(moverKey)
       FrameUtil:UnregisterMover(moverKey)
@@ -2281,7 +2283,7 @@ function M:AttachMover()
         return
       end
 
-      local settings = p.secondary.resourceSettings[PLAYER_CLASS][resourceKey]
+      local settings = p.secondary.resourceSettings[PLAYER_CLASS][config.specID][resourceKey]
       SaveAnchor(movedFrame, settings.anchor, false)
       self:InvalidateRuntimeConfig()
     end
@@ -2299,7 +2301,7 @@ function M:AttachMover()
           return
         end
 
-        local settings = p.secondary.resourceSettings[PLAYER_CLASS][resourceKey]
+        local settings = p.secondary.resourceSettings[PLAYER_CLASS][config.specID][resourceKey]
         local anchor = settings.anchor
 
         anchor.point = "CENTER"
@@ -2311,12 +2313,12 @@ function M:AttachMover()
         movedFrame:SetPoint(anchor.point, UIParent, anchor.point, anchor.x, anchor.y)
       end,
 
-      optionsString = "PRD,secondary," .. PLAYER_CLASS .. "," .. resourceKey,
+      optionsString = "PRD,resources," .. resourceKey,
       quickSettings = BuildQuickSettings,
       smartSnap = PRD_BuildCombatBarSmartSnap(self, function()
         local p = GetProfile()
         if not p then return nil end
-        local settings = p.secondary.resourceSettings[PLAYER_CLASS][resourceKey]
+        local settings = p.secondary.resourceSettings[PLAYER_CLASS][config.specID][resourceKey]
         return {
           widthOwner = settings,
           appearance = settings,
