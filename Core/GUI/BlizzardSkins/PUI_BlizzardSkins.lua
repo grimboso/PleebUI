@@ -578,6 +578,7 @@ function Skins.Register(addonName, frameName, callbacks)
     install = callbacks.install,
     onShow = callbacks.onShow,
     onTheme = callbacks.onTheme,
+    controlsRoot = callbacks.controlsRoot,
     legacy = legacy,
   }
 end
@@ -587,7 +588,8 @@ local function SkinWindow(window, frame)
   if not window.initialized then
     if window.install then window.install(frame) end
     window.initialized = true
-    ns.BlizzardWindowControls.Install(frame, nil, window.name)
+    local controlsRoot = window.controlsRoot and window.controlsRoot(frame) or nil
+    ns.BlizzardWindowControls.Install(frame, controlsRoot, window.name)
   end
   if window.onShow then window.onShow(frame) end
 end
