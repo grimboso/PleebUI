@@ -32,7 +32,21 @@ local function UpdatePower(owner, bar, text, unit)
   local current, maximum, displayValue = ReadPowerValues(owner, unit)
   local r, g, b, a = owner._puiSecColorR, owner._puiSecColorG, owner._puiSecColorB, owner._puiSecColorA
 
-  Secondary.ApplyDiscreteSecondaryBars(owner, current, maximum, r, g, b, a)
+  local chargedMask = 0
+  if owner.secondaryResourceConfig.behavior.colorChargedPoints
+    and owner.secondaryResourceConfig.perSegment
+  then
+    local points = GetUnitChargedPowerPoints(unit)
+    if not issecretvalue(points) and points then
+      for index = 1, #points do
+        local point = points[index]
+        if not issecretvalue(point) then
+          chargedMask = chargedMask + 2 ^ (point - 1)
+        end
+      end
+    end
+  end
+  Secondary.ApplyDiscreteSecondaryBars(owner, current, maximum, r, g, b, a, chargedMask)
 
   local displayMaximum = maximum
   if maximum == math.floor(maximum) then
@@ -65,6 +79,10 @@ local function UpdateSecretPower(owner, bar, text, unit)
 end
 
 local function OnEvent(owner, event, _, powerToken)
+  if event == "UNIT_POWER_POINT_CHARGE" then
+    owner:UpdateSecondary()
+    return
+  end
   if powerToken ~= owner.secondaryToken then
     return
   end
@@ -89,11 +107,20 @@ local function OnEvent(owner, event, _, powerToken)
   owner:UpdateSecondary()
 end
 
+local POWER_EVENTS = {
+  UNIT_POWER_UPDATE = "player",
+  UNIT_MAXPOWER = "player",
+}
+local CHARGED_POWER_EVENTS = {
+  UNIT_POWER_UPDATE = "player",
+  UNIT_MAXPOWER = "player",
+  UNIT_POWER_POINT_CHARGE = "player",
+}
+
 Secondary:RegisterAdapter("POWER", {
-  events = {
-    UNIT_POWER_UPDATE = "player",
-    UNIT_MAXPOWER = "player",
-  },
+  GetEvents = function(owner)
+    return owner.secondaryResourceConfig.behavior.colorChargedPoints and CHARGED_POWER_EVENTS or POWER_EVENTS
+  end,
   Build = P:Def("Power.Build", BuildPower),
   OnEvent = P:Def("Power.OnEvent", OnEvent),
   Update = P:Def("Power.Update", UpdatePower),
