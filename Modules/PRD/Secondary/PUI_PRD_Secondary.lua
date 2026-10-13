@@ -1775,7 +1775,7 @@ end
 
 
 
-local function _ApplyDiscreteSecondaryBars(self, cur, maxV, r, g, b, a)
+local function _ApplyDiscreteSecondaryBars(self, cur, maxV, r, g, b, a, chargedMask)
   local config = self.secondaryResourceConfig
   r, g, b, a = _ResolveResourceCueColor(config, cur, r, g, b, a)
   _UpdateResourceThresholdCue(self.secondary, config, cur)
@@ -1791,6 +1791,7 @@ local function _ApplyDiscreteSecondaryBars(self, cur, maxV, r, g, b, a)
     if frac < 0 then frac = 0 end
     if frac > 1 then frac = 1 end
 
+    chargedMask = chargedMask or 0
     local packedFrac = math.floor(frac * 1000 + 0.5)
     local inactiveAlpha = self._puiSecInactiveAlpha
 
@@ -1799,6 +1800,8 @@ local function _ApplyDiscreteSecondaryBars(self, cur, maxV, r, g, b, a)
       and self._puiDiscreteLastFrac == packedFrac
       and self._puiDiscreteLastColorP == colorKey
       and self._puiDiscreteLastInactiveAlpha == inactiveAlpha
+      and self._puiDiscreteLastChargedMask == chargedMask
+      and self._puiDiscreteLastConfig == config
     then
       return
     end
@@ -1808,6 +1811,8 @@ local function _ApplyDiscreteSecondaryBars(self, cur, maxV, r, g, b, a)
     self._puiDiscreteLastFrac = packedFrac
     self._puiDiscreteLastColorP = colorKey
     self._puiDiscreteLastInactiveAlpha = inactiveAlpha
+    self._puiDiscreteLastChargedMask = chargedMask
+    self._puiDiscreteLastConfig = config
 
     for i = 1, count do
       local segment = segments[i]
@@ -1819,17 +1824,29 @@ local function _ApplyDiscreteSecondaryBars(self, cur, maxV, r, g, b, a)
         value = frac
       end
 
-      if segment._puiLastColorP ~= colorKey then
-        segment._puiLastColorP = colorKey
-        segment:SetStatusBarColor(r, g, b, a)
+      local charged = math.floor(chargedMask / 2 ^ (i - 1)) % 2 == 1
+      local sr, sg, sb, sa = r, g, b, a
+      if charged then
+        sr, sg, sb, sa = unpack(config.behavior.chargedColor)
+      elseif config.behavior.darkenPartial and value > 0 and value < 1 then
+        sr, sg, sb = r * 0.75, g * 0.75, b * 0.75
+      end
+      local segmentColorKey = _PackResourceColor(sr, sg, sb, sa)
+      if segment._puiLastColorP ~= segmentColorKey then
+        segment._puiLastColorP = segmentColorKey
+        segment:SetStatusBarColor(sr, sg, sb, sa)
       end
 
+      local alpha = value > 0 and 1 or inactiveAlpha
+      if charged and value == 0 then
+        value = 1
+        alpha = 0.5
+      end
       if segment._puiLastTargetV ~= value then
         segment._puiLastTargetV = value
         segment:SetValue(value)
       end
 
-      local alpha = value > 0 and 1 or inactiveAlpha
       if segment._puiLastTargetA ~= alpha then
         segment._puiLastTargetA = alpha
         segment:SetAlpha(alpha)
