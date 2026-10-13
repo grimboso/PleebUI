@@ -3,9 +3,9 @@ local ADDON_NAME, ns = ...
 local M = ns.Modules.PRD
 local Secondary = ns.PRDSecondary
 local P = ns.Pleebug:DropIn({}, { name = "PRD_Secondary_Core" })
-local function BuildStateKey(owner, customEnabled)
+local function BuildStateKey(owner, hasSecondary)
   local parts = {
-    tostring(customEnabled and 1 or 0),
+    tostring(hasSecondary and 1 or 0),
   }
   local resources = owner.secondaryResources or {}
 
@@ -191,23 +191,19 @@ function M:RebuildSecondary(forceBuild)
   local adapter = self.secondaryAdapter
   local resources = self.secondaryResources or {}
   local profile = self.db.profile
-  local secondaryConfig = profile.secondary
   local hasSecondary = #resources > 0
     and definition ~= nil
     and adapter ~= nil
     and token ~= nil
     and maximum > 0
-  local isAlternatePower = definition ~= nil and definition.isAlternatePower == true
-  local customEnabled = hasSecondary and (isAlternatePower or secondaryConfig.enabled ~= false)
-
-  local useCustom = customEnabled and self._puiSecondaryHasVisibleResources
+  local useCustom = hasSecondary and self._puiSecondaryHasVisibleResources
 
   self.secondaryType = powerType
   self.secondaryToken = token
   self.secondaryMax = maximum
-  self.secondaryCustomEnabled = customEnabled
+  self.secondaryCustomEnabled = hasSecondary
 
-  local stateKey = BuildStateKey(self, customEnabled)
+  local stateKey = BuildStateKey(self, hasSecondary)
   local stateChanged = forceBuild == true or self._puiSecondaryStateKey ~= stateKey
   local visibilityChanged = wasUsingCustom ~= useCustom
 
@@ -215,9 +211,8 @@ function M:RebuildSecondary(forceBuild)
   self._puiSecondaryStateKey = stateKey
 
   local eventParts = {
-    tostring(secondaryConfig.enabled ~= false and 1 or 0),
     tostring(profile.primary.hideAlternateMana ~= true and 1 or 0),
-    tostring(customEnabled and 1 or 0),
+    tostring(hasSecondary and 1 or 0),
     tostring(useCustom and 1 or 0),
   }
 
@@ -254,20 +249,16 @@ function M:RebuildSecondary(forceBuild)
     self._puiSecondaryContent:SetAlpha(1)
   end
 
-  local showBlizzard = hasSecondary and not customEnabled
-  local blizzardState = tostring(showBlizzard and 1 or 0)
-    .. "|"
-    .. tostring(profile.primary.hideAlternateMana == true and 1 or 0)
+  local blizzardState = tostring(profile.primary.hideAlternateMana == true and 1 or 0)
 
   if self._puiBlizzardSecondaryState ~= blizzardState then
     self._puiBlizzardSecondaryState = blizzardState
-    self:SetBlizzardSecondaryShown(showBlizzard)
+    self:SetBlizzardSecondaryShown(false)
   end
 
-  local ghostRoot = not showBlizzard
-  if self._puiBlizzardRootGhosted ~= ghostRoot then
-    self._puiBlizzardRootGhosted = ghostRoot
-    self:SetBlizzardRootGhosted(ghostRoot)
+  if self._puiBlizzardRootGhosted ~= true then
+    self._puiBlizzardRootGhosted = true
+    self:SetBlizzardRootGhosted(true)
   end
 
   local structureReady = not useCustom or AreSecondaryStructuresReady(self)
@@ -308,6 +299,10 @@ function M:RebuildSecondary(forceBuild)
   if not useCustom then
     SuspendSecondaryAdapters(self)
     HideSecondaryResourceFrames(self)
+    self._puiSecondaryBuildPending = nil
+    self._puiSecondaryAppearancePending = nil
+    self._puiSecondaryTextPending = nil
+    self:RegisterSecondaryEvents()
     return
   end
 
@@ -481,31 +476,13 @@ local function EnsureEventFrame(owner)
 end
 
 function M:RegisterSecondaryEvents()
-  local profile = self.db.profile
-  local secondaryConfig = profile.secondary
-  local keepAlternatePowerRuntime = profile.primary.hideAlternateMana ~= true
-    and Secondary.PlayerClassHasAlternatePower == true
-
-  if secondaryConfig.enabled == false and not keepAlternatePowerRuntime then
-    local frame = self._puiSecondaryEventFrame
-    if frame then
-      frame:UnregisterAllEvents()
-      frame._puiAdapterEvents = nil
-    end
-
-    self._puiSecondaryEventsRegistered = false
-    return
-  end
-
   local frame = EnsureEventFrame(self)
   frame:UnregisterAllEvents()
   frame._puiAdapterEvents = nil
 
-  if secondaryConfig.enabled ~= false then
-    for _, resource in ipairs(self.secondaryResources or {}) do
-      if resource.definition.isAlternatePower ~= true then
-        RegisterVisibilityEvents(frame, resource.config.visibilityMode)
-      end
+  for _, resource in ipairs(self.secondaryResources or {}) do
+    if resource.definition.isAlternatePower ~= true then
+      RegisterVisibilityEvents(frame, resource.config.visibilityMode)
     end
   end
 
