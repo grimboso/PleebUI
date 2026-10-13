@@ -1,5 +1,7 @@
 local _, ns = ...
 local Skins = ns.BlizzardSkins
+local achievementCards = setmetatable({}, { __mode = "k" })
+local achievementRows = setmetatable({}, { __mode = "k" })
 
 local function FadeArtwork(frame, keep)
   Skins.Chrome(frame)
@@ -30,19 +32,12 @@ local function SkinProgressBar(bar)
   Skins.Texts(bar)
 end
 
-local function SkinAchievementCard(card)
+local function RepaintAchievementCard(card)
   if not Skins.CanStyle() then return end
   local keep = {}
   if card.Check then keep[card.Check] = true end
   if card.PlusMinus then keep[card.PlusMinus] = true end
   FadeArtwork(card, keep)
-  local host = Skins.Surface(card, true, true)
-  host:ClearAllPoints()
-  host:SetPoint("TOPLEFT", card, "TOPLEFT", 2, -2)
-  host:SetPoint("BOTTOMRIGHT", card, "BOTTOMRIGHT", -2, 2)
-  if card.Highlight then
-    SkinHighlight(card.Highlight)
-  end
   if card.Icon then
     Skins.Hide(card.Icon.frame)
     Skins.Hide(card.Icon.bling)
@@ -50,26 +45,49 @@ local function SkinAchievementCard(card)
   end
   Skins.Texts(card)
   if card.Shield then Skins.Texts(card.Shield) end
+end
+
+local function SkinAchievementCard(card)
+  if not Skins.CanStyle() then return end
+  if achievementCards[card] then
+    RepaintAchievementCard(card)
+    return
+  end
+  achievementCards[card] = true
+  local host = Skins.Surface(card, true, true)
+  host:ClearAllPoints()
+  host:SetPoint("TOPLEFT", card, "TOPLEFT", 2, -2)
+  host:SetPoint("BOTTOMRIGHT", card, "BOTTOMRIGHT", -2, 2)
+  if card.Highlight then
+    SkinHighlight(card.Highlight)
+  end
+  RepaintAchievementCard(card)
   if card.Tracked then Skins.CheckBox(card.Tracked) end
   -- These templates repaint parchment and text when completed or recycled.
-  if card.Init then Skins.Hook(card, "Init", SkinAchievementCard) end
-  if card.Saturate then Skins.Hook(card, "Saturate", SkinAchievementCard) end
-  if card.Desaturate then Skins.Hook(card, "Desaturate", SkinAchievementCard) end
+  if card.Init then Skins.Hook(card, "Init", RepaintAchievementCard) end
+  if card.Saturate then Skins.Hook(card, "Saturate", RepaintAchievementCard) end
+  if card.Desaturate then Skins.Hook(card, "Desaturate", RepaintAchievementCard) end
 end
 
 local function SkinCategoryRow(row)
   if not Skins.CanStyle() then return end
-  Skins.Button(row.Button, true)
+  if not achievementRows[row] then
+    achievementRows[row] = true
+    Skins.Button(row.Button, true)
+    Skins.Hook(row, "Init", SkinCategoryRow)
+  end
   Skins.Font(row.Button.Label)
-  Skins.Hook(row, "Init", SkinCategoryRow)
 end
 
 local function SkinStatRow(row)
   if not Skins.CanStyle() then return end
   FadeArtwork(row)
-  Skins.Surface(row, true, true)
+  if not achievementRows[row] then
+    achievementRows[row] = true
+    Skins.Surface(row, true, true)
+    Skins.Hook(row, "Init", SkinStatRow)
+  end
   Skins.Texts(row)
-  Skins.Hook(row, "Init", SkinStatRow)
 end
 
 local function SkinComparisonRow(row)
@@ -80,11 +98,14 @@ end
 
 local function SkinSearchRow(row)
   if not Skins.CanStyle() then return end
-  Skins.Button(row, true)
+  if not achievementRows[row] then
+    achievementRows[row] = true
+    Skins.Button(row, true)
+    Skins.Selection(row.SelectedTexture)
+  end
   Skins.Hide(row.IconFrame)
   Skins.Icon(row.Icon)
   Skins.Texts(row)
-  Skins.Selection(row.SelectedTexture)
 end
 
 local function RefreshCriteria(objectives)
@@ -130,12 +151,12 @@ end
 
 local function RefreshRows()
   RefreshAchievementControls()
-  Skins.ScrollRows(AchievementFrame.Categories.ScrollBox, SkinCategoryRow)
-  Skins.ScrollRows(AchievementFrameAchievements.ScrollBox, SkinAchievementCard)
-  Skins.ScrollRows(AchievementFrameStats.ScrollBox, SkinStatRow)
-  Skins.ScrollRows(AchievementFrameComparison.AchievementContainer.ScrollBox, SkinComparisonRow)
-  Skins.ScrollRows(AchievementFrameComparison.StatContainer.ScrollBox, SkinStatRow)
-  Skins.ScrollRows(AchievementFrame.SearchResults.ScrollBox, SkinSearchRow)
+  Skins.ScrollRows(AchievementFrame.Categories.ScrollBox, SkinCategoryRow, SkinCategoryRow)
+  Skins.ScrollRows(AchievementFrameAchievements.ScrollBox, SkinAchievementCard, RepaintAchievementCard)
+  Skins.ScrollRows(AchievementFrameStats.ScrollBox, SkinStatRow, SkinStatRow)
+  Skins.ScrollRows(AchievementFrameComparison.AchievementContainer.ScrollBox, SkinComparisonRow, SkinComparisonRow)
+  Skins.ScrollRows(AchievementFrameComparison.StatContainer.ScrollBox, SkinStatRow, SkinStatRow)
+  Skins.ScrollRows(AchievementFrame.SearchResults.ScrollBox, SkinSearchRow, SkinSearchRow)
   RefreshSummary()
   RefreshSearchPreview()
   RefreshCriteria(AchievementFrameAchievementsObjectives)
@@ -224,5 +245,4 @@ end
 Skins.Register("Blizzard_AchievementUI", "AchievementFrame", {
   install = InstallAchievements,
   onShow = RefreshRows,
-  onTheme = RefreshRows,
 })
