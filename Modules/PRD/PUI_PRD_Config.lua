@@ -3170,11 +3170,6 @@ do
     local style = appearance.style
 
     local args = {
-      header = {
-        type = "header",
-        name = "Health bar",
-        order = 1,
-      },
       layoutGroup = {
         type = "group",
         name = "Layout",
