@@ -460,6 +460,16 @@ local function CS_GetShowMaxHealth()
   return not csdb or csdb.showMaxHealth ~= false
 end
 
+local function CS_RefreshMaxHealthEvents()
+  local visible = PaperDollFrame:IsVisible()
+  if issecretvalue(visible) then return end
+  if CS_GetShowMaxHealth() and visible then
+    CS_EventDriver:RegisterUnitEvent("UNIT_MAXHEALTH", "player")
+  else
+    CS_EventDriver:UnregisterEvent("UNIT_MAXHEALTH")
+  end
+end
+
 local function CS_GetUsePleebUIFont()
   local csdb = _CS_GetDB()
   return csdb and csdb.usePleebUIFont == true
@@ -1178,6 +1188,7 @@ local function CS_SetShowMaxHealth(v)
   end
 
   CS_LayoutMaxHealthRow()
+  CS_RefreshMaxHealthEvents()
 end
 
 local function CS_SetUsePleebUIFont(v)
@@ -4154,11 +4165,14 @@ local function SetupCharacterFrameSkinning()
   CS_UpdateCharacterSettingsButtonVisibility()
 
   PaperDollFrame:HookScript("OnShow", function()
+    CS_RefreshMaxHealthEvents()
     CharacterSheet:SetSocketStripActive(true)
   end)
   PaperDollFrame:HookScript("OnHide", function()
+    CS_EventDriver:UnregisterEvent("UNIT_MAXHEALTH")
     CharacterSheet:SetSocketStripActive(false)
   end)
+  CS_RefreshMaxHealthEvents()
   CharacterFrame:HookScript("OnHide", function()
     CharacterSheet:SetSocketStripActive(false)
   end)
@@ -4231,6 +4245,7 @@ function CharacterSheet:RefreshTheme()
     ns.BlizzardWindowControls.Install(CharacterFrame, CharacterSheet._shellHost)
     UpdateCharacterAverageItemLevelText()
     CS_LayoutMaxHealthRow()
+    CS_RefreshMaxHealthEvents()
     CS_RefreshCharacterStatFonts()
     CS_LayoutStatGroups()
     CS_RefreshSlotDisplaySettings()
@@ -4294,7 +4309,6 @@ do
   driver:RegisterEvent("UPDATE_INVENTORY_DURABILITY")
   driver:RegisterEvent("PLAYER_REGEN_DISABLED")
   driver:RegisterEvent("PLAYER_REGEN_ENABLED")
-  driver:RegisterUnitEvent("UNIT_MAXHEALTH", "player")
   driver:RegisterEvent("INSPECT_READY")
 
   driver:SetScript("OnEvent", function(self, event, arg1)
@@ -4408,6 +4422,7 @@ end
   CS_GetHighlightStatGear = P:Def("CS_GetHighlightStatGear", CS_GetHighlightStatGear)
   CS_SetHighlightStatGear = P:Def("CS_SetHighlightStatGear", CS_SetHighlightStatGear)
   CS_GetShowMaxHealth = P:Def("CS_GetShowMaxHealth", CS_GetShowMaxHealth)
+  CS_RefreshMaxHealthEvents = P:Def("CS_RefreshMaxHealthEvents", CS_RefreshMaxHealthEvents)
   CS_SetShowMaxHealth = P:Def("CS_SetShowMaxHealth", CS_SetShowMaxHealth)
   CS_GetUsePleebUIFont = P:Def("CS_GetUsePleebUIFont", CS_GetUsePleebUIFont)
   CS_SetUsePleebUIFont = P:Def("CS_SetUsePleebUIFont", CS_SetUsePleebUIFont)
