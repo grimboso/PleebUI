@@ -450,34 +450,9 @@ local DEFINITIONS = {
   },
 
   WARRIOR = {
-    bySpec = {
-      [72] = {
-        adapter = "AURA_STACKS",
-        resourceKey = "WHIRLWIND_STACKS",
-        token = "WHIRLWIND_STACKS",
-        unit = "player",
-        filter = "HELPFUL|PLAYER",
-        texture = "Pleebar",
-        defaultColor = { 0.78, 0.61, 0.43, 1 },
-        max = 4,
-        auraSpellIDs = { 85739 },
-        forceContinuous = true,
-        defaultEnabled = false,
-      },
-      [73] = {
-        adapter = "AURA_STACKS",
-        resourceKey = "IGNORE_PAIN",
-        token = "IGNORE_PAIN",
-        unit = "player",
-        filter = "HELPFUL|PLAYER",
-        texture = "Pleebar",
-        defaultColor = { 0.85, 0.65, 0.20, 1 },
-        max = 100,
-        auraSpellIDs = { 190456 },
-        forceContinuous = true,
-        defaultEnabled = false,
-      },
-      [71] = {
+    resources = {
+      {
+        legacySpecID = 71,
         adapter = "SPELL_COUNT",
         resourceKey = "SWEEPING_STRIKES",
         token = "SWEEPING_STRIKES",
@@ -492,6 +467,34 @@ local DEFINITIONS = {
         countDisplayName = "Sweeping Strikes display",
         countDisplayDescription = "Show remaining Sweeping Strikes uses on its icon, the PRD bar, both, or neither.",
         forceContinuous = true,
+      },
+      {
+        legacySpecID = 72,
+        adapter = "AURA_STACKS",
+        resourceKey = "WHIRLWIND_STACKS",
+        token = "WHIRLWIND_STACKS",
+        unit = "player",
+        filter = "HELPFUL|PLAYER",
+        texture = "Pleebar",
+        defaultColor = { 0.78, 0.61, 0.43, 1 },
+        max = 4,
+        auraSpellIDs = { 85739 },
+        forceContinuous = true,
+        defaultEnabled = false,
+      },
+      {
+        legacySpecID = 73,
+        adapter = "AURA_STACKS",
+        resourceKey = "IGNORE_PAIN",
+        token = "IGNORE_PAIN",
+        unit = "player",
+        filter = "HELPFUL|PLAYER",
+        texture = "Pleebar",
+        defaultColor = { 0.85, 0.65, 0.20, 1 },
+        max = 100,
+        auraSpellIDs = { 190456 },
+        forceContinuous = true,
+        defaultEnabled = false,
       },
     },
   },
@@ -611,6 +614,22 @@ local function GetPlayerSpecID()
   return C_SpecializationInfo.GetSpecializationInfo(specIndex)
 end
 
+Secondary.Specializations = {}
+local SPECIALIZATIONS_BY_CLASS = {}
+for classID = 1, GetNumClasses() do
+  local classInfo = C_CreatureInfo.GetClassInfo(classID)
+  if classInfo then
+    local specs = {}
+    SPECIALIZATIONS_BY_CLASS[classInfo.classFile] = specs
+    for index = 1, C_SpecializationInfo.GetNumSpecializationsForClassID(classID) do
+      local specID, name = GetSpecializationInfoForClassID(classID, index)
+      local spec = { id = specID, name = name, classToken = classInfo.classFile }
+      specs[#specs + 1] = spec
+      Secondary.Specializations[#Secondary.Specializations + 1] = spec
+    end
+  end
+end
+
 local IsDefinitionEnabled
 
 local function GetResolvedDefinitionCandidates()
@@ -620,6 +639,7 @@ local function GetResolvedDefinitionCandidates()
   end
 
   local specID = GetPlayerSpecID()
+  if not specID then return nil, nil end
   local formID = GetShapeshiftFormID() or nil
   local resolvedEntry = entry
 
@@ -724,9 +744,9 @@ local RESOURCE_OPTIONS_BY_CLASS = {
     { key = "ESSENCE", name = "Essence", category = "CLASS_RESOURCE" },
   },
   WARRIOR = {
-    { key = "SWEEPING_STRIKES", name = "Sweeping Strikes", category = "TRACKED_EFFECT", specIDs = { [71] = true } },
-    { key = "WHIRLWIND_STACKS", name = "Whirlwind stacks", category = "TRACKED_EFFECT", specIDs = { [72] = true } },
-    { key = "IGNORE_PAIN", name = "Ignore Pain", category = "TRACKED_EFFECT", specIDs = { [73] = true } },
+    { key = "SWEEPING_STRIKES", name = "Sweeping Strikes", category = "TRACKED_EFFECT" },
+    { key = "WHIRLWIND_STACKS", name = "Whirlwind stacks", category = "TRACKED_EFFECT" },
+    { key = "IGNORE_PAIN", name = "Ignore Pain", category = "TRACKED_EFFECT" },
   },
   DEATHKNIGHT = {
     { key = "RUNES", name = "Runes", category = "CLASS_RESOURCE" },
@@ -734,19 +754,26 @@ local RESOURCE_OPTIONS_BY_CLASS = {
   },
 }
 
-function Secondary:GetResourceOptionsForClass(classToken, includeAllSpecs)
-  local options = RESOURCE_OPTIONS_BY_CLASS[classToken] or {}
-  local specID = GetPlayerSpecID()
-  local filtered = {}
-
-  for i = 1, #options do
-    local option = options[i]
-    if includeAllSpecs == true or not option.specIDs or option.specIDs[specID] then
-      filtered[#filtered + 1] = option
+local RESOURCE_OPTIONS_BY_SPEC = {}
+local NO_RESOURCE_OPTIONS = {}
+for classToken, specs in pairs(SPECIALIZATIONS_BY_CLASS) do
+  local bySpec = {}
+  RESOURCE_OPTIONS_BY_SPEC[classToken] = bySpec
+  for _, spec in ipairs(specs) do
+    local options = {}
+    bySpec[spec.id] = options
+    for _, resource in ipairs(RESOURCE_OPTIONS_BY_CLASS[classToken] or NO_RESOURCE_OPTIONS) do
+      if not resource.specIDs or resource.specIDs[spec.id] then
+        options[#options + 1] = {
+          key = resource.key, name = resource.name, category = resource.category, specID = spec.id,
+        }
+      end
     end
   end
+end
 
-  return filtered
+function Secondary:GetResourceOptionsForClass(classToken, specID)
+  return RESOURCE_OPTIONS_BY_SPEC[classToken][specID or GetPlayerSpecID()] or NO_RESOURCE_OPTIONS
 end
 
 IsDefinitionEnabled = function(definition, profile)
@@ -758,14 +785,14 @@ IsDefinitionEnabled = function(definition, profile)
     return profile.primary.hideAlternateMana ~= true
   end
 
-  return profile.secondary.resourceSettings[PLAYER_CLASS][definition.resourceKey].enabled ~= false
+  return profile.secondary.resourceSettings[PLAYER_CLASS][GetPlayerSpecID()][definition.resourceKey].enabled ~= false
 end
 
 local function ResolveMaximum(definition, deferSecretAuraMaximum)
   local resolvedMax = tonumber(definition.max) or 0
 
   if definition.configurableMaximum then
-    resolvedMax = M.db.profile.secondary.resourceSettings[PLAYER_CLASS][definition.resourceKey].behavior.stackCeiling
+    resolvedMax = M.db.profile.secondary.resourceSettings[PLAYER_CLASS][GetPlayerSpecID()][definition.resourceKey].behavior.stackCeiling
   elseif definition.knownMaxSpellID then
     if C_SpellBook.IsSpellKnown(definition.knownMaxSpellID) then
       resolvedMax = tonumber(definition.maxWhenKnown) or resolvedMax
@@ -793,24 +820,33 @@ local function ResolveMaximum(definition, deferSecretAuraMaximum)
   return resolvedMax
 end
 
-local function EnsureResourceSettings(profile, resourceKey, resourceIndex, classToken)
+function Secondary:GetResourceSettings(profile, resourceKey, classToken, specID, resourceIndex)
   local secondary = profile.secondary
   secondary.resourceSettings = secondary.resourceSettings or {}
   classToken = classToken or PLAYER_CLASS
+  specID = specID or GetPlayerSpecID()
+  if not specID then return nil end
   local classSettings = secondary.resourceSettings[classToken]
   if not classSettings then
     classSettings = {}
     secondary.resourceSettings[classToken] = classSettings
   end
 
-  local settings = classSettings[resourceKey]
+  local specSettings = classSettings[specID]
+  if not specSettings then
+    specSettings = {}
+    classSettings[specID] = specSettings
+  end
+  local settings = specSettings[resourceKey]
   if not settings then
     settings = {}
-    classSettings[resourceKey] = settings
+    specSettings[resourceKey] = settings
   end
 
   if settings.enabled == nil then
-    settings.enabled = RESOURCE_DEFINITIONS_BY_CLASS[classToken][resourceKey].defaultEnabled ~= false
+    local definition = RESOURCE_DEFINITIONS_BY_CLASS[classToken][resourceKey]
+    settings.enabled = definition.defaultEnabled ~= false
+      and (not definition.legacySpecID or definition.legacySpecID == specID)
   end
   if settings.visibilityMode == nil then settings.visibilityMode = "ALWAYS" end
 
@@ -969,10 +1005,6 @@ local function EnsureResourceSettings(profile, resourceKey, resourceIndex, class
   return settings
 end
 
-function Secondary:GetResourceSettings(profile, resourceKey, classToken)
-  return EnsureResourceSettings(profile, resourceKey, 1, classToken)
-end
-
 local function CopyMissingResourceSettings(target, source)
   for key, value in pairs(source) do
     if type(value) == "table" then
@@ -986,81 +1018,64 @@ local function CopyMissingResourceSettings(target, source)
   end
 end
 
-local function NormalizeDefinitionSettings(profile, entry, resourceIndex, seen, classToken, migrating)
-  if type(entry) ~= "table" then
-    return
-  end
-
-  if entry.adapter and entry.resourceKey then
-    if not seen[entry.resourceKey] then
-      seen[entry.resourceKey] = true
-      if migrating then
-        local allSettings = profile.secondary.resourceSettings
-        allSettings[classToken] = allSettings[classToken] or {}
-        local classSettings = allSettings[classToken]
-        classSettings[entry.resourceKey] = classSettings[entry.resourceKey] or {}
-        local legacySettings = allSettings[entry.resourceKey]
-        if legacySettings then
-          CopyMissingResourceSettings(classSettings[entry.resourceKey], legacySettings)
-        end
-        local settings = classSettings[entry.resourceKey]
-        if settings.enabled == nil then
-          local enabled = profile.secondary.resourceEnabled
-          if enabled and enabled[entry.resourceKey] ~= nil then
-            settings.enabled = enabled[entry.resourceKey] ~= false
-          else
-            settings.enabled = entry.defaultEnabled ~= false
-          end
-        end
-        if settings.visibilityMode == nil then
-          settings.visibilityMode = profile.secondary.visibilityMode or "ALWAYS"
-        end
-      end
-      EnsureResourceSettings(profile, entry.resourceKey, resourceIndex, classToken)
-    end
-    return
-  end
-
-  if type(entry.resources) == "table" then
-    for index, definition in ipairs(entry.resources) do
-      NormalizeDefinitionSettings(profile, definition, index, seen, classToken, migrating)
-    end
-  end
-
-  if type(entry.bySpec) == "table" then
-    for _, definition in pairs(entry.bySpec) do
-      NormalizeDefinitionSettings(profile, definition, resourceIndex, seen, classToken, migrating)
-    end
-  end
-
-  if type(entry.byForm) == "table" then
-    for _, definition in pairs(entry.byForm) do
-      NormalizeDefinitionSettings(profile, definition, resourceIndex, seen, classToken, migrating)
-    end
-  end
-end
-
 function Secondary:NormalizeProfile(profile)
   local secondary = profile.secondary
-  local migrating = secondary.__puiClassResourcesMigrated ~= true
-  secondary.resourceSettings = secondary.resourceSettings or {}
-  for classToken, entry in pairs(DEFINITIONS) do
-    NormalizeDefinitionSettings(profile, entry, 1, {}, classToken, migrating)
+  local migrating = secondary.__puiSpecResourcesMigrated ~= true
+  local allSettings = secondary.resourceSettings or {}
+  secondary.resourceSettings = allSettings
+  for classToken, definitions in pairs(RESOURCE_DEFINITIONS_BY_CLASS) do
+    local classSettings = allSettings[classToken] or {}
+    allSettings[classToken] = classSettings
+    for _, spec in ipairs(SPECIALIZATIONS_BY_CLASS[classToken]) do
+      local specSettings = classSettings[spec.id] or {}
+      classSettings[spec.id] = specSettings
+      for resourceKey, definition in pairs(definitions) do
+        local settings = specSettings[resourceKey] or {}
+        specSettings[resourceKey] = settings
+        if migrating then
+          local hadEnabled = settings.enabled ~= nil
+          if classSettings[resourceKey] then
+            CopyMissingResourceSettings(settings, classSettings[resourceKey])
+          end
+          if allSettings[resourceKey] then
+            CopyMissingResourceSettings(settings, allSettings[resourceKey])
+          end
+          if not hadEnabled then
+            if definition.isAlternatePower ~= true and secondary.enabled == false then
+              settings.enabled = false
+            elseif definition.legacySpecID and definition.legacySpecID ~= spec.id then
+              settings.enabled = false
+            elseif settings.enabled == nil and secondary.resourceEnabled then
+              settings.enabled = secondary.resourceEnabled[resourceKey]
+            end
+          end
+          if settings.visibilityMode == nil then
+            settings.visibilityMode = secondary.visibilityMode
+          end
+        end
+        self:GetResourceSettings(profile, resourceKey, classToken, spec.id)
+      end
+    end
+    if migrating then
+      for resourceKey in pairs(definitions) do classSettings[resourceKey] = nil end
+    end
   end
 
   if migrating then
-    -- Seed every class before removing shared entries used by multi-character profiles.
+    -- Copy every class/spec before retiring shared settings from existing profiles.
     for _, definitions in pairs(RESOURCE_DEFINITIONS_BY_CLASS) do
       for resourceKey in pairs(definitions) do
-        secondary.resourceSettings[resourceKey] = nil
+        allSettings[resourceKey] = nil
         if secondary.resourceEnabled then secondary.resourceEnabled[resourceKey] = nil end
       end
     end
-    if secondary.resourceEnabled and next(secondary.resourceEnabled) == nil then
+    if secondary.resourceEnabled and not next(secondary.resourceEnabled) then
       secondary.resourceEnabled = nil
     end
+    secondary.enabled = nil
     secondary.visibilityMode = nil
-    secondary.__puiClassResourcesMigrated = true
+    secondary.__puiClassResourcesMigrated = nil
+    secondary.__puiSpecResourcesMigrated = true
   end
 end
 
@@ -1093,6 +1108,7 @@ local function BuildResourceConfigStateKey(config)
 
   return table.concat({
     config.resourceKey,
+    config.specID,
     config.detached and 1 or 0,
     config.height, config.width,
     anchor.point, anchor.x, anchor.y,
@@ -1143,6 +1159,7 @@ end
 local function BuildResourceConfigStructureKey(config)
   return table.concat({
     config.resourceKey,
+    config.specID,
     config.perSegment and 1 or 0,
     config.behavior.fiveBarStyle and 1 or 0,
   }, "|")
@@ -1176,7 +1193,7 @@ local function ResolveResourceConfig(profile, definition, specID)
   end
 
   local shared = profile.secondary
-  local settings = shared.resourceSettings[PLAYER_CLASS][definition.resourceKey]
+  local settings = shared.resourceSettings[PLAYER_CLASS][specID][definition.resourceKey]
   local appearance = settings
   local text = settings.text
   local font = settings.text
@@ -1215,6 +1232,7 @@ local function ResolveResourceConfig(profile, definition, specID)
 
   local config = {
     resourceKey = definition.resourceKey,
+    specID = specID,
     visibilityMode = settings.visibilityMode,
     resourceName = RESOURCE_NAMES[definition.resourceKey] or definition.resourceKey,
     thresholdGlowKey = "PUI_PRD_THRESHOLD_" .. definition.resourceKey,
@@ -1364,8 +1382,8 @@ local function ResolveDefinitions()
   return resources, specID
 end
 
-local function IsResourceVisibilityAllowed(resource, profile)
-  if resource.definition.isAlternatePower == true or profile.secondary.enabled == false then
+local function IsResourceVisibilityAllowed(resource)
+  if resource.definition.isAlternatePower == true then
     return true
   end
 
@@ -1402,7 +1420,7 @@ function M:GetSecondaryDefinition()
   local hasVisibleResources = false
   for index = 1, #resources do
     local resource = resources[index]
-    resource.visible = IsResourceVisibilityAllowed(resource, profile)
+    resource.visible = IsResourceVisibilityAllowed(resource)
     hasVisibleResources = hasVisibleResources or resource.visible
   end
   self._puiSecondaryHasVisibleResources = hasVisibleResources
@@ -1475,7 +1493,8 @@ Secondary.ResourceSupportsStackColorShifts = P:Def(
   Secondary.ResourceSupportsStackColorShifts
 )
 Secondary.GetApplicationCountdownMax = P:Def("GetApplicationCountdownMax", Secondary.GetApplicationCountdownMax)
-GetPlayerSpecID = P:Def("GetPlayerSpecID", GetPlayerSpecID)
+GetPlayerSpecID = P:Def("GetPlayerSpecialization", GetPlayerSpecID)
+Secondary.GetPlayerSpecialization = GetPlayerSpecID
 GetResolvedDefinitionCandidates = P:Def(
   "GetResolvedDefinitionCandidates",
   GetResolvedDefinitionCandidates
@@ -1483,8 +1502,6 @@ GetResolvedDefinitionCandidates = P:Def(
 IsDefinitionEnabled = P:Def("IsDefinitionEnabled", IsDefinitionEnabled)
 ResolveMaximum = P:Def("ResolveMaximum", ResolveMaximum)
 Secondary.ResolveMaximum = ResolveMaximum
-EnsureResourceSettings = P:Def("EnsureResourceSettings", EnsureResourceSettings)
-NormalizeDefinitionSettings = P:Def("NormalizeDefinitionSettings", NormalizeDefinitionSettings)
 CopyMissingResourceSettings = P:Def("CopyMissingResourceSettings", CopyMissingResourceSettings)
 IsResourceVisibilityAllowed = P:Def("IsResourceVisibilityAllowed", IsResourceVisibilityAllowed)
 BuildResourceConfigStateKey = P:Def("BuildResourceConfigStateKey", BuildResourceConfigStateKey)
