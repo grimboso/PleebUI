@@ -1,5 +1,7 @@
 local _, ns = ...
 local Skins = ns.BlizzardSkins
+local collectionButtons = setmetatable({}, { __mode = "k" })
+local collectionModels = setmetatable({}, { __mode = "k" })
 
 local layout = {
   Panel = { "MountJournal.LeftInset", "MountJournal.RightInset", "MountJournal.BottomLeftInset",
@@ -26,6 +28,15 @@ local layout = {
     "WardrobeCollectionFrame.SetsCollectionFrame.DetailsFrame.IconRowBackground" },
 }
 
+local function RepaintCollectionRow(row)
+  Skins.Hide(row.background)
+  if row.dragButton then Skins.Hide(row.dragButton.levelBG) end
+  -- The native initializer changes font objects for collected and unavailable entries.
+  for _, region in ipairs({ row:GetRegions() }) do
+    if region:IsObjectType("FontString") then ns.Theme.ApplyFont(region, "body") end
+  end
+end
+
 local function SkinCollectionRow(row)
   Skins.Hide(row.background)
   Skins.IconButton(row, row.icon)
@@ -38,7 +49,14 @@ local function SkinCollectionRow(row)
     Skins.Font(row.dragButton.level)
   end
   Skins.Selection(row.selectedTexture)
-  Skins.Texts(row)
+  RepaintCollectionRow(row)
+end
+
+local function RepaintSetRow(row)
+  Skins.Hide(row.Background)
+  for _, region in ipairs({ row:GetRegions() }) do
+    if region:IsObjectType("FontString") then ns.Theme.ApplyFont(region, "body") end
+  end
 end
 
 local function SkinSetRow(row)
@@ -47,7 +65,7 @@ local function SkinSetRow(row)
   Skins.Surface(row.IconFrame, true)
   Skins.Icon(row.IconFrame.Icon)
   Skins.Selection(row.SelectedTexture)
-  Skins.Texts(row)
+  RepaintSetRow(row)
 end
 
 local function SkinCollectionSpell(button)
@@ -55,16 +73,22 @@ local function SkinCollectionSpell(button)
   Skins.Hide(button.slotFrameCollected)
   Skins.Hide(button.slotFrameUncollected)
   Skins.Hide(button.slotFrameUncollectedInnerGlow)
-  Skins.IconButton(button, button.iconTexture)
-  Skins.Icon(button.iconTextureUncollected)
-  Skins.Font(button.name)
+  if not collectionButtons[button] then
+    collectionButtons[button] = true
+    Skins.IconButton(button, button.iconTexture)
+    Skins.Icon(button.iconTextureUncollected)
+  end
+  ns.Theme.ApplyFont(button.name, "body")
 end
 
 local function SkinCampsite(row)
   Skins.Hide(row.Border)
   Skins.Hide(row.NameBackground)
-  Skins.IconButton(row, row.Icon)
-  Skins.Font(row.Name)
+  if not collectionButtons[row] then
+    collectionButtons[row] = true
+    Skins.IconButton(row, row.Icon)
+  end
+  ns.Theme.ApplyFont(row.Name, "body")
 end
 
 local function RefreshCampsites()
@@ -107,22 +131,30 @@ local function SkinPetExperience(bar)
   Skins.Bar(bar)
 end
 
-local function RefreshCollections(frame)
-  Skins.Shell(frame)
-  for index = 1, 6 do Skins.Tab(_G["CollectionsJournalTab" .. index]) end
-  Skins.Apply(_G, layout)
-  Skins.ScrollRows(MountJournal.ScrollBox, SkinCollectionRow)
-  Skins.ScrollRows(PetJournal.ScrollBox, SkinCollectionRow)
-  Skins.ScrollRows(WardrobeCollectionFrame.SetsCollectionFrame.ListContainer.ScrollBox, SkinSetRow)
-  for index = 1, 18 do SkinCollectionSpell(ToyBox.iconsFrame["spellButton" .. index]) end
+local function RefreshCollectionModels()
+  if not Skins.CanStyle() then return end
   for _, content in ipairs(WardrobeCollectionFrame.ContentFrames) do
     if content.Models then
       for _, model in ipairs(content.Models) do
-        Skins.Hide(model.Border)
-        Skins.Surface(model, true)
+        if not collectionModels[model] then
+          collectionModels[model] = true
+          Skins.Hide(model.Border)
+          Skins.Surface(model, true)
+        end
       end
     end
   end
+end
+
+local function InstallCollections(frame)
+  Skins.Shell(frame)
+  for index = 1, 6 do Skins.Tab(_G["CollectionsJournalTab" .. index]) end
+  Skins.Apply(_G, layout)
+  Skins.ScrollRows(MountJournal.ScrollBox, SkinCollectionRow, RepaintCollectionRow)
+  Skins.ScrollRows(PetJournal.ScrollBox, SkinCollectionRow, RepaintCollectionRow)
+  Skins.ScrollRows(WardrobeCollectionFrame.SetsCollectionFrame.ListContainer.ScrollBox, SkinSetRow, RepaintSetRow)
+  for index = 1, 18 do SkinCollectionSpell(ToyBox.iconsFrame["spellButton" .. index]) end
+  RefreshCollectionModels()
   for _, spell in ipairs({ MountJournal.SummonRandomFavoriteSpellFrame.Button,
     PetJournal.HealPetSpellFrame.Button, PetJournal.SummonRandomPetSpellFrame.Button }) do
     Skins.IconButton(spell, spell.Icon)
@@ -150,4 +182,10 @@ local function RefreshCollections(frame)
   Skins.Hook(WarbandSceneJournal.IconsFrame.Icons, "DisplayViewsForCurrentPage", RefreshCampsites)
 end
 
-Skins.Register("Blizzard_Collections", "CollectionsJournal", RefreshCollections)
+Skins.Register("Blizzard_Collections", "CollectionsJournal", {
+  install = InstallCollections,
+  onShow = function()
+    RefreshCollectionModels()
+    RefreshCampsites()
+  end,
+})
