@@ -79,13 +79,18 @@ local function Update(owner, bar, text, unit)
   local statusBar = owner.secondaryStatusBar
   local stagger = UnitStagger(unit)
   local maxHealth = UnitHealthMax(unit)
+  local behavior = owner.secondaryResourceConfig.behavior
+  local barMaximum = maxHealth
+  if not IsRestricted(maxHealth) then
+    barMaximum = math.max(1, maxHealth) * behavior.fillCeiling / 100
+  end
 
   if IsRestricted(stagger) or IsRestricted(maxHealth) then
     statusBar._puiStaggerLastMax = nil
     statusBar._puiStaggerLastValue = nil
     statusBar._puiStaggerColorMode = nil
     statusBar._puiStaggerColorKey = nil
-    statusBar:SetMinMaxValues(0, maxHealth)
+    statusBar:SetMinMaxValues(0, barMaximum)
     statusBar:SetValue(stagger)
 
     local r, g, b, a = owner._puiSecColorR, owner._puiSecColorG, owner._puiSecColorB, owner._puiSecColorA
@@ -103,9 +108,9 @@ local function Update(owner, bar, text, unit)
     maxHealth = 1
   end
 
-  if statusBar._puiStaggerLastMax ~= maxHealth then
-    statusBar._puiStaggerLastMax = maxHealth
-    statusBar:SetMinMaxValues(0, maxHealth)
+  if statusBar._puiStaggerLastMax ~= barMaximum then
+    statusBar._puiStaggerLastMax = barMaximum
+    statusBar:SetMinMaxValues(0, barMaximum)
   end
 
   if statusBar._puiStaggerLastValue ~= stagger then
@@ -113,7 +118,6 @@ local function Update(owner, bar, text, unit)
     statusBar:SetValue(stagger)
   end
 
-  local behavior = owner.secondaryResourceConfig.behavior
   local percentage = stagger / maxHealth * 100
   local low = tonumber(behavior.yellowThreshold) or 30
   local high = tonumber(behavior.redThreshold) or 60
