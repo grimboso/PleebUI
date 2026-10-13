@@ -117,20 +117,9 @@ local function RefreshSearchPreview()
   Skins.Button(preview.ShowAllSearchResults, true)
 end
 
-local function RefreshAchievementTab(tab)
-  if not Skins.CanStyle() then return end
-  Skins.Font(tab.Text, "button")
-  tab.Text:ClearAllPoints()
-  tab.Text:SetPoint("CENTER", tab, "CENTER")
-  tab.Text:SetWidth(0)
-  local width = tab.Text:GetStringWidth()
-  if not issecretvalue(width) then tab:SetWidth(width + 32) end
-end
-
 local function RefreshAchievementControls()
   if not Skins.CanStyle() then return end
   local frame = AchievementFrame
-  for _, tab in ipairs({ frame.Tab1, frame.Tab2, frame.Tab3 }) do RefreshAchievementTab(tab) end
   local dropdown = frame.HeaderDetails.Filters.FilterDropdown
   Skins.Dropdown(dropdown)
   dropdown.Text:ClearAllPoints()
@@ -210,9 +199,6 @@ local function InstallAchievements(frame)
   for _, tab in ipairs({ frame.Tab1, frame.Tab2, frame.Tab3 }) do Skins.Tab(tab) end
   RefreshAchievementControls()
   Skins.Hook(_G, "AchievementFrame_UpdateTabs", RefreshAchievementControls)
-  Skins.Hook(_G, "PanelTemplates_TabResize", function(tab)
-    if tab == frame.Tab1 or tab == frame.Tab2 or tab == frame.Tab3 then RefreshAchievementTab(tab) end
-  end)
   Skins.Shell(frame.SearchResults)
   FadeArtwork(frame.SearchResults)
   Skins.ScrollBar(frame.SearchResults.ScrollBar)
