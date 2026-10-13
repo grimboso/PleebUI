@@ -262,16 +262,6 @@ local function ApplyVisuals(owner, full, maximum, partialFraction, r, g, b, a)
   b = tonumber(b) or 1
   a = tonumber(a) or 1
 
-  local pr = math.floor(r * 1000 + 0.5)
-  local pg = math.floor(g * 1000 + 0.5)
-  local pb = math.floor(b * 1000 + 0.5)
-  local pa = math.floor(a * 1000 + 0.5)
-  if pr < 0 then pr = 0 elseif pr > 1000 then pr = 1000 end
-  if pg < 0 then pg = 0 elseif pg > 1000 then pg = 1000 end
-  if pb < 0 then pb = 0 elseif pb > 1000 then pb = 1000 end
-  if pa < 0 then pa = 0 elseif pa > 1000 then pa = 1000 end
-  local colorKey = pr * 1000000000 + pg * 1000000 + pb * 1000 + pa
-
   local activeIndex = full < maximum and full + 1 or nil
 
   for i = 1, segmentCount do
@@ -305,9 +295,11 @@ local function ApplyVisuals(owner, full, maximum, partialFraction, r, g, b, a)
       segment._puiMinMaxSet = true
     end
 
+    local shade = behavior.darkenPartial and isPartial and 0.75 or 1
+    local colorKey = Secondary.PackResourceColor(r * shade, g * shade, b * shade, a)
     if segment._puiLastColorP ~= colorKey then
       segment._puiLastColorP = colorKey
-      segment:SetStatusBarColor(r, g, b, a)
+      segment:SetStatusBarColor(r * shade, g * shade, b * shade, a)
     end
 
     if segment._puiLastTargetV ~= value then
@@ -490,7 +482,8 @@ local function Update(owner, bar, text, unit)
     state.animation ~= animation or
     state.colorKey ~= colorKey or
     state.segmentCount ~= segmentCount or
-    state.rechargeRate ~= owner._puiEssenceRechargeRate
+    state.rechargeRate ~= owner._puiEssenceRechargeRate or
+    state.darkenPartial ~= behavior.darkenPartial
 
   owner._puiEssLiveFull = full
   owner._puiEssLiveMax = maximum
@@ -506,6 +499,7 @@ local function Update(owner, bar, text, unit)
     state.colorKey = colorKey
     state.segmentCount = segmentCount
     state.rechargeRate = owner._puiEssenceRechargeRate
+    state.darkenPartial = behavior.darkenPartial
 
     ApplyVisuals(owner, full, maximum, partialFraction, r, g, b, a)
   elseif full < maximum then
