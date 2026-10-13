@@ -3629,20 +3629,6 @@ do
     local style = appearance.style
 
     local args = {
-      header = {
-        type = "header",
-        name = function()
-          local resourceKey = s.M:GetPrimaryResourceKey()
-          if not resourceKey then
-            return "Primary bar"
-          end
-
-          local resourceName = resourceKey:gsub("_", " "):lower()
-          resourceName = resourceName:gsub("^%l", string.upper)
-          return "Primary bar - " .. resourceName
-        end,
-        order = 1,
-      },
       visibilityGroup = {
         type = "group",
         name = "Visibility",
