@@ -279,7 +279,7 @@ local SECTION_NAMES = {
   ["Icon size"] = "Icons",
   ["Player buffs"] = "General",
   ["Top panel appearance"] = "Layout and appearance",
-  ["Typography"] = "Text", ["Fade"] = "Visibility",
+  ["Typography"] = "Text", ["Shared typography"] = "Shared font settings", ["Fade"] = "Visibility",
   ["Text and fonts"] = "Text", ["Font settings"] = "Text",
   ["Position and layout"] = "Layout",
   ["Button appearance"] = "Border", ["Box border"] = "Outer border",
@@ -305,7 +305,7 @@ local TEXT_CONTEXTS = {
   Clock = true, Coordinates = true, ["Zone text"] = true,
   ["Chat text"] = true, Tabs = true, Input = true,
   ["Top panel text"] = true,
-  ["Bar font"] = true, ["Spell name"] = true, ["Cast time"] = true,
+  ["Bar font"] = true, ["Shared font settings"] = true, ["Spell name"] = true, ["Cast time"] = true,
   Countdown = true, ["Duration countdown"] = true, Charges = true,
   Stacks = true, Counts = true, ["Charges / stacks"] = true, Keybinds = true,
   ["Keybind text"] = true, ["Macro text"] = true, ["Macro name"] = true,
@@ -690,7 +690,7 @@ function Schema.BuildTextGroup(name, order, args)
     powerTextColor = { "Text color", 70 }, textColor = { "Text color", 70 },
     useCustomPosition = { "Override shared position", 75 },
     anchor = { "Anchor point", 80 }, offsetX = { "Horizontal offset", 90 },
-    offsetY = { "Vertical offset", 100 }, resetSection = { "Reset text to defaults", 900 },
+    offsetY = { "Vertical offset", 100 }, resetSection = { "Reset text settings", 900 },
   }
   for key, definition in pairs(properties) do
     local option = args[key]
