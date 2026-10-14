@@ -3,7 +3,6 @@ local Skins = ns.BlizzardSkins
 local greetingButtons = setmetatable({}, { __mode = "k" })
 
 local function RefreshQuestGreeting()
-  if not Skins.CanStyle() then return end
   for button in QuestFrameGreetingPanel.titleButtonPool:EnumerateActive() do
     if not greetingButtons[button] then
       greetingButtons[button] = true
@@ -21,7 +20,7 @@ local function RefreshQuestGreeting()
 end
 
 local function RefreshQuestAccessibility()
-  if not QuestFrame:IsShown() or not Skins.CanStyle() then return end
+  if not QuestFrame:IsShown() then return end
   if QuestFrameGreetingPanel:IsShown() then
     QuestFrameGreetingPanel_OnShow()
     return
