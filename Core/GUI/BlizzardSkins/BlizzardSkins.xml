@@ -56,6 +56,7 @@
   <Script file="PUI_ProfessionDecline.lua"/>
   <Script file="PUI_AuctionTemplates.lua"/>
   <Script file="PUI_AuctionHouse.lua"/>
+  <Script file="PUI_Auctionator.lua"/>
   <Script file="PUI_AuctionBrowse.lua"/>
   <Script file="PUI_AuctionItemBuy.lua"/>
   <Script file="PUI_AuctionCommodityBuy.lua"/>
