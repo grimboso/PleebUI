@@ -304,7 +304,7 @@ BuildQuickSettings = function(record, moverFrame)
     }
     controls[#controls + 1] = {
       type = "toggle",
-      label = chargeKind and "Desaturate at full charges" or "Desaturate while ready",
+      label = chargeKind and "Grayscale at full charges" or "Grayscale while ready",
       get = function() return icon.desaturateReady == true end,
       set = function(value)
         icon.desaturateReady = value == true
@@ -328,7 +328,7 @@ BuildQuickSettings = function(record, moverFrame)
     }
     controls[#controls + 1] = {
       type = "toggle",
-      label = chargeKind and "Desaturate while recharging" or "Desaturate while on cooldown",
+      label = chargeKind and "Grayscale while recharging" or "Grayscale on cooldown",
       get = function() return icon.desaturateCooldown == true end,
       set = function(value)
         icon.desaturateCooldown = value == true
@@ -340,7 +340,8 @@ BuildQuickSettings = function(record, moverFrame)
   controls[#controls + 1] = {
     type = "select",
     label = "Timer display",
-    values = { AUTOMATIC = "Duration while active", COOLDOWN = "Cooldown only" },
+    tooltip = "Tracks how long the buff remains active, then shows the spell cooldown or charge recharge. Choose cooldown or recharge only to skip buff duration.",
+    values = { AUTOMATIC = "Buff duration while active", COOLDOWN = chargeKind and "Recharge only" or "Spell cooldown only" },
     sorting = { "AUTOMATIC", "COOLDOWN" },
     get = function() return icon.activeAuraEnabled == true and "AUTOMATIC" or "COOLDOWN" end,
     set = function(value)
