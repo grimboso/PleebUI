@@ -29,6 +29,6 @@ end
 Skins.Register("Blizzard_ChallengesUI", "ChallengesFrame", function(frame)
   RefreshMythicPlus(frame)
   Skins.Hook(frame, "Update", function()
-    if Skins.CanStyle() then RefreshMythicPlus(frame) end
+    RefreshMythicPlus(frame)
   end)
 end)
