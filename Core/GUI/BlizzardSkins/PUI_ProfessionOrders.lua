@@ -2,7 +2,6 @@ local _, ns = ...
 local Skins, Templates = ns.BlizzardSkins, ns.ProfessionSkins
 
 local function RefreshOrders(page)
-  if not Skins.CanStyle() then return end
   Templates.RecipeRows(page.BrowseFrame.RecipeList)
   Templates.RefreshForm(page.OrderView.OrderDetails.SchematicForm)
   Templates.TableRows(page.BrowseFrame.OrderList)
