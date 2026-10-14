@@ -2,7 +2,6 @@ local _, ns = ...
 local Skins, Templates = ns.BlizzardSkins, ns.ProfessionSkins
 
 local function RepaintCategory(row)
-  if not Skins.CanStyle() then return end
   ns.Theme.ApplyFont(row.Text, "body")
   row.Text:SetHeight(0)
 end
