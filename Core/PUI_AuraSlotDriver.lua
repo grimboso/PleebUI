@@ -4,10 +4,7 @@ local AuraSlotDriver = {}
 ns.AuraSlotDriver = AuraSlotDriver
 
 local CreateFrame = CreateFrame
-local GetBuildInfo = GetBuildInfo
 local UIParent = UIParent
-
-local SUPPORTS_NATIVE_AURA_TRACKING_ENABLE = select(4, GetBuildInfo()) >= 120105
 
 local unitRuntimes = {}
 local sequence = 0
@@ -63,11 +60,7 @@ function AuraSlotDriver:CreateSlot(unit, filter, options)
 
   local key = "pui_shared_aura_slot_" .. tostring(sequence)
   local slot = runtime.container:AddAuraSlot(key, filter, options)
-  if SUPPORTS_NATIVE_AURA_TRACKING_ENABLE then
-    runtime.container:SetAuraSlotEnabled(key, false)
-  else
-    runtime.container:SetAuraSlotFilterString(key, "")
-  end
+  runtime.container:SetAuraSlotEnabled(key, false)
 
   return {
     runtime = runtime,
@@ -86,9 +79,7 @@ function AuraSlotDriver:SetSlotFilter(handle, filter)
   end
 
   handle.filter = filter
-  if SUPPORTS_NATIVE_AURA_TRACKING_ENABLE or handle.active then
-    handle.container:SetAuraSlotFilterString(handle.key, filter)
-  end
+  handle.container:SetAuraSlotFilterString(handle.key, filter)
 end
 
 function AuraSlotDriver:SetSlotCandidates(handle, candidateFilters)
@@ -108,11 +99,7 @@ function AuraSlotDriver:SetSlotActive(handle, active)
     runtime.activeSlots = math.max(0, runtime.activeSlots - 1)
   end
 
-  if SUPPORTS_NATIVE_AURA_TRACKING_ENABLE then
-    handle.container:SetAuraSlotEnabled(handle.key, active)
-  else
-    handle.container:SetAuraSlotFilterString(handle.key, active and handle.filter or "")
-  end
+  handle.container:SetAuraSlotEnabled(handle.key, active)
 
   handle.active = active
   if handle.applicationThresholdParts then
