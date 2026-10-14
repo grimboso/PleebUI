@@ -2,7 +2,6 @@ local _, ns = ...
 local Skins = ns.BlizzardSkins
 
 local function RepaintMerchantItems()
-  if not Skins.CanStyle() then return end
   for index = 1, BUYBACK_ITEMS_PER_PAGE do
     ns.Theme.ApplyFont(_G["MerchantItem" .. index].Name, "body")
   end
