@@ -2,7 +2,6 @@ local _, ns = ...
 local Skins = ns.BlizzardSkins
 
 local function LayoutSearch(options)
-  if not Skins.CanStyle() then return end
   local edit, button = options.SearchBox, options.Search
   edit:ClearAllPoints()
   edit:SetPoint("RIGHT", options.DpsRoleFrame, "RIGHT", 150, 14)
