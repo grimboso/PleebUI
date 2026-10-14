@@ -13,7 +13,6 @@ local _G = _G
 local CreateFrame = _G.CreateFrame
 local tonumber = _G.tonumber
 local type = _G.type
-local USE_SECRET_ROLE_ICONS = select(4, _G.GetBuildInfo()) >= 120105
 
 local UFFrameGlow = ns.UFFrameGlow
 
@@ -53,15 +52,6 @@ function UFThreat.GetThreatConfigForFrame(frame)
   end
 
   return nil
-end
-
-function UFThreat.ShouldShowThreatHighlight(frame)
-  if USE_SECRET_ROLE_ICONS then
-    return true
-  end
-
-  local role = frame.__puiGroupRole
-  return role ~= nil and role ~= Enum.LFGRole.Tank
 end
 
 function UFThreat.HideThreatHighlight(frame)
@@ -163,7 +153,6 @@ function UFThreat.PostUpdate(self, unit, status, color)
   if not cfg
     or cfg.enabled == false
     or not color
-    or (not USE_SECRET_ROLE_ICONS and not UFThreat.ShouldShowThreatHighlight(frame))
   then
     UFThreat.HideThreatHighlight(frame)
     return
@@ -228,7 +217,6 @@ end
 
 UFThreat.NormalizeThreatConfig = P:Def("UFThreat.NormalizeThreatConfig", UFThreat.NormalizeThreatConfig)
 UFThreat.GetThreatConfigForFrame = P:Def("UFThreat.GetThreatConfigForFrame", UFThreat.GetThreatConfigForFrame)
-UFThreat.ShouldShowThreatHighlight = P:Def("UFThreat.ShouldShowThreatHighlight", UFThreat.ShouldShowThreatHighlight)
 UFThreat.HideThreatHighlight = P:Def("UFThreat.HideThreatHighlight", UFThreat.HideThreatHighlight)
 UFThreat.Construct = P:Def("UFThreat.Construct", UFThreat.Construct)
 UFThreat.Configure = P:Def("UFThreat.Configure", UFThreat.Configure)
