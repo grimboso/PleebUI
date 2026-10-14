@@ -664,6 +664,7 @@ function Skins.Register(addonName, frameName, callbacks)
     controlsFrame = callbacks.controlsFrame,
     controlsParent = callbacks.controlsParent,
     manageControls = callbacks.manageControls ~= false,
+    installOnLoad = callbacks.installOnLoad == true,
     legacy = legacy,
   }
 end
@@ -690,6 +691,11 @@ local function ObserveWindow(window)
     if not frame then return end
   end
   if frame:IsForbidden() then return end
+  if window.installOnLoad then
+    window.frame = frame
+    if not window.initialized then SkinWindow(window, frame) end
+    return
+  end
   if window.frame ~= frame then
     window.frame = frame
     window.initialized = false
