@@ -41,6 +41,7 @@ end
 
 function Templates.List(list)
   Skins.Chrome(list)
+  Skins.Surface(list.ScrollBox, true, true)
   Skins.ScrollBar(list.ScrollBar)
   Templates.Fonts(list.RefreshFrame)
   Skins.Font(list.ResultsText)
