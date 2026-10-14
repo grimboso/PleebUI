@@ -44,12 +44,12 @@ AssignFields("glow", "glowDuringDurationSwipe readyGlowStyle readyGlowColor cool
 AssignFields("advanced", "delete deleteBar resetIcon resetGroups customTexture rotateTexture dynamicTextOnSlot")
 
 local QUICK_SETTINGS = {
-  forceCooldown = { 1, "Enable duration timer" },
-  cooldownTimerEnabled = { 2, "Enable cooldown timer" },
-  timerDisplay = { 1, "Enable duration timer" },
-  swipeSource = { 1, "Enable duration timer" },
+  forceCooldown = { 1, "Enable buff duration timer" },
+  cooldownTimerEnabled = { 2, "Enable spell cooldown timer" },
+  timerDisplay = { 1, "Enable buff duration timer" },
+  swipeSource = { 1, "Enable buff duration timer" },
   enabled = { 40, "Enable custom glow" },
-  desaturateCooldown = { 21, "Desaturation" },
+  desaturateCooldown = { 21 },
 }
 
 local INLINE_GROUPS = {
@@ -86,8 +86,8 @@ AssignInlineGroup(LAYOUT_GROUPS, "styling", "texture barTexture stackTexture dur
 AssignInlineGroup(LAYOUT_GROUPS, "saturation", "desaturateCooldown desaturateReady activeAuraDesaturate readySaturationOverride readySaturation cooldownSaturationOverride cooldownSaturation auraSaturationOverride auraSaturation")
 
 local TIMER_ROWS = {
-  forceCooldown = { 1, 0.5, "Enable duration timer" },
-  cooldownTimerEnabled = { 1, 0.5, "Enable cooldown timer" },
+  forceCooldown = { 1, 0.5, "Enable buff duration timer" },
+  cooldownTimerEnabled = { 1, 0.5, "Enable spell cooldown timer" },
   countDuration = { 2, 0.5, "Show countdown" },
   countCooldown = { 2, 0.5, "Show countdown" },
   swipeDuration = { 3, 0.25, "Show swipe" },
@@ -202,7 +202,7 @@ function Options:BuildSections(source, context)
           elseif key == "keybindToggle" or key == "showKeybinds" then
             role = "keybind"
           elseif key == "font" or key == "fontSize" or key == "fontColor" or key == "outline" or key == "fontOutline" then
-            bucketPrefix, bucketLabel = "sharedTypography", "Shared typography"
+            bucketPrefix, bucketLabel = "sharedTypography", "Shared font settings"
           end
           if role then
             bucketPrefix = role
@@ -212,14 +212,14 @@ function Options:BuildSections(source, context)
           end
         elseif destination == "timer" then
           if key:lower():find("gcd", 1, true) then
-            bucketPrefix, bucketLabel = "gcdTimer", "GCD"
+            bucketPrefix, bucketLabel = "gcdTimer", "Global cooldown"
           elseif key:lower():find("duration", 1, true) or key:match("^activeAura")
             or key == "forceCooldown" or key == "timerDisplay" or key == "swipeSource"
             or key == "showActive" or key == "source" or key == "cdmBuff" or key == "customBuff"
           then
-            bucketPrefix, bucketLabel = "durationTimer", "Duration"
+            bucketPrefix, bucketLabel = "durationTimer", "Buff duration"
           elseif key:lower():find("cooldown", 1, true) or key:match("^recharge") then
-            bucketPrefix, bucketLabel = "cooldownTimer", "Cooldown"
+            bucketPrefix, bucketLabel = "cooldownTimer", context.items and "Item and racial cooldown" or "Spell cooldown"
           else
             bucketPrefix, bucketLabel = "swipeSettings", "Swipe settings"
           end
@@ -309,7 +309,7 @@ function Options:BuildSections(source, context)
         option.hidden = CombineCondition(hidden, option.hidden)
         option.disabled = CombineCondition(disabled, option.disabled)
         local quickSetting = QUICK_SETTINGS[key]
-        if context.customTracker and state == "cooldownState" and key == "desaturate" then quickSetting = { 21, "Desaturation" } end
+        if context.customTracker and state == "cooldownState" and key == "desaturate" then quickSetting = { 21 } end
         if quickSetting and destination ~= "general" and (destination ~= "visibility" or key == "desaturateCooldown" or key == "desaturate") and option.hidden ~= true
           and (key ~= "enabled" or destination == "glow")
         then
@@ -470,9 +470,9 @@ function Options.GetSearchEntries()
     results[#results + 1] = { label = label, path = path, keywords = keywords or "" }
   end
   local settingKeywords = {
-    general = "general quick settings enabled tooltip spell specialization assignment timer duration cooldown charges stacks glow desaturate saturation behavior",
-    layout = "layout appearance size width height spacing rows columns orientation growth icon position color saturation desaturate texture border",
-    timer = "timer display duration active aura buff cooldown gcd swipe countdown recharge fill drain",
+    general = "general quick settings enabled tooltip spell specialization assignment timer buff effect duration cooldown charges stacks glow grayscale gray desaturate saturation behavior",
+    layout = "layout appearance size width height spacing rows columns orientation growth icon position color saturation grayscale gray desaturate texture border",
+    timer = "timer display duration active aura buff effect spell item racial cooldown global gcd swipe countdown recharge fill drain",
     visibility = "visibility combat mouseover opacity fade active inactive ready cooldown",
     text = "text font size outline anchor offset countdown charges stacks keybinds name",
     glow = "glow style color speed scale lines thickness aura ready cooldown",
