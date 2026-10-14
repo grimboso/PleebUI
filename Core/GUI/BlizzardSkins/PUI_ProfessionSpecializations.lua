@@ -3,7 +3,6 @@ local Skins, Templates = ns.BlizzardSkins, ns.ProfessionSkins
 local tabs = setmetatable({}, { __mode = "k" })
 
 local function RefreshSpecTabs(page)
-  if not Skins.CanStyle() then return end
   for tab in page.tabsPool:EnumerateActive() do
     if not tabs[tab] then
       tabs[tab] = true
