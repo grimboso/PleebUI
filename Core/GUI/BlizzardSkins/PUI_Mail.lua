@@ -2,7 +2,6 @@ local _, ns = ...
 local Skins = ns.BlizzardSkins
 
 local function RepaintMailItems()
-  if not Skins.CanStyle() then return end
   for index = 1, INBOXITEMS_TO_DISPLAY do
     ns.Theme.ApplyFont(_G["MailItem" .. index .. "Subject"], "body")
   end
