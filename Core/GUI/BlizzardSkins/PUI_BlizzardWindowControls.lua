@@ -49,7 +49,6 @@ local exteriorGrips = {
   ItemSocketingFrame = true,
   DressUpFrame = true,
   TransmogFrame = true,
-  AuctionHouseFrame = true,
   ["AuctionHouseFrame.BuyDialog"] = true,
   ["ProfessionsFrame.CraftingPage.SchematicForm.QualityDialog"] = true,
   ["ProfessionsFrame.OrdersPage.OrderView.OrderDetails.SchematicForm.QualityDialog"] = true,
@@ -213,9 +212,14 @@ function Controls.Install(frame, visualRoot, name, controlsParent)
   state.grip:SetFrameLevel(controlRoot:GetFrameLevel() + 100)
   state.grip:ClearAllPoints()
   local rightInset = 4
+  local bottomInset = 4
   -- These templates put buttons or scrollbars in the bottom-right corner.
-  if exteriorGrips[name] then rightInset = -20 end
-  state.grip:SetPoint("BOTTOMRIGHT", state.visualRoot, "BOTTOMRIGHT", -rightInset, 4)
+  if name == "AuctionHouseFrame" then
+    rightInset, bottomInset = 0, 0
+  elseif exteriorGrips[name] then
+    rightInset = -20
+  end
+  state.grip:SetPoint("BOTTOMRIGHT", state.visualRoot, "BOTTOMRIGHT", -rightInset, bottomInset)
   local accent = ns.Theme.GetColors().accent
   for _, line in ipairs(state.lines) do
     line:SetColorTexture(accent[1], accent[2], accent[3], 0.75)
