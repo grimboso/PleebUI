@@ -1254,6 +1254,7 @@ local function RegisterMinimapMover()
     end,
     optionsString = "Minimap",
     quickSettings = function()
+      local db = GetDB()
       return {
         ownerKey = "Minimap",
         title = "Minimap",
