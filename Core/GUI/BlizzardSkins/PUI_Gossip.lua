@@ -5,15 +5,9 @@ local function RepaintGossipRow(row)
   if not Skins.CanStyle() then return end
   local text = row.GreetingText or (row:IsObjectType("Button") and row:GetFontString())
   if not text then return end
-  Skins.Font(text, "body")
-  text:SetSpacing(3)
-  local content = text:GetText()
-  -- Inline parchment colors override the font color, including in quest labels.
-  if not issecretvalue(content) and content then
-    local label, colors = content:gsub("|c%x%x%x%x%x%x%x%x", "")
-    if colors > 0 then text:SetText((label:gsub("|r", ""))) end
-  end
   if row:IsObjectType("Button") then
+    row.Icon:ClearAllPoints()
+    row.Icon:SetPoint("LEFT", row, "LEFT", 3, 0)
     local textHeight, iconHeight = row:GetTextHeight(), row.Icon:GetHeight()
     if not issecretvalue(textHeight) and not issecretvalue(iconHeight) then
       row:SetHeight(math.max(textHeight, iconHeight) + 10)
@@ -70,9 +64,10 @@ Skins.Register("Blizzard_UIPanels_Game", "GossipFrame", {
     Skins.Button(frame.GreetingPanel.GoodbyeButton, true)
     Skins.ScrollBar(frame.GreetingPanel.ScrollBar)
     Skins.Hook(frame, "UpdateScrollBox", ConfigureGossipLayout)
-    Skins.Hook(frame, "UpdateTheme", function()
-      Skins.ScrollRows(frame.GreetingPanel.ScrollBox, InstallGossipRow, RepaintGossipRow)
-    end)
+    Skins.Hook(frame, "UpdateTheme", RefreshGossipLayout)
+    EventRegistry:RegisterCallback("TextSizeManager.OnTextScaleUpdated", function()
+      if frame:IsShown() then RefreshGossipLayout(frame) end
+    end, frame)
     ConfigureGossipLayout(frame)
   end,
   onShow = RefreshGossipLayout,

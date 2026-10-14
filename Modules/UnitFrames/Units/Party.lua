@@ -490,6 +490,7 @@ function PartyFrames:EnsureAnchor()
   end
 
   self.anchor = CreateFrame("Frame", "PleebUI_PartyFramesAnchor", UIParent)
+  self.anchor:SetFrameStrata("LOW")
   Pixel.Size(self.anchor, 1, 1)
   return self.anchor
 end

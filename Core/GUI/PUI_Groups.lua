@@ -666,9 +666,6 @@ function WidgetSkins.InlineGroup(widget)
     outer.__puiInlineAccent = accent
   end
 
-  accent:ClearAllPoints()
-  accent:SetPoint("TOPLEFT", outer, "TOPLEFT", 0, 0)
-  accent:SetPoint("TOPRIGHT", outer, "TOPRIGHT", 0, 0)
   accent:SetHeight(2)
   accent:SetTexture("Interface\\Buttons\\WHITE8x8")
   accent:SetVertexColor(colors.border[1], colors.border[2], colors.border[3], 0.35)
@@ -684,13 +681,21 @@ function WidgetSkins.InlineGroup(widget)
 
   title:ClearAllPoints()
   title:SetPoint("TOPLEFT", frame, "TOPLEFT", padX, 0)
-  title:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -padX, 0)
+  title:SetWidth(math.max(1, math.ceil(title:GetStringWidth())))
   title.__puiOptionsFontOwned = true
   title:SetTextColor(colors.text[1], colors.text[2], colors.text[3], colors.text[4])
   title:SetJustifyH("LEFT")
   title:SetJustifyV("MIDDLE")
   title:SetHeight(titleHeight)
   title:SetShown(hasTitle)
+
+  accent:ClearAllPoints()
+  if hasTitle then
+    accent:SetPoint("LEFT", title, "RIGHT", 8, 0)
+  else
+    accent:SetPoint("LEFT", frame, "TOPLEFT", 0, -titleHeight / 2)
+  end
+  accent:SetPoint("RIGHT", frame, "TOPRIGHT", 0, -titleHeight / 2)
 end
 
 local function _PUI_StyleTreeButtons(widget)

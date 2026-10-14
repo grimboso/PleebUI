@@ -5,6 +5,7 @@ local Theme = ns.Theme
 local WidgetSkins = Theme.WidgetSkins
 
 function Addon:Theme_SkinGameMenu(menu)
+  if not ns.BlizzardSkinOptions.IsEnabled("GameMenuFrame") then return end
   ns.BlizzardSkins.StripDialogTextures(menu, function()
     return false
   end, function(region)

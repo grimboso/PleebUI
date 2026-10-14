@@ -3,6 +3,7 @@ local Skins, Theme = ns.BlizzardSkins, ns.Theme
 local modules
 local styledButtons = setmetatable({}, { __mode = "k" })
 local styledBars = setmetatable({}, { __mode = "k" })
+local headerSkins = setmetatable({}, { __mode = "k" })
 local barArtwork = { "BorderLeft", "BorderMid", "BorderRight", "BarFrame", "BarFrame2", "BarFrame3" }
 
 local function TintTrackerButton(button)
@@ -15,12 +16,36 @@ local function TintTrackerButton(button)
 end
 
 local function RefreshTrackerHeader(header)
+  local collapsed = header:GetParent():IsCollapsed()
+  if issecretvalue(collapsed) then return end
+  local skin = headerSkins[header]
+  -- The addon-owned glyph can follow native collapse changes during combat.
+  if skin then skin.label:SetText(collapsed and "+" or "−") end
   if not Skins.CanStyle() then return end
   local colors = Theme.GetColors()
-  header.Background:SetColorTexture(unpack(colors.control))
+  header.Background:SetTexture("")
   header.Text:SetTextColor(unpack(colors.accent))
-  -- Blizzard selects the collapse atlas; only tint its existing texture slots.
-  TintTrackerButton(header.MinimizeButton)
+  local button = header.MinimizeButton
+  if not skin then
+    local label = button:CreateFontString(nil, "OVERLAY")
+    label:SetPoint("CENTER", button, "CENTER")
+    Theme.ApplyFont(label, "button")
+    label:SetText(collapsed and "+" or "−")
+    local divider = header:CreateTexture(nil, "BORDER")
+    divider:SetPoint("BOTTOMLEFT", header, "BOTTOMLEFT", 7, 0)
+    divider:SetPoint("BOTTOMRIGHT", header, "BOTTOMRIGHT", -1, 0)
+    divider:SetHeight(1)
+    skin = { label = label, divider = divider }
+    headerSkins[header] = skin
+  end
+  skin.label:SetTextColor(unpack(colors.text))
+  skin.divider:SetColorTexture(colors.accent[1], colors.accent[2], colors.accent[3], 0.45)
+  button:GetNormalTexture():SetTexture("")
+  local pushed, highlight = button:GetPushedTexture(), button:GetHighlightTexture()
+  pushed:SetColorTexture(1, 1, 1, 0.12)
+  pushed:SetAllPoints(button)
+  highlight:SetColorTexture(1, 1, 1, 0.08)
+  highlight:SetAllPoints(button)
   if header.FilterButton then TintTrackerButton(header.FilterButton) end
 end
 
@@ -30,7 +55,7 @@ local function SkinTrackerItem(button, icon)
   button:GetNormalTexture():SetTexture(nil)
   button:GetPushedTexture():SetTexture(nil)
   button:GetHighlightTexture():SetColorTexture(1, 1, 1, 0.2)
-  Skins.Surface(button, true)
+  Skins.Surface(button, true):SetAlpha(0.35)
   Skins.Icon(icon)
 end
 
@@ -53,7 +78,7 @@ local function SkinTrackerBar(wrapper)
     if texture then texture:SetTexture(nil) end
   end
   bar:SetStatusBarTexture(Theme.GetBarTexture())
-  Skins.Surface(bar, true)
+  Skins.Surface(bar, true):SetAlpha(0.35)
   if bar.Label then Theme.ApplyFont(bar.Label, "body") end
   if wrapper.Label then Theme.ApplyFont(wrapper.Label, "body") end
 end

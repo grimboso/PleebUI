@@ -6,7 +6,7 @@ local layout = {
     "CommunitiesList.InsetFrame", "Chat.InsetFrame", "MemberList.InsetFrame", "GuildBenefitsFrame.Perks",
     "GuildBenefitsFrame.Rewards", "GuildDetailsFrame.Info", "GuildDetailsFrame.News", "InvitationFrame.InsetFrame",
     "ClubFinderInvitationFrame.InsetFrame", "TicketFrame.InsetFrame" },
-  Hide = { "PortraitOverlay", "CommunitiesList.FilligreeOverlay", "CommunitiesList.TopFiligree", "CommunitiesList.BottomFiligree",
+  Hide = { "CommunitiesList.FilligreeOverlay", "CommunitiesList.TopFiligree", "CommunitiesList.BottomFiligree",
     "MemberList.WatermarkFrame", "ChatEditBox.Mid" },
   Button = { "InviteButton", "GuildLogButton", "CommunitiesControlFrame.GuildControlButton",
     "CommunitiesControlFrame.GuildRecruitmentButton", "CommunitiesControlFrame.CommunitiesSettingsButton",
@@ -19,6 +19,55 @@ local layout = {
   ScrollBar = { "CommunitiesList.ScrollBar", "Chat.ScrollBar", "MemberList.ScrollBar", "GuildBenefitsFrame.Perks.ScrollBar",
     "GuildBenefitsFrame.Rewards.ScrollBar", "GuildDetailsFrame.News.ScrollBar", "GuildDetailsFrame.Info.DetailsFrame.ScrollBar" },
 }
+
+local function LayoutCommunities(frame)
+  if not Skins.CanStyle() then return end
+  local minimized = frame.MaximizeMinimizeFrame:IsMinimized()
+  if issecretvalue(minimized) then return end
+  local chat = frame.Chat
+  if not minimized then
+    chat:SetPoint("BOTTOMRIGHT", frame.MemberList, "BOTTOMLEFT", -32, 40)
+    frame.StreamDropdown:ClearAllPoints()
+    frame.StreamDropdown:SetPoint("BOTTOMLEFT", chat.MessageFrame, "TOPLEFT", 0, 8)
+    frame.StreamDropdown:SetSize(160, 26)
+  end
+  chat.ScrollBar:ClearAllPoints()
+  chat.ScrollBar:SetPoint("TOPLEFT", chat.MessageFrame, "TOPRIGHT", 4, 0)
+  chat.ScrollBar:SetPoint("BOTTOMLEFT", chat.MessageFrame, "BOTTOMRIGHT", 4, 0)
+  local edit = frame.ChatEditBox
+  edit:ClearAllPoints()
+  edit:SetPoint("TOPLEFT", chat.MessageFrame, "BOTTOMLEFT", 0, -6)
+  edit:SetPoint("TOPRIGHT", chat.MessageFrame, "BOTTOMRIGHT", 0, -6)
+  edit:SetHeight(minimized and 24 or 28)
+  edit:SetTextInsets(8, 8, 0, 0)
+
+  local offline = frame.MemberList.ShowOfflineButton
+  local _, fontSize = offline.Text:GetFont()
+  if not issecretvalue(fontSize) then
+    local size = math.max(16, fontSize)
+    offline:SetSize(size, size)
+    offline:SetHitRectInsets(-4, -4, -4, -4)
+    offline.Text:ClearAllPoints()
+    offline.Text:SetPoint("LEFT", offline, "RIGHT", 6, 0)
+  end
+end
+
+local function InstallPortrait(frame)
+  local overlay = frame.PortraitOverlay
+  overlay:SetAlpha(1)
+  local portrait = overlay.Portrait
+  portrait:RemoveMaskTexture(overlay.CircleMask)
+  portrait:ClearAllPoints()
+  portrait:SetPoint("TOPLEFT", frame, "TOPLEFT", 6, -6)
+  portrait:SetSize(36, 36)
+  for _, texture in ipairs({ overlay.TabardBackground, overlay.TabardBorder }) do
+    texture:ClearAllPoints()
+    texture:SetAllPoints(portrait)
+  end
+  overlay.TabardEmblem:ClearAllPoints()
+  overlay.TabardEmblem:SetPoint("CENTER", portrait, "CENTER")
+  overlay.TabardEmblem:SetSize(34, 38)
+end
 
 local function SkinCommunityRow(row)
   Skins.Hide(row.Background)
@@ -67,6 +116,11 @@ end
 local function RefreshCommunities(frame)
   Skins.Shell(frame)
   Skins.Apply(frame, layout)
+  InstallPortrait(frame)
+  LayoutCommunities(frame)
+  Skins.Hook(frame, "SetDisplayMode", LayoutCommunities)
+  Skins.Hook(frame.MaximizeMinimizeFrame, "Maximize", function() LayoutCommunities(frame) end)
+  Skins.Hook(frame.MaximizeMinimizeFrame, "Minimize", function() LayoutCommunities(frame) end)
   for _, pane in ipairs({ frame.CommunitiesList, frame.GuildBenefitsFrame, frame.GuildBenefitsFrame.Perks,
     frame.GuildDetailsFrame, frame.MemberList.ColumnDisplay }) do
     for _, region in ipairs({ pane:GetRegions() }) do

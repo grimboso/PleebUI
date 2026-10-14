@@ -1,6 +1,22 @@
 local _, ns = ...
 local Skins = ns.BlizzardSkins
 
+local function LayoutSearch(options)
+  if not Skins.CanStyle() then return end
+  local edit, button = options.SearchBox, options.Search
+  edit:ClearAllPoints()
+  edit:SetPoint("RIGHT", options.DpsRoleFrame, "RIGHT", 150, 14)
+  edit:SetSize(150, 24)
+  edit:SetTextInsets(26, 8, 0, 0)
+  edit.Instructions:ClearAllPoints()
+  edit.Instructions:SetPoint("LEFT", edit, "LEFT", 26, 0)
+  edit.Instructions:SetPoint("RIGHT", edit, "RIGHT", -8, 0)
+  button:ClearAllPoints()
+  button:SetPoint("TOPLEFT", edit, "BOTTOMLEFT", 0, -6)
+  button:SetPoint("TOPRIGHT", edit, "BOTTOMRIGHT", 0, -6)
+  button:SetHeight(24)
+end
+
 local function SkinClubCard(card)
   Skins.Chrome(card)
   Skins.Surface(card, true)
@@ -28,6 +44,9 @@ local function RefreshClubFinder(frame)
     ScrollBar = { "CommunityCards.ScrollBar", "PendingCommunityCards.ScrollBar" },
     Tab = { "ClubFinderSearchTab", "ClubFinderPendingTab" },
   })
+  LayoutSearch(frame.OptionsList)
+  Skins.Hook(frame.OptionsList, "SetupGuildFinderOptions", LayoutSearch)
+  Skins.Hook(frame.OptionsList, "SetupCommunityFinderOptions", LayoutSearch)
   for _, key in ipairs({ "GuildCards", "PendingGuildCards" }) do
     local cards = frame[key]
     Skins.Arrow(cards.PreviousPage, "<")

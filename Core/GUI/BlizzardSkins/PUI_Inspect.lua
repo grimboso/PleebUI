@@ -108,6 +108,7 @@ local function SetupInspectFrameSkinning()
   if CharacterSheet._inspectInit then return end
 
   CharacterSheet._inspectInit = true
+  EnsureInspectShellHost()
 
   local function ApplyInspectDecorations()
     if not InspectFrame then
@@ -134,7 +135,7 @@ local function SetupInspectFrameSkinning()
       InspectFrame.TitleBg:SetAlpha(0)
     end
 
-    ns.BlizzardSkins.WindowTitle(InspectFrame, InspectFrame.TitleText)
+    ns.BlizzardSkins.WindowTitle(InspectFrame, InspectFrame.TitleText, CharacterSheet._inspectHost._puiBg)
 
     if InspectModelScene then
       StripTextures(InspectModelScene, true)
@@ -218,28 +219,11 @@ local function SetupInspectFrameSkinning()
     if InspectModelFrameBorderBottom2 then InspectModelFrameBorderBottom2:SetAlpha(0) end
   end
 
-  EnsureInspectShellHost()
-
-  do
-    local index = 1
-    local lastTab = nil
-    local tab = _G["InspectFrameTab" .. index]
-
-    while tab do
-      ns.BlizzardSkins.Tab(tab)
-
-      tab:ClearAllPoints()
-      if index == 1 then
-        tab:SetPoint("TOPLEFT", InspectFrame, "BOTTOMLEFT", -3, 0)
-      else
-        tab:SetPoint("TOPLEFT", lastTab, "TOPRIGHT", -5, 0)
-      end
-
-      lastTab = tab
-      index = index + 1
-      tab = _G["InspectFrameTab" .. index]
-    end
-  end
+  ns.BlizzardSkins.WindowTabs(InspectFrame, {
+    InspectFrameTab1,
+    InspectFrameTab2,
+    InspectFrameTab3,
+  })
 
   local function UpdateInspectPaperDollVisibility()
     local unit = InspectFrame and InspectFrame.unit
@@ -303,7 +287,7 @@ local function RefreshInspectTheme()
     ns.Theme.WidgetSkins.Frame(CharacterSheet._inspectHost)
 
     local tr, tg, tb, ta = GetTextColor()
-    ns.BlizzardSkins.WindowTitle(InspectFrame, InspectFrame.TitleText)
+    ns.BlizzardSkins.WindowTitle(InspectFrame, InspectFrame.TitleText, CharacterSheet._inspectHost._puiBg)
 
     CS_ApplyBackdrop(InspectModelFrame, CS_BG)
     CS_SkinCloseButton(InspectFrameCloseButton)

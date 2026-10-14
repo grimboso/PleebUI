@@ -63,6 +63,7 @@ local function _PUI_SkinStaticPopupItemFrame(itemFrame)
 end
 
 function Addon:Theme_SkinStaticPopup(popup)
+  if not ns.BlizzardSkinOptions.IsEnabled("StaticPopups") then return end
   local text = popup:GetTextFontString()
   local editBox = popup:GetEditBox()
   local moneyInputFrame = popup.MoneyInputFrame

@@ -3,6 +3,35 @@ local _, ns = ...
 local Theme = ns.Theme
 local WHITE8 = "Interface\\Buttons\\WHITE8x8"
 local WidgetSkins = Theme.WidgetSkins
+local scrollArrows = setmetatable({}, { __mode = "k" })
+
+function Theme.ApplyScrollArrow(button, direction)
+  local textures = scrollArrows[button]
+  if not textures then
+    textures = {
+      normal = button:CreateTexture(nil, "ARTWORK"),
+      pushed = button:CreateTexture(nil, "ARTWORK"),
+      disabled = button:CreateTexture(nil, "ARTWORK"),
+    }
+    scrollArrows[button] = textures
+    for _, texture in pairs(textures) do Theme.MarkCreatedWidgetChrome(texture) end
+  end
+  local colors = Theme.GetColors()
+  local rotation = direction == "up" and math.pi * 3 / 2 or math.pi / 2
+  for state, texture in pairs(textures) do
+    texture:SetAtlas(state == "pushed" and "CovenantSanctum-Renown-Arrow-Depressed" or "CovenantSanctum-Renown-Arrow")
+    texture:SetRotation(rotation)
+    texture:ClearAllPoints()
+    texture:SetPoint("CENTER", button, "CENTER")
+    texture:SetSize(16, 16)
+    texture:SetAlpha(1)
+    local color = state == "disabled" and colors.disabledText or colors.accent
+    texture:SetVertexColor(color[1], color[2], color[3], color[4])
+  end
+  button:SetNormalTexture(textures.normal)
+  button:SetPushedTexture(textures.pushed)
+  button:SetDisabledTexture(textures.disabled)
+end
 
 function Theme.StripACDFrameTextures(frame)
   ns.IconSkin.StripNineSliceAndBackdrop(frame)
@@ -80,26 +109,14 @@ function WidgetSkins.Scrollbar(widget)
     end
   end
 
-  local function SkinArrowButton(button, texture)
+  local function SkinArrowButton(button, direction)
     StripTextures(button)
-    button:SetSize(scrollbarWidth, scrollbarWidth)
+    button:SetSize(scrollbarWidth, Theme.GetOptionsPointerTargetSize(24))
     button:SetHitRectInsets(0, 0, 0, 0)
 
     WidgetSkins.Button(button, owner)
 
-    local arrow = button.__puiArrow
-    if not arrow then
-      arrow = button:CreateTexture(nil, "ARTWORK")
-      Theme.MarkCreatedWidgetChrome(arrow)
-      button.__puiArrow = arrow
-    end
-
-    arrow:SetTexture(texture)
-    arrow:ClearAllPoints()
-    arrow:SetPoint("CENTER")
-    arrow:SetSize(12, 12)
-    arrow:SetVertexColor(accent[1], accent[2], accent[3], 0.95)
-    arrow:Show()
+    Theme.ApplyScrollArrow(button, direction)
   end
 
   StripTextures(scrollbar, thumb)
@@ -113,8 +130,8 @@ function WidgetSkins.Scrollbar(widget)
   bg:ClearAllPoints()
   bg:SetAllPoints(scrollbar)
 
-  SkinArrowButton(upButton, "Interface\\ChatFrame\\UI-ChatIcon-ScrollUp-Up")
-  SkinArrowButton(downButton, "Interface\\ChatFrame\\UI-ChatIcon-ScrollDown-Up")
+  SkinArrowButton(upButton, "up")
+  SkinArrowButton(downButton, "down")
 
   thumb:SetTexture(WHITE8)
   thumb:SetTexCoord(0, 1, 0, 1)
@@ -162,7 +179,7 @@ local function LayoutScrollFrameTargets(widget)
   if widget.content.original_width then
     widget.content.width = widget.content.original_width - margin
   end
-  local inset = width > 18 and width or 16
+  local inset = Theme.GetOptionsPointerTargetSize(24)
   widget.scrollbar:ClearAllPoints()
   widget.scrollbar:SetPoint("TOPLEFT", widget.scrollframe, "TOPRIGHT", 4, -inset)
   widget.scrollbar:SetPoint("BOTTOMLEFT", widget.scrollframe, "BOTTOMRIGHT", 4, inset)

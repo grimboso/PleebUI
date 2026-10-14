@@ -42,6 +42,7 @@ local embedded = {
 }
 local enabled = true
 local exteriorGrips = {
+  AddonList = true,
   ItemInteractionFrame = true,
   ItemSocketingFrame = true,
   DressUpFrame = true,
@@ -253,31 +254,28 @@ function Controls.RefreshTheme()
 end
 
 function Controls:GetOptions()
-  return {
-    type = "group", name = "Blizzard windows",
-    args = {
-      moveAndResize = {
-        type = "toggle", name = "Move and resize windows", order = 1, width = "full",
-        desc = "Drag the title area to move a window. Drag its bottom-right corner to change its size. Position and size reset on login or reload.",
-        disabled = function() return InCombatLockdown() end,
-        get = function() return enabled end,
-        set = function(_, value)
-          if InCombatLockdown() then return end
-          enabled = value
-          StopInteraction()
-          if not value then driver:UnregisterEvent("PLAYER_REGEN_ENABLED") end
-          for frame, state in pairs(windows) do
-            state.drag:SetShown(value)
-            state.grip:SetShown(value)
-            ApplyWindow(frame)
-          end
-        end,
-      },
-    },
+  local options = ns.BlizzardSkinOptions:GetOptions()
+  options.args.moveAndResize = {
+    type = "toggle", name = "Move and resize windows", order = 1, width = "full",
+    desc = "Drag the title area to move a window. Drag its bottom-right corner to change its size. Position and size reset on login or reload.",
+    disabled = function() return InCombatLockdown() end,
+    get = function() return enabled end,
+    set = function(_, value)
+      if InCombatLockdown() then return end
+      enabled = value
+      StopInteraction()
+      if not value then driver:UnregisterEvent("PLAYER_REGEN_ENABLED") end
+      for frame, state in pairs(windows) do
+        state.drag:SetShown(value)
+        state.grip:SetShown(value)
+        ApplyWindow(frame)
+      end
+    end,
   }
+  return options
 end
 
 ns.Addon:RegisterOptionsSection("BlizzardWindows", function() return Controls end, 17, "Blizzard windows", nil, {
   preview = false, navSection = "General",
-  navDescription = "Move and resize skinned game windows for this session.",
+  navDescription = "Choose window skins and move or resize game windows.",
 })

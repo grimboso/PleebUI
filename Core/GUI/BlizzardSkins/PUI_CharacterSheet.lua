@@ -140,10 +140,10 @@ local function CS_GetCachedInventoryTooltipData(cache, unit, slotId)
   end
 
   local tooltipData = C_TooltipInfo.GetInventoryItem(unit, slotId)
-  if cache and tooltipData then
-    cache.tooltipData = tooltipData
-  end
-
+  if issecretvalue(tooltipData) or not tooltipData then return nil end
+  local lines = tooltipData.lines
+  if issecretvalue(lines) or not lines then return nil end
+  if cache and next(lines) then cache.tooltipData = tooltipData end
   return tooltipData
 end
 
@@ -1104,38 +1104,23 @@ local function CS_SetupPaperDollValueHooks()
   hooksecurefunc("PaperDollFrame_SetArmor", function(statFrame)
     statFrame._puiAttributeStat = "ARMOR"
   end)
-  hooksecurefunc("PaperDollFrame_SetCritChance", function(statFrame)
-    statFrame._puiItemStatKey = ITEM_STAT_CRIT
-    CS_ForwardStatTexts(statFrame, ITEM_STAT_CRIT)
-    CS_ForwardSecondaryStatRatingText(statFrame, SECONDARY_STAT_RATING_IDS[ITEM_STAT_CRIT])
-  end)
-  hooksecurefunc("PaperDollFrame_SetHaste", function(statFrame)
-    statFrame._puiItemStatKey = ITEM_STAT_HASTE
-    CS_ForwardStatTexts(statFrame, ITEM_STAT_HASTE)
-    CS_ForwardSecondaryStatRatingText(statFrame, SECONDARY_STAT_RATING_IDS[ITEM_STAT_HASTE])
-  end)
-  hooksecurefunc("PaperDollFrame_SetMastery", function(statFrame)
-    statFrame._puiItemStatKey = ITEM_STAT_MASTERY
-    CS_ForwardStatTexts(statFrame, ITEM_STAT_MASTERY)
-    CS_ForwardSecondaryStatRatingText(statFrame, SECONDARY_STAT_RATING_IDS[ITEM_STAT_MASTERY])
-  end)
-  hooksecurefunc("PaperDollFrame_SetVersatility", function(statFrame)
-    statFrame._puiItemStatKey = ITEM_STAT_VERSATILITY
-    CS_ForwardStatTexts(statFrame, ITEM_STAT_VERSATILITY)
-    CS_ForwardSecondaryStatRatingText(statFrame, SECONDARY_STAT_RATING_IDS[ITEM_STAT_VERSATILITY])
-  end)
-  hooksecurefunc("PaperDollFrame_SetLifesteal", function(statFrame)
-    statFrame._puiItemStatKey = ITEM_STAT_LIFESTEAL
-    CS_ForwardStatTexts(statFrame, ITEM_STAT_LIFESTEAL)
-  end)
-  hooksecurefunc("PaperDollFrame_SetAvoidance", function(statFrame)
-    statFrame._puiItemStatKey = ITEM_STAT_AVOIDANCE
-    CS_ForwardStatTexts(statFrame, ITEM_STAT_AVOIDANCE)
-  end)
-  hooksecurefunc("PaperDollFrame_SetSpeed", function(statFrame)
-    statFrame._puiItemStatKey = ITEM_STAT_SPEED
-    CS_ForwardStatTexts(statFrame, ITEM_STAT_SPEED)
-  end)
+  for _, stat in ipairs({
+    { "PaperDollFrame_SetCritChance", ITEM_STAT_CRIT },
+    { "PaperDollFrame_SetHaste", ITEM_STAT_HASTE },
+    { "PaperDollFrame_SetMastery", ITEM_STAT_MASTERY },
+    { "PaperDollFrame_SetVersatility", ITEM_STAT_VERSATILITY },
+    { "PaperDollFrame_SetLifesteal", ITEM_STAT_LIFESTEAL },
+    { "PaperDollFrame_SetAvoidance", ITEM_STAT_AVOIDANCE },
+    { "PaperDollFrame_SetSpeed", ITEM_STAT_SPEED },
+  }) do
+    local statKey = stat[2]
+    hooksecurefunc(stat[1], function(statFrame)
+      statFrame._puiItemStatKey = statKey
+      CS_ForwardStatTexts(statFrame, statKey)
+      local ratingID = SECONDARY_STAT_RATING_IDS[statKey]
+      if ratingID then CS_ForwardSecondaryStatRatingText(statFrame, ratingID) end
+    end)
+  end
   hooksecurefunc("PaperDollFrame_SetDodge", function(statFrame)
     statFrame._puiDefenseStat = "DODGE"
   end)
@@ -1378,442 +1363,6 @@ local function CS_RefreshInspectData(expectedGUID)
   end
 end
 
--- Reputation frame entries
-
-local function CS_SkinReputationBar(repBar, tr, tg, tb, ta)
-  if not (repBar and repBar.SetStatusBarTexture) then
-    return
-  end
-
-  repBar:SetStatusBarTexture(Theme.GetBarTexture())
-
-  local ar, ag, ab, aa = CS_ACCENT()
-  repBar:SetStatusBarColor(ar * 0.7, ag * 0.7, ab * 0.7, aa)
-
-  if repBar.LeftTexture then
-    repBar.LeftTexture:SetAlpha(0)
-  end
-  if repBar.RightTexture then
-    repBar.RightTexture:SetAlpha(0)
-  end
-
-  if repBar.Background and repBar.Background.SetColorTexture then
-    repBar.Background:SetColorTexture(0, 0, 0, 0.6)
-  end
-
-  local sbTex = repBar.GetStatusBarTexture and repBar:GetStatusBarTexture()
-  if sbTex and sbTex.SetMaskTexture then
-    sbTex:SetMaskTexture(nil)
-  end
-
-  if repBar.GetRegions then
-    for _, region in ipairs({ repBar:GetRegions() }) do
-      if region and region.IsObjectType and region:IsObjectType("Texture") and region.SetMaskTexture then
-        region:SetMaskTexture(nil)
-      end
-    end
-  end
-
-  if repBar.BarText then
-    ns.Theme.ApplyFont(repBar.BarText, "tiny")
-    repBar.BarText:SetTextColor(tr, tg, tb, ta)
-  end
-end
-
-local function RefreshReputationEntryTheme(entry)
-  if not entry then
-    return
-  end
-
-  local tr, tg, tb, ta = GetTextColor()
-  local br, bgG, bB, bA = CS_B()
-  local backdrop = EnsureBackdropFrame(entry)
-
-  if backdrop then
-    local r, g, b, a = CS_CONTROL()
-    backdrop:SetBackdropColor(r, g, b, a)
-    backdrop:SetBackdropBorderColor(br, bgG, bB, bA)
-  end
-
-  if entry.Name then
-    ns.Theme.ApplyFont(entry.Name, entry.Right and "nav" or "body")
-    entry.Name:SetTextColor(tr, tg, tb, ta)
-  elseif entry.Content and entry.Content.Name then
-    ns.Theme.ApplyFont(entry.Content.Name, "body")
-    entry.Content.Name:SetTextColor(tr, tg, tb, ta)
-  end
-
-  local toggle = entry.ToggleCollapseButton
-  if toggle and toggle.GetHeader then
-    local header = toggle:GetHeader()
-    if header then
-      Theme.ApplyExpandCollapseButton(toggle, not header:IsCollapsed())
-    end
-  elseif entry.Right and entry.IsCollapsed then
-    local expanded = not entry:IsCollapsed()
-    Theme.ApplyExpandCollapseTexture(entry.Right, expanded)
-    Theme.ApplyExpandCollapseTexture(entry.HighlightRight, expanded)
-  end
-
-  CS_SkinReputationBar(entry.Content and entry.Content.ReputationBar, tr, tg, tb, ta)
-end
-
-local function SkinReputationEntry(entry)
-  if not entry then
-    return
-  end
-
-  if entry._puiCharSkinned then
-    RefreshReputationEntryTheme(entry)
-    return
-  end
-
-  local tr, tg, tb, ta = GetTextColor()
-  local br, bgG, bB, bA = CS_B()
-
-  -- Top-level header (Expansion headers use Left/Middle/Right atlases)
-  if entry.Right and entry.Name then
-    StripTextures(entry, true)
-
-    local bg = EnsureBackdropFrame(entry)
-    if bg and bg.SetBackdrop then
-      local edgeSize = Theme.GetEdgeSize()
-      bg:SetBackdrop({
-        bgFile   = "Interface\\Buttons\\WHITE8x8",
-        edgeFile = "Interface\\Buttons\\WHITE8x8",
-        edgeSize = edgeSize,
-      })
-
-      local r, g, b, a = CS_CONTROL()
-      bg:SetBackdropColor(r, g, b, a)
-      bg:SetBackdropBorderColor(br, bgG, bB, bA)
-    end
-
-    ns.Theme.ApplyFont(entry.Name, "nav")
-    entry.Name:SetTextColor(tr, tg, tb, ta)
-
-    -- Replace collapse atlas on the right cap
-    local function UpdateCollapseIcon(tex)
-      if not (tex and tex.SetAtlas) then return end
-      local atlas = tex.GetAtlas and tex:GetAtlas()
-      if atlas == "Options_ListExpand_Right" or atlas == "Options_ListExpand_Right_Expanded" then
-        Theme.ApplyExpandCollapseTexture(tex, not (entry.IsCollapsed and entry:IsCollapsed()))
-      end
-    end
-
-    UpdateCollapseIcon(entry.Right)
-    UpdateCollapseIcon(entry.HighlightRight)
-
-    if entry.Right and entry.Right.SetAtlas then
-      hooksecurefunc(entry.Right, "SetAtlas", function() UpdateCollapseIcon(entry.Right) end)
-    end
-    if entry.HighlightRight and entry.HighlightRight.SetAtlas then
-      hooksecurefunc(entry.HighlightRight, "SetAtlas", function() UpdateCollapseIcon(entry.HighlightRight) end)
-    end
-
-    CS_SkinReputationBar(entry.Content and entry.Content.ReputationBar, tr, tg, tb, ta)
-
-    entry._puiCharSkinned = true
-    return
-  end
-
-  -- Sub-header (Faction groups like Horde/Alliance have ToggleCollapseButton)
-  if entry.ToggleCollapseButton and entry.ToggleCollapseButton.RefreshIcon then
-    StripTextures(entry, true)
-
-    local bg = EnsureBackdropFrame(entry)
-    if bg and bg.SetBackdrop then
-      local edgeSize = Theme.GetEdgeSize()
-      bg:SetBackdrop({
-        bgFile   = "Interface\\Buttons\\WHITE8x8",
-        edgeFile = "Interface\\Buttons\\WHITE8x8",
-        edgeSize = edgeSize,
-      })
-
-      local r, g, b, a = CS_CONTROL()
-      bg:SetBackdropColor(r, g, b, a)
-      bg:SetBackdropBorderColor(br, bgG, bB, bA)
-    end
-
-    if entry.Name then
-      ns.Theme.ApplyFont(entry.Name, "body")
-      entry.Name:SetTextColor(tr, tg, tb, ta)
-    end
-
-    local function UpdateToggleButton(btn)
-      local header = btn.GetHeader and btn:GetHeader()
-      if not header then return end
-
-      StripTextures(btn, true)
-      Theme.ApplyExpandCollapseButton(btn, not header:IsCollapsed())
-    end
-
-    if not entry.ToggleCollapseButton._puiHooked then
-      hooksecurefunc(entry.ToggleCollapseButton, "RefreshIcon", UpdateToggleButton)
-      entry.ToggleCollapseButton._puiHooked = true
-    end
-    UpdateToggleButton(entry.ToggleCollapseButton)
-
-    CS_SkinReputationBar(entry.Content and entry.Content.ReputationBar, tr, tg, tb, ta)
-
-    entry._puiCharSkinned = true
-    return
-  end
-
-  -- Normal reputation entry (Content + ReputationBar)
-  StripTextures(entry, true)
-
-  local bg = EnsureBackdropFrame(entry)
-  if bg and bg.SetBackdrop then
-    local edgeSize = Theme.GetEdgeSize()
-    bg:SetBackdrop({
-      bgFile   = "Interface\\Buttons\\WHITE8x8",
-      edgeFile = "Interface\\Buttons\\WHITE8x8",
-      edgeSize = edgeSize,
-    })
-
-    local r, g, b, a = CS_CONTROL()
-    bg:SetBackdropColor(r, g, b, a)
-    bg:SetBackdropBorderColor(br, bgG, bB, bA)
-  end
-
-  if entry.Content and entry.Content.Name then
-    ns.Theme.ApplyFont(entry.Content.Name, "body")
-    entry.Content.Name:SetTextColor(tr, tg, tb, ta)
-  end
-
-  CS_SkinReputationBar(entry.Content and entry.Content.ReputationBar, tr, tg, tb, ta)
-
-  entry._puiCharSkinned = true
-end
-
-
--- Currency frame entries
-
-local function RefreshCurrencyEntryTheme(button, isHeader)
-  if not button then
-    return
-  end
-
-  local tr, tg, tb, ta = GetTextColor()
-  local br, bgG, bB, bA = CS_B()
-  local backdrop = EnsureBackdropFrame(button)
-
-  if backdrop then
-    local r, g, b, a = CS_CONTROL()
-    backdrop:SetBackdropColor(r, g, b, a)
-    backdrop:SetBackdropBorderColor(br, bgG, bB, bA)
-  end
-
-  local nameFS = isHeader and (button.Name or button.Text) or (button.Content and button.Content.Name)
-  if nameFS then
-    ns.Theme.ApplyFont(nameFS, isHeader and "nav" or "body")
-    nameFS:SetTextColor(tr, tg, tb, ta)
-  end
-
-  if not isHeader and button.Content then
-    if button.Content.Count then
-      ns.Theme.ApplyFont(button.Content.Count, "body")
-      button.Content.Count:SetTextColor(tr, tg, tb, ta)
-    end
-
-    local icon = button.Content.CurrencyIcon
-    if icon and icon._puiBorder then
-      icon._puiBorder:SetBackdropBorderColor(br, bgG, bB, bA)
-    end
-  end
-
-  local toggle = button.ToggleCollapseButton
-  if toggle and toggle.GetHeader then
-    local header = toggle:GetHeader()
-    if header then
-      Theme.ApplyExpandCollapseButton(toggle, not header:IsCollapsed())
-    end
-  elseif isHeader and button.Right and button.IsCollapsed then
-    local expanded = not button:IsCollapsed()
-    Theme.ApplyExpandCollapseTexture(button.Right, expanded)
-    Theme.ApplyExpandCollapseTexture(button.HighlightRight, expanded)
-  end
-end
-
-local function SkinCurrencyEntry(button)
-  if not button then
-    return
-  end
-
-  if button._puiCharSkinned then
-    RefreshCurrencyEntryTheme(button, false)
-    return
-  end
-
-  StripTextures(button, true)
-
-  local tr, tg, tb, ta = GetTextColor()
-  local br, bgG, bB, bA = CS_B()
-
-  local bg = EnsureBackdropFrame(button)
-  if bg and bg.SetBackdrop then
-    local edgeSize = Theme.GetEdgeSize()
-    bg:SetBackdrop({
-      bgFile   = "Interface\\Buttons\\WHITE8x8",
-      edgeFile = "Interface\\Buttons\\WHITE8x8",
-      edgeSize = edgeSize,
-    })
-
-    local r, g, b, a = CS_CONTROL()
-    bg:SetBackdropColor(r, g, b, a)
-    bg:SetBackdropBorderColor(br, bgG, bB, bA)
-  end
-
-  local content = button.Content
-  if content then
-    if content.Name then
-      ns.Theme.ApplyFont(content.Name, "body")
-      content.Name:SetTextColor(tr, tg, tb, ta)
-    end
-    if content.Count then
-      ns.Theme.ApplyFont(content.Count, "body")
-      content.Count:SetTextColor(tr, tg, tb, ta)
-    end
-
-    local icon = content.CurrencyIcon
-    if icon then
-      icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
-
-      if not icon._puiBorder then
-        local ib = CreateFrame("Frame", nil, icon:GetParent(), "BackdropTemplate")
-        ib:SetPoint("TOPLEFT", icon, -1, 1)
-        ib:SetPoint("BOTTOMRIGHT", icon, 1, -1)
-
-        local edgeSize = Theme.GetEdgeSize()
-        ib:SetBackdrop({
-          bgFile   = "Interface\\Buttons\\WHITE8x8",
-          edgeFile = "Interface\\Buttons\\WHITE8x8",
-          edgeSize = edgeSize,
-        })
-
-        ib:SetBackdropColor(0, 0, 0, 0.8)
-        ib:SetBackdropBorderColor(br, bgG, bB, bA)
-        icon._puiBorder = ib
-      else
-        icon._puiBorder:SetBackdropBorderColor(br, bgG, bB, bA)
-      end
-    end
-  end
-
-  -- Sub-category collapse toggle
-  local tcb = button.ToggleCollapseButton
-  if tcb and tcb.RefreshIcon then
-    local function UpdateToggle(btn)
-      local header = btn.GetHeader and btn:GetHeader()
-      if not header then return end
-
-      StripTextures(btn, true)
-      Theme.ApplyExpandCollapseButton(btn, not header:IsCollapsed())
-    end
-
-    if not tcb._puiHooked then
-      hooksecurefunc(tcb, "RefreshIcon", UpdateToggle)
-      tcb._puiHooked = true
-    end
-    UpdateToggle(tcb)
-  end
-
-  button._puiCharSkinned = true
-end
-
-local function SkinCurrencyHeader(button)
-  if not button then
-    return
-  end
-
-  if button._puiCharSkinned then
-    RefreshCurrencyEntryTheme(button, true)
-    return
-  end
-
-  StripTextures(button, true)
-
-  local tr, tg, tb, ta = GetTextColor()
-  local br, bgG, bB, bA = CS_B()
-
-  local bg = EnsureBackdropFrame(button)
-  if bg and bg.SetBackdrop then
-    local edgeSize = Theme.GetEdgeSize()
-    bg:SetBackdrop({
-      bgFile   = "Interface\\Buttons\\WHITE8x8",
-      edgeFile = "Interface\\Buttons\\WHITE8x8",
-      edgeSize = edgeSize,
-    })
-
-    local r, g, b, a = CS_CONTROL()
-    bg:SetBackdropColor(r, g, b, a)
-    bg:SetBackdropBorderColor(br, bgG, bB, bA)
-  end
-
-  local nameFS = button.Name or button.Text
-  if nameFS then
-    ns.Theme.ApplyFont(nameFS, "nav")
-    nameFS:SetTextColor(tr, tg, tb, ta)
-  end
-
-  -- Main category plus/minus (match Reputation styling)
-  local function UpdateCollapseIcon(tex)
-    if not (tex and tex.SetAtlas) then return end
-    local atlas = tex.GetAtlas and tex:GetAtlas()
-    if atlas == "Options_ListExpand_Right" or atlas == "Options_ListExpand_Right_Expanded" then
-      Theme.ApplyExpandCollapseTexture(tex, not (button.IsCollapsed and button:IsCollapsed()))
-    end
-  end
-
-  UpdateCollapseIcon(button.Right)
-  UpdateCollapseIcon(button.HighlightRight)
-
-  if not button._puiHeaderCollapseHooked then
-    if button.Right and button.Right.SetAtlas then
-      hooksecurefunc(button.Right, "SetAtlas", function() UpdateCollapseIcon(button.Right) end)
-    end
-    if button.HighlightRight and button.HighlightRight.SetAtlas then
-      hooksecurefunc(button.HighlightRight, "SetAtlas", function() UpdateCollapseIcon(button.HighlightRight) end)
-    end
-    button._puiHeaderCollapseHooked = true
-  end
-
-  button._puiCharSkinned = true
-end
-
-local function SkinCurrencyButton(button)
-  if not button then
-    return
-  end
-
-  local kind
-  if button.ToggleCollapseButton and button.ToggleCollapseButton.RefreshIcon then
-    kind = "subheader"
-  elseif (button.Right and (button.Name or button.Text)) or button.CategoryLeft or button.CategoryRight or button.CategoryMiddle then
-    kind = "header"
-  else
-    kind = "row"
-  end
-
-  if button._puiCharSkinKind ~= kind then
-    button._puiCharSkinned = nil
-    button._puiCharSkinKind = kind
-  end
-
-  if kind == "subheader" then
-    SkinCurrencyEntry(button)
-    return
-  end
-
-  if kind == "header" then
-    SkinCurrencyHeader(button)
-    return
-  end
-
-  SkinCurrencyEntry(button)
-end
-
 -- Supplemental character / inspect parity skinning
 local function CS_ApplyBackdrop(frame, colorFunc)
   if not frame then
@@ -1899,102 +1448,6 @@ local function CS_SkinTextureIcon(icon)
   host:SetPoint("TOPLEFT", icon, -1, 1)
   host:SetPoint("BOTTOMRIGHT", icon, 1, -1)
   CS_ApplyBackdrop(host, CS_CONTROL)
-end
-
-local function CS_SkinCheckBox(check)
-  if not check then
-    return
-  end
-
-  if not check._puiCharCheckSkinned then
-    local nt = check.GetNormalTexture and check:GetNormalTexture()
-    if nt and nt.SetAlpha then
-      nt:SetAlpha(0)
-    end
-
-    local pt = check.GetPushedTexture and check:GetPushedTexture()
-    if pt and pt.SetAlpha then
-      pt:SetAlpha(0)
-    end
-
-    local ht = check.GetHighlightTexture and check:GetHighlightTexture()
-    if ht then
-      ht:SetColorTexture(1, 1, 1, 0.15)
-    end
-
-    check._puiCharCheckSkinned = true
-  end
-
-  local box = check._puiCharCheckBackdrop
-  if not box then
-    box = CreateFrame("Frame", nil, check, "BackdropTemplate")
-    check._puiCharCheckBackdrop = box
-    box:SetSize(14, 14)
-    box:SetPoint("CENTER", check, "CENTER", 0, 0)
-  end
-
-  CS_ApplyBackdrop(box, CS_CONTROL)
-
-  local checked = check.Check or (check.GetCheckedTexture and check:GetCheckedTexture())
-  if checked then
-    if checked.SetTexCoord then
-      checked:SetTexCoord(0.08, 0.92, 0.08, 0.92)
-    end
-    if checked.SetVertexColor then
-      local ar, ag, ab, aa = CS_ACCENT()
-      checked:SetVertexColor(ar, ag, ab, aa)
-    end
-  end
-
-  if check.Text then
-    ns.Theme.ApplyFont(check.Text, "body")
-    local tr, tg, tb, ta = GetTextColor()
-    check.Text:SetTextColor(tr, tg, tb, ta)
-  end
-end
-
-local function CS_SkinDropDown(dropdown)
-  if not dropdown then
-    return
-  end
-
-  if not dropdown._puiCharDropSkinned then
-    StripTextures(dropdown, true)
-    dropdown._puiCharDropSkinned = true
-  end
-
-  CS_ApplyBackdrop(dropdown, CS_CONTROL)
-
-  if dropdown.Text then
-    ns.Theme.ApplyFont(dropdown.Text, "body")
-    local tr, tg, tb, ta = GetTextColor()
-    dropdown.Text:SetTextColor(tr, tg, tb, ta)
-  end
-
-  if dropdown.Button then
-    CS_SkinButton(dropdown.Button)
-  end
-
-  if dropdown.DropdownButton then
-    CS_SkinButton(dropdown.DropdownButton)
-  end
-end
-
-local function CS_SkinEditBox(editBox)
-  if not editBox then
-    return
-  end
-
-  if not editBox._puiCharEditSkinned then
-    StripTextures(editBox, true)
-    editBox._puiCharEditSkinned = true
-  end
-
-  CS_ApplyBackdrop(editBox, CS_CONTROL)
-
-  if editBox.SetTextInsets then
-    editBox:SetTextInsets(6, 6, 0, 0)
-  end
 end
 
 local function CS_SkinScrollBar(scrollBar)
@@ -2103,64 +1556,40 @@ local function CS_SkinSidebarTabs()
   end
 end
 
-function CharacterSheet:SkinGearManagerIcon(button)
-  if not button then
-    return
-  end
+local gearIconTooltips = setmetatable({}, { __mode = "k" })
+local gearPopupSearch = setmetatable({}, { __mode = "k" })
 
-  if not button._puiCharGearIconStyled then
-    for _, region in ipairs({ button:GetRegions() }) do
-      if region:IsObjectType("Texture") and region ~= button.Icon
-        and region ~= button.SelectedTexture and region ~= button.Highlight then
-        region:SetAlpha(0)
-      end
+function CharacterSheet:InstallGearManagerIconTooltip(button)
+  if gearIconTooltips[button] then return end
+  button:HookScript("OnEnter", function(self)
+    local icon = self:GetIconTexture()
+    if issecretvalue(icon) or icon == nil then
+      return
     end
-    button.Icon:ClearAllPoints()
-    button.Icon:SetPoint("TOPLEFT", button, "TOPLEFT", 2, -2)
-    button.Icon:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT", -2, 2)
-    button.Icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
 
-    button:HookScript("OnEnter", function(self)
-      local icon = self:GetIconTexture()
-      if issecretvalue(icon) or icon == nil then
-        return
-      end
-
-      GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-      local popup = _G.GearManagerPopupFrame
-      local name = popup._puiCharSearchNames and popup._puiCharSearchNames[icon]
-      if name then
-        GameTooltip:SetText(name)
-      elseif type(icon) == "string" then
-        GameTooltip:SetText(icon:match("[^/\\]+$") or icon)
-      else
-        GameTooltip:SetText("Icon")
-      end
-      if type(icon) == "number" then
-        GameTooltip:AddLine("Icon ID: " .. tostring(icon), 0.75, 0.75, 0.75)
-      elseif type(icon) == "string" then
-        GameTooltip:AddLine(icon, 0.75, 0.75, 0.75)
-      end
-      GameTooltip:Show()
-    end)
-    button:HookScript("OnLeave", function(self)
-      if GameTooltip:IsOwned(self) then
-        GameTooltip:Hide()
-      end
-    end)
-    button._puiCharGearIconStyled = true
-  end
-
-  CS_ApplyBackdrop(button, CS_CONTROL)
-  local r, g, b = CS_ACCENT()
-  if button.SelectedTexture then
-    button.SelectedTexture:SetAllPoints(button)
-    button.SelectedTexture:SetColorTexture(r, g, b, 0.25)
-  end
-  if button.Highlight then
-    button.Highlight:SetAllPoints(button)
-    button.Highlight:SetColorTexture(1, 1, 1, 0.10)
-  end
+    GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+    local popup = _G.GearManagerPopupFrame
+    local name = popup._puiCharSearchNames and popup._puiCharSearchNames[icon]
+    if name then
+      GameTooltip:SetText(name)
+    elseif type(icon) == "string" then
+      GameTooltip:SetText(icon:match("[^/\\]+$") or icon)
+    else
+      GameTooltip:SetText("Icon")
+    end
+    if type(icon) == "number" then
+      GameTooltip:AddLine("Icon ID: " .. tostring(icon), 0.75, 0.75, 0.75)
+    elseif type(icon) == "string" then
+      GameTooltip:AddLine(icon, 0.75, 0.75, 0.75)
+    end
+    GameTooltip:Show()
+  end)
+  button:HookScript("OnLeave", function(self)
+    if GameTooltip:IsOwned(self) then
+      GameTooltip:Hide()
+    end
+  end)
+  gearIconTooltips[button] = true
 end
 
 function CharacterSheet:FilterGearManagerIcons()
@@ -2283,22 +1712,11 @@ function CharacterSheet:FilterGearManagerIcons()
   popup:SetSelectedIconText()
 end
 
-function CharacterSheet:SkinGearManagerPopup()
+function CharacterSheet:ConfigureGearManagerPopup()
   local popup = _G.GearManagerPopupFrame
-  if not popup then
-    return
-  end
+  if not popup or not ns.BlizzardSkins.CanStyle() then return end
 
-  if not popup._puiCharPopupSkinned then
-    StripTextures(popup, true)
-    StripTextures(popup.BorderBox, true)
-    if popup.BorderBox.NineSlice then popup.BorderBox.NineSlice:Hide() end
-    if popup.BG then popup.BG:SetAlpha(0) end
-
-    CS_SkinEditBox(popup.BorderBox.IconSelectorEditBox)
-    CS_SkinButton(popup.BorderBox.OkayButton)
-    CS_SkinButton(popup.BorderBox.CancelButton)
-
+  if not gearPopupSearch[popup] then
     local search = CreateFrame("EditBox", nil, popup.BorderBox, "SearchBoxTemplate")
     search:SetSize(148, 22)
     search:SetPoint("TOPLEFT", popup.BorderBox, "TOPLEFT", 165, -65)
@@ -2319,26 +1737,27 @@ function CharacterSheet:SkinGearManagerPopup()
       self:ClearFocus()
     end)
     popup._puiCharIconSearch = search
+    ns.BlizzardSkins.EditBox(search)
 
     popup._puiCharNoIcons = popup.IconSelector:CreateFontString(nil, "OVERLAY")
-    Theme.ApplyFont(popup._puiCharNoIcons, "body")
+    ns.BlizzardSkins.Font(popup._puiCharNoIcons)
     popup._puiCharNoIcons:SetPoint("CENTER", popup.IconSelector, "CENTER", 0, 0)
     popup._puiCharNoIcons:SetWidth(390)
     popup._puiCharNoIcons:SetText("No matching icons or known spells")
     popup._puiCharNoIcons:Hide()
 
     hooksecurefunc(popup.IconSelector, "RunSetup", function(_, button)
-      CharacterSheet:SkinGearManagerIcon(button)
+      CharacterSheet:InstallGearManagerIconTooltip(button)
     end)
     hooksecurefunc(popup, "SetIconFilterInternal", function(frame)
       CharacterSheet:FilterGearManagerIcons()
     end)
     popup:HookScript("OnShow", function(frame)
-      CharacterSheet:SkinGearManagerPopup()
+      CharacterSheet:ConfigureGearManagerPopup()
       frame._puiCharIconSearch:SetText("")
       CharacterSheet:FilterGearManagerIcons()
     end)
-    popup._puiCharPopupSkinned = true
+    gearPopupSearch[popup] = true
   end
 
   popup:SetFrameStrata("FULLSCREEN_DIALOG")
@@ -2352,59 +1771,12 @@ function CharacterSheet:SkinGearManagerPopup()
   popup.IconSelector:ClearAllPoints()
   popup.IconSelector:SetPoint("TOPLEFT", popup, "TOPLEFT", 21, -97)
   popup.IconSelector:SetPoint("BOTTOMRIGHT", popup, "BOTTOMRIGHT", -10, 37)
-  CS_ApplyBackdrop(popup, CS_BG)
-  Theme.WidgetSkins.UIEditBox(popup._puiCharIconSearch)
-
-  local dropdown = popup.BorderBox.IconTypeDropdown
-  dropdown.Background:SetAlpha(0)
-  CS_ApplyBackdrop(dropdown, CS_CONTROL)
-  Theme.ApplyFont(dropdown.Text, "body")
-  local tr, tg, tb, ta = GetTextColor()
-  dropdown.Text:SetTextColor(tr, tg, tb, ta)
-
-  if not dropdown._puiCharMenuStyle then
-    local style = CreateFromMixins(MenuStyle1Mixin)
-    function style:Generate()
-      local r, g, b, a = CS_CONTROL()
-      local background = self:AttachTexture()
-      background:SetPoint("TOPLEFT", self, "TOPLEFT", -4, 4)
-      background:SetPoint("BOTTOMRIGHT", self, "BOTTOMRIGHT", 4, -4)
-      background:SetColorTexture(r, g, b, a)
-
-      local br, bg, bb, ba = CS_B()
-      local edge = math.max(Theme.GetEdgeSize(), 2)
-
-      local top = self:AttachTexture()
-      top:SetColorTexture(br, bg, bb, ba)
-      top:SetPoint("TOPLEFT", background, "TOPLEFT")
-      top:SetPoint("TOPRIGHT", background, "TOPRIGHT")
-      top:SetHeight(edge)
-
-      local bottom = self:AttachTexture()
-      bottom:SetColorTexture(br, bg, bb, ba)
-      bottom:SetPoint("BOTTOMLEFT", background, "BOTTOMLEFT")
-      bottom:SetPoint("BOTTOMRIGHT", background, "BOTTOMRIGHT")
-      bottom:SetHeight(edge)
-
-      local left = self:AttachTexture()
-      left:SetColorTexture(br, bg, bb, ba)
-      left:SetPoint("TOPLEFT", background, "TOPLEFT", 0, -edge)
-      left:SetPoint("BOTTOMLEFT", background, "BOTTOMLEFT", 0, edge)
-      left:SetWidth(edge)
-
-      local right = self:AttachTexture()
-      right:SetColorTexture(br, bg, bb, ba)
-      right:SetPoint("TOPRIGHT", background, "TOPRIGHT", 0, -edge)
-      right:SetPoint("BOTTOMRIGHT", background, "BOTTOMRIGHT", 0, edge)
-      right:SetWidth(edge)
+  if popup.IconSelector.initialized then
+    for button in popup.IconSelector:EnumerateButtons() do
+      self:InstallGearManagerIconTooltip(button)
     end
-    dropdown.menuMixin = style
-    dropdown._puiCharMenuStyle = style
   end
-
-  local selected = popup.BorderBox.SelectedIconArea.SelectedIconButton
-  self:SkinGearManagerIcon(selected)
-  CS_SkinScrollBar(popup.IconSelector.ScrollBar)
+  self:InstallGearManagerIconTooltip(popup.BorderBox.SelectedIconArea.SelectedIconButton)
 end
 
 local function CS_SkinEquipmentManagerPane()
@@ -2454,7 +1826,7 @@ local function CS_SkinEquipmentManagerPane()
 
 
 
-  CharacterSheet:SkinGearManagerPopup()
+  CharacterSheet:ConfigureGearManagerPopup()
 end
 
 local function CS_SkinEquipmentFlyout()
@@ -2559,90 +1931,6 @@ local function CS_SkinEquipmentFlyout()
   end
 end
 
-local function CS_SkinReputationAndCurrencyExtras()
-  if ReputationFrame then
-    CS_SkinDropDown(ReputationFrame.filterDropdown)
-
-    local detail = ReputationFrame.ReputationDetailFrame
-    if detail then
-      StripTextures(detail, true)
-      CS_ApplyBackdrop(detail, CS_BG)
-      CS_SkinCloseButton(detail.CloseButton)
-      CS_SkinCheckBox(detail.AtWarCheckbox)
-      CS_SkinCheckBox(detail.MakeInactiveCheckbox)
-      CS_SkinCheckBox(detail.WatchFactionCheckbox)
-      CS_SkinButton(detail.ViewRenownButton)
-      CS_SkinScrollBar(detail.ScrollingDescriptionScrollBar)
-    end
-  end
-
-  if TokenFrame then
-    CS_SkinDropDown(TokenFrame.filterDropdown)
-  end
-
-  if _G.TokenFramePopup then
-    StripTextures(_G.TokenFramePopup, true)
-    CS_ApplyBackdrop(_G.TokenFramePopup, CS_BG)
-    CS_SkinCheckBox(_G.TokenFramePopup.InactiveCheckbox)
-    CS_SkinCheckBox(_G.TokenFramePopup.BackpackCheckbox)
-    CS_SkinButton(_G.TokenFramePopup.CurrencyTransferToggleButton)
-    CS_SkinCloseButton(_G.TokenFramePopup.CloseButton)
-  end
-
-  if _G.CurrencyTransferLog then
-    local function UpdateLine(frame)
-      if frame and frame.CurrencyIcon then
-        CS_SkinTextureIcon(frame.CurrencyIcon)
-      end
-    end
-
-    StripTextures(_G.CurrencyTransferLog, true)
-    CS_ApplyBackdrop(_G.CurrencyTransferLog, CS_BG)
-    CS_SkinScrollBar(_G.CurrencyTransferLog.ScrollBar)
-
-    if _G.CurrencyTransferLog.ScrollBox and _G.CurrencyTransferLog.ScrollBox.ForEachFrame then
-      if not _G.CurrencyTransferLog.ScrollBox._puiCharHooked then
-        hooksecurefunc(_G.CurrencyTransferLog.ScrollBox, "Update", function(scrollBox)
-          scrollBox:ForEachFrame(UpdateLine)
-        end)
-        _G.CurrencyTransferLog.ScrollBox._puiCharHooked = true
-      end
-
-      _G.CurrencyTransferLog.ScrollBox:ForEachFrame(UpdateLine)
-    end
-  end
-
-  local currencyTransfer = _G.CurrencyTransferMenu
-  if currencyTransfer then
-    StripTextures(currencyTransfer, true)
-    CS_ApplyBackdrop(currencyTransfer, CS_BG)
-    CS_SkinCloseButton(currencyTransfer.CloseButton)
-
-    local content = currencyTransfer.Content
-    if content then
-      if content.SourceSelector then
-        CS_SkinDropDown(content.SourceSelector.Dropdown)
-      end
-
-      if content.AmountSelector then
-        CS_SkinButton(content.AmountSelector.MaxQuantityButton)
-        CS_SkinEditBox(content.AmountSelector.InputBox)
-      end
-
-      CS_SkinButton(content.ConfirmButton)
-      CS_SkinButton(content.CancelButton)
-
-      if content.SourceBalancePreview and content.SourceBalancePreview.BalanceInfo then
-        CS_SkinTextureIcon(content.SourceBalancePreview.BalanceInfo.CurrencyIcon)
-      end
-
-      if content.PlayerBalancePreview and content.PlayerBalancePreview.BalanceInfo then
-        CS_SkinTextureIcon(content.PlayerBalancePreview.BalanceInfo.CurrencyIcon)
-      end
-    end
-  end
-end
-
 -- Item slot helpers (ilvl / enchant / gems + icon skin)
 local function GetSlotItemLevel(unit, slotId)
   local cache, itemLink = CS_GetCachedSlotInfo(unit, slotId)
@@ -2653,8 +1941,6 @@ local function GetSlotItemLevel(unit, slotId)
   if cache and cache.itemLevel ~= nil then
     return cache.itemLevel or nil
   end
-
-  local itemLevel
 
   local itemID = tonumber(itemLink:match("item:(%d+)"))
   if itemID and not C_Item.IsItemDataCachedByID(itemID) then
@@ -2677,45 +1963,15 @@ local function GetSlotItemLevel(unit, slotId)
     end
   end
 
-  local detailed = C_Item.GetDetailedItemLevelInfo(itemLink)
-  if detailed then
-    itemLevel = detailed
-  end
-
+  local itemLevel = C_Item.GetDetailedItemLevelInfo(itemLink)
+  if issecretvalue(itemLevel) then return nil end
   if not itemLevel then
-    local _, _, _, ilvl = C_Item.GetItemInfo(itemLink)
-    if ilvl then
-      itemLevel = ilvl
-    end
+    local _, _, _, cachedLevel = C_Item.GetItemInfo(itemLink)
+    if issecretvalue(cachedLevel) then return nil end
+    itemLevel = cachedLevel
   end
 
-  if not itemLevel then
-    local tooltipData = CS_GetCachedInventoryTooltipData(cache, unit, slotId)
-    if tooltipData and tooltipData.lines then
-      local pattern
-      if ITEM_LEVEL then
-        pattern = ITEM_LEVEL:gsub("%%d", "(%%d+)")
-      else
-        pattern = "Item Level (%d+)"
-      end
-
-      for _, line in ipairs(tooltipData.lines) do
-        local text = line.leftText or ""
-        local tooltipIlvl = text:match(pattern)
-        if tooltipIlvl then
-          local parsed = tonumber(tooltipIlvl)
-          if parsed then
-            itemLevel = parsed
-          end
-          break
-        end
-      end
-    end
-  end
-
-  if cache and itemLevel then
-    cache.itemLevel = itemLevel
-  end
+  if cache and itemLevel then cache.itemLevel = itemLevel end
 
   return itemLevel
 end
@@ -2862,29 +2118,23 @@ local function GetSlotEnchantInfo(unit, slotId)
 
   if hasEnchant then
     local tooltipData = CS_GetCachedInventoryTooltipData(cache, unit, slotId)
-    if tooltipData and tooltipData.lines then
-      for _, line in ipairs(tooltipData.lines) do
-        local text = line.leftText or ""
-        local enchant
-
-        if ENCHANTED_TOOLTIP_LINE then
-          local pattern = ENCHANTED_TOOLTIP_LINE:gsub("%%s", "(.+)")
-          enchant = text:match(pattern)
-        end
-
-        if not enchant then
-          enchant = text:match("Enchanted:%s*(.+)")
-        end
-
-        if enchant then
-          local enchantAtlas = enchant:match("|A:([^:|]+)")
-            or "Professions-ChatIcon-Quality-Tier5"
-          if cache then
-            cache.enchantChecked = true
-            cache.enchantAtlas = enchantAtlas
-            cache.missingEnchant = false
+    if tooltipData and not issecretvalue(tooltipData) then
+      local lines = tooltipData.lines
+      if lines and not issecretvalue(lines) then
+        for _, line in ipairs(lines) do
+          if not issecretvalue(line) then
+            local lineType, text = line.type, line.leftText
+            if not issecretvalue(lineType) and lineType == Enum.TooltipDataLineType.ItemEnchantmentPermanent
+              and not issecretvalue(text) and text then
+              local enchantAtlas = text:match("|A:([^:|]+)") or "Professions-ChatIcon-Quality-Tier5"
+              if cache then
+                cache.enchantChecked = true
+                cache.enchantAtlas = enchantAtlas
+                cache.missingEnchant = false
+              end
+              return enchantAtlas, false
+            end
           end
-          return enchantAtlas, false
         end
       end
     end
@@ -3711,24 +2961,6 @@ local function CS_AfterCharacterSubFrameShown(_, frameName)
     UpdateCharacterAverageItemLevelText()
     CS_LayoutMaxHealthRow()
     CS_RefreshPlayerSlots(true)
-    return
-  end
-
-  if frameName == "ReputationFrame" then
-    CS_SkinReputationAndCurrencyExtras()
-
-    if ReputationFrame.ScrollBox and ReputationFrame.ScrollBox.ForEachFrame then
-      ReputationFrame.ScrollBox:ForEachFrame(SkinReputationEntry)
-    end
-    return
-  end
-
-  if frameName == "TokenFrame" then
-    CS_SkinReputationAndCurrencyExtras()
-
-    if TokenFrame.ScrollBox and TokenFrame.ScrollBox.ForEachFrame then
-      TokenFrame.ScrollBox:ForEachFrame(SkinCurrencyButton)
-    end
   end
 end
 
@@ -3910,6 +3142,7 @@ end
 
 -- Core CharacterFrame skin setup
 local function SetupCharacterFrameSkinning()
+  if not ns.BlizzardSkinOptions.IsEnabled("CharacterFrame") then return end
 
   if not CharacterFrame then
     return
@@ -3925,6 +3158,8 @@ local function SetupCharacterFrameSkinning()
   end
 
   CharacterSheet._initialized = true
+  CharacterSheet._shellExtended = true
+  EnsureShellHost()
   CS_SetupPaperDollValueHooks()
 
   -- Core frame: hide Blizzard art we replace with our shell.
@@ -3974,7 +3209,7 @@ local function SetupCharacterFrameSkinning()
       CharacterFrame.TitleBg:SetAlpha(0)
     end
 
-    ns.BlizzardSkins.WindowTitle(CharacterFrame, CharacterFrame.TitleText)
+    ns.BlizzardSkins.WindowTitle(CharacterFrame, CharacterFrame.TitleText, CharacterSheet._shellHost._puiBg)
 
     if CharacterModelScene then
       StripTextures(CharacterModelScene, true)
@@ -3990,24 +3225,7 @@ local function SetupCharacterFrameSkinning()
       CharacterStatsPane.Background:SetAlpha(0)
     end
 
-    -- Add the shared PUI background and border.
-    do
-      local bg = EnsureBackdropFrame(CharacterStatsPane)
-      if bg and bg.SetBackdrop then
-        local edgeSize = Theme.GetEdgeSize()
-        bg:SetBackdrop({
-          bgFile   = "Interface\\Buttons\\WHITE8x8",
-          edgeFile = "Interface\\Buttons\\WHITE8x8",
-          edgeSize = edgeSize,
-        })
-
-        local r, g, b, a      = CS_BG()
-        local br, bgG, bB, bA = CS_B()
-
-        bg:SetBackdropColor(r, g, b, a)
-        bg:SetBackdropBorderColor(br, bgG, bB, bA)
-      end
-    end
+    ns.BlizzardSkins.Panel(CharacterStatsPane)
 
 
 
@@ -4088,15 +3306,14 @@ local function SetupCharacterFrameSkinning()
     CharacterFrame._puiCharCoreDecorHooked = true
   end
 
-  for i = 1, 3 do
-    ns.BlizzardSkins.Tab(_G["CharacterFrameTab" .. i])
-  end
+  ns.BlizzardSkins.WindowTabs(CharacterFrame, {
+    CharacterFrameTab1,
+    CharacterFrameTab2,
+    CharacterFrameTab3,
+  })
 
 
 
-  -- Initial shell state: character page uses extended shell.
-  CharacterSheet._shellExtended = true
-  EnsureShellHost()
   ns.BlizzardWindowControls.Install(CharacterFrame, CharacterSheet._shellHost)
   UpdateCharacterAverageItemLevelText()
   CS_LayoutMaxHealthRow()
@@ -4163,24 +3380,6 @@ local function SetupCharacterFrameSkinning()
     CS_AfterCharacterSubFrameShown(CharacterFrame, CharacterFrame.activeSubframe)
   end
 
-  -- Reputation: hook ScrollBox updates
-  if ReputationFrame and ReputationFrame.ScrollBox and ReputationFrame.ScrollBox.ForEachFrame then
-    hooksecurefunc(ReputationFrame.ScrollBox, "Update", function(scrollBox)
-
-      scrollBox:ForEachFrame(SkinReputationEntry)
-    end)
-
-  end
-  -- Currencies (TokenFrame)
-
-  if TokenFrame and TokenFrame.ScrollBox and TokenFrame.ScrollBox.ForEachFrame then
-    hooksecurefunc(TokenFrame.ScrollBox, "Update", function(scrollBox)
-
-      scrollBox:ForEachFrame(SkinCurrencyButton)
-    end)
-
-  end
-
   CS_SkinModelControlButtons(CharacterModelScene and CharacterModelScene.ControlFrame)
   CS_SkinSidebarTabs()
   CS_SkinEquipmentFlyout()
@@ -4227,10 +3426,10 @@ function CharacterSheet:RefreshTheme()
     CS_LayoutStatGroups()
     CS_RefreshSlotDisplaySettings()
 
-    ns.BlizzardSkins.WindowTitle(CharacterFrame, CharacterFrame.TitleText)
+    ns.BlizzardSkins.WindowTitle(CharacterFrame, CharacterFrame.TitleText, CharacterSheet._shellHost._puiBg)
 
     CS_ApplyBackdrop(CharacterFramePortraitFrame, CS_BG)
-    CS_ApplyBackdrop(CharacterStatsPane, CS_BG)
+    ns.BlizzardSkins.Panel(CharacterStatsPane)
 
     CS_RefreshStatCategory(CharacterStatsPane.ItemLevelCategory)
     CS_RefreshStatCategory(CharacterStatsPane.AttributesCategory)
@@ -4244,16 +3443,6 @@ function CharacterSheet:RefreshTheme()
     SkinTitleManagerPane()
     CS_SkinEquipmentManagerPane()
     CS_SkinEquipmentFlyout()
-    CS_SkinReputationAndCurrencyExtras()
-
-    if ReputationFrame and ReputationFrame.ScrollBox and ReputationFrame.ScrollBox.ForEachFrame then
-      ReputationFrame.ScrollBox:ForEachFrame(SkinReputationEntry)
-    end
-
-    if TokenFrame and TokenFrame.ScrollBox and TokenFrame.ScrollBox.ForEachFrame then
-      TokenFrame.ScrollBox:ForEachFrame(SkinCurrencyButton)
-    end
-
     local paperDollItems = _G.PaperDollItemsFrame
     if paperDollItems and paperDollItems.GetChildren then
       for _, button in ipairs({ paperDollItems:GetChildren() }) do
@@ -4272,17 +3461,11 @@ do
   CS_EventDriver = driver
   driver:RegisterEvent("PLAYER_LOGIN")
   driver:RegisterEvent("ADDON_LOADED")
-  driver:RegisterEvent("PLAYER_EQUIPMENT_CHANGED")
-  driver:RegisterEvent("PLAYER_LEVEL_UP")
-  driver:RegisterEvent("UPDATE_INVENTORY_DURABILITY")
-  driver:RegisterEvent("PLAYER_REGEN_DISABLED")
-  driver:RegisterEvent("PLAYER_REGEN_ENABLED")
-  driver:RegisterEvent("INSPECT_READY")
 
   driver:SetScript("OnEvent", function(self, event, arg1)
 
     if event == "ADDON_LOADED" then
-      if arg1 == "Blizzard_UIPanels_Game" then
+      if arg1 == "Blizzard_UIPanels_Game" and ns.BlizzardSkinOptions.IsEnabled("CharacterFrame") then
         C_Timer.After(0.1, SetupCharacterFrameSkinning)
       end
 
@@ -4290,7 +3473,19 @@ do
     end
 
     if event == "PLAYER_LOGIN" then
-      if CharacterFrame then
+      local character = ns.BlizzardSkinOptions.IsEnabled("CharacterFrame")
+      local inspect = ns.BlizzardSkinOptions.IsEnabled("InspectFrame")
+      if character then
+        self:RegisterEvent("PLAYER_EQUIPMENT_CHANGED")
+        self:RegisterEvent("PLAYER_LEVEL_UP")
+        self:RegisterEvent("UPDATE_INVENTORY_DURABILITY")
+        self:RegisterEvent("PLAYER_REGEN_DISABLED")
+      else
+        self:UnregisterEvent("ADDON_LOADED")
+      end
+      if inspect then self:RegisterEvent("INSPECT_READY") end
+      if character or inspect then self:RegisterEvent("PLAYER_REGEN_ENABLED") end
+      if character and CharacterFrame then
         C_Timer.After(0.1, SetupCharacterFrameSkinning)
       end
       self:UnregisterEvent("PLAYER_LOGIN")
@@ -4321,8 +3516,14 @@ do
     end
 
     if event == "PLAYER_REGEN_ENABLED" then
-      CS_RefreshPlayerItemStatPresence()
-      CS_RefreshSecondaryStatRatingTexts()
+      if ns.BlizzardSkinOptions.IsEnabled("CharacterFrame") then
+        CS_RefreshPlayerItemStatPresence()
+        CS_RefreshSecondaryStatRatingTexts()
+        local popup = _G.GearManagerPopupFrame
+        if popup and popup:IsVisible() then
+          CharacterSheet:ConfigureGearManagerPopup()
+        end
+      end
       return
     end
 
@@ -4437,27 +3638,18 @@ end
   CS_IsInspectReady = P:Def("CS_IsInspectReady", CS_IsInspectReady)
   CS_RefreshInspectSlotButtons = P:Def("CS_RefreshInspectSlotButtons", CS_RefreshInspectSlotButtons)
   CS_RefreshInspectData = P:Def("CS_RefreshInspectData", CS_RefreshInspectData)
-  CS_SkinReputationBar = P:Def("CS_SkinReputationBar", CS_SkinReputationBar)
-  SkinReputationEntry = P:Def("SkinReputationEntry", SkinReputationEntry)
-  SkinCurrencyEntry = P:Def("SkinCurrencyEntry", SkinCurrencyEntry)
-  SkinCurrencyHeader = P:Def("SkinCurrencyHeader", SkinCurrencyHeader)
-  SkinCurrencyButton = P:Def("SkinCurrencyButton", SkinCurrencyButton)
   CS_ApplyBackdrop = P:Def("CS_ApplyBackdrop", CS_ApplyBackdrop)
   CS_SkinButton = P:Def("CS_SkinButton", CS_SkinButton)
   CS_SkinCloseButton = P:Def("CS_SkinCloseButton", CS_SkinCloseButton)
   CS_SkinTextureIcon = P:Def("CS_SkinTextureIcon", CS_SkinTextureIcon)
-  CS_SkinCheckBox = P:Def("CS_SkinCheckBox", CS_SkinCheckBox)
-  CS_SkinDropDown = P:Def("CS_SkinDropDown", CS_SkinDropDown)
-  CS_SkinEditBox = P:Def("CS_SkinEditBox", CS_SkinEditBox)
   CS_SkinScrollBar = P:Def("CS_SkinScrollBar", CS_SkinScrollBar)
   CS_SkinModelControlButtons = P:Def("CS_SkinModelControlButtons", CS_SkinModelControlButtons)
   CS_SkinSidebarTabs = P:Def("CS_SkinSidebarTabs", CS_SkinSidebarTabs)
-  CharacterSheet.SkinGearManagerIcon = P:Def("CharacterSheet.SkinGearManagerIcon", CharacterSheet.SkinGearManagerIcon)
+  CharacterSheet.InstallGearManagerIconTooltip = P:Def("CharacterSheet.InstallGearManagerIconTooltip", CharacterSheet.InstallGearManagerIconTooltip)
   CharacterSheet.FilterGearManagerIcons = P:Def("CharacterSheet.FilterGearManagerIcons", CharacterSheet.FilterGearManagerIcons)
-  CharacterSheet.SkinGearManagerPopup = P:Def("CharacterSheet.SkinGearManagerPopup", CharacterSheet.SkinGearManagerPopup)
+  CharacterSheet.ConfigureGearManagerPopup = P:Def("CharacterSheet.ConfigureGearManagerPopup", CharacterSheet.ConfigureGearManagerPopup)
   CS_SkinEquipmentManagerPane = P:Def("CS_SkinEquipmentManagerPane", CS_SkinEquipmentManagerPane)
   CS_SkinEquipmentFlyout = P:Def("CS_SkinEquipmentFlyout", CS_SkinEquipmentFlyout)
-  CS_SkinReputationAndCurrencyExtras = P:Def("CS_SkinReputationAndCurrencyExtras", CS_SkinReputationAndCurrencyExtras)
   GetSlotItemLevel = P:Def("GetSlotItemLevel", GetSlotItemLevel)
   CS_GetEquippedItemState = P:Def("CS_GetEquippedItemState", CS_GetEquippedItemState)
   CS_GetWeaponItemLevelTotal = P:Def("CS_GetWeaponItemLevelTotal", CS_GetWeaponItemLevelTotal)

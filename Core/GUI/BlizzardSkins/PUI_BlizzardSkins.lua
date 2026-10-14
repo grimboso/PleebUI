@@ -15,7 +15,10 @@ local styledButtons = setmetatable({}, { __mode = "k" })
 local selections = setmetatable({}, { __mode = "k" })
 local checkedTextures = setmetatable({}, { __mode = "k" })
 local styledTabs = setmetatable({}, { __mode = "k" })
+local windowHeaders = setmetatable({}, { __mode = "k" })
 local scrollRows = setmetatable({}, { __mode = "k" })
+local scrollBars = setmetatable({}, { __mode = "k" })
+local dropdownMenuStyle
 local hooks = setmetatable({}, { __mode = "k" })
 local driver = CreateFrame("Frame")
 local loggedIn = false
@@ -138,24 +141,36 @@ function Skins.Selection(texture, alpha)
   end
 end
 
-function Skins.WindowTitle(frame, title)
+function Skins.WindowTitle(frame, title, surface)
   title = title or (frame.TitleContainer and frame.TitleContainer.TitleText)
   if not title then return end
+
+  local header = windowHeaders[frame]
+  if not header then
+    header = surface:CreateTexture(nil, "ARTWORK", nil, 1)
+    header:SetPoint("TOPLEFT", frame, "TOPLEFT", 1, -1)
+    header:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -1, -1)
+    header:SetHeight(32)
+    windowHeaders[frame] = header
+  end
+
+  local color = Theme.GetColors().control
+  header:SetColorTexture(color[1], color[2], color[3], color[4])
 
   Skins.Font(title, "title")
   title:ClearAllPoints()
   title:SetPoint("TOPLEFT", frame, "TOPLEFT", 56, -1)
   title:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -56, -1)
-  title:SetHeight(20)
+  title:SetHeight(32)
   title:SetJustifyH("CENTER")
   title:SetJustifyV("MIDDLE")
 end
 
 function Skins.Shell(frame, backgroundFrame)
   Skins.Chrome(frame)
-  Skins.Surface(backgroundFrame or frame)
+  local surface = Skins.Surface(backgroundFrame or frame)
   Skins.Chrome(frame.Inset)
-  Skins.WindowTitle(frame)
+  Skins.WindowTitle(frame, nil, surface)
   if frame.CloseButton then
     Theme.WidgetSkins.CloseButton(frame.CloseButton)
   end
@@ -187,7 +202,7 @@ local function RefreshButtonState(button)
     Theme.SetSquareBackdrop(host, {
       bg = enabled and colors.control or colors.disabledControl,
       border = state.borderless and transparentBorder or (enabled and colors.controlBorder or colors.disabledControlBorder),
-    }, Theme.GetEdgeSize())
+    }, state.edge or Theme.GetEdgeSize())
   end
   local text = state.label or button:GetFontString()
   if text then
@@ -219,7 +234,7 @@ end
 function Skins.Button(button, borderless)
   Skins.Chrome(button)
   Skins.Surface(button, true, borderless)
-  for _, key in ipairs({ "Left", "Middle", "Right", "LeftDisabled", "MiddleDisabled", "RightDisabled" }) do
+  for _, key in ipairs({ "Left", "Middle", "Center", "Right", "LeftDisabled", "MiddleDisabled", "RightDisabled" }) do
     Skins.Hide(button[key])
   end
   Skins.Hide(button:GetNormalTexture())
@@ -309,12 +324,42 @@ function Skins.CheckBox(button)
   RefreshButtonState(button)
 end
 
+local function GenerateDropdownMenu(menu)
+  local colors = Theme.GetColors()
+  local background = menu:AttachTexture()
+  background:SetPoint("TOPLEFT", menu, "TOPLEFT", -4, 4)
+  background:SetPoint("BOTTOMRIGHT", menu, "BOTTOMRIGHT", 4, -4)
+  background:SetColorTexture(unpack(colors.control))
+  local edge = Theme.ControlBorderSize
+  for _, side in ipairs({ "TOP", "BOTTOM", "LEFT", "RIGHT" }) do
+    local texture = menu:AttachTexture()
+    texture:SetColorTexture(unpack(colors.controlBorder))
+    if side == "TOP" or side == "BOTTOM" then
+      texture:SetPoint(side .. "LEFT", background, side .. "LEFT")
+      texture:SetPoint(side .. "RIGHT", background, side .. "RIGHT")
+      texture:SetHeight(edge)
+    else
+      texture:SetPoint("TOP" .. side, background, "TOP" .. side, 0, -edge)
+      texture:SetPoint("BOTTOM" .. side, background, "BOTTOM" .. side, 0, edge)
+      texture:SetWidth(edge)
+    end
+  end
+end
+
 function Skins.Dropdown(dropdown)
   if not dropdown then return end
   Skins.Chrome(dropdown)
   for _, key in ipairs({ "Left", "Middle", "Right" }) do Skins.Hide(dropdown[key]) end
   Skins.Surface(dropdown, true)
   Skins.Font(dropdown.Text)
+  if dropdown.CreateDefaultRootMenuDescription then
+    if not dropdownMenuStyle then
+      dropdownMenuStyle = CreateFromMixins(MenuStyle1Mixin)
+      dropdownMenuStyle.Generate = GenerateDropdownMenu
+    end
+    -- Use Blizzard's menu style contract without altering its secure menu elements.
+    dropdown.menuMixin = dropdownMenuStyle
+  end
   if dropdown:IsObjectType("Button") then
     Skins.Button(dropdown)
     local state = InstallButtonState(dropdown)
@@ -422,21 +467,56 @@ function Skins.Tab(tab)
   RefreshTabState(tab)
 end
 
+function Skins.WindowTabs(frame, tabs)
+  local previous
+
+  for _, tab in ipairs(tabs) do
+    Skins.Tab(tab)
+
+    tab:ClearAllPoints()
+    if previous then
+      tab:SetPoint("TOPLEFT", previous, "TOPRIGHT", 4, 0)
+    else
+      tab:SetPoint("TOPLEFT", frame, "BOTTOMLEFT", 11, 2)
+    end
+
+    previous = tab
+  end
+end
+
 function Skins.WidenScrollBar(scrollbar)
-  if scrollbar.__puiWidthAdjusted then return end
-
-  scrollbar.__puiWidthAdjusted = true
-  scrollbar:SetWidth(scrollbar:GetWidth() + 2)
-
+  local width = Theme.GetOptionsPointerTargetSize(20)
+  scrollbar:SetWidth(width)
   local track = scrollbar.Track
   if track then
-    track:SetWidth(track:GetWidth() + 2)
+    local height = Theme.GetOptionsPointerTargetSize(24)
+    scrollbar.Back:SetSize(width, height)
+    scrollbar.Forward:SetSize(width, height)
+    scrollbar.Back:ClearAllPoints()
+    scrollbar.Back:SetPoint("TOPLEFT", scrollbar, "TOPLEFT")
+    scrollbar.Forward:ClearAllPoints()
+    scrollbar.Forward:SetPoint("BOTTOMLEFT", scrollbar, "BOTTOMLEFT")
+    track:ClearAllPoints()
+    track:SetPoint("TOPLEFT", scrollbar.Back, "BOTTOMLEFT", 0, -2)
+    track:SetPoint("BOTTOMRIGHT", scrollbar.Forward, "TOPRIGHT", 0, 2)
+    track:SetWidth(width)
+    track.Thumb:SetWidth(width - 2)
+    track.Thumb:SetHitRectInsets(0, 0, 0, 0)
+    scrollbar.thumbAnchor = "TOP"
   end
+end
 
-  local thumb = track and track.Thumb or scrollbar.Thumb
-  if thumb then
-    thumb:SetWidth(thumb:GetWidth() + 2)
-  end
+local function RefreshScrollBar(scrollbar)
+  Skins.WidenScrollBar(scrollbar)
+  local colors = Theme.GetColors()
+  Theme.SetSquareBackdrop(surfaces[scrollbar.Track], {
+    bg = colors.control, border = colors.controlBorder,
+  }, Theme.ControlBorderSize)
+  Theme.SetSquareBackdrop(surfaces[scrollbar.Track.Thumb], {
+    bg = colors.accent, border = transparentBorder,
+  }, 0)
+  Theme.ApplyScrollArrow(scrollbar.Back, "up")
+  Theme.ApplyScrollArrow(scrollbar.Forward, "down")
 end
 
 function Skins.ScrollBar(scrollbar)
@@ -445,10 +525,18 @@ function Skins.ScrollBar(scrollbar)
     Theme.WidgetSkins.Scrollbar(scrollbar)
     return
   end
-  Skins.WidenScrollBar(scrollbar)
+  if scrollBars[scrollbar] then
+    RefreshScrollBar(scrollbar)
+    return
+  end
+  scrollBars[scrollbar] = true
   Skins.Chrome(scrollbar)
-  if scrollbar.Back then Skins.Arrow(scrollbar.Back, "^") end
-  if scrollbar.Forward then Skins.Arrow(scrollbar.Forward, "v") end
+  for _, button in ipairs({ scrollbar.Back, scrollbar.Forward }) do
+    Skins.Button(button)
+    Skins.Hide(button.Texture)
+    InstallButtonState(button).edge = Theme.ControlBorderSize
+    button:SetHitRectInsets(0, 0, 0, 0)
+  end
   local track = scrollbar.Track
   if track then
     Skins.Surface(track, true)
@@ -460,10 +548,7 @@ function Skins.ScrollBar(scrollbar)
   end
   local thumb = track and track.Thumb
   if thumb then
-    local colors = Theme.GetColors()
-    local host = Skins.Surface(thumb, true)
-    surfaceRoles[thumb] = "accent"
-    Theme.SetSquareBackdrop(host, { bg = colors.accent, border = colors.border }, Theme.GetEdgeSize())
+    Skins.Surface(thumb, true)
     -- Blizzard sizes the thumb from its atlases; keep those assigned under our surface.
     for _, region in ipairs({ thumb:GetRegions() }) do
       if region:IsObjectType("Texture") then
@@ -471,6 +556,7 @@ function Skins.ScrollBar(scrollbar)
       end
     end
   end
+  RefreshScrollBar(scrollbar)
 end
 
 function Skins.Apply(root, layout)
@@ -605,6 +691,7 @@ function Skins.Register(addonName, frameName, callbacks)
   if legacy then
     callbacks = { onShow = callbacks }
   end
+  ns.BlizzardSkinOptions.Register(frameName, callbacks.label, callbacks.category)
   windows[#windows + 1] = {
     addon = addonName,
     name = frameName,
@@ -612,6 +699,7 @@ function Skins.Register(addonName, frameName, callbacks)
     onShow = callbacks.onShow,
     onTheme = callbacks.onTheme,
     controlsRoot = callbacks.controlsRoot,
+    manageControls = callbacks.manageControls ~= false,
     legacy = legacy,
   }
 end
@@ -621,13 +709,16 @@ local function SkinWindow(window, frame)
   if not window.initialized then
     if window.install then window.install(frame) end
     window.initialized = true
-    local controlsRoot = window.controlsRoot and window.controlsRoot(frame) or nil
-    ns.BlizzardWindowControls.Install(frame, controlsRoot, window.name)
+    if window.manageControls then
+      local controlsRoot = window.controlsRoot and window.controlsRoot(frame) or nil
+      ns.BlizzardWindowControls.Install(frame, controlsRoot, window.name)
+    end
   end
   if window.onShow then window.onShow(frame) end
 end
 
 local function ObserveWindow(window)
+  if not ns.BlizzardSkinOptions.IsEnabled(window.name) then return end
   local frame = _G
   for key in window.name:gmatch("[^.]+") do
     frame = frame[key]
@@ -672,6 +763,10 @@ function Skins.RefreshTheme(refreshWindows)
       }, edge)
     end
   end
+  for _, header in pairs(windowHeaders) do
+    local color = colors.control
+    header:SetColorTexture(color[1], color[2], color[3], color[4])
+  end
   for text in pairs(styledTexts) do RefreshTextColor(text) end
   for texture, alpha in pairs(selections) do
     texture:SetColorTexture(colors.accent[1], colors.accent[2], colors.accent[3], alpha)
@@ -682,6 +777,7 @@ function Skins.RefreshTheme(refreshWindows)
   end
   for tab in pairs(styledTabs) do RefreshTabState(tab) end
   for button in pairs(styledButtons) do RefreshButtonState(button) end
+  for scrollbar in pairs(scrollBars) do RefreshScrollBar(scrollbar) end
   ns.BlizzardWindowControls.RefreshTheme()
   if refreshWindows == false then return end
   for _, window in ipairs(windows) do

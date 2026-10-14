@@ -18,6 +18,8 @@ local WHITE8 = "Interface\\Buttons\\WHITE8x8"
 
 local Bags = {}
 ns.Registry.Bags = Bags
+ns.BlizzardSkinOptions.Register("ContainerFrameCombinedBags")
+ns.BlizzardSkinOptions.Register("ContainerFrame6")
 
 local itemBorders = setmetatable({}, { __mode = "k" })
 local skinnedItemButtons = setmetatable({}, { __mode = "k" })
@@ -172,6 +174,8 @@ local function SkinItemButton(button)
     return
   end
 
+  if not ns.BlizzardSkinOptions.IsEnabled(frame == _G.ContainerFrameCombinedBags and "ContainerFrameCombinedBags" or "ContainerFrame6") then return end
+
   if InCombatLockdown() then
     pendingItemButtons[button] = true
     return
@@ -212,6 +216,8 @@ local function ApplyBagFrameSkin(frame, usesSharedControls)
     return
   end
 
+  if not ns.BlizzardSkinOptions.IsEnabled(frame == _G.ContainerFrameCombinedBags and "ContainerFrameCombinedBags" or "ContainerFrame6") then return end
+
   if InCombatLockdown() then
     Bags.themeRefreshPending = true
     return
@@ -249,6 +255,7 @@ local function RefreshBagScale()
 end
 
 local function SetupBagSkins()
+  if not ns.BlizzardSkinOptions.IsEnabled("ContainerFrameCombinedBags") and not ns.BlizzardSkinOptions.IsEnabled("ContainerFrame6") then return end
   local frame = _G.ContainerFrameCombinedBags
   local reagentFrame = _G.ContainerFrame6
   local itemButtonMixin = _G.ContainerFrameItemButtonMixin
@@ -289,6 +296,7 @@ local function RefreshCurrentItemThemes(frame)
 end
 
 function Bags:RefreshTheme()
+  if not ns.BlizzardSkinOptions.IsEnabled("ContainerFrameCombinedBags") and not ns.BlizzardSkinOptions.IsEnabled("ContainerFrame6") then return end
   if InCombatLockdown() then
     self.themeRefreshPending = true
     return
@@ -317,6 +325,10 @@ driver:RegisterEvent("ADDON_LOADED")
 driver:RegisterEvent("PLAYER_REGEN_ENABLED")
 driver:SetScript("OnEvent", function(self, event, arg1)
   if event == "PLAYER_LOGIN" then
+    if not ns.BlizzardSkinOptions.IsEnabled("ContainerFrameCombinedBags") and not ns.BlizzardSkinOptions.IsEnabled("ContainerFrame6") then
+      self:UnregisterAllEvents()
+      return
+    end
     SetupBagSkins()
     self:UnregisterEvent("PLAYER_LOGIN")
     return

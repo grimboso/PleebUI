@@ -1,6 +1,17 @@
 <Ui xmlns="http://www.blizzard.com/wow/ui/">
+  <Script file="PUI_IconSelector.lua"/>
+  <Script file="PUI_Macros.lua"/>
+  <Script file="PUI_AddOnList.lua"/>
+  <Script file="PUI_TimeManager.lua"/>
+  <Script file="PUI_Stopwatch.lua"/>
   <Script file="PUI_CharacterSheet.lua"/>
   <Script file="PUI_Inspect.lua"/>
+  <Script file="PUI_Reputation.lua"/>
+  <Script file="PUI_ReputationDetail.lua"/>
+  <Script file="PUI_Currency.lua"/>
+  <Script file="PUI_CurrencyOptions.lua"/>
+  <Script file="PUI_CurrencyTransfer.lua"/>
+  <Script file="PUI_CurrencyTransferLog.lua"/>
   <Script file="PUI_GroupFinder.lua"/>
   <Script file="PUI_MythicPlus.lua"/>
   <Script file="PUI_Keystone.lua"/>
@@ -80,4 +91,19 @@
   <Script file="PUI_DressingRoom.lua"/>
   <Script file="PUI_SideDressingRoom.lua"/>
   <Script file="PUI_Transmog.lua"/>
+  <Script file="PUI_DelvesCompanion.lua"/>
+  <Script file="PUI_DelvesAbilities.lua"/>
+  <Script file="PUI_DelvesDifficulty.lua"/>
+  <Script file="PUI_PlayerChoice.lua"/>
+  <Script file="PUI_DelvesToast.lua"/>
+  <Script file="PUI_NotificationTemplates.lua"/>
+  <Script file="PUI_LootNotifications.lua"/>
+  <Script file="PUI_MoneyNotifications.lua"/>
+  <Script file="PUI_HonorNotifications.lua"/>
+  <Script file="PUI_LootUpgradeNotification.lua"/>
+  <Script file="PUI_AchievementNotifications.lua"/>
+  <Script file="PUI_CollectionNotifications.lua"/>
+  <Script file="PUI_ProfessionNotifications.lua"/>
+  <Script file="PUI_DungeonNotifications.lua"/>
+  <Script file="PUI_QuestNotifications.lua"/>
 </Ui>

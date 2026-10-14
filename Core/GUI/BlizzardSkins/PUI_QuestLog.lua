@@ -2,11 +2,11 @@ local _, ns = ...
 local Skins = ns.BlizzardSkins
 
 local layout = {
-  Panel = { "QuestsFrame.ScrollFrame", "QuestsFrame.CampaignOverview", "DetailsFrame", "MapLegend.ScrollFrame",
+  Panel = { "QuestsFrame.ScrollFrame", "QuestsFrame.CampaignOverview", "MapLegend.ScrollFrame",
     "EventsFrame.ScrollBox" },
-  StripRegions = { "DetailsFrame.BackFrame", "DetailsFrame.RewardsFrameContainer.RewardsFrame", "EventsFrame" },
+  StripRegions = { "DetailsFrame.BackFrame", "EventsFrame" },
   Hide = { "Background", "VerticalSeparator", "QuestsFrame.ScrollFrame.Edge", "QuestsFrame.ScrollFrame.Background",
-    "QuestsFrame.ScrollFrame.Contents.Separator", "DetailsFrame.SealMaterialBG", "MapLegend.BorderFrame", "EventsFrame.BorderFrame",
+    "QuestsFrame.ScrollFrame.Contents.Separator", "MapLegend.BorderFrame", "EventsFrame.BorderFrame",
     "QuestSessionManagement.BG" },
   Button = { "DetailsFrame.AbandonButton", "DetailsFrame.ShareButton", "DetailsFrame.TrackButton", "DetailsFrame.BackFrame.BackButton" },
   EditBox = { "QuestsFrame.ScrollFrame.SearchBox" },
@@ -71,17 +71,16 @@ local function RefreshQuestRows()
     QuestScrollFrame.campaignHeaderMinimalFramePool, QuestScrollFrame.covenantCallingsHeaderFramePool }) do
     for header in pool:EnumerateActive() do SkinQuestHeader(header) end
   end
-  for row in QuestScrollFrame.titleFramePool:EnumerateActive() do
-    for _, region in ipairs({ row:GetRegions() }) do
-      if region:IsObjectType("FontString") then ns.Theme.ApplyFont(region, "body") end
-    end
-  end
 end
 
 local function RefreshQuestDetails()
   if not Skins.CanStyle() then return end
-  Skins.Texts(QuestMapFrame.DetailsFrame.ScrollFrame.Contents)
-  Skins.Texts(QuestMapFrame.DetailsFrame.RewardsFrameContainer.RewardsFrame)
+  local details = QuestMapFrame.DetailsFrame
+  if not details:IsShown() or not QuestInfoFrame.questLog then return end
+  details.Bg:SetAtlas(QuestTextContrast.GetDefaultDetailsBackgroundAtlas())
+  details:AdjustBackgroundTexture(details.Bg)
+  QuestInfo_Display(QUEST_TEMPLATE_MAP_DETAILS, details.ScrollFrame.Contents)
+  QuestInfo_Display(QUEST_TEMPLATE_MAP_REWARDS, details.RewardsFrameContainer.RewardsFrame, nil, nil, true)
 end
 
 local function RefreshQuestLog(frame)
@@ -99,7 +98,11 @@ local function RefreshQuestLog(frame)
   RefreshQuestRows()
   RefreshQuestDetails()
   Skins.Hook(_G, "QuestLogQuests_Update", RefreshQuestRows)
-  Skins.Hook(_G, "QuestMapFrame_ShowQuestDetails", RefreshQuestDetails)
+  if not frame.__puiQuestAccessibilityRegistered then
+    frame.__puiQuestAccessibilityRegistered = true
+    CVarCallbackRegistry:RegisterCallback("questTextContrast", RefreshQuestDetails, frame)
+    EventRegistry:RegisterCallback("TextSizeManager.OnTextScaleUpdated", RefreshQuestDetails, frame)
+  end
 end
 
 Skins.Register("Blizzard_UIPanels_Game", "QuestMapFrame", RefreshQuestLog)
