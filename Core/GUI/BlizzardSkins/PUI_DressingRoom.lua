@@ -15,7 +15,6 @@ local function InstallSetRow(row)
 end
 
 local function RefreshDetails(panel)
-  if not Skins.CanStyle() then return end
   for slot in panel.slotPool:EnumerateActive() do
     if not details[slot] then
       details[slot] = true
