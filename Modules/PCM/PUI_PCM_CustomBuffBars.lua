@@ -2160,7 +2160,7 @@ function _customBarsAuraDriver:CreateSlot(unit, filter, candidate, f, cfg, appli
     end
 
     AuraWidget.ConfigureApplicationThresholdSource(
-      sub, sub.auraSlot, candidate.spellIDs, candidate.cooldownID
+      sub, sub.auraSlot, candidate.spellIDs
     )
     self:SetSlotAttached(sub, true)
 
@@ -2196,7 +2196,7 @@ function _customBarsAuraDriver:CreateSlot(unit, filter, candidate, f, cfg, appli
   })
 
   AuraWidget.ConfigureApplicationThresholdSource(
-    sub, sub.auraSlot, candidate.spellIDs, candidate.cooldownID
+    sub, sub.auraSlot, candidate.spellIDs
   )
   self:SetSlotAttached(sub, true)
   return sub
