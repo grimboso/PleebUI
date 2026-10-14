@@ -2329,8 +2329,7 @@ do
   local function PRD_NormalizePrimaryResourceSettings(
     settings,
     legacyText,
-    legacyAppearanceText,
-    legacyTicks
+    legacyAppearanceText
   )
     settings.text = settings.text or PRD_CopyResourceSetting(legacyText) or {}
 
@@ -2348,18 +2347,59 @@ do
     if settings.text.useGlobalFont == nil then settings.text.useGlobalFont = true end
     PRD_NormalizeNativeTextConfig(settings.text, "CUR")
 
-    settings.ticks = settings.ticks or PRD_CopyResourceSetting(legacyTicks) or {}
+    settings.ticks = settings.ticks or {}
     if settings.ticks.enabled == nil then settings.ticks.enabled = false end
     if settings.ticks.maxValue == nil then settings.ticks.maxValue = 0 end
     if settings.ticks.automaticMax == nil then
-      settings.ticks.automaticMax = not (
-        type(legacyTicks) == "table"
-        and (tonumber(legacyTicks.maxValue) or 0) > 0
-      )
+      settings.ticks.automaticMax = (tonumber(settings.ticks.maxValue) or 0) <= 0
     end
     if type(settings.ticks.entries) ~= "table" then settings.ticks.entries = {} end
 
     return settings
+  end
+
+  local function PRD_ResourceSettingsEqual(first, second)
+    if type(first) ~= type(second) then return false end
+    if type(first) ~= "table" then return first == second end
+
+    for key, value in pairs(first) do
+      if not PRD_ResourceSettingsEqual(value, second[key]) then return false end
+    end
+    for key in pairs(second) do
+      if first[key] == nil then return false end
+    end
+    return true
+  end
+
+  local function PRD_MigratePrimaryTickBindings(primary)
+    if primary.__puiTicksResourceBound == true then return end
+
+    -- The previous migration copied profile-wide ticks to all ten resources,
+    -- losing their original owner. Keep the values, but require an explicit enable.
+    local first = primary.resourceSettings[PRIMARY_RESOURCE_KEYS[1]]
+    local ticks = first and first.ticks
+    local copiedToEveryResource = type(ticks) == "table"
+      and ticks.enabled == true
+      and type(ticks.entries) == "table"
+      and #ticks.entries > 0
+
+    if copiedToEveryResource then
+      for index = 2, #PRIMARY_RESOURCE_KEYS do
+        local settings = primary.resourceSettings[PRIMARY_RESOURCE_KEYS[index]]
+        if not settings or not PRD_ResourceSettingsEqual(ticks, settings.ticks) then
+          copiedToEveryResource = false
+          break
+        end
+      end
+    end
+
+    if copiedToEveryResource then
+      for index = 1, #PRIMARY_RESOURCE_KEYS do
+        primary.resourceSettings[PRIMARY_RESOURCE_KEYS[index]].ticks.enabled = false
+      end
+    end
+
+    primary.__puiTicksResourceBound = true
   end
 
   local function PRD_BuildNativeTextGroup(text, role, appearanceText)
@@ -2528,7 +2568,7 @@ do
     if db.primary.__puiResourceSettingsMigrated ~= true then
       local legacyText = db.text.primary
       local legacyAppearanceText = db.primary.text
-      local legacyTicks = db.primary.ticks
+      db.primary.unassignedTicks = db.primary.unassignedTicks or db.primary.ticks
 
       for index = 1, #PRIMARY_RESOURCE_KEYS do
         local resourceKey = PRIMARY_RESOURCE_KEYS[index]
@@ -2541,8 +2581,7 @@ do
         PRD_NormalizePrimaryResourceSettings(
           settings,
           legacyText,
-          legacyAppearanceText,
-          legacyTicks
+          legacyAppearanceText
         )
       end
 
@@ -2551,6 +2590,8 @@ do
       db.primary.text = nil
       db.primary.ticks = nil
     end
+
+    PRD_MigratePrimaryTickBindings(db.primary)
 
     for _, settings in pairs(db.primary.resourceSettings) do
       if type(settings) == "table" then
@@ -3407,11 +3448,21 @@ do
       enabled = {
         type = "toggle",
         name = "Enable ticks",
+        desc = "Applies only to the current resource. Saved tick markers are kept when disabled.",
         order = 1,
         get = function()
           return tickConfig.enabled == true
         end,
         set = function(_, value)
+          local primary = owner.db.profile.primary
+          if value and primary.unassignedTicks and #entries == 0 then
+            for key, savedValue in pairs(primary.unassignedTicks) do
+              tickConfig[key] = PRD_CopyResourceSetting(savedValue)
+            end
+            PRD_NormalizePrimaryResourceSettings({ ticks = tickConfig })
+            entries = tickConfig.entries
+            primary.unassignedTicks = nil
+          end
           tickConfig.enabled = value and true or false
           Addon:ApplyOptionsChange("PRD", { primaryTicks = true })
           RefreshTickOptions()
