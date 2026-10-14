@@ -21,7 +21,6 @@ local layout = {
 }
 
 local function LayoutCommunities(frame)
-  if not Skins.CanStyle() then return end
   local minimized = frame.MaximizeMinimizeFrame:IsMinimized()
   if issecretvalue(minimized) then return end
   local chat = frame.Chat
@@ -78,7 +77,7 @@ local function SkinCommunityRow(row)
   Skins.Font(row.Name)
   for _, method in ipairs({ "SetAddCommunity", "SetFindCommunity", "SetGuildFinder" }) do
     Skins.Hook(row, method, function(entry)
-      if Skins.CanStyle() then SkinCommunityRow(entry) end
+      SkinCommunityRow(entry)
     end)
   end
 end
