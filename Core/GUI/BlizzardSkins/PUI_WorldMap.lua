@@ -1,59 +1,81 @@
 local _, ns = ...
 local Skins = ns.BlizzardSkins
-local mapOverlays = setmetatable({}, { __mode = "k" })
+local navigationButtons = setmetatable({}, { __mode = "k" })
+local positioningNavigationButton
+
+local function PositionNavigationButton(button, point, relativeTo, relativePoint, x, y)
+  if positioningNavigationButton == button then return end
+  positioningNavigationButton = button
+  button:SetPoint(point, relativeTo, relativePoint, 1, y)
+  positioningNavigationButton = nil
+end
+
+local function SkinNavigationButton(button, index)
+  if navigationButtons[button] then return end
+  navigationButtons[button] = true
+  Skins.Button(button, true)
+  if button.MenuArrowButton then
+    Skins.Arrow(button.MenuArrowButton, "v")
+  end
+  -- Native layout reads xoffset; adjust the rendered anchor without assigning that field.
+  if index > 1 then
+    PositionNavigationButton(button, button:GetPoint())
+    hooksecurefunc(button, "SetPoint", PositionNavigationButton)
+  end
+end
+
+local function SkinMapOverlay(frame, templateName)
+  local overlay = frame.overlayFrames[#frame.overlayFrames]
+  if templateName == "WorldMapFloorNavigationFrameTemplate" then
+    Skins.Dropdown(overlay)
+  elseif templateName == "WorldMapTrackingOptionsButtonTemplate" then
+    Skins.IconButton(overlay, overlay.Icon)
+  elseif templateName == "WorldMapTrackingPinButtonTemplate" then
+    Skins.IconButton(overlay, overlay.Icon)
+  end
+end
 
 local function InstallMap(frame)
-  Skins.Shell(frame.BorderFrame, frame)
-  Skins.Navigation(frame.NavBar)
-  Skins.Arrow(frame.BorderFrame.MaximizeMinimizeFrame.MaximizeButton, "+")
-  Skins.Arrow(frame.BorderFrame.MaximizeMinimizeFrame.MinimizeButton, "-")
-  if frame.SidePanelToggle then
-    Skins.StripRegions(frame.SidePanelToggle.OpenButton)
-    Skins.StripRegions(frame.SidePanelToggle.CloseButton)
-    Skins.Arrow(frame.SidePanelToggle.OpenButton, "<")
-    Skins.Arrow(frame.SidePanelToggle.CloseButton, ">")
+  for _, region in ipairs({ frame:GetRegions() }) do
+    if region:IsObjectType("Texture") then Skins.Hide(region) end
   end
-  Skins.Apply(frame, {
-    Panel = { "ScrollContainer" },
-  })
-end
+  Skins.Surface(frame)
+  Skins.Panel(frame.ScrollContainer)
 
-local function RefreshMapArtwork(frame)
-  Skins.Chrome(frame.BorderFrame)
-  Skins.Chrome(frame.BorderFrame.Inset)
-  Skins.Navigation(frame.NavBar)
-
-  local maximized = frame:IsMaximized()
-  if not issecretvalue(maximized) then
-    local navBar = frame.NavBar
-    navBar:ClearAllPoints()
-    navBar:SetPoint("TOPLEFT", frame.TitleCanvasSpacerFrame, "TOPLEFT", maximized and 8 or 64, -33)
-    navBar:SetPoint("BOTTOMRIGHT", frame.TitleCanvasSpacerFrame, "BOTTOMRIGHT", -4, 1)
+  local navigation = frame.NavBar
+  Skins.Chrome(navigation)
+  Skins.Hide(navigation.overlay)
+  navigation:SetPoint("TOPLEFT", 1, -40)
+  for index, button in ipairs(navigation.navList) do
+    SkinNavigationButton(button, index)
   end
-
-  for _, overlay in ipairs(frame.overlayFrames) do
-    if not mapOverlays[overlay] and overlay:IsObjectType("DropdownButton") then
-      mapOverlays[overlay] = true
-      if overlay.Icon then
-        Skins.IconButton(overlay, overlay.Icon)
-      else
-        Skins.Dropdown(overlay)
-      end
+  Skins.Button(navigation.homeButton)
+  Skins.Arrow(navigation.overflowButton, "<")
+  hooksecurefunc("NavBar_AddButton", function(bar)
+    if bar == navigation then
+      local index = #bar.navList
+      SkinNavigationButton(bar.navList[index], index)
     end
-  end
+  end)
+
+  local border = frame.BorderFrame
+  Skins.Chrome(border)
+  border:SetFrameStrata(frame:GetFrameStrata())
+  ns.Theme.WidgetSkins.CloseButton(border.CloseButton)
+  Skins.Arrow(border.MaximizeMinimizeFrame.MaximizeButton, "+")
+  Skins.Arrow(border.MaximizeMinimizeFrame.MinimizeButton, "-")
+  Skins.Arrow(frame.SidePanelToggle.CloseButton, "<")
+  Skins.Arrow(frame.SidePanelToggle.OpenButton, ">")
+
+  local dropdown, tracking, pin = unpack(frame.overlayFrames)
+  Skins.Dropdown(dropdown)
+  Skins.IconButton(tracking, tracking.Icon)
+  Skins.IconButton(pin, pin.Icon)
+  hooksecurefunc(frame, "AddOverlayFrame", SkinMapOverlay)
 end
 
--- SetDisplayState can run inside OnShow before Blizzard's protected reading emote.
--- Repaint mode changes after the native button action has finished instead.
 Skins.Register("Blizzard_WorldMap", "WorldMapFrame", {
-  install = function(frame)
-    InstallMap(frame)
-    local function RefreshAfterClick()
-      RefreshMapArtwork(frame)
-    end
-    local buttons = frame.BorderFrame.MaximizeMinimizeFrame
-    buttons.MaximizeButton:HookScript("OnClick", RefreshAfterClick)
-    buttons.MinimizeButton:HookScript("OnClick", RefreshAfterClick)
-  end,
-  onShow = RefreshMapArtwork,
+  install = InstallMap,
+  installOnLoad = true,
+  manageControls = false,
 })
