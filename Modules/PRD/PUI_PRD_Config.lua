@@ -11,7 +11,6 @@ local LSM = ns.LSM
 
 local P = ns.Pleebug:DropIn({}, { name = "PRD_Config" })
 local PLAYER_CLASS_NAME, PLAYER_CLASS = UnitClass("player")
-local USE_NATIVE_APPLICATION_THRESHOLDS = select(4, GetBuildInfo()) >= 120105
 
 local PRDPreview = {}
 ns.PRDPreview = PRDPreview
@@ -4594,22 +4593,6 @@ do
             args = BuildStackColorThresholdArgs(),
           },
         },
-      },
-      stackRecolorCdmNotice = {
-        type = "description",
-        name = "Stack recoloring requires this effect to be tracked in Blizzard's Cooldown Manager.",
-        order = 45.5,
-        hidden = function()
-          if USE_NATIVE_APPLICATION_THRESHOLDS or not stackColorThresholds then
-            return true
-          end
-          for index = 1, #stackColorThresholds do
-            if stackColorThresholds[index].enabled == true then
-              return false
-            end
-          end
-          return true
-        end,
       },
       appearance = {
         type = "group",
