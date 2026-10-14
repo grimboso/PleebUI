@@ -18,6 +18,7 @@ Skins.Register("Blizzard_AuctionHouseUI", "AuctionHouseFrame.AuctionsFrame", {
     Skins.Button(frame.BidFrame.BidButton, true)
     Templates.MoneyInputs(frame.BidFrame.BidAmount)
     Skins.Chrome(frame.SummaryList)
+    Skins.Surface(frame.SummaryList.ScrollBox, true, true)
     Skins.ScrollBar(frame.SummaryList.ScrollBar)
     for _, list in ipairs({ frame.AllAuctionsList, frame.BidsList, frame.ItemList, frame.CommoditiesList }) do Templates.List(list) end
   end,
