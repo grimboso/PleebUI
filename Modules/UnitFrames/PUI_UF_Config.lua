@@ -15,7 +15,6 @@ local UF       = ns.UnitFrames
 local CastBar  = ns.Modules.CastBar
 local FrameUtil = ns.FrameUtil
 local _, PLAYER_CLASS = UnitClass("player")
-local USE_SECRET_ROLE_ICONS = select(4, _G.GetBuildInfo()) >= 120105
 local UFConfigDebug = ns.UFConfigDebug or {}
 ns.UFConfigDebug = UFConfigDebug
 
@@ -4812,36 +4811,10 @@ local function UFCB_BuildPartyGeneralArgs(groupKind, opts)
     INDEX = "Index",
     NAME = "Name",
   }
-  if not USE_SECRET_ROLE_ICONS then
-    partyGroupByValues.ROLE = "Role"
-  end
-
-  local roleOrderValues = {
-    TANK = "Tank",
-    HEALER = "Healer",
-    DAMAGER = "DPS",
-  }
-
   local sortDirectionValues = {
     ASC = "Ascending",
     DESC = "Descending",
   }
-
-  local function NormalizeRoleOrder(db)
-    if not db then
-      return
-    end
-
-    if db.ROLE1 ~= "TANK" and db.ROLE1 ~= "HEALER" and db.ROLE1 ~= "DAMAGER" then
-      db.ROLE1 = "TANK"
-    end
-    if db.ROLE2 ~= "TANK" and db.ROLE2 ~= "HEALER" and db.ROLE2 ~= "DAMAGER" then
-      db.ROLE2 = "HEALER"
-    end
-    if db.ROLE3 ~= "TANK" and db.ROLE3 ~= "HEALER" and db.ROLE3 ~= "DAMAGER" then
-      db.ROLE3 = "DAMAGER"
-    end
-  end
 
   local function ApplyGeneralDefaults(reloadAfterReset)
     local db = GetDB()
@@ -5316,26 +5289,7 @@ local function UFCB_BuildPartyGeneralArgs(groupKind, opts)
             end
 
             db.groupBy = v
-            if v == "ROLE" then
-              NormalizeRoleOrder(db)
-            end
           end)
-        end,
-      }),
-      sortOrder = BuildGroupedSelect("sortOrder", "Sort method", 2, sortOrderValues, {
-        flags = { layout = true },
-        hidden = USE_SECRET_ROLE_ICONS,
-        disabled = function()
-          local db = GetDB()
-          return not db or db.groupBy ~= "ROLE"
-        end,
-        get = function()
-          local db = GetDB()
-          local value = db and db.sortOrder or nil
-          if value ~= "NAME" then
-            value = "INDEX"
-          end
-          return value
         end,
       }),
       sortDir = BuildGroupedSelect("sortDir", "Sort direction", 3, sortDirectionValues, {
@@ -5349,40 +5303,6 @@ local function UFCB_BuildPartyGeneralArgs(groupKind, opts)
           return value
         end,
       }),
-      roleSetup = {
-        type = "group",
-        name = "Role order",
-        order = 4,
-        inline = true,
-        hidden = USE_SECRET_ROLE_ICONS,
-        disabled = function()
-          local db = GetDB()
-          return not db or db.groupBy ~= "ROLE"
-        end,
-        args = {
-          ROLE1 = BuildGroupedSelect("ROLE1", "First", 1, roleOrderValues, {
-            flags = { layout = true },
-            get = function()
-              local db = GetDB()
-              return db and db.ROLE1 or "TANK"
-            end,
-          }),
-          ROLE2 = BuildGroupedSelect("ROLE2", "Second", 2, roleOrderValues, {
-            flags = { layout = true },
-            get = function()
-              local db = GetDB()
-              return db and db.ROLE2 or "HEALER"
-            end,
-          }),
-          ROLE3 = BuildGroupedSelect("ROLE3", "Third", 3, roleOrderValues, {
-            flags = { layout = true },
-            get = function()
-              local db = GetDB()
-              return db and db.ROLE3 or "DAMAGER"
-            end,
-          }),
-        },
-      },
     })
   else
     args.frameLayout.args.growthDirection = BuildGroupedSelect("growthDirection", "Growth direction", 4, {
