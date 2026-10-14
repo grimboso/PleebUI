@@ -4,7 +4,6 @@ local Theme = ns.Theme
 local abilities = setmetatable({}, { __mode = "k" })
 
 local function InstallAbilities(frame)
-  if not Skins.CanStyle() then return end
   for _, button in ipairs(frame.buttons) do
     if not abilities[button] then
       abilities[button] = true
