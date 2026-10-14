@@ -8,7 +8,6 @@ local function RefreshPreference()
 end
 
 local function PaintCategory(button)
-  if not Skins.CanStyle() then return end
   Skins.Hide(button.NormalTexture)
   button.SelectedTexture:SetDrawLayer("BACKGROUND", 1)
   button.SelectedTexture:SetAllPoints(button)
