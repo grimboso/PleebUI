@@ -1,13 +1,18 @@
 local _, ns = ...
 local Skins = ns.BlizzardSkins
+local styledQuestRows = setmetatable({}, { __mode = "k" })
+local styledSessionDialogs = setmetatable({}, { __mode = "k" })
+local eventBackgrounds = setmetatable({}, { __mode = "k" })
+local sessionAtlases = {
+  [Enum.QuestSessionCommand.Start] = "QuestSharing-DialogIcon",
+  [Enum.QuestSessionCommand.Stop] = "QuestSharing-Stop-DialogIcon",
+}
 
 local layout = {
-  Panel = { "QuestsFrame.ScrollFrame", "QuestsFrame.CampaignOverview", "MapLegend.ScrollFrame",
-    "EventsFrame.ScrollBox" },
+  Panel = { "QuestsFrame.ScrollFrame", "QuestsFrame.CampaignOverview", "MapLegend.ScrollFrame", "EventsFrame.ScrollBox" },
   StripRegions = { "DetailsFrame.BackFrame", "EventsFrame" },
   Hide = { "Background", "VerticalSeparator", "QuestsFrame.ScrollFrame.Edge", "QuestsFrame.ScrollFrame.Background",
-    "QuestsFrame.ScrollFrame.Contents.Separator", "MapLegend.BorderFrame", "EventsFrame.BorderFrame",
-    "QuestSessionManagement.BG" },
+    "QuestsFrame.ScrollFrame.Contents.Separator", "MapLegend.BorderFrame", "EventsFrame.BorderFrame", "QuestSessionManagement.BG" },
   Button = { "DetailsFrame.AbandonButton", "DetailsFrame.ShareButton", "DetailsFrame.TrackButton", "DetailsFrame.BackFrame.BackButton" },
   EditBox = { "QuestsFrame.ScrollFrame.SearchBox" },
   ScrollBar = { "QuestsFrame.ScrollFrame.ScrollBar", "QuestsFrame.CampaignOverview.ScrollFrame.ScrollBar",
@@ -15,91 +20,152 @@ local layout = {
   Font = { "MapLegend.TitleText", "EventsFrame.TitleText", "QuestSessionManagement.CommandText", "QuestSessionManagement.HelpText" },
 }
 
-local function RefreshHeaderCollapse(button)
-  local collapsed = button.collapsed
-  if issecretvalue(collapsed) then return end
-  ns.Theme.ApplyExpandCollapseTexture(button.Icon, not collapsed)
-  local highlight = button:GetHighlightTexture()
-  highlight:SetColorTexture(1, 1, 1, 0.12)
-  highlight:SetAlpha(1)
-  highlight:SetAllPoints(button)
+local function HideQuestPortrait(frame)
+  local portrait = QuestModelScene
+  if frame:GetParent() == portrait:GetParent() then
+    portrait:SetParent(nil)
+    portrait:Hide()
+  end
 end
 
-local function RefreshHeaderTitle(row)
-  Skins.Font(row:GetTitleRegion(), "header")
-end
-
-local function SkinQuestHeaderSurface(row, bottomInset)
-  local host = Skins.Surface(row, false, true)
-  -- Campaign headers resize from their children; the backdrop must not affect layout.
-  host.ignoreInLayout = true
-  host:ClearAllPoints()
-  host:SetPoint("TOPLEFT", row, "TOPLEFT", 0, 0)
-  host:SetPoint("BOTTOMLEFT", row, "BOTTOMLEFT", 0, bottomInset)
-  host:SetWidth(QuestScrollFrame.Contents:GetWidth() - 4)
-  return host
-end
-
-local function SkinQuestHeader(row)
-  Skins.Hide(row.Background)
-  Skins.Hide(row.TopFiligree)
-  Skins.Hide(row.Divider)
-  if row:IsObjectType("Button") and row.CollapseButton then
-    Skins.Button(row, true)
-    Skins.Hook(row, "CheckHighlightTitle", RefreshHeaderTitle)
+local function SkinStoryHeader(header)
+  Skins.Hide(header.Background)
+  Skins.Hide(header.TopFiligree)
+  Skins.Hide(header.Divider)
+  header.HighlightTexture:SetAllPoints(header.Background)
+  header.HighlightTexture:SetAlpha(0)
+  local collapse = header.CollapseButton
+  if collapse then
+    Skins.Surface(collapse, true)
+    collapse:GetHighlightTexture():SetAlpha(0)
   end
-  local host = SkinQuestHeaderSurface(row, row.LoreButton and 10 or 0)
-  if row.LoreButton then
-    Skins.Selection(row.SelectedHighlight, 0.07)
-    row.SelectedHighlight:SetAllPoints(host)
-    Skins.Selection(row.HighlightTexture, 0.05)
-    row.HighlightTexture:SetAllPoints(host)
-  end
-  if row.CollapseButton then
-    Skins.Button(row.CollapseButton)
-    RefreshHeaderCollapse(row.CollapseButton)
-    Skins.Hook(row.CollapseButton, "UpdateCollapsedState", RefreshHeaderCollapse)
-  end
-  Skins.Texts(row)
-  if row.CheckHighlightTitle then RefreshHeaderTitle(row) end
 end
 
 local function RefreshQuestRows()
-  for _, pool in ipairs({ QuestScrollFrame.headerFramePool, QuestScrollFrame.campaignHeaderFramePool,
-    QuestScrollFrame.campaignHeaderMinimalFramePool, QuestScrollFrame.covenantCallingsHeaderFramePool }) do
-    for header in pool:EnumerateActive() do SkinQuestHeader(header) end
+  for row in QuestScrollFrame.headerFramePool:EnumerateActive() do
+    if row.ButtonText and not styledQuestRows[row] then
+      Skins.StripRegions(row)
+      Skins.Selection(row:GetHighlightTexture(), 0.25)
+      Skins.Font(row.ButtonText, "header")
+      styledQuestRows[row] = true
+    end
+  end
+  for row in QuestScrollFrame.titleFramePool:EnumerateActive() do
+    if not styledQuestRows[row] then
+      if row.Checkbox then Skins.CheckBox(row.Checkbox) end
+      styledQuestRows[row] = true
+    end
+  end
+  for row in QuestScrollFrame.campaignHeaderFramePool:EnumerateActive() do
+    if row.Text and not styledQuestRows[row] then
+      Skins.Font(row.Text, "header")
+      Skins.Font(row.Progress)
+      styledQuestRows[row] = true
+    end
+  end
+  for row in QuestScrollFrame.campaignHeaderMinimalFramePool:EnumerateActive() do
+    if row.CollapseButton and not styledQuestRows[row] then
+      Skins.StripRegions(row)
+      Skins.Surface(row)
+      Skins.Selection(row.Highlight, 0.75)
+      styledQuestRows[row] = true
+    end
   end
 end
 
-local function RefreshQuestDetails()
-  local details = QuestMapFrame.DetailsFrame
-  if not details:IsShown() or not QuestInfoFrame.questLog then return end
-  details.Bg:SetAtlas(QuestTextContrast.GetDefaultDetailsBackgroundAtlas())
-  details:AdjustBackgroundTexture(details.Bg)
-  QuestInfo_Display(QUEST_TEMPLATE_MAP_DETAILS, details.ScrollFrame.Contents)
-  QuestInfo_Display(QUEST_TEMPLATE_MAP_REWARDS, details.RewardsFrameContainer.RewardsFrame, nil, nil, true)
+local function RefreshSessionCommand(frame, command)
+  local button = frame.ExecuteSessionCommand
+  button:SetNormalTexture(nil)
+  button:SetPushedTexture(nil)
+  button:SetDisabledTexture(nil)
+  local atlas = sessionAtlases[command]
+  if atlas then button.normalIcon:SetAtlas(atlas) end
 end
 
-local function RefreshQuestLog(frame)
+local function SkinSessionDialog(_, dialog)
+  if styledSessionDialogs[dialog] then return end
+  styledSessionDialogs[dialog] = true
+  Skins.StripRegions(dialog)
+  Skins.Button(dialog.ButtonContainer.Confirm)
+  Skins.Button(dialog.ButtonContainer.Decline)
+  if dialog.MinimizeButton then
+    Skins.Arrow(dialog.MinimizeButton, "-")
+  end
+end
+
+local function PositionQuestTab(tab, point, relativeTo, relativePoint, x, y)
+  if x ~= 1 or y ~= 0 then
+    tab:ClearAllPoints()
+    tab:SetPoint("TOPLEFT", QuestMapFrame, "TOPRIGHT", 1, 0)
+  end
+end
+
+local function PositionQuestTabIcon(icon, point, relativeTo)
+  if relativeTo and point ~= "CENTER" then icon:SetPoint("CENTER") end
+end
+
+local function RefreshEventBackground(texture)
+  local colors = ns.Theme.GetColors()
+  texture:SetColorTexture(colors.background[1], colors.background[2], colors.background[3], 0.5)
+  local row = texture:GetParent()
+  if row and row.Highlight then Skins.Selection(row.Highlight, 0.2) end
+end
+
+local function SkinEventRow(_, row, elementData)
+  local data = elementData.data
+  if not data then return end
+  if data.entryType == 1 or data.entryType == 3 then
+    Skins.Surface(row)
+    row.Label:SetTextColor(1, 1, 1)
+  elseif data.entryType == 2 then
+    if not eventBackgrounds[row.Background] then
+      eventBackgrounds[row.Background] = true
+      hooksecurefunc(row.Background, "SetAtlas", RefreshEventBackground)
+    end
+  elseif data.entryType == 4 and row.Highlight then
+    Skins.Selection(row.Highlight, 0.2)
+  end
+end
+
+local function InstallQuestLog(frame)
+  frame:SetScript("OnHide", HideQuestPortrait)
   Skins.Apply(frame, layout)
-  Skins.Dropdown(frame.QuestsFrame.ScrollFrame.SettingsDropdown)
-  for _, key in ipairs({ "QuestsTab", "EventsTab", "MapLegendTab" }) do
+  SkinStoryHeader(QuestScrollFrame.Contents.StoryHeader)
+
+  local session = frame.QuestSessionManagement
+  local command = session.ExecuteSessionCommand
+  Skins.Surface(command, true)
+  command.normalIcon = command:CreateTexture(nil, "ARTWORK")
+  command.normalIcon:SetAllPoints(command)
+  hooksecurefunc(session, "UpdateExecuteCommandAtlases", RefreshSessionCommand)
+  hooksecurefunc(QuestSessionManager, "NotifyDialogShow", SkinSessionDialog)
+  hooksecurefunc("QuestLogQuests_Update", RefreshQuestRows)
+
+  for index, key in ipairs({ "QuestsTab", "EventsTab", "MapLegendTab" }) do
     local tab = frame[key]
     Skins.Panel(tab)
-    Skins.Icon(tab.Icon)
+    tab:SetSize(30, 40)
+    if index == 1 then
+      tab:ClearAllPoints()
+      tab:SetPoint("TOPLEFT", frame, "TOPRIGHT", 11, 24)
+      hooksecurefunc(tab, "SetPoint", PositionQuestTab)
+    end
+    if tab.Icon then
+      tab.Icon:ClearAllPoints()
+      tab.Icon:SetPoint("CENTER")
+      hooksecurefunc(tab.Icon, "SetPoint", PositionQuestTabIcon)
+    end
     Skins.Selection(tab.SelectedTexture, 0.08)
     Skins.Selection(tab.HighlightTexture, 0.05)
     Skins.Hide(tab.TabGlow)
   end
-  SkinQuestHeader(QuestScrollFrame.Contents.StoryHeader)
-  RefreshQuestRows()
-  RefreshQuestDetails()
-  Skins.Hook(_G, "QuestLogQuests_Update", RefreshQuestRows)
-  if not frame.__puiQuestAccessibilityRegistered then
-    frame.__puiQuestAccessibilityRegistered = true
-    CVarCallbackRegistry:RegisterCallback("questTextContrast", RefreshQuestDetails, frame)
-    EventRegistry:RegisterCallback("TextSizeManager.OnTextScaleUpdated", RefreshQuestDetails, frame)
+  if frame.EventsFrame then
+    ScrollUtil.AddAcquiredFrameCallback(frame.EventsFrame.ScrollBox, SkinEventRow, frame.EventsFrame, true)
   end
 end
 
-Skins.Register("Blizzard_UIPanels_Game", "QuestMapFrame", RefreshQuestLog)
+Skins.Register("Blizzard_UIPanels_Game", "QuestMapFrame", {
+  install = InstallQuestLog,
+  installOnLoad = true,
+  manageControls = false,
+})
