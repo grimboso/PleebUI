@@ -343,11 +343,11 @@ local function SetPage(newPage)
     end)
   elseif page == 2 then
     AddHeading("What to track")
-    AddDescription("Cooldown tracks one spell cooldown. Charge cooldown also shows recharge progress and available charges. Aura stacks tracks stack count with optional duration. Duration tracks a buff, debuff, ground effect, totem or summon.")
-    AddButton("Cooldown", function() draft.kind = "cooldown" PreviewChanged(DefaultPreviewState()) SetPage(3) end)
+    AddDescription("Spell cooldown tracks when a spell is ready again. Charge cooldown also shows recharge progress and available charges. Aura stacks tracks stack count with optional duration. Effect duration tracks how long a buff, debuff, ground effect, totem or summon remains active.")
+    AddButton("Spell cooldown", function() draft.kind = "cooldown" PreviewChanged(DefaultPreviewState()) SetPage(3) end)
     AddButton("Charge cooldown", function() draft.kind = "charge" PreviewChanged(DefaultPreviewState()) SetPage(3) end)
     AddButton("Aura stacks", function() draft.kind = "stack" draft.maximum = 3 PreviewChanged(DefaultPreviewState()) SetPage(3) end)
-    AddButton("Duration", function() draft.kind = "duration" PreviewChanged(DefaultPreviewState()) SetPage(3) end)
+    AddButton("Effect duration", function() draft.kind = "duration" PreviewChanged(DefaultPreviewState()) SetPage(3) end)
   elseif page == 3 then
     AddHeading("Spell")
     if draft.kind == "cooldown" or draft.kind == "charge" then
@@ -472,20 +472,20 @@ local function SetPage(newPage)
     AddDescription("The preview rotates through each supported state every three seconds. Changing a state option immediately previews that state. Opacity at 0% fully hides that state. Combat-only visibility applies to the live tracker; the setup preview stays visible while you configure it.")
     AddCheckbox("Only show in combat", draft.combatOnly, function(value) draft.combatOnly = value end)
     if draft.kind == "cooldown" or draft.kind == "charge" then
-      AddCheckbox("Show while ready", draft.showReady, function(value) draft.showReady = value end, "READY")
-      AddSlider("Ready opacity", draft.readyAlpha, 0, 100, 1, function(value) draft.readyAlpha = value end, "READY")
-      AddCheckbox("Desaturate while ready", draft.desaturateReady, function(value) draft.desaturateReady = value end, "READY")
-      AddDropdown("Ready glow", GLOW_STYLES, GLOW_ORDER, draft.readyGlowStyle, function(value) draft.readyGlowStyle = value end, "READY")
+      AddCheckbox(draft.kind == "charge" and "Show at full charges" or "Show while ready", draft.showReady, function(value) draft.showReady = value end, "READY")
+      AddSlider(draft.kind == "charge" and "Full-charge opacity" or "Ready opacity", draft.readyAlpha, 0, 100, 1, function(value) draft.readyAlpha = value end, "READY")
+      AddCheckbox(draft.kind == "charge" and "Grayscale at full charges" or "Grayscale while ready", draft.desaturateReady, function(value) draft.desaturateReady = value end, "READY")
+      AddDropdown(draft.kind == "charge" and "Full-charge glow" or "Ready glow", GLOW_STYLES, GLOW_ORDER, draft.readyGlowStyle, function(value) draft.readyGlowStyle = value end, "READY")
 
       AddCheckbox(draft.kind == "charge" and "Show while recharging" or "Show while on cooldown", draft.showCooldown, function(value) draft.showCooldown = value end, draft.kind == "charge" and "RECHARGING" or "COOLDOWN")
       AddSlider(draft.kind == "charge" and "Recharging opacity" or "On cooldown opacity", draft.cooldownAlpha, 0, 100, 1, function(value) draft.cooldownAlpha = value end, draft.kind == "charge" and "RECHARGING" or "COOLDOWN")
-      AddCheckbox(draft.kind == "charge" and "Desaturate while recharging" or "Desaturate while on cooldown", draft.desaturateCooldown, function(value) draft.desaturateCooldown = value end, draft.kind == "charge" and "RECHARGING" or "COOLDOWN")
+      AddCheckbox(draft.kind == "charge" and "Grayscale while recharging" or "Grayscale on cooldown", draft.desaturateCooldown, function(value) draft.desaturateCooldown = value end, draft.kind == "charge" and "RECHARGING" or "COOLDOWN")
       AddDropdown(draft.kind == "charge" and "Recharging glow" or "On cooldown glow", GLOW_STYLES, GLOW_ORDER, draft.cooldownGlowStyle, function(value) draft.cooldownGlowStyle = value end, draft.kind == "charge" and "RECHARGING" or "COOLDOWN")
 
       if draft.presentation == "BUTTON" then
         AddDropdown("Timer display", {
-          AUTOMATIC = "Duration while active",
-          COOLDOWN = "Cooldown only",
+          AUTOMATIC = "Buff duration while active",
+          COOLDOWN = draft.kind == "charge" and "Recharge only" or "Spell cooldown only",
         }, { "AUTOMATIC", "COOLDOWN" }, draft.showActive and "AUTOMATIC" or "COOLDOWN", function(value)
           draft.showActive = value == "AUTOMATIC"
           if not draft.showActive then draft.customGlowEnabled = false end
@@ -496,7 +496,7 @@ local function SetPage(newPage)
           if not value then draft.customGlowEnabled = false end
         end, "ACTIVE")
       end
-      AddDescription("Choose the active buff and glow on the Active glow page.")
+      AddDescription("Buff duration tracks how long the buff remains active, then shows the spell cooldown or charge recharge. Choose the active buff and glow on the Active glow page.")
     else
       draft.showActive = true
       AddCheckbox("Show only while active", draft.showOnlyWhenActive, function(value) draft.showOnlyWhenActive = value end, "ACTIVE")
@@ -504,10 +504,10 @@ local function SetPage(newPage)
         AddCheckbox("Hide tracked aura in Buff Icon Viewer", draft.hideViewerIcon, function(value) draft.hideViewerIcon = value end)
       end
       AddSlider("Inactive opacity", draft.readyAlpha, 0, 100, 1, function(value) draft.readyAlpha = value end, "INACTIVE")
-      AddCheckbox("Desaturate while inactive", draft.desaturateReady, function(value) draft.desaturateReady = value end, "INACTIVE")
+      AddCheckbox("Grayscale while inactive", draft.desaturateReady, function(value) draft.desaturateReady = value end, "INACTIVE")
     end
     AddSlider("Active opacity", draft.activeAlpha, 0, 100, 1, function(value) draft.activeAlpha = value end, "ACTIVE")
-    AddCheckbox("Desaturate while active", draft.desaturateActive, function(value) draft.desaturateActive = value end, "ACTIVE")
+    AddCheckbox("Grayscale while active", draft.desaturateActive, function(value) draft.desaturateActive = value end, "ACTIVE")
   elseif page == 6 then
     AddHeading("Active glow")
     AddDescription("Cooldown and charge trackers can use the tracked spell's aura automatically or an optional different buff. Glow is separate and is off by default.")
