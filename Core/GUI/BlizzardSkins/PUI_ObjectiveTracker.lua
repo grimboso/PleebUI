@@ -21,7 +21,6 @@ local function RefreshTrackerHeader(header)
   local skin = headerSkins[header]
   -- The addon-owned glyph can follow native collapse changes during combat.
   if skin then skin.label:SetText(collapsed and "+" or "−") end
-  if not Skins.CanStyle() then return end
   local colors = Theme.GetColors()
   header.Background:SetTexture("")
   header.Text:SetTextColor(unpack(colors.accent))
@@ -60,7 +59,6 @@ local function SkinTrackerItem(button, icon)
 end
 
 local function SkinTrackerBlock(block)
-  if not Skins.CanStyle() then return end
   -- Both regular and bonus quests attach their item as the last right-edge frame.
   local item = block.rightEdgeFrame
   if item and item.template == "QuestObjectiveItemButtonTemplate" then
@@ -84,17 +82,14 @@ local function SkinTrackerBar(wrapper)
 end
 
 local function SkinTrackerProgressBar(module, key)
-  if not Skins.CanStyle() then return end
   SkinTrackerBar(module.usedProgressBars[key])
 end
 
 local function SkinTrackerTimerBar(module, key)
-  if not Skins.CanStyle() then return end
   SkinTrackerBar(module.usedTimerBars[key])
 end
 
 local function RefreshObjectiveTracker(frame)
-  if not Skins.CanStyle() then return end
   RefreshTrackerHeader(frame.Header)
   for _, module in pairs(modules) do
     RefreshTrackerHeader(module.Header)
