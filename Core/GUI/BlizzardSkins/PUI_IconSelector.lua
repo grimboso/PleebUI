@@ -3,7 +3,7 @@ local Skins, Theme = ns.BlizzardSkins, ns.Theme
 local buttons = setmetatable({}, { __mode = "k" })
 
 function Skins.IconSelectorButton(button)
-  if buttons[button] or button:IsForbidden() or not Skins.CanStyle() then return end
+  if buttons[button] or button:IsForbidden() then return end
   for _, region in ipairs({ button:GetRegions() }) do
     if region:IsObjectType("Texture") and region ~= button.Icon
       and region ~= button.SelectedTexture and region ~= button.Highlight then
@@ -28,7 +28,6 @@ function Skins.IconSelectorButton(button)
 end
 
 local function RefreshIconSelector(popup)
-  if not Skins.CanStyle() then return end
   -- ScrollBoxSelector creates its view on its own first OnShow, after the popup's OnShow.
   if popup.IconSelector.initialized then
     for button in popup.IconSelector:EnumerateButtons() do Skins.IconSelectorButton(button) end
@@ -64,7 +63,7 @@ local function InstallIconSelector(popup)
   Skins.Hook(popup.IconSelector, "RunSetup", function(_, button) Skins.IconSelectorButton(button) end)
   local description = box.SelectedIconArea.SelectedIconText.SelectedIconDescription
   Skins.Hook(description, "SetFontObject", function()
-    if Skins.CanStyle() then Theme.ApplyFont(description, "body") end
+    Theme.ApplyFont(description, "body")
   end)
   Skins.IconSelectorButton(box.SelectedIconArea.SelectedIconButton)
 end
