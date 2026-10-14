@@ -3,7 +3,6 @@ local Skins, Theme = ns.BlizzardSkins, ns.Theme
 local bars = setmetatable({}, { __mode = "k" })
 
 local function PaintBar(bar)
-  if not Skins.CanStyle() then return end
   local color = Theme.GetColors().accent
   bar:SetStatusBarColor(color[1] * 0.7, color[2] * 0.7, color[3] * 0.7, color[4])
 end
@@ -16,7 +15,6 @@ local function RefreshBarTheme()
 end
 
 local function RefreshHeader(row)
-  if not Skins.CanStyle() then return end
   local collapsed = row:IsCollapsed()
   if issecretvalue(collapsed) then return end
   Theme.ApplyExpandCollapseTexture(row.Right, not collapsed)
@@ -24,7 +22,6 @@ local function RefreshHeader(row)
 end
 
 local function RefreshToggle(toggle)
-  if not Skins.CanStyle() then return end
   local collapsed = toggle:GetHeader():IsCollapsed()
   if not issecretvalue(collapsed) then Theme.ApplyExpandCollapseButton(toggle, not collapsed) end
 end
