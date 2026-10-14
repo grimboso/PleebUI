@@ -3,13 +3,11 @@ local Skins = ns.BlizzardSkins
 local trainerRows = setmetatable({}, { __mode = "k" })
 
 local function RepaintTrainerRow(row)
-  if not Skins.CanStyle() then return end
   ns.Theme.ApplyFont(row.name, "body")
   ns.Theme.ApplyFont(row.subText, "body")
 end
 
 local function InstallTrainerRow(row)
-  if not Skins.CanStyle() then return end
   if not trainerRows[row] then
     trainerRows[row] = true
     Skins.IconButton(row, row.icon, true)
