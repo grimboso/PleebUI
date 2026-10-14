@@ -589,7 +589,7 @@ function Skins.ScrollRows(scrollBox, skin, repaint)
       end
     end
     state = function(box)
-      box:ForEachFrame(SkinRow)
+      if box:HasView() then box:ForEachFrame(SkinRow) end
     end
     scrollRows[scrollBox] = state
     Skins.Hook(scrollBox, "Update", state)
