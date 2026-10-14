@@ -349,7 +349,16 @@ function Schema.GetDisabledReason(user)
   local reason = node.disabled ~= nil and type(node.arg) == "table" and node.arg.puiDisabledReason or nil
   local info = {}
   for index, key in ipairs(user.path) do
-    node = node.args[key]
+    local pluginOption
+    if node.plugins then
+      for _, plugin in pairs(node.plugins) do
+        if plugin[key] then
+          pluginOption = plugin[key]
+          break
+        end
+      end
+    end
+    node = pluginOption or node.args[key]
     handler = node.handler or handler
     info[index] = key
     if node.disabled ~= nil then

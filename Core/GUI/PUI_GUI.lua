@@ -2,6 +2,7 @@ local ADDON_NAME, ns = ...
 
 local Addon = ns.Addon
 local AceGUI = LibStub("AceGUI-3.0")
+local OptionsTooltip = LibStub("AceConfigDialog-3.0").tooltip
 local PUI_OPTIONS_APP = "PleebUI"
 
 local GUI = {
@@ -2319,11 +2320,7 @@ local function _PUI_RefreshRootRegistryNav(frame)
         return
       end
 
-      local tooltip = _G.GameTooltip
-      if not tooltip then
-        return
-      end
-
+      local tooltip = OptionsTooltip
       local label = self.__puiNode and (self.__puiNode.label or self.__puiNode.name or self.__puiNode.key) or "PleebUI"
       local description = meta.pageDescription or meta.navDescription or meta.description or ""
       local help = meta.pageHelp or meta.helpText or meta.help or ""
@@ -2352,9 +2349,8 @@ local function _PUI_RefreshRootRegistryNav(frame)
     btn:SetScript("OnLeave", function(self)
       self.__puiRootNavHovered = false
 
-      local tooltip = _G.GameTooltip
-      if tooltip then
-        tooltip:Hide()
+      if OptionsTooltip:IsOwned(self) then
+        OptionsTooltip:Hide()
       end
 
       _PUI_StyleRootNavButton(self, self.__puiNode, self.__puiSectionKey == (frame.__puiRootNavSelectedKey or _PUI_GetSelectedRootRegistryKey()))
@@ -2741,7 +2737,7 @@ local function _PUI_EnsurePleebUIOptionsChrome(frame)
   end
 
   if not frame.__puiResizeGrip then
-    local grip = CreateFrame("Frame", nil, frame)
+    local grip = CreateFrame("Frame", nil, controlsParent or frame)
 
     grip:EnableMouse(true)
     grip.tex = grip:CreateTexture(nil, "OVERLAY")

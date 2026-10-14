@@ -129,11 +129,8 @@ local function ShowSliderTooltip(self)
   self:Fire("OnEnter")
   local tooltip = AceConfigDialog.tooltip
   if not tooltip:IsShown() or tooltip:GetOwner() ~= self.frame then
-    tooltip = GameTooltip
-    if not tooltip:IsShown() or tooltip:GetOwner() ~= self.frame then
-      tooltip:SetOwner(self.frame, "ANCHOR_RIGHT")
-      tooltip:SetText(self.label:GetText() or "")
-    end
+    tooltip:SetOwner(self.frame, "ANCHOR_RIGHT")
+    tooltip:SetText(self.label:GetText() or "")
   end
   local colors = Theme.GetColors()
   tooltip:AddLine("Range: " .. FormatValue(self, self.min or 0) .. " - " .. FormatValue(self, self.max or 100),

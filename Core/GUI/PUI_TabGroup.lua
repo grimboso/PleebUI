@@ -5,6 +5,7 @@ local Theme = ns.Theme
 local Pixel = ns.Pixel
 local WidgetSkins = Theme.WidgetSkins
 local AceGUI = LibStub("AceGUI-3.0")
+local OptionsTooltip = LibStub("AceConfigDialog-3.0").tooltip
 
 local _PUI_StyleCustomTabButton
 local _PUI_UpdateTabGroupSelection
@@ -90,21 +91,21 @@ local function _PUI_EnsureCustomTabButton(host, index)
     self.__puiHovered = true
     _PUI_StyleCustomTabButton(self, self.__puiValue == _PUI_GetSelectedTabValue(self.__puiWidget))
     if self.__puiLabel:GetUnboundedStringWidth() > math.max(1, self:GetWidth() - 24) then
-      GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-      GameTooltip:SetText(self.__puiLabel:GetText(), 1, 1, 1, 1, true)
-      GameTooltip:Show()
+      OptionsTooltip:SetOwner(self, "ANCHOR_RIGHT")
+      OptionsTooltip:SetText(self.__puiLabel:GetText(), 1, 1, 1, 1, true)
+      OptionsTooltip:Show()
     end
   end)
 
   btn:SetScript("OnLeave", function(self)
     self.__puiHovered = false
-    if GameTooltip:IsOwned(self) then GameTooltip:Hide() end
+    if OptionsTooltip:IsOwned(self) then OptionsTooltip:Hide() end
     _PUI_StyleCustomTabButton(self, self.__puiValue == _PUI_GetSelectedTabValue(self.__puiWidget))
   end)
 
   btn:SetScript("OnHide", function(self)
     self.__puiHovered = nil
-    if GameTooltip:IsOwned(self) then GameTooltip:Hide() end
+    if OptionsTooltip:IsOwned(self) then OptionsTooltip:Hide() end
   end)
 
   btn:SetScript("OnClick", function(self)

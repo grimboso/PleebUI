@@ -38,14 +38,11 @@ function AceHooks.ShowDisabledTooltip(widget)
   local reason = ns.OptionsSchema.GetDisabledReason(widget:GetUserDataTable())
   local tooltip = LibStub("AceConfigDialog-3.0").tooltip
   if not tooltip:IsShown() or tooltip:GetOwner() ~= widget.frame then
-    tooltip = GameTooltip
-    if not tooltip:IsShown() or tooltip:GetOwner() ~= widget.frame then
-      if not reason and widget.type ~= "ColorPicker" then return end
-      tooltip:SetOwner(widget.frame, "ANCHOR_RIGHT")
-      local option = widget:GetUserData("option")
-      tooltip:SetText(widget.type == "ColorPicker" and widget.text:GetText()
-        or (type(option.name) == "string" and option.name or "Unavailable setting"))
-    end
+    if not reason and widget.type ~= "ColorPicker" then return end
+    tooltip:SetOwner(widget.frame, "ANCHOR_RIGHT")
+    local option = widget:GetUserData("option")
+    tooltip:SetText(widget.type == "ColorPicker" and widget.text:GetText()
+      or (type(option.name) == "string" and option.name or "Unavailable setting"))
   end
   if reason and reason ~= "" then
     local colors = ns.Theme.GetColors()
@@ -95,7 +92,10 @@ end
 
 local function _PUI_IsPleebUIOptionsTooltipOwner(owner)
   while owner and not owner:IsForbidden() do
-    if owner == ns.Addon._OptionsWindow or owner.__puiAceGUIOwnedByPleebUI == true then
+    if owner == ns.Addon._OptionsWindow
+      or owner.__puiOptionsTooltipOwner == true
+      or owner.__puiAceGUIOwnedByPleebUI == true
+    then
       return true
     end
 
@@ -182,6 +182,35 @@ local function _PUI_InstallAceGUIHooks()
     widget.__puiLastTreeResizeWidth = nil
     widget.__puiLastTreeNativeRows = nil
     widget.__puiLastTreePCMRows = nil
+    if widget.__puiBlizzardTree and widget.__puiTreeViewport then
+      for index, button in ipairs(widget.buttons) do
+        if button:GetParent() == widget.__puiTreeViewport then
+          button:SetParent(widget.treeframe)
+          button:SetHeight(18)
+          button:ClearAllPoints()
+          if index == 1 then
+            button:SetPoint("TOPLEFT", widget.treeframe, "TOPLEFT", 0, -10)
+            button:SetPoint("TOPRIGHT", widget.treeframe, "TOPRIGHT", widget.showscroll and -22 or 0, -10)
+          else
+            button:SetPoint("TOPLEFT", widget.buttons[index - 1], "BOTTOMLEFT", 0, 0)
+            button:SetPoint("TOPRIGHT", widget.buttons[index - 1], "BOTTOMRIGHT", 0, 0)
+          end
+          button.__puiTreeButtonLayoutKey = nil
+        end
+      end
+      widget.__puiTreeViewport:Hide()
+    end
+    widget.__puiBlizzardTree = nil
+    widget.__puiTreeSmoothScroll = nil
+    widget.__puiTreeSmoothStep = nil
+    widget.__puiTreeRenderedRow = nil
+    widget.__puiTreeNativeScroll = nil
+    widget.__puiTreeSliderUpdating = nil
+    if widget.__puiTreeSmoothInputHooked then
+      widget.scrollbar:SetValueStep(1)
+      widget.scrollbar.scrollStep = nil
+      widget.scrollbar:GetThumbTexture():SetHeight(ns.Theme.GetOptionsPointerTargetSize(24))
+    end
   end
 
   local function IsPleebUIOwner(owner)
@@ -384,7 +413,7 @@ end
 
 function AceHooks.RefreshOwnedWidgets()
   ns.KeyboardNavigation.QueueRestore()
-  for _, tooltip in ipairs({ GameTooltip, LibStub("AceGUI-3.0").tooltip, LibStub("AceConfigDialog-3.0").tooltip }) do
+  for _, tooltip in ipairs({ LibStub("AceGUI-3.0").tooltip, LibStub("AceConfigDialog-3.0").tooltip }) do
     if not tooltip:IsForbidden() and tooltip:IsShown() then
       _PUI_RefreshOptionsTooltip(tooltip)
     end
@@ -407,5 +436,4 @@ end
 function AceHooks.Install()
   _PUI_InstallAceGUIHooks()
   _PUI_InstallAceConfigDialogHooks()
-  _PUI_InstallOptionsTooltipHook(GameTooltip)
 end

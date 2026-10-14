@@ -3,6 +3,7 @@ local ADDON_NAME, ns = ...
 local Theme = ns.Theme
 local Pixel = ns.Pixel
 local WidgetSkins = Theme.WidgetSkins
+local OptionsTooltip = LibStub("AceConfigDialog-3.0").tooltip
 
 local ColorControls = {}
 ns.ColorControls = ColorControls
@@ -46,13 +47,10 @@ local function HideColorTooltip(widget)
 end
 
 local function ShowColorTooltip(widget)
-  local tooltip = LibStub("AceConfigDialog-3.0").tooltip
+  local tooltip = OptionsTooltip
   if not tooltip:IsShown() or tooltip:GetOwner() ~= widget.frame then
-    tooltip = GameTooltip
-    if not tooltip:IsShown() or tooltip:GetOwner() ~= widget.frame then
-      tooltip:SetOwner(widget.frame, "ANCHOR_RIGHT")
-      tooltip:SetText(widget.text:GetText() or "")
-    end
+    tooltip:SetOwner(widget.frame, "ANCHOR_RIGHT")
+    tooltip:SetText(widget.text:GetText() or "")
   end
   ColorControls.AppendTooltip(widget, tooltip)
   tooltip:Show()
@@ -96,13 +94,13 @@ end
 
 local function ShowSwatchTooltip(button)
   palette.tooltipOwner = button
-  GameTooltip:SetOwner(button, "ANCHOR_RIGHT")
-  GameTooltip:SetText(ColorDescription(button.color))
-  GameTooltip:Show()
+  OptionsTooltip:SetOwner(button, "ANCHOR_RIGHT")
+  OptionsTooltip:SetText(ColorDescription(button.color))
+  OptionsTooltip:Show()
 end
 
 local function HideSwatchTooltip(button)
-  if GameTooltip:GetOwner() == button then GameTooltip:Hide() end
+  if OptionsTooltip:GetOwner() == button then OptionsTooltip:Hide() end
 end
 
 local SWATCH_FOCUS_ACTIONS = {
@@ -176,6 +174,7 @@ end
 local function EnsurePalette()
   if palette then return end
   palette = CreateFrame("Frame", nil, ColorPickerFrame, "BackdropTemplate")
+  palette.__puiOptionsTooltipOwner = true
   palette:EnableMouse(true)
   palette:SetClampedToScreen(true)
   palette:SetPoint("TOPLEFT", ColorPickerFrame, "TOPRIGHT", 8, 0)
@@ -237,7 +236,7 @@ local function EnsurePalette()
     end
   end
   palette:HookScript("OnHide", function()
-    if palette.tooltipOwner and GameTooltip:GetOwner() == palette.tooltipOwner then GameTooltip:Hide() end
+    if palette.tooltipOwner and OptionsTooltip:GetOwner() == palette.tooltipOwner then OptionsTooltip:Hide() end
     palette.tooltipOwner = nil
   end)
   palette:Hide()

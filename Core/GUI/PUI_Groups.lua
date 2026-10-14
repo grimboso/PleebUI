@@ -74,8 +74,9 @@ end
 local PCM_TREE_ROW_HEIGHT = 54
 local PCM_TREE_ROW_GAP = 4
 local PCM_TREE_TOP_INSET = 10
+local TREE_EDGE_INSET = 1
 local function _PUI_GetTreeScrollbarLane()
-  return Theme.GetOptionsPointerTargetSize(18) + 8
+  return Theme.GetOptionsPointerTargetSize(20) + 6 + TREE_EDGE_INSET
 end
 
 local function _PUI_ConfigureTreeExpandTarget(toggle, baseSize)
@@ -190,6 +191,100 @@ local function _PUI_RefreshStyledTree(widget, originalRefreshTree, scrollToSelec
     widget.scrollbar:SetValue(0)
   end
   widget.noupdate = nil
+end
+
+local function _PUI_GetBlizzardTreeScrollGeometry(widget, lineCount)
+  local metrics = Theme.GetControlMetrics()
+  local rowHeight = _PUI_GetTreeRowHeight(false)
+  local step = rowHeight + metrics.treeButtonGap
+  local viewport = widget.__puiTreeViewport
+  local viewportHeight = viewport and viewport:GetHeight() or 0
+  if viewportHeight <= 0 then
+    viewportHeight = (widget.treeframe:GetHeight() or 0) - metrics.treeGroupTopInset * 2
+  end
+  viewportHeight = math.max(1, viewportHeight)
+  local contentHeight = math.max(0, lineCount * step - metrics.treeButtonGap)
+  return step, viewportHeight, math.max(0, (contentHeight - viewportHeight) / step), contentHeight
+end
+
+local function _PUI_PositionBlizzardTree(widget)
+  local viewport = widget.__puiTreeViewport
+  local first = widget.buttons[1]
+  if not viewport or not first or not first:IsShown() then
+    return
+  end
+
+  local step = _PUI_GetBlizzardTreeScrollGeometry(widget, #widget.lines)
+  local offset = ((widget.__puiTreeNativeScroll or 0) - (widget.__puiTreeSmoothScroll or 0)) * step
+  first:ClearAllPoints()
+  first:SetPoint("TOPLEFT", viewport, "TOPLEFT", 0, offset)
+  first:SetPoint("TOPRIGHT", viewport, "TOPRIGHT", 0, offset)
+end
+
+local function _PUI_RefreshBlizzardTree(widget, originalRefreshTree, scrollToSelection, fromOnUpdate)
+  local status = widget.status or widget.localstatus
+  local nativeRows = math.max(1, math.floor(((widget.treeframe:GetHeight() or 0) - 20) / 18))
+  local lineCount = #(widget.lines or {})
+  local step, viewportHeight, maxScroll = _PUI_GetBlizzardTreeScrollGeometry(widget, lineCount)
+  local scroll = math.max(0, math.min(widget.__puiTreeSmoothScroll or status.scrollvalue or 0, maxScroll))
+  local nativeScroll = math.min(math.max(0, math.floor(scroll) - 1), math.max(0, lineCount - nativeRows))
+  scrollToSelection = scrollToSelection or status.scrollToSelection
+
+  status.scrollToSelection = nil
+  status.scrollvalue = nativeScroll
+  widget.__puiTreeSliderUpdating = true
+  originalRefreshTree(widget, false, fromOnUpdate)
+  widget.__puiTreeSliderUpdating = nil
+
+  lineCount = #(widget.lines or {})
+  step, viewportHeight, maxScroll = _PUI_GetBlizzardTreeScrollGeometry(widget, lineCount)
+  scroll = math.min(scroll, maxScroll)
+
+  if scrollToSelection and status.selected then
+    for index = 1, lineCount do
+      if widget.lines[index].uniquevalue == status.selected then
+        local top = (index - 1) * step
+        local bottom = top + _PUI_GetTreeRowHeight(false)
+        local pixels = scroll * step
+        if top < pixels then
+          scroll = top / step
+        elseif bottom > pixels + viewportHeight then
+          scroll = (bottom - viewportHeight) / step
+        end
+        scroll = math.max(0, math.min(scroll, maxScroll))
+        break
+      end
+    end
+  end
+
+  local correctedNativeScroll = math.min(math.max(0, math.floor(scroll) - 1), math.max(0, lineCount - nativeRows))
+  if correctedNativeScroll ~= status.scrollvalue then
+    status.scrollvalue = correctedNativeScroll
+    widget.__puiTreeSliderUpdating = true
+    originalRefreshTree(widget, false, fromOnUpdate)
+    widget.__puiTreeSliderUpdating = nil
+  end
+
+  local firstButton = widget.buttons[1]
+  if firstButton and firstButton.treeline and firstButton:IsShown() then
+    for index = 1, lineCount do
+      if widget.lines[index].uniquevalue == firstButton.treeline.uniquevalue then
+        widget.__puiTreeNativeScroll = index - 1
+        break
+      end
+    end
+  end
+
+  widget.__puiTreeSmoothScroll = scroll
+  widget.__puiTreeSmoothStep = step
+  widget.__puiTreeRenderedRow = math.floor(scroll)
+  status.scrollvalue = math.floor(scroll)
+
+  widget.__puiTreeSliderUpdating = true
+  widget:ShowScroll(maxScroll > 0)
+  widget.scrollbar:SetMinMaxValues(0, maxScroll)
+  widget.scrollbar:SetValue(scroll)
+  widget.__puiTreeSliderUpdating = nil
 end
 
 local function _PUI_SkinGenericTreeButton(button, isSelected)
@@ -631,7 +726,10 @@ function WidgetSkins.InlineGroup(widget)
   local hasTitle = title:GetText() ~= ""
   title.__puiOptionsFontOwned = true
   Theme.ApplyFont(title, "header")
-  title:SetWidth(math.max(1, math.ceil(title:GetStringWidth())))
+  title:ClearAllPoints()
+  title:SetPoint("TOPLEFT", frame, "TOPLEFT", padX, 0)
+  title:SetWordWrap(false)
+  title:SetWidth(math.max(1, math.ceil(title:GetUnboundedStringWidth()) + 4))
   local titleHeight = math.max(18, Theme.GetOptionsFontHeight("header"), math.ceil(title:GetStringHeight() or 0) + 2)
   local contentTopInset = hasTitle and math.max(padY + 4, titleHeight - 17 + padY) or padY
   widget.__puiInlineGroupExtraHeight = math.max(0, 17 + contentTopInset + padY - 3 - 40)
@@ -680,9 +778,6 @@ function WidgetSkins.InlineGroup(widget)
   widget.content:SetPoint("TOPLEFT", outer, "TOPLEFT", padX, -contentTopInset)
   widget.content:SetPoint("BOTTOMRIGHT", outer, "BOTTOMRIGHT", -padX, -padY)
 
-  title:ClearAllPoints()
-  title:SetPoint("TOPLEFT", frame, "TOPLEFT", padX, 0)
-  title.__puiOptionsFontOwned = true
   title:SetTextColor(colors.text[1], colors.text[2], colors.text[3], colors.text[4])
   title:SetJustifyH("LEFT")
   title:SetJustifyV("MIDDLE")
@@ -706,8 +801,10 @@ local function _PUI_StyleTreeButtons(widget)
   local useCustomCards = _PUI_TreeGroupUsesCustomCards(widget)
   local buttons = widget.buttons
   local prev
+  local smoothTree = widget.__puiBlizzardTree == true
+  local buttonParent = smoothTree and widget.__puiTreeViewport or widget.treeframe
   local treeWidth = math.floor((tonumber(widget.treeframe:GetWidth()) or 0) + 0.5)
-  local rightInset = (pcmManagerTree or widget.showscroll == true) and _PUI_GetTreeScrollbarLane() or 0
+  local rightInset = (pcmManagerTree or widget.showscroll == true) and _PUI_GetTreeScrollbarLane() or TREE_EDGE_INSET
   local treeLayoutKey = table.concat({
     tostring(useCustomCards == true),
     tostring(pcmManagerTree == true),
@@ -725,22 +822,25 @@ local function _PUI_StyleTreeButtons(widget)
 
     Theme.CaptureCreatedWidgetFrameTree(widget, button)
 
-    if button:GetParent() ~= widget.treeframe then
-      button:SetParent(widget.treeframe)
+    if button:GetParent() ~= buttonParent then
+      button:SetParent(buttonParent)
       button.__puiTreeButtonLayoutKey = nil
     end
 
     if button:IsShown() and (useCustomCards or pcmManagerTree) then
       local buttonLayoutKey = treeLayoutKey .. "\030" .. tostring(i) .. "\030" .. tostring(prev or "root")
-      if button.__puiTreeButtonLayoutKey ~= buttonLayoutKey then
+      if smoothTree or button.__puiTreeButtonLayoutKey ~= buttonLayoutKey then
         button.__puiTreeButtonLayoutKey = buttonLayoutKey
         button:ClearAllPoints()
 
         if prev then
           button:SetPoint("TOPLEFT", prev, "BOTTOMLEFT", 0, -buttonGap)
           button:SetPoint("TOPRIGHT", prev, "BOTTOMRIGHT", 0, -buttonGap)
+        elseif smoothTree then
+          button:SetPoint("TOPLEFT", buttonParent, "TOPLEFT", 0, 0)
+          button:SetPoint("TOPRIGHT", buttonParent, "TOPRIGHT", 0, 0)
         else
-          button:SetPoint("TOPLEFT", widget.treeframe, "TOPLEFT", 0, -topInset)
+          button:SetPoint("TOPLEFT", widget.treeframe, "TOPLEFT", TREE_EDGE_INSET, -topInset)
           button:SetPoint("TOPRIGHT", widget.treeframe, "TOPRIGHT", -rightInset, -topInset)
         end
       end
@@ -756,6 +856,10 @@ local function _PUI_StyleTreeButtons(widget)
 
     local groups = (button.obj.status or button.obj.localstatus).groups
     Theme.ApplyExpandCollapseButton(button.toggle, groups[button.uniquevalue] == true)
+  end
+
+  if smoothTree then
+    _PUI_PositionBlizzardTree(widget)
   end
 end
 
@@ -807,6 +911,46 @@ function WidgetSkins.TreeGroup(widget)
 
   local pcmManagerTree = _PUI_IsPCMManagerTree(widget)
   widget.__puiPCMManagerTree = pcmManagerTree
+  local user = widget:GetUserDataTable()
+  widget.__puiBlizzardTree = user.appName == "PleebUI"
+    and user.path and user.path[1] == "BlizzardWindows"
+
+  if widget.__puiBlizzardTree and widget.__puiTreeSmoothScroll == nil then
+    widget.scrollbar:SetValueStep(0.01)
+    widget.scrollbar.scrollStep = 0.5
+  end
+
+  if widget.__puiBlizzardTree and not widget.__puiTreeSmoothInputHooked then
+    widget.__puiTreeSmoothInputHooked = true
+    local originalSliderScript = widget.scrollbar:GetScript("OnValueChanged")
+    widget.scrollbar:SetScript("OnValueChanged", function(slider, value)
+      if not widget.__puiBlizzardTree or widget.__puiAceGUIOwnedByPleebUI ~= true then
+        return originalSliderScript(slider, value)
+      end
+      if widget.__puiTreeSliderUpdating then
+        return
+      end
+
+      widget.__puiTreeSmoothScroll = value
+      if math.floor(value) ~= widget.__puiTreeRenderedRow then
+        widget:RefreshTree()
+      else
+        _PUI_PositionBlizzardTree(widget)
+      end
+    end)
+
+    local treeframe = widget.treeframe
+    local originalWheelScript = treeframe:GetScript("OnMouseWheel")
+    treeframe:SetScript("OnMouseWheel", function(frame, delta)
+      if not widget.__puiBlizzardTree or widget.__puiAceGUIOwnedByPleebUI ~= true then
+        return originalWheelScript(frame, delta)
+      end
+      if widget.showscroll then
+        local step = _PUI_GetBlizzardTreeScrollGeometry(widget, #widget.lines)
+        widget.scrollbar:SetValue(widget.scrollbar:GetValue() - delta * math.min(32, step / 2) / step)
+      end
+    end)
+  end
 
   if not widget.__puiTreeShowScrollHooked then
     widget.__puiTreeShowScrollHooked = true
@@ -814,7 +958,11 @@ function WidgetSkins.TreeGroup(widget)
     widget.ShowScroll = function(self, show)
       originalShowScroll(self, show)
 
-      if self.__puiPCMManagerTree ~= true then
+      if self.__puiAceGUIOwnedByPleebUI ~= true then
+        return
+      end
+
+      if self.__puiBlizzardTree then
         return
       end
 
@@ -823,15 +971,12 @@ function WidgetSkins.TreeGroup(widget)
         return
       end
 
+      local pcmTree = self.__puiPCMManagerTree == true
+      local topInset = pcmTree and PCM_TREE_TOP_INSET or Theme.GetControlMetrics().treeGroupTopInset
+      local rightInset = (pcmTree or show) and _PUI_GetTreeScrollbarLane() or TREE_EDGE_INSET
       firstButton:ClearAllPoints()
-      firstButton:SetPoint("TOPLEFT", self.treeframe, "TOPLEFT", 0, -PCM_TREE_TOP_INSET)
-      firstButton:SetPoint(
-        "TOPRIGHT",
-        self.treeframe,
-        "TOPRIGHT",
-        -_PUI_GetTreeScrollbarLane(),
-        -PCM_TREE_TOP_INSET
-      )
+      firstButton:SetPoint("TOPLEFT", self.treeframe, "TOPLEFT", TREE_EDGE_INSET, -topInset)
+      firstButton:SetPoint("TOPRIGHT", self.treeframe, "TOPRIGHT", -rightInset, -topInset)
     end
   end
 
@@ -844,7 +989,9 @@ function WidgetSkins.TreeGroup(widget)
         return
       end
 
-      if self.__puiAceGUIOwnedByPleebUI == true and _PUI_TreeGroupUsesCustomCards(self) then
+      if self.__puiBlizzardTree then
+        _PUI_RefreshBlizzardTree(self, originalRefreshTree, ...)
+      elseif self.__puiAceGUIOwnedByPleebUI == true and _PUI_TreeGroupUsesCustomCards(self) then
         _PUI_RefreshStyledTree(self, originalRefreshTree, ...)
       else
         originalRefreshTree(self, ...)
@@ -908,26 +1055,62 @@ function WidgetSkins.TreeGroup(widget)
   treeframe:SetBackdropColor(0, 0, 0, 0)
   treeframe:SetBackdropBorderColor(0, 0, 0, 0)
 
-  for i = 1, treeframe:GetNumRegions() do
-    local region = select(i, treeframe:GetRegions())
-    if region:GetObjectType() == "Texture" then
-      region:SetTexture(nil)
-      region:SetAlpha(0)
-      region:Hide()
+  if widget.__puiBlizzardTree then
+    local viewport = widget.__puiTreeViewport
+    if not viewport then
+      viewport = CreateFrame("Frame", nil, treeframe)
+      viewport:SetClipsChildren(true)
+      viewport:EnableMouse(false)
+      Theme.MarkCreatedWidgetChrome(viewport)
+      widget.__puiTreeViewport = viewport
+    end
+    local inset = metrics.treeGroupTopInset
+    local rightInset = widget.showscroll and _PUI_GetTreeScrollbarLane() or TREE_EDGE_INSET
+    viewport:ClearAllPoints()
+    viewport:SetPoint("TOPLEFT", treeframe, "TOPLEFT", 8, -inset)
+    viewport:SetPoint("BOTTOMRIGHT", treeframe, "BOTTOMRIGHT", -(rightInset + 6), inset)
+    viewport:Show()
+  end
+
+  if not treeframe.__puiTreeNativeTexturesStripped then
+    treeframe.__puiTreeNativeTexturesStripped = true
+    for i = 1, treeframe:GetNumRegions() do
+      local region = select(i, treeframe:GetRegions())
+      if region:GetObjectType() == "Texture" then
+        region:SetTexture(nil)
+        region:SetAlpha(0)
+        region:Hide()
+      end
     end
   end
+
+  local colors = Theme.GetColors()
+  treeframe.__puiUseTextureBackdrop = true
+  Theme.SetSquareBackdrop(treeframe, {
+    bg = widget.__puiBlizzardTree
+      and { colors.background[1], colors.background[2], colors.background[3], 1 }
+      or { colors.control[1], colors.control[2], colors.control[3], 0.45 },
+    border = widget.__puiBlizzardTree and colors.controlBorder or colors.border,
+  }, Theme.GetEdgeSize())
 
   widget.scrollbar:ClearAllPoints()
   local scrollbarInset = _PUI_GetTreeScrollbarLane()
   widget.scrollbar:SetPoint("TOPRIGHT", treeframe, "TOPRIGHT", -6, -scrollbarInset)
   widget.scrollbar:SetPoint("BOTTOMRIGHT", treeframe, "BOTTOMRIGHT", -6, scrollbarInset)
-  WidgetSkins.Scrollbar(widget.scrollbar)
+  if widget.__puiBlizzardTree then
+    local _, visibleHeight, _, contentHeight = _PUI_GetBlizzardTreeScrollGeometry(widget, #(widget.lines or {}))
+    WidgetSkins.Scrollbar(widget.scrollbar, visibleHeight, contentHeight, 72)
+  else
+    WidgetSkins.Scrollbar(widget.scrollbar)
+  end
   widget.__puiTreeChromeHooked = true
   _PUI_StyleTreeButtons(widget)
 
   local rowHeight = _PUI_GetTreeRowHeight(pcmManagerTree)
   if _PUI_TreeGroupUsesCustomCards(widget) and widget.__puiTreeRowHeight ~= rowHeight then
     widget.__puiTreeRowHeight = rowHeight
+    widget:RefreshTree()
+  elseif widget.__puiBlizzardTree and widget.__puiTreeRenderedRow == nil then
     widget:RefreshTree()
   end
 end

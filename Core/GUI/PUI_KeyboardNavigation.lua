@@ -608,7 +608,19 @@ local function FocusTreeLine(widget, index)
       if button.uniquevalue == line.uniquevalue then visible = true end
     end
   end
-  if not visible then
+  if widget.__puiBlizzardTree and widget.__puiTreeViewport then
+    local step = widget.__puiTreeSmoothStep
+    if step then
+      local top = (index - 1) * step
+      local bottom = top + step - ns.Theme.GetControlMetrics().treeButtonGap
+      local scroll = (widget.__puiTreeSmoothScroll or 0) * step
+      if top < scroll then
+        widget.scrollbar:SetValue(top / step)
+      elseif bottom > scroll + widget.__puiTreeViewport:GetHeight() then
+        widget.scrollbar:SetValue((bottom - widget.__puiTreeViewport:GetHeight()) / step)
+      end
+    end
+  elseif not visible then
     local status = widget.status or widget.localstatus
     widget.scrollbar:SetValue(index <= status.scrollvalue and index - 1 or math.max(0, index - count))
   end

@@ -70,7 +70,7 @@ local function RefreshScrollbarState(scrollbar)
   )
 end
 
-function WidgetSkins.Scrollbar(widget)
+function WidgetSkins.Scrollbar(widget, visibleHeight, contentHeight, minimumThumbHeight)
   local scrollbar = widget.ScrollBar or widget
   local colors = Theme.GetColors()
   local edge = Theme.ControlBorderSize
@@ -136,7 +136,16 @@ function WidgetSkins.Scrollbar(widget)
   thumb:SetTexture(WHITE8)
   thumb:SetTexCoord(0, 1, 0, 1)
   thumb:SetVertexColor(accent[1], accent[2], accent[3], 0.90)
-  thumb:SetSize(scrollbarWidth - 2, Theme.GetOptionsPointerTargetSize(24))
+  local thumbHeight = Theme.GetOptionsPointerTargetSize(24)
+  if visibleHeight and contentHeight and contentHeight > visibleHeight then
+    local trackHeight = scrollbar:GetHeight()
+    if trackHeight > 0 then
+      local minimumHeight = math.min(trackHeight, Theme.GetOptionsPointerTargetSize(minimumThumbHeight))
+      local proportionalHeight = math.floor(trackHeight * visibleHeight / contentHeight + 0.5)
+      thumbHeight = math.min(trackHeight, math.max(minimumHeight, proportionalHeight))
+    end
+  end
+  thumb:SetSize(scrollbarWidth - 2, thumbHeight)
   thumb:Show()
 
   if not scrollbar.__puiScrollbarStateHooked then
