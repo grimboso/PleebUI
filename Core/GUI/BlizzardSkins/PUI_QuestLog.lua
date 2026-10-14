@@ -75,9 +75,9 @@ end
 
 local function RefreshSessionCommand(frame, command)
   local button = frame.ExecuteSessionCommand
-  button:SetNormalTexture(nil)
-  button:SetPushedTexture(nil)
-  button:SetDisabledTexture(nil)
+  Skins.Hide(button:GetNormalTexture())
+  Skins.Hide(button:GetPushedTexture())
+  Skins.Hide(button:GetDisabledTexture())
   local atlas = sessionAtlases[command]
   if atlas then button.normalIcon:SetAtlas(atlas) end
 end
