@@ -631,6 +631,7 @@ function WidgetSkins.InlineGroup(widget)
   local hasTitle = title:GetText() ~= ""
   title.__puiOptionsFontOwned = true
   Theme.ApplyFont(title, "header")
+  title:SetWidth(math.max(1, math.ceil(title:GetStringWidth())))
   local titleHeight = math.max(18, Theme.GetOptionsFontHeight("header"), math.ceil(title:GetStringHeight() or 0) + 2)
   local contentTopInset = hasTitle and math.max(padY + 4, titleHeight - 17 + padY) or padY
   widget.__puiInlineGroupExtraHeight = math.max(0, 17 + contentTopInset + padY - 3 - 40)
@@ -681,7 +682,6 @@ function WidgetSkins.InlineGroup(widget)
 
   title:ClearAllPoints()
   title:SetPoint("TOPLEFT", frame, "TOPLEFT", padX, 0)
-  title:SetWidth(math.max(1, math.ceil(title:GetStringWidth())))
   title.__puiOptionsFontOwned = true
   title:SetTextColor(colors.text[1], colors.text[2], colors.text[3], colors.text[4])
   title:SetJustifyH("LEFT")
