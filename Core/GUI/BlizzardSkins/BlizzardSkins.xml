@@ -31,6 +31,7 @@
   <Script file="PUI_GuildTextEdit.lua"/>
   <Script file="PUI_WorldMap.lua"/>
   <Script file="PUI_QuestLog.lua"/>
+  <Script file="PUI_ObjectiveTracker.lua"/>
   <Script file="PUI_Merchant.lua"/>
   <Script file="PUI_Mail.lua"/>
   <Script file="PUI_OpenMail.lua"/>
