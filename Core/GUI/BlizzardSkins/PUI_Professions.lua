@@ -2,7 +2,6 @@ local _, ns = ...
 local Skins, Templates = ns.BlizzardSkins, ns.ProfessionSkins
 
 local function RefreshProfessions(frame)
-  if not Skins.CanStyle() then return end
   Templates.Tabs(frame.TabSystem)
   Templates.RecipeRows(frame.CraftingPage.RecipeList)
   Templates.RefreshForm(frame.CraftingPage.SchematicForm)
