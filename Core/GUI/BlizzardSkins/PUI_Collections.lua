@@ -149,10 +149,40 @@ local function RefreshCollectionModels()
   end
 end
 
+local function AlignCollectionNavigation()
+  local controls = WarbandSceneJournal.IconsFrame.Icons.Controls
+  local campsitePaging = controls.PagingControls
+  local showOwned = controls.ShowOwned
+  controls:MarkIgnoreInLayout(campsitePaging, showOwned)
+  campsitePaging:MarkIgnoreInLayout(campsitePaging.PageText, campsitePaging.PrevPageButton, campsitePaging.NextPageButton)
+
+  for _, paging in ipairs({
+    ToyBox.PagingFrame,
+    HeirloomsJournal.PagingFrame,
+    WardrobeCollectionFrame.ItemsCollectionFrame.PagingFrame,
+    campsitePaging,
+  }) do
+    paging:ClearAllPoints()
+    paging:SetPoint("BOTTOM", CollectionsJournal, "BOTTOM", 0, 43)
+    paging.PrevPageButton:ClearAllPoints()
+    paging.PrevPageButton:SetPoint("RIGHT", CollectionsJournal, "BOTTOM", -1.5, 59)
+    paging.NextPageButton:ClearAllPoints()
+    paging.NextPageButton:SetPoint("LEFT", CollectionsJournal, "BOTTOM", 1.5, 59)
+    paging.PageText:ClearAllPoints()
+    paging.PageText:SetPoint("RIGHT", paging.PrevPageButton, "LEFT", -11, 0)
+  end
+
+  showOwned:ClearAllPoints()
+  showOwned:SetPoint("LEFT", campsitePaging.NextPageButton, "RIGHT", 25, 0)
+  Skins.Font(showOwned.Text)
+
+end
+
 local function InstallCollections(frame)
   Skins.Shell(frame)
   for index = 1, 6 do Skins.Tab(_G["CollectionsJournalTab" .. index]) end
   Skins.Apply(_G, layout)
+  AlignCollectionNavigation()
   RefreshCollectionRows()
   for index = 1, 18 do SkinCollectionSpell(ToyBox.iconsFrame["spellButton" .. index]) end
   RefreshCollectionModels()
