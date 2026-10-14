@@ -1452,17 +1452,6 @@ local function HideBlizzardActionFrame(frame, clearEvents)
     frame:UnregisterAllEvents()
   end
 
-  if frame.system then
-    frame.isShownExternal = nil
-    local index = 42
-    repeat
-      if frame[index] == nil then
-        frame[index] = nil
-      end
-      index = index + 1
-    until issecurevariable(frame, "isShownExternal")
-  end
-
   if frame.HideBase then
     frame:HideBase()
   else
