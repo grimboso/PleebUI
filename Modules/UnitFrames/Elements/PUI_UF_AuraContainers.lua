@@ -29,10 +29,6 @@ local AuraFilters = ns.UFAuraFilters
 local AuraHighlight = ns.UFAuraHighlight
 local AuraLayout = ns.UFAuraLayout
 
-local INTERFACE_VERSION = select(4, _G.GetBuildInfo())
-local SUPPORTS_NATIVE_AURA_TRACKING_ENABLE = INTERFACE_VERSION >= 120105
-local SUPPORTS_NATIVE_AURA_STATE_REFRESH = INTERFACE_VERSION >= 120105
-
 local SORT_METHODS = {
   BIG_DEFENSIVE = AuraContainerSortMethod.BigDefensive,
   INDEX = AuraContainerSortMethod.AuraInstanceIDOnly,
@@ -167,14 +163,6 @@ local function CreateAuraElement(frame, layout, appearance)
   frame.__puiAuraContainers = frame.__puiAuraContainers or {}
   frame.__puiAuraContainers[#frame.__puiAuraContainers + 1] = container
 
-  if not SUPPORTS_NATIVE_AURA_STATE_REFRESH
-    and frame.__puiAuraStateRefreshEventsRegistered ~= true
-  then
-    frame.__puiAuraStateRefreshEventsRegistered = true
-    frame:RegisterEvent("UNIT_FLAGS", RefreshNativeAuraContainers)
-    frame:RegisterEvent("UNIT_FACTION", RefreshNativeAuraContainers)
-  end
-
   container:SetParent(parent)
   container.__puiAuraAppearance = appearance
   container:SetSize(Round(1), Round(1))
@@ -209,12 +197,6 @@ local function ApplyDisplayLayout(container, layout)
   )
   container:SetFlowLayoutPadding(0, 0, 0, 0)
 end
-
-local RETIRED_SLOT_CANDIDATES = {
-  includeSpellIDs = {
-    [0] = true,
-  },
-}
 
 local function InitializeAuraButton(container, options, button)
   local owner = container.__owner
@@ -328,25 +310,9 @@ local function SetSlotRuntimeTracking(runtime, enabled)
     return
   end
 
-  if SUPPORTS_NATIVE_AURA_TRACKING_ENABLE then
-    if runtime.nativeTrackingEnabled ~= enabled then
-      runtime.nativeTrackingEnabled = enabled
-      runtime.container:SetAuraSlotEnabled(runtime.key, enabled)
-    end
-    return
-  end
-
-  if enabled then
-    if runtime.candidatesRetired then
-      runtime.container:SetAuraSlotCandidateFilters(
-        runtime.key,
-        runtime.options.candidateFilters
-      )
-      runtime.candidatesRetired = nil
-    end
-  elseif not runtime.candidatesRetired then
-    runtime.container:SetAuraSlotCandidateFilters(runtime.key, RETIRED_SLOT_CANDIDATES)
-    runtime.candidatesRetired = true
+  if runtime.nativeTrackingEnabled ~= enabled then
+    runtime.nativeTrackingEnabled = enabled
+    runtime.container:SetAuraSlotEnabled(runtime.key, enabled)
   end
 end
 
@@ -355,37 +321,14 @@ local function SetGroupRuntimeTracking(runtime, enabled)
     return
   end
 
-  if SUPPORTS_NATIVE_AURA_TRACKING_ENABLE then
-    local trackingEnabled = enabled and runtime.configuredEnabled == true
-    if runtime.nativeTrackingEnabled ~= trackingEnabled then
-      runtime.nativeTrackingEnabled = trackingEnabled
-      runtime.container:SetAuraGroupEnabled(runtime.groupKey, trackingEnabled)
+  local trackingEnabled = enabled and runtime.configuredEnabled == true
+  if runtime.nativeTrackingEnabled ~= trackingEnabled then
+    runtime.nativeTrackingEnabled = trackingEnabled
+    runtime.container:SetAuraGroupEnabled(runtime.groupKey, trackingEnabled)
 
-      if runtime.encounterGroupKey then
-        runtime.container:SetAuraGroupEnabled(runtime.encounterGroupKey, trackingEnabled)
-      end
+    if runtime.encounterGroupKey then
+      runtime.container:SetAuraGroupEnabled(runtime.encounterGroupKey, trackingEnabled)
     end
-    return
-  end
-
-  if not runtime.sharedHost then
-    return
-  end
-
-  local maxFrameCount = enabled and runtime.configuredEnabled == true
-    and runtime.layoutMaxIcons
-    or 0
-
-  if runtime.groupState.maxFrameCount ~= maxFrameCount then
-    runtime.groupState.maxFrameCount = maxFrameCount
-    runtime.container:SetAuraGroupMaxFrameCount(runtime.groupKey, maxFrameCount)
-  end
-
-  if runtime.encounterGroupKey
-    and runtime.encounterGroupState.maxFrameCount ~= maxFrameCount
-  then
-    runtime.encounterGroupState.maxFrameCount = maxFrameCount
-    runtime.container:SetAuraGroupMaxFrameCount(runtime.encounterGroupKey, maxFrameCount)
   end
 end
 
@@ -512,7 +455,6 @@ local function CreateDisplayRuntime(frame, aDB, display)
       sortDirection = options.sortDirection,
       layoutSignature = BuildAuraGroupLayoutSignature(layout, primaryLayoutIndex),
     },
-    layoutMaxIcons = layout.maxIcons,
   }
 
   if sharedHost then
@@ -570,14 +512,7 @@ local function ConfigureAuraGroup(
   local sortDirection = SORT_DIRECTIONS[display.sortDirection] or AuraContainerSortDirection.Normal
   local layoutSignature = BuildAuraGroupLayoutSignature(layout, layoutIndex)
   local maxFrameCount = layout.maxIcons
-  if not SUPPORTS_NATIVE_AURA_TRACKING_ENABLE then
-    maxFrameCount = runtime.configuredEnabled == true
-      and (not runtime.sharedHost or runtime.enabled ~= false)
-      and layout.maxIcons
-      or 0
-  end
 
-  runtime.layoutMaxIcons = layout.maxIcons
   options.__puiAuraKind = display.auraType == "HARMFUL" and "debuffs" or "buffs"
   options.maxFrameCount = maxFrameCount
 
