@@ -16,7 +16,6 @@ local layout = {
 }
 
 local function RefreshHeaderCollapse(button)
-  if not Skins.CanStyle() then return end
   local collapsed = button.collapsed
   if issecretvalue(collapsed) then return end
   ns.Theme.ApplyExpandCollapseTexture(button.Icon, not collapsed)
@@ -27,7 +26,7 @@ local function RefreshHeaderCollapse(button)
 end
 
 local function RefreshHeaderTitle(row)
-  if Skins.CanStyle() then Skins.Font(row:GetTitleRegion(), "header") end
+  Skins.Font(row:GetTitleRegion(), "header")
 end
 
 local function SkinQuestHeaderSurface(row, bottomInset)
@@ -66,7 +65,6 @@ local function SkinQuestHeader(row)
 end
 
 local function RefreshQuestRows()
-  if not Skins.CanStyle() then return end
   for _, pool in ipairs({ QuestScrollFrame.headerFramePool, QuestScrollFrame.campaignHeaderFramePool,
     QuestScrollFrame.campaignHeaderMinimalFramePool, QuestScrollFrame.covenantCallingsHeaderFramePool }) do
     for header in pool:EnumerateActive() do SkinQuestHeader(header) end
@@ -74,7 +72,6 @@ local function RefreshQuestRows()
 end
 
 local function RefreshQuestDetails()
-  if not Skins.CanStyle() then return end
   local details = QuestMapFrame.DetailsFrame
   if not details:IsShown() or not QuestInfoFrame.questLog then return end
   details.Bg:SetAtlas(QuestTextContrast.GetDefaultDetailsBackgroundAtlas())
