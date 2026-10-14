@@ -40,7 +40,7 @@ Skins.Register("Blizzard_WorldMap", "WorldMapFrame", {
   install = function(frame)
     InstallMap(frame)
     local function RefreshAfterClick()
-      if Skins.CanStyle() then RefreshMapArtwork(frame) end
+      RefreshMapArtwork(frame)
     end
     local buttons = frame.BorderFrame.MaximizeMinimizeFrame
     buttons.MaximizeButton:HookScript("OnClick", RefreshAfterClick)
