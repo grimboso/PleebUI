@@ -631,7 +631,7 @@ RefreshProfileChoiceControls = function(host)
   host.ProfileWidget:SetList(values, order)
   host.ProfileWidget:SetValue(nil)
   host.ProfileWidget:SetDisabled(not hasProfiles)
-  host.ProfileWidget:SetLabel(hasProfiles and "Replace with an existing profile" or "No other profiles available")
+  host.ProfileWidget:SetLabel(hasProfiles and "Use an existing profile" or "No other profiles available")
   host.ProfileWidget.frame:Show()
 
   LayoutProfileChoiceControls(host)
@@ -669,7 +669,7 @@ local function BuildProfileChoiceControls(frame, colors)
   continueTitle:SetPoint("TOPRIGHT", host, "TOPRIGHT", -24, -24)
   continueTitle:SetJustifyH("CENTER")
   ApplyWizardFont(continueTitle, "title", 28)
-  continueTitle:SetText("Use this character profile")
+  continueTitle:SetText("Continue with the current profile")
   host.ContinueTitle = continueTitle
 
   local currentProfile = host:CreateFontString(nil, "OVERLAY")
@@ -680,7 +680,7 @@ local function BuildProfileChoiceControls(frame, colors)
   host.CurrentProfile = currentProfile
 
   local profileWidget = AceGUI:Create("Dropdown")
-  profileWidget:SetLabel("Replace with an existing profile")
+  profileWidget:SetLabel("Use an existing profile")
   profileWidget:SetCallback("OnValueChanged", function(_, _, value)
     ActivateExistingProfileAndExit(value)
   end)
@@ -694,7 +694,7 @@ local function BuildProfileChoiceControls(frame, colors)
   explanation:SetJustifyH("CENTER")
   explanation:SetWordWrap(true)
   ApplyWizardFont(explanation, "body", 12)
-  explanation:SetText("PleebUI has prepared a profile for this character. Continue with it, or choose another profile above to replace it.")
+  explanation:SetText("Continue with the current profile, or select another profile above to switch to it and reload the UI. Existing profiles are kept.")
   host.Explanation = explanation
 
   host:SetScript("OnSizeChanged", LayoutProfileChoiceControls)
@@ -730,26 +730,26 @@ local INSTALL_FLOW = {
   pages = {
     {
       title = "Choose a profile",
-      body = "PleebUI has already prepared a profile for this character. Continue with it, or replace it with another existing profile.",
-      note = "Choosing another profile reloads the UI and only changes this character's active profile.",
+      body = "Continue with the current profile, or select an existing profile to use for this character.",
+      note = "Selecting another profile switches this character to it and reloads the UI. Existing profiles are kept.",
       profileChoice = true,
     },
     {
       title = "Text, colors, and UI scale",
-      body = "Choose a font, text style, color preset, and UI scale. The combat readability preset increases text, aura, border, and tracker readability across PleebUI.",
-      note = "These settings are shared across PleebUI.",
+      body = "Choose a font, outline, color preset, and UI scale. Improve combat readability makes frame and tracker text larger and increases aura and border sizes.",
+      note = "Font, outline, colors, and UI scale are shared across PleebUI. Options font size changes settings text. Combat readability changes the current profile; you can undo it under UI Theme.",
       accessibility = true,
     },
     {
       title = "Unit Frames",
-      body = "Use the preview to set the Player frame. Texture, number abbreviations, and borders also apply to other unit frames.\n\n• Health display chooses the text shown on the health bar.\n• Abbreviate numbers changes 12345 to 12.3k.\n• Aura anchor moves the buff and debuff rows around the frame.\n• Aura visibility shows all auras, only yours, or none.",
-      note = "Use Unit Frames for frame sizes, grouped frames, cast bars, colors, text positions, and advanced aura filters.",
+      body = "Set up the Player frame with the preview below. Texture, number abbreviations, borders, and the aura enable switch also affect other unit frames.\n\nChoose the health text, power bar, portraits, and buff/debuff display. Aura anchor positions the rows; visibility chooses all auras, only yours, or none.",
+      note = "Open Unit Frames for frame sizes, party and raid frames, castbars, colors, text positions, and aura filters.",
       unitFrames = true,
     },
     {
       title = "Personal Resource Display",
-      body = "Choose which bars are shown and how they are stacked.\n\n• Use the arrows beside each preview bar to change its top-to-bottom order.\n• Class resources and tracked effects are grouped separately for your current specialization.\n• Main stack width, texture, and border apply only to bars that are not detached.",
-      note = "Use Personal Resource Display settings to detach bars or change heights, text, colors, and class-specific options.",
+      body = "Choose health, primary power, class resources, and tracked effects for your current specialization. Use the preview arrows to change the bar order.\n\nShared stack width, texture, and border thickness apply to bars that are attached to the stack.",
+      note = "Open Personal Resource Display to detach bars or change height, text, colors, and resource behavior.",
       prd = true,
     },
     {
@@ -760,8 +760,8 @@ local INSTALL_FLOW = {
     },
     {
       title = "Cooldowns and trackers",
-      body = "PleebUI uses your Cooldown Manager selection and owns all four viewer displays. Blizzard's background manager stays active only when its sounds or application colors are needed. Disabling Cooldown Manager also disables PleebUI's viewers. Turn on the Consumable Tracker and preview custom tracker types here. Use /cd to choose tracked spells and auras.",
-      note = "The Consumable Tracker covers potions, Healthstones, combat resurrection items, and equipped on-use trinkets. Custom trackers can be created here or later under Cooldown Manager > Custom Trackers.",
+      body = "Enable cooldown icons and buff bars, show items and racials, and create custom trackers. Use /cd to choose tracked spells and buffs.\n\nThe examples below show spell cooldown, charge recharge, aura stacks, and effect duration.",
+      note = "Items & racials includes potions, Healthstones, combat resurrection items, on-use trinkets, and racial abilities. Find these settings and Custom trackers under Cooldown Manager.",
       preview = "customBars",
       actions = {
         {
@@ -772,8 +772,8 @@ local INSTALL_FLOW = {
     },
     {
       title = "Finish setup",
-      body = "Click Finish + Reload to save your setup.",
-      note = "After reloading, type /pe to move PleebUI frames and bars.",
+      body = "Your choices are saved as you go. Click Finish and reload to complete setup.",
+      note = "After reloading, use /pe to move frames and bars, or /pui to open settings. Skip setup keeps any changes already made.",
     },
   },
 }
@@ -1025,7 +1025,7 @@ local function BuildAccessibilityControls(frame, colors)
   local scaleLabel = host:CreateFontString(nil, "OVERLAY")
   scaleLabel:SetJustifyH("LEFT")
   ApplyWizardFont(scaleLabel, "tiny", 11)
-  scaleLabel:SetText("UI Scale")
+  scaleLabel:SetText("UI scale")
   host.ScaleLabel = scaleLabel
 
   local scaleButtons = {}
@@ -1053,7 +1053,7 @@ local function BuildAccessibilityControls(frame, colors)
       end,
     },
     {
-      text = "Restore previous scale",
+      text = "Restore starting scale",
       func = RestoreOpeningScale,
     },
   }
@@ -1439,7 +1439,7 @@ local function BuildCustomBarsPreview(frame, colors)
   local cooldownManagerLabel = host:CreateFontString(nil, "OVERLAY")
   cooldownManagerLabel:SetPoint("TOPLEFT", host, "TOPLEFT", 12, -14)
   ApplyWizardFont(cooldownManagerLabel, "body", 12)
-  cooldownManagerLabel:SetText("PleebUI Cooldown Manager")
+  cooldownManagerLabel:SetText("Cooldown Manager")
 
   local cooldownManagerStatus = CreateFrame("Button", nil, host, "UIPanelButtonTemplate")
   cooldownManagerStatus:SetSize(220, 28)
@@ -1452,14 +1452,14 @@ local function BuildCustomBarsPreview(frame, colors)
   local consumableLabel = host:CreateFontString(nil, "OVERLAY")
   consumableLabel:SetPoint("TOPLEFT", host, "TOPLEFT", 12, -52)
   ApplyWizardFont(consumableLabel, "body", 12)
-  consumableLabel:SetText("PleebUI Consumable Tracker")
+  consumableLabel:SetText("Items & racials")
 
   local consumableWidget = AceGUI:Create("CheckBox")
-  consumableWidget:SetLabel("Show consumables and equipped on-use trinkets")
+  consumableWidget:SetLabel("Show items and racials")
   consumableWidget:SetCallback("OnValueChanged", function(_, _, value)
     local cooldowns = ns.Modules.CooldownManager
     cooldowns:SetConsumableTrackerEnabled(value == true)
-    SetStatus(value and "Consumable Tracker enabled." or "Consumable Tracker disabled.")
+    SetStatus(value and "Items & racials enabled." or "Items & racials disabled.")
   end)
   consumableWidget:SetWidth(420)
   consumableWidget.frame:SetParent(host)
@@ -1475,10 +1475,10 @@ local function BuildCustomBarsPreview(frame, colors)
   local chargeRow = CreatePreviewRow(host, "Charge cooldown", -114, 32)
   host.ChargeBars, host.ChargeTexts = CreateChargePreview(chargeRow, defaults.charge)
 
-  local stackRow = CreatePreviewRow(host, "Stack duration", -152, 34)
+  local stackRow = CreatePreviewRow(host, "Aura stacks", -152, 34)
   host.StackSegments, host.StackText = CreateStackPreview(stackRow, defaults.stack)
 
-  local cooldownRow = CreatePreviewRow(host, "Cooldown", -194, 32)
+  local cooldownRow = CreatePreviewRow(host, "Spell cooldown", -194, 32)
   host.CooldownBar, host.CooldownText = CreatePreviewBar(
     cooldownRow,
     defaults.cooldown,
@@ -1488,7 +1488,7 @@ local function BuildCustomBarsPreview(frame, colors)
   )
   host.CooldownBar:SetMinMaxValues(0, 10)
 
-  local durationRow = CreatePreviewRow(host, "Duration", -232, 32)
+  local durationRow = CreatePreviewRow(host, "Effect duration", -232, 32)
   host.DurationBar, host.DurationText = CreatePreviewBar(
     durationRow,
     defaults.duration,
@@ -1927,12 +1927,12 @@ local function BuildUnitFrameControls(frame, colors)
     SetStatus("Unit frame texture applied: " .. tostring(value))
   end)
 
-  host.HealthModeWidget = CreateInstallerWidget(host, "Dropdown", "Player health display", function(_, _, value)
+  host.HealthModeWidget = CreateInstallerWidget(host, "Dropdown", "Player health text", function(_, _, value)
     if BlockUnitFrameInstallerChange() then return end
     local UF = ns.UnitFrames
     UF:SetQuickSetupValue("healthMode", value)
     RefreshUnitFrameControls(host)
-    SetStatus("Player health display updated.")
+    SetStatus("Player health text updated.")
   end)
 
   host.ShortenWidget = CreateInstallerWidget(host, "CheckBox", "Abbreviate numbers", function(_, _, value)
@@ -1951,7 +1951,7 @@ local function BuildUnitFrameControls(frame, colors)
     SetStatus(value and "Player power bar enabled." or "Player power bar hidden.")
   end)
 
-  host.ClassColorWidget = CreateInstallerWidget(host, "CheckBox", "Class-color player health", function(_, _, value)
+  host.ClassColorWidget = CreateInstallerWidget(host, "CheckBox", "Use class color for player health", function(_, _, value)
     if BlockUnitFrameInstallerChange() then return end
     local UF = ns.UnitFrames
     UF:SetQuickSetupValue("classColor", value)
@@ -1987,7 +1987,7 @@ local function BuildUnitFrameControls(frame, colors)
   local auraSectionLabel = host:CreateFontString(nil, "OVERLAY")
   auraSectionLabel:SetJustifyH("LEFT")
   ApplyWizardFont(auraSectionLabel, "body", 12)
-  auraSectionLabel:SetText("Player Buffs and Debuffs")
+  auraSectionLabel:SetText("Player buffs and debuffs")
   host.AuraSectionLabel = auraSectionLabel
 
   host.AurasEnabledWidget = CreateInstallerWidget(host, "CheckBox", "Show unit frame auras", function(_, _, value)
@@ -2014,7 +2014,7 @@ local function BuildUnitFrameControls(frame, colors)
     SetStatus(value and "Player debuffs shown." or "Player debuffs hidden.")
   end)
 
-  host.AuraAnchorWidget = CreateInstallerWidget(host, "Dropdown", "Aura block anchor point", function(_, _, value)
+  host.AuraAnchorWidget = CreateInstallerWidget(host, "Dropdown", "Aura anchor", function(_, _, value)
     if BlockUnitFrameInstallerChange() then return end
     local UF = ns.UnitFrames
     UF:SetQuickSetupValue("auraAnchor", value)
@@ -2022,7 +2022,7 @@ local function BuildUnitFrameControls(frame, colors)
     SetStatus("Player aura anchor updated.")
   end)
 
-  host.AuraSizeWidget = CreateInstallerWidget(host, "PUI_Slider", "Aura icon size", function(_, _, value)
+  host.AuraSizeWidget = CreateInstallerWidget(host, "PUI_Slider", "Aura size", function(_, _, value)
     if BlockUnitFrameInstallerChange() then return end
     local UF = ns.UnitFrames
     UF:SetQuickSetupValue("auraSize", value)
@@ -2609,7 +2609,7 @@ local function BuildPRDControls(frame, colors)
   }
   host.Preview = preview
 
-  host.EnabledWidget = CreateInstallerWidget(host, "CheckBox", "Enable PleebUI PRD", function(_, _, value)
+  host.EnabledWidget = CreateInstallerWidget(host, "CheckBox", "Enable Personal Resource Display", function(_, _, value)
     local PRD = ns.Modules.PRD
     PRD:SetModuleEnabled(value)
     RefreshPRDControls(host)
@@ -2623,11 +2623,11 @@ local function BuildPRDControls(frame, colors)
     SetStatus(value and "PRD health bar shown." or "PRD health bar hidden.")
   end)
 
-  host.PrimaryWidget = CreateInstallerWidget(host, "CheckBox", "Show primary resource", function(_, _, value)
+  host.PrimaryWidget = CreateInstallerWidget(host, "CheckBox", "Show primary power", function(_, _, value)
     local PRD = ns.Modules.PRD
     PRD:SetQuickSetupValue("showPrimary", value)
     RefreshPRDControls(host)
-    SetStatus(value and "PRD primary resource shown." or "PRD primary resource hidden.")
+    SetStatus(value and "PRD primary power shown." or "PRD primary power hidden.")
   end)
 
   host.ResourceWidgets = {}
@@ -2647,16 +2647,16 @@ local function BuildPRDControls(frame, colors)
   host.DisplaySectionLabel = CreateSectionLabel("Display")
   host.ClassResourceSectionLabel = CreateSectionLabel("Class resources")
   host.TrackedEffectSectionLabel = CreateSectionLabel("Tracked effects")
-  host.AppearanceSectionLabel = CreateSectionLabel("Main stack appearance")
+  host.AppearanceSectionLabel = CreateSectionLabel("Shared stack appearance")
 
-  host.TextureWidget = CreateInstallerWidget(host, "LSM30_Statusbar", "Main stack texture", function(_, _, value)
+  host.TextureWidget = CreateInstallerWidget(host, "LSM30_Statusbar", "Shared stack texture", function(_, _, value)
     local PRD = ns.Modules.PRD
     PRD:SetQuickSetupValue("texture", value)
     RefreshPRDControls(host)
     SetStatus("PRD texture applied: " .. tostring(value))
   end)
 
-  host.WidthWidget = CreateInstallerWidget(host, "PUI_Slider", "Main stack width", function(_, _, value)
+  host.WidthWidget = CreateInstallerWidget(host, "PUI_Slider", "Shared stack width", function(_, _, value)
     local PRD = ns.Modules.PRD
     PRD:SetQuickSetupValue("width", value)
     RefreshPRDControls(host)
@@ -2664,11 +2664,11 @@ local function BuildPRDControls(frame, colors)
   end)
   host.WidthWidget:SetSliderValues(120, 600, 1)
 
-  host.BorderWidget = CreateInstallerWidget(host, "PUI_Slider", "Main stack border size", function(_, _, value)
+  host.BorderWidget = CreateInstallerWidget(host, "PUI_Slider", "Shared stack border thickness", function(_, _, value)
     local PRD = ns.Modules.PRD
     PRD:SetQuickSetupValue("borderSize", value)
     RefreshPRDControls(host)
-    SetStatus(string.format("PRD border size: %d", value))
+    SetStatus(string.format("PRD border thickness: %d", value))
   end)
   host.BorderWidget:SetSliderValues(0, 12, 1)
 
@@ -2738,7 +2738,7 @@ RefreshQualityControls = function(host)
   host.PetWarningsWidget:SetLabel(
     petWarningsAvailable
       and "Pet warnings"
-      or "Pet warnings - not used by this class/spec"
+      or "Pet warnings - unavailable for this specialization"
   )
   host.PetWarningsWidget:SetValue(
     petWarningsAvailable
