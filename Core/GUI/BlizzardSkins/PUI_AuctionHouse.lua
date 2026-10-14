@@ -57,6 +57,10 @@ Skins.Register("Blizzard_AuctionHouseUI", "AuctionHouseFrame", {
     Skins.Surface(frame.CategoriesList.ScrollBox, true, true)
     Skins.ScrollBar(frame.CategoriesList.ScrollBar)
     local scrollBox = frame.CategoriesList.ScrollBox
+    local scrollBar = frame.CategoriesList.ScrollBar
+    scrollBar:ClearAllPoints()
+    scrollBar:SetPoint("TOPLEFT", scrollBox, "TOPRIGHT", 4, 0)
+    scrollBar:SetPoint("BOTTOMLEFT", scrollBox, "BOTTOMRIGHT", 4, 4)
     local categoryScrollOffset
     -- Selection rebuilds the tree before the click handler forces its top alignment.
     Skins.Hook(frame.CategoriesList, "SetSelectedCategory", function()
