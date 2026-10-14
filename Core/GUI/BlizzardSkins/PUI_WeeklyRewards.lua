@@ -3,7 +3,6 @@ local Skins = ns.BlizzardSkins
 local activities = setmetatable({}, { __mode = "k" })
 
 local function RefreshActivities(frame)
-  if not Skins.CanStyle() then return end
   for _, activity in ipairs(frame.Activities) do
     if not activities[activity] then
       activities[activity] = true
