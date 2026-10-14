@@ -472,6 +472,10 @@ local function RefreshScrollBar(scrollbar)
   Theme.SetSquareBackdrop(surfaces[scrollbar.Track.Thumb], {
     bg = colors.accent, border = transparentBorder,
   }, 0)
+  for _, divider in ipairs(scrollBars[scrollbar]) do
+    divider:SetHeight(Theme.ControlBorderSize)
+    divider:SetColorTexture(unpack(colors.controlBorder))
+  end
   Theme.ApplyScrollArrow(scrollbar.Back, "up")
   Theme.ApplyScrollArrow(scrollbar.Forward, "down")
 end
@@ -486,7 +490,8 @@ function Skins.ScrollBar(scrollbar)
     RefreshScrollBar(scrollbar)
     return
   end
-  scrollBars[scrollbar] = true
+  local dividers = {}
+  scrollBars[scrollbar] = dividers
   Skins.Chrome(scrollbar)
   Skins.Surface(scrollbar, true)
   for _, button in ipairs({ scrollbar.Back, scrollbar.Forward }) do
@@ -494,6 +499,11 @@ function Skins.ScrollBar(scrollbar)
     Skins.Hide(button.Texture)
     InstallButtonState(button).edge = Theme.ControlBorderSize
     button:SetHitRectInsets(0, 0, 0, 0)
+    local divider = button:CreateTexture(nil, "OVERLAY")
+    local edge = button == scrollbar.Back and "BOTTOM" or "TOP"
+    divider:SetPoint(edge .. "LEFT", button, edge .. "LEFT")
+    divider:SetPoint(edge .. "RIGHT", button, edge .. "RIGHT")
+    dividers[#dividers + 1] = divider
   end
   local track = scrollbar.Track
   if track then
