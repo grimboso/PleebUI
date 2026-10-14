@@ -1240,17 +1240,17 @@ local function ActionBarsOptionsProvider(Addon)
           if override.useCustom == true then
             return "Using custom settings for this bar."
           end
-          return "Using shared settings. Enable customization to change this bar separately."
+          return "Using Action Bars / Shared settings. Enable Customize this bar to change this bar separately."
         end,
         order = 15,
       }
 
       args.resetShared = {
         type = "execute",
-        name = "Reset to shared settings",
+        name = "Reset bar overrides",
         confirm = true,
-        confirmText = "Discard this bar's custom settings and use the shared settings?",
-        desc = "Discard this bar's saved appearance overrides and use shared settings.",
+        confirmText = "Clear this bar's layout, appearance, text, opacity and fade overrides and use Shared settings? Actions, keybinds, position and show/hide conditions stay unchanged.",
+        desc = "Clears this bar's layout, appearance, text, opacity and fade overrides and uses Shared settings. Actions, keybinds, position and show/hide conditions stay unchanged.",
         order = 16,
         disabled = function()
           return override.useCustom ~= true and next(customSkin) == nil
