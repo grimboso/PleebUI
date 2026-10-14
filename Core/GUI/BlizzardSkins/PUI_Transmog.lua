@@ -17,7 +17,6 @@ local function InstallOutfit(row)
 end
 
 local function RefreshSituations(frame)
-  if not Skins.CanStyle() then return end
   for row in frame.SituationFramePool:EnumerateActive() do
     if not situationRows[row] then
       situationRows[row] = true
