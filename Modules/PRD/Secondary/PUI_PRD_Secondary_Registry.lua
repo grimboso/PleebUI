@@ -776,7 +776,7 @@ function Secondary:GetResourceOptionsForClass(classToken, specID)
   return RESOURCE_OPTIONS_BY_SPEC[classToken][specID or GetPlayerSpecID()] or NO_RESOURCE_OPTIONS
 end
 
-IsDefinitionEnabled = function(definition, profile)
+IsDefinitionEnabled = function(definition, profile, specID)
   if type(definition) ~= "table" then
     return false
   end
@@ -785,14 +785,16 @@ IsDefinitionEnabled = function(definition, profile)
     return profile.primary.hideAlternateMana ~= true
   end
 
-  return profile.secondary.resourceSettings[PLAYER_CLASS][GetPlayerSpecID()][definition.resourceKey].enabled ~= false
+  local settings = Secondary:GetResourceSettings(profile, definition.resourceKey, PLAYER_CLASS, specID)
+  return settings.enabled ~= false
 end
 
-local function ResolveMaximum(definition, deferSecretAuraMaximum)
+local function ResolveMaximum(definition, deferSecretAuraMaximum, specID)
   local resolvedMax = tonumber(definition.max) or 0
 
   if definition.configurableMaximum then
-    resolvedMax = M.db.profile.secondary.resourceSettings[PLAYER_CLASS][GetPlayerSpecID()][definition.resourceKey].behavior.stackCeiling
+    local settings = Secondary:GetResourceSettings(M.db.profile, definition.resourceKey, PLAYER_CLASS, specID)
+    resolvedMax = settings.behavior.stackCeiling
   elseif definition.knownMaxSpellID then
     if C_SpellBook.IsSpellKnown(definition.knownMaxSpellID) then
       resolvedMax = tonumber(definition.maxWhenKnown) or resolvedMax
@@ -1193,7 +1195,7 @@ local function ResolveResourceConfig(profile, definition, specID)
   end
 
   local shared = profile.secondary
-  local settings = shared.resourceSettings[PLAYER_CLASS][specID][definition.resourceKey]
+  local settings = Secondary:GetResourceSettings(profile, definition.resourceKey, PLAYER_CLASS, specID)
   local appearance = settings
   local text = settings.text
   local font = settings.text
@@ -1343,8 +1345,8 @@ local function ResolveDefinitions()
     local appliesToSpec = type(definition.specIDs) ~= "table"
       or definition.specIDs[specID] == true
 
-    if appliesToSpec and IsDefinitionEnabled(definition, profile) then
-      local resolvedMax = ResolveMaximum(definition)
+    if appliesToSpec and IsDefinitionEnabled(definition, profile, specID) then
+      local resolvedMax = ResolveMaximum(definition, false, specID)
       local minimum = tonumber(definition.minRealMax) or 0
 
       if minimum <= 0 or resolvedMax >= minimum then
