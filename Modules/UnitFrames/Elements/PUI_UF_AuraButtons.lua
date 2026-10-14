@@ -326,6 +326,20 @@ function AuraButtons.CreateButton(element, options, button)
     textFormatter = DurationFormatter,
   })
 
+  local flash = button:CreateTexture(nil, "OVERLAY", nil, 4)
+  flash:SetAllPoints(button)
+  flash:SetColorTexture(1, 1, 1, 0.22)
+  flash:SetBlendMode("ADD")
+  flash:SetAlpha(0)
+
+  local flashGroup = flash:CreateAnimationGroup()
+  local flashAlpha = flashGroup:CreateAnimation("Alpha")
+  flashAlpha:SetFromAlpha(1)
+  flashAlpha:SetToAlpha(0)
+  flashAlpha:SetDuration(0.3)
+
+  button:AddAuraShownAnimation(flashGroup)
+
   if kind == "debuffs" then
     local dispelBorder = EnsureSquareBorder(button, "DispelBorder", 7)
     ApplySquareBorderLayout(

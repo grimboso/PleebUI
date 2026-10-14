@@ -18,6 +18,14 @@ local __PUI_SHARED_MOUSEOVER_FRAME_GLOW_SIZE = 3
 local __PUI_MOUSEOVER_FRAME_GLOW_LEVEL = 40
 local MouseoverRuntimeConfig = nil
 
+local function Mouseover_SuppressGroupQuestLine(tooltip)
+  if tooltip == GameTooltip then
+    return true
+  end
+end
+
+_G.TooltipDataProcessor.AddLinePreCall(_G.Enum.TooltipDataLineType.QuestPlayer, Mouseover_SuppressGroupQuestLine)
+
 
 local function BuildMouseoverRuntimeConfig()
   local db = ns.UnitFrames.db.profile or {}

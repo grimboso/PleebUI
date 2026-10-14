@@ -34,14 +34,19 @@ local function Round(v)
   return Pixel.Round(tonumber(v) or 0)
 end
 
-local function ApplyFontStringFrameWidth(fontString, anchorFrame, offsetX)
-  local width = anchorFrame:GetWidth()
-  if width <= 0 then
-    return
+local function GetAnchorRow(anchor)
+  if anchor == "TOP" or anchor == "TOPLEFT" or anchor == "TOPRIGHT" then
+    return "TOP"
+  elseif anchor == "BOTTOM" or anchor == "BOTTOMLEFT" or anchor == "BOTTOMRIGHT" then
+    return "BOTTOM"
   end
 
-  local inset = math_abs(tonumber(offsetX) or 0)
-  Pixel.Width(fontString, math_max(1, width - inset))
+  return "MIDDLE"
+end
+
+local function GetAnchorEdgePoint(anchor, edge)
+  local row = GetAnchorRow(anchor)
+  return row == "MIDDLE" and edge or (row .. edge)
 end
 
 local function ResolveHorizontalJustification(anchor, defaultHorizontal)
@@ -427,11 +432,14 @@ function Text.ApplyUnitTextLayout(frame, unit, cfg, useConfigText, groupKind)
   end
 
   local powerBar = frame.Power
+  local _, _, _, healthAnchor, healthDX, healthDY = Text.ResolveFontForText(unit, "health", nil, cfg, useConfigText)
+  healthAnchor = healthAnchor or "RIGHT"
 
   if frame.NameText then
     local _, _, _, anchor, dx, dy = Text.ResolveFontForText(unit, "name", nil, cfg, useConfigText)
     frame.__puiNameAnchor = anchor or "LEFT"
     local justifyH = ResolveHorizontalJustification(frame.__puiNameAnchor, "LEFT")
+    local nameRow = GetAnchorRow(frame.__puiNameAnchor)
 
     local nameAnchor = frame.__puiNameAnchor
     if groupKind == "raid" then
@@ -449,8 +457,10 @@ function Text.ApplyUnitTextLayout(frame, unit, cfg, useConfigText, groupKind)
 
     frame.NameText:ClearAllPoints()
     frame.NameText:SetJustifyH(justifyH)
-    Pixel.Point(frame.NameText, nameAnchor, healthBar, nameAnchor, dx or 0, dy or 0)
+    frame.NameText:SetWidth(0)
+
     if groupKind == "raid" and justifyH == "LEFT" then
+      Pixel.Point(frame.NameText, nameAnchor, healthBar, nameAnchor, dx or 0, dy or 0)
       local rightAnchor = "TOPRIGHT"
       if nameAnchor == "BOTTOMLEFT" then
         rightAnchor = "BOTTOMRIGHT"
@@ -459,10 +469,36 @@ function Text.ApplyUnitTextLayout(frame, unit, cfg, useConfigText, groupKind)
       local offsetX = tonumber(dx) or 0
       local maxInset = math_max(0, healthBar:GetWidth() - Round(1))
       local rightOffset = offsetX - math_min(math_abs(offsetX), maxInset)
-      frame.NameText:SetWidth(0)
       Pixel.Point(frame.NameText, rightAnchor, healthBar, rightAnchor, rightOffset, dy or 0)
     else
-      ApplyFontStringFrameWidth(frame.NameText, healthBar, dx)
+      local leftPoint = GetAnchorEdgePoint(nameAnchor, "LEFT")
+      local rightPoint = GetAnchorEdgePoint(nameAnchor, "RIGHT")
+      local offsetX = tonumber(dx) or 0
+      local maxInset = math_max(0, healthBar:GetWidth() - Round(1))
+      local leftInset = math_min(math_max(offsetX, 0), maxInset)
+      local rightInset = -math_min(math_max(-offsetX, 0), maxInset)
+      local textCfg = cfg and cfg.text
+      local sameRow = groupKind ~= "raid"
+        and frame.HealthText
+        and nameRow == GetAnchorRow(healthAnchor)
+        and not (textCfg and (textCfg.hideHealthText == true or textCfg.healthMode == "HIDE"))
+
+      if sameRow then
+        local healthSide = ResolveHorizontalJustification(healthAnchor, "RIGHT")
+        local verticalOffset = (dy or 0) - (healthDY or 0)
+        local spacing = Round(3)
+
+        if healthSide == "LEFT" or (healthSide == "CENTER" and justifyH == "RIGHT") then
+          Pixel.Point(frame.NameText, leftPoint, frame.HealthText, GetAnchorEdgePoint(healthAnchor, "RIGHT"), spacing, verticalOffset)
+          Pixel.Point(frame.NameText, rightPoint, healthBar, rightPoint, rightInset, dy or 0)
+        else
+          Pixel.Point(frame.NameText, leftPoint, healthBar, leftPoint, leftInset, dy or 0)
+          Pixel.Point(frame.NameText, rightPoint, frame.HealthText, GetAnchorEdgePoint(healthAnchor, "LEFT"), -spacing, verticalOffset)
+        end
+      else
+        Pixel.Point(frame.NameText, leftPoint, healthBar, leftPoint, leftInset, dy or 0)
+        Pixel.Point(frame.NameText, rightPoint, healthBar, rightPoint, rightInset, dy or 0)
+      end
     end
 
     frame.NameText:SetMaxLines(1)
@@ -470,13 +506,12 @@ function Text.ApplyUnitTextLayout(frame, unit, cfg, useConfigText, groupKind)
   end
 
   if frame.HealthText then
-    local _, _, _, anchor, dx, dy = Text.ResolveFontForText(unit, "health", nil, cfg, useConfigText)
-    frame.__puiHealthAnchor = anchor or "RIGHT"
-    local justifyH = ResolveHorizontalJustification(frame.__puiHealthAnchor, "RIGHT")
+    frame.__puiHealthAnchor = healthAnchor
+    local justifyH = ResolveHorizontalJustification(healthAnchor, "RIGHT")
 
     frame.HealthText:ClearAllPoints()
     frame.HealthText:SetJustifyH(justifyH)
-    Pixel.Point(frame.HealthText, frame.__puiHealthAnchor, healthBar, frame.__puiHealthAnchor, dx or 0, dy or 0)
+    Pixel.Point(frame.HealthText, healthAnchor, healthBar, healthAnchor, healthDX or 0, healthDY or 0)
   end
 
   if frame.PowerText and powerBar then
@@ -849,7 +884,8 @@ function Text.ApplyFrame(frame, unit, cfg, fontRev, opts)
 end
 
   Round = P:Def("Text.Round", Round)
-  ApplyFontStringFrameWidth = P:Def("Text.ApplyFontStringFrameWidth", ApplyFontStringFrameWidth)
+  GetAnchorRow = P:Def("Text.GetAnchorRow", GetAnchorRow)
+  GetAnchorEdgePoint = P:Def("Text.GetAnchorEdgePoint", GetAnchorEdgePoint)
   ResolveHorizontalJustification = P:Def("Text.ResolveHorizontalJustification", ResolveHorizontalJustification)
   ShouldShortenValues = P:Def("Text.ShouldShortenValues", ShouldShortenValues)
   Text.GetUnitTextConfig = P:Def("Text.GetUnitTextConfig", Text.GetUnitTextConfig)

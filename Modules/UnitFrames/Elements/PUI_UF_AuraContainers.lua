@@ -166,6 +166,7 @@ local function CreateAuraElement(frame, layout, appearance)
   container:SetParent(parent)
   container.__puiAuraAppearance = appearance
   container:SetSize(Round(1), Round(1))
+  container:SetRoundLayoutToNearestPixel(true)
   container:SetFrameStrata(frame:GetFrameStrata())
   container:SetFlowLayoutPadding(0, 0, 0, 0)
 
@@ -707,7 +708,7 @@ local function AuditAvailabilityFrame(frame, refreshAvailable)
 end
 
 local function AvailabilityFrame_OnShow(frame)
-  AuditAvailabilityFrame(frame)
+  AuditAvailabilityFrame(frame, true)
 end
 
 local function RegisterAvailabilityFrame(frame)
@@ -968,7 +969,12 @@ function AuraContainers.RefreshAvailability(frame, event)
     return
   end
 
-  AuditAvailabilityFrame(frame, event ~= nil)
+  local refreshNativeAuras = event == "UNIT_AREA_CHANGED"
+    or event == "UNIT_CONNECTION"
+    or event == "UNIT_OTHER_PARTY_CHANGED"
+    or event == "UNIT_PHASE"
+
+  AuditAvailabilityFrame(frame, refreshNativeAuras)
 end
 
 function AuraContainers.RestoreConfiguredState(frame)
