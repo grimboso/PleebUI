@@ -15,7 +15,6 @@ local C_Spell = C_Spell
 local C_DurationUtil = C_DurationUtil
 local CreateFrame = CreateFrame
 local issecretvalue = issecretvalue
-local REUSE_GCD_DURATION = select(4, GetBuildInfo()) >= 120105
 
 local CB_GCD_DUMMY_SPELL_ID = 61304
 local CB_INSTANT_CLEANUP_DURATION = 1.50
@@ -46,22 +45,17 @@ function Module:OnCreate(bar)
 end
 
 local function CB_GetPublicGCDDuration(displayDuration)
-  local duration
-  if REUSE_GCD_DURATION then
-    local cooldown = C_Spell.GetSpellCooldown(CB_GCD_DUMMY_SPELL_ID)
-    if not cooldown
-      or issecretvalue(cooldown.startTime)
-      or issecretvalue(cooldown.duration)
-      or issecretvalue(cooldown.modRate)
-    then
-      return nil, nil
-    end
-
-    duration = displayDuration
-    duration:SetTimeFromStart(cooldown.startTime, cooldown.duration, cooldown.modRate)
-  else
-    duration = C_Spell.GetSpellCooldownDuration(CB_GCD_DUMMY_SPELL_ID)
+  local cooldown = C_Spell.GetSpellCooldown(CB_GCD_DUMMY_SPELL_ID)
+  if not cooldown
+    or issecretvalue(cooldown.startTime)
+    or issecretvalue(cooldown.duration)
+    or issecretvalue(cooldown.modRate)
+  then
+    return nil, nil
   end
+
+  local duration = displayDuration
+  duration:SetTimeFromStart(cooldown.startTime, cooldown.duration, cooldown.modRate)
   if not duration or duration:HasSecretValues() then
     return nil, nil
   end
