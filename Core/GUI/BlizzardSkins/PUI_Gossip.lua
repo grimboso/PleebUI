@@ -2,7 +2,6 @@ local _, ns = ...
 local Skins = ns.BlizzardSkins
 
 local function RepaintGossipRow(row)
-  if not Skins.CanStyle() then return end
   local text = row.GreetingText or (row:IsObjectType("Button") and row:GetFontString())
   if not text then return end
   if row:IsObjectType("Button") then
@@ -26,14 +25,12 @@ local function InstallGossipRow(row)
 end
 
 local function RefreshGossipLayout(frame)
-  if not Skins.CanStyle() then return end
   local scrollBox = frame.GreetingPanel.ScrollBox
   scrollBox:FullUpdate(ScrollBoxConstants.UpdateImmediately)
   Skins.ScrollRows(scrollBox, InstallGossipRow, RepaintGossipRow)
 end
 
 local function ConfigureGossipLayout(frame)
-  if not Skins.CanStyle() then return end
   local view = frame.GreetingPanel.ScrollBox:GetView()
   view:SetPadding(4, 4, 0, 0, 4)
   -- Blizzard measures hidden template instances, separate from the visible rows.
