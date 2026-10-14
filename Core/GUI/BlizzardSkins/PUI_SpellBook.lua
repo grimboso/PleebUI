@@ -4,7 +4,6 @@ local spellRows = setmetatable({}, { __mode = "k" })
 local transparent = { 0, 0, 0, 0 }
 
 local function RefreshSpellHitArea(frame)
-  if not Skins.CanStyle() then return end
   local button = frame.Button
   local buttonWidth, buttonHeight = button:GetWidth(), button:GetHeight()
   local width, height = frame:GetWidth(), frame:GetHeight()
@@ -50,12 +49,11 @@ local function SkinSpell(frame)
   Skins.Font(frame.SubName)
   ns.Theme.ApplyFont(frame.RequiredLevel, "body")
   Skins.Hook(frame, "UpdateVisuals", function(item)
-    if Skins.CanStyle() then SkinSpell(item) end
+    SkinSpell(item)
   end)
 end
 
 local function RefreshSpells()
-  if not Skins.CanStyle() then return end
   for _, frame in PlayerSpellsFrame.SpellBookFrame.PagedSpellsFrame:EnumerateFrames() do SkinSpell(frame) end
 end
 
@@ -74,10 +72,10 @@ local function RefreshSpellBook(frame)
   Skins.TabSystem(book.CategoryTabSystem)
   Skins.IconButton(book.AssistedCombatRotationSpellFrame.Button, book.AssistedCombatRotationSpellFrame.Button.Icon)
   Skins.Hook(book.CategoryTabSystem, "AddTab", function(system)
-    if Skins.CanStyle() then Skins.TabSystem(system) end
+    Skins.TabSystem(system)
   end)
   Skins.Hook(frame.TabSystem, "AddTab", function(system)
-    if Skins.CanStyle() then Skins.TabSystem(system) end
+    Skins.TabSystem(system)
   end)
   RefreshSpells()
 end
@@ -85,7 +83,7 @@ end
 Skins.Register("Blizzard_PlayerSpells", "PlayerSpellsFrame", function(frame)
   RefreshSpellBook(frame)
   Skins.Hook(frame.SpellBookFrame, "SetMinimized", function()
-    if Skins.CanStyle() then RefreshSpellBook(frame) end
+    RefreshSpellBook(frame)
   end)
   if not ns.BlizzardSkins.spellBookDisplayHook then
     ns.BlizzardSkins.spellBookDisplayHook = true
