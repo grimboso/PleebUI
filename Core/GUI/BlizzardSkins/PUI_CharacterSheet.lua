@@ -1714,7 +1714,7 @@ end
 
 function CharacterSheet:ConfigureGearManagerPopup()
   local popup = _G.GearManagerPopupFrame
-  if not popup or not ns.BlizzardSkins.CanStyle() then return end
+  if not popup then return end
 
   if not gearPopupSearch[popup] then
     local search = CreateFrame("EditBox", nil, popup.BorderBox, "SearchBoxTemplate")
