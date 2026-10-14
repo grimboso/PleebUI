@@ -645,6 +645,13 @@ local function ObserveWindow(window)
   if not issecretvalue(shown) and shown then SkinWindow(window, frame) end
 end
 
+function Skins.ObserveAddon(addonName)
+  if not loggedIn then return end
+  for _, window in ipairs(windows) do
+    if window.addon == addonName then ObserveWindow(window) end
+  end
+end
+
 function Skins.RefreshTheme(refreshWindows)
   if not loggedIn then return end
   if not Skins.CanStyle() then
@@ -699,9 +706,7 @@ driver:SetScript("OnEvent", function(self, event, addonName)
     for _, window in ipairs(windows) do ObserveWindow(window) end
   elseif event == "ADDON_LOADED" and loggedIn then
     if not Skins.CanStyle() then return end
-    for _, window in ipairs(windows) do
-      if window.addon == addonName then ObserveWindow(window) end
-    end
+    Skins.ObserveAddon(addonName)
   elseif event == "PLAYER_REGEN_ENABLED" then
     self:UnregisterEvent("PLAYER_REGEN_ENABLED")
     if pending then
