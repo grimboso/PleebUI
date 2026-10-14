@@ -2,7 +2,6 @@ local _, ns = ...
 local Skins, Theme = ns.BlizzardSkins, ns.Theme
 
 local function RefreshHeader(row)
-  if not Skins.CanStyle() then return end
   local collapsed = row:IsCollapsed()
   if issecretvalue(collapsed) then return end
   Theme.ApplyExpandCollapseTexture(row.Right, not collapsed)
@@ -10,13 +9,11 @@ local function RefreshHeader(row)
 end
 
 local function RefreshHeaderText(row)
-  if not Skins.CanStyle() then return end
   local color = Theme.GetColors().text
   row.Name:SetTextColor(color[1], color[2], color[3], color[4])
 end
 
 local function RefreshToggle(toggle)
-  if not Skins.CanStyle() then return end
   local collapsed = toggle:GetHeader():IsCollapsed()
   if not issecretvalue(collapsed) then Theme.ApplyExpandCollapseButton(toggle, not collapsed) end
 end
