@@ -3410,9 +3410,9 @@ do
           },
           reset = {
             type = "execute",
-            name = "Reset form override",
+            name = "Reset form color to Primary",
             confirm = true,
-            confirmText = "Discard this form's custom color override?",
+            confirmText = "Clear this form's color override and use Primary's color settings?",
             order = 10,
             func = function()
               config.colorMode = nil
@@ -3471,7 +3471,7 @@ do
       automaticMax = {
         type = "toggle",
         name = "Use detected maximum",
-        desc = "Uses the current maximum reported by the game. If it is restricted, ticks wait for a non-secret value outside combat.",
+        desc = "Uses your current resource maximum. Updates when the resource maximum is available outside combat.",
         order = 2,
         hidden = function()
           return tickConfig.enabled ~= true
@@ -3495,7 +3495,7 @@ do
           if maximum then
             return "Detected maximum: " .. tostring(maximum)
           end
-          return "Detected maximum is unavailable until the game exposes a non-secret value outside combat."
+          return "Waiting for the resource maximum to become available outside combat."
         end,
         order = 3,
         hidden = function()
@@ -4849,7 +4849,8 @@ do
         args = {
           desaturateMode = {
             type = "select",
-            name = "Desaturate",
+            name = "Grayscale",
+            desc = "Turns the resource bar gray when its value meets the selected threshold.",
             order = 2,
             values = RESOURCE_THRESHOLD_VALUES,
             get = function()
@@ -4862,12 +4863,12 @@ do
           },
           desaturateThreshold = {
             type = "range",
-            name = "Desaturate threshold",
+            name = "Grayscale threshold",
             order = 3,
             min = 0,
             max = 50,
             step = 1,
-            arg = { puiDisabledReason = "Choose a Desaturate threshold mode first." },
+            arg = { puiDisabledReason = "Choose a Grayscale threshold mode first." },
             disabled = DesaturateThresholdDisabled,
             get = function()
               return Clamp(cues.desaturateThreshold or 0, 0, 50)
