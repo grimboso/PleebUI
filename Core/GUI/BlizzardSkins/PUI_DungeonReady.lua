@@ -21,6 +21,6 @@ end
 Skins.Register("Blizzard_GroupFinder", "LFGDungeonReadyDialog", function(dialog)
   RefreshDungeonReady(dialog)
   Skins.Hook(_G, "LFGDungeonReadyPopup_Update", function()
-    if Skins.CanStyle() then RefreshDungeonReady(dialog) end
+    RefreshDungeonReady(dialog)
   end)
 end)
