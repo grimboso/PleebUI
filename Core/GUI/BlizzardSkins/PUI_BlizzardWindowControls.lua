@@ -85,13 +85,10 @@ local function ApplyWindow(frame)
     return
   end
 
-  local maximized = frame == _G.WorldMapFrame and frame:IsMaximized()
-  state.drag:SetShown(not maximized)
-  state.grip:SetShown(not maximized)
+  state.drag:Show()
+  state.grip:Show()
   state.applying = true
-  if maximized then
-    frame:SetScale(state.baseScale)
-  elseif state.left then
+  if state.left then
     frame:SetScale(state.scale)
     SetTopLeft(frame, state.left, state.top)
   end
@@ -125,7 +122,6 @@ end
 
 local function BeginInteraction(frame, control, resize)
   if not enabled or InCombatLockdown() then return end
-  if frame == _G.WorldMapFrame and frame:IsMaximized() then return end
   StopInteraction()
   local left, bottom, width, height = frame:GetScaledRect()
   if not left or not bottom or not width or not height or width <= 0 or height <= 0 then return end
@@ -166,14 +162,8 @@ function Controls.Install(frame, visualRoot, name, controlsParent)
     local drag = CreateFrame("Frame", nil, controlsParent or frame)
     state.drag = drag
     controlFrames[drag] = true
-    if frame == _G.WorldMapFrame then
-      drag:SetPoint("LEFT", frame.BorderFrame.Tutorial, "RIGHT", 8, 0)
-      drag:SetPoint("RIGHT", frame, "RIGHT", -80, 0)
-      drag:SetPoint("TOP", frame, "TOP", 0, -4)
-    else
-      drag:SetPoint("TOPLEFT", frame, "TOPLEFT", 60, -4)
-      drag:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -80, -4)
-    end
+    drag:SetPoint("TOPLEFT", frame, "TOPLEFT", 60, -4)
+    drag:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -80, -4)
     drag:SetHeight(24)
     drag:EnableMouse(true)
     drag:RegisterForDrag("LeftButton")
@@ -214,25 +204,15 @@ function Controls.Install(frame, visualRoot, name, controlsParent)
     -- Blizzard reanchors dialogs after OnShow, including windows outside the UIPanel manager.
     hooksecurefunc(frame, "SetPoint", function() ApplyWindow(frame) end)
     hooksecurefunc(frame, "SetScale", function() ApplyWindow(frame) end)
-    if frame == _G.WorldMapFrame then
-      local function RefreshMapControlsAfterClick()
-        if active and active.frame == frame then StopInteraction() end
-        ApplyWindow(frame)
-      end
-      -- Blizzard reads the mode methods before acquiring protected map pins.
-      local buttons = frame.BorderFrame.MaximizeMinimizeFrame
-      buttons.MaximizeButton:HookScript("OnClick", RefreshMapControlsAfterClick)
-      buttons.MinimizeButton:HookScript("OnClick", RefreshMapControlsAfterClick)
-    end
   end
   if visualRoot then state.visualRoot = visualRoot end
-  local controlRoot = frame == _G.WorldMapFrame and frame.BorderFrame or frame
+  local controlRoot = frame
   state.drag:SetFrameStrata(controlRoot:GetFrameStrata())
   state.grip:SetFrameStrata(controlRoot:GetFrameStrata())
   state.drag:SetFrameLevel(controlRoot:GetFrameLevel() + 100)
   state.grip:SetFrameLevel(controlRoot:GetFrameLevel() + 100)
   state.grip:ClearAllPoints()
-  local rightInset = frame == _G.WorldMapFrame and 28 or 4
+  local rightInset = 4
   -- These templates put buttons or scrollbars in the bottom-right corner.
   if exteriorGrips[name] then rightInset = -20 end
   state.grip:SetPoint("BOTTOMRIGHT", state.visualRoot, "BOTTOMRIGHT", -rightInset, 4)
