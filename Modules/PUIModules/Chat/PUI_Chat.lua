@@ -2531,9 +2531,16 @@ local function SkinChatEditBox(chatFrame)
     return
   end
 
-  local colors = ns.Theme.GetColors()
-  _PUI_ApplyTextureBackdrop(editBox, colors.control, colors.border, ns.Theme.GetEdgeSize())
-  editBox._puiTextureBackdrop.fill:Show()
+  local shell = GetChatFrameState(chatFrame).shell
+  SaveNativeVisual(editBox, true)
+  editBox:ClearAllPoints()
+  editBox:SetPoint("TOPLEFT", shell, "BOTTOMLEFT", 0, 0)
+  editBox:SetPoint("TOPRIGHT", shell, "BOTTOMRIGHT", 0, 0)
+  editBox:SetHeight(30)
+
+  local style = _GetChatWindowStyle()
+  _PUI_ApplyTextureBackdrop(editBox, style.bg, style.border, style.borderSize)
+  editBox._puiTextureBackdrop.top:Hide()
 
   local state = GetChatEditBoxState(editBox)
   if state.skinned then
@@ -2870,7 +2877,7 @@ function ChatLinks:RefreshChatFrameVisuals(chatFrame, refreshStyle)
   self:ApplyChatWindowFading(chatFrame)
   self:ApplyChatHistoryCapacity(chatFrame)
 
-  if not CanChangeChatLayout(chatFrame) then
+  if not CanChangeChatLayout(chatFrame) or not CanChangeChatLayout(chatFrame.editBox) then
     state.open = true
     state.pendingVisualRefresh = true
     state.pendingVisualStyle = refreshStyle == true
@@ -2933,12 +2940,16 @@ local function ApplyChatDockLayout()
     return
   end
 
-  if not CanChangeChatLayout(dock) then
+  if InCombatLockdown() or not CanChangeChatLayout(dock) then
     ChatLinks._puiPendingChatDockLayout = true
     return
   end
 
   ChatLinks._puiPendingChatDockLayout = nil
+  SaveNativeVisual(dock, true)
+  SaveNativeVisual(dock.overflowButton, true)
+  SaveNativeVisual(dock.scrollFrame, true)
+  SaveNativeVisual(dock.scrollFrame:GetScrollChild(), true)
 
   dock:ClearAllPoints()
   dock:SetPoint("BOTTOMLEFT", primary, "TOPLEFT", 0, 3)
