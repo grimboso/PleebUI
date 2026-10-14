@@ -6,7 +6,7 @@ local texts = setmetatable({}, { __mode = "k" })
 local headers = setmetatable({}, { __mode = "k" })
 
 local function ApplyNativeFont(text)
-  if Skins.CanStyle() then Theme.ApplyFont(text, "body") end
+  Theme.ApplyFont(text, "body")
 end
 
 function Templates.Fonts(frame)
@@ -25,7 +25,6 @@ function Templates.Fonts(frame)
 end
 
 local function DiscoverHeaders(list)
-  if not Skins.CanStyle() then return end
   for _, header in ipairs({ list.HeaderContainer:GetChildren() }) do
     if header:IsObjectType("Button") and not headers[header] then
       headers[header] = true
@@ -36,7 +35,6 @@ local function DiscoverHeaders(list)
 end
 
 function Templates.ListRows(list)
-  if not Skins.CanStyle() then return end
   Skins.ScrollRows(list.ScrollBox, Templates.Fonts, Templates.Fonts)
   DiscoverHeaders(list)
 end
