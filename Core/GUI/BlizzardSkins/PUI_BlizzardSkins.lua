@@ -22,18 +22,7 @@ local dropdownMenuStyle
 local hooks = setmetatable({}, { __mode = "k" })
 local driver = CreateFrame("Frame")
 local loggedIn = false
-local pending = false
-local pendingTheme = false
 local transparentBorder = { 0, 0, 0, 0 }
-
-function Skins.CanStyle()
-  if InCombatLockdown() then
-    pending = true
-    driver:RegisterEvent("PLAYER_REGEN_ENABLED")
-    return false
-  end
-  return true
-end
 
 function Skins.Hide(region)
   if region then
@@ -192,7 +181,6 @@ function Skins.Shell(frame, backgroundFrame)
 end
 
 local function RefreshButtonState(button)
-  if not Skins.CanStyle() then return end
   local enabled = button:IsEnabled()
   if issecretvalue(enabled) then return end
   local colors = Theme.GetColors()
@@ -389,7 +377,6 @@ function Skins.Dropdown(dropdown)
 end
 
 local function RefreshTabState(tab)
-  if not Skins.CanStyle() then return end
   local state = styledTabs[tab]
   local selected = false
   if tab.MiddleActive then selected = tab.MiddleActive:IsShown() end
@@ -632,7 +619,7 @@ function Skins.ScrollRows(scrollBox, skin, repaint)
       end
     end
     state = function(box)
-      if Skins.CanStyle() then box:ForEachFrame(SkinRow) end
+      box:ForEachFrame(SkinRow)
     end
     scrollRows[scrollBox] = state
     Skins.Hook(scrollBox, "Update", state)
@@ -682,7 +669,7 @@ function Skins.Navigation(bar)
     end
   end
   Skins.Hook(_G, "NavBar_AddButton", function(nav)
-    if navigationBars[nav] and Skins.CanStyle() then Skins.Navigation(nav) end
+    if navigationBars[nav] then Skins.Navigation(nav) end
   end)
 end
 
@@ -705,7 +692,6 @@ function Skins.Register(addonName, frameName, callbacks)
 end
 
 local function SkinWindow(window, frame)
-  if not Skins.CanStyle() then return end
   if not window.initialized then
     if window.install then window.install(frame) end
     window.initialized = true
@@ -745,10 +731,6 @@ end
 
 function Skins.RefreshTheme(refreshWindows)
   if not loggedIn then return end
-  if not Skins.CanStyle() then
-    pendingTheme = refreshWindows ~= false or pendingTheme
-    return
-  end
   local colors = Theme.GetColors()
   local edge = Theme.GetEdgeSize()
   for frame, host in pairs(surfaces) do
@@ -801,24 +783,7 @@ driver:SetScript("OnEvent", function(self, event, addonName)
     self:UnregisterEvent("PLAYER_LOGIN")
     for _, window in ipairs(windows) do ObserveWindow(window) end
   elseif event == "ADDON_LOADED" and loggedIn then
-    if not Skins.CanStyle() then return end
     Skins.ObserveAddon(addonName)
-  elseif event == "PLAYER_REGEN_ENABLED" then
-    self:UnregisterEvent("PLAYER_REGEN_ENABLED")
-    if pending then
-      pending = false
-      local refreshThemeCallbacks = pendingTheme
-      pendingTheme = false
-      for _, window in ipairs(windows) do ObserveWindow(window) end
-      Skins.RefreshTheme(false)
-      if refreshThemeCallbacks then
-        for _, window in ipairs(windows) do
-          if window.frame and window.initialized and window.onTheme then
-            window.onTheme(window.frame)
-          end
-        end
-      end
-    end
   end
 end)
 
