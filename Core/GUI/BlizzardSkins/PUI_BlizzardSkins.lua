@@ -514,6 +514,7 @@ function Skins.ScrollBar(scrollbar)
     end
   end
   RefreshScrollBar(scrollbar)
+  scrollbar:SetHideIfUnscrollable(true)
 end
 
 function Skins.Apply(root, layout)
