@@ -35,11 +35,9 @@ local function UpdateTargetDriver()
   local runtime = unitRuntimes.target
   if runtime and runtime.activeSlots > 0 then
     targetDriver:RegisterEvent("PLAYER_TARGET_CHANGED")
-    targetDriver:RegisterUnitEvent("UNIT_FACTION", "target")
     targetDriver:RegisterUnitEvent("UNIT_TARGETABLE_CHANGED", "target")
   else
     targetDriver:UnregisterEvent("PLAYER_TARGET_CHANGED")
-    targetDriver:UnregisterEvent("UNIT_FACTION")
     targetDriver:UnregisterEvent("UNIT_TARGETABLE_CHANGED")
   end
 end
