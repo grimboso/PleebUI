@@ -32,16 +32,9 @@ local math_max = _G.math.max
 local math_min = _G.math.min
 local table_sort = _G.table.sort
 local setmetatable = _G.setmetatable
-local USE_SECRET_ROLE_ICONS = select(4, _G.GetBuildInfo()) >= 120105
 
 local PartyFrames = Addon:NewModule("PartyFrames", "NumyAceEvent-3.0")
 ns.Modules.PartyFrames = PartyFrames
-
-local ROLE_NAME_BY_ENUM = {
-  [Enum.LFGRole.Tank] = "TANK",
-  [Enum.LFGRole.Healer] = "HEALER",
-  [Enum.LFGRole.Damage] = "DAMAGER",
-}
 
 local Pixel = ns.Pixel
 local Round = Pixel.Round
@@ -69,26 +62,8 @@ end
 local PartyFrameConfig = setmetatable({}, { __index = ReadPartyProfile })
 local PartyPetFrameConfig = setmetatable({}, { __index = ReadPartyPetProfile })
 
-local VALID_ASSIGNED_ROLES = {
-  TANK = true,
-  HEALER = true,
-  DAMAGER = true,
-}
-
 local function GetPartyGroupBy(db)
   local value = db and db.groupBy or nil
-  if USE_SECRET_ROLE_ICONS and value == "ROLE" then
-    return "INDEX"
-  end
-
-  if value ~= "NAME" and value ~= "ROLE" then
-    value = "INDEX"
-  end
-  return value
-end
-
-local function GetPartySortOrder(db)
-  local value = db and db.sortOrder or nil
   if value ~= "NAME" then
     value = "INDEX"
   end
@@ -97,26 +72,6 @@ end
 
 local function GetPartySortDirection(db)
   return db and db.sortDir == "DESC" and "DESC" or "ASC"
-end
-
-local function GetPartyRoleRank(db, role)
-  if not VALID_ASSIGNED_ROLES[role] then
-    return 4
-  end
-
-  local role1 = VALID_ASSIGNED_ROLES[db.ROLE1] and db.ROLE1 or "TANK"
-  local role2 = VALID_ASSIGNED_ROLES[db.ROLE2] and db.ROLE2 or "HEALER"
-  local role3 = VALID_ASSIGNED_ROLES[db.ROLE3] and db.ROLE3 or "DAMAGER"
-
-  if role == role1 then
-    return 1
-  elseif role == role2 then
-    return 2
-  elseif role == role3 then
-    return 3
-  end
-
-  return 4
 end
 
 local function ComparePartyIndex(firstFrame, secondFrame, descending)
@@ -162,20 +117,6 @@ local function ComparePartyFrames(db, firstFrame, secondFrame)
 
   if groupBy == "NAME" then
     return ComparePartyNames(firstFrame, secondFrame, descending)
-  elseif groupBy == "ROLE" then
-    local firstRole = ROLE_NAME_BY_ENUM[firstFrame.__puiGroupRole] or "NONE"
-    local secondRole = ROLE_NAME_BY_ENUM[secondFrame.__puiGroupRole] or "NONE"
-
-    local firstRank = GetPartyRoleRank(db, firstRole)
-    local secondRank = GetPartyRoleRank(db, secondRole)
-
-    if firstRank ~= secondRank then
-      return firstRank < secondRank
-    end
-
-    if GetPartySortOrder(db) == "NAME" then
-      return ComparePartyNames(firstFrame, secondFrame, descending)
-    end
   end
 
   return ComparePartyIndex(firstFrame, secondFrame, descending)
@@ -1152,9 +1093,6 @@ end
 
 function PartyFrames:OnEnable()
   self:RegisterEvent("GROUP_ROSTER_UPDATE")
-  if not USE_SECRET_ROLE_ICONS then
-    self:RegisterEvent("PLAYER_ROLES_ASSIGNED", "RefreshGroupLayout")
-  end
   self:RegisterEvent("PLAYER_ENTERING_WORLD")
   self:RegisterEvent("PARTY_MEMBER_ENABLE", "RefreshAuraAvailability")
   self:RegisterEvent("PARTY_MEMBER_DISABLE", "RefreshAuraAvailability")
@@ -1251,9 +1189,7 @@ local P = select(1, ns.Pleebug:DropIn(PartyFrames, { name = "UnitFrames.Party" }
   ReadPartyProfile = P:Def("ReadPartyProfile", ReadPartyProfile)
   ReadPartyPetProfile = P:Def("ReadPartyPetProfile", ReadPartyPetProfile)
   GetPartyGroupBy = P:Def("GetPartyGroupBy", GetPartyGroupBy)
-  GetPartySortOrder = P:Def("GetPartySortOrder", GetPartySortOrder)
   GetPartySortDirection = P:Def("GetPartySortDirection", GetPartySortDirection)
-  GetPartyRoleRank = P:Def("GetPartyRoleRank", GetPartyRoleRank)
   ComparePartyIndex = P:Def("ComparePartyIndex", ComparePartyIndex)
   ComparePartyNames = P:Def("ComparePartyNames", ComparePartyNames)
   ComparePartyFrames = P:Def("ComparePartyFrames", ComparePartyFrames)
