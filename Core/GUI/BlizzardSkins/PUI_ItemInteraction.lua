@@ -2,7 +2,6 @@ local _, ns = ...
 local Skins = ns.BlizzardSkins
 
 local function RepaintInteraction(frame)
-  if not Skins.CanStyle() then return end
   Skins.Hide(frame.Background)
   Skins.Hide(frame.ItemConversionFrame.ItemConversionInputSlot.ButtonFrame)
   Skins.Hide(frame.ItemConversionFrame.ItemConversionOutputSlot.ButtonFrame)
