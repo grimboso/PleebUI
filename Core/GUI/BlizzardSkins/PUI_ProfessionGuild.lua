@@ -2,7 +2,7 @@ local _, ns = ...
 local Skins = ns.BlizzardSkins
 
 local function RepaintCrafterRow(row)
-  if Skins.CanStyle() then ns.Theme.ApplyFont(row.Text, "body") end
+  ns.Theme.ApplyFont(row.Text, "body")
 end
 
 Skins.Register("Blizzard_Professions", "ProfessionsFrame.CraftingPage.GuildFrame", {
