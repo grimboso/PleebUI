@@ -447,17 +447,17 @@ function Skins.WidenScrollBar(scrollbar)
   local track = scrollbar.Track
   if track then
     local height = Theme.GetOptionsPointerTargetSize(24)
-    scrollbar.Back:SetSize(width, height)
-    scrollbar.Forward:SetSize(width, height)
+    scrollbar.Back:SetSize(width - 2, height)
+    scrollbar.Forward:SetSize(width - 2, height)
     scrollbar.Back:ClearAllPoints()
-    scrollbar.Back:SetPoint("TOPLEFT", scrollbar, "TOPLEFT")
+    scrollbar.Back:SetPoint("TOPLEFT", scrollbar, "TOPLEFT", 1, -1)
     scrollbar.Forward:ClearAllPoints()
-    scrollbar.Forward:SetPoint("BOTTOMLEFT", scrollbar, "BOTTOMLEFT")
+    scrollbar.Forward:SetPoint("BOTTOMLEFT", scrollbar, "BOTTOMLEFT", 1, 1)
     track:ClearAllPoints()
-    track:SetPoint("TOPLEFT", scrollbar.Back, "BOTTOMLEFT", 0, -2)
-    track:SetPoint("BOTTOMRIGHT", scrollbar.Forward, "TOPRIGHT", 0, 2)
-    track:SetWidth(width)
-    track.Thumb:SetWidth(width - 2)
+    track:SetPoint("TOPLEFT", scrollbar.Back, "BOTTOMLEFT")
+    track:SetPoint("BOTTOMRIGHT", scrollbar.Forward, "TOPRIGHT")
+    track:SetWidth(width - 2)
+    track.Thumb:SetWidth(width - 4)
     track.Thumb:SetHitRectInsets(0, 0, 0, 0)
     scrollbar.thumbAnchor = "TOP"
   end
@@ -466,7 +466,7 @@ end
 local function RefreshScrollBar(scrollbar)
   Skins.WidenScrollBar(scrollbar)
   local colors = Theme.GetColors()
-  Theme.SetSquareBackdrop(surfaces[scrollbar.Track], {
+  Theme.SetSquareBackdrop(surfaces[scrollbar], {
     bg = colors.control, border = colors.controlBorder,
   }, Theme.ControlBorderSize)
   Theme.SetSquareBackdrop(surfaces[scrollbar.Track.Thumb], {
@@ -488,15 +488,15 @@ function Skins.ScrollBar(scrollbar)
   end
   scrollBars[scrollbar] = true
   Skins.Chrome(scrollbar)
+  Skins.Surface(scrollbar, true)
   for _, button in ipairs({ scrollbar.Back, scrollbar.Forward }) do
-    Skins.Button(button)
+    Skins.Button(button, true)
     Skins.Hide(button.Texture)
     InstallButtonState(button).edge = Theme.ControlBorderSize
     button:SetHitRectInsets(0, 0, 0, 0)
   end
   local track = scrollbar.Track
   if track then
-    Skins.Surface(track, true)
     for _, region in ipairs({ track:GetRegions() }) do
       if region:IsObjectType("Texture") then
         Skins.Hide(region)
