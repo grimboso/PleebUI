@@ -2,7 +2,6 @@ local _, ns = ...
 local Skins = ns.BlizzardSkins
 
 local function RepaintOutputRow(row)
-  if not Skins.CanStyle() then return end
   ns.Theme.ApplyFont(row.ItemContainer.Text, "body")
 end
 
