@@ -69,10 +69,10 @@ Skins.Register("Blizzard_AuctionHouseUI", "AuctionHouseFrame", {
     categoryText:SetHeight(0)
     categoryText:Hide()
     local view = scrollBox:GetView()
-    view:SetPadding(0, 0, 3, 0, 4)
+    view:SetPadding(3, 3, 3, 3, 4)
     view:SetElementExtentCalculator(function(_, elementData)
       local inset = elementData.type == "category" and 8 or elementData.type == "subCategory" and 18 or 26
-      categoryText:SetWidth(scrollBox:GetWidth() - 3 - inset - 4)
+      categoryText:SetWidth(scrollBox:GetWidth() - 6 - inset - 4)
       categoryText:SetText(elementData.name)
       return math.max(21, math.ceil(categoryText:GetStringHeight()) + 8)
     end)
