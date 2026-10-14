@@ -9,14 +9,15 @@ end
 
 local function PaintCategory(button)
   Skins.Hide(button.NormalTexture)
+  Skins.Surface(button, false, true)
   button.SelectedTexture:SetDrawLayer("BACKGROUND", 1)
   button.SelectedTexture:SetAllPoints(button)
   button.SelectedTexture:SetBlendMode("BLEND")
-  Skins.Selection(button.SelectedTexture, 0.08)
+  Skins.Selection(button.SelectedTexture, 0.18)
   button.HighlightTexture:SetDrawLayer("BACKGROUND", 2)
   button.HighlightTexture:SetAllPoints(button)
   button.HighlightTexture:SetBlendMode("BLEND")
-  button.HighlightTexture:SetColorTexture(1, 1, 1, 0.06)
+  button.HighlightTexture:SetColorTexture(1, 1, 1, 0.10)
   ns.Theme.ApplyFont(button.Text, "body")
   button.Text:SetHeight(0)
   button.Text:SetDrawLayer("OVERLAY")
@@ -53,6 +54,7 @@ Skins.Register("Blizzard_AuctionHouseUI", "AuctionHouseFrame", {
     Skins.Button(search.SearchButton, true)
     -- Favorites star and filter-clear X retain their native action glyphs.
     Skins.Chrome(frame.CategoriesList)
+    Skins.Surface(frame.CategoriesList.ScrollBox, true, true)
     Skins.ScrollBar(frame.CategoriesList.ScrollBar)
     local scrollBox = frame.CategoriesList.ScrollBox
     categoryText = frame.CategoriesList:CreateFontString(nil, "OVERLAY")
