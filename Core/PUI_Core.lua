@@ -1274,23 +1274,13 @@ end)
 
 
 local PUI_OPTIONS_SECTION_UX = {
-  GeneralOptions = {
-    label = "UI Scale",
-    order = 10,
-    meta = {
-      navDescription = "Resolution presets and custom scale.",
-      pageTitle = "UI Scale",
-      pageDescription = "Set the UI scale used by PleebUI.",
-      pageHelp = "Choose a preset or adjust the scale manually.",
-    },
-  },
   UITheme = {
-    label = "UI Theme",
+    label = "UI Settings",
     order = 15,
     meta = {
-      navDescription = "Colors, fonts, and options layout.",
-      pageTitle = "UI Theme",
-      pageDescription = "Set PleebUI colors, fonts, and options layout.",
+      navDescription = "UI scale, colors, fonts, and options layout.",
+      pageTitle = "UI Settings",
+      pageDescription = "Set UI scale, PleebUI colors, fonts, and options layout.",
       pageHelp = "These settings apply throughout PleebUI.",
     },
   },
