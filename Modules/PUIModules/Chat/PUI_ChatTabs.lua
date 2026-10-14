@@ -28,7 +28,8 @@ function ChatLinks:AlignChatDockTabs(dock, nativeUpdated)
 
   local primary = dock.primary
   if not canaccessvalue(primary) or not primary then return end
-  if not nativeUpdated then
+  local chatLocked = C_ChatInfo.InChatMessagingLockdown()
+  if not nativeUpdated and not chatLocked then
     DockLayoutReady = true
     FCFDock_UpdateTabs(dock, true)
     return
@@ -64,13 +65,13 @@ function ChatLinks:AlignChatDockTabs(dock, nativeUpdated)
   for _, frame in ipairs(dock.DOCKED_CHAT_FRAMES) do
     if canaccessvalue(frame.isStaticDocked) and not frame.isStaticDocked then
       local tab = _G[frame:GetName() .. "Tab"]
-      local textWidth = tab.Text:GetStringWidth()
-      local width
-      if canaccessvalue(textWidth) then
-        width = math.max(tab.Left:GetWidth() + tab.Right:GetWidth(), textWidth + 20 + (tab.sizePadding or 0))
-      else
-        -- Blizzard gives tabs with restricted names a fixed, readable width.
-        width = tab:GetWidth()
+      local width = tab:GetWidth()
+      -- Measuring restricted labels can fail before returning a width.
+      if not chatLocked and canaccessvalue(tab.Text:GetText()) then
+        local textWidth = tab.Text:GetStringWidth()
+        if canaccessvalue(textWidth) then
+          width = math.max(tab.Left:GetWidth() + tab.Right:GetWidth(), textWidth + 20 + (tab.sizePadding or 0))
+        end
       end
       if not canaccessvalue(width) then return end
       TabLabelWidths[tab] = width
@@ -169,7 +170,9 @@ end
 function ChatLinks:StopChatTabs()
   Enabled = false
   DockLayoutReady = false
-  if not InCombatLockdown() then FCFDock_UpdateTabs(GeneralDockManager, true) end
+  if not InCombatLockdown() and not C_ChatInfo.InChatMessagingLockdown() then
+    FCFDock_UpdateTabs(GeneralDockManager, true)
+  end
   for tab, owner in pairs(TabOwners) do
     SetTabTextShown(tab, true)
     owner.fadeText, owner.tabHovered, owner.frameHovered = false, false, false
