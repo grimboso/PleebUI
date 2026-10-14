@@ -482,6 +482,9 @@ function CharacterSheet:StyleStatRow(statFrame)
   if statFrame.Background then
     statFrame.Background:SetAlpha(0)
   end
+  local _, labelSize = statFrame.Label:GetFont()
+  local _, valueSize = statFrame.Value:GetFont()
+  statFrame:SetHeight(math.max(15, labelSize, valueSize) + 4)
   local tr, tg, tb, ta = GetTextColor()
   statFrame.Label:SetTextColor(tr * 0.70, tg * 0.70, tb * 0.70, ta)
 end
