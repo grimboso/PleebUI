@@ -75,7 +75,6 @@ local function RefreshCollectionRows()
 end
 
 local function SkinCollectionSpell(button)
-  if not Skins.CanStyle() then return end
   Skins.Hide(button.slotFrameCollected)
   Skins.Hide(button.slotFrameUncollected)
   Skins.Hide(button.slotFrameUncollectedInnerGlow)
@@ -98,7 +97,6 @@ local function SkinCampsite(row)
 end
 
 local function RefreshCampsites()
-  if not Skins.CanStyle() then return end
   for _, row in WarbandSceneJournal.IconsFrame.Icons:EnumerateFrames() do SkinCampsite(row) end
 end
 
@@ -138,7 +136,6 @@ local function SkinPetExperience(bar)
 end
 
 local function RefreshCollectionModels()
-  if not Skins.CanStyle() then return end
   for _, content in ipairs(WardrobeCollectionFrame.ContentFrames) do
     if content.Models then
       for _, model in ipairs(content.Models) do
