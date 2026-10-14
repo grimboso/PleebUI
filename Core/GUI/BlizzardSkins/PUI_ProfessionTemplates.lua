@@ -42,12 +42,11 @@ function Templates.Note(note)
   local edit = note.ScrollingEditBox.ScrollBox.EditBox
   ns.Theme.ApplyFont(edit, "body")
   Skins.Hook(edit, "SetFontObject", function(text)
-    if Skins.CanStyle() then ns.Theme.ApplyFont(text, "body") end
+    ns.Theme.ApplyFont(text, "body")
   end)
 end
 
 function Templates.Tabs(system)
-  if not Skins.CanStyle() then return end
   for _, tab in ipairs({ system:GetChildren() }) do
     if tab:IsObjectType("Button") and not tabs[tab] then
       tabs[tab] = true
@@ -67,7 +66,6 @@ function Templates.Rank(bar)
 end
 
 local function RepaintRecipeRow(row)
-  if not Skins.CanStyle() then return end
   if row.Label then
     ns.Theme.ApplyFont(row.Label, "body")
     row.Label:SetHeight(0)
@@ -115,7 +113,6 @@ function Templates.RecipeRows(list)
 end
 
 local function RepaintTableRow(row)
-  if not Skins.CanStyle() then return end
   for _, cell in ipairs({ row:GetChildren() }) do Templates.Fonts(cell) end
 end
 
@@ -126,7 +123,6 @@ local function InstallTableRow(row)
 end
 
 function Templates.TableRows(list)
-  if not Skins.CanStyle() then return end
   Skins.ScrollRows(list.ScrollBox, InstallTableRow, RepaintTableRow)
   for _, header in ipairs({ list.HeaderContainer:GetChildren() }) do Templates.Fonts(header) end
 end
@@ -148,12 +144,11 @@ local function SkinReagentSlot(slot)
 end
 
 local function RepaintFlyoutRow(button)
-  if not Skins.CanStyle() then return end
   Templates.Fonts(button)
 end
 
 local function RefreshFlyout()
-  if not activeFlyout or not Skins.CanStyle() then return end
+  if not activeFlyout then return end
   local shown = activeFlyout:IsVisible()
   if issecretvalue(shown) or not shown then return end
   local frame = activeFlyout
@@ -179,7 +174,6 @@ function Templates.ObserveFlyouts()
 end
 
 function Templates.RefreshForm(form)
-  if not Skins.CanStyle() then return end
   for slot in form.reagentSlotPool:EnumerateActive() do SkinReagentSlot(slot) end
   for _, key in ipairs({ "salvageSlot", "enchantSlot" }) do
     local slot = form[key]
