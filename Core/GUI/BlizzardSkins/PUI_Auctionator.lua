@@ -2,6 +2,7 @@ local _, ns = ...
 local Skins, Theme = ns.BlizzardSkins, ns.Theme
 local styledFrames = setmetatable({}, { __mode = "k" })
 local scrollBoxes = setmetatable({}, { __mode = "k" })
+local framePools = setmetatable({}, { __mode = "k" })
 local skinName = "AuctionatorAHTabsContainer"
 local driver = CreateFrame("Frame")
 local hooked = false
@@ -77,6 +78,7 @@ SkinFrame = function(frame)
     end)
   end
   if frame.checkBoxPool then
+    framePools[frame.checkBoxPool] = true
     Skins.Hook(frame, "RefreshLists", function(list)
       for checkbox in list.checkBoxPool:EnumerateActive() do
         SkinFrame(checkbox)
@@ -84,6 +86,8 @@ SkinFrame = function(frame)
     end)
   end
   if frame.groupPool and frame.buttonPool then
+    framePools[frame.groupPool] = true
+    framePools[frame.buttonPool] = true
     Skins.Hook(frame, "UpdateFromExisting", function(view)
       if not Skins.CanStyle() then return end
       for group in view.groupPool:EnumerateActive() do SkinFrame(group) end
@@ -121,6 +125,9 @@ local function SkinAuctionator(container)
       SkinFrame(row)
       SkinChildren(row)
     end)
+  end
+  for pool in pairs(framePools) do
+    for frame in pool:EnumerateActive() do SkinFrame(frame) end
   end
   SkinDialogs()
 end
