@@ -441,6 +441,10 @@ end
 
 function Skins.ScrollBar(scrollbar)
   if not scrollbar then return end
+  if scrollbar.ScrollUpButton then
+    Theme.WidgetSkins.Scrollbar(scrollbar)
+    return
+  end
   Skins.WidenScrollBar(scrollbar)
   Skins.Chrome(scrollbar)
   if scrollbar.Back then Skins.Arrow(scrollbar.Back, "^") end
