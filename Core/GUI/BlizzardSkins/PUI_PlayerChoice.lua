@@ -7,7 +7,6 @@ local rewards = setmetatable({}, { __mode = "k" })
 local containers = setmetatable({}, { __mode = "k" })
 
 local function InstallButtons(container)
-  if not Skins.CanStyle() then return end
   for frame in container.buttonFramePool:EnumerateActive() do
     if not buttons[frame] then
       buttons[frame] = true
@@ -26,7 +25,6 @@ local function ObserveButtons(container)
 end
 
 local function PaintReward(row)
-  if not Skins.CanStyle() then return end
   Skins.Font(row.Name)
   Skins.Font(row.Text)
 end
@@ -45,7 +43,6 @@ local function InstallRewards(container)
 end
 
 local function PaintOptionFonts(option)
-  if not Skins.CanStyle() then return end
   if option.Header then
     if option.Header.Contents then
       Skins.Font(option.Header.Contents.Text, "header")
@@ -64,7 +61,6 @@ local function PaintOptionFonts(option)
 end
 
 local function PaintOption(option)
-  if not Skins.CanStyle() then return end
   -- Covenant cards bake their identifying artwork into the background texture.
   if not option.PreviewButton then Skins.Hide(option.Background) end
   Skins.Hide(option.ArtworkBorder)
@@ -82,7 +78,6 @@ local function PaintOption(option)
 end
 
 local function RefreshOptions(frame)
-  if not Skins.CanStyle() then return end
   for option in frame.optionPools:EnumerateActive() do
     if not options[option] then
       options[option] = true
@@ -100,7 +95,6 @@ local function RefreshOptions(frame)
 end
 
 local function PaintShell(frame)
-  if not Skins.CanStyle() then return end
   Skins.Hide(frame.NineSlice)
   Skins.Hide(frame.BorderOverlay)
   Skins.Hide(frame.Header.Texture)
