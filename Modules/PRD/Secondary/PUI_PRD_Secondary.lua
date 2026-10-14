@@ -1387,6 +1387,33 @@ local function _ResolveSecondaryColorConfig(self)
 
   local packedResolved = _PackResourceColor(r, g, b, a)
 
+  if definition.adapter == "POWER" then
+    local gray = r * 0.2126 + g * 0.7152 + b * 0.0722
+    local partialR, partialG, partialB = r * 0.75, g * 0.75, b * 0.75
+    local partialGray = gray * 0.75
+    local cr, cg, cb, ca = unpack(config.behavior.chargedColor)
+
+    self._puiDiscreteColorPalette = {
+      normalKey = packedResolved,
+      partial = {
+        partialR, partialG, partialB, a,
+        key = _PackResourceColor(partialR, partialG, partialB, a),
+      },
+      desaturated = {
+        gray, gray, gray, a,
+        key = _PackResourceColor(gray, gray, gray, a),
+      },
+      desaturatedPartial = {
+        partialGray, partialGray, partialGray, a,
+        key = _PackResourceColor(partialGray, partialGray, partialGray, a),
+      },
+      charged = {
+        cr, cg, cb, ca,
+        key = _PackResourceColor(cr, cg, cb, ca),
+      },
+    }
+  end
+
   if useCustom then packedResolved = packedResolved + 2000000000000 end
   if useBlizz then packedResolved = packedResolved + 4000000000000 end
   if useClass then packedResolved = packedResolved + 8000000000000 end
@@ -1777,10 +1804,23 @@ end
 
 local function _ApplyDiscreteSecondaryBars(self, cur, maxV, r, g, b, a, chargedMask)
   local config = self.secondaryResourceConfig
-  r, g, b, a = _ResolveResourceCueColor(config, cur, r, g, b, a)
-  _UpdateResourceThresholdCue(self.secondary, config, cur)
+  local palette = self._puiDiscreteColorPalette
+  local colorKey = palette.normalKey
+  local partialColor = palette.partial
+  local cues = config.cues
 
-  local colorKey = _PackResourceColor(r, g, b, a)
+  if config.supportsNumericCues == true
+    and cues.desaturateMode ~= "NONE"
+    and cur ~= nil
+    and not issecretvalue(cur)
+    and _ThresholdMatches(cues.desaturateMode, cur, cues.desaturateThreshold)
+  then
+    r, g, b, a = unpack(palette.desaturated)
+    colorKey = palette.desaturated.key
+    partialColor = palette.desaturatedPartial
+  end
+
+  _UpdateResourceThresholdCue(self.secondary, config, cur)
 
   if self._puiSecondaryBuildMode == "SEGMENTED" then
     local segments = self.secondarySegments
@@ -1826,12 +1866,14 @@ local function _ApplyDiscreteSecondaryBars(self, cur, maxV, r, g, b, a, chargedM
 
       local charged = math.floor(chargedMask / 2 ^ (i - 1)) % 2 == 1
       local sr, sg, sb, sa = r, g, b, a
+      local segmentColorKey = colorKey
       if charged then
-        sr, sg, sb, sa = unpack(config.behavior.chargedColor)
+        sr, sg, sb, sa = unpack(palette.charged)
+        segmentColorKey = palette.charged.key
       elseif config.behavior.darkenPartial and value > 0 and value < 1 then
-        sr, sg, sb = r * 0.75, g * 0.75, b * 0.75
+        sr, sg, sb, sa = unpack(partialColor)
+        segmentColorKey = partialColor.key
       end
-      local segmentColorKey = _PackResourceColor(sr, sg, sb, sa)
       if segment._puiLastColorP ~= segmentColorKey then
         segment._puiLastColorP = segmentColorKey
         segment:SetStatusBarColor(sr, sg, sb, sa)
