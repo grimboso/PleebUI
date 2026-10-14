@@ -18,7 +18,6 @@ local type = _G.type
 local tonumber = _G.tonumber
 local pairs = _G.pairs
 local math_max = _G.math.max
-local USE_SECRET_ROLE_ICONS = select(4, _G.GetBuildInfo()) >= 120105
 
 local Round = ns.Pixel.Round
 local SHARED_ICON_ANCHOR_POINTS = {
@@ -184,15 +183,6 @@ local function SetTexturePoint(texture, point, relativeTo, relativePoint, x, y, 
   texture:SetSize(size, size)
 end
 
-local function GetRaidRoleVisibilityMask(frame)
-  local isLeader = frame and frame.LeaderIndicator and frame.LeaderIndicator:IsShown() == true
-  local isAssistant = frame and frame.AssistantIndicator and frame.AssistantIndicator:IsShown() == true
-  local isRaidRole = frame and frame.RaidRoleIndicator and frame.RaidRoleIndicator:IsShown() == true
-  local mask = (isLeader and 1 or 0) + (isAssistant and 2 or 0) + (isRaidRole and 4 or 0)
-
-  return mask, isLeader, isAssistant, isRaidRole
-end
-
 local function LayoutRaidRoleIndicators(frame)
   if not frame then
     return
@@ -203,121 +193,14 @@ local function LayoutRaidRoleIndicators(frame)
     return
   end
 
-  if USE_SECRET_ROLE_ICONS then
-    local anchor = frame.PUIRaidRoleAnchor
-    local size = layout.size
-    local direction = layout.point:find("RIGHT", 1, true) and -1 or 1
+  local anchor = frame.PUIRaidRoleAnchor
+  local size = layout.size
+  local direction = layout.point:find("RIGHT", 1, true) and -1 or 1
 
-    -- Blizzard can set secret widths; each slot anchors directly to our container.
-    SetTexturePoint(frame.LeaderIndicator, layout.point, anchor, layout.point, layout.x, layout.y, size)
-    SetTexturePoint(frame.AssistantIndicator, layout.point, anchor, layout.point, layout.x + direction * size, layout.y, size)
-    SetTexturePoint(frame.RaidRoleIndicator, layout.point, anchor, layout.point, layout.x + direction * size * 2, layout.y, size)
-    return
-  end
-
-  local visibilityMask, isLeader, isAssistant, isRaidRole = GetRaidRoleVisibilityMask(frame)
-  if frame.RaidRoleIndicator then
-    frame.RaidRoleIndicator.__puiRaidRoleWasShown = isRaidRole
-  end
-
-  if visibilityMask == 0 then
-    return
-  end
-
-  local leader = frame.LeaderIndicator
-  local assistant = frame.AssistantIndicator
-  local raidRole = frame.RaidRoleIndicator
-  local anchor = frame.PUIRaidRoleAnchor or frame
-  local point = layout.point
-  local size = math_max(Round(1), Round(layout.size or 1))
-  local x = Round(layout.x or 0)
-  local y = Round(layout.y or 0)
-
-  if isLeader then
-    leader:SetSize(size, size)
-    leader:ClearAllPoints()
-  end
-
-  if isAssistant then
-    assistant:SetSize(size, size)
-    assistant:ClearAllPoints()
-  end
-
-  if isRaidRole then
-    raidRole:SetSize(size, size)
-    raidRole:ClearAllPoints()
-  end
-
-  local growsLeft = point:find("RIGHT", 1, true) ~= nil
-  local pos1 = growsLeft and "RIGHT" or "LEFT"
-  local pos2 = growsLeft and "LEFT" or "RIGHT"
-
-  if isLeader then
-    leader:SetPoint(point, anchor, point, x, y)
-  elseif isAssistant then
-    assistant:SetPoint(point, anchor, point, x, y)
-  end
-
-  if isRaidRole then
-    if isLeader then
-      raidRole:SetPoint(pos1, leader, pos2, 0, 0)
-    elseif isAssistant then
-      raidRole:SetPoint(pos1, assistant, pos2, 0, 0)
-    else
-      raidRole:SetPoint(point, anchor, point, x, y)
-    end
-  end
-end
-
-local function UpdateRaidRoleLayoutOnVisibilityChanged(element)
-  local owner = element and element.__owner or nil
-  if owner then
-    LayoutRaidRoleIndicators(owner)
-  end
-end
-
-local function HookRaidRoleLayoutVisibility(element)
-  if USE_SECRET_ROLE_ICONS or not element or element.__puiRaidRoleVisibilityHooked == true then
-    return
-  end
-
-  element.__puiRaidRoleVisibilityHooked = true
-  element:HookScript("OnShow", UpdateRaidRoleLayoutOnVisibilityChanged)
-  element:HookScript("OnHide", UpdateRaidRoleLayoutOnVisibilityChanged)
-end
-
-local function PostUpdateRaidAssignmentIndicator(element, role)
-  local owner = element and element.__owner or nil
-  local layout = owner and owner.__puiRaidRoleLayout or nil
-
-  if role == "MAINTANK" and layout and layout.showMainTank ~= true then
-    element:Hide()
-  elseif role == "MAINASSIST" and layout and layout.showMainAssist ~= true then
-    element:Hide()
-  end
-
-  local isShown = element:IsShown() == true
-  if not owner or element.__puiRaidRoleWasShown == isShown then
-    return
-  end
-
-  element.__puiRaidRoleWasShown = isShown
-  LayoutRaidRoleIndicators(owner)
-end
-
-local function PostUpdateGroupRoleIndicator(element, role)
-  local frame = element.__owner
-  local previousRole = frame.__puiGroupRole
-  frame.__puiGroupRole = role
-  element:SetAlpha(element.__puiShowRoleIcon == true and 1 or 0)
-
-  if previousRole ~= role then
-    ns.UFThreat.Refresh(frame)
-
-    if frame.__puiGroupKind == "party" then
-      ns.Modules.PartyFrames:RefreshGroupLayout()
-    end
-  end
+  -- Blizzard can set secret widths; each slot anchors directly to our container.
+  SetTexturePoint(frame.LeaderIndicator, layout.point, anchor, layout.point, layout.x, layout.y, size)
+  SetTexturePoint(frame.AssistantIndicator, layout.point, anchor, layout.point, layout.x + direction * size, layout.y, size)
+  SetTexturePoint(frame.RaidRoleIndicator, layout.point, anchor, layout.point, layout.x + direction * size * 2, layout.y, size)
 end
 
 local function CreatePhaseIndicator(frame, parent)
@@ -466,11 +349,6 @@ function UFIndicators.EnsureSharedUnitIndicators(frame, parent, roleConfigProvid
   if useRoleIndicators and not frame.GroupRoleIndicator then
     frame.GroupRoleIndicator = roleParent:CreateTexture(nil, "ARTWORK")
   end
-  if frame.GroupRoleIndicator then
-    if not USE_SECRET_ROLE_ICONS then
-      frame.GroupRoleIndicator.PostUpdate = PostUpdateGroupRoleIndicator
-    end
-  end
 
   if useRoleIndicators and not frame.PUIRaidRoleAnchor then
     frame.PUIRaidRoleAnchor = CreateFrame("Frame", nil, leaderParent)
@@ -485,25 +363,13 @@ function UFIndicators.EnsureSharedUnitIndicators(frame, parent, roleConfigProvid
   if useRoleIndicators and not frame.LeaderIndicator then
     frame.LeaderIndicator = frame.PUIRaidRoleAnchor:CreateTexture(nil, "OVERLAY")
   end
-  if frame.LeaderIndicator then
-    HookRaidRoleLayoutVisibility(frame.LeaderIndicator)
-  end
 
   if useRoleIndicators and not frame.AssistantIndicator then
     frame.AssistantIndicator = frame.PUIRaidRoleAnchor:CreateTexture(nil, "OVERLAY")
     frame.AssistantIndicator:SetTexture("Interface\\GroupFrame\\UI-Group-AssistantIcon")
   end
-  if frame.AssistantIndicator then
-    HookRaidRoleLayoutVisibility(frame.AssistantIndicator)
-  end
-
   if useRoleIndicators and not frame.RaidRoleIndicator then
     frame.RaidRoleIndicator = frame.PUIRaidRoleAnchor:CreateTexture(nil, "OVERLAY")
-  end
-  if frame.RaidRoleIndicator then
-    if not USE_SECRET_ROLE_ICONS then
-      frame.RaidRoleIndicator.PostUpdate = PostUpdateRaidAssignmentIndicator
-    end
   end
 
   if not frame.RaidTargetIndicator then
@@ -626,7 +492,7 @@ function UFIndicators.ConfigureSharedUnitIndicators(frame, layout)
     frame.GroupRoleIndicator.__puiShowRoleIcon = IsIndicatorEnabled(config, "showRoleIcon") and not isPet
     frame.GroupRoleIndicator:SetAlpha(frame.GroupRoleIndicator.__puiShowRoleIcon and 1 or 0)
 
-    if isPet or (USE_SECRET_ROLE_ICONS and not frame.GroupRoleIndicator.__puiShowRoleIcon) then
+    if isPet or not frame.GroupRoleIndicator.__puiShowRoleIcon then
       DisableElement(frame, "GroupRoleIndicator")
       frame.GroupRoleIndicator:Hide()
     else
@@ -679,17 +545,15 @@ function UFIndicators.ConfigureSharedUnitIndicators(frame, layout)
   end
 
   if frame.RaidRoleIndicator then
-    if USE_SECRET_ROLE_ICONS then
-      local mainTankAtlas = IsIndicatorEnabled(config, "showMainTank") and "RaidFrame-Icon-MainTank" or ""
-      local mainAssistAtlas = IsIndicatorEnabled(config, "showMainAssist") and "RaidFrame-Icon-MainAssist" or ""
-      local indicator = frame.RaidRoleIndicator
+    local mainTankAtlas = IsIndicatorEnabled(config, "showMainTank") and "RaidFrame-Icon-MainTank" or ""
+    local mainAssistAtlas = IsIndicatorEnabled(config, "showMainAssist") and "RaidFrame-Icon-MainAssist" or ""
+    local indicator = frame.RaidRoleIndicator
 
-      if indicator.mainTankAtlas ~= mainTankAtlas or indicator.mainAssistAtlas ~= mainAssistAtlas then
-        -- oUF copies the texture map on Enable, so changed options need a fresh map.
-        DisableElement(frame, "RaidRoleIndicator")
-        indicator.mainTankAtlas = mainTankAtlas
-        indicator.mainAssistAtlas = mainAssistAtlas
-      end
+    if indicator.mainTankAtlas ~= mainTankAtlas or indicator.mainAssistAtlas ~= mainAssistAtlas then
+      -- oUF copies the texture map on Enable, so changed options need a fresh map.
+      DisableElement(frame, "RaidRoleIndicator")
+      indicator.mainTankAtlas = mainTankAtlas
+      indicator.mainAssistAtlas = mainAssistAtlas
     end
 
     if useRaidRoleStrip and (IsIndicatorEnabled(config, "showMainTank") or IsIndicatorEnabled(config, "showMainAssist")) then
@@ -1026,10 +890,6 @@ end
   DisableElement = P:Def("DisableElement", DisableElement)
   SetTexturePoint = P:Def("SetTexturePoint", SetTexturePoint)
   LayoutRaidRoleIndicators = P:Def("LayoutRaidRoleIndicators", LayoutRaidRoleIndicators)
-  UpdateRaidRoleLayoutOnVisibilityChanged = P:Def("UpdateRaidRoleLayoutOnVisibilityChanged", UpdateRaidRoleLayoutOnVisibilityChanged)
-  HookRaidRoleLayoutVisibility = P:Def("HookRaidRoleLayoutVisibility", HookRaidRoleLayoutVisibility)
-  PostUpdateRaidAssignmentIndicator = P:Def("PostUpdateRaidAssignmentIndicator", PostUpdateRaidAssignmentIndicator)
-  PostUpdateGroupRoleIndicator = P:Def("PostUpdateGroupRoleIndicator", PostUpdateGroupRoleIndicator)
   CreatePhaseIndicator = P:Def("CreatePhaseIndicator", CreatePhaseIndicator)
   UFIndicators.ConstructNativeStatusElements = P:Def("UFIndicators.ConstructNativeStatusElements", UFIndicators.ConstructNativeStatusElements)
   UFIndicators.EnsureSharedUnitIndicators = P:Def("UFIndicators.EnsureSharedUnitIndicators", UFIndicators.EnsureSharedUnitIndicators)
@@ -1042,5 +902,4 @@ end
   UFIndicators.UpdateRaidGroupLabels = P:Def("UFIndicators.UpdateRaidGroupLabels", UFIndicators.UpdateRaidGroupLabels)
   IsPetUnit = P:Def("IsPetUnit", IsPetUnit)
   IsIndicatorEnabled = P:Def("IsIndicatorEnabled", IsIndicatorEnabled)
-  GetRaidRoleVisibilityMask = P:Def("GetRaidRoleVisibilityMask", GetRaidRoleVisibilityMask)
   CheckRaidHeaderMember = P:Def("CheckRaidHeaderMember", CheckRaidHeaderMember)
