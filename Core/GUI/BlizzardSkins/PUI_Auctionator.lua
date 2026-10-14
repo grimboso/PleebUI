@@ -10,13 +10,12 @@ local loggedIn = false
 local nextDialog = 1
 
 local function RefreshFont(text)
-  if Skins.CanStyle() then Theme.ApplyFont(text, "body") end
+  Theme.ApplyFont(text, "body")
 end
 
 local SkinFrame
 
 local function SkinChildren(frame)
-  if not Skins.CanStyle() then return end
   for _, child in ipairs({ frame:GetChildren() }) do
     SkinFrame(child)
   end
@@ -24,7 +23,6 @@ end
 
 SkinFrame = function(frame)
   if styledFrames[frame] or frame:IsForbidden() then return end
-  if not Skins.CanStyle() then return end
   styledFrames[frame] = true
   -- Capture Auctionator's children before the skins create their own surfaces.
   local children = { frame:GetChildren() }
@@ -89,7 +87,6 @@ SkinFrame = function(frame)
     framePools[frame.groupPool] = true
     framePools[frame.buttonPool] = true
     Skins.Hook(frame, "UpdateFromExisting", function(view)
-      if not Skins.CanStyle() then return end
       for group in view.groupPool:EnumerateActive() do SkinFrame(group) end
       for button in view.buttonPool:EnumerateActive() do SkinFrame(button) end
     end)
@@ -99,7 +96,6 @@ SkinFrame = function(frame)
 end
 
 local function SkinDialogs()
-  if not Skins.CanStyle() then return end
   local dialog = _G["AuctionatorDialog" .. nextDialog]
   while dialog do
     Skins.StripRegions(dialog)
