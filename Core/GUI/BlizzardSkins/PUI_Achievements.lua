@@ -33,7 +33,6 @@ local function SkinProgressBar(bar)
 end
 
 local function RepaintAchievementCard(card)
-  if not Skins.CanStyle() then return end
   local keep = {}
   if card.Check then keep[card.Check] = true end
   if card.PlusMinus then keep[card.PlusMinus] = true end
@@ -48,7 +47,6 @@ local function RepaintAchievementCard(card)
 end
 
 local function SkinAchievementCard(card)
-  if not Skins.CanStyle() then return end
   if achievementCards[card] then
     RepaintAchievementCard(card)
     return
@@ -70,7 +68,6 @@ local function SkinAchievementCard(card)
 end
 
 local function SkinCategoryRow(row)
-  if not Skins.CanStyle() then return end
   if not achievementRows[row] then
     achievementRows[row] = true
     Skins.Button(row.Button, true)
@@ -80,7 +77,6 @@ local function SkinCategoryRow(row)
 end
 
 local function SkinStatRow(row)
-  if not Skins.CanStyle() then return end
   FadeArtwork(row)
   if not achievementRows[row] then
     achievementRows[row] = true
@@ -97,7 +93,6 @@ local function SkinComparisonRow(row)
 end
 
 local function SkinSearchRow(row)
-  if not Skins.CanStyle() then return end
   if not achievementRows[row] then
     achievementRows[row] = true
     Skins.Button(row, true)
@@ -109,7 +104,6 @@ local function SkinSearchRow(row)
 end
 
 local function RefreshCriteria(objectives)
-  if not Skins.CanStyle() then return end
   Skins.Font(objectives.RepCriteria)
   -- Use realized widgets, without querying or deriving achievement criteria state.
   for _, criterion in ipairs(objectives.criterias) do Skins.Font(criterion.Name) end
@@ -127,19 +121,16 @@ local function RefreshCriteria(objectives)
 end
 
 local function RefreshSummary()
-  if not Skins.CanStyle() then return end
   for _, card in ipairs(AchievementFrameSummaryAchievements.buttons or {}) do SkinAchievementCard(card) end
 end
 
 local function RefreshSearchPreview()
-  if not Skins.CanStyle() then return end
   local preview = AchievementFrame.HeaderDetails.Filters.SearchBox.SearchPreviewContainer
   for _, row in ipairs(preview.searchPreviews) do SkinSearchRow(row) end
   Skins.Button(preview.ShowAllSearchResults, true)
 end
 
 local function RefreshAchievementControls()
-  if not Skins.CanStyle() then return end
   local frame = AchievementFrame
   for _, tab in ipairs({ frame.Tab1, frame.Tab2, frame.Tab3 }) do Skins.Tab(tab) end
   local dropdown = frame.HeaderDetails.Filters.FilterDropdown
