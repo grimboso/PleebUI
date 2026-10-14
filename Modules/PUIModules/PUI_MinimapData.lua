@@ -138,15 +138,9 @@ local function Minimap_OnMouseUp(self, button)
     else
       _G.MinimapCluster.Tracking.Button:OpenMenu()
     end
-    return
-  end
-
-  if button == "MiddleButton" then
+  elseif button == "MiddleButton" then
     _G.GameTimeFrame:Click()
-    return
   end
-
-  MinimapData.__puiOriginalMinimapOnMouseUp(self, button)
 end
 
 function MinimapData.InstallMinimapClicks()
@@ -155,8 +149,8 @@ function MinimapData.InstallMinimapClicks()
   end
 
   MinimapData.__puiMinimapClicksInstalled = true
-  MinimapData.__puiOriginalMinimapOnMouseUp = Minimap:GetScript("OnMouseUp")
-  Minimap:SetScript("OnMouseUp", Minimap_OnMouseUp)
+  -- Keep protected pings in Blizzard's native handler.
+  Minimap:HookScript("OnMouseUp", Minimap_OnMouseUp)
 end
 
 
