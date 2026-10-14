@@ -6,7 +6,7 @@ local PreviewBox = ns.PreviewBox
 local _G = _G
 local CreateFrame = _G.CreateFrame
 local C_Timer = _G.C_Timer
-local GameTooltip = _G.GameTooltip
+local OptionsTooltip = LibStub("AceConfigDialog-3.0").tooltip
 local GetCursorPosition = _G.GetCursorPosition
 local ResetCursor = _G.ResetCursor
 local SetCursor = _G.SetCursor
@@ -55,22 +55,22 @@ local function PUI_PreviewBox_ShowInteractionTooltip(button)
     return
   end
 
-  GameTooltip:SetOwner(button, options.tooltipAnchor or "ANCHOR_RIGHT")
-  GameTooltip:SetText(title, 1, 1, 1)
+  OptionsTooltip:SetOwner(button, options.tooltipAnchor or "ANCHOR_RIGHT")
+  OptionsTooltip:SetText(title, 1, 1, 1)
 
   if description and description ~= "" then
-    GameTooltip:AddLine(description, 0.82, 0.82, 0.82, true)
+    OptionsTooltip:AddLine(description, 0.82, 0.82, 0.82, true)
   end
 
   if button.__puiPreviewInteractionFocused then
-    GameTooltip:AddLine("Enter or Space to activate.", 0.82, 0.82, 0.82, true)
+    OptionsTooltip:AddLine("Enter or Space to activate.", 0.82, 0.82, 0.82, true)
   end
-  GameTooltip:Show()
+  OptionsTooltip:Show()
 end
 
 local function PUI_PreviewBox_HideInteractionTooltip(button)
-  if GameTooltip:IsOwned(button) then
-    GameTooltip:Hide()
+  if OptionsTooltip:IsOwned(button) then
+    OptionsTooltip:Hide()
   end
 end
 
