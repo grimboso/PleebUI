@@ -22,7 +22,6 @@ local layout = {
 }
 
 local function RefreshGroupButtons()
-  if not Skins.CanStyle() then return end
   for index = 1, 4 do
     local button = GroupFinderFrame["groupButton" .. index]
     button.bg:SetAlpha(0.25)
@@ -32,7 +31,6 @@ local function RefreshGroupButtons()
 end
 
 local function RefreshShellArtwork()
-  if not Skins.CanStyle() then return end
   Skins.Chrome(PVEFrame.Inset)
   Skins.Hide(PVEFrame.shadows)
   for _, key in ipairs({ "BlueBg", "TLCorner", "TRCorner", "BRCorner", "BLCorner", "LLVert", "RLVert",
@@ -42,7 +40,6 @@ local function RefreshShellArtwork()
 end
 
 local function RefreshQueueDropdown(dropdown)
-  if not Skins.CanStyle() then return end
   dropdown.Text:ClearAllPoints()
   dropdown.Text:SetPoint("LEFT", dropdown, "LEFT", 8, 0)
   dropdown.Text:SetPoint("RIGHT", dropdown, "RIGHT", -28, 0)
@@ -51,7 +48,6 @@ local function RefreshQueueDropdown(dropdown)
 end
 
 local function RefreshRewards(parentFrame)
-  if not Skins.CanStyle() then return end
   if parentFrame == LFDQueueFrameRandomScrollFrameChildFrame or parentFrame == RaidFinderQueueFrameScrollFrameChildFrame then
     Skins.Hide(LFDQueueFrameBackground)
     Skins.Hide(RaidFinderQueueFrameBackground)
@@ -76,7 +72,6 @@ local function RefreshRewards(parentFrame)
 end
 
 local function RefreshCategoryFonts()
-  if not Skins.CanStyle() then return end
   for _, button in ipairs(LFGListFrame.CategorySelection.CategoryButtons) do
     ns.Theme.ApplyFont(button:GetFontString(), "body")
   end
@@ -101,13 +96,13 @@ local function InstallGroupFinder(frame)
   -- Applicant and search-result state stays entirely in Blizzard's restricted path.
   Skins.Hook(_G, "PVEFrame_ShowLeftInset", RefreshShellArtwork)
   Skins.Hook(_G, "GroupFinderFrameButton_SetEnabled", function(button)
-    if Skins.CanStyle() then ns.Theme.ApplyFont(button.name, "header") end
+    ns.Theme.ApplyFont(button.name, "header")
   end)
   Skins.Hook(_G, "GroupFinderFrame_OnShow", RefreshGroupButtons)
   Skins.Hook(_G, "LFGRewardsFrame_UpdateFrame", RefreshRewards)
   Skins.Hook(_G, "LFGListCategorySelection_AddButton", function(panel, index)
     local button = panel.CategoryButtons[index]
-    if button and Skins.CanStyle() then
+    if button then
       ns.Theme.ApplyFont(button:GetFontString(), "body")
     end
   end)
