@@ -1269,8 +1269,8 @@ local function _PCM_BuildCooldownViewerArgs(cm, viewerKey, opts)
 
   args.cooldownTimerEnabled = {
     type = "toggle",
-    name = "Enable cooldown timer",
-    desc = "Show the cooldown timer when a cooldown exists. An enabled duration timer takes priority while an aura, totem or similar effect is active.",
+    name = "Enable spell cooldown timer",
+    desc = "Tracks how long until the spell is ready again. An enabled buff duration timer takes priority while a buff, totem or other effect is active.",
     order = 1,
     get = function()
       local _, v = GetViewerSwipeDB(cm, viewerKey)
@@ -1320,8 +1320,8 @@ local function _PCM_BuildCooldownViewerArgs(cm, viewerKey, opts)
 
   args.desaturateCooldown = {
     type = "toggle",
-    name = "Desaturate icons on cooldown",
-    desc = "Turn icons gray during a spell cooldown. The global cooldown does not desaturate icons. Individual saturation settings take priority.",
+    name = "Grayscale on cooldown",
+    desc = "Turns icons gray during a spell cooldown. The global cooldown keeps their colors. Individual saturation settings take priority.",
     order = 39,
     get = function()
       local _, v = GetViewerSwipeDB(cm, viewerKey)
@@ -1434,8 +1434,8 @@ local function _PCM_BuildCooldownViewerArgs(cm, viewerKey, opts)
 
   args.forceCooldown = {
     type = "toggle",
-    name = "Enable duration timer",
-    desc = "Show the duration of active auras, totems and similar effects. While an effect is active, its duration takes priority. When it ends, show the cooldown timer if enabled and a cooldown exists.",
+    name = "Enable buff duration timer",
+    desc = "Tracks how long the buff, totem or other effect remains active. Its duration takes priority while active. When it ends, shows the spell cooldown if that timer is enabled.",
     order = 1,
     get = function()
       local _, v = GetViewerSwipeDB(cm, viewerKey)
@@ -2103,11 +2103,19 @@ local function _PCM_BuildEssentialGlowArgs(cm)
 end
 
 local ICON_INHERIT = "__INHERIT"
+local ICON_SETTING_SOURCES = {
+  EssentialCooldownViewer = "Essential",
+  UtilityCooldownViewer = "Utility",
+  BuffIconCooldownViewer = "Buff Icons",
+}
 
 
-local function _PCM_GetIconOutlineValues()
-  local values = OptionsUtil.BuildOutlineValues(false)
-  values[ICON_INHERIT] = "Use viewer setting"
+local function _PCM_GetIconOutlineValues(viewerKey)
+  local values = {}
+  for key, label in pairs(OptionsUtil.BuildOutlineValues(false)) do
+    values[key] = label
+  end
+  values[ICON_INHERIT] = "Use " .. ICON_SETTING_SOURCES[viewerKey] .. " settings"
   return values
 end
 
@@ -2162,7 +2170,7 @@ local function _PCM_BuildIconTextSettingsArgs(args, viewerKey, entry, role, labe
       or "Show keybinds",
     order = orderBase + 1,
     values = {
-      [ICON_INHERIT] = "Use viewer setting",
+      [ICON_INHERIT] = "Use " .. ICON_SETTING_SOURCES[viewerKey] .. " settings",
       SHOW = "Show",
       HIDE = "Hide",
     },
@@ -2258,8 +2266,9 @@ local function _PCM_BuildIconTextSettingsArgs(args, viewerKey, entry, role, labe
   args[prefix .. "Outline"] = {
     type = "select",
     name = "Outline",
+    desc = "Use " .. ICON_SETTING_SOURCES[viewerKey] .. " settings to match its text outline, or choose an outline for this icon.",
     order = orderBase + 5,
-    values = _PCM_GetIconOutlineValues,
+    values = function() return _PCM_GetIconOutlineValues(viewerKey) end,
     get = function()
       local value = IconSettings:GetField(entry, role, "flags")
       return value == nil and ICON_INHERIT or value
@@ -2456,7 +2465,7 @@ _PCM_BuildIconOverrideArgs = function(viewerKey, entry)
       name = "Visibility",
       order = 51,
       values = {
-        [ICON_INHERIT] = "Use viewer setting",
+        [ICON_INHERIT] = "Use " .. ICON_SETTING_SOURCES[viewerKey] .. " settings",
         SHOW = "Show",
         HIDE = "Hide",
       },
@@ -2524,6 +2533,7 @@ _PCM_BuildIconOverrideArgs = function(viewerKey, entry)
     args.auraSaturation = {
       type = "range",
       name = "Saturation",
+      desc = "0% is grayscale; 100% keeps full color.",
       order = 64,
       min = 0,
       max = 1,
@@ -2602,9 +2612,9 @@ _PCM_BuildIconOverrideArgs = function(viewerKey, entry)
     }
     args.resetIcon = {
       type = "execute",
-      name = "Reset to group settings",
+      name = "Reset this icon to shared settings",
       confirm = true,
-      confirmText = "Discard this icon's overrides and use its group settings?",
+      confirmText = "Clear this icon's text, timer and appearance overrides for this specialization? Shared settings and group placement stay unchanged.",
       order = 80,
       func = function()
         IconSettings:ResetEntry(entry)
@@ -2651,7 +2661,7 @@ _PCM_BuildIconOverrideArgs = function(viewerKey, entry)
     name = "Cooldown swipe",
     order = 71,
     values = {
-      [ICON_INHERIT] = "Use viewer setting",
+      [ICON_INHERIT] = "Use " .. ICON_SETTING_SOURCES[viewerKey] .. " settings",
       SHOW = "Show",
       HIDE = "Hide",
     },
@@ -2673,7 +2683,7 @@ _PCM_BuildIconOverrideArgs = function(viewerKey, entry)
     name = "Duration swipe",
     desc = "Draw the swipe for active auras, totems and similar effects when the duration timer is enabled.",
     order = 71.1,
-    values = { [ICON_INHERIT] = "Use viewer setting", SHOW = "Show", HIDE = "Hide" },
+    values = { [ICON_INHERIT] = "Use " .. ICON_SETTING_SOURCES[viewerKey] .. " settings", SHOW = "Show", HIDE = "Hide" },
     get = function()
       return _PCM_GetIconTriState(IconSettings:GetField(entry, "swipe", "showDuration"), "SHOW", "HIDE")
     end,
@@ -2686,7 +2696,7 @@ _PCM_BuildIconOverrideArgs = function(viewerKey, entry)
     type = "select",
     name = "Duration text",
     order = 71.2,
-    values = { [ICON_INHERIT] = "Use viewer setting", SHOW = "Show", HIDE = "Hide" },
+    values = { [ICON_INHERIT] = "Use " .. ICON_SETTING_SOURCES[viewerKey] .. " settings", SHOW = "Show", HIDE = "Hide" },
     get = function()
       return _PCM_GetIconTriState(IconSettings:GetField(entry, "cooldown", "durationShow"), "SHOW", "HIDE")
     end,
@@ -2698,11 +2708,11 @@ _PCM_BuildIconOverrideArgs = function(viewerKey, entry)
 
   args.swipeSource = {
     type = "select",
-    name = "Enable duration timer",
-    desc = "Enable the active aura timer, disable it, or use the inherited setting. Swipe and countdown controls apply to this timer.",
+    name = "Enable buff duration timer",
+    desc = "Tracks how long the buff, totem or other effect remains active. Use " .. ICON_SETTING_SOURCES[viewerKey] .. " settings to follow its timer choice. Swipe and countdown controls apply to this timer.",
     order = 70.5,
     values = {
-      [ICON_INHERIT] = "Use viewer setting",
+      [ICON_INHERIT] = "Use " .. ICON_SETTING_SOURCES[viewerKey] .. " settings",
       AUTOMATIC = "Enabled",
       COOLDOWN = "Disabled",
     },
@@ -2723,10 +2733,10 @@ _PCM_BuildIconOverrideArgs = function(viewerKey, entry)
   args.swipeEdge = {
     type = "select",
     name = "All swipe edges",
-    desc = "Override the viewer edges for cooldown, duration and GCD swipes. Recharge edge takes priority for charge cooldowns.",
+    desc = "Overrides the " .. ICON_SETTING_SOURCES[viewerKey] .. " swipe edges for spell cooldowns, buff durations and the global cooldown. Recharge edge takes priority while charges recover.",
     order = 73,
     values = {
-      [ICON_INHERIT] = "Use viewer setting",
+      [ICON_INHERIT] = "Use " .. ICON_SETTING_SOURCES[viewerKey] .. " settings",
       SHOW = "Show",
       HIDE = "Hide",
     },
@@ -2769,7 +2779,7 @@ _PCM_BuildIconOverrideArgs = function(viewerKey, entry)
   args.swipeColorOverride = {
     type = "toggle",
     name = "Override all swipe colors",
-    desc = "Apply this icon color to cooldown, duration and GCD swipes instead of the viewer colors.",
+    desc = "Uses this icon color for spell cooldown, buff duration and global cooldown swipes instead of the " .. ICON_SETTING_SOURCES[viewerKey] .. " colors.",
     order = 75,
     get = function()
       return IconSettings:GetField(entry, "swipe", "color") ~= nil
@@ -2884,7 +2894,7 @@ _PCM_BuildIconOverrideArgs = function(viewerKey, entry)
     name = "GCD swipe",
     order = 85,
     values = {
-      [ICON_INHERIT] = "Use viewer setting",
+      [ICON_INHERIT] = "Use " .. ICON_SETTING_SOURCES[viewerKey] .. " settings",
       SHOW = "Show",
       HIDE = "Hide",
     },
@@ -2973,6 +2983,7 @@ _PCM_BuildIconOverrideArgs = function(viewerKey, entry)
   args.readySaturation = {
     type = "range",
     name = entry.hasCharges and "Maximum charges saturation" or "Ready saturation",
+    desc = "0% is grayscale; 100% keeps full color.",
     order = 92,
     min = 0,
     max = 1,
@@ -3006,6 +3017,7 @@ _PCM_BuildIconOverrideArgs = function(viewerKey, entry)
   args.cooldownSaturation = {
     type = "range",
     name = entry.hasCharges and "Recharging saturation" or "On cooldown saturation",
+    desc = "0% is grayscale; 100% keeps full color.",
     order = 94,
     min = 0,
     max = 1,
@@ -3173,9 +3185,9 @@ _PCM_BuildIconOverrideArgs = function(viewerKey, entry)
 
   args.resetIcon = {
     type = "execute",
-    name = "Reset to group settings",
+    name = "Reset this icon to shared settings",
       confirm = true,
-      confirmText = "Discard this icon's overrides and use its group settings?",
+      confirmText = "Clear this icon's text, timer and appearance overrides for this specialization? Shared settings and group placement stay unchanged.",
     order = 110,
     func = function()
       IconSettings:ResetEntry(entry)
@@ -4669,7 +4681,7 @@ local function _PCM_BuildCustomIconGroup(GetCfg, RebuildRuntime, kind, order)
     },
     desaturateReady = {
       type = "toggle",
-      name = auraKind and "Desaturate while inactive" or "Desaturate while ready",
+      name = auraKind and "Grayscale while inactive" or "Grayscale while ready",
       order = 16,
       hidden = function()
         local _, icon = GetIcon()
@@ -4683,7 +4695,7 @@ local function _PCM_BuildCustomIconGroup(GetCfg, RebuildRuntime, kind, order)
     },
     desaturateCooldown = {
       type = "toggle",
-      name = chargeKind and "Desaturate while recharging" or "Desaturate while on cooldown",
+      name = chargeKind and "Grayscale while recharging" or "Grayscale on cooldown",
       order = 17,
       hidden = function()
         local _, icon = GetIcon()
@@ -4763,8 +4775,8 @@ local function _PCM_BuildCustomIconGroup(GetCfg, RebuildRuntime, kind, order)
     },
     timerDisplay = {
       type = "toggle",
-      name = "Enable duration timer",
-      desc = "Show the duration of active auras, totems and similar effects. While an effect is active, its duration takes priority. When it ends, show the cooldown timer if enabled and a cooldown exists.",
+      name = "Enable buff duration timer",
+      desc = "Tracks how long the buff, totem or other effect remains active. Its duration takes priority while active. When it ends, shows the spell cooldown if that timer is enabled.",
       order = 1,
       hidden = function() return auraKind or HiddenWhenIconOff() end,
       get = function()
@@ -4876,7 +4888,7 @@ local function _PCM_BuildCustomIconGroup(GetCfg, RebuildRuntime, kind, order)
     },
     activeAuraDesaturate = {
       type = "toggle",
-      name = "Desaturate while aura is active",
+      name = "Grayscale while buff is active",
       order = 25.3,
       hidden = function()
         local _, icon = GetIcon()
@@ -5405,7 +5417,7 @@ local function _PCM_BuildCustomBarStateGroups(GetCfg, RebuildRuntime, chargeKind
   }
   local desaturateReady = {
     type = "toggle",
-    name = chargeKind and "Desaturate at full charges" or "Desaturate while ready",
+    name = chargeKind and "Grayscale at full charges" or "Grayscale while ready",
     order = 2,
     get = function() return GetValue("desaturateReady", false) == true end,
     set = function(_, value) SetValue("desaturateReady", value == true) end,
@@ -5445,7 +5457,7 @@ local function _PCM_BuildCustomBarStateGroups(GetCfg, RebuildRuntime, chargeKind
   }
   local desaturateCooldown = {
     type = "toggle",
-    name = chargeKind and "Desaturate while recharging" or "Desaturate while on cooldown",
+    name = chargeKind and "Grayscale while recharging" or "Grayscale on cooldown",
     order = 2,
     get = function() return GetValue("desaturateCooldown", false) == true end,
     set = function(_, value) SetValue("desaturateCooldown", value == true) end,
@@ -7059,7 +7071,7 @@ _PCM_BuildCustomBarBuffGlowGroup = function(GetCfg, RebuildRuntime, trackKey, or
       },
       desaturateActive = {
         type = "toggle",
-        name = "Desaturate while active",
+        name = "Grayscale while buff is active",
         order = 3,
         hidden = function() return not IsActiveAuraEnabled() end,
         get = function()
@@ -8928,10 +8940,6 @@ local function _PCM_BuildGroupEntryArgs(groupID, record, order)
     }
   end
   if kind == "ICON" and record.viewerKey ~= "ConsumableTracker" then
-    local inheritedNames = {
-      EssentialCooldownViewer = "Essential", UtilityCooldownViewer = "Utility",
-      BuffIconCooldownViewer = "Buff Icons",
-    }
     local inheritedValues = {
       swipeSource = function()
         local _, swipe = GetViewerSwipeDB(GetPCMRoot(), record.viewerKey)
@@ -8963,11 +8971,17 @@ local function _PCM_BuildGroupEntryArgs(groupID, record, order)
     for key, resolveValue in pairs(inheritedValues) do
       local option = args[key]
       if option then
+        if key ~= "swipeSource" then
+          local source = key == "chargeShow" and ns.PRDSecondary:GetCooldownCountResourceKey(entry)
+            and "resource" or ICON_SETTING_SOURCES[record.viewerKey]
+          option.desc = (option.desc and option.desc .. "\n\n" or "")
+            .. "Use " .. source .. " settings to follow its current Show or Hide choice."
+        end
         local values = option.values
         option.values = function()
           local effective = resolveValue()
           local source = key == "chargeShow" and ns.PRDSecondary:GetCooldownCountResourceKey(entry)
-            and "resource" or inheritedNames[record.viewerKey]
+            and "resource" or ICON_SETTING_SOURCES[record.viewerKey]
           values[ICON_INHERIT] = "Use " .. source .. " settings ("
             .. (type(effective) == "boolean" and (effective and "Show" or "Hide") or effective) .. ")"
           return values
@@ -8978,21 +8992,21 @@ local function _PCM_BuildGroupEntryArgs(groupID, record, order)
       type = "description",
       order = 4,
       name = function()
-        local names = {
-          EssentialCooldownViewer = "Essential", UtilityCooldownViewer = "Utility",
-          BuffIconCooldownViewer = "Buff Icons",
-        }
         local source = IconSettings:GetField(entry, "swipe", "source")
         local _, swipe = GetViewerSwipeDB(GetPCMRoot(), record.viewerKey)
         local effective = source or (swipe.forceCooldownSwipe == true and "COOLDOWN" or "AUTOMATIC")
-        local owner = source and "This icon" or names[record.viewerKey] .. " settings"
-        return "Duration timer: " .. (effective == "COOLDOWN" and "Disabled" or "Enabled")
-          .. " (" .. owner .. "). Other inherited settings use " .. names[record.viewerKey] .. ". Layout uses this group."
+        local owner = source and "This icon" or ICON_SETTING_SOURCES[record.viewerKey] .. " settings"
+        local countSource = ns.PRDSecondary:GetCooldownCountResourceKey(entry)
+          and "resource settings" or ICON_SETTING_SOURCES[record.viewerKey] .. " settings"
+        return "Buff duration timer: " .. (effective == "COOLDOWN" and "Disabled" or "Enabled")
+          .. " (" .. owner .. "). Text and timers use " .. ICON_SETTING_SOURCES[record.viewerKey]
+          .. " settings; counts use " .. countSource .. ". Layout uses this group."
       end,
     }
     args.inheritedTimer = {
       type = "execute",
-      name = "Use inherited timer settings",
+      name = "Reset timer overrides",
+      desc = "Clears this icon's duration timer, swipe visibility and countdown overrides. Uses shared timer settings; swipe colors, edges, direction, fonts and appearance stay unchanged.",
       order = 70,
       func = function()
         for _, field in ipairs({ "source", "show", "showDuration", "showGCD" }) do
@@ -9006,7 +9020,7 @@ local function _PCM_BuildGroupEntryArgs(groupID, record, order)
     }
     args.editInherited = {
       type = "execute",
-      name = "Edit inherited settings",
+      name = "Edit " .. ICON_SETTING_SOURCES[record.viewerKey] .. " timer settings",
       order = 5,
       func = function()
         local groupIDs = {
@@ -9404,7 +9418,8 @@ local function _PCM_BuildUnifiedManagerArgs(activeKey, activePath)
   }
   if activeKey == "advanced" then
     args.advanced.args.resetGroups = {
-      type = "execute", name = "Reset groups", order = 100, confirm = true,
+      type = "execute", name = "Reset groups and assignments", order = 100, confirm = true,
+      desc = "Deletes custom groups and restores default group assignments.",
       confirmText = "Delete custom groups and restore default group assignments?",
       disabled = _PCM_IsGroupStructureLocked,
       func = function() ns.PCMGroupManager:ResetGroups() end,
@@ -9532,8 +9547,8 @@ _PCM_BuildConsumablesTabArgs = function()
       args = {
         timerDisplay = {
           type = "toggle",
-          name = "Enable duration timer",
-          desc = "Show the duration of active auras, totems and similar effects. While an effect is active, its duration takes priority. When it ends, show the cooldown timer if enabled and a cooldown exists.",
+          name = "Enable buff duration timer",
+          desc = "Tracks how long the buff, totem or other effect remains active. Its duration takes priority while active. When it ends, shows the spell cooldown if that timer is enabled.",
           order = 1,
           get = function() return GetCfg().timerSource ~= "COOLDOWN" end,
           set = function(_, value) GetCfg().timerSource = value == true and "AUTOMATIC" or "COOLDOWN" Rebuild() end,
