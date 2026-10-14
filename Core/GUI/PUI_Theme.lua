@@ -3013,52 +3013,6 @@ local function _PUI_ThemeRegistry_CopyArgsWithoutHeader(args)
   return out
 end
 
-local function GeneralOptionsProvider()
-  local provider = {}
-
-  function provider:GetOptions()
-    local scaleOptions = UIScaleProvider():GetOptions()
-
-    return {
-      type = "group",
-      name = "UI Scale",
-      order = 10,
-      args = {
-        uiScale = {
-          type = "group",
-          name = scaleOptions.name or "UI Scale",
-          order = 1,
-          inline = true,
-          args = _PUI_ThemeRegistry_CopyArgsWithoutHeader(scaleOptions.args),
-        },
-        setup = {
-          type = "group",
-          name = "Getting started",
-          order = 2,
-          inline = true,
-          args = {
-            description = {
-              type = "description",
-              name = "Run the setup wizard again.",
-              order = 1,
-            },
-            run = {
-              type = "execute",
-              name = "Run setup wizard",
-              order = 2,
-              func = function()
-                Addon:ShowInstallWizard(true)
-              end,
-            },
-          },
-        },
-      },
-    }
-  end
-
-  return provider
-end
-
 local selectedAccessibilityPreset = "default"
 
 local function PresetLuminance(color)
@@ -3108,7 +3062,7 @@ local function AccessibilityOptionsProvider()
           args = {
             description = {
               type = "description", order = 1,
-              name = "These settings are also available in UI Theme. Changes in either page apply to the same current profile settings.",
+              name = "These settings are also available in UI Settings. Changes in either page apply to the same current profile settings.",
             },
             optionsWindow = {
               type = "group", name = "Options window", order = 2,
@@ -3306,7 +3260,7 @@ local function UIThemeOptionsProvider()
 
     local options = {
       type = "group",
-      name = "UI Theme",
+      name = "UI Settings",
       order = 15,
       args = {
         themeColors = {
@@ -3432,7 +3386,34 @@ local function UIThemeOptionsProvider()
     sections.optionsLayout.name = "Layout and appearance"
     sections.optionsLayout.order = 20
     local window = sections.optionsLayout.args
+    local scaleOptions = UIScaleProvider():GetOptions()
     sections.optionsLayout.args = {
+      uiScale = {
+        type = "group", name = scaleOptions.name, order = 1, inline = true,
+        arg = { puiExplicit = true },
+        args = _PUI_ThemeRegistry_CopyArgsWithoutHeader(scaleOptions.args),
+      },
+      setup = {
+        type = "group",
+        name = "Getting started",
+        order = 30,
+        inline = true,
+        args = {
+          description = {
+            type = "description",
+            name = "Run the setup wizard again.",
+            order = 1,
+          },
+          run = {
+            type = "execute",
+            name = "Run setup wizard",
+            order = 2,
+            func = function()
+              Addon:ShowInstallWizard(true)
+            end,
+          },
+        },
+      },
       window = { type = "group", name = "Options window", order = 10, inline = true, arg = { puiExplicit = true }, args = window },
       colors = sections.themeColors,
     }
@@ -3884,11 +3865,7 @@ UIScaleProvider = function()
   return provider
 end
 
-Addon:RegisterOptionsSection("GeneralOptions", GeneralOptionsProvider, 10, "UI Scale", nil, {
-  preview = false,
-})
-
-Addon:RegisterOptionsSection("UITheme", UIThemeOptionsProvider, 15, "UI Theme", nil, {
+Addon:RegisterOptionsSection("UITheme", UIThemeOptionsProvider, 15, "UI Settings", nil, {
   preview = false,
 })
 
