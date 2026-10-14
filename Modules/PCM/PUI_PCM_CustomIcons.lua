@@ -1322,8 +1322,7 @@ function CustomIcons:ConfigureAura(key, cfg, options)
   AuraWidget.ConfigureApplicationThresholdSource(
     record.auraParts,
     record.auraSlot,
-    options.candidateSpellIDs,
-    cfg.__puiCooldownID
+    options.candidateSpellIDs
   )
   if options.auraKind == "duration" then
     ns.PCMCustomDurationSource:Attach(record, cfg, options.candidateSpellIDs, RefreshAuraDurationSource)
