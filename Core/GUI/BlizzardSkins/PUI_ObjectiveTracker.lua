@@ -40,10 +40,10 @@ local function RefreshTrackerHeader(header)
   end
   skin.label:SetTextColor(unpack(colors.text))
   skin.divider:SetColorTexture(colors.accent[1], colors.accent[2], colors.accent[3], 0.45)
-  button:GetNormalTexture():SetTexture("")
-  local pushed, highlight = button:GetPushedTexture(), button:GetHighlightTexture()
-  pushed:SetColorTexture(1, 1, 1, 0.12)
-  pushed:SetAllPoints(button)
+  -- Native collapse changes reassign these atlases even during combat.
+  button:GetNormalTexture():SetAlpha(0)
+  button:GetPushedTexture():SetAlpha(0)
+  local highlight = button:GetHighlightTexture()
   highlight:SetColorTexture(1, 1, 1, 0.08)
   highlight:SetAllPoints(button)
   if header.FilterButton then TintTrackerButton(header.FilterButton) end
