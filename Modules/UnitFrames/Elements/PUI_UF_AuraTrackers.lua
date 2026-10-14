@@ -84,9 +84,7 @@ function AuraTrackers.ConfigureRuntime(auraDB, display, runtime)
     runtime.candidateSignature = candidateSignature
     runtime.options.candidateFilters = AuraFilters.BuildCandidateFilters(display)
 
-    if not runtime.candidatesRetired then
-      container:SetAuraSlotCandidateFilters(runtime.key, runtime.options.candidateFilters)
-    end
+    container:SetAuraSlotCandidateFilters(runtime.key, runtime.options.candidateFilters)
   end
 
   if runtime.sortMethod ~= sortMethod or runtime.sortDirection ~= sortDirection then
