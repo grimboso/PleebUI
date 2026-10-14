@@ -4,6 +4,7 @@ ns.BlizzardWindowControls = Controls
 
 local windows = setmetatable({}, { __mode = "k" })
 local controlFrames = setmetatable({}, { __mode = "k" })
+local pendingControls = setmetatable({}, { __mode = "k" })
 local embedded = {
   -- Loot's Edit Mode and loot-under-mouse paths own its anchors and scale.
   LootFrame = true,
@@ -145,9 +146,14 @@ function Controls.IsControl(frame)
   return controlFrames[frame] == true
 end
 
-function Controls.Install(frame, visualRoot, name)
+function Controls.Install(frame, visualRoot, name, controlsParent)
   if embedded[name] then return end
-  if InCombatLockdown() then return end
+  if InCombatLockdown() then
+    pendingControls[frame] = { visualRoot = visualRoot, name = name, controlsParent = controlsParent }
+    driver:RegisterEvent("PLAYER_REGEN_ENABLED")
+    return
+  end
+  pendingControls[frame] = nil
   local state = windows[frame]
   if not state then
     state = { baseScale = frame:GetScale(), visualRoot = visualRoot or frame }
@@ -156,7 +162,7 @@ function Controls.Install(frame, visualRoot, name)
     frame:SetDontSavePosition(true)
     frame:SetClampedToScreen(true)
 
-    local drag = CreateFrame("Frame", nil, frame)
+    local drag = CreateFrame("Frame", nil, controlsParent or frame)
     state.drag = drag
     controlFrames[drag] = true
     if frame == _G.WorldMapFrame then
@@ -174,7 +180,7 @@ function Controls.Install(frame, visualRoot, name)
     drag:SetScript("OnDragStop", StopInteraction)
     drag:SetScript("OnMouseUp", StopInteraction)
 
-    local grip = CreateFrame("Frame", nil, frame)
+    local grip = CreateFrame("Frame", nil, controlsParent or frame)
     state.grip = grip
     state.lines = {}
     controlFrames[grip] = true
@@ -238,6 +244,9 @@ driver:SetScript("OnEvent", function(self, event)
     StopInteraction()
   else
     self:UnregisterEvent("PLAYER_REGEN_ENABLED")
+    for frame, request in pairs(pendingControls) do
+      Controls.Install(frame, request.visualRoot, request.name, request.controlsParent)
+    end
     for frame in pairs(windows) do
       if frame:IsShown() then ApplyWindow(frame) end
     end
@@ -264,7 +273,7 @@ function Controls:GetOptions()
       if InCombatLockdown() then return end
       enabled = value
       StopInteraction()
-      if not value then driver:UnregisterEvent("PLAYER_REGEN_ENABLED") end
+      if not value and not next(pendingControls) then driver:UnregisterEvent("PLAYER_REGEN_ENABLED") end
       for frame, state in pairs(windows) do
         state.drag:SetShown(value)
         state.grip:SetShown(value)
