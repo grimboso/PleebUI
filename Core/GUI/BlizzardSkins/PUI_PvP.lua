@@ -14,6 +14,10 @@ local layout = {
 
 local function SkinActivity(button)
   Skins.IconButton(button, button.Icon)
+  Skins.Hide(button.Anchor)
+  if button.NormalTexture then
+    button.NormalTexture:SetTexture(nil)
+  end
   Skins.Selection(button.SelectedTexture)
   Skins.Texts(button)
 end
@@ -22,16 +26,18 @@ Skins.Register("Blizzard_PVPUI", "PVPQueueFrame", function(frame)
   Skins.Apply(_G, layout)
   for index = 1, 5 do
     local button = frame["CategoryButton" .. index]
-    Skins.Hide(button.Ring)
-    button.Icon:RemoveMaskTexture(button.CircleMask)
-    Skins.IconButton(button, button.Icon)
-    Skins.Texts(button)
+    button.Background:SetAlpha(0.25)
+    button:GetHighlightTexture():SetAlpha(0.12)
+    ns.Theme.ApplyFont(button.Name, "header")
   end
   for _, key in ipairs({ "RatedSoloShuffle", "RatedBGBlitz", "Arena2v2", "Arena3v3", "RatedBG" }) do
     SkinActivity(ConquestFrame[key])
   end
   for _, key in ipairs({ "RandomBGButton", "RandomEpicBGButton", "Arena1Button", "BrawlButton", "BrawlButton2" }) do
     SkinActivity(HonorFrame.BonusFrame[key])
+  end
+  for _, key in ipairs({ "RandomTrainingGroundBGButton", "RandomTrainingGroundArenaButton" }) do
+    SkinActivity(TrainingGroundsFrame.BonusTrainingGroundList[key])
   end
   for _, key in ipairs({ "CasualPanel", "RatedPanel", "PlunderstormPanel", "TrainingGroundsPanel" }) do
     Skins.Texts(frame.HonorInset[key])

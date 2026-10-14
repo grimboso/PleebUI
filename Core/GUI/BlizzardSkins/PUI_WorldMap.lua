@@ -22,6 +22,15 @@ local function RefreshMapArtwork(frame)
   Skins.Chrome(frame.BorderFrame)
   Skins.Chrome(frame.BorderFrame.Inset)
   Skins.Navigation(frame.NavBar)
+
+  local maximized = frame:IsMaximized()
+  if not issecretvalue(maximized) then
+    local navBar = frame.NavBar
+    navBar:ClearAllPoints()
+    navBar:SetPoint("TOPLEFT", frame.TitleCanvasSpacerFrame, "TOPLEFT", maximized and 8 or 64, -33)
+    navBar:SetPoint("BOTTOMRIGHT", frame.TitleCanvasSpacerFrame, "BOTTOMRIGHT", -4, 1)
+  end
+
   for _, overlay in ipairs(frame.overlayFrames) do
     if not mapOverlays[overlay] and overlay:IsObjectType("DropdownButton") then
       mapOverlays[overlay] = true

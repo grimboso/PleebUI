@@ -82,6 +82,9 @@ end
 
 Skins.Register("Blizzard_PlayerSpells", "PlayerSpellsFrame", function(frame)
   RefreshSpellBook(frame)
+  Skins.Hook(frame, "UpdatePortrait", function(updatedFrame)
+    Skins.Icon(updatedFrame.PortraitContainer.portrait)
+  end)
   Skins.Hook(frame.SpellBookFrame, "SetMinimized", function()
     RefreshSpellBook(frame)
   end)

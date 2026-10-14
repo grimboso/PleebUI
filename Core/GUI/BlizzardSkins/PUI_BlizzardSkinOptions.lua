@@ -138,7 +138,7 @@ end
 
 function Options:GetOptions()
   local settings = {
-    type = "group", name = "Blizzard windows",
+    type = "group", name = "Blizzard windows", childGroups = "tree",
     args = {
       description = {
         type = "description", order = 2,
@@ -160,7 +160,7 @@ function Options:GetOptions()
   for name, entry in pairs(registered) do
     local category = entry.category
     if not groups[category] then
-      groups[category] = { type = "group", name = category, inline = true, args = {}, order = 10 }
+      groups[category] = { type = "group", name = category, inline = false, args = {}, order = 10 }
       settings.args[category] = groups[category]
     end
     groups[category].args[name] = {

@@ -1,5 +1,6 @@
 local _, ns = ...
 local Skins = ns.BlizzardSkins
+local skinnedDungeonIcons = setmetatable({}, { __mode = "k" })
 
 local function RefreshMythicPlus(frame)
   Skins.Hide(frame.Background)
@@ -15,10 +16,13 @@ local function RefreshMythicPlus(frame)
   end
   if frame.DungeonIcons then
     for _, dungeon in ipairs(frame.DungeonIcons) do
-      Skins.Hide(dungeon.Border)
-      Skins.Surface(dungeon, true)
-      Skins.Icon(dungeon.Icon)
-      Skins.Texts(dungeon)
+      if not skinnedDungeonIcons[dungeon] then
+        Skins.StripRegions(dungeon, { [dungeon.Icon] = true })
+        Skins.Surface(dungeon, true)
+        Skins.Icon(dungeon.Icon)
+        Skins.Texts(dungeon)
+        skinnedDungeonIcons[dungeon] = true
+      end
     end
   end
   Skins.StripRegions(frame.SeasonChangeNoticeFrame)

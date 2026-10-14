@@ -38,6 +38,7 @@ local embedded = {
   ["AuctionHouseFrame.WoWTokenSellFrame"] = true,
   -- The native bottom-managed progress display is a HUD surface.
   AuctionHouseMultisellProgressFrame = true,
+  CommunitiesFrame = true,
   ["CommunitiesFrame.GuildFinderFrame"] = true,
   ["CommunitiesFrame.CommunityFinderFrame"] = true,
 }
@@ -204,6 +205,11 @@ function Controls.Install(frame, visualRoot, name, controlsParent)
     frame:HookScript("OnHide", function()
       if active and active.frame == frame then StopInteraction() end
     end)
+    if controlsParent then
+      controlsParent:HookScript("OnHide", function()
+        if active and active.frame == frame then StopInteraction() end
+      end)
+    end
     frame:HookScript("OnShow", function() ApplyWindow(frame) end)
     -- Blizzard reanchors dialogs after OnShow, including windows outside the UIPanel manager.
     hooksecurefunc(frame, "SetPoint", function() ApplyWindow(frame) end)

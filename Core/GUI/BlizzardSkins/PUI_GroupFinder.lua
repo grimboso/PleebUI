@@ -13,7 +13,8 @@ local layout = {
     "LFGListFrame.SearchPanel.BackButton", "LFGListFrame.SearchPanel.BackToGroupButton", "LFGListFrame.SearchPanel.SignUpButton",
     "LFGListFrame.EntryCreation.ListGroupButton", "LFGListFrame.EntryCreation.CancelButton",
     "LFGListFrame.EntryCreation.ActivityFinder.Dialog.SelectButton", "LFGListFrame.EntryCreation.ActivityFinder.Dialog.CancelButton" },
-  Dropdown = { "LFDQueueFrame.TypeDropdown", "RaidFinderQueueFrame.SelectionDropdown" },
+  Dropdown = { "LFDQueueFrame.TypeDropdown", "RaidFinderQueueFrame.SelectionDropdown",
+    "LFGListFrame.SearchPanel.FilterButton" },
   EditBox = { "LFGListFrame.SearchPanel.SearchBox", "LFGListFrame.EntryCreation.Name",
     "LFGListFrame.EntryCreation.ActivityFinder.Dialog.EntryBox", "LFGListFrame.EntryCreation.Description.EditBox" },
   StripRegions = { "LFGListFrame.EntryCreation.Description" },
@@ -88,6 +89,15 @@ local function InstallGroupFinder(frame)
     Skins.Hook(dropdown, "OnMenuAssigned", RefreshQueueDropdown)
   end
   RefreshCategoryFonts()
+  local search = LFGListFrame.SearchPanel
+  Skins.Button(search.RefreshButton)
+  search.RefreshButton.Icon:SetAtlas("uitools-icon-refresh")
+  search.ScrollBar:ClearAllPoints()
+  search.ScrollBar:SetPoint("TOPRIGHT", search.ResultsInset, "TOPRIGHT", -6, -8)
+  search.ScrollBar:SetPoint("BOTTOMRIGHT", search.ResultsInset, "BOTTOMRIGHT", -6, 8)
+  search.ScrollBox:ClearAllPoints()
+  search.ScrollBox:SetPoint("TOPLEFT", search.ResultsInset, "TOPLEFT", 1, -3)
+  search.ScrollBox:SetPoint("BOTTOMRIGHT", search.ScrollBar, "BOTTOMLEFT", -8, -4)
   for _, rewards in ipairs({ LFDQueueFrameRandomScrollFrameChildFrame, RaidFinderQueueFrameScrollFrameChildFrame }) do
     Skins.Surface(rewards:GetParent(), true, true)
   end

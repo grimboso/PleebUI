@@ -40,10 +40,70 @@ local function SkinGuideRow(row)
   Skins.Surface(row, true)
   Skins.Texts(row)
   if row:IsObjectType("Button") then Skins.IconButton(row, row.Icon) end
+end
+
+local hoveredJourneyRows = setmetatable({}, { __mode = "k" })
+
+local function RefreshJourneyWatchToggle(row)
+  local unlocked = row.majorFactionData.isUnlocked
+  if issecretvalue(unlocked) then return end
+
+  local toggle = row.WatchedFactionToggleFrame
+  toggle:SetShown(unlocked == true)
+  toggle:SetAlpha(hoveredJourneyRows[row] and 1 or 0.4)
+end
+
+local function JourneyWatchEnter(row)
+  hoveredJourneyRows[row] = true
+  row.WatchedFactionToggleFrame:SetAlpha(1)
+end
+
+local function JourneyWatchLeave(row)
+  hoveredJourneyRows[row] = nil
+  RefreshJourneyWatchToggle(row)
+end
+
+local function RepaintJourneyRow(row)
   if row.WatchedFactionToggleFrame then
-    Skins.CheckBox(row.WatchedFactionToggleFrame.WatchFactionCheckbox)
+    RefreshJourneyWatchToggle(row)
+  elseif row.JourneyCardProgressBar then
+    local color = row.majorFactionData.factionFontColor
+    if issecretvalue(color) then return end
+    if color then
+      row.JourneyCardProgressBar:SetStatusBarColor(color.color:GetRGB())
+    else
+      row.JourneyCardProgressBar:SetStatusBarColor(1, 1, 1)
+    end
   end
-  if row.JourneyCardProgressBar then Skins.Bar(row.JourneyCardProgressBar) end
+end
+
+local function SkinJourneyRow(row)
+  if row.CategoryDivider then return end
+  if row.CategoryName then
+    Skins.Font(row.CategoryName, "header")
+    return
+  end
+
+  SkinGuideRow(row)
+
+  if row.WatchedFactionToggleFrame then
+    local checkbox = row.WatchedFactionToggleFrame.WatchFactionCheckbox
+    Skins.CheckBox(checkbox)
+    Skins.Font(checkbox.Label)
+    checkbox.Label:ClearAllPoints()
+    checkbox.Label:SetPoint("LEFT", checkbox, "RIGHT", 7, 0)
+    Skins.Hook(row, "OnEnter", JourneyWatchEnter)
+    Skins.Hook(row, "OnLeave", JourneyWatchLeave)
+  elseif row.JourneyCardProgressBar then
+    local bar = row.JourneyCardProgressBar
+    Skins.Hide(bar.JourneyCardProgressBarBG)
+    Skins.Hide(bar.JourneyCardProgressBarFrame)
+    bar.bg = bar:CreateTexture(nil, "BACKGROUND")
+    bar.bg:SetAllPoints(bar)
+    Skins.Bar(bar)
+  end
+
+  RepaintJourneyRow(row)
 end
 
 local function RefreshGuide(frame)
@@ -53,7 +113,7 @@ local function RefreshGuide(frame)
   Skins.ScrollRows(frame.instanceSelect.ScrollBox, SkinGuideRow)
   Skins.ScrollRows(frame.encounter.info.BossesScrollBox, SkinGuideRow)
   Skins.ScrollRows(frame.encounter.info.LootContainer.ScrollBox, SkinLootRow)
-  Skins.ScrollRows(frame.JourneysFrame.JourneysList, SkinGuideRow)
+  Skins.ScrollRows(frame.JourneysFrame.JourneysList, SkinJourneyRow, RepaintJourneyRow)
   Skins.ScrollRows(frame.MonthlyActivitiesFrame.ScrollBox, SkinGuideRow)
   Skins.ScrollRows(frame.MonthlyActivitiesFrame.FilterList.ScrollBox, SkinGuideRow)
   Skins.ScrollRows(frame.LootJournal.ScrollBox, SkinGuideRow)

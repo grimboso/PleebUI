@@ -27,7 +27,7 @@ local function LayoutCommunities(frame)
   if not minimized then
     chat:SetPoint("BOTTOMRIGHT", frame.MemberList, "BOTTOMLEFT", -32, 40)
     frame.StreamDropdown:ClearAllPoints()
-    frame.StreamDropdown:SetPoint("BOTTOMLEFT", chat.MessageFrame, "TOPLEFT", 0, 8)
+    frame.StreamDropdown:SetPoint("BOTTOMLEFT", chat.MessageFrame, "TOPLEFT", 0, 5)
     frame.StreamDropdown:SetSize(160, 26)
   end
   chat.ScrollBar:ClearAllPoints()
@@ -52,7 +52,10 @@ local function LayoutCommunities(frame)
 end
 
 local function InstallPortrait(frame)
+  local container = frame.PortraitContainer
+  container.portrait:SetAlpha(0)
   local overlay = frame.PortraitOverlay
+  overlay:SetFrameLevel(container:GetFrameLevel() + 1)
   overlay:SetAlpha(1)
   local portrait = overlay.Portrait
   portrait:RemoveMaskTexture(overlay.CircleMask)
@@ -68,19 +71,6 @@ local function InstallPortrait(frame)
   overlay.TabardEmblem:SetSize(34, 38)
 end
 
-local function SkinCommunityRow(row)
-  Skins.Hide(row.Background)
-  Skins.Hide(row.IconRing)
-  Skins.Button(row, true)
-  Skins.Selection(row.Selection)
-  row.Selection:SetAllPoints(row)
-  Skins.Font(row.Name)
-  for _, method in ipairs({ "SetAddCommunity", "SetFindCommunity", "SetGuildFinder" }) do
-    Skins.Hook(row, method, function(entry)
-      SkinCommunityRow(entry)
-    end)
-  end
-end
 
 local function SkinRewardRow(row)
   Skins.Hide(row.Background)
@@ -110,6 +100,11 @@ local function SkinNewsRow(row)
   Skins.Hide(row.header)
   Skins.Surface(row, true, true)
   Skins.Texts(row)
+end
+
+local function RefreshFactionBar(frame)
+  local accent = ns.Theme.GetColors().accent
+  frame.GuildBenefitsFrame.FactionFrame.Bar.Progress:SetVertexColor(accent[1], accent[2], accent[3], accent[4])
 end
 
 local function RefreshCommunities(frame)
@@ -145,8 +140,7 @@ local function RefreshCommunities(frame)
   bar.Progress:SetHeight(bar:GetHeight() - 2)
   bar.Progress:SetTexture(ns.Theme.GetBarTexture())
 
-  local accent = ns.Theme.GetColors().accent
-  bar.Progress:SetVertexColor(accent[1], accent[2], accent[3], accent[4])
+  RefreshFactionBar(frame)
 
   Skins.Font(faction.Label)
   Skins.Font(bar.Label)
@@ -162,11 +156,13 @@ local function RefreshCommunities(frame)
     Skins.IconButton(tab, tab.Icon)
     Skins.Selection(tab:GetCheckedTexture())
   end
-  Skins.ScrollRows(frame.CommunitiesList.ScrollBox, SkinCommunityRow)
   Skins.ScrollRows(frame.GuildBenefitsFrame.Perks.ScrollBox, SkinRewardRow)
   Skins.ScrollRows(frame.GuildBenefitsFrame.Rewards.ScrollBox, SkinRewardRow)
   Skins.ScrollRows(frame.MemberList.ScrollBox, SkinMemberRow)
   Skins.ScrollRows(frame.GuildDetailsFrame.News.ScrollBox, SkinNewsRow)
 end
 
-Skins.Register("Blizzard_Communities", "CommunitiesFrame", RefreshCommunities)
+Skins.Register("Blizzard_Communities", "CommunitiesFrame", {
+  install = RefreshCommunities,
+  onTheme = RefreshFactionBar,
+})

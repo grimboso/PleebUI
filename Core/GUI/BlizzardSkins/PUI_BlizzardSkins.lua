@@ -18,7 +18,6 @@ local styledTabs = setmetatable({}, { __mode = "k" })
 local windowHeaders = setmetatable({}, { __mode = "k" })
 local scrollRows = setmetatable({}, { __mode = "k" })
 local scrollBars = setmetatable({}, { __mode = "k" })
-local dropdownMenuStyle
 local hooks = setmetatable({}, { __mode = "k" })
 local driver = CreateFrame("Frame")
 local loggedIn = false
@@ -170,13 +169,14 @@ function Skins.Shell(frame, backgroundFrame)
       portrait:RemoveMaskTexture(container.CircleMask)
     end
     portrait:ClearAllPoints()
-    portrait:SetPoint("TOPLEFT", frame, "TOPLEFT", 6, -6)
-    portrait:SetSize(36, 36)
+    portrait:SetPoint("TOPLEFT", frame, "TOPLEFT", 5, -5)
+    portrait:SetSize(38, 38)
     portrait:SetAlpha(1)
+    Skins.Icon(portrait)
     local holder = Skins.Surface(container, true)
     holder:ClearAllPoints()
-    holder:SetPoint("TOPLEFT", portrait, "TOPLEFT", -2, 2)
-    holder:SetPoint("BOTTOMRIGHT", portrait, "BOTTOMRIGHT", 2, -2)
+    holder:SetPoint("TOPLEFT", portrait, "TOPLEFT", -1, 1)
+    holder:SetPoint("BOTTOMRIGHT", portrait, "BOTTOMRIGHT", 1, -1)
   end
 end
 
@@ -312,42 +312,12 @@ function Skins.CheckBox(button)
   RefreshButtonState(button)
 end
 
-local function GenerateDropdownMenu(menu)
-  local colors = Theme.GetColors()
-  local background = menu:AttachTexture()
-  background:SetPoint("TOPLEFT", menu, "TOPLEFT", -4, 4)
-  background:SetPoint("BOTTOMRIGHT", menu, "BOTTOMRIGHT", 4, -4)
-  background:SetColorTexture(unpack(colors.control))
-  local edge = Theme.ControlBorderSize
-  for _, side in ipairs({ "TOP", "BOTTOM", "LEFT", "RIGHT" }) do
-    local texture = menu:AttachTexture()
-    texture:SetColorTexture(unpack(colors.controlBorder))
-    if side == "TOP" or side == "BOTTOM" then
-      texture:SetPoint(side .. "LEFT", background, side .. "LEFT")
-      texture:SetPoint(side .. "RIGHT", background, side .. "RIGHT")
-      texture:SetHeight(edge)
-    else
-      texture:SetPoint("TOP" .. side, background, "TOP" .. side, 0, -edge)
-      texture:SetPoint("BOTTOM" .. side, background, "BOTTOM" .. side, 0, edge)
-      texture:SetWidth(edge)
-    end
-  end
-end
-
 function Skins.Dropdown(dropdown)
   if not dropdown then return end
   Skins.Chrome(dropdown)
   for _, key in ipairs({ "Left", "Middle", "Right" }) do Skins.Hide(dropdown[key]) end
   Skins.Surface(dropdown, true)
   Skins.Font(dropdown.Text)
-  if dropdown.CreateDefaultRootMenuDescription then
-    if not dropdownMenuStyle then
-      dropdownMenuStyle = CreateFromMixins(MenuStyle1Mixin)
-      dropdownMenuStyle.Generate = GenerateDropdownMenu
-    end
-    -- Use Blizzard's menu style contract without altering its secure menu elements.
-    dropdown.menuMixin = dropdownMenuStyle
-  end
   if dropdown:IsObjectType("Button") then
     Skins.Button(dropdown)
     local state = InstallButtonState(dropdown)
@@ -644,6 +614,7 @@ function Skins.Navigation(bar)
     -- The level-50 overlay is decorative and must not cover the navigation buttons.
     Skins.Hide(bar.overlay)
     Skins.Arrow(bar.overflowButton, ">")
+    bar.overflowButton:SetWidth(30)
   end
   for _, button in ipairs(bar.navList) do
     if not styledButtons[button] or not styledButtons[button].navigation then
@@ -662,6 +633,10 @@ function Skins.Navigation(bar)
       if button.MenuArrowButton then
         local menu = button.MenuArrowButton
         Skins.Button(menu)
+        menu:SetWidth(24)
+        menu:ClearAllPoints()
+        menu:SetPoint("TOPRIGHT", button, "TOPRIGHT", -2, -1)
+        menu:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT", -2, 1)
         -- Native hover restores alpha on these borders, so retain empty texture slots.
         menu:GetNormalTexture():SetTexture(nil)
         menu:GetPushedTexture():SetTexture(nil)
@@ -686,6 +661,8 @@ function Skins.Register(addonName, frameName, callbacks)
     onShow = callbacks.onShow,
     onTheme = callbacks.onTheme,
     controlsRoot = callbacks.controlsRoot,
+    controlsFrame = callbacks.controlsFrame,
+    controlsParent = callbacks.controlsParent,
     manageControls = callbacks.manageControls ~= false,
     legacy = legacy,
   }
@@ -696,8 +673,10 @@ local function SkinWindow(window, frame)
     if window.install then window.install(frame) end
     window.initialized = true
     if window.manageControls then
+      local controlsFrame = window.controlsFrame and window.controlsFrame(frame) or frame
       local controlsRoot = window.controlsRoot and window.controlsRoot(frame) or nil
-      ns.BlizzardWindowControls.Install(frame, controlsRoot, window.name)
+      local controlsParent = window.controlsParent and window.controlsParent(frame) or nil
+      ns.BlizzardWindowControls.Install(controlsFrame, controlsRoot, window.name, controlsParent)
     end
   end
   if window.onShow then window.onShow(frame) end
@@ -718,7 +697,7 @@ local function ObserveWindow(window)
       if window.frame == shown then SkinWindow(window, shown) end
     end)
   end
-  local shown = frame:IsVisible()
+  local shown = frame:IsShown()
   if not issecretvalue(shown) and shown then SkinWindow(window, frame) end
 end
 
