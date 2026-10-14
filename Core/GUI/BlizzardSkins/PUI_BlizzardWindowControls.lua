@@ -202,11 +202,14 @@ function Controls.Install(frame, visualRoot, name)
     hooksecurefunc(frame, "SetPoint", function() ApplyWindow(frame) end)
     hooksecurefunc(frame, "SetScale", function() ApplyWindow(frame) end)
     if frame == _G.WorldMapFrame then
-      hooksecurefunc(frame, "Maximize", function()
+      local function RefreshMapControlsAfterClick()
         if active and active.frame == frame then StopInteraction() end
         ApplyWindow(frame)
-      end)
-      hooksecurefunc(frame, "Minimize", function() ApplyWindow(frame) end)
+      end
+      -- Blizzard reads the mode methods before acquiring protected map pins.
+      local buttons = frame.BorderFrame.MaximizeMinimizeFrame
+      buttons.MaximizeButton:HookScript("OnClick", RefreshMapControlsAfterClick)
+      buttons.MinimizeButton:HookScript("OnClick", RefreshMapControlsAfterClick)
     end
   end
   if visualRoot then state.visualRoot = visualRoot end
