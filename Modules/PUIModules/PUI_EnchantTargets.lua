@@ -95,13 +95,14 @@ end
 
 function EnchantTargets:RefreshEnchantTargets()
   if InCombatLockdown() then
-    self:SuspendEnchantTargets()
     return
   end
 
   local enchanting = C_Spell.TargetSpellIsEnchanting()
   if issecretvalue(enchanting) or not enchanting then
-    self:SuspendEnchantTargets()
+    if self.enchantTargeting then
+      self:SuspendEnchantTargets()
+    end
     return
   end
 
@@ -118,6 +119,10 @@ function EnchantTargets:RefreshEnchantTargets()
 end
 
 function EnchantTargets:SuspendEnchantTargets()
+  if not self.enchantTargeting then
+    return
+  end
+
   ClearEnchantTargetDimming()
   self.enchantTargeting = false
   self:UnregisterEvent("BAG_UPDATE_DELAYED")
@@ -133,7 +138,7 @@ function EnchantTargets:InstallEnchantTargetHooks()
   if not hookedPaperDoll and _G.PaperDollItemsFrame then
     hookedPaperDoll = true
     _G.PaperDollItemsFrame:HookScript("OnShow", function()
-      if EnchantTargets:IsEnabled() then
+      if EnchantTargets:IsEnabled() and EnchantTargets.enchantTargeting and not InCombatLockdown() then
         EnchantTargets:RefreshEnchantTargets()
       end
     end)
@@ -142,7 +147,7 @@ function EnchantTargets:InstallEnchantTargetHooks()
   if not hookedBags and _G.ContainerFrame_OnShow then
     hookedBags = true
     hooksecurefunc("ContainerFrame_OnShow", function()
-      if EnchantTargets:IsEnabled() then
+      if EnchantTargets:IsEnabled() and EnchantTargets.enchantTargeting and not InCombatLockdown() then
         EnchantTargets:RefreshEnchantTargets()
       end
     end)
@@ -153,19 +158,26 @@ function EnchantTargets:InstallEnchantTargetHooks()
   end
 end
 
+function EnchantTargets:OnCombatStarted()
+  self:UnregisterEvent("CURSOR_CHANGED")
+  self:UnregisterEvent("CURRENT_SPELL_CAST_CHANGED")
+  self:SuspendEnchantTargets()
+end
+
 function EnchantTargets:OnCombatEnded()
+  self:RegisterEvent("CURSOR_CHANGED", "RefreshEnchantTargets")
+  self:RegisterEvent("CURRENT_SPELL_CAST_CHANGED", "RefreshEnchantTargets")
   self:InstallEnchantTargetHooks()
   self:RefreshEnchantTargets()
 end
 
 function EnchantTargets:OnEnable()
-  self:RegisterEvent("CURSOR_CHANGED", "RefreshEnchantTargets")
-  self:RegisterEvent("CURRENT_SPELL_CAST_CHANGED", "RefreshEnchantTargets")
-  self:RegisterEvent("PLAYER_REGEN_DISABLED", "SuspendEnchantTargets")
+  self:RegisterEvent("PLAYER_REGEN_DISABLED", "OnCombatStarted")
   self:RegisterEvent("PLAYER_REGEN_ENABLED", "OnCombatEnded")
   self:RegisterEvent("ADDON_LOADED", "InstallEnchantTargetHooks")
-  self:InstallEnchantTargetHooks()
-  self:RefreshEnchantTargets()
+  if not InCombatLockdown() then
+    self:OnCombatEnded()
+  end
 end
 
 function EnchantTargets:OnDisable()
@@ -182,6 +194,7 @@ DimIncompatibleBags = P:Def("EnchantTargets.DimIncompatibleBags", DimIncompatibl
 EnchantTargets.RefreshEnchantTargets = P:Def("EnchantTargets:RefreshEnchantTargets", EnchantTargets.RefreshEnchantTargets)
 EnchantTargets.SuspendEnchantTargets = P:Def("EnchantTargets:SuspendEnchantTargets", EnchantTargets.SuspendEnchantTargets)
 EnchantTargets.InstallEnchantTargetHooks = P:Def("EnchantTargets:InstallEnchantTargetHooks", EnchantTargets.InstallEnchantTargetHooks)
+EnchantTargets.OnCombatStarted = P:Def("EnchantTargets:OnCombatStarted", EnchantTargets.OnCombatStarted)
 EnchantTargets.OnCombatEnded = P:Def("EnchantTargets:OnCombatEnded", EnchantTargets.OnCombatEnded)
 EnchantTargets.OnEnable = P:Def("EnchantTargets:OnEnable", EnchantTargets.OnEnable)
 EnchantTargets.OnDisable = P:Def("EnchantTargets:OnDisable", EnchantTargets.OnDisable)
