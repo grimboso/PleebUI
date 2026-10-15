@@ -112,14 +112,19 @@ function Settings.Show(panel, path, refresh)
   if not refresh then panel.optionsPath = path end
   panel.skinSettings = SkinSettings()
   if not panel.widget then
-    local widget = AceGUI:Create("SimpleGroup")
+    local widget = AceGUI:Create("PUI_OptionsGroup")
     widget:SetLayout("Fill")
+    widget:SetAutoAdjustHeight(false)
+    widget:SetFullWidth(true)
+    widget:SetFullHeight(true)
     widget.frame:SetParent(panel)
     ns.AceHooks.TakeOwnership(widget)
     widget.frame:ClearAllPoints()
     widget.frame:SetAllPoints(panel)
     panel.widget = widget
   end
+  panel.widget.frame:SetFrameStrata(panel:GetFrameStrata())
+  panel.widget.frame:SetFrameLevel(panel:GetFrameLevel() + 1)
   panel.widget:SetWidth(panel:GetWidth())
   panel.widget:SetHeight(panel:GetHeight())
   Dialog:Open(APP, panel.widget, unpack(path))
