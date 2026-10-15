@@ -446,10 +446,11 @@ function Cooldowns:GetCustomBarSpellDropdown(kind)
     ["none"] = "-- Select --",
   }
   local sorting = { "none" }
+  local available = {}
 
   local configuration = ns.PCMCatalog:GetNativeConfiguration()
   if not configuration then
-    return values, sorting
+    return values, sorting, available
   end
 
   local isAura = kind == "aura"
@@ -500,6 +501,7 @@ function Cooldowns:GetCustomBarSpellDropdown(kind)
 
               local existing = entriesBySpellID[spellID]
               if existing then
+                if isKnown == true then existing.known = true end
                 if shown then
                   existing.shown = true
                 end
@@ -521,6 +523,7 @@ function Cooldowns:GetCustomBarSpellDropdown(kind)
                   name = name,
                   icon = icon,
                   shown = shown == true,
+                  known = isKnown == true,
                 }
                 entriesBySpellID[spellID] = entry
                 entries[#entries + 1] = entry
@@ -565,10 +568,11 @@ function Cooldowns:GetCustomBarSpellDropdown(kind)
     end
 
     values[key] = label
+    available[key] = entry.known
     sorting[#sorting + 1] = key
   end
 
-  return values, sorting
+  return values, sorting, available
 end
 
 
