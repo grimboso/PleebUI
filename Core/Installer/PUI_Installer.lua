@@ -7,6 +7,7 @@ local OptionsTooltip = LibStub("AceConfigDialog-3.0").tooltip
 local InCombatLockdown = _G.InCombatLockdown
 local wizardFrame
 local currentPage = 1
+local accessibilityOpen = false
 local pages = {}
 local sections = {}
 local RefreshPage
@@ -485,6 +486,7 @@ local function BuildRoute(target)
 end
 
 local function SelectPage(index)
+  accessibilityOpen = false
   currentPage = math.max(1, math.min(#pages, index))
   Onboarding().installerPage = pages[currentPage][1]
   RefreshPage()
@@ -599,6 +601,51 @@ local function Finish(reload)
   if reload then ReloadUI() end
 end
 
+local function LayoutChrome(frame)
+  if frame.__puiInstallerLayout then return end
+  frame.__puiInstallerLayout = true
+  local guideHeight = ns.KeyboardNavigation.GetGuideHeight(frame)
+  local rowHeight = math.max(38, Theme.GetOptionsPointerTargetSize(34), Theme.GetOptionsFontHeight("button") * 2 + 12)
+  local available = math.max(1, frame:GetWidth() - 44)
+  local rows = { {} }
+  local used = 0
+  for _, button in ipairs(frame.FooterControls) do
+    if button:IsShown() then
+      local width = math.min(available, math.max(100, math.ceil(button:GetFontString():GetUnboundedStringWidth()) + 28))
+      if used > 0 and used + width > available then rows[#rows + 1] = {}; used = 0 end
+      rows[#rows][#rows[#rows] + 1] = { button = button, width = width, x = used }
+      used = used + width + 12
+    end
+  end
+  for index, row in ipairs(rows) do
+    for _, entry in ipairs(row) do
+      local button = entry.button
+      button:ClearAllPoints()
+      button:SetSize(entry.width, rowHeight)
+      button:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 22 + (button == frame.Next and available - entry.width or entry.x),
+        22 + (#rows - index) * (rowHeight + 8))
+    end
+  end
+  local footerHeight = 22 + #rows * (rowHeight + 8)
+  frame.KeyboardGuideSettings.bottom = footerHeight + 8
+  local statusHeight = Theme.GetOptionsFontHeight("body") * 2 + 12
+  frame.Status:SetHeight(statusHeight)
+  frame.Status:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 265, footerHeight + guideHeight + 8)
+  frame.Status:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -30, footerHeight + guideHeight + 8)
+  frame.Progress:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 24, footerHeight + guideHeight + 8)
+  local bottom = footerHeight + statusHeight + guideHeight + 20
+  frame.Sidebar:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 12, bottom)
+  frame.Scroll:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -44, bottom)
+  local titleHeight = math.max(60, Theme.GetOptionsFontHeight("title", 20) * 2 + 12)
+  frame.Title:SetHeight(titleHeight)
+  frame.Scroll:SetPoint("TOPLEFT", frame, "TOPLEFT", 265, -titleHeight - 32)
+  frame.Accessibility:SetSize(math.max(155, math.ceil(frame.Accessibility:GetFontString():GetUnboundedStringWidth()) + 28), rowHeight)
+  frame.Help:SetSize(math.max(80, math.ceil(frame.Help:GetFontString():GetUnboundedStringWidth()) + 28), rowHeight)
+  frame.Title:SetPoint("TOPRIGHT", frame.Help, "TOPLEFT", -12, 0)
+  frame.ResizeGrip:SetSize(Theme.GetOptionsPointerTargetSize(18), Theme.GetOptionsPointerTargetSize(18))
+  frame.__puiInstallerLayout = nil
+end
+
 local function ApplyWindowTheme(frame)
   local colors = Theme.GetColors()
   local background = colors.background
@@ -620,7 +667,9 @@ local function RefreshChrome(frame)
   ApplyWindowTheme(frame)
   frame:SetScale(math.min(Theme.GetOptionsUIScale(), (UIParent:GetWidth() - 24) / 850, (UIParent:GetHeight() - 24) / 560))
   Content.Relayout()
-  frame.Next:SetText(currentPage == #pages and (Onboarding().installerReload and "Finish and reload" or "Finish setup") or "Continue")
+  frame.Next:SetText(accessibilityOpen and "Return to setup" or pages[currentPage][1] == "welcome" and "Start setup" or currentPage == #pages and (Onboarding().installerReload and "Finish and reload" or "Finish setup") or "Continue")
+  LayoutChrome(frame)
+  ns.KeyboardNavigation.RefreshWindows()
 end
 
 local profileCallbacks = {}
@@ -640,8 +689,8 @@ RefreshPage = function()
   frame.Progress:SetText(string.format("%d / %d", currentPage, #pages))
   frame.Status:SetText("")
   frame.Previous:SetEnabled(currentPage > 1)
-  frame.Next:SetText(currentPage == #pages and (Content.pendingReload and "Finish and reload" or "Finish setup") or "Continue")
-  frame.Skip:SetShown(currentPage < #pages)
+  frame.Next:SetText(definition[1] == "welcome" and "Start setup" or currentPage == #pages and (Content.pendingReload and "Finish and reload" or "Finish setup") or "Continue")
+  frame.Skip:SetShown(currentPage < #pages and definition[3] ~= nil)
   for index, button in ipairs(frame.PageButtons) do
     local page = pages[index]
     button:SetShown(page ~= nil)
@@ -662,8 +711,17 @@ RefreshPage = function()
   frame.SidebarCanvas:SetHeight(#pages * (rowHeight + 4))
   local offset = (currentPage - 1) * (rowHeight + 4)
   frame.SidebarScroll:SetVerticalScroll(math.max(0, math.min(frame.SidebarScroll:GetVerticalScrollRange(), offset - frame.SidebarScroll:GetHeight() / 2)))
-  Content.Show(frame.Content, definition[1])
+  if accessibilityOpen then
+    frame.Title:SetText("Accessibility")
+    frame.Progress:SetText("Help and readability")
+    frame.Previous:SetEnabled(true)
+    frame.Next:SetText("Return to setup")
+    frame.Skip:Hide()
+  end
+  Content.Show(frame.Content, accessibilityOpen and "accessibility" or definition[1])
   frame.Scroll:SetVerticalScroll(0)
+  LayoutChrome(frame)
+  ns.KeyboardNavigation.RefreshWindows()
 end
 
 local function BuildFrame()
@@ -757,17 +815,11 @@ local function BuildFrame()
   })
   frame.Content = Content.Create(canvas, {
     status = SetStatus, navigate = Navigate, requireReload = RequireReload,
+    openHelp = function() ns.KeyboardNavigation.ToggleHelp(frame) end,
     openOptions = OpenOptions, openTracker = OpenTracker, openEditMode = OpenEditMode,
     openKeybinds = OpenKeybinds, openTrackedSpells = OpenTrackedSpells,
     resize = function(height) canvas:SetHeight(height + 24) end,
     refreshTheme = function() RefreshChrome(frame) end,
-    chooseMode = function(mode)
-      Onboarding().installerMode = mode
-      for _, chapter in ipairs(Content.Chapters) do sections[chapter.key] = mode == "full" end
-      Onboarding().installerSections = sections
-      BuildRoute("profiles")
-      SelectPage(currentPage)
-    end,
     changedRoute = function()
       local target = pages[currentPage][1]
       Onboarding().installerMode = "custom"
@@ -789,7 +841,9 @@ local function BuildFrame()
   frame.Progress = Text(frame)
   frame.Progress:SetPoint("BOTTOMLEFT", 24, 84)
   frame.Progress:SetWidth(200)
-  frame.Previous = Button(frame, "Back", 110, function() SelectPage(currentPage - 1) end)
+  frame.Previous = Button(frame, "Back", 110, function()
+    if accessibilityOpen then accessibilityOpen = false; RefreshPage() else SelectPage(currentPage - 1) end
+  end)
   frame.Previous:SetPoint("BOTTOMLEFT", 18, 22)
   frame.Save = Button(frame, "Save and exit", 145, function() frame:Hide() end)
   frame.Save:SetPoint("LEFT", frame.Previous, "RIGHT", 12, 0)
@@ -803,17 +857,25 @@ local function BuildFrame()
   end)
   frame.Skip:SetPoint("LEFT", frame.Save, "RIGHT", 12, 0)
   frame.Next = Button(frame, "Continue", 180, function()
-    if currentPage == #pages then Finish(false) else SelectPage(currentPage + 1) end
+    if accessibilityOpen then accessibilityOpen = false; RefreshPage()
+    elseif currentPage == #pages then Finish(false) else SelectPage(currentPage + 1) end
   end)
   frame.Next:SetPoint("BOTTOMRIGHT", -22, 22)
-  frame.Accessibility = Button(frame, "Accessibility", 155, function() Navigate("appearance") end)
+  frame.Accessibility = Button(frame, "Accessibility", 155, function()
+    accessibilityOpen = not accessibilityOpen
+    RefreshPage()
+    ns.KeyboardNavigation.FocusRegion(frame, 2)
+  end)
   frame.Accessibility:SetPoint("TOPRIGHT", -60, -23)
+  frame.Help = Button(frame, "Help", 80, function() ns.KeyboardNavigation.ToggleHelp(frame) end)
+  frame.Help:SetPoint("RIGHT", frame.Accessibility, "LEFT", -8, 0)
   local close = CreateFrame("Button", nil, frame, "UIPanelCloseButton")
   close:SetPoint("TOPRIGHT", -4, -4)
   close:SetScript("OnClick", function() frame:Hide() end)
   Theme.WidgetSkins.CloseButton(close)
   ns.KeyboardNavigation.RegisterFrame(close, "button", "installerClose")
   local grip = CreateFrame("Button", nil, frame)
+  frame.ResizeGrip = grip
   grip:SetSize(18, 18)
   grip:SetPoint("BOTTOMRIGHT", -1, 1)
   local texture = grip:CreateTexture(nil, "OVERLAY")
@@ -847,6 +909,12 @@ local function BuildFrame()
       RefreshPage()
     end
   end)
+  frame.FooterControls = { frame.Previous, frame.Save, frame.Skip, frame.Next }
+  frame.KeyboardGuideSettings = { bottom = 62,
+    text = "Ctrl+Tab Areas · Tab Next control · Enter Select · F1 Help",
+    layout = function() LayoutChrome(frame) end,
+  }
+  frame:HookScript("OnSizeChanged", function() LayoutChrome(frame); ns.KeyboardNavigation.RefreshWindows() end)
   ns.KeyboardNavigation.BindWindow(frame, false, function() frame:Hide() end, nil, function(key, keyboardInput)
     if key == "TAB" and IsControlKeyDown() then
       Content.HandleKey(frame.Content, "GLOBAL_MOUSE_DOWN", false)
@@ -855,17 +923,7 @@ local function BuildFrame()
     return Content.HandleKey(frame.Content, key, keyboardInput)
   end)
   ns.KeyboardNavigation.SetRegions(frame, { frame.Sidebar, frame.Content, frame.Content.Settings, frame })
-  ns.KeyboardNavigation.AttachGuide(frame, {
-    bottom = 62,
-    text = "Ctrl+Tab Areas · Tab Next control · Enter Select · F1 Help",
-    layout = function(height)
-      frame.Sidebar:SetPoint("BOTTOMLEFT", 12, 116 + height)
-      frame.Scroll:SetPoint("BOTTOMRIGHT", -44, 116 + height)
-      frame.Status:SetPoint("BOTTOMLEFT", 265, 82 + height)
-      frame.Status:SetPoint("BOTTOMRIGHT", -30, 82 + height)
-      frame.Progress:SetPoint("BOTTOMLEFT", 24, 84 + height)
-    end,
-  })
+  ns.KeyboardNavigation.AttachGuide(frame, frame.KeyboardGuideSettings)
   table.insert(UISpecialFrames, frame:GetName())
   return frame
 end
