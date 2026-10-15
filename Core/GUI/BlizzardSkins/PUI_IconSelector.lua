@@ -71,8 +71,11 @@ end
 for _, target in ipairs({
   { "Blizzard_UIPanels_Game", "GearManagerPopupFrame" },
   { "Blizzard_MacroUI", "MacroPopupFrame" },
+  { "Blizzard_UIPanels_Game", "BankFrame.BankPanel.TabSettingsMenu", "Bank tab settings", "Bags" },
+  { "Blizzard_GuildBankUI", "GuildBankPopupFrame", "Guild bank tab settings", "Bags" },
 }) do
   Skins.Register(target[1], target[2], {
+    label = target[3], category = target[4],
     install = InstallIconSelector,
     onShow = RefreshIconSelector,
     manageControls = false,
