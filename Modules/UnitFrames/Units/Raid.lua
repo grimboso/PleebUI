@@ -396,7 +396,6 @@ local function BuildHeaderAttributes(db, groupIndex)
   end
 
   return {
-    showRaid = true,
     showParty = false,
     showSolo = false,
     showPlayer = db.showPlayer == true,
@@ -438,7 +437,6 @@ local function ApplyHeaderAttributes(header, db, groupIndex)
   local attrs = BuildHeaderAttributes(db, groupIndex)
 
   SetHeaderAttribute(header, "oUF-initialConfigFunction", attrs["oUF-initialConfigFunction"])
-  SetHeaderAttribute(header, "showRaid", attrs.showRaid)
   SetHeaderAttribute(header, "showParty", attrs.showParty)
   SetHeaderAttribute(header, "showSolo", attrs.showSolo)
   SetHeaderAttribute(header, "showPlayer", attrs.showPlayer)
@@ -922,7 +920,7 @@ function RaidFrames:CreateHeaders()
   oUF:SetActiveStyle("PleebUI_RaidFrames")
 
   for index = 1, maxHeaders do
-    local header = oUF:SpawnHeader("PleebUI_RaidHeader" .. index, nil)
+    local header = oUF:SpawnHeader("PleebUI_RaidHeader" .. index, "SecureRaidGroupHeaderTemplate")
     header:SetParent(self.anchor)
     self.headers[index] = header
   end
