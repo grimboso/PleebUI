@@ -1995,21 +1995,15 @@ function M:AttachMover()
     }
     controls[#controls + 1] = {
       type = "slider",
-      label = "Border size",
+      label = "Bar border thickness",
       min = 0,
-      max = 10,
+      max = 12,
       step = 1,
       get = function()
-        return GetProfile().appearance.style.borderSize
+        return self:GetQuickSetupValue("borderSize")
       end,
       set = function(value)
-        GetProfile().appearance.style.borderSize = Round(value)
-        self:RequestRefresh({
-          health = true,
-          primary = true,
-          secondaryAppearance = true,
-          layout = true,
-        })
+        self:SetQuickSetupValue("borderSize", value)
       end,
     }
     controls[#controls + 1] = {
