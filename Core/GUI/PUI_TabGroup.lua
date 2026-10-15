@@ -116,8 +116,13 @@ local function _PUI_EnsureCustomTabButton(host, index)
     local owner = self.__puiWidget
     local value = self.__puiValue
 
-    if value == _PUI_GetSelectedTabValue(owner)
-      or not Addon:HandleOptionsGroupSelection(owner, value)
+    if value == _PUI_GetSelectedTabValue(owner) then
+      return
+    end
+
+    local user = owner:GetUserDataTable()
+    if user.appName == "PleebUI"
+      and not Addon:HandleOptionsGroupSelection(owner, value)
     then
       return
     end
