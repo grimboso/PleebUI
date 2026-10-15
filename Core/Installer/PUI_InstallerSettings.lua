@@ -79,10 +79,14 @@ local UNIT_CONTROLS = {
 }
 local AURA_CONTROLS = {
   { "overview/display/enabled", "Show this aura display" },
-  { "overview/iconSize/iconSize", "Icon size", optional = true },
-  { "overview/layout/maxIcons", "Maximum auras", optional = true },
-  { "overview/display/showDefensives", "Show defensives", optional = true },
-  { "overview/display/showExternals", "Show externals", optional = true },
+  { "overview/iconSize/iconSize", "Icon size" },
+  { "overview/layout/maxIcons", "Maximum auras" },
+}
+local DEFENSIVE_AURA_CONTROLS = {
+  { "overview/display/enabled", "Show this aura display" },
+  { "overview/defensiveAppearance/iconSize", "Icon size" },
+  { "overview/display/showDefensives", "Show defensives" },
+  { "overview/display/showExternals", "Show externals" },
 }
 local BAR_CONTROLS = {
   { "layout/arrangement/iconSize", "Button size" },
@@ -161,7 +165,9 @@ end
 
 local function LessonControls(path, node)
   if path[1] == "unitframes" then
-    if path[4] == "customDisplays" then return AURA_CONTROLS end
+    if path[4] == "customDisplays" then
+      return path[5] == "defensives" and DEFENSIVE_AURA_CONTROLS or AURA_CONTROLS
+    end
     if path[2] == "party" or path[2] == "raid" then
       return {
         { "layout/core/enabled", "Enable group frames (reload required)" },
@@ -277,6 +283,49 @@ end
 
 Registry:RegisterOptionsTable(APP, BuildOptions)
 
+local function BuildAuraLesson(panel)
+  local options = BuildOptions()
+  local controls = {}
+  for _, option in pairs(options.args) do controls[#controls + 1] = option end
+  table.sort(controls, function(left, right) return left.order < right.order end)
+  local container = panel.widget
+  container:ReleaseChildren()
+  container:PauseLayout()
+  for _, option in ipairs(controls) do
+    if not option.hidden or not option.hidden({}) then
+      local widget = AceGUI:Create(option.dialogControl)
+      widget:SetLabel(option.name)
+      widget:SetFullWidth(true)
+      if option.type == "range" then widget:SetSliderValues(option.min, option.max, option.step) end
+      widget:SetValue(option.get({}))
+      widget:SetDisabled(option.disabled and option.disabled({}) or false)
+      widget:SetUserData("appName", APP)
+      widget:SetUserData("option", option)
+      widget:SetCallback("OnValueChanged", function(_, _, value)
+        if InCombatLockdown() then return end
+        option.set({}, value)
+        QueueRefresh(true)
+      end)
+      widget:SetCallback("OnEnter", function(control)
+        local tooltip = Dialog.tooltip
+        tooltip:SetOwner(control.frame, "ANCHOR_RIGHT")
+        tooltip:SetText(option.name)
+        local description = option.desc
+        if type(description) == "function" then description = description({}) end
+        if description and description ~= "" then
+          local colors = ns.Theme.GetColors()
+          tooltip:AddLine(description, colors.text[1], colors.text[2], colors.text[3], true)
+        end
+        tooltip:Show()
+      end)
+      widget:SetCallback("OnLeave", function() Dialog.tooltip:Hide() end)
+      container:AddChild(widget)
+    end
+  end
+  container:ResumeLayout()
+  container:DoLayout()
+end
+
 function Settings.SetCallbacks(handlers)
   callbacks = handlers
 end
@@ -309,8 +358,12 @@ function Settings.Show(panel, path)
   panel.widget.frame:SetFrameLevel(panel:GetFrameLevel() + 1)
   panel.widget:SetWidth(panel:GetWidth())
   panel.widget:SetHeight(panel:GetHeight())
-  Dialog:Open(APP, panel.widget)
-  BindControls(panel.widget)
+  if path[1] == "unitframes" and path[4] == "customDisplays" then
+    BuildAuraLesson(panel)
+  else
+    Dialog:Open(APP, panel.widget)
+    BindControls(panel.widget)
+  end
   ns.InstallerPreview.SetSettingsPath(path)
   panel.widget.frame:Show()
 end
