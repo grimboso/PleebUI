@@ -46,6 +46,7 @@ local function QueueRefresh(rebuild)
     if active ~= panel or not panel or not panel:IsVisible() or InCombatLockdown() then return end
     if panel.skinSettings ~= SkinSettings() then callbacks.requireReload(); panel.skinSettings = SkinSettings() end
     if rebuild then Settings.Show(panel, panel.path, true) else BindControls(panel.widget) end
+    ns.InstallerPreview.SetSettingsPath(panel.optionsPath)
     callbacks.changed()
     ns.InstallerPreview.Refresh()
   end)
