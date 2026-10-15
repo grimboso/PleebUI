@@ -821,7 +821,6 @@ local function _PrepareSecondaryBuild(self, buildMode, segmentCount, dividerCoun
   local textureKey = _ResolveSecondaryTextureKey(self, secCfg)
   local texturePath = _FetchStatusbarTexture(textureKey)
   local content = _GetSecondaryContentFrame(self) or self.secondary
-  content:SetAlpha(1)
   local bar = _EnsureSecondaryBuildBar(self, content)
 
   return profile, secCfg, bar, texturePath, false

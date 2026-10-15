@@ -441,7 +441,7 @@ local function ConfigureNativeApplicationThreshold(parts, source, index)
   gate.bar:SetFrameLevel(config.frameLevel + index)
   gate.bar:ClearAllPoints()
   gate.bar:SetAllPoints(config.anchor)
-  gate.button:SetAlpha(parts.applicationThresholdParent:GetEffectiveAlpha() * config.alpha)
+  gate.button:SetAlpha(config.alpha)
   gate.texture:SetTexture(config.texturePath or "Interface\\Buttons\\WHITE8X8")
   gate.texture:ClearAllPoints()
   gate.texture:SetAllPoints(config.anchor)
@@ -526,17 +526,6 @@ function AuraWidget.ConfigureApplicationThresholdSource(parts, slot, spellIDs)
       parent:HookScript("OnHide", function()
         for ownedParts in pairs(sources) do
           AuraWidget.SetApplicationThresholdActive(ownedParts, false)
-        end
-      end)
-      hooksecurefunc(parent, "SetAlpha", function()
-        for ownedParts in pairs(sources) do
-          local ownedSource = ownedParts.applicationThresholdSource
-          local ownedConfig = ownedParts.applicationThresholdConfiguration
-          if ownedConfig then
-            for _, gate in ipairs(ownedSource.gates) do
-              gate.button:SetAlpha(parent:GetEffectiveAlpha() * ownedConfig.alpha)
-            end
-          end
         end
       end)
     end

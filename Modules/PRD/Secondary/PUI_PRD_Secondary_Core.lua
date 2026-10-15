@@ -245,10 +245,6 @@ function M:RebuildSecondary(forceBuild)
 
   self._puiSecondaryRuntimeResources = useCustom and resources or {}
 
-  if useCustom and not wasUsingCustom and self._puiSecondaryContent then
-    self._puiSecondaryContent:SetAlpha(1)
-  end
-
   local blizzardState = tostring(profile.primary.hideAlternateMana == true and 1 or 0)
 
   if self._puiBlizzardSecondaryState ~= blizzardState then
