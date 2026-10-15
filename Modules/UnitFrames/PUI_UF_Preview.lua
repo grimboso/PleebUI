@@ -3254,7 +3254,7 @@ local function LayoutAuraPreviewCreateButtons(box)
     offsetY = offsetY + height + 4
   end
 
-  local height = math_max(0, offsetY - 4)
+  local height = toolbar:IsShown() and math_max(0, offsetY - 4) or 0
   toolbar:SetHeight(height)
   box.__puiAuraCreateToolbarHeight = height
 end
@@ -3680,11 +3680,14 @@ end
 
 SyncAuraPreviewControls = function(box, context)
   local toolbar = box.__puiAuraCreateToolbar
+  local path = context.optionsPath
+  local auraPageIndex = path[2] == "player" and path[3] == "pet" and 4 or 3
+  local showCreateButtons = context.supportsAuraManager and path[auraPageIndex] == "auras"
 
-  toolbar:SetShown(context.supportsAuraManager)
+  toolbar:SetShown(showCreateButtons)
 
   for _, button in ipairs(box.__puiAuraCreateButtons or {}) do
-    button:SetShown(context.supportsAuraManager)
+    button:SetShown(showCreateButtons)
   end
 
   LayoutAuraPreviewCreateButtons(box)
