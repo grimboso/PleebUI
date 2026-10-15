@@ -191,6 +191,7 @@ local DB_DEFAULTS = {
   global = {
     reloadCount = 0,
     installed   = false,
+    blizzardEditModeNoticeDismissed = false,
     schemaVersion = 6,
     whatsNew = {
       disabled = false,
@@ -904,15 +905,32 @@ function Addon:OnInitialize()
   if not ns.Flags.__puiBlizzardEditModeCallbacksInstalled then
     ns.Flags.__puiBlizzardEditModeCallbacksInstalled = true
 
+    StaticPopupDialogs["PUI_BLIZZARD_EDIT_MODE_NOTICE"] = {
+      text = "|cffffd200Moving PleebUI elements|r\n\nTo move and arrange PleebUI frames, open PleebUI Edit Mode by typing /pe.",
+      button1 = OKAY,
+      button2 = "Don't show again",
+      OnButton2 = function()
+        Addon.db.global.blizzardEditModeNoticeDismissed = true
+      end,
+      selectCallbackByIndex = true,
+      timeout = 0,
+      whileDead = true,
+      hideOnEscape = true,
+    }
+
     local function _PUI_OnBlizzardEditModeEnter()
       ns.Flags.__puiBlizzardEditModeActive = true
       if Addon:IsEditMode() then
         Addon:SetEditMode(false)
       end
+      if not Addon.db.global.blizzardEditModeNoticeDismissed then
+        StaticPopup_Show("PUI_BLIZZARD_EDIT_MODE_NOTICE")
+      end
     end
 
     local function _PUI_OnBlizzardEditModeExit()
       ns.Flags.__puiBlizzardEditModeActive = false
+      StaticPopup_Hide("PUI_BLIZZARD_EDIT_MODE_NOTICE")
     end
 
     EventRegistry:RegisterCallback("EditMode.Enter", _PUI_OnBlizzardEditModeEnter)
