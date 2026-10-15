@@ -275,6 +275,9 @@ local function PRDPreview_OrderButtonOnClick(button)
   if not targetKey or not box then
     return
   end
+  if box.__puiPRDPreviewState.allowReorder == false then
+    return
+  end
 
   local PRD = ns.Modules.PRD
   PRD:SwapStackItems(button.__puiPRDOrderKey, targetKey)
@@ -299,6 +302,10 @@ local function PRDPreview_ConfigureOrderButtons(box, entries)
   for _, bar in pairs(bars) do
     bar.orderDown:Hide()
     bar.orderUp:Hide()
+  end
+
+  if box.__puiPRDPreviewState.allowReorder == false then
+    return
   end
 
   for index = 1, #entries do
@@ -2026,6 +2033,7 @@ function PRDPreview.Build(
 )
   local previewHost = shell.previewHost
   local box = shell.__puiPRDPreviewBox
+  local previewState = shell:GetPreviewState()
 
   if box then
     if box:GetParent() ~= previewHost then
@@ -2055,7 +2063,9 @@ function PRDPreview.Build(
     "Personal Resource Display preview"
   )
   box:SetDescription(
-    "Sample display. Click a bar, text, or border to edit it. Use Up and Down to reorder; Pause or Sample to inspect a fixed value."
+    previewState.allowReorder == false
+      and "Sample values. Click a bar, text, or border to open its settings. Open PRD settings to change stack order. Pause or Sample holds a value."
+      or "Sample display. Click a bar, text, or border to edit it. Use Up and Down to reorder; Pause or Sample to inspect a fixed value."
   )
 
   canvas:SetFrameStrata(box:GetFrameStrata())
@@ -2071,7 +2081,6 @@ function PRDPreview.Build(
 
   PRDPreview_EnsureContents(box)
 
-  local previewState = shell:GetPreviewState()
   local previewZoom = PRDPreview_Clamp(previewState.zoom or 1, 0.25, 2)
 
   box.__puiPRDPreviewAddon = addon
