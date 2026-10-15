@@ -909,6 +909,9 @@ function Addon:OnInitialize()
       text = "|cffffd200Moving PleebUI elements|r\n\nTo move and arrange PleebUI frames, open PleebUI Edit Mode by typing /pe.",
       button1 = OKAY,
       button2 = "Don't show again",
+      OnButton1 = function()
+        return false
+      end,
       OnButton2 = function()
         Addon.db.global.blizzardEditModeNoticeDismissed = true
       end,
