@@ -447,20 +447,19 @@ local function BuildPage(key)
     Action("Apply combat readability", function() Addon:ApplyCombatReadabilityPreset(); Rebuild() end)
     Action("Undo combat readability", function() Addon:UndoCombatReadabilityPreset(); Rebuild() end, not Addon:CanUndoCombatReadabilityPreset())
   elseif key == "navigation" then
-    Text("Choose a sample category and tab, then try a toggle and dropdown. These controls change only this practice area.")
-    Practice("navigation")
-    local sampleChoice = "icons"
-    local values = { icons = "Icons", bars = "Bars", both = "Both" }
-    local picker = Dropdown("Sample display", values, { "icons", "bars", "both" }, sampleChoice, function(value)
-      sampleChoice = value
-      practice.navResult:SetText("Sample display: " .. values[value] .. ". Your profile has not changed.")
-    end)
-    Action("Reset all practice controls", function()
-      sampleChoice = "icons"
-      picker:SetValue(sampleChoice)
-      practice:Show("navigation", math.max(450, group.frame:GetWidth()))
-    end)
-    Details({ "Accessibility" }, "Accessibility")
+    Text("The next pages introduce each part of your UI with a preview and a few useful settings. You can continue now or try opening full settings below.")
+    Heading("Using setup")
+    Text("Click a numbered page on the left to revisit it, or use Back and Continue. Scroll inside the page to see more controls.")
+    Text("On feature pages, the selector chooses which frame, bar, or display you are configuring. Settings are saved as you change them; previews show sample data.")
+    Heading("Finding more settings")
+    Text("Type /pui to open options. Choose a category on the left, then a tab or group for the settings you need. Hover over controls for help.")
+    Text("Each setup page tells you where to find that feature later. Open full settings when you want more choices; close that window to return to the same setup page.")
+    Action("Explore player frame settings", function() callbacks.openOptions({ "unitframes", "player" }) end)
+    Action("Open accessibility settings", function() callbacks.openOptions({ "Accessibility" }) end)
+    if ns.KeyboardNavigation.IsEnabled() then
+      Heading("Using the keyboard")
+      Text("Ctrl+Tab switches between the page list, content, settings, and window buttons. Tab moves between controls. Use arrow keys to browse lists and Enter to select. Press F1 for keyboard help.")
+    end
   elseif key == "unitframes" then
     Text("Unit frames show health and power for you and the units you select. Pick a frame, then try its size, health text, and class colors in the example.")
     Check("Enable unit frames", ns.UnitFrames:GetQuickSetupValue("enabled"), function(value) ns.UnitFrames:SetQuickSetupValue("enabled", value) end)
