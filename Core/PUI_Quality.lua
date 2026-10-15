@@ -2579,7 +2579,6 @@ function Quality:ApplyAll()
 end
 
 local QualityPreviewRoot
-local QualityPreviewTab = "combatTab"
 
 local function Quality_GetPreviewWarnings()
   CombatWarning_RefreshMeleeSpec()
@@ -2601,15 +2600,15 @@ local function Quality_GetPreviewWarnings()
   return warnings
 end
 
-local function Quality_RefreshPreview()
-  local root = QualityPreviewRoot
-  if not root or not root:IsShown() then
+local function Quality_RefreshPreview(root)
+  root = root or QualityPreviewRoot
+  if not root or not root:IsVisible() then
     return
   end
 
   local q = GetQ()
-  local isCursor = QualityPreviewTab == "cursorTab"
-  local isGroup = QualityPreviewTab == "groupTab"
+  local isCursor = root.__puiQualityPreviewTab == "cursorTab"
+  local isGroup = root.__puiQualityPreviewTab == "groupTab"
 
   root.CombatSamples:SetShown(not isCursor and not isGroup)
   root.CursorLabel:SetShown(isCursor)
@@ -2759,9 +2758,9 @@ end
 local function Quality_BuildPreview(_, _, shell, path)
   local host = shell.previewHost
 
-  if not QualityPreviewRoot then
+  if not shell.__puiQualityPreviewRoot then
     local root = CreateFrame("Frame", nil, host, "BackdropTemplate")
-    QualityPreviewRoot = root
+    shell.__puiQualityPreviewRoot = root
     root:EnableMouse(false)
 
     local title = root:CreateFontString(nil, "OVERLAY", "GameFontNormal")
@@ -2840,13 +2839,13 @@ local function Quality_BuildPreview(_, _, shell, path)
     root:SetScript("OnSizeChanged", Quality_RefreshPreview)
   end
 
-  local root = QualityPreviewRoot
+  local root = shell.__puiQualityPreviewRoot
+  QualityPreviewRoot = root
+  root.__puiQualityPreviewTab = path[2] or "combatTab"
   root:SetParent(host)
   root:ClearAllPoints()
   root:SetAllPoints(host)
   root:Show()
-
-  QualityPreviewTab = path[2] or "combatTab"
 
   local colors = ns.Theme.GetColors()
   ns.Theme.SetSquareBackdrop(root, {
@@ -2857,7 +2856,7 @@ local function Quality_BuildPreview(_, _, shell, path)
   ns.Theme.ApplyFont(root.Title, "header")
   root.Title:SetTextColor(colors.text[1], colors.text[2], colors.text[3], colors.text[4])
 
-  if QualityPreviewTab == "automationTab" then
+  if root.__puiQualityPreviewTab == "automationTab" then
     root:Hide()
   else
     Quality_RefreshPreview()
