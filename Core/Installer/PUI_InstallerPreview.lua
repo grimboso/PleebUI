@@ -1,12 +1,14 @@
 local _, ns = ...
 local Preview = {}
 ns.InstallerPreview = Preview
-local owners = { unitframes = {}, actionbars = {}, cooldowns = {}, prd = {}, quality = {}, meters = {}, everyday = {} }
+local owners = { unitframes = {}, actionbars = {}, cooldowns = {}, prd = {}, quality = {}, meters = {}, everyday = {}, movement = {} }
 local settingsRoots = { unitframes = "unitframes", actionbars = "ACTIONBARS", cooldowns = "CooldownManager", prd = "PRD", quality = "Quality" }
 local current
 local openOptions
 local draftTimer
 local events = CreateFrame("Frame")
+local pausedUpdates, pausedCooldowns, pausedAnimations = {}, {}, {}
+local AdvanceDraft
 local navigation = {
   NavigateOpenOptionsPath = function(_, path) openOptions(path); return true end,
   OpenOptions = function(_, path) openOptions(path) end,
@@ -27,9 +29,37 @@ local function StopDraftTimer()
   if draftTimer then draftTimer:Cancel(); draftTimer = nil end
 end
 
+local function ResumePresentation()
+  for frame, callback in pairs(pausedUpdates) do frame:SetScript("OnUpdate", callback) end
+  for frame, paused in pairs(pausedCooldowns) do frame:SetPaused(paused) end
+  for animation in pairs(pausedAnimations) do animation:Play() end
+  wipe(pausedUpdates)
+  wipe(pausedCooldowns)
+  wipe(pausedAnimations)
+end
+
+local function PauseAnimations(region)
+  for _, animation in ipairs({ region:GetAnimationGroups() }) do
+    if animation:IsPlaying() then pausedAnimations[animation] = true; animation:Pause() end
+  end
+end
+
+local function PausePresentation(frame)
+  local callback = frame:GetScript("OnUpdate")
+  if callback then pausedUpdates[frame] = callback; frame:SetScript("OnUpdate", nil) end
+  if frame:GetObjectType() == "Cooldown" then
+    pausedCooldowns[frame] = frame:IsPaused()
+    frame:SetPaused(true)
+  end
+  PauseAnimations(frame)
+  for _, region in ipairs({ frame:GetRegions() }) do PauseAnimations(region) end
+  for _, child in ipairs({ frame:GetChildren() }) do PausePresentation(child) end
+end
+
 local function HideCurrent()
   StopDraftTimer()
   if not current then return end
+  ResumePresentation()
   if current.box then current.box:Hide() end
   if current.draft then ns.PCMPreview.HideInstallerDraft(current.host) end
 end
@@ -42,8 +72,11 @@ end
 local function BuildCurrent()
   if not current or not current.host:IsVisible() or InCombatLockdown() then return end
   local request = current
+  ResumePresentation()
+  if not ns.OptionsMotion.IsEnabled() then request.playing = false; StopDraftTimer() end
   if request.draft then
     ns.PCMPreview.RenderInstallerDraft(request.host, request.draft, request.state)
+    if not request.playing then PausePresentation(request.host) end
     return
   end
   local owner = owners[request.kind]
@@ -66,12 +99,16 @@ local function BuildCurrent()
     request.box = ns.DamageMeterWindows.BuildPreview(request.host, owner)
   elseif request.kind == "everyday" then
     request.box = ns.InstallerExamples.Show(request.host, request.path[1])
+  elseif request.kind == "movement" then
+    ns.Registry.Options.MovementWarning.meta.page.buildPreview(navigation, owner, owner, request.path)
+    request.box = owner.__puiMovementWarningPreviewRoot
   end
+  if not request.playing then PausePresentation(request.box) end
 end
 
 function Preview.Show(host, kind, path)
   Preview.Hide()
-  current = { host = host, kind = kind, path = path }
+  current = { host = host, kind = kind, path = path, playing = false }
   BuildCurrent()
 end
 
@@ -100,7 +137,11 @@ function Preview.SetDraftState(state)
   BuildCurrent()
 end
 
-local function AdvanceDraft()
+function Preview.GetDraftState()
+  return current and current.state
+end
+
+AdvanceDraft = function()
   draftTimer = nil
   if not current or not current.draft or not current.playing
     or not current.host:IsVisible() or InCombatLockdown() then return end
@@ -114,14 +155,15 @@ local function AdvanceDraft()
   end
   current.state = states[nextIndex]
   BuildCurrent()
-  draftTimer = C_Timer.NewTimer(3, AdvanceDraft)
+  if current.playing then draftTimer = C_Timer.NewTimer(3, AdvanceDraft) end
 end
 
-function Preview.ToggleDraftAnimation()
-  if not current or not current.draft then return end
+function Preview.SetPlaying(enabled)
+  if not current then return end
   StopDraftTimer()
-  current.playing = not current.playing
-  if current.playing then AdvanceDraft() end
+  current.playing = enabled == true and ns.OptionsMotion.IsEnabled()
+  if current.playing and current.draft then AdvanceDraft() else BuildCurrent() end
+  return current.playing
 end
 
 events:SetScript("OnEvent", function(_, event)
