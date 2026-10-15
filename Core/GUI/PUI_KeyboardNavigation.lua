@@ -145,7 +145,7 @@ local GUIDE_TEXT = {
 }
 local HELP_TEXT = [[Moving between controls
 Tab moves forward; Shift+Tab moves backward. Focus does not change a setting.
-In the installer, Ctrl+Tab jumps between the page list, lesson and preview, settings, and window controls. Ctrl+Shift+Tab jumps back. Up/Down browses the page list; Enter opens a page.
+In options and setup, Ctrl+Tab jumps between navigation, tabs, previews, settings, and window controls. Hidden or empty areas are skipped. Ctrl+Shift+Tab jumps back. Up/Down browses lists; Enter opens a page. Opening a page with the keyboard moves focus into its content.
 
 Trees and tabs
 Up/Down browses tree entries. Left/Right expands or collapses tree branches, or browses tabs. Enter opens the focused page; Space also selects a tab.
@@ -608,6 +608,21 @@ function Navigation.FocusRegion(root, index)
   return false
 end
 
+function Navigation.QueueFocusRegion(root, index)
+  local state = windows[root]
+  if root ~= activeWindow or not state or not state.active or state.helpShown
+    or InCombatLockdown() or not WindowNavigationEnabled(state) then return end
+  local request = {}
+  local generation = restoreGeneration
+  state.pendingRegionFocus = request
+  C_Timer.After(0, function()
+    if state.pendingRegionFocus ~= request then return end
+    state.pendingRegionFocus = nil
+    if generation ~= restoreGeneration then return end
+    Navigation.FocusRegion(root, index)
+  end)
+end
+
 MoveFocus = function(direction)
   local list = Collect(activeWindow)
   local groups, stops = {}, {}
@@ -959,6 +974,7 @@ function Navigation.BindWindow(root, movers, cancel, enabled, keyHandler)
   end)
   root:HookScript("OnShow", function() Navigation.ActivateWindow(root) end)
   root:HookScript("OnHide", function()
+    state.pendingRegionFocus = nil
     if activeWindow == root then
       HideFocus()
       current, popup, state.active, state.restoreKey = nil, nil, false, nil
