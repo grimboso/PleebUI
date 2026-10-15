@@ -621,7 +621,7 @@ local function _PUI_BuildOptionsPath(sectionKey, inlineTabKey, key)
   return path
 end
 
-local function _PUI_CopyOptionsNode(src, seen)
+function GUI.CopyOptionsNode(src, seen)
   if type(src) ~= "table" then
     return src
   end
@@ -638,7 +638,7 @@ local function _PUI_CopyOptionsNode(src, seen)
     if k == "handler" then
       out[k] = v
     elseif type(v) == "table" then
-      out[k] = _PUI_CopyOptionsNode(v, seen)
+      out[k] = GUI.CopyOptionsNode(v, seen)
     else
       out[k] = v
     end
@@ -802,7 +802,7 @@ local function _PUI_BuildActiveOptionsTree(activePath)
     end
 
     local sourceOption = _PUI_CreateProviderOption(node, activePath)
-    local option = _PUI_CopyOptionsNode(sourceOption)
+    local option = GUI.CopyOptionsNode(sourceOption)
     local kids = childrenByParent[node.key]
 
     if kids and #kids > 0 then
