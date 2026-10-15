@@ -104,13 +104,14 @@ local function ResolveTrackedSpells()
     row.spellIcon = C_Spell.GetSpellTexture(row.spellID)
 
     local charges = C_Spell.GetSpellCharges(row.spellID)
-    if charges and charges.maxCharges > 1 then
+    row.isChargeSpell = charges ~= nil and charges.maxCharges > 1
+    if row.isChargeSpell then
       tracksCharges = true
     end
   end
 
   if tracksCharges then
-    MovementWarning:RegisterEvent("SPELL_UPDATE_CHARGES", "OnMovementEvent")
+    MovementWarning:RegisterEvent("SPELL_UPDATE_CHARGES", "OnSpellUpdateCharges")
   else
     MovementWarning:UnregisterEvent("SPELL_UPDATE_CHARGES")
   end
@@ -320,11 +321,10 @@ local function RefreshRowCooldown(row)
     return
   end
   local spellID = row.spellID
-  local charges = C_Spell.GetSpellCharges(spellID)
-  local isChargeSpell = charges and charges.maxCharges > 1
   local duration
-  if isChargeSpell then
-    if charges.isActive ~= true then
+  if row.isChargeSpell then
+    local charges = C_Spell.GetSpellCharges(spellID)
+    if not charges or charges.isActive ~= true then
       row.runtime:Hide()
       row.countdown:Clear()
       return
@@ -348,7 +348,7 @@ local function RefreshRowCooldown(row)
 
   row.countdown:SetCooldownFromDurationObject(duration)
   row.countdown:Show()
-  if isChargeSpell then
+  if row.isChargeSpell then
     -- A banked charge reports only a brief cooldown. The engine classifies
     -- its secret duration and passes the result directly to the alpha sink.
     local availabilityDuration = C_Spell.GetSpellCooldownDuration(spellID)
@@ -397,38 +397,44 @@ function MovementWarning:RefreshWarning()
   end
 end
 
-function MovementWarning:OnMovementEvent(event, eventSpellID, baseSpellID, spellCategory)
-  if event == "PLAYER_SPECIALIZATION_CHANGED" and eventSpellID ~= "player" then return end
+function MovementWarning:OnSpellUpdateCooldown(_, eventSpellID, baseSpellID, spellCategory)
+  if trackedCount == 0 or ns.Flags.IsEditing then return end
 
-  if event == "SPELL_UPDATE_COOLDOWN" or event == "SPELL_UPDATE_CHARGES" then
-    if trackedCount == 0 or ns.Flags.IsEditing
-    then
-      return
-    end
-
-    if event == "SPELL_UPDATE_COOLDOWN"
-      and not issecretvalue(eventSpellID)
-      and not issecretvalue(baseSpellID)
-      and not issecretvalue(spellCategory)
-      and eventSpellID ~= nil and spellCategory == nil
-    then
-      for index = 1, trackedCount do
-        local row = rows[index]
-        if eventSpellID == row.spellID
-          or eventSpellID == row.baseSpellID
-          or baseSpellID == row.baseSpellID
-        then
-          RefreshRowCooldown(row)
-        end
-      end
-      return
-    end
-
+  if not issecretvalue(eventSpellID)
+    and not issecretvalue(baseSpellID)
+    and not issecretvalue(spellCategory)
+    and eventSpellID ~= nil and spellCategory == nil
+  then
     for index = 1, trackedCount do
-      RefreshRowCooldown(rows[index])
+      local row = rows[index]
+      if eventSpellID == row.spellID
+        or eventSpellID == row.baseSpellID
+        or baseSpellID == row.baseSpellID
+      then
+        RefreshRowCooldown(row)
+      end
     end
     return
   end
+
+  for index = 1, trackedCount do
+    RefreshRowCooldown(rows[index])
+  end
+end
+
+function MovementWarning:OnSpellUpdateCharges()
+  if ns.Flags.IsEditing then return end
+
+  for index = 1, trackedCount do
+    local row = rows[index]
+    if row.isChargeSpell then
+      RefreshRowCooldown(row)
+    end
+  end
+end
+
+function MovementWarning:OnMovementEvent(event, unit)
+  if event == "PLAYER_SPECIALIZATION_CHANGED" and unit ~= "player" then return end
 
   local spellbookChanged = false
   if event == "PLAYER_ENTERING_WORLD" or event == "SPELLS_CHANGED"
@@ -462,10 +468,11 @@ function MovementWarning:ApplySettings()
     ApplyAnchor()
     RefreshSpellbook()
     RefreshSelectedSpells()
+    self:RegisterEvent("SPELL_UPDATE_COOLDOWN", "OnSpellUpdateCooldown")
     for _, event in ipairs({
       "PLAYER_ENTERING_WORLD", "SPELLS_CHANGED", "PLAYER_SPECIALIZATION_CHANGED",
       "TRAIT_CONFIG_UPDATED", "UPDATE_SHAPESHIFT_FORM", "PLAYER_REGEN_ENABLED",
-      "PLAYER_REGEN_DISABLED", "SPELL_UPDATE_COOLDOWN",
+      "PLAYER_REGEN_DISABLED",
     }) do
       self:RegisterEvent(event, "OnMovementEvent")
     end
@@ -747,6 +754,8 @@ end
 
 MovementWarning.RefreshFonts = P:Def("MovementWarning:RefreshFonts", MovementWarning.RefreshFonts)
 MovementWarning.RefreshWarning = P:Def("MovementWarning:RefreshWarning", MovementWarning.RefreshWarning)
+MovementWarning.OnSpellUpdateCooldown = P:Def("MovementWarning:OnSpellUpdateCooldown", MovementWarning.OnSpellUpdateCooldown)
+MovementWarning.OnSpellUpdateCharges = P:Def("MovementWarning:OnSpellUpdateCharges", MovementWarning.OnSpellUpdateCharges)
 MovementWarning.OnMovementEvent = P:Def("MovementWarning:OnMovementEvent", MovementWarning.OnMovementEvent)
 MovementWarning.ApplySettings = P:Def("MovementWarning:ApplySettings", MovementWarning.ApplySettings)
 MovementWarning.ShowEnablePrompt = P:Def("MovementWarning:ShowEnablePrompt", MovementWarning.ShowEnablePrompt)
