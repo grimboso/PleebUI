@@ -25,6 +25,11 @@ local function PlaceMovers(self)
     button:SetPoint("BOTTOMLEFT", self.arena, "BOTTOMLEFT", point.x, point.y)
     button:SetText(self.names[index] .. (self.selected[index] and "\n[Selected]" or ""))
   end
+  if self.basic then
+    self.status:SetText((self.keyboardMode and "Arrow keys move · F6 returns to controls." or "Drag the sample · F6 enables arrow keys.")
+      .. "\n" .. (#self.undo > 0 and "Sample moved; real layout unchanged." or "Sample only; real layout unchanged."))
+    return
+  end
   self.status:SetText(string.format("%s · Step: %d px · Undo: %d · Redo: %d",
     self.keyboardMode and "Mover keys active · F6 for controls" or "Practice controls · F6 for mover keys",
     self.step, #self.undo, #self.redo))
@@ -95,7 +100,7 @@ function Practice:HandleKey(key, keyboardInput)
     PlaceMovers(self)
     return false
   end
-  if IsControlKeyDown() and (key == "Z" or key == "Y") then
+  if not self.basic and IsControlKeyDown() and (key == "Z" or key == "Y") then
     self:Replay(key == "Y" or IsShiftKeyDown())
     return true
   end
@@ -108,7 +113,7 @@ function Practice:HandleKey(key, keyboardInput)
   if not self.keyboardMode or not keyboardInput then return false end
   if key == "TAB" then
     local direction = IsShiftKeyDown() and -1 or 1
-    SelectMover(self, (self.selectedIndex - 1 + direction) % #self.movers + 1, false)
+    SelectMover(self, (self.selectedIndex - 1 + direction) % self.moverCount + 1, false)
     return true
   end
   if key:match("^[1-9]$") then self.step = tonumber(key); PlaceMovers(self); return true end
@@ -121,9 +126,11 @@ function Practice:HandleKey(key, keyboardInput)
   return true
 end
 
-function Practice:Show(kind, width)
+function Practice:Show(kind, width, basic)
   self:StopDrag(true)
   self.kind, self.keyboardMode, self.step = kind, false, 1
+  self.basic = basic == true
+  self.moverCount = self.basic and 1 or #self.movers
   self.undo, self.redo, self.selected, self.selectedIndex = {}, {}, { true }, 1
   self.categoryGroup.status, self.tabGroup.status = {}, {}
   local Theme = ns.Theme
@@ -132,9 +139,9 @@ function Practice:Show(kind, width)
   self.navigation:SetShown(kind == "navigation")
   self.arena:SetShown(kind ~= "navigation")
   self.status:SetShown(kind ~= "navigation")
-  self.undoButton:SetShown(kind ~= "navigation")
-  self.redoButton:SetShown(kind ~= "navigation")
-  self.reset:SetShown(kind ~= "navigation")
+  self.undoButton:SetShown(kind ~= "navigation" and not self.basic)
+  self.redoButton:SetShown(kind ~= "navigation" and not self.basic)
+  self.reset:SetShown(kind ~= "navigation" and not self.basic)
   for _, button in ipairs(self.buttons) do Theme.WidgetSkins.UIButton(button) end
   Theme.SetSquareBackdrop(self.frame, { bg = colors.control, border = colors.controlBorder }, Theme.ControlBorderSize)
   for _, text in ipairs({ self.heading, self.navResult, self.status }) do
@@ -173,14 +180,16 @@ function Practice:Show(kind, width)
   self.navResult:SetText("Choose a sample category and tab, then toggle Show sample text.")
   self.sampleToggle:SetText("Show sample text: Off")
   self.sampleOn = false
-  self.moverWidth = math.min(190, (width - 56) / 3)
+  self.moverWidth = math.min(self.basic and 260 or 190, (width - 56) / (self.basic and 1 or 3))
   self.moverHeight = rowHeight
   self.arena:SetSize(width - 32, self.moverHeight + 150)
   self.arena:ClearAllPoints()
   self.arena:SetPoint("TOPLEFT", 16, -headingHeight - 32)
   self.points = { { x = 8, y = 120 }, { x = (width - 32 - self.moverWidth) / 2, y = 70 },
     { x = width - 40 - self.moverWidth, y = 20 } }
+  if self.basic then self.points[1] = { x = (width - 32 - self.moverWidth) / 2, y = 70 } end
   for index, button in ipairs(self.movers) do
+    button:SetShown(index <= self.moverCount)
     button:SetSize(self.moverWidth, self.moverHeight)
     ns.KeyboardNavigation.RegisterFrame(button, "button", "practiceMover" .. index, nil, nil, nil, {
       activate = function() SelectMover(self, index, false) end,
@@ -199,7 +208,7 @@ function Practice:Show(kind, width)
   end
   PlaceMovers(self)
   local height = kind == "navigation" and headingHeight + rowHeight * 4 + 100
-    or headingHeight + self.arena:GetHeight() + self.status:GetStringHeight() + rowHeight + 80
+    or headingHeight + self.arena:GetHeight() + self.status:GetStringHeight() + (self.basic and 0 or rowHeight + 16) + 64
   self.frame:SetHeight(height)
   self.frame:Show()
 end
@@ -266,7 +275,7 @@ function Practice.Create(parent)
     button:SetScript("OnMouseDown", function(_, key)
       if key ~= "LeftButton" then return end
       self.keyboardMode = false
-      SelectMover(self, index, IsControlKeyDown())
+      SelectMover(self, index, not self.basic and IsControlKeyDown())
     end)
     button:SetScript("OnDragStart", function()
       if not self.selected[index] then SelectMover(self, index, false) end
@@ -285,6 +294,6 @@ function Practice.Create(parent)
   self.status:SetPoint("TOPLEFT", self.arena, "BOTTOMLEFT", 0, -12)
   self.undoButton = Button(self.frame, "Undo\nCtrl+Z", function() self:Replay(false) end)
   self.redoButton = Button(self.frame, "Redo\nCtrl+Y", function() self:Replay(true) end)
-  self.reset = Button(self.frame, "Reset practice", function() self:Show(self.kind, self.frame:GetWidth()) end)
+  self.reset = Button(self.frame, "Reset practice", function() self:Show(self.kind, self.frame:GetWidth(), self.basic) end)
   return self
 end
