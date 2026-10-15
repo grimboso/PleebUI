@@ -905,10 +905,22 @@ function Addon:OnInitialize()
   if not ns.Flags.__puiBlizzardEditModeCallbacksInstalled then
     ns.Flags.__puiBlizzardEditModeCallbacksInstalled = true
 
+    local blizzardEditModeNoticeScale
+
     StaticPopupDialogs["PUI_BLIZZARD_EDIT_MODE_NOTICE"] = {
       text = "|cffffd200Moving PleebUI elements|r\n\nTo move and arrange PleebUI frames, open PleebUI Edit Mode by typing /pe.",
       button1 = OKAY,
       button2 = "Don't show again",
+      AnchorDialogFrame = function(popup)
+        popup:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
+      end,
+      OnShow = function(popup)
+        blizzardEditModeNoticeScale = popup:GetScale()
+        popup:SetScale(blizzardEditModeNoticeScale * 2.5)
+      end,
+      OnHide = function(popup)
+        popup:SetScale(blizzardEditModeNoticeScale)
+      end,
       OnButton1 = function()
         return false
       end,
