@@ -164,7 +164,7 @@ local function LessonControls(path, node)
         { "layout/core/enabled", "Enable group frames (reload required)" },
         { "layout/size/width", "Frame width" }, { "layout/size/height", "Frame height" },
         { path[2] == "party" and "layout/arrangement/spacing" or "layout/arrangement/rowSpacing", "Frame spacing" },
-        { "text/health/mode", "Health text" }, { "layout/health/useClassColor", "Class colors" },
+        { "layout/health/useClassColor", "Class colors" },
       }
     end
     return UNIT_CONTROLS
@@ -260,8 +260,9 @@ local function BuildOptions()
         end
       end
       control.order, control.width, control.fullWidth, control.relWidth = index * 10, "full", true, nil
-      if path[1] == "unitframes" then
-        control.width, control.fullWidth, control.relWidth = "relative", nil, 0.48
+      local columns = math.min(2, ns.Theme.GetOptionsWidgetColumns(active:GetWidth()))
+      if columns > 1 then
+        control.width, control.fullWidth, control.relWidth = "relative", nil, 1 / columns - 0.02
       end
       args["essential" .. index] = control
     end
