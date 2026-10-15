@@ -1894,7 +1894,7 @@ local PUI_CONTROL_METRICS = {
   treeGroupWidth = 190,
   inlineGroupPaddingX = 8,
   inlineGroupPaddingY = 8,
-  treeButtonGap = 8,
+  treeButtonGap = 6,
   treeGroupTopInset = 10,
 }
 
@@ -1905,7 +1905,7 @@ local PUI_COMPACT_CONTROL_METRICS = {
   treeGroupWidth = 190,
   inlineGroupPaddingX = 8,
   inlineGroupPaddingY = 8,
-  treeButtonGap = 8,
+  treeButtonGap = 6,
   treeGroupTopInset = 10,
 }
 
@@ -1916,7 +1916,7 @@ local PUI_COMPACT_INLINE_CONTROL_METRICS = {
   treeGroupWidth = 190,
   inlineGroupPaddingX = 8,
   inlineGroupPaddingY = 8,
-  treeButtonGap = 8,
+  treeButtonGap = 6,
   treeGroupTopInset = 10,
 }
 
