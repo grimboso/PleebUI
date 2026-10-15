@@ -13,6 +13,40 @@ local sections = {}
 local RefreshPage
 local ShowInstaller
 local math_max = math.max
+local DEFAULT_WIDTH, DEFAULT_HEIGHT = 1320, 940
+local MIN_WIDTH, MIN_HEIGHT = 850, 560
+
+local function GetWindowDB()
+  local pui = Addon.db.global.pui
+  pui.installerWindow = pui.installerWindow or {}
+  return pui.installerWindow
+end
+
+local function SaveWindowGeometry(frame)
+  frame:StopMovingOrSizing()
+  local db = GetWindowDB()
+  db.width, db.height = frame:GetWidth(), frame:GetHeight()
+  local x, y = frame:GetCenter()
+  db.offsetX = x - UIParent:GetWidth() / frame:GetScale() * 0.5
+  db.offsetY = y - UIParent:GetHeight() / frame:GetScale() * 0.5
+end
+
+local function RestoreWindowGeometry(frame)
+  local db = GetWindowDB()
+  local screenWidth = UIParent:GetWidth() / frame:GetScale()
+  local screenHeight = UIParent:GetHeight() / frame:GetScale()
+  local maxWidth, maxHeight = screenWidth - 24, screenHeight - 24
+  local width = math.min(maxWidth, math.max(MIN_WIDTH, db.width or DEFAULT_WIDTH))
+  local height = math.min(maxHeight, math.max(MIN_HEIGHT, db.height or DEFAULT_HEIGHT))
+  frame:SetResizeBounds(math.min(MIN_WIDTH, maxWidth), math.min(MIN_HEIGHT, maxHeight), maxWidth, maxHeight)
+  frame:SetSize(width, height)
+  local maxX, maxY = math.max(0, (screenWidth - width) * 0.5), math.max(0, (screenHeight - height) * 0.5)
+  local x = math.max(-maxX, math.min(maxX, db.offsetX or 0))
+  local y = math.max(-maxY, math.min(maxY, db.offsetY or 0))
+  frame:ClearAllPoints()
+  frame:SetPoint("CENTER", UIParent, "CENTER", x, y)
+end
+
 local function SetStatus(message)
   if wizardFrame then wizardFrame.Status:SetText(message or "") end
 end
@@ -663,7 +697,8 @@ end
 
 local function RefreshChrome(frame)
   ApplyWindowTheme(frame)
-  frame:SetScale(math.min(Theme.GetOptionsUIScale(), (UIParent:GetWidth() - 24) / 850, (UIParent:GetHeight() - 24) / 560))
+  frame:SetScale(math.min(Theme.GetOptionsUIScale(), UIParent:GetWidth() / (MIN_WIDTH + 24), UIParent:GetHeight() / (MIN_HEIGHT + 24)))
+  RestoreWindowGeometry(frame)
   Content.Relayout()
   frame.Next:SetText(accessibilityOpen and "Return to setup" or pages[currentPage][1] == "welcome" and "Start setup" or currentPage == #pages and (Onboarding().installerReload and "Finish and reload" or "Finish setup") or "Continue")
   LayoutChrome(frame)
@@ -723,7 +758,7 @@ end
 local function BuildFrame()
   local frame = CreateFrame("Frame", "PleebUIOnboardingFrame", UIParent, "BackdropTemplate")
   frame:Hide()
-  frame:SetSize(1170, 820)
+  frame:SetSize(DEFAULT_WIDTH, DEFAULT_HEIGHT)
   frame:SetPoint("CENTER")
   frame:SetClampedToScreen(true)
   frame:SetFrameStrata("FULLSCREEN_DIALOG")
@@ -733,10 +768,10 @@ local function BuildFrame()
   frame:EnableMouse(true)
   frame:SetMovable(true)
   frame:SetResizable(true)
-  frame:SetResizeBounds(850, 560)
+  frame:SetResizeBounds(MIN_WIDTH, MIN_HEIGHT)
   frame:RegisterForDrag("LeftButton")
   frame:SetScript("OnDragStart", frame.StartMoving)
-  frame:SetScript("OnDragStop", frame.StopMovingOrSizing)
+  frame:SetScript("OnDragStop", SaveWindowGeometry)
   frame.Buttons, frame.PageButtons = {}, {}
   local function Text(parent)
     local text = parent:CreateFontString(nil, "OVERLAY")
@@ -879,8 +914,9 @@ local function BuildFrame()
   texture:SetAllPoints(grip)
   texture:SetAtlas("damagemeters-scalehandle")
   grip:SetScript("OnMouseDown", function(_, button) if button == "LeftButton" then frame:StartSizing("BOTTOMRIGHT") end end)
-  grip:SetScript("OnMouseUp", function() frame:StopMovingOrSizing() end)
+  grip:SetScript("OnMouseUp", function() SaveWindowGeometry(frame) end)
   frame:SetScript("OnHide", function()
+    SaveWindowGeometry(frame)
     frame:UnregisterAllEvents()
     for _, event in ipairs({ "OnProfileChanged", "OnProfileCopied", "OnProfileReset" }) do Addon.db.UnregisterCallback(profileCallbacks, event) end
     ns.InstallerPreview.Deactivate()
@@ -894,9 +930,11 @@ local function BuildFrame()
     frame:RegisterEvent("UPDATE_SHAPESHIFT_FORM")
     frame:RegisterEvent("PLAYER_REGEN_DISABLED")
     frame:RegisterEvent("PLAYER_REGEN_ENABLED")
+    frame:RegisterEvent("PLAYER_LOGOUT")
     ns.InstallerPreview.Activate()
   end)
   frame:SetScript("OnEvent", function(_, event, unit)
+    if event == "PLAYER_LOGOUT" then SaveWindowGeometry(frame); return end
     if event == "PLAYER_SPECIALIZATION_CHANGED" and unit and unit ~= "player" then return end
     if event == "PLAYER_REGEN_DISABLED" then
       Content.Suspend(frame.Content)
@@ -936,9 +974,6 @@ ShowInstaller = function()
   if Addon._OptionsWindow then Addon._OptionsWindow:Hide() end
   wizardFrame = wizardFrame or BuildFrame()
   RefreshChrome(wizardFrame)
-  local screenWidth = UIParent:GetWidth() / wizardFrame:GetScale()
-  local screenHeight = UIParent:GetHeight() / wizardFrame:GetScale()
-  wizardFrame:SetSize(math.min(1170, screenWidth - 24), math.min(820, screenHeight - 24))
   wizardFrame:Show()
   wizardFrame:Raise()
   wizardFrame.Canvas:SetWidth(math.max(480, wizardFrame.Scroll:GetWidth() - 4))
