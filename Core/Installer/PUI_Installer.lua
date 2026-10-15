@@ -981,6 +981,9 @@ ShowInstaller = function()
   if InCombatLockdown() then Content.Suspend(wizardFrame.Content) end
 end
 
+SLASH_PUI_INSTALL1 = "/install"
+SlashCmdList.PUI_INSTALL = ShowInstaller
+
 function Addon:IsInstallWizardPending()
   local db = Onboarding()
   return db.installComplete ~= true or (tonumber(db.installVersion) or 0) < ns.InstallFlowVersion
