@@ -605,9 +605,9 @@ local function UpdateHeaderText(window, windowDB, session)
   end
 end
 
-local function ApplyWindowStyle(window)
+local function ApplyWindowStyle(window, previewDB)
   local db = DamageMeters.db.profile
-  local windowDB = GetWindowDB(window.index)
+  local windowDB = previewDB or GetWindowDB(window.index)
   local colors = Theme.GetColors()
   local barTexture = Theme.GetBarTexture()
   local headerHeight = db.headerHeight
@@ -786,8 +786,10 @@ local function ApplyWindowStyle(window)
     row.name:SetPoint("RIGHT", row.amountHost, "LEFT", -8, 0)
   end
 
-  UpdateLockButton(window)
-  UpdateHeaderText(window, windowDB)
+  if not previewDB then
+    UpdateLockButton(window)
+    UpdateHeaderText(window, windowDB)
+  end
 end
 
 local function ApplyWindowLayout(window)
@@ -896,7 +898,8 @@ local function SetRowSource(
   source,
   rank,
   maxAmount,
-  maxAmountIsSecret
+  maxAmountIsSecret,
+  showSpecIcons
 )
   local classFilename = source.classFilename
 
@@ -1045,7 +1048,8 @@ local function SetRowSource(
   local iconKind
   local iconValue
   local specIconID = source.specIconID
-  if DamageMeters.runtimeShowSpecIcons then
+  if showSpecIcons == nil then showSpecIcons = DamageMeters.runtimeShowSpecIcons end
+  if showSpecIcons then
     if type(specIconID) == "number" and specIconID > 0 then
       iconKind = "SPEC"
       iconValue = specIconID
@@ -2344,6 +2348,72 @@ DamageMeters.ReopenWindow = P:Def("DamageMeters.ReopenWindow", DamageMeters.Reop
 DamageMeters.CloseWindow = P:Def("DamageMeters.CloseWindow", DamageMeters.CloseWindow)
 DamageMeters.DeleteWindow = P:Def("DamageMeters.DeleteWindow", DamageMeters.DeleteWindow)
 DamageMeters.CloseLastWindow = P:Def("DamageMeters.CloseLastWindow", DamageMeters.CloseLastWindow)
+
+function Windows.BuildPreview(host, owner)
+  local window = owner.window
+  if not window then
+    window = { rows = {}, headerButtons = {} }
+    owner.window = window
+    local frame = CreateFrame("Frame", nil, host)
+    window.frame = frame
+    window.snapHint = frame:CreateFontString(nil, "OVERLAY")
+    window.snapHint:Hide()
+    local header = CreateFrame("Frame", nil, frame)
+    header:SetPoint("TOPLEFT", frame, "TOPLEFT", 2, -2)
+    header:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -2, -2)
+    window.header = header
+    window.headerBackground = header:CreateTexture(nil, "BACKGROUND")
+    window.headerBackground:SetAllPoints(header)
+    window.headerBorder = header:CreateTexture(nil, "BORDER")
+    window.headerBorder:SetPoint("BOTTOMLEFT", header, "BOTTOMLEFT")
+    window.headerBorder:SetPoint("BOTTOMRIGHT", header, "BOTTOMRIGHT")
+    window.headerBorder:SetHeight(1)
+    window.title = header:CreateFontString(nil, "OVERLAY")
+    window.subtitle = header:CreateFontString(nil, "OVERLAY")
+    window.title:SetJustifyH("LEFT")
+    window.subtitle:SetJustifyH("LEFT")
+    for _, texture in ipairs({ MINIMIZE_TEXTURE, CONFIG_TEXTURE, PAD_LOCKED_TEXTURE, TRASH_TEXTURE, LIST_TEXTURE, LIST_TEXTURE }) do
+      local button = CreateTextureButton(header, texture)
+      button:EnableMouse(false)
+      window.headerButtons[#window.headerButtons + 1] = button
+    end
+    window.viewport = CreateFrame("Frame", nil, frame)
+    window.viewport:SetClipsChildren(true)
+    window.emptyText = window.viewport:CreateFontString(nil, "OVERLAY")
+    window.emptyText:Hide()
+  end
+  local configured = DamageMeters.db.profile.windows[1]
+  local previewDB = {
+    width = configured and configured.width or 320,
+    height = configured and configured.height or 180,
+  }
+  window.frame:SetParent(host)
+  window.frame:ClearAllPoints()
+  window.frame:SetPoint("CENTER", host, "CENTER")
+  window.frame:SetScale(math_min(1, math_max(1, host:GetWidth() - 20) / previewDB.width,
+    math_max(1, host:GetHeight() - 20) / previewDB.height))
+  ApplyWindowStyle(window, previewDB)
+  ApplyWindowLayout(window)
+  ConfigureWindowRowDisplay(window, "DAMAGE_DONE")
+  window.title:SetText("Damage Done")
+  window.subtitle:SetText((configured and configured.session == "OVERALL" and "Overall" or "Current") .. " — sample data")
+  local samples = {
+    { name = "Player", classFilename = "MAGE", totalAmount = 1200000, amountPerSecond = 20000, isLocalPlayer = true },
+    { name = "Group member", classFilename = "ROGUE", totalAmount = 960000, amountPerSecond = 16000 },
+    { name = "Group member", classFilename = "DRUID", totalAmount = 720000, amountPerSecond = 12000 },
+  }
+  for index, row in ipairs(window.rows) do
+    row:EnableMouse(false)
+    if samples[index] and index <= window.activeRowCount then
+      SetRowSource(window, row, samples[index], index, 1200000, false, DamageMeters.db.profile.showSpecIcons)
+      row:Show()
+    else
+      row:Hide()
+    end
+  end
+  window.frame:Show()
+  return window.frame
+end
 
 Windows.CreateTextureButton = CreateTextureButton
 Windows.SetHeaderButtonTooltip = SetHeaderButtonTooltip
