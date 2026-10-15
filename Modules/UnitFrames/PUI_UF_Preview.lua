@@ -1380,8 +1380,10 @@ local function BuildAuraPreviewFrame(box, canvas, context)
   context.scale = scale
   context.healthRawHeight = layout.healthHeight
 
-  LayoutUnitFramePreviewInteractions(frame)
-  ConfigureUnitFramePreviewInteractions(context)
+  if not context.installer then
+    LayoutUnitFramePreviewInteractions(frame)
+    ConfigureUnitFramePreviewInteractions(context)
+  end
   return frame
 end
 
@@ -2271,10 +2273,12 @@ local function PositionAuraPreviewDisplay(previewDisplay, xOffset, yOffset, anch
     maxY = maxY and math_max(maxY, top) or top
   end
 
-  local control = previewDisplay.control
-  control:ClearAllPoints()
-  control:SetPoint("BOTTOMLEFT", target, relativePoint, minX, minY)
-  control:SetSize(math_max(1, maxX - minX), math_max(1, maxY - minY))
+  if not previewDisplay.context.installer then
+    local control = previewDisplay.control
+    control:ClearAllPoints()
+    control:SetPoint("BOTTOMLEFT", target, relativePoint, minX, minY)
+    control:SetSize(math_max(1, maxX - minX), math_max(1, maxY - minY))
+  end
 end
 
 local function GetRegionAnchorOffset(region, point)
@@ -2579,9 +2583,11 @@ BuildAuraPreviewDisplay = function(box, context, display, displayIndex)
     output.icons[#output.icons + 1] = icon
   end
 
-  local control = AcquireAuraPreviewDisplayControl(box, box:GetCanvas())
-  output.control = control
-  control.__puiAuraPreviewDisplay = output
+  if not context.installer then
+    local control = AcquireAuraPreviewDisplayControl(box, box:GetCanvas())
+    output.control = control
+    control.__puiAuraPreviewDisplay = output
+  end
   PositionAuraPreviewDisplay(output, xOffset, yOffset, anchorPoint)
   ConfigureAuraPreviewElementNavigation(output)
 
@@ -3739,6 +3745,71 @@ function Preview.BuildUnitFramePreview(addon, optionsFrame, shell, path)
   return true
 end
 
+function Preview.BuildInstallerPreview(host, owner, path)
+  local box = owner.installerBox
+  if not box then
+    box = CreateFrame("Frame", nil, host)
+    box.canvas = CreateFrame("Frame", nil, box)
+    box.canvas:SetAllPoints(box)
+    box.canvas:SetClipsChildren(true)
+    function box:GetCanvas() return self.canvas end
+    owner.installerBox = box
+  end
+  box:SetParent(host)
+  box:ClearAllPoints()
+  box:SetAllPoints(host)
+  box:SetFrameStrata(host:GetFrameStrata())
+  box:SetFrameLevel(host:GetFrameLevel() + 1)
+  box.canvas:SetFrameLevel(box:GetFrameLevel() + 1)
+  box:Show()
+  BeginAuraPreviewFramePool(box)
+  BeginAuraPreviewIconPool(box)
+
+  local context = GetAuraManagerPreviewContext(path)
+  context.installer = true
+  context.selectedID = GetAuraManagerPathSelection(path)
+  context.supportsAuraManager = false
+  context.allowDrag = false
+  local width, height = ns.UFStyle.ResolveFrameSize(context.frameDB)
+  local canvas = box:GetCanvas()
+  local availableWidth = math_max(1, canvas:GetWidth() - 32)
+  local availableHeight = math_max(1, canvas:GetHeight() - 80)
+  local scale = math_min(GetPreviewScale(1), availableWidth / math_max(40, width), availableHeight / math_max(12, height))
+  local positions
+  local insets = { left = 16, right = 16, top = 40, bottom = 40 }
+  if context.grouped then
+    local dimensions
+    if context.unitKey == "raid" then
+      dimensions = { BuildRaidAuraPreviewPositions(box, context.frameDB, 2, 3, scale, insets) }
+    else
+      dimensions = { BuildPartyAuraPreviewPositions(box, context.frameDB, 3, scale, insets) }
+    end
+    scale = scale * math_min(1, availableWidth / dimensions[4], availableHeight / dimensions[5])
+    if context.unitKey == "raid" then
+      positions = BuildRaidAuraPreviewPositions(box, context.frameDB, 2, 3, scale, insets)
+    else
+      positions = BuildPartyAuraPreviewPositions(box, context.frameDB, 3, scale, insets)
+    end
+  else
+    positions = { {} }
+  end
+  context.previewZoom = scale * Theme.GetOptionsUIScale()
+  for index, position in ipairs(positions) do
+    local sample = CopyAuraPreviewContext(context)
+    sample.previewX, sample.previewY = position.x, position.y
+    sample.previewCenterYOffset = 0
+    sample.previewName = context.grouped and ("Member " .. index) or "Sample unit"
+    sample.previewHealth = 73 - (index - 1) * 7
+    if context.grouped then sample.previewClassToken = UNIT_FRAME_PREVIEW_CLASS_TOKENS[index] end
+    BuildAuraPreviewFrame(box, canvas, sample)
+    if context.selectedID then
+      local display = context.displays[context.selectedID]
+      if display then BuildAuraPreviewDisplay(box, sample, display, index) end
+    end
+  end
+  return box
+end
+
 function Preview.PLAYER_REGEN_DISABLED()
   local optionsFrame = ns.Addon._OptionsWindow
   local shell = optionsFrame and optionsFrame.__puiPageShell
@@ -3846,6 +3917,7 @@ SyncInlineGroupedPreviewControls = P:Def("SyncInlineGroupedPreviewControls", Syn
 EnsureAuraManagerPreviewControls = P:Def("EnsureAuraManagerPreviewControls", EnsureAuraManagerPreviewControls)
 SyncAuraPreviewControls = P:Def("SyncAuraPreviewControls", SyncAuraPreviewControls)
 Preview.BuildUnitFramePreview = P:Def("Preview:BuildUnitFramePreview", Preview.BuildUnitFramePreview)
+Preview.BuildInstallerPreview = P:Def("Preview:BuildInstallerPreview", Preview.BuildInstallerPreview)
 Preview.PLAYER_REGEN_DISABLED = P:Def("Preview:PLAYER_REGEN_DISABLED", Preview.PLAYER_REGEN_DISABLED)
 
 local EventFrame = CreateFrame("Frame")
