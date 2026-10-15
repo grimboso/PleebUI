@@ -91,6 +91,7 @@ Content.SpecializationGuides = specGuides
 
 
 local function Add(widget)
+  widget:SetUserData("keyboardKey", activeKey .. "\001" .. tostring(#group.children + 1))
   group:AddChild(widget)
   ns.AceHooks.TakeOwnership(widget)
   return widget
@@ -639,6 +640,7 @@ function Content.Create(parent, handlers)
     callbacks.resize(height + 16)
   end
   settingsHost = ns.InstallerSettings.Create(host, 0)
+  host.Settings = settingsHost
   settingsHost:Hide()
   previewHost = CreateFrame("Frame", nil, host)
   previewHost:Hide()
