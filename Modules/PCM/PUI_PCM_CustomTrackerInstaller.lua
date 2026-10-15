@@ -19,6 +19,7 @@ local previewTimer
 local SchedulePreviewAdvance
 local closeCallback
 local createdTrackerKey
+local requireAvailableSpell
 local PREVIEW_SECONDS = 3
 
 local PAGES = {
@@ -119,6 +120,38 @@ function Installer:CreateDraft(kind)
   local value = NewDraft()
   value.kind = kind
   return value
+end
+
+function Installer:GetDraftChoices(value)
+  local values, sorting, available = Cooldowns:GetCustomBarSpellDropdown(
+    (value.kind == "stack" or value.kind == "duration") and "aura" or "cooldown")
+  if value.kind == "charge" then
+    local eligible = {}
+    for _, entry in ipairs(ns.PCMAbilityCatalog:GetEntries()) do
+      if entry.hasCharges == true then
+        eligible[tostring(entry.chargeSpellID)] = true
+        eligible[tostring(entry.staticDisplaySpellID)] = true
+        eligible[tostring(entry.spellID)] = true
+      end
+    end
+    local filteredValues, filteredSorting = { none = "Demonstration only" }, { "none" }
+    for _, id in ipairs(sorting) do
+      if eligible[id] then filteredValues[id] = values[id]; filteredSorting[#filteredSorting + 1] = id end
+    end
+    values, sorting = filteredValues, filteredSorting
+  end
+  local key = value.spellID and tostring(value.spellID)
+  local canCreate = key ~= nil and values[key] ~= nil and available[key] == true
+  if key and not values[key] then
+    values[key] = "Spell " .. key .. " (unavailable)"
+    sorting[#sorting + 1] = key
+  end
+  local reason
+  if not key then reason = "Choose a spell before creating this tracker."
+  elseif not canCreate then
+    reason = "Your selected spell is kept, but it is not currently available for this tracker. Check your specialization, talents, and tracked spells, or choose another spell."
+  end
+  return values, sorting, canCreate, reason
 end
 
 local function DefaultPreviewState()
@@ -328,6 +361,11 @@ local function SetPage(newPage)
   frame.PageTitle:SetText(string.format("Step %d of %d — %s", page, #PAGES, PAGES[page]))
   controls:ReleaseChildren()
   controls:SetScroll(0)
+  local spellValues, spellOrder, availabilityReason
+  local canCreate = draft.spellID ~= nil
+  if requireAvailableSpell then
+    spellValues, spellOrder, canCreate, availabilityReason = Installer:GetDraftChoices(draft)
+  end
 
   if page == 1 then
     AddHeading("Button or bar")
@@ -362,15 +400,13 @@ local function SetPage(newPage)
       AddDescription("Choose a spell found by the Cooldown Manager or enter its spell ID. Create separate trackers for its effect or summon duration and its buff/debuff if you want to see both.")
     end
     local listKind = (draft.kind == "cooldown" or draft.kind == "charge") and "cooldown" or "aura"
-    local values, sorting = Cooldowns:GetCustomBarSpellDropdown(listKind)
-    values = values or {}
+    local values, sorting
+    if requireAvailableSpell then values, sorting = spellValues, spellOrder
+    else values, sorting = Cooldowns:GetCustomBarSpellDropdown(listKind) end
     values.none = "-- Select --"
-    sorting = sorting or {}
-    if sorting[1] ~= "none" then
-      table.insert(sorting, 1, "none")
-    end
     AddDropdown("Tracked spell", values, sorting, draft.spellID and tostring(draft.spellID) or "none", function(value)
       draft.spellID = value ~= "none" and tonumber(value) or nil
+      if requireAvailableSpell then SetPage(3) end
     end, "ACTIVE")
 
     local spellID = AceGUI:Create("PUI_EditBox")
@@ -609,7 +645,8 @@ local function SetPage(newPage)
   frame.Previous:SetDisabled(page <= 1)
   frame.Next.frame:SetShown(page < #PAGES)
   frame.Finish.frame:SetShown(page == #PAGES)
-  frame.Finish:SetDisabled(draft.spellID == nil)
+  if availabilityReason then AddDescription(availabilityReason) end
+  frame.Finish:SetDisabled(not canCreate)
   ApplyPreviewState(previewState)
 end
 
@@ -644,6 +681,7 @@ end
 
 local function BuildFrame()
   local window = CreateFrame("Frame", "PleebUI_PCM_CustomTrackerInstaller", UIParent, "BackdropTemplate")
+  window:Hide()
   window:SetSize(1220, 570)
   window:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
   window:SetFrameStrata("DIALOG")
@@ -708,6 +746,10 @@ local function BuildFrame()
 
   local finish = CreateWindowButton(window, "Finish tracker", 160, function()
     if InCombatLockdown() then return end
+    if requireAvailableSpell then
+      local _, _, available = Installer:GetDraftChoices(draft)
+      if not available then SetPage(page) return end
+    end
     local key = ns.PCM_CreateCustomTrackerFromDraft(draft)
     if key then
       local returnToCustomTrackerPage = closeCallback ~= nil
@@ -732,8 +774,17 @@ local function BuildFrame()
   window.Finish = finish
 
   CreatePreview(window)
-  window:SetScript("OnShow", function() window:RegisterEvent("PLAYER_REGEN_DISABLED") end)
-  window:SetScript("OnEvent", function() window:Hide() end)
+  window:SetScript("OnShow", function()
+    window:RegisterEvent("PLAYER_REGEN_DISABLED")
+    window:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED")
+    window:RegisterEvent("PLAYER_TALENT_UPDATE")
+    window:RegisterEvent("SPELLS_CHANGED")
+  end)
+  window:SetScript("OnEvent", function(_, event, unit)
+    if event == "PLAYER_SPECIALIZATION_CHANGED" and unit ~= "player" then return end
+    if event == "PLAYER_REGEN_DISABLED" then window:Hide()
+    elseif requireAvailableSpell and not InCombatLockdown() then SetPage(page) end
+  end)
   window:SetScript("OnHide", function()
     window:UnregisterAllEvents()
     StopPreviewAdvance()
@@ -742,6 +793,7 @@ local function BuildFrame()
     local callback = closeCallback
     local key = createdTrackerKey
     closeCallback = nil
+    requireAvailableSpell = nil
     createdTrackerKey = nil
     if callback then
       C_Timer.After(0, function()
@@ -752,13 +804,14 @@ local function BuildFrame()
   return window
 end
 
-function Installer:Open(onClose, initialDraft)
+function Installer:Open(onClose, initialDraft, checkAvailability)
   if InCombatLockdown() then return end
   if not draft then
     draft = initialDraft and CopyTable(initialDraft) or NewDraft()
     page = 1
   end
   closeCallback = onClose
+  requireAvailableSpell = checkAvailability == true
   frame = frame or BuildFrame()
   ApplyWindowSkin(frame)
   frame:Show()
