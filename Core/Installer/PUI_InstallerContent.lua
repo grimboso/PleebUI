@@ -251,7 +251,7 @@ local function Practice(kind)
   practice.frame:SetParent(parent)
   practice.frame:ClearAllPoints()
   practice.frame:SetPoint("TOPLEFT", parent, "TOPLEFT")
-  practice:Show(kind, math.max(450, group:GetWidth()))
+  practice:Show(kind, math.max(450, group.frame:GetWidth()))
 end
 
 local function TrackerPage(key)
@@ -455,7 +455,7 @@ local function BuildPage(key)
     Action("Reset all practice controls", function()
       sampleChoice = "icons"
       picker:SetValue(sampleChoice)
-      practice:Show("navigation", math.max(450, group:GetWidth()))
+      practice:Show("navigation", math.max(450, group.frame:GetWidth()))
     end)
     Details({ "Accessibility" }, "Accessibility")
   elseif key == "unitframes" then
