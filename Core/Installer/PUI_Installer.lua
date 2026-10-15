@@ -504,6 +504,45 @@ end
 
 local returnFromOptions
 local returnFromEditMode
+local externalReturn
+local externalCallbacks = {}
+
+local function ClearExternalReturn()
+  if not externalReturn then return end
+  if externalReturn.kind == "keybinds" then
+    ns.ActionBarsCore.LibKeyBound.UnregisterCallback(externalCallbacks, "LIBKEYBOUND_DISABLED")
+  else
+    EventRegistry:UnregisterCallback("CooldownViewerSettings.OnHide", externalCallbacks)
+  end
+  externalReturn = nil
+end
+
+local function ResumeExternalSetup()
+  local request = externalReturn
+  C_Timer.After(0, function()
+    if not request or externalReturn ~= request then return end
+    ClearExternalReturn()
+    ShowInstaller()
+  end)
+end
+
+local function OpenKeybinds()
+  if InCombatLockdown() then SetStatus("Open keybind mode after combat ends.") return end
+  ClearExternalReturn()
+  wizardFrame:Hide()
+  externalReturn = { kind = "keybinds" }
+  ns.ActionBarsCore.LibKeyBound.RegisterCallback(externalCallbacks, "LIBKEYBOUND_DISABLED", ResumeExternalSetup)
+  ns.ActionBarsCore.LibKeyBound:Activate()
+end
+
+local function OpenTrackedSpells()
+  if InCombatLockdown() then SetStatus("Open tracked spell settings after combat ends.") return end
+  ClearExternalReturn()
+  wizardFrame:Hide()
+  externalReturn = { kind = "trackedSpells" }
+  EventRegistry:RegisterCallback("CooldownViewerSettings.OnHide", ResumeExternalSetup, externalCallbacks)
+  if not CooldownViewerSettings:IsShown() then CooldownViewerSettings:TogglePanel() end
+end
 local function OpenEditMode()
   if InCombatLockdown() then SetStatus("Open Edit Mode after combat ends.") return end
   wizardFrame:Hide()
@@ -543,7 +582,7 @@ local function OpenTracker(draft)
   wizardFrame:Hide()
   ns.PCMCustomTrackerInstaller:Open(function()
     ShowInstaller()
-  end, draft)
+  end, draft, true)
 end
 
 local function Finish(reload)
@@ -698,7 +737,7 @@ local function BuildFrame()
   frame.Content = Content.Create(canvas, {
     status = SetStatus, navigate = Navigate, requireReload = RequireReload,
     openOptions = OpenOptions, openTracker = OpenTracker, openEditMode = OpenEditMode,
-    closeForOptions = function() frame:Hide() end,
+    openKeybinds = OpenKeybinds, openTrackedSpells = OpenTrackedSpells,
     resize = function(height) canvas:SetHeight(height + 24) end,
     refreshTheme = function() RefreshChrome(frame) end,
     chooseMode = function(mode)
@@ -770,6 +809,7 @@ local function BuildFrame()
     for _, event in ipairs({ "OnProfileChanged", "OnProfileCopied", "OnProfileReset" }) do Addon.db.RegisterCallback(profileCallbacks, event, "Changed") end
     frame:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED")
     frame:RegisterEvent("PLAYER_TALENT_UPDATE")
+    frame:RegisterEvent("SPELLS_CHANGED")
     frame:RegisterEvent("UPDATE_SHAPESHIFT_FORM")
     frame:RegisterEvent("PLAYER_REGEN_DISABLED")
     frame:RegisterEvent("PLAYER_REGEN_ENABLED")
@@ -793,6 +833,7 @@ local function BuildFrame()
 end
 
 ShowInstaller = function()
+  ClearExternalReturn()
   local db = Onboarding()
   sections = db.installerSections or {}
   Content.sections = sections
