@@ -2,6 +2,7 @@ local _, ns = ...
 local Preview = {}
 ns.InstallerPreview = Preview
 local owners = { unitframes = {}, actionbars = {}, cooldowns = {}, prd = {}, quality = {}, meters = {}, everyday = {} }
+local settingsRoots = { unitframes = "unitframes", actionbars = "ACTIONBARS", cooldowns = "CooldownManager", prd = "PRD", quality = "Quality" }
 local current
 local openOptions
 local draftTimer
@@ -90,6 +91,11 @@ end
 
 function Preview.Refresh()
   BuildCurrent()
+end
+
+function Preview.SetSettingsPath(path)
+  if not current or current.draft then return end
+  if settingsRoots[current.kind] == path[1] then current.path = CopyTable(path) end
 end
 
 function Preview.ShowDraft(host, draft)
