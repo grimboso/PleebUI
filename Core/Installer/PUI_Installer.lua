@@ -982,6 +982,7 @@ ShowInstaller = function()
 end
 
 SLASH_PUI_INSTALL1 = "/install"
+SLASH_PUI_INSTALL2 = "/instal"
 SlashCmdList.PUI_INSTALL = ShowInstaller
 
 function Addon:IsInstallWizardPending()
