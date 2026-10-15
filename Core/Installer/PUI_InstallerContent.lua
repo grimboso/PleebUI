@@ -198,6 +198,18 @@ local function Settings(path)
   Action("Open full settings", function() callbacks.openOptions(path) end)
 end
 
+local function AnimationToggle()
+  local status = Text("Example paused.")
+  local play
+  play = Check("Animate this example", false, function(value)
+    local enabled = ns.InstallerPreview.SetPlaying(value)
+    play:SetValue(enabled)
+    status:SetText(enabled and "Example playing. Uncheck to pause." or "Example paused.")
+  end, true)
+  play:SetDisabled(not ns.OptionsMotion.IsEnabled())
+  if not ns.OptionsMotion.IsEnabled() then Text("Motion is off in Accessibility.") end
+end
+
 local function Preview(kind, path)
   local height = kind == "unitframes" and (path[2] == "party" or path[2] == "raid") and 220
     or kind == "unitframes" and 150 or 335
@@ -208,28 +220,7 @@ local function Preview(kind, path)
   previewHost:SetAllPoints(parent)
   previewHost:Show()
   ns.InstallerPreview.Show(previewHost, kind, path)
-  local states = ns.InstallerPreview.GetSampleStates(kind, path)
-  if not states then Text("Static example · sample data.") return end
-  local status = Text(states.values and ("Example paused: " .. states.values[states.initial] .. ".") or "Example paused. Two buttons animate when enabled.")
-  local play
-  if states.values then
-    Dropdown("Sample state", states.values, states.order, states.initial, function(value)
-      ns.InstallerPreview.SetSample(value)
-      if play then play:SetValue(false) end
-      status:SetText("Example paused: " .. states.values[value] .. ".")
-    end)
-  end
-  if states.animated then
-    play = Check("Animate this example", false, function(value)
-      local enabled = ns.InstallerPreview.SetPlaying(value)
-      play:SetValue(enabled)
-      status:SetText(enabled and "Example playing. Uncheck to pause." or "Example paused.")
-    end, true)
-    play:SetDisabled(not ns.OptionsMotion.IsEnabled())
-    if not ns.OptionsMotion.IsEnabled() then
-      Text(states.values and "Motion is off in Accessibility; sample states still work." or "Motion is off in Accessibility.")
-    end
-  end
+  if ns.InstallerPreview.AnimatedKinds[kind] then AnimationToggle() else Text("Static example · sample data.") end
 end
 
 local function Rebuild()
@@ -358,28 +349,7 @@ local function TrackerPage(key)
   previewHost:SetAllPoints(parent)
   previewHost:Show()
   ns.InstallerPreview.ShowDraft(previewHost, draft)
-  local values, order
-  if draft.kind == "charge" then
-    values, order = { READY = "Full charges", RECHARGING = "One spent", EMPTY = "Empty" }, { "READY", "RECHARGING", "EMPTY" }
-  elseif draft.kind == "stack" or draft.kind == "duration" then
-    values, order = { ACTIVE = "Active", INACTIVE = "Inactive" }, { "ACTIVE", "INACTIVE" }
-  else
-    values, order = { READY = "Ready", COOLDOWN = "On cooldown", ACTIVE = "Effect active" }, { "READY", "COOLDOWN", "ACTIVE" }
-  end
-  local status = Text("Example paused. Choose a state to compare it.")
-  local play
-  Dropdown("Sample state", values, order, ns.InstallerPreview.GetDraftState(), function(state)
-    ns.InstallerPreview.SetDraftState(state)
-    play:SetValue(false)
-    status:SetText("Example paused: " .. values[state] .. ".")
-  end)
-  play = Check("Cycle sample states", false, function(value)
-    local enabled = ns.InstallerPreview.SetPlaying(value)
-    play:SetValue(enabled)
-    status:SetText(enabled and "Cycling sample states. Uncheck to pause." or "Example paused. Choose a state to compare it.")
-  end, true)
-  play:SetDisabled(not ns.OptionsMotion.IsEnabled())
-  if not ns.OptionsMotion.IsEnabled() then Text("Motion is off in Accessibility; sample states still work.") end
+  AnimationToggle()
   Text("Tip: the optional creator handles spell selection, sources, text, and visibility.")
   Action(ns.PCMCustomTrackerInstaller:HasDraft() and "Continue unfinished tracker (optional)" or "Create a tracker (optional)", function()
     if ns.PCMCustomTrackerInstaller:HasDraft() then callbacks.openTracker() else callbacks.openTracker(draft) end

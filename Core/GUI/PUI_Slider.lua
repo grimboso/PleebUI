@@ -6,7 +6,7 @@ local AceGUI = LibStub("AceGUI-3.0")
 local AceConfigDialog = LibStub("AceConfigDialog-3.0")
 
 local TYPE = "PUI_Slider"
-local VERSION = 7
+local VERSION = 8
 local WHITE8 = "Interface\\Buttons\\WHITE8x8"
 
 local math_floor = math.floor
@@ -143,6 +143,14 @@ local function ShowSliderTooltip(self)
   self.hintTooltip = tooltip
 end
 
+local function RefreshStepButtonVisualState(button)
+  local background, border, text = Theme.GetControlStateColors(
+    not button:IsEnabled(), button.__puiHovered == true, button.__puiPressed == true
+  )
+  SetControlChromeColors(button.chrome, background, border, 1)
+  button.text:SetTextColor(text[1], text[2], text[3], text[4])
+end
+
 local function RefreshVisualState(self)
   local colors = Theme.GetColors()
   local disabled = self.disabled == true
@@ -176,11 +184,7 @@ local function RefreshVisualState(self)
       or button == self.plusButton and (self.value or 0) >= (self.max or 100)
     local buttonDisabled = disabled or atLimit
     if buttonDisabled then button:Disable() else button:Enable() end
-    local background, border, text = Theme.GetControlStateColors(
-      buttonDisabled, button.__puiHovered == true, button.__puiPressed == true
-    )
-    SetControlChromeColors(button.chrome, background, border, 1)
-    button.text:SetTextColor(text[1], text[2], text[3], text[4])
+    RefreshStepButtonVisualState(button)
   end
   self.editbox:SetTextColor(
     textColor[1],
@@ -382,14 +386,14 @@ end
 
 local function StepButtonOnEnter(button)
   button.__puiHovered = true
-  RefreshVisualState(button.obj)
+  RefreshStepButtonVisualState(button)
   ShowSliderTooltip(button.obj)
 end
 
 local function StepButtonOnLeave(button)
   button.__puiHovered = nil
   button.__puiPressed = nil
-  RefreshVisualState(button.obj)
+  RefreshStepButtonVisualState(button)
   HideSliderTooltip(button.obj)
   button.obj:Fire("OnLeave")
 end
@@ -397,13 +401,13 @@ end
 local function StepButtonOnMouseDown(button, mouseButton)
   if mouseButton ~= "LeftButton" then return end
   button.__puiPressed = true
-  RefreshVisualState(button.obj)
+  RefreshStepButtonVisualState(button)
 end
 
 local function StepButtonOnMouseUp(button, mouseButton)
   if mouseButton ~= "LeftButton" then return end
   button.__puiPressed = nil
-  RefreshVisualState(button.obj)
+  RefreshStepButtonVisualState(button)
 end
 
 local function SliderOnHide(frame)
