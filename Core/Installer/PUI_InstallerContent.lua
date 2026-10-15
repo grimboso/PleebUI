@@ -9,7 +9,11 @@ local drafts = {}
 local activeKey
 local rebuilding
 local pendingRebuild
-local function Onboarding() return Addon.db.profile.pui.onboarding end
+local paletteChoice
+local chooseSections = false
+local moverHelp = false
+local profileTools = false
+local individualBars = false
 local chapterOrder = {
   { key = "frames", name = "Frames and auras" },
   { key = "combat", name = "Combat and trackers" },
@@ -34,11 +38,11 @@ local specGuides = {
     { "Balance", "Alternate Mana; Cat Form Combo Points", "Combo Points depend on Cat Form and can appear outside Feral." },
     { "Feral", "Combo Points", "The primary power changes with your form." },
     { "Guardian", "Ironfur; Cat Form Combo Points", "Ironfur is a Bear Form effect. Cat Combo Points are contextual." },
-    { "Restoration", "Primary power; contextual Combo Points", "Cat Form can expose Combo Points; group indicators have separate settings.", healer = true },
+    { "Restoration", "Primary power; contextual Combo Points", "Cat Form can expose Combo Points; group indicators have separate settings." },
   },
   EVOKER = {
-    { "Devastation", "Essence", "Recharge and ready effects use the existing resource renderer." },
-    { "Preservation", "Essence", "Also explore healing indicators and empower castbars.", healer = true },
+    { "Devastation", "Essence", "Choose readable segments and recharge cues." },
+    { "Preservation", "Essence", "Also explore healing indicators and empower castbars." },
     { "Augmentation", "Essence", "Effect-duration trackers are available separately." },
   },
   HUNTER = {
@@ -53,17 +57,17 @@ local specGuides = {
   },
   MONK = {
     { "Brewmaster", "Stagger", "Stagger severity and fill thresholds have dedicated options." },
-    { "Mistweaver", "Sheilun's Gift", "The supported count display is separate from ordinary power.", healer = true },
+    { "Mistweaver", "Sheilun's Gift", "The supported count display is separate from ordinary power." },
     { "Windwalker", "Chi", "Configure segments, text and visibility for a true resource." },
   },
   PALADIN = {
-    { "Holy", "Holy Power", "Group indicators can be customized in Unit Frames.", healer = true },
+    { "Holy", "Holy Power", "Group indicators can be customized in Unit Frames." },
     { "Protection", "Holy Power; Shining Light", "Shining Light is a tracked effect, not Holy Power." },
     { "Retribution", "Holy Power", "Choose the supported segments, text and resource cues." },
   },
   PRIEST = {
-    { "Discipline", "Primary power", "Healing indicators and optional effect trackers have separate settings.", healer = true },
-    { "Holy", "Lightweaver", "This tracked effect can depend on your current talents.", healer = true },
+    { "Discipline", "Primary power", "Healing indicators and optional effect trackers have separate settings." },
+    { "Holy", "Lightweaver", "This tracked effect can depend on your current talents." },
     { "Shadow", "Primary power; alternate Mana", "Alternate Mana is not a new class resource." },
   },
   ROGUE = {
@@ -74,7 +78,7 @@ local specGuides = {
   SHAMAN = {
     { "Elemental", "Primary power; alternate Mana", "Alternate Mana and primary power are different displays." },
     { "Enhancement", "Maelstrom Weapon; Hailstorm; Overflowing Maelstrom", "These are tracked stacks/effects, not new basic power types." },
-    { "Restoration", "Primary power", "Group indicators and effect-duration trackers are optional.", healer = true },
+    { "Restoration", "Primary power", "Group indicators and effect-duration trackers are optional." },
   },
   WARLOCK = {
     { "Affliction", "Soul Shards", "Choose segment visibility and count text." },
@@ -116,7 +120,7 @@ local function PrimaryPowerIntroduction()
   local name = key and _G[key]
   if name then
     Heading("Your primary power: " .. name)
-    Text("Primary power settings control this bar's text and tick markers. Health and secondary resources have separate settings.")
+    Text("This is your main power bar. Health and class resources have separate controls.")
   else
     Text("Your primary power is not available yet. Its name will appear when the game provides it.")
   end
@@ -191,7 +195,7 @@ local function Settings(path)
   settingsHost:SetPoint("TOPRIGHT", parent, "TOPRIGHT")
   settingsHost:Show()
   ns.InstallerSettings.Show(settingsHost, path)
-  Action("Open full settings for this feature", function() callbacks.openOptions(path) end)
+  Action("Open full settings", function() callbacks.openOptions(path) end)
 end
 
 local function Preview(kind, path)
@@ -204,6 +208,13 @@ local function Preview(kind, path)
   previewHost:SetAllPoints(parent)
   previewHost:Show()
   ns.InstallerPreview.Show(previewHost, kind, path)
+  local status = Text("Example paused. Change a setting to update the sample.")
+  local play
+  play = Check("Animate this example", false, function(value)
+    local enabled = ns.InstallerPreview.SetPlaying(value)
+    play:SetValue(enabled)
+    status:SetText(enabled and "Example playing." or "Example paused. Change a setting to update the sample.")
+  end, true)
 end
 
 local function Rebuild()
@@ -218,6 +229,40 @@ local function Rebuild()
   end)
 end
 
+local function Accessibility()
+  Text("Make setup comfortable. These choices also apply to PleebUI options.")
+  Slider("Text size", Theme.GetOptionsFontSize(), Theme.OptionsFontSizeRange.min, Theme.OptionsFontSizeRange.max,
+    Theme.OptionsFontSizeRange.step, function(value) Theme.SetOptionsFontSize(value); Rebuild() end)
+  Slider("Window scale", Theme.GetOptionsUIScale(), Theme.OptionsUIScaleRange.min, Theme.OptionsUIScaleRange.max,
+    Theme.OptionsUIScaleRange.step, function(value) Theme.SetOptionsUIScale(value); Rebuild() end)
+  Check("Larger pointer targets", Addon:GetOptionsDB().largerPointerTargets, function(value)
+    Addon:GetOptionsDB().largerPointerTargets = value
+    Addon:RefreshOptionsTheme()
+    Rebuild()
+  end)
+  Check("Keyboard navigation", ns.KeyboardNavigation.IsEnabled(), ns.KeyboardNavigation.SetEnabled)
+  Check("Allow animation", ns.OptionsMotion.IsEnabled(), function(value)
+    ns.OptionsMotion.SetEnabled(value)
+    if not value then ns.InstallerPreview.SetPlaying(false) end
+  end)
+  local values = {}
+  for _, key in ipairs(Theme.ColorPresetOrder) do values[key] = Theme.GetColorPresetLabel(key) end
+  Dropdown("Color and contrast preset", values, Theme.ColorPresetOrder, paletteChoice, function(value)
+    paletteChoice = value
+    Rebuild()
+  end)
+  if paletteChoice then
+    local colors = Theme.GetColorPresetPreviewColors(paletteChoice)
+    local sample = Text("Aa · " .. Theme.GetColorPresetDefinition(paletteChoice).description)
+    sample:SetHeight(Theme.GetOptionsFontHeight("body") * 2 + 16)
+    Theme.SetSquareBackdrop(sample.frame, { bg = colors.background, border = colors.border }, Theme.GetEdgeSize())
+    sample.label:SetTextColor(unpack(colors.text))
+    Action("Apply selected colors", function() Theme.ApplyColorPreset(paletteChoice); Rebuild() end)
+  end
+  Text("• Mouse: click a control; scroll for more.\n• Keyboard: Tab moves, Enter selects, Ctrl+Tab changes areas.")
+  Action("Open keyboard help", callbacks.openHelp)
+end
+
 local function Choices(label, options, default, callback, cards)
   local values, order = {}, {}
   for index, option in ipairs(options) do values[index] = option[1]; order[index] = index end
@@ -229,8 +274,8 @@ local function Choices(label, options, default, callback, cards)
     for choice, option in ipairs(options) do
       local button = AceGUI:Create("PUI_Button")
       button:SetText(option[1])
-      button:SetRelativeWidth(0.48)
-      button:SetHeight(Theme.GetOptionsPointerTargetSize(52))
+      button:SetRelativeWidth(group.frame:GetWidth() >= Theme.GetOptionsFontHeight("button") * 30 and 0.48 or 1)
+      button:SetHeight(math.max(Theme.GetOptionsPointerTargetSize(52), Theme.GetOptionsFontHeight("button") * 3 + 16))
       button:SetDisabled(choice == index)
       button:SetCallback("OnClick", function()
         if InCombatLockdown() then return end
@@ -250,7 +295,7 @@ end
 
 local function Details(path, name)
   Text("Find this later: /pui > " .. name .. ". Close settings to return to setup.")
-  Action("Open " .. name, function() callbacks.openOptions(path) end)
+  Action("Open full settings", function() callbacks.openOptions(path) end)
 end
 
 local function Practice(kind)
@@ -270,9 +315,12 @@ local function TrackerPage(key)
     draft.presentation = "BAR"
     drafts[key] = draft
   end
-  Text("This example works even on a new profile. Nothing is saved until you choose Create tracker, review the creator, and finish it.")
+  local introduction = kind == "charge" and "Charge trackers show available charges and recharge progress."
+    or kind == "stack" and "Effect trackers show stacks or how long an effect lasts."
+    or "Custom cooldowns give one spell its own button or bar."
+  Text(introduction .. "\n• Try the example; nothing is created.\n• Add a tracker only if you need one.")
   if key == "trackerStacks" then
-    Dropdown("Track", { stack = "Aura stacks", duration = "Effect duration" }, { "stack", "duration" }, draft.kind, function(value)
+    Dropdown("Example", { stack = "Stacks", duration = "Effect duration" }, { "stack", "duration" }, draft.kind, function(value)
       draft.kind = value
       draft.spellID = nil
       Rebuild()
@@ -282,63 +330,42 @@ local function TrackerPage(key)
     draft.presentation = value
     Rebuild()
   end)
-  local values, order, canCreate, reason = ns.PCMCustomTrackerInstaller:GetDraftChoices(draft)
-  if reason then Text(reason) end
-  Dropdown("Tracked spell", values, order, draft.spellID and tostring(draft.spellID) or "none", function(value)
-    draft.spellID = value ~= "none" and tonumber(value) or nil
-    Rebuild()
-  end)
-  if draft.kind == "duration" then
-    Dropdown("Duration source", ns.PCMCustomDurationSource.sourceValues, { "automatic", "ground", "aura" }, draft.durationSource, function(value)
-      draft.durationSource = value
-      Rebuild()
-    end)
-    Text(ns.PCMCustomDurationSource.sourceHelp)
-  end
-  if draft.kind == "stack" or draft.kind == "duration" and draft.durationSource ~= "ground" then
-    Dropdown("Track aura on", { automatic = "Automatic", player_buff = "Player buff", target_debuff = "Target debuff" },
-      { "automatic", "player_buff", "target_debuff" }, draft.auraTrackMode, function(value) draft.auraTrackMode = value end)
-  end
-  if draft.kind == "stack" then Slider("Maximum stacks", draft.maximum, 2, 60, 1, function(value) draft.maximum = value; ns.InstallerPreview.Refresh() end) end
   if draft.presentation == "BAR" then
     Slider("Width", draft.width, 80, 600, 5, function(value) draft.width = value; ns.InstallerPreview.Refresh() end)
     Slider("Height", draft.height, 6, 50, 1, function(value) draft.height = value; ns.InstallerPreview.Refresh() end)
-    Check("Show text", draft.showText, function(value) draft.showText = value; ns.InstallerPreview.Refresh() end, true)
   else
     Slider("Icon size", draft.icon.size, 20, 96, 2, function(value) draft.icon.size = value; ns.InstallerPreview.Refresh() end)
-    Check("Show countdown", draft.icon.showDuration, function(value) draft.icon.showDuration = value; ns.InstallerPreview.Refresh() end, true)
-    if draft.kind == "charge" or draft.kind == "stack" then
-      Check("Show count", draft.icon.showCount, function(value) draft.icon.showCount = value; ns.InstallerPreview.Refresh() end, true)
-    end
   end
-  if draft.kind == "charge" then
-    Check("Show at full charges", draft.showReady, function(value) draft.showReady = value; ns.InstallerPreview.Refresh() end, true)
-  elseif draft.kind == "stack" or draft.kind == "duration" then
-    Check("Show only while active", draft.showOnlyWhenActive, function(value) draft.showOnlyWhenActive = value; ns.InstallerPreview.Refresh() end, true)
-  end
-  local parent = Panel(250)
+  local parent = Panel(180)
   previewHost:SetParent(parent)
   previewHost:ClearAllPoints()
   previewHost:SetAllPoints(parent)
   previewHost:Show()
   ns.InstallerPreview.ShowDraft(previewHost, draft)
-  local states = draft.kind == "charge" and { { "Full charges", "READY" }, { "One spent", "RECHARGING" }, { "Empty", "EMPTY" } }
-    or (draft.kind == "stack" or draft.kind == "duration") and { { "Active", "ACTIVE" }, { "Inactive", "INACTIVE" } }
-    or { { "Ready", "READY" }, { "On cooldown", "COOLDOWN" }, { "Aura active", "ACTIVE" } }
-  for _, state in ipairs(states) do
-    Action(state[1], function() ns.InstallerPreview.SetDraftState(state[2]) end)
-  end
-  Action("Play / pause example", ns.InstallerPreview.ToggleDraftAnimation)
-  if ns.PCMCustomTrackerInstaller:HasDraft() then
-    Text("You have an unfinished tracker in the creator. Continue it first; this sample does not replace it.")
-    Action("Continue unfinished tracker", function() callbacks.openTracker() end)
+  local values, order
+  if draft.kind == "charge" then
+    values, order = { READY = "Full charges", RECHARGING = "One spent", EMPTY = "Empty" }, { "READY", "RECHARGING", "EMPTY" }
+  elseif draft.kind == "stack" or draft.kind == "duration" then
+    values, order = { ACTIVE = "Active", INACTIVE = "Inactive" }, { "ACTIVE", "INACTIVE" }
   else
-    Action("Create this tracker", function()
-      local _, _, available, message = ns.PCMCustomTrackerInstaller:GetDraftChoices(draft)
-      if not available then callbacks.status(message); Rebuild(); return end
-      callbacks.openTracker(draft)
-    end, not canCreate)
+    values, order = { READY = "Ready", COOLDOWN = "On cooldown", ACTIVE = "Effect active" }, { "READY", "COOLDOWN", "ACTIVE" }
   end
+  local status = Text("Example paused. Choose a state to compare it.")
+  local play
+  Dropdown("Sample state", values, order, ns.InstallerPreview.GetDraftState(), function(state)
+    ns.InstallerPreview.SetDraftState(state)
+    play:SetValue(false)
+    status:SetText("Example paused: " .. values[state] .. ".")
+  end)
+  play = Check("Animate this example", false, function(value)
+    local enabled = ns.InstallerPreview.SetPlaying(value)
+    play:SetValue(enabled)
+    status:SetText(enabled and "Example playing. Uncheck to pause." or "Example paused. Choose a state to compare it.")
+  end, true)
+  Text("Tip: the optional creator handles spell selection, sources, text, and visibility.")
+  Action(ns.PCMCustomTrackerInstaller:HasDraft() and "Continue unfinished tracker (optional)" or "Create a tracker (optional)", function()
+    if ns.PCMCustomTrackerInstaller:HasDraft() then callbacks.openTracker() else callbacks.openTracker(draft) end
+  end)
   Details({ "CooldownManager", "customTrackers" }, "Cooldown Manager / Custom trackers")
 end
 
@@ -359,114 +386,71 @@ local function Review()
   }) do
     Action(entry[1] .. ": " .. (entry[2] and "On" or "Off") .. " — Edit", function() callbacks.navigate(entry[3]) end)
   end
-  Heading("Custom tracker inventory")
-  local spellNames = ns.Modules.CooldownManager:GetCustomBarSpellDropdown("cooldown")
   local count = 0
-  for _, family in ipairs({
-    { "Cooldown", "spell:", ns.Modules.CooldownManager:GetSpellBarsDB() },
-    { "Charge", "chargeSpell:", ns.Modules.CooldownManager:GetCooldownStackBarsDB() },
-    { "Effect", "bb:", ns.Modules.PCM_BB.GetStackBarsDB() },
-  }) do
-    local ids = {}
-    for id in pairs(family[3]) do ids[#ids + 1] = id end
-    table.sort(ids, function(a, b) return tostring(a) < tostring(b) end)
-    for _, id in ipairs(ids) do
-      local config = family[3][id]
-      if type(config) == "table" then
-        count = count + 1
-        local name = spellNames[tostring(config.spellID or id)] or config.label or tostring(id)
-        Action(family[1] .. " — " .. name .. " (" .. (config.presentation == "BUTTON" and "Button" or "Bar") .. ") — Edit",
-          function() callbacks.openOptions({ "CooldownManager", "customTrackers", family[2] .. tostring(id) }) end)
-      end
-    end
+  for _, entries in ipairs({ ns.Modules.CooldownManager:GetSpellBarsDB(), ns.Modules.CooldownManager:GetCooldownStackBarsDB(), ns.Modules.PCM_BB.GetStackBarsDB() }) do
+    for _, config in pairs(entries) do if type(config) == "table" then count = count + 1 end end
   end
-  if count == 0 then Text("No custom trackers have been created. They are optional.") end
-  Heading("Other setup choices")
-  Text("Options text size: " .. Theme.GetOptionsFontSize() .. ". Keyboard navigation: " .. (ns.KeyboardNavigation.IsEnabled() and "On" or "Off") .. ".")
-  for _, entry in ipairs({ { "Accessibility and appearance", "appearance" }, { "Auras and indicators", "auras" },
-    { "Action bars and keybinds", "bars" }, { "Specialization resources", "spec" },
-    { "Chat, minimap, bags, buffs, skins, and skyriding", "everyday" }, { "Automation and warnings", "convenience" } }) do
-    Action(entry[1] .. " — Review", function() callbacks.navigate(entry[2]) end)
-  end
-  Text(Content.pendingReload and "A reload is needed to finish applying your choices." or "No installer changes are waiting for a reload.")
-  Action("Inspect my actual layout in Edit Mode", function()
-    callbacks.openEditMode()
-  end)
+  Text("Custom trackers: " .. count .. ". Optional; you can add or edit them later.")
+  Text(Content.pendingReload and "Remaining: finish and reload to apply all choices." or "Your changes are saved. No reload is needed.")
+  Action("Check my layout in Edit Mode", callbacks.openEditMode)
 end
 
 local function BuildPage(key)
-  if key == "welcome" then
-    Text("Welcome to PleebUI. Set up readable frames, action buttons, resources, and trackers at your own pace. Every section can be revisited later.")
-    Heading("Make setup comfortable")
-    Slider("Options text size", Theme.GetOptionsFontSize(), Theme.OptionsFontSizeRange.min, Theme.OptionsFontSizeRange.max,
-      Theme.OptionsFontSizeRange.step, function(value) Theme.SetOptionsFontSize(value); Rebuild() end)
-    Check("Larger pointer targets", Addon:GetOptionsDB().largerPointerTargets, function(value)
-      Addon:GetOptionsDB().largerPointerTargets = value
-      Addon:RefreshOptionsTheme()
-      Rebuild()
-    end)
-    Check("Keyboard navigation", ns.KeyboardNavigation.IsEnabled(), ns.KeyboardNavigation.SetEnabled)
-    Check("Animate options", ns.OptionsMotion.IsEnabled(), ns.OptionsMotion.SetEnabled)
-    Text("Try Tab, arrow keys, and Enter on these controls. Mouse clicks clear keyboard focus. Accessibility is available at the top of every page.")
-    Action("Full walkthrough", function() callbacks.chooseMode("full") end)
-    Action("Choose my sections", function() callbacks.chooseMode("custom") end)
+  if key == "welcome" or key == "accessibility" then
+    Accessibility()
   elseif key == "profiles" then
     Heading("Current profile: " .. Addon.db:GetCurrentProfile())
-    Text("Controls change the active profile as you use them. Examples stay separate. Create a setup profile first if you want to explore without changing your current profile.")
-    local values, order = Addon:GetInstallerExistingProfiles()
-    Dropdown("Use an existing profile (reload)", values, order, nil, function(name)
-      local ok, message = Addon:ActivateExistingProfile(name)
-      if ok then ReloadUI() else callbacks.status(message) end
-    end)
-    Action("Create a separate setup profile", function()
-      Addon:PUI_ConfirmAction({
-        title = "Create setup profile", text = "Create a profile with PleebUI defaults and reload? Your current profile will be kept.",
-        yesText = "Create and reload", onYes = function()
-          local names, index = {}, 1
-          for _, name in ipairs(Addon.db:GetProfiles({})) do names[name] = true end
-          local name = "PleebUI Setup"
-          while names[name] do index = index + 1; name = "PleebUI Setup " .. index end
-          Addon.db:SetProfile(name)
-          ReloadUI()
-        end,
-      })
-    end)
-    Heading("Include these chapters")
-    for _, chapter in ipairs(Content.Chapters) do
-      Check(chapter.name, Content.sections[chapter.key] ~= false, function(value)
-        Content.sections[chapter.key] = value
-        callbacks.changedRoute()
+    Text("• Settings save to this profile as you change them.\n• Examples stay separate from your real layout.")
+    Check("Use another profile (optional)", profileTools, function(value) profileTools = value; Rebuild() end, true)
+    if profileTools then
+      local values, order = Addon:GetInstallerExistingProfiles()
+      Dropdown("Use an existing profile (reload)", values, order, nil, function(name)
+        local ok, message = Addon:ActivateExistingProfile(name)
+        if ok then ReloadUI() else callbacks.status(message) end
+      end)
+      Action("Create a separate setup profile", function()
+        Addon:PUI_ConfirmAction({
+          title = "Create setup profile", text = "Create a profile with PleebUI defaults and reload? Your current profile will be kept.",
+          yesText = "Create and reload", onYes = function()
+            local names, index = {}, 1
+            for _, name in ipairs(Addon.db:GetProfiles({})) do names[name] = true end
+            local name = "PleebUI Setup"
+            while names[name] do index = index + 1; name = "PleebUI Setup " .. index end
+            Addon.db:SetProfile(name)
+            ReloadUI()
+          end,
+        })
       end)
     end
-    Text("Excluding a chapter only skips its setup pages. It does not disable that feature.")
+    Check("Choose which sections to visit", chooseSections, function(value) chooseSections = value; Rebuild() end, true)
+    if chooseSections then
+      for _, chapter in ipairs(Content.Chapters) do
+        Check(chapter.name, Content.sections[chapter.key] ~= false, function(value)
+          Content.sections[chapter.key] = value
+          callbacks.changedRoute()
+        end)
+      end
+      Text("Tip: skipping a section keeps its current settings.")
+    end
   elseif key == "appearance" then
-    Text("Options text size and options window scale affect setup and settings. Global font choices affect PleebUI text. Game UI scale resizes the whole interface.")
-    Choices("Configure", { { "Accessibility", { "Accessibility" } }, { "UI settings and game scale", { "UITheme" } } }, 1, function(choice) Settings(choice[2]) end)
+    Text("Choose a readable look.\n• Global font affects PleebUI text.\n• Game UI scale resizes the whole interface.")
+    Settings({ "UITheme" })
+    Text("Tip: use Accessibility above for text size, window scale, and contrast presets.")
     Heading("Text examples")
     Text("Options text: Choose a category, then adjust its controls.")
     local sample = Add(AceGUI:Create("PUI_Label"))
     sample:SetFullWidth(true)
     sample:SetText("Combat text sample: Player   73%   Power 62")
     ns.Theme.ApplyFont(sample.label, "body", 16)
-    Text("Combat readability enlarges unit and resource text, aura icons, and borders in this profile. Undo remains available until profile change or reload.")
+    Text("Tip: combat readability enlarges text and aura icons. Undo is available until profile change or reload.")
     Action("Apply combat readability", function() Addon:ApplyCombatReadabilityPreset(); Rebuild() end)
     Action("Undo combat readability", function() Addon:UndoCombatReadabilityPreset(); Rebuild() end, not Addon:CanUndoCombatReadabilityPreset())
   elseif key == "navigation" then
-    Text("The next pages introduce each part of your UI with a preview and a few useful settings. You can continue now or try opening full settings below.")
-    Heading("Using setup")
-    Text("Click a numbered page on the left to revisit it, or use Back and Continue. Scroll inside the page to see more controls.")
-    Text("On feature pages, the selector chooses which frame, bar, or display you are configuring. Settings are saved as you change them; previews show sample data.")
-    Heading("Finding more settings")
-    Text("Type /pui to open options. Choose a category on the left, then a tab or group for the settings you need. Hover over controls for help.")
-    Text("Each setup page tells you where to find that feature later. Open full settings when you want more choices; close that window to return to the same setup page.")
-    Action("Explore player frame settings", function() callbacks.openOptions({ "unitframes", "player" }) end)
-    Action("Open accessibility settings", function() callbacks.openOptions({ "Accessibility" }) end)
-    if ns.KeyboardNavigation.IsEnabled() then
-      Heading("Using the keyboard")
-      Text("Ctrl+Tab switches between the page list, content, settings, and window buttons. Tab moves between controls. Use arrow keys to browse lists and Enter to select. Press F1 for keyboard help.")
-    end
+    Text("Find a feature now, or come back later.\n• Use the numbered pages, Back, and Continue.\n• Type /pui for full settings; close them to return here.")
+    Text("Tip: settings save as you change them. Examples use sample data.")
+    Action("Open full options (optional)", function() callbacks.openOptions({ "unitframes", "player" }) end)
   elseif key == "unitframes" then
-    Text("Unit frames show health and power for you and the units you select. Pick a frame, then try its size, health text, and class colors in the example.")
+    Text("Unit frames show health and power.\n• Pick the frame you want to change.\n• Start with a readable size and health text.")
     Check("Enable unit frames", ns.UnitFrames:GetQuickSetupValue("enabled"), function(value) ns.UnitFrames:SetQuickSetupValue("enabled", value) end)
     Choices("Frame", {
       { "Player", { "unitframes", "player" } }, { "Target", { "unitframes", "target" } },
@@ -475,13 +459,13 @@ local function BuildPage(key)
     }, 1, function(choice) Preview("unitframes", choice[2]); Settings(choice[2]) end)
     Text("Find this later: /pui > Unit Frames. Cast bars, portraits, indicators, and detailed styling are in full settings.")
   elseif key == "group" then
-    Text("Party and raid frames help you follow your group. Set a readable size and spacing here; the next page introduces buffs, debuffs, and defensive indicators.")
+    Text("Follow your group at a glance.\n• Choose Party or Raid.\n• Give each frame enough size and space.")
     Choices("Group", { { "Party", { "unitframes", "party" } }, { "Raid", { "unitframes", "raid" } } }, 1, function(choice)
       Preview("unitframes", choice[2]); Settings(choice[2])
     end)
     Text("Find this later: /pui > Unit Frames > Party or Raid. Sorting and detailed indicators are in full settings.")
   elseif key == "auras" then
-    Text("Buffs show helpful effects; debuffs show harmful ones. Pick an example to change its visibility and icon size. Defensive displays show protection from you and other players.")
+    Text("Auras show effects on a unit.\n• Buffs help; debuffs harm.\n• Defensive icons show protection.")
     Choices("Aura example", {
       { "Player buffs", { "unitframes", "player", "auras", "customDisplays", "buffs" } },
       { "Player debuffs", { "unitframes", "player", "auras", "customDisplays", "debuffs" } },
@@ -494,16 +478,22 @@ local function BuildPage(key)
     }, 1, function(choice) Preview("unitframes", choice[2]); Settings(choice[2]) end)
     Text("Find this later: /pui > Unit Frames > Auras. Custom spell lists, filters, positions, and dispel highlighting are in full settings. Private aura information comes from Blizzard.")
   elseif key == "bars" then
-    Text("Action bars hold your spells and items. Start with the shared button size and spacing. Choose an individual bar only if you want it to look different, then turn on Customize this bar.")
+    Text("Action bars hold spells and items.\n• Start with shared button size and spacing.\n• Individual bar overrides are optional.")
     local choices = { { "Shared settings", { "ACTIONBARS", "general" } } }
     for index = 1, 12 do choices[#choices + 1] = { "Bar " .. index, { "ACTIONBARS", tostring(index) } } end
     choices[#choices + 1] = { "Pet bar", { "ACTIONBARS", "special", "pet" } }
     choices[#choices + 1] = { "Stance bar", { "ACTIONBARS", "special", "stance" } }
-    Choices("Action bar", choices, 1, function(choice) Preview("actionbars", choice[2]); Settings(choice[2]) end)
+    Check("Customize an individual bar (optional)", individualBars, function(value) individualBars = value; Rebuild() end, true)
+    if individualBars then
+      Choices("Action bar", choices, 1, function(choice) Preview("actionbars", choice[2]); Settings(choice[2]) end)
+    else
+      Preview("actionbars", { "ACTIONBARS", "general" })
+      Settings({ "ACTIONBARS", "general" })
+    end
     Text("Find this later: /pui > Action bars. Mouseover visibility, countdown styling, and special-bar behavior are in full settings. Keybind mode lets you assign keys by hovering over a button.")
     Action("Open keybind mode", callbacks.openKeybinds)
   elseif key == "prd" then
-    Text("The Personal Resource Display keeps health and power near your character. Choose which bars to show, then make their text and height comfortable. The next page introduces your specialization's resources.")
+    Text("Keep health and power near your character.\n• Choose which bars to show.\n• Make their height and text easy to read.")
     PrimaryPowerIntroduction()
     Check("Enable Personal Resource Display", ns.Modules.PRD:IsModuleEnabled(), function(value) ns.Modules.PRD:SetModuleEnabled(value) end)
     Preview("prd")
@@ -525,7 +515,7 @@ local function BuildPage(key)
       choices[#choices + 1] = { resource.name .. (resource.category == "TRACKED_EFFECT" and " — Tracked effect" or " — Resource"), { "PRD", "resources", resource.key } }
       if guide and guide.preferredResource == resource.key then default = #choices end
     end
-    Text("These are settings for the selected specialization. A configured effect still needs its talent, spell, or form to be available. The preview shows sample values, not proof that an effect is currently active.")
+    Text("Tip: effects may need a talent or form. The preview uses sample values.")
     Preview("prd")
     if #choices > 0 then Choices("Resource or effect", choices, default, function(choice)
       if class == "DRUID" and choice[2][3] == "COMBO_POINTS" then
@@ -536,25 +526,9 @@ local function BuildPage(key)
       Settings(choice[2])
     end)
     else Text("This specialization has no dedicated secondary tracker. Configure its primary power or choose an optional custom tracker.") end
-    Details({ "PRD", "primary" }, "Personal Resource Display / Primary power")
-    Heading("More to explore")
-    if guide and guide.healer then
-      Text("Party and raid aura indicators have separate settings for each group layout.")
-      Action("Open party aura indicators", function() callbacks.openOptions({ "unitframes", "party", "auras", "customDisplays" }) end)
-      Action("Open raid aura indicators", function() callbacks.openOptions({ "unitframes", "raid", "auras", "customDisplays" }) end)
-    end
-    if class == "EVOKER" then
-      Action("Open empower castbar settings", function() callbacks.openOptions({ "unitframes", "player", "empower" }) end)
-    end
-    if ns.Modules.Quality:IsPetWarningAvailable() then
-      Action("Open pet warnings", function() callbacks.openOptions({ "Quality", "combatTab" }) end)
-      Action("Open pet action bar", function() callbacks.openOptions({ "ACTIONBARS", "special", "pet" }) end)
-    end
-    Text("Custom trackers are optional. These lessons show examples before you choose whether to create one.")
-    Action("Explore custom cooldowns", function() callbacks.navigate("trackerCooldown") end)
-    Action("Explore stacks and effect durations", function() callbacks.navigate("trackerStacks") end)
+    Text("Check later: /pui has castbars, pet warnings, and group indicators. Custom trackers are optional.")
   elseif key == "cooldowns" then
-    Text("Cooldown icons show when spells are ready. Buff icons and bars show how long effects last. Pick a group and try a readable size; use Choose tracked spells to select what it tracks.")
+    Text("See when spells are ready and effects expire.\n• Pick one group to style.\n• Choose tracked spells separately.")
     Check("Enable Cooldown Manager", ns.Modules.CooldownManager:IsModuleEnabledByUser(), function(value) ns.Modules.CooldownManager:SetModuleEnabled(value) end)
     local choices = {}
     local groups = ns.PCMGroupManager:GetGroups()
@@ -563,21 +537,21 @@ local function BuildPage(key)
       if entry then choices[#choices + 1] = { entry.name, { "CooldownManager", "groups", id } } end
     end
     if #choices > 0 then Choices("Group", choices, 1, function(choice) Preview("cooldowns", choice[2]); Settings(choice[2]) end) end
-    Text("Tracked spell selection belongs to Blizzard. Add the spells you want there, then style their displays here.")
+    Text("Tip: Choose tracked spells opens Blizzard settings; close them to return.")
     Action("Choose tracked spells", callbacks.openTrackedSpells)
     Text("Find this later: /pui > Cooldown Manager > Groups. Per-spell overrides, swipes, glows, and detailed styling are in full settings.")
   elseif key == "trackerCooldown" or key == "trackerStacks" or key == "trackerCharges" then
     TrackerPage(key)
   elseif key == "utility" then
-    Text("Items and racials include supported potions, health items, trinkets, and abilities. Choose categories and individual slots below. Battle resurrection and bloodlust are independent group displays.")
+    Text("Keep useful items and group tools nearby.\n• Choose items or group tools.\n• Battle resurrection and bloodlust can be enabled separately.")
     Choices("Configure", {
       { "Items and racials", { "CooldownManager", "consumables" }, "cooldowns" },
       { "Battle resurrection, bloodlust, and group tools", { "Quality", "groupTab" }, "quality" },
     }, 1, function(choice) Preview(choice[3], choice[2]); Settings(choice[2]) end)
   elseif key == "meters" then
-    Text("Current follows the current session. Fight selects a fight view; Overall combines the applicable session data. Changing the example below never changes combat history.")
+    Text("Meters summarize combat.\n• Current follows the current session.\n• Overall combines session data; choose a fight on the live meter.")
     Preview("meters")
-    Choices("Configure", { { "General", { "DamageMeters", "general" } }, { "Window 1", { "DamageMeters", "window1" } } }, 1, function(choice) Settings(choice[2]) end)
+    Settings({ "DamageMeters", "general" })
     local db = ns.Modules.DamageMeters.db.profile
     if db.windowCount > 0 then
       local window = ns.DamageMeterConfig.GetWindowDB(1)
@@ -593,7 +567,7 @@ local function BuildPage(key)
     end
     Text("Find this later: /pui > Damage Meters. Saved history, breakdowns, and detailed styling are in full settings.")
   elseif key == "everyday" then
-    Text("Choose a feature to see its example and existing controls. Changes apply to this profile; window skin changes take effect after reload.")
+    Text("Choose a feature to try.\n• Start with visibility and size.\n• Window skins may need a reload.")
     Choices("Feature", {
       { "Chat", { "Chat" }, "chat" }, { "Minimap", { "Minimap" }, "minimap" },
       { "Player buffs", { "PLAYER_BUFFS" }, "buffs" }, { "Bags", { "BlizzardWindows" }, "bags" },
@@ -605,32 +579,30 @@ local function BuildPage(key)
       end
     end, true)
   elseif key == "convenience" then
-    Text("Choose automation deliberately. Visual helpers are separate from automatic interactions. Pet and combat warnings appear only where the owning module supports them.")
+    Text("Choose the helpers you want.\n• Automation changes game interactions.\n• Visual reminders are separate and optional.")
     Choices("Feature", {
-      { "Loot, repair, selling, keystones, and invites", { "Quality", "automationTab" } },
+      { "Loot and repair", { "Quality", "automationTab" } },
       { "Cursor ring and crosshair", { "Quality", "cursorTab" }, "quality" },
       { "Combat and pet warnings", { "Quality", "combatTab" }, "quality" },
-      { "Movement reminders", { "MovementWarning" } },
+      { "Movement reminders", { "MovementWarning" }, "movement" },
     }, 1, function(choice)
       if choice[3] then Preview(choice[3], choice[2]) end
       Settings(choice[2])
     end, true)
   elseif key == "arrange" then
-    Text("Practice: select a mover, move it, select multiple movers with Ctrl, then undo and redo. These sample positions and history never touch your real layout.")
+    Text("Try moving one sample frame. Your real layout stays unchanged.\n• Mouse: drag a sample frame.\n• Keyboard: F6, then Tab to select a frame and arrows to move it.")
     Practice("movers")
-    Text("Keyboard: F6 switches to mover keys; Tab selects a mover; arrows move it; 1–9 choose the step. Ctrl+Z undoes and Ctrl+Y redoes. F6 returns to controls.")
-    Action("Check practice progress", function()
-      callbacks.status(#practice.undo > 0 and "Movement recorded. Try Undo, Redo, then Reset practice." or #practice.redo > 0 and "Undo completed. Try Redo." or "Select and move a sample frame to start.")
-    end)
+    Check("Show more movement tips", moverHelp, function(value) moverHelp = value; Rebuild() end, true)
+    if moverHelp then Text("Ctrl selects more frames. Ctrl+Z undoes; Ctrl+Y redoes. Keys 1–9 change the movement step. F6 returns to controls.") end
     Action("Open real Edit Mode", callbacks.openEditMode)
   elseif key == "review" then
     Review()
   elseif key == "ready" then
-    Review()
-    Heading("Keep these shortcuts")
-    Text("/pui — options\n/pe — arrange your UI\n/pek — keyboard Edit Mode\n/cd — tracked spells\n/pui install — reopen setup")
-    Text("Continue with Finish setup below. If a reload is required, the button will say Finish and reload. Your saved profile and specialization settings are retained.")
-    Details({ "Accessibility" }, "Accessibility and keyboard help")
+    Heading("Your setup is ready")
+    Text("Profile: " .. Addon.db:GetCurrentProfile())
+    Text(Content.pendingReload and "Choose Finish and reload below to apply the remaining changes." or "Choose Finish setup below to start playing.")
+    Text("• /pui — change settings\n• /pe — move frames\n• /pui install — reopen setup")
+    Text("Check later: /pui > Cooldown Manager > Custom trackers. Add them only when you need them.")
   end
 end
 
