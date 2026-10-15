@@ -260,6 +260,9 @@ local function BuildOptions()
         end
       end
       control.order, control.width, control.fullWidth, control.relWidth = index * 10, "full", true, nil
+      if path[1] == "unitframes" then
+        control.width, control.fullWidth, control.relWidth = "relative", nil, 0.48
+      end
       args["essential" .. index] = control
     end
   end
@@ -281,15 +284,20 @@ function Settings.Show(panel, path)
   panel.path = path
   panel.skinSettings = SkinSettings()
   if not panel.widget then
-    local widget = AceGUI:Create("PUI_OptionsGroup")
-    widget:SetLayout("Fill")
+    local widget = AceGUI:Create("SimpleGroup")
+    widget:SetLayout("Flow")
     widget:SetAutoAdjustHeight(false)
     widget:SetFullWidth(true)
-    widget:SetFullHeight(true)
     widget.frame:SetParent(panel)
     ns.AceHooks.TakeOwnership(widget)
     widget.frame:ClearAllPoints()
-    widget.frame:SetAllPoints(panel)
+    widget.frame:SetPoint("TOPLEFT", panel, "TOPLEFT")
+    widget.frame:SetPoint("TOPRIGHT", panel, "TOPRIGHT")
+    function widget:LayoutFinished(_, height)
+      self:SetHeight(height)
+      panel:SetHeight(height)
+      panel.onHeightChanged(height)
+    end
     panel.widget = widget
   end
   panel.widget.frame:SetFrameStrata(panel:GetFrameStrata())
@@ -310,8 +318,9 @@ function Settings.Hide(panel)
   if active == panel then active = nil end
 end
 
-function Settings.Create(parent, y)
+function Settings.Create(parent, y, onHeightChanged)
   local panel = CreateFrame("Frame", nil, parent)
+  panel.onHeightChanged = onHeightChanged
   panel:SetPoint("TOPLEFT", parent, "TOPLEFT", 16, -y)
   panel:SetPoint("TOPRIGHT", parent, "TOPRIGHT", -16, -y)
   panel:SetHeight(360)
