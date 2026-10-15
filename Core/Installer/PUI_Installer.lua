@@ -445,27 +445,27 @@ function Addon:ApplyCombatReadabilityPreset()
 end
 
 local PAGE_DEFINITIONS = {
-  { "welcome", "Welcome and accessibility" },
-  { "profiles", "Profile and setup choices" },
-  { "appearance", "Appearance and readability" },
-  { "navigation", "Finding your way around" },
-  { "unitframes", "Player, target and unit frames", "frames" },
-  { "group", "Party and raid frames", "frames" },
-  { "auras", "Buffs, debuffs and indicators", "frames" },
-  { "bars", "Action bars and keybinds", "frames" },
-  { "prd", "Personal Resource Display", "combat" },
-  { "spec", "Your specialization", "combat" },
-  { "cooldowns", "Cooldown Manager", "combat" },
-  { "trackerCooldown", "Custom cooldown buttons and bars", "combat" },
-  { "trackerStacks", "Custom stacks and durations", "combat" },
-  { "trackerCharges", "Custom charge bars", "combat" },
-  { "utility", "Items, racials and group utility", "combat" },
-  { "meters", "Damage meters", "interface" },
-  { "everyday", "Everyday interface", "interface" },
-  { "convenience", "Convenience and visual helpers", "convenience" },
-  { "arrange", "Arrange your UI", "arrange" },
-  { "review", "Review your setup" },
-  { "ready", "Ready to play" },
+  { "welcome", "Welcome", nil, "Meet PleebUI and choose comfortable text, controls, and accessibility settings." },
+  { "profiles", "Profiles", nil, "Choose where to save your settings and which setup chapters to include." },
+  { "appearance", "Appearance", nil, "Adjust fonts, scale, colors, and combat readability." },
+  { "navigation", "Options guide", nil, "Practice using categories, tabs, and controls without changing your settings." },
+  { "unitframes", "Unit frames", "frames", "Configure player, target, focus, pet, and boss frames." },
+  { "group", "Group frames", "frames", "Set up party and raid layouts and their indicators." },
+  { "auras", "Auras", "frames", "Explore buffs, debuffs, tracked effects, and dispel indicators." },
+  { "bars", "Action bars", "frames", "Choose button layouts, visibility, pet and stance bars, and keybinds." },
+  { "prd", "Resource display", "combat", "Set up the Personal Resource Display: health, primary power, and the resource stack." },
+  { "spec", "Specialization", "combat", "Explore resources and tracked effects for your current class and specialization." },
+  { "cooldowns", "Cooldowns", "combat", "Configure Cooldown Manager icons, buff icons, and buff bars." },
+  { "trackerCooldown", "Custom cooldowns", "combat", "Try independent cooldown buttons and bars, then optionally create a tracker." },
+  { "trackerStacks", "Effect trackers", "combat", "Try custom aura-stack and effect-duration trackers." },
+  { "trackerCharges", "Charge trackers", "combat", "Compare available charges and recharge progress in custom buttons and bars." },
+  { "utility", "Items & utility", "combat", "Choose consumables, trinkets, racials, battle resurrection, and bloodlust displays." },
+  { "meters", "Damage meters", "interface", "Explore meter windows, session choices, and basic sizing." },
+  { "everyday", "Interface", "interface", "Discover chat, minimap, player buffs, bags, window skins, and skyriding settings." },
+  { "convenience", "Convenience", "convenience", "Choose optional automation, cursor helpers, movement reminders, and combat warnings." },
+  { "arrange", "Arrange UI", "arrange", "Practice moving frames and undoing changes before opening real Edit Mode." },
+  { "review", "Review", nil, "Review saved features, custom trackers, and remaining setup actions." },
+  { "ready", "Finish", nil, "Save your setup and keep useful shortcuts for future customization." },
 }
 
 local function Onboarding()
@@ -494,7 +494,7 @@ local function Navigate(id)
   for index, definition in ipairs(pages) do
     if definition[1] == id then SelectPage(index) return end
   end
-  SetStatus("Include this chapter on Profile and setup choices to visit it.")
+  SetStatus("Include this chapter on the Profiles page to visit it.")
 end
 
 local function RequireReload()
@@ -645,12 +645,13 @@ RefreshPage = function()
     local page = pages[index]
     button:SetShown(page ~= nil)
     if page then
-      button:SetText(string.format("%02d  %s", index, page[2]))
+      button:SetText(string.format("%02d. %s", index, page[2]))
       button:SetEnabled(index ~= currentPage)
     end
   end
-  local rowHeight = Theme.GetOptionsPointerTargetSize(38)
+  local rowHeight = math.max(Theme.GetOptionsPointerTargetSize(38), Theme.GetOptionsFontHeight("button") * 2 + 12)
   for index, button in ipairs(frame.PageButtons) do
+    button:GetFontString():SetWidth(math.max(1, frame.SidebarCanvas:GetWidth() - 16))
     button:ClearAllPoints()
     button:SetPoint("TOPLEFT", frame.SidebarCanvas, "TOPLEFT", 0, -(index - 1) * (rowHeight + 4))
     button:SetPoint("TOPRIGHT", frame.SidebarCanvas, "TOPRIGHT", 0, -(index - 1) * (rowHeight + 4))
@@ -718,9 +719,21 @@ local function BuildFrame()
   frame.SidebarCanvas:SetSize(195, 1000)
   frame.SidebarScroll:SetScrollChild(frame.SidebarCanvas)
   for index = 1, #PAGE_DEFINITIONS do
-    local button = Button(frame.SidebarCanvas, "", 195, function() SelectPage(index) end)
+    local button = Button(frame.SidebarCanvas, PAGE_DEFINITIONS[index][2], 195, function() SelectPage(index) end)
     button:GetFontString():SetWordWrap(true)
     button:GetFontString():SetJustifyH("LEFT")
+    button:SetScript("OnEnter", function(self)
+      local page = pages[index]
+      if not page then return end
+      GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+      GameTooltip:SetText(string.format("%02d. %s", index, page[2]))
+      GameTooltip:AddLine(page[4], 1, 1, 1, true)
+      GameTooltip:Show()
+    end)
+    button:SetScript("OnLeave", function() GameTooltip:Hide() end)
+    button:HookScript("OnHide", function(self)
+      if GameTooltip:IsOwned(self) then GameTooltip:Hide() end
+    end)
     frame.PageButtons[index] = button
   end
   frame.Scroll = Scroll(frame)
