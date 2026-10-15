@@ -784,7 +784,7 @@ function Navigation.HandleKey(key, autoFocus)
   if not activeWindow or InCombatLockdown() then return false end
   if autoFocus and not keyboardInput then return false end
   local state = windows[activeWindow]
-  if not WindowNavigationEnabled(state) then return false end
+  if not WindowNavigationEnabled(state) and not state.helpShown then return false end
   local text = GetCurrentKeyBoardFocus()
   if text and not BelongsTo(text, activeWindow) and not (popup and current and current.frame == text) then return false end
   if key == "TAB" or key == "F1" or (key == "F6" and (state.movers or state.keyHandler)) then keyboardInput = true end
@@ -918,7 +918,6 @@ function Navigation.RefreshWindows()
     events:UnregisterEvent("GLOBAL_MOUSE_DOWN")
   end
   for root, state in pairs(windows) do
-    if not WindowNavigationEnabled(state) then state.helpShown = false end
     local shown = root:IsVisible() and (root == activeWindow) and not InCombatLockdown()
     local text = GetCurrentKeyBoardFocus()
     RefreshGuide(root, state)
@@ -927,7 +926,7 @@ function Navigation.RefreshWindows()
     state.receiver:SetShown(shown and (state.helpShown or not (text and (BelongsTo(text, root)
       or (popup and BelongsTo(text, popup.frame)))))
       and not (current and current.widget and current.widget.waitingForKey == true)
-      and WindowNavigationEnabled(state))
+      and (state.helpShown or WindowNavigationEnabled(state)))
   end
 end
 
