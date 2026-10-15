@@ -454,6 +454,35 @@ local function _CancelClockCoordinateTicker(box)
   box.__pui_coordTicker = nil
 end
 
+function MinimapModule:RefreshCoordinateUpdates(event)
+  if event == "PLAYER_ENTERING_WORLD" then
+    self.playerMapID = C_Map.GetBestMapForUnit("player")
+  end
+
+  local cluster = _G.MinimapCluster
+  local box = cluster and cluster.__pui_clockBox
+  if not box then
+    return
+  end
+
+  local db = self.db.profile
+  local inInstance, instanceType = IsInInstance()
+  local paused = C_ChallengeMode.IsChallengeModeActive()
+    or (inInstance and instanceType == "raid" and InCombatLockdown())
+
+  if not self:IsEnabled() or not db.enabled or not db.clockBoxEnabled or not db.clockBoxShowCoords or paused then
+    _CancelClockCoordinateTicker(box)
+    return
+  end
+
+  if not box.__pui_coordTicker then
+    box.__pui_coordTicker = C_Timer.NewTicker(1, function()
+      _ClockBox_UpdateCoords(box)
+    end)
+  end
+  _ClockBox_UpdateCoords(box)
+end
+
 local function ApplyClockCoordsBox(db)
   local map = _G.Minimap
   if not map or map:IsForbidden() then
@@ -938,16 +967,9 @@ local function ApplyClockCoordsBox(db)
   _SetLastBoxHeight(h)
   _SyncMinimapCompositeBounds(db)
 
-  _CancelClockCoordinateTicker(box)
   box:SetScript("OnUpdate", nil)
   box.__pui_coordDecimals = db.clockBoxCoordDecimals ~= false
-
-  if showCoords then
-    box.__pui_coordTicker = C_Timer.NewTicker(1, function()
-      _ClockBox_UpdateCoords(box)
-    end)
-    _ClockBox_UpdateCoords(box)
-  end
+  MinimapModule:RefreshCoordinateUpdates()
 
   box:Show()
 end
@@ -1342,17 +1364,7 @@ end
 
 function MinimapModule:PLAYER_MAP_CHANGED(event, oldMapID, newMapID)
   self.playerMapID = newMapID
-
-  local db = self.db.profile
-  if db.enabled == false or db.clockBoxEnabled == false or db.clockBoxShowCoords == false then
-    return
-  end
-
-  local cluster = _G.MinimapCluster
-  local box = cluster and cluster.__pui_clockBox
-  if box then
-    _ClockBox_UpdateCoords(box)
-  end
+  self:RefreshCoordinateUpdates()
 end
 
 function MinimapModule:OnProfileChanged()
@@ -1446,6 +1458,12 @@ function MinimapModule:OnEnable()
 
   self.playerMapID = C_Map.GetBestMapForUnit("player")
   self:RegisterEvent("PLAYER_MAP_CHANGED")
+  self:RegisterEvent("PLAYER_ENTERING_WORLD", "RefreshCoordinateUpdates")
+  self:RegisterEvent("PLAYER_REGEN_DISABLED", "RefreshCoordinateUpdates")
+  self:RegisterEvent("PLAYER_REGEN_ENABLED", "RefreshCoordinateUpdates")
+  self:RegisterEvent("CHALLENGE_MODE_START", "RefreshCoordinateUpdates")
+  self:RegisterEvent("CHALLENGE_MODE_COMPLETED", "RefreshCoordinateUpdates")
+  self:RegisterEvent("CHALLENGE_MODE_RESET", "RefreshCoordinateUpdates")
 
   if not self.db.profile.enabled then
     return
@@ -1467,6 +1485,12 @@ end
 function MinimapModule:OnDisable()
   ns.MinimapData.SetBucketEnabled(false)
   self:UnregisterEvent("PLAYER_MAP_CHANGED")
+  self:UnregisterEvent("PLAYER_ENTERING_WORLD")
+  self:UnregisterEvent("PLAYER_REGEN_DISABLED")
+  self:UnregisterEvent("PLAYER_REGEN_ENABLED")
+  self:UnregisterEvent("CHALLENGE_MODE_START")
+  self:UnregisterEvent("CHALLENGE_MODE_COMPLETED")
+  self:UnregisterEvent("CHALLENGE_MODE_RESET")
   self.playerMapID = nil
 
   local cluster = _G.MinimapCluster
@@ -1875,6 +1899,7 @@ end
   _EnsureClockBox = P:Def("_EnsureClockBox", _EnsureClockBox)
   _ClockBox_UpdateCoords = P:Def("_ClockBox_UpdateCoords", _ClockBox_UpdateCoords)
   _CancelClockCoordinateTicker = P:Def("_CancelClockCoordinateTicker", _CancelClockCoordinateTicker)
+  MinimapModule.RefreshCoordinateUpdates = P:Def("MinimapModule.RefreshCoordinateUpdates", MinimapModule.RefreshCoordinateUpdates)
   ApplyClockCoordsBox = P:Def("ApplyClockCoordsBox", ApplyClockCoordsBox)
   ApplyMinimapElementHides = P:Def("ApplyMinimapElementHides", ApplyMinimapElementHides)
   ApplySquareMask = P:Def("ApplySquareMask", ApplySquareMask)
