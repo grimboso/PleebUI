@@ -3768,6 +3768,12 @@ function Preview.BuildInstallerPreview(host, owner, path)
   local context = GetAuraManagerPreviewContext(path)
   context.installer = true
   context.selectedID = GetAuraManagerPathSelection(path)
+  if context.selectedID then
+    context.auraDB = CopyTable(context.auraDB)
+    context.auraDB.enabled = true
+    context.displays = context.auraDB.customDisplays
+    context.displays[context.selectedID].enabled = true
+  end
   context.supportsAuraManager = false
   context.allowDrag = false
   local width, height = ns.UFStyle.ResolveFrameSize(context.frameDB)
