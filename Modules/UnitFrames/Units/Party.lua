@@ -23,6 +23,7 @@ local RegisterStateDriver = _G.RegisterStateDriver
 local UnregisterStateDriver = _G.UnregisterStateDriver
 local IsInRaid = _G.IsInRaid
 local UnitName = _G.UnitName
+local UnitGroupRolesAssigned = _G.UnitGroupRolesAssigned
 local UnitGUID = _G.UnitGUID
 local issecretvalue = _G.issecretvalue
 local type = _G.type
@@ -64,7 +65,7 @@ local PartyPetFrameConfig = setmetatable({}, { __index = ReadPartyPetProfile })
 
 local function GetPartyGroupBy(db)
   local value = db and db.groupBy or nil
-  if value ~= "NAME" then
+  if value ~= "NAME" and value ~= "ROLE" then
     value = "INDEX"
   end
   return value
@@ -117,6 +118,8 @@ local function ComparePartyFrames(db, firstFrame, secondFrame)
 
   if groupBy == "NAME" then
     return ComparePartyNames(firstFrame, secondFrame, descending)
+  elseif groupBy == "ROLE" then
+    return ComparePartyIndex(firstFrame, secondFrame, false)
   end
 
   return ComparePartyIndex(firstFrame, secondFrame, descending)
@@ -264,12 +267,34 @@ function PartyFrames:LayoutTestFrames(memberFrames, petFrames, memberCount)
     orientation = db.orientation,
   })
 
+  local positions = {}
+  if GetPartyGroupBy(db) == "ROLE" then
+    local orderedFrames = {}
+    for index = 1, memberCount do
+      orderedFrames[#orderedFrames + 1] = memberFrames[index]
+    end
+
+    table_sort(orderedFrames, function(firstFrame, secondFrame)
+      local firstRank = UFDefaults.GetRoleSortRank(db.roleSortOrder, firstFrame.__puiTestSample.assignedRole)
+      local secondRank = UFDefaults.GetRoleSortRank(db.roleSortOrder, secondFrame.__puiTestSample.assignedRole)
+      if firstRank ~= secondRank then
+        return firstRank < secondRank
+      end
+
+      return firstFrame.__puiTestSample.index < secondFrame.__puiTestSample.index
+    end)
+
+    for index, frame in ipairs(orderedFrames) do
+      positions[frame] = index
+    end
+  end
+
   for index, frame in pairs(memberFrames or {}) do
     frame:SetParent(UIParent)
     frame:ClearAllPoints()
 
     if index <= memberCount then
-      local offset = index - 1
+      local offset = (positions[frame] or index) - 1
 
       if isHorizontal then
         Pixel.Point(frame, "LEFT", anchor, "LEFT", offset * (width + spacing), 0)
@@ -563,7 +588,32 @@ function PartyFrames:LayoutPartyFrames()
     frames[#frames + 1] = self.partyPlayerFrame
   end
 
+  local roleRanks
+  if GetPartyGroupBy(db) == "ROLE" then
+    roleRanks = {}
+
+    for _, frame in ipairs(frames) do
+      local role = UnitGroupRolesAssigned(frame.__unit)
+      if issecretvalue(role) then
+        roleRanks = nil
+        break
+      end
+
+      roleRanks[frame] = UFDefaults.GetRoleSortRank(db.roleSortOrder, role)
+    end
+  end
+
   table_sort(frames, function(firstFrame, secondFrame)
+    if roleRanks then
+      local firstRank = roleRanks[firstFrame]
+      local secondRank = roleRanks[secondFrame]
+      if firstRank ~= secondRank then
+        return firstRank < secondRank
+      end
+
+      return ComparePartyIndex(firstFrame, secondFrame, false)
+    end
+
     return ComparePartyFrames(db, firstFrame, secondFrame)
   end)
 
@@ -1030,6 +1080,12 @@ local function RefreshPartyRosterFrames(owner)
   owner:RefreshGroupLayout()
 end
 
+function PartyFrames:PLAYER_ROLES_ASSIGNED()
+  if GetPartyGroupBy(self.db.profile) == "ROLE" then
+    self:RefreshGroupLayout()
+  end
+end
+
 function PartyFrames:GROUP_ROSTER_UPDATE()
   if not ShouldProcessPartyGroupEvents(self.db.profile) then
     return
@@ -1094,6 +1150,7 @@ end
 
 function PartyFrames:OnEnable()
   self:RegisterEvent("GROUP_ROSTER_UPDATE")
+  self:RegisterEvent("PLAYER_ROLES_ASSIGNED")
   self:RegisterEvent("PLAYER_ENTERING_WORLD")
   self:RegisterEvent("PARTY_MEMBER_ENABLE", "RefreshAuraAvailability")
   self:RegisterEvent("PARTY_MEMBER_DISABLE", "RefreshAuraAvailability")
@@ -1180,6 +1237,7 @@ local P = select(1, ns.Pleebug:DropIn(PartyFrames, { name = "UnitFrames.Party" }
   PartyFrames.Refresh = P:Def("PartyFrames.Refresh", PartyFrames.Refresh)
   PartyFrames.RefreshAuraAvailability = P:Def("PartyFrames.RefreshAuraAvailability", PartyFrames.RefreshAuraAvailability)
   RefreshPartyRosterFrames = P:Def("RefreshPartyRosterFrames", RefreshPartyRosterFrames)
+  PartyFrames.PLAYER_ROLES_ASSIGNED = P:Def("PartyFrames.PLAYER_ROLES_ASSIGNED", PartyFrames.PLAYER_ROLES_ASSIGNED)
   PartyFrames.GROUP_ROSTER_UPDATE = P:Def("PartyFrames.GROUP_ROSTER_UPDATE", PartyFrames.GROUP_ROSTER_UPDATE)
   PartyFrames.PLAYER_ENTERING_WORLD = P:Def("PartyFrames.PLAYER_ENTERING_WORLD", PartyFrames.PLAYER_ENTERING_WORLD)
   PartyFrames.PLAYER_REGEN_ENABLED = P:Def("PartyFrames.PLAYER_REGEN_ENABLED", PartyFrames.PLAYER_REGEN_ENABLED)

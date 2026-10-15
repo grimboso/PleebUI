@@ -67,6 +67,8 @@ local TEST_ROLE_ATLASES = {
   "UI-LFG-RoleIcon-DPS-Micro-Raid",
 }
 
+local TEST_ASSIGNED_ROLES = { "TANK", "HEALER", "DAMAGER" }
+
 local TEST_STATUS_ATLASES = {
   "UI-LFG-ReadyMark-Raid",
   "RaidFrame-Icon-SummonPending",
@@ -1147,6 +1149,7 @@ local function ApplyPresentationFrame(
     db = db,
     groupKind = groupKind,
     groupMemberIndex = groupMemberIndex,
+    assignedRole = TEST_ASSIGNED_ROLES[((index - 1) % #TEST_ASSIGNED_ROLES) + 1],
     isPet = type(unit) == "string" and unit:find("pet", 1, true) ~= nil,
   }
 

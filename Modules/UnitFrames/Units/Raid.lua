@@ -401,10 +401,10 @@ local function BuildHeaderAttributes(db, groupIndex)
     showSolo = false,
     showPlayer = db.showPlayer == true,
     groupFilter = groupFilter,
-    groupBy = raidWideSorting and (db.groupBy or "GROUP") or "GROUP",
-    groupingOrder = "1,2,3,4,5,6,7,8",
+    groupBy = db.sortOrder == "ROLE" and "ASSIGNEDROLE" or (raidWideSorting and (db.groupBy or "GROUP") or "GROUP"),
+    groupingOrder = db.sortOrder == "ROLE" and (db.roleSortOrder or UFDefaults.DefaultRoleSortOrder) or "1,2,3,4,5,6,7,8",
     sortMethod = (db.sortOrder == "NAME") and "NAME" or "INDEX",
-    sortDir = db.sortDir or "ASC",
+    sortDir = db.sortOrder == "ROLE" and "ASC" or (db.sortDir or "ASC"),
     point = point,
     xOffset = xOffset,
     yOffset = yOffset,
@@ -554,6 +554,45 @@ function RaidFrames:LayoutTestFrames(frames, groupFrames, groupCount, membersPer
   self:ApplyAnchor()
 
   local visibleCount = groupCount * membersPerGroup
+  local positions = {}
+
+  if db.sortOrder == "ROLE" then
+    local function ComparePreviewRoles(firstFrame, secondFrame)
+      local firstRank = UFDefaults.GetRoleSortRank(db.roleSortOrder, firstFrame.__puiTestSample.assignedRole)
+      local secondRank = UFDefaults.GetRoleSortRank(db.roleSortOrder, secondFrame.__puiTestSample.assignedRole)
+      if firstRank ~= secondRank then
+        return firstRank < secondRank
+      end
+
+      return firstFrame.__puiTestSample.index < secondFrame.__puiTestSample.index
+    end
+
+    if lockedGroups then
+      for groupIndex = 1, groupCount do
+        local members = {}
+        local firstIndex = (groupIndex - 1) * membersPerGroup
+        for memberIndex = 1, membersPerGroup do
+          members[memberIndex] = frames[firstIndex + memberIndex]
+        end
+
+        table.sort(members, ComparePreviewRoles)
+        for memberIndex, frame in ipairs(members) do
+          positions[frame] = firstIndex + memberIndex
+        end
+      end
+    else
+      local members = {}
+      for index = 1, visibleCount do
+        members[index] = frames[index]
+      end
+
+      table.sort(members, ComparePreviewRoles)
+      for index, frame in ipairs(members) do
+        positions[frame] = index
+      end
+    end
+  end
+
   RaidBoundsConfig.numGroups = groupCount
   local totalWidth, totalHeight = UFLayout.GetRaidConfiguredHeaderBounds(RaidBoundsConfig, {
     groupLabelHeight = RF_GROUP_LABEL_HEIGHT,
@@ -609,8 +648,9 @@ function RaidFrames:LayoutTestFrames(frames, groupFrames, groupCount, membersPer
       frame:ClearAllPoints()
 
       if index <= visibleCount then
-        local groupIndex = math_floor((index - 1) / membersPerGroup) + 1
-        local memberIndex = ((index - 1) % membersPerGroup) + 1
+        local position = positions[frame] or index
+        local groupIndex = math_floor((position - 1) / membersPerGroup) + 1
+        local memberIndex = ((position - 1) % membersPerGroup) + 1
         local groupFrame = groupFrames and groupFrames[groupIndex]
 
         if groupFrame then
@@ -665,8 +705,9 @@ function RaidFrames:LayoutTestFrames(frames, groupFrames, groupCount, membersPer
       frame:ClearAllPoints()
 
       if index <= visibleCount then
-        local groupIndex = math_floor((index - 1) / membersPerGroup) + 1
-        local memberIndex = ((index - 1) % membersPerGroup) + 1
+        local position = positions[frame] or index
+        local groupIndex = math_floor((position - 1) / membersPerGroup) + 1
+        local memberIndex = ((position - 1) % membersPerGroup) + 1
         local x
         local y
 
@@ -1417,6 +1458,29 @@ function RaidFrames:GROUP_ROSTER_UPDATE()
   self:RefreshRosterPresentation()
 end
 
+function RaidFrames:PLAYER_ROLES_ASSIGNED()
+  if self.db.profile.enabled == false or self.db.profile.sortOrder ~= "ROLE" then
+    return
+  end
+
+  if InCombatLockdown() then
+    self.pendingRoleSortRefresh = true
+    self:RegisterEvent("PLAYER_REGEN_ENABLED")
+    return
+  end
+
+  self.pendingRoleSortRefresh = nil
+  self._roleSortRevision = (self._roleSortRevision or 0) + 1
+
+  local activeHeaders = GetActiveHeaderCount(self.db.profile)
+  for index = 1, activeHeaders do
+    local header = self.headers and self.headers[index]
+    if header then
+      SetHeaderAttribute(header, "puiRoleSortRevision", self._roleSortRevision)
+    end
+  end
+end
+
 function RaidFrames:PLAYER_ENTERING_WORLD()
   if self.db.profile.hideBlizzard == true then
     self:DisableBlizzardRaidFrames()
@@ -1468,6 +1532,10 @@ function RaidFrames:PLAYER_REGEN_ENABLED()
     self.pendingGroupLabelRefresh = nil
     self:RefreshRosterPresentation()
   end
+
+  if self.pendingRoleSortRefresh then
+    self:PLAYER_ROLES_ASSIGNED()
+  end
 end
 
 function RaidFrames:ADDON_LOADED(_, addonName)
@@ -1485,6 +1553,7 @@ end
 function RaidFrames:OnEnable()
   self:RegisterEvent("ADDON_LOADED")
   self:RegisterEvent("GROUP_ROSTER_UPDATE")
+  self:RegisterEvent("PLAYER_ROLES_ASSIGNED")
   self:RegisterEvent("PLAYER_ENTERING_WORLD")
   self:RegisterEvent("PARTY_MEMBER_ENABLE", "RefreshAuraAvailability")
   self:RegisterEvent("PARTY_MEMBER_DISABLE", "RefreshAuraAvailability")
@@ -1521,6 +1590,7 @@ function RaidFrames:OnDisable()
   self.__puiDeferredRefresh = nil
   self.__puiTopologyCreationPending = nil
   self.pendingGroupLabelRefresh = nil
+  self.pendingRoleSortRefresh = nil
   self.pendingBlizzardRaidSuppression = nil
   self._pendingAuraRefresh = nil
   self._auraRefreshScheduled = nil
@@ -1584,6 +1654,7 @@ local P = select(1, ns.Pleebug:DropIn(RaidFrames, { name = "UnitFrames.Raid" }))
   RaidFrames.RefreshAuraAvailability = P:Def("RaidFrames.RefreshAuraAvailability", RaidFrames.RefreshAuraAvailability)
   RaidFrames.QueueMainTankRosterRefresh = P:Def("RaidFrames.QueueMainTankRosterRefresh", RaidFrames.QueueMainTankRosterRefresh)
   RaidFrames.GROUP_ROSTER_UPDATE = P:Def("RaidFrames.GROUP_ROSTER_UPDATE", RaidFrames.GROUP_ROSTER_UPDATE)
+  RaidFrames.PLAYER_ROLES_ASSIGNED = P:Def("RaidFrames.PLAYER_ROLES_ASSIGNED", RaidFrames.PLAYER_ROLES_ASSIGNED)
   RaidFrames.PLAYER_ENTERING_WORLD = P:Def("RaidFrames.PLAYER_ENTERING_WORLD", RaidFrames.PLAYER_ENTERING_WORLD)
   RaidFrames.PLAYER_REGEN_ENABLED = P:Def("RaidFrames.PLAYER_REGEN_ENABLED", RaidFrames.PLAYER_REGEN_ENABLED)
   RaidFrames.ADDON_LOADED = P:Def("RaidFrames.ADDON_LOADED", RaidFrames.ADDON_LOADED)

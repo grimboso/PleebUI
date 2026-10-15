@@ -4449,11 +4449,8 @@ local PARTY_GENERAL_RESET_KEYS = {
   growthY = true,
   spacing = true,
   groupBy = true,
-  sortOrder = true,
   sortDir = true,
-  ROLE1 = true,
-  ROLE2 = true,
-  ROLE3 = true,
+  roleSortOrder = true,
   showRaidRoleStrip = true,
   raidRoleStripPosition = true,
   raidRoleStripXOffset = true,
@@ -4490,6 +4487,7 @@ local RAID_GENERAL_RESET_KEYS = {
   enabledGroups = true,
   sortOrder = true,
   sortDir = true,
+  roleSortOrder = true,
   numGroups = true,
   unitsPerColumn = true,
 }
@@ -4805,12 +4803,24 @@ local function UFCB_BuildPartyGeneralArgs(groupKind, opts)
   local sortOrderValues = {
     INDEX = "Group order",
     NAME = "Name",
+    ROLE = "Role",
   }
 
   local partyGroupByValues = {
     INDEX = "Index",
     NAME = "Name",
+    ROLE = "Role",
   }
+
+  local roleSortOrderValues = {
+    ["TANK,DAMAGER,HEALER,NONE"] = "Tank → DPS → Healer",
+    ["TANK,HEALER,DAMAGER,NONE"] = "Tank → Healer → DPS",
+    ["DAMAGER,TANK,HEALER,NONE"] = "DPS → Tank → Healer",
+    ["DAMAGER,HEALER,TANK,NONE"] = "DPS → Healer → Tank",
+    ["HEALER,TANK,DAMAGER,NONE"] = "Healer → Tank → DPS",
+    ["HEALER,DAMAGER,TANK,NONE"] = "Healer → DPS → Tank",
+  }
+
   local sortDirectionValues = {
     ASC = "Ascending",
     DESC = "Descending",
@@ -5292,8 +5302,19 @@ local function UFCB_BuildPartyGeneralArgs(groupKind, opts)
           end)
         end,
       }),
+      roleSortOrder = BuildGroupedSelect("roleSortOrder", "Role order", 2, roleSortOrderValues, {
+        flags = { layout = true },
+        hidden = function()
+          local db = GetDB()
+          return not db or db.groupBy ~= "ROLE"
+        end,
+      }),
       sortDir = BuildGroupedSelect("sortDir", "Sort direction", 3, sortDirectionValues, {
         flags = { layout = true },
+        disabled = function()
+          local db = GetDB()
+          return db and db.groupBy == "ROLE" or false
+        end,
         get = function()
           local db = GetDB()
           local value = db and db.sortDir or nil
@@ -5403,9 +5424,21 @@ local function UFCB_BuildPartyGeneralArgs(groupKind, opts)
           return value
         end,
       }),
-      sortDirection = BuildGroupedSelect("sortDir", "Sort direction", 2, sortDirectionValues),
-      numGroups = BuildGroupedRange("numGroups", "Groups", 3, 1, 8),
-      unitsPerColumn = BuildGroupedRange("unitsPerColumn", "Units per column", 4, 1, 5, {
+      roleSortOrder = BuildGroupedSelect("roleSortOrder", "Role order", 2, roleSortOrderValues, {
+        flags = { layout = true },
+        hidden = function()
+          local db = GetDB()
+          return not db or db.sortOrder ~= "ROLE"
+        end,
+      }),
+      sortDirection = BuildGroupedSelect("sortDir", "Sort direction", 3, sortDirectionValues, {
+        disabled = function()
+          local db = GetDB()
+          return db and db.sortOrder == "ROLE" or false
+        end,
+      }),
+      numGroups = BuildGroupedRange("numGroups", "Groups", 4, 1, 8),
+      unitsPerColumn = BuildGroupedRange("unitsPerColumn", "Units per column", 5, 1, 5, {
         disabled = function()
           local db = GetDB()
           if not db then

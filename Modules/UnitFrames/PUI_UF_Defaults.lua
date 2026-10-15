@@ -529,6 +529,12 @@ UFDefaults.RaidRoleIcon = {
   roleIconPosition = "TOPLEFT",
 }
 
+UFDefaults.DefaultRoleSortOrder = "TANK,DAMAGER,HEALER,NONE"
+
+function UFDefaults.GetRoleSortRank(roleOrder, role)
+  return (roleOrder or UFDefaults.DefaultRoleSortOrder):find(role or "NONE", 1, true) or 100
+end
+
 function UFDefaults.GetPartyDefaults()
   return {
   profile = {
@@ -548,9 +554,9 @@ function UFDefaults.GetPartyDefaults()
 
     orientation = "VERTICAL",
     growthY = "DOWN",
-    sortOrder = "INDEX",
+    groupBy = "INDEX",
     sortDir = "ASC",
-    roleSortOrder = "TANK,HEALER,DAMAGER,NONE",
+    roleSortOrder = UFDefaults.DefaultRoleSortOrder,
     showPlayer = false,
     showSolo = false,
     showPower = true,
@@ -779,6 +785,7 @@ function UFDefaults.GetRaidDefaults()
     groupBy = "GROUP",
     sortOrder = "INDEX",
     sortDir = "ASC",
+    roleSortOrder = UFDefaults.DefaultRoleSortOrder,
     numGroups = 5,
     unitsPerColumn = 5,
     rowSpacing = 3,
