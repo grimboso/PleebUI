@@ -431,6 +431,8 @@ function Addon:EnsureSchema()
   local p = self.db.profile
   if not p then return end
 
+  self:ApplyImportedProfileSettings()
+
   _PUI_EnsureTable(p, "blizzardFonts")
 
   local pui = _PUI_EnsureTable(p, "pui")
@@ -577,7 +579,7 @@ end
 
 local PUI_PROFILE_EXPORT_PREFIX = "PUI-PROFILE:"
 local PUI_PROFILE_FORMAT = "PleebUIProfile"
-local PUI_PROFILE_FORMAT_VERSION = 1
+local PUI_PROFILE_FORMAT_VERSION = 2
 
 local function _PUI_CloneProfileData(value, seen)
   local valueType = type(value)
@@ -611,6 +613,72 @@ local function _PUI_CloneProfileData(value, seen)
 end
 
 ns.CloneProfileData = _PUI_CloneProfileData
+
+local PUI_PROFILE_SHARED_FIELDS = {
+  char = {
+    pcmRendererMigrationVersion = "number",
+    pcmViewerTooltips = {
+      EssentialCooldownViewer = "boolean",
+      UtilityCooldownViewer = "boolean",
+      BuffIconCooldownViewer = "boolean",
+      BuffBarCooldownViewer = "boolean",
+    },
+    pcmViewerHideWhenInactive = {
+      BuffIconCooldownViewer = "boolean",
+      BuffBarCooldownViewer = "boolean",
+    },
+  },
+  global = {
+    pui = {
+      options = {
+        useCustomUIScale = "boolean",
+        UIScale = "number",
+        colorPalette = "table",
+      },
+      optionsWindow = {
+        optionsWindowWidth = "number",
+        optionsWindowHeight = "number",
+        offsetX = "number",
+        offsetY = "number",
+      },
+    },
+    whatsNew = {
+      disabled = "boolean",
+    },
+  },
+}
+
+local function _PUI_CopySharedProfileSettings(source, target, fields)
+  for key, expected in pairs(fields) do
+    local value = source[key]
+    if type(expected) == "table" then
+      if type(value) == "table" then
+        if type(target[key]) ~= "table" then
+          target[key] = {}
+        end
+        _PUI_CopySharedProfileSettings(value, target[key], expected)
+      end
+    elseif type(value) == expected then
+      target[key] = _PUI_CloneProfileData(value)
+    end
+  end
+end
+
+function Addon:ApplyImportedProfileSettings()
+  local profile = self.db.profile
+  local settings = profile.__puiPendingImportSettings
+  if type(settings) ~= "table" then
+    return
+  end
+
+  _PUI_CopySharedProfileSettings(settings, self.db, PUI_PROFILE_SHARED_FIELDS)
+  profile.__puiPendingImportSettings = nil
+
+  local globalPUI = settings.global and settings.global.pui
+  if globalPUI and globalPUI.optionsWindow then
+    self._puiImportedOptionsWindow = _PUI_CloneProfileData(globalPUI.optionsWindow)
+  end
+end
 
 local function _PUI_TrimProfileName(value)
   value = type(value) == "string" and value or ""
@@ -674,7 +742,7 @@ local function _PUI_GetNamespaceProfileExportData(db, profileName)
     end
   end
 
-  local liveNamespaces = db.namespaces
+  local liveNamespaces = db.children
   if type(liveNamespaces) == "table" then
     for namespaceName, namespaceDB in pairs(liveNamespaces) do
       if out[namespaceName] == nil and type(namespaceDB) == "table" and type(namespaceDB.profile) == "table" then
@@ -707,6 +775,18 @@ function Addon:ExportCurrentProfile()
   local db = self.db
 
   local profileName = _PUI_GetCurrentProfileName(db)
+  local sharedSettings = {}
+  _PUI_CopySharedProfileSettings(db, sharedSettings, PUI_PROFILE_SHARED_FIELDS)
+  local options = sharedSettings.global.pui.options
+  options.colorPalette = options.colorPalette or { recent = {}, favorites = {} }
+  local width, height, x, y = self:GetOptionsWindowGeometry()
+  sharedSettings.global.pui.optionsWindow = {
+    optionsWindowWidth = width,
+    optionsWindowHeight = height,
+    offsetX = x,
+    offsetY = y,
+  }
+
   local payload = {
     format = PUI_PROFILE_FORMAT,
     formatVersion = PUI_PROFILE_FORMAT_VERSION,
@@ -716,6 +796,7 @@ function Addon:ExportCurrentProfile()
     data = {
       profile = _PUI_GetRootProfileExportData(db),
       namespaces = _PUI_GetNamespaceProfileExportData(db, profileName),
+      sharedSettings = sharedSettings,
     },
   }
 
@@ -730,6 +811,10 @@ function Addon:ExportCurrentProfile()
 end
 
 function Addon:ImportProfileString(text, targetProfileName, applyNow)
+  if applyNow and InCombatLockdown() then
+    return false, "Profiles cannot be imported and activated during combat."
+  end
+
   text = type(text) == "string" and text or ""
   text = text:gsub("%s+", "")
   if text == "" then
@@ -753,7 +838,10 @@ function Addon:ImportProfileString(text, targetProfileName, applyNow)
   if not ok or type(payload) ~= "table" then
     return false, "Failed to deserialize profile."
   end
-  if payload.format ~= PUI_PROFILE_FORMAT or payload.formatVersion ~= PUI_PROFILE_FORMAT_VERSION or type(payload.data) ~= "table" then
+  if payload.format ~= PUI_PROFILE_FORMAT
+    or (payload.formatVersion ~= 1 and payload.formatVersion ~= PUI_PROFILE_FORMAT_VERSION)
+    or type(payload.data) ~= "table"
+  then
     return false, "Imported profile is not supported."
   end
 
@@ -765,8 +853,18 @@ function Addon:ImportProfileString(text, targetProfileName, applyNow)
     return false, "Imported profile data is invalid."
   end
 
+  if payload.formatVersion == PUI_PROFILE_FORMAT_VERSION and type(payload.data.sharedSettings) ~= "table" then
+    return false, "Imported shared settings are invalid."
+  end
+
   local profileName = _PUI_GetSafeProfileName(db, targetProfileName, payload.profileName)
   local importedProfile = _PUI_CloneProfileData(importedRoot)
+  importedProfile.__puiPendingImportSettings = nil
+  if payload.formatVersion == PUI_PROFILE_FORMAT_VERSION then
+    local settings = {}
+    _PUI_CopySharedProfileSettings(payload.data.sharedSettings, settings, PUI_PROFILE_SHARED_FIELDS)
+    importedProfile.__puiPendingImportSettings = settings
+  end
 
   profiles[profileName] = importedProfile
   _PUI_SetNamespaceProfileImportData(db, profileName, payload.data.namespaces)
@@ -1031,6 +1129,12 @@ function Addon:_RunStaggeredUpdateStep(step, flags)
 
   if step == "ApplyScale" then
     self.FrameScale:ApplyUIScaleFromProfile()
+    local window = self._puiImportedOptionsWindow
+    if window then
+      self._puiImportedOptionsWindow = nil
+      self:ApplyOptionsUIScale()
+      self:SetOptionsWindowGeometry(window.optionsWindowWidth, window.optionsWindowHeight, window.offsetX, window.offsetY)
+    end
   elseif step == "ApplyQuality" then
     ns.Modules.Quality:ApplyAll()
   elseif step == "RequestProfileUpdates" then
