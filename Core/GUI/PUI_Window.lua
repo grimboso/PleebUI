@@ -5,6 +5,16 @@ local WHITE8 = "Interface\\Buttons\\WHITE8x8"
 local WidgetSkins = Theme.WidgetSkins
 local scrollArrows = setmetatable({}, { __mode = "k" })
 
+function Theme.ApplyArrowTexture(texture, direction, state)
+  texture:SetAtlas(state == "pushed" and "CovenantSanctum-Renown-Arrow-Depressed" or "CovenantSanctum-Renown-Arrow")
+  texture:SetRotation(direction == "up" and math.pi * 3 / 2 or math.pi / 2)
+  texture:SetSize(16, 16)
+  texture:SetAlpha(1)
+  local colors = Theme.GetColors()
+  local color = state == "disabled" and colors.disabledText or colors.accent
+  texture:SetVertexColor(color[1], color[2], color[3], color[4])
+end
+
 function Theme.ApplyScrollArrow(button, direction)
   local textures = scrollArrows[button]
   if not textures then
@@ -16,17 +26,10 @@ function Theme.ApplyScrollArrow(button, direction)
     scrollArrows[button] = textures
     for _, texture in pairs(textures) do Theme.MarkCreatedWidgetChrome(texture) end
   end
-  local colors = Theme.GetColors()
-  local rotation = direction == "up" and math.pi * 3 / 2 or math.pi / 2
   for state, texture in pairs(textures) do
-    texture:SetAtlas(state == "pushed" and "CovenantSanctum-Renown-Arrow-Depressed" or "CovenantSanctum-Renown-Arrow")
-    texture:SetRotation(rotation)
+    Theme.ApplyArrowTexture(texture, direction, state)
     texture:ClearAllPoints()
     texture:SetPoint("CENTER", button, "CENTER")
-    texture:SetSize(16, 16)
-    texture:SetAlpha(1)
-    local color = state == "disabled" and colors.disabledText or colors.accent
-    texture:SetVertexColor(color[1], color[2], color[3], color[4])
   end
   button:SetNormalTexture(textures.normal)
   button:SetPushedTexture(textures.pushed)
@@ -180,8 +183,7 @@ function WidgetSkins.Scrollbar(widget, visibleHeight, contentHeight, minimumThum
 end
 
 local function LayoutScrollFrameTargets(widget)
-  local width = Theme.GetOptionsPointerTargetSize(20)
-  local margin = widget.scrollBarShown and (width + 2) or 0
+  local margin = Theme.GetOptionsPointerTargetSize(20) + 6
   local changed = widget.__puiScrollTargetMargin ~= margin
   widget.__puiScrollTargetMargin = margin
   widget.scrollframe:SetPoint("BOTTOMRIGHT", -margin, 0)
@@ -193,6 +195,27 @@ local function LayoutScrollFrameTargets(widget)
   widget.scrollbar:SetPoint("TOPLEFT", widget.scrollframe, "TOPRIGHT", 4, -inset)
   widget.scrollbar:SetPoint("BOTTOMLEFT", widget.scrollframe, "BOTTOMRIGHT", 4, inset)
   return changed
+end
+
+local function FixScrollFrameWithReservedLane(widget)
+  if widget.updateLock then return end
+  widget.updateLock = true
+
+  local status = widget.status or widget.localstatus
+  local overflow = widget.content:GetHeight() - widget.scrollframe:GetHeight()
+  local showScrollbar = overflow > 2
+  local value = 0
+  if showScrollbar then
+    value = math.max(0, math.min(1000, (status.offset or 0) / overflow * 1000))
+  end
+
+  if widget.scrollBarShown ~= showScrollbar then
+    widget.scrollBarShown = showScrollbar
+    widget.scrollbar:SetShown(showScrollbar)
+  end
+  widget.scrollbar:SetValue(value)
+  widget:SetScroll(value)
+  widget.updateLock = nil
 end
 
 function WidgetSkins.ScrollFrame(widget)
@@ -212,6 +235,13 @@ function WidgetSkins.ScrollFrame(widget)
       if self.__puiAceGUIOwnedByPleebUI == true then
         LayoutScrollFrameTargets(self)
       end
+    end
+    local originalFixScroll = widget.FixScroll
+    widget.FixScroll = function(self)
+      if self.__puiAceGUIOwnedByPleebUI == true then
+        return FixScrollFrameWithReservedLane(self)
+      end
+      return originalFixScroll(self)
     end
   end
   if LayoutScrollFrameTargets(widget) then

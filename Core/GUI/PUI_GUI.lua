@@ -1205,43 +1205,34 @@ local function _PUI_GetToggleMode(frame, request)
   return "Open", requestedPath
 end
 
-local PUI_ROOT_NAV_SECTION_ORDER = {
-  { key = "General", label = "General" },
-  { key = "CombatFrames", label = "Combat UI" },
-  { key = "Interface", label = "Interface" },
-  { key = "Plugins", label = "Plugins" },
+local PUI_ROOT_NAV_GENERAL_KEYS = {
+  Accessibility = true,
+  BlizzardWindows = true,
+  Chat = true,
+  EditMode = true,
+  Minimap = true,
+  DamageMeters = true,
+  PLAYER_BUFFS = true,
+  Dragonriding = true,
+  Quality = true,
 }
 
-local PUI_ROOT_NAV_SECTION_BY_KEY = {
-  GeneralOptions = "General",
-  UITheme = "General",
-  Quality = "General",
-
-  unitframes = "CombatFrames",
-  CooldownManager = "CombatFrames",
-  PRD = "CombatFrames",
-  ACTIONBARS = "CombatFrames",
-  PLAYER_BUFFS = "CombatFrames",
-  DamageMeters = "CombatFrames",
-
-  Chat = "Interface",
-  Minimap = "Interface",
-  Dragonriding = "Interface",
-  Profiles = "General",
+local PUI_ROOT_NAV_GENERAL_LABELS = {
+  BlizzardWindows = "Blizzard Window Skins",
 }
 
-local PUI_ROOT_NAV_ITEM_ORDER = {
-  unitframes = 10,
-  CooldownManager = 20,
-  PRD = 30,
-  ACTIONBARS = 40,
-  PLAYER_BUFFS = 50,
-  Profiles = 10000,
+local PUI_ROOT_NAV_MAIN_ORDER = {
+  "ACTIONBARS",
+  "CooldownManager",
+  "PRD",
+  "unitframes",
+  "Profiles",
 }
 
 local PUI_ROOT_NAV_SEARCH_ALIAS_BY_KEY = {
-  GeneralOptions = "Sc",
-  UITheme = "Th",
+  UITheme = "General UI Settings Th",
+  Accessibility = "Accessibility",
+  BlizzardWindows = "Blizzard Window Skins",
   unitframes = "UF",
   PLAYER_BUFFS = "PB",
   PRD = "RD",
@@ -1253,90 +1244,136 @@ local PUI_ROOT_NAV_SEARCH_ALIAS_BY_KEY = {
   Dragonriding = "SK",
   Quality = "QL",
   Profiles = "PR",
+  PluginsOverview = "Plugins Integrations",
 }
 
-local function _PUI_InsertRootNavSections(nodes)
-  if type(nodes) ~= "table" or #nodes == 0 then
-    return nodes or {}
+local function _PUI_GetRootNavGroup(key)
+  if PUI_ROOT_NAV_GENERAL_KEYS[key] then
+    return "General"
   end
 
-  local grouped = {}
-  local used = {}
+  local record = optionsRegistry[key]
+  local meta = record and record.meta
+  if record and (record.pluginRoot == true or (meta and meta.navSection == "Plugins")) then
+    return "Plugins"
+  end
+
+  return nil
+end
+
+local function _PUI_IsRootNavGroupExpanded(groupKey)
+  local db = _PUI_GetOptionsStateDB()
+  local expanded = db.rootNavExpanded
+  return type(expanded) == "table" and expanded[groupKey] == true
+end
+
+local function _PUI_SetRootNavGroupExpanded(groupKey, expanded)
+  local db = _PUI_GetOptionsStateDB()
+  db.rootNavExpanded = db.rootNavExpanded or {}
+  db.rootNavExpanded[groupKey] = expanded
+end
+
+local function _PUI_CopyRootNavNode(node, label, groupKey, isChild)
+  local copy = {}
+  for key, value in pairs(node) do
+    copy[key] = value
+  end
+
+  local meta = {}
+  for key, value in pairs(node.meta or {}) do
+    meta[key] = value
+  end
+
+  if label then
+    copy.label = label
+  end
+
+  if groupKey then
+    meta.navGroup = groupKey
+    meta.navHeight = isChild and 40 or 50
+    meta.navGap = isChild and 4 or 10
+    meta.navChild = isChild == true
+    meta.navExpandable = not isChild
+    meta.navExpanded = not isChild and _PUI_IsRootNavGroupExpanded(groupKey) or false
+  end
+
+  copy.meta = meta
+  return copy
+end
+
+local function _PUI_BuildRootNavGroups(nodes)
+  local roots = {}
+  local generalChildren = {}
+  local pluginChildren = {}
 
   for i = 1, #nodes do
     local node = nodes[i]
-    local meta = type(node and node.meta) == "table" and node.meta or nil
-    local sectionKey = (meta and meta.navSection)
-      or PUI_ROOT_NAV_SECTION_BY_KEY[node and node.key]
-      or "Other"
+    roots[node.key] = node
 
-    grouped[sectionKey] = grouped[sectionKey] or {}
-    grouped[sectionKey][#grouped[sectionKey] + 1] = node
-  end
-
-  for _, list in pairs(grouped) do
-    table.sort(list, function(a, b)
-      local aOrder = PUI_ROOT_NAV_ITEM_ORDER[a.key] or tonumber(a.order) or 50
-      local bOrder = PUI_ROOT_NAV_ITEM_ORDER[b.key] or tonumber(b.order) or 50
-
-      if aOrder == bOrder then
-        return tostring(a.label or a.name or a.key) < tostring(b.label or b.name or b.key)
-      end
-
-      return aOrder < bOrder
-    end)
-  end
-
-  local out = {}
-
-  for i = 1, #PUI_ROOT_NAV_SECTION_ORDER do
-    local section = PUI_ROOT_NAV_SECTION_ORDER[i]
-    local list = grouped[section.key]
-
-    if list and #list > 0 then
-      out[#out + 1] = {
-        key = "__pui_nav_header_" .. section.key,
-        name = section.label,
-        label = section.label,
-        order = (tonumber(list[1] and list[1].order) or (i * 100)) - 0.5,
-        parentKey = nil,
-        factory = nil,
-        meta = {
-          navHeader = true,
-          navHeight = 22,
-          navGap = 8,
-        },
-        rec = nil,
-      }
-
-      for j = 1, #list do
-        out[#out + 1] = list[j]
-      end
-
-      used[section.key] = true
+    local groupKey = _PUI_GetRootNavGroup(node.key)
+    if groupKey == "General" then
+      generalChildren[#generalChildren + 1] = node
+    elseif groupKey == "Plugins" then
+      pluginChildren[#pluginChildren + 1] = node
     end
   end
 
-  for sectionKey, list in pairs(grouped) do
-    if not used[sectionKey] and list and #list > 0 then
-      out[#out + 1] = {
-        key = "__pui_nav_header_" .. sectionKey,
-        name = sectionKey,
-        label = sectionKey,
-        order = (tonumber(list[1] and list[1].order) or 1000) - 0.5,
-        parentKey = nil,
-        factory = nil,
-        meta = {
-          navHeader = true,
-          navHeight = 22,
-          navGap = 8,
-        },
-        rec = nil,
-      }
+  table.sort(generalChildren, function(a, b)
+    local aLabel = string.lower(PUI_ROOT_NAV_GENERAL_LABELS[a.key] or a.label)
+    local bLabel = string.lower(PUI_ROOT_NAV_GENERAL_LABELS[b.key] or b.label)
+    if aLabel == bLabel then
+      return a.key < b.key
+    end
+    return aLabel < bLabel
+  end)
 
-      for j = 1, #list do
-        out[#out + 1] = list[j]
+  table.sort(pluginChildren, function(a, b)
+    local aOrder = tonumber(a.order) or 50
+    local bOrder = tonumber(b.order) or 50
+    if aOrder == bOrder then
+      return tostring(a.label) < tostring(b.label)
+    end
+    return aOrder < bOrder
+  end)
+
+  local out = {}
+  local placed = {}
+
+  local function AddGroup(rootKey, label, groupKey, children)
+    local root = roots[rootKey]
+    if not root then
+      return
+    end
+
+    out[#out + 1] = _PUI_CopyRootNavNode(root, label, groupKey, false)
+    placed[rootKey] = true
+
+    for i = 1, #children do
+      local child = children[i]
+      placed[child.key] = true
+      if _PUI_IsRootNavGroupExpanded(groupKey) then
+        out[#out + 1] = _PUI_CopyRootNavNode(child, PUI_ROOT_NAV_GENERAL_LABELS[child.key], groupKey, true)
       end
+    end
+  end
+
+  AddGroup("UITheme", "General", "General", generalChildren)
+
+  for i = 1, #PUI_ROOT_NAV_MAIN_ORDER do
+    local key = PUI_ROOT_NAV_MAIN_ORDER[i]
+    local node = roots[key]
+    if node then
+      out[#out + 1] = node
+      placed[key] = true
+    end
+  end
+
+  AddGroup("PluginsOverview", "Plugins", "Plugins", pluginChildren)
+
+  for i = 1, #nodes do
+    local node = nodes[i]
+    if not placed[node.key] then
+      out[#out + 1] = node
     end
   end
 
@@ -1632,7 +1669,7 @@ local function _PUI_GetRootRegistryNavNodes(searchText)
   end
 
   if searchText == "" then
-    return _PUI_InsertRootNavSections(roots)
+    return _PUI_BuildRootNavGroups(roots)
   end
 
   local results = {}
@@ -1792,9 +1829,15 @@ local function _PUI_EnsureRootNavButton(btn)
   btn.__puiRootNavBadge:SetJustifyH("RIGHT")
   btn.__puiRootNavBadge:SetJustifyV("MIDDLE")
 
-  ns.Theme.ApplyFont(btn.__puiRootNavLabel, "nav", 12)
+  btn.__puiRootNavExpand = btn:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+  btn.__puiRootNavExpand.__puiOptionsFontOwned = true
+  btn.__puiRootNavExpand:SetPoint("RIGHT", btn, "RIGHT", -12, 0)
+  btn.__puiRootNavExpand:SetJustifyH("CENTER")
+  btn.__puiRootNavExpand:SetWidth(16)
+
   ns.Theme.ApplyFont(btn.__puiRootNavDescription, "tiny", 10)
   ns.Theme.ApplyFont(btn.__puiRootNavBadge, "tiny", 9)
+  ns.Theme.ApplyFont(btn.__puiRootNavExpand, "nav", 12)
 end
 
 local function _PUI_StyleRootNavButton(btn, node, isSelected)
@@ -1804,10 +1847,12 @@ local function _PUI_StyleRootNavButton(btn, node, isSelected)
   end
 
   local colors = ns.Theme.GetColors()
-  local fill = colors.control
+  local meta = node.meta
+  local labelFontSize = meta.navChild and 10 or ((meta.navHeader or meta.searchResult) and 12 or 13)
+  ns.Theme.ApplyFont(btn.__puiRootNavLabel, "nav", labelFontSize)
+  local fill = meta.searchResult == true and colors.hoverControl or colors.control
   local accent = colors.accent
   local text = colors.text
-  local meta = node.meta
 
   if meta.navHeader == true then
     ns.Theme.SetSquareBackdrop(btn, {
@@ -1826,6 +1871,7 @@ local function _PUI_StyleRootNavButton(btn, node, isSelected)
     btn.__puiRootNavIcon:Hide()
     btn.__puiRootNavDescription:Hide()
     btn.__puiRootNavBadge:Hide()
+    btn.__puiRootNavExpand:Hide()
 
     btn.__puiRootNavLabel:ClearAllPoints()
     btn.__puiRootNavLabel:SetPoint("LEFT", btn, "LEFT", 4, 0)
@@ -1837,9 +1883,10 @@ local function _PUI_StyleRootNavButton(btn, node, isSelected)
 
   local disabled = meta.disabled == true or meta.comingSoon == true
   local hovered = btn.__puiRootNavHovered == true
-  local bgAlpha = isSelected and 0.92 or 0.58
-  local borderColor = isSelected and accent or colors.controlBorder
-  local borderAlpha = borderColor[4] * (isSelected and 0.72 or 0.55)
+  local isSearchResult = meta.searchResult == true
+  local bgAlpha = (isSelected or isSearchResult) and 0.92 or 0.58
+  local borderColor = isSelected and accent or (isSearchResult and colors.hoverBorder or colors.controlBorder)
+  local borderAlpha = borderColor[4] * (isSelected and 0.72 or (isSearchResult and 0.85 or 0.55))
 
   ns.Theme.SetSquareBackdrop(btn, {
     bg = { fill[1], fill[2], fill[3], bgAlpha },
@@ -1857,9 +1904,12 @@ local function _PUI_StyleRootNavButton(btn, node, isSelected)
   ns.OptionsMotion.Hover(btn, btn.__puiRootNavHover, hovered and not disabled)
 
   btn.__puiRootNavIconBack:SetVertexColor(accent[1], accent[2], accent[3], isSelected and 0.26 or 0.11)
+  btn.__puiRootNavExpand:SetText(meta.navExpanded and "-" or "+")
+  btn.__puiRootNavExpand:SetTextColor(accent[1], accent[2], accent[3], 0.95)
+  btn.__puiRootNavExpand:SetShown(meta.navExpandable == true)
 
-  local iconAtlas = meta.navAtlas or meta.iconAtlas
-  local iconPath = meta.navIcon or meta.icon
+  local iconAtlas = not meta.navChild and (meta.navAtlas or meta.iconAtlas) or nil
+  local iconPath = not meta.navChild and (meta.navIcon or meta.icon) or nil
 
   if iconAtlas then
     btn.__puiRootNavIcon:SetAtlas(iconAtlas, true)
@@ -1879,7 +1929,7 @@ local function _PUI_StyleRootNavButton(btn, node, isSelected)
   local hasIcon = iconAtlas ~= nil or iconPath ~= nil
   btn.__puiRootNavIconBack:SetShown(hasIcon)
   local labelLeft = hasIcon and 46 or 12
-  local desc = meta.navDescription or ""
+  local desc = meta.searchResult and (meta.navDescription or "") or ""
   if desc == node.label then desc = "" end
   local badgeText = meta.comingSoon and "Soon" or (meta.navBadge or "")
   local badgeShown = badgeText ~= ""
@@ -1901,11 +1951,11 @@ local function _PUI_StyleRootNavButton(btn, node, isSelected)
   btn.__puiRootNavBadge:SetPoint("RIGHT", btn, "RIGHT", -10, 0)
   btn.__puiRootNavBadge:SetWidth(40)
 
-  local rightAnchor = badgeShown and btn.__puiRootNavBadge or btn
-  local rightPoint = badgeShown and "LEFT" or "RIGHT"
-  local rightOffset = badgeShown and -6 or -10
+  local rightAnchor = meta.navExpandable and btn.__puiRootNavExpand or (badgeShown and btn.__puiRootNavBadge or btn)
+  local rightPoint = (meta.navExpandable or badgeShown) and "LEFT" or "RIGHT"
+  local rightOffset = (meta.navExpandable or badgeShown) and -6 or -10
 
-  btn.__puiRootNavLabel:SetHeight(ns.Theme.GetOptionsFontHeight("nav", 12))
+  btn.__puiRootNavLabel:SetHeight(ns.Theme.GetOptionsFontHeight("nav", labelFontSize))
 
   if desc ~= "" then
     btn.__puiRootNavLabel:SetPoint("TOPLEFT", btn, "TOPLEFT", labelLeft, -8)
@@ -1922,7 +1972,9 @@ end
 
 local function _PUI_GetRootNavSignature(nodes)
   local parts = {
+    ns.Theme.GetOptionsFontSignature("nav", 10),
     ns.Theme.GetOptionsFontSignature("nav", 12),
+    ns.Theme.GetOptionsFontSignature("nav", 13),
     ns.Theme.GetOptionsFontSignature("tiny", 10),
   }
 
@@ -1937,6 +1989,8 @@ local function _PUI_GetRootNavSignature(nodes)
       tostring(meta.navGap or ""),
       tostring(meta.navBadge or ""),
       tostring(meta.navHeader == true),
+      tostring(meta.navChild == true),
+      tostring(meta.navExpanded == true),
       tostring(meta.disabled == true),
       tostring(meta.comingSoon == true),
     }, "\030")
@@ -2003,15 +2057,30 @@ local function _PUI_RefreshRootRegistryNav(frame)
     search:SetTextInsets(10, 10, 0, 0)
     search:SetMaxLetters(64)
     search.__puiOptionsFontOwned = true
+    search.__puiProminentInput = true
 
     search.__puiPlaceholder = search:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     search.__puiPlaceholder.__puiOptionsFontOwned = true
     search.__puiPlaceholder:SetPoint("LEFT", search, "LEFT", 10, 0)
     search.__puiPlaceholder:SetPoint("RIGHT", search, "RIGHT", -10, 0)
     search.__puiPlaceholder:SetJustifyH("LEFT")
-    search.__puiPlaceholder:SetText("Search settings... 2+ letters")
+    search.__puiPlaceholder:SetText("Search")
 
     ns.Theme.ApplyFont(search.__puiPlaceholder, "tiny", 10)
+
+    search:SetScript("OnEnter", function(self)
+      OptionsTooltip:SetOwner(self, "ANCHOR_RIGHT")
+      OptionsTooltip:SetText("Search", 1, 1, 1, 1, true)
+      OptionsTooltip:AddLine("Type at least 2 letters to search settings.", 0.78, 0.78, 0.82, true)
+      OptionsTooltip:AddLine("Press Enter to open the first result.", 0.55, 0.68, 0.86, true)
+      OptionsTooltip:Show()
+    end)
+
+    search:SetScript("OnLeave", function(self)
+      if OptionsTooltip:IsOwned(self) then
+        OptionsTooltip:Hide()
+      end
+    end)
 
     search:SetScript("OnEditFocusGained", function(self)
       self.__puiPlaceholder:SetShown(self:GetText() == "")
@@ -2122,6 +2191,9 @@ local function _PUI_RefreshRootRegistryNav(frame)
     if frame.__puiRootNavScroll then
       frame.__puiRootNavScroll:Hide()
     end
+    if frame.__puiRootNavSearchPanel then
+      frame.__puiRootNavSearchPanel:Hide()
+    end
 
     if not frame.__puiRootNavNoResults then
       frame.__puiRootNavNoResults = frame.__puiNavShell:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
@@ -2153,6 +2225,7 @@ local function _PUI_RefreshRootRegistryNav(frame)
 
   if not frame.__puiRootNavScroll then
     local scroll = CreateFrame("ScrollFrame", nil, frame.__puiNavShell, "UIPanelScrollFrameTemplate")
+    scroll.scrollBarHideable = true
     scroll:EnableMouseWheel(true)
     scroll:SetScript("OnMouseWheel", function(self, delta)
       local maxScroll = self:GetVerticalScrollRange()
@@ -2204,9 +2277,33 @@ local function _PUI_RefreshRootRegistryNav(frame)
     scroll:SetPoint("TOPLEFT", navShell, "TOPLEFT", 14, -searchHeight - 28)
     scroll:SetPoint("TOPRIGHT", navShell, "TOPRIGHT", -scrollRightInset, -searchHeight - 28)
     scroll:SetPoint("BOTTOM", navShell, "BOTTOM", 0, 16)
-    scroll:SetClipsChildren(true)
   end
   scroll:Show()
+
+  local searchPanel = frame.__puiRootNavSearchPanel
+  if _PUI_NormalizeRootNavSearch(searchText) ~= "" then
+    if not searchPanel then
+      searchPanel = CreateFrame("Frame", nil, navShell)
+      searchPanel:EnableMouse(false)
+      frame.__puiRootNavSearchPanel = searchPanel
+    end
+
+    searchPanel:SetParent(navShell)
+    searchPanel:SetFrameStrata(scroll:GetFrameStrata())
+    searchPanel:SetFrameLevel(scroll:GetFrameLevel() - 2)
+    searchPanel:ClearAllPoints()
+    searchPanel:SetPoint("TOPLEFT", scroll, "TOPLEFT", -6, 6)
+    searchPanel:SetPoint("BOTTOMRIGHT", scroll, "BOTTOMRIGHT", 4, -6)
+
+    local accent = searchColors.accent
+    ns.Theme.SetSquareBackdrop(searchPanel, {
+      bg = searchColors.control,
+      border = { accent[1], accent[2], accent[3], accent[4] * 0.48 },
+    }, ns.Theme.GetEdgeSize())
+    searchPanel:Show()
+  elseif searchPanel then
+    searchPanel:Hide()
+  end
 
   if not frame.__puiRootNavHost then
     frame.__puiRootNavHost = CreateFrame("Frame", nil, scroll)
@@ -2246,9 +2343,10 @@ local function _PUI_RefreshRootRegistryNav(frame)
 
   ns.Theme.WidgetSkins.Scrollbar(scroll.ScrollBar)
   local scrollbarInset = scrollbarWidth > 20 and scrollbarWidth or 18
+  local scrollbarXOffset = scrollRightInset - scrollbarWidth - 6
   scroll.ScrollBar:ClearAllPoints()
-  scroll.ScrollBar:SetPoint("TOPLEFT", scroll, "TOPRIGHT", 6, -scrollbarInset)
-  scroll.ScrollBar:SetPoint("BOTTOMLEFT", scroll, "BOTTOMRIGHT", 6, scrollbarInset)
+  scroll.ScrollBar:SetPoint("TOPLEFT", scroll, "TOPRIGHT", scrollbarXOffset, -scrollbarInset)
+  scroll.ScrollBar:SetPoint("BOTTOMLEFT", scroll, "BOTTOMRIGHT", scrollbarXOffset, scrollbarInset)
 
   host:EnableMouse(false)
   host:Show()
@@ -2275,9 +2373,9 @@ local function _PUI_RefreshRootRegistryNav(frame)
   for i = 1, #nodes do
     local node = nodes[i]
     local meta = _PUI_GetRootNavMeta(node)
-    local navHeight = tonumber(meta.navHeight) or 54
-    local titleHeight = ns.Theme.GetOptionsFontHeight("nav", 12)
-    local description = meta.navDescription or ""
+    local navHeight = tonumber(meta.navHeight) or (meta.navChild and 40 or 50)
+    local titleHeight = ns.Theme.GetOptionsFontHeight("nav", meta.navChild and 10 or ((meta.navHeader or meta.searchResult) and 12 or 13))
+    local description = meta.searchResult and (meta.navDescription or "") or ""
     if meta.navHeader then
       navHeight = math.max(navHeight, titleHeight + 6)
     elseif description ~= "" and description ~= node.label then
@@ -2285,7 +2383,7 @@ local function _PUI_RefreshRootRegistryNav(frame)
     else
       navHeight = math.max(navHeight, titleHeight + 16)
     end
-    local navGap = tonumber(meta.navGap) or 5
+    local navGap = tonumber(meta.navGap) or (meta.navChild and 4 or 10)
     local btn = host.__puiButtons[i]
 
     if not btn then
@@ -2303,11 +2401,13 @@ local function _PUI_RefreshRootRegistryNav(frame)
     btn.__puiNode = node
 
     btn:ClearAllPoints()
+    local buttonLeft = meta.navChild and 10 or 0
     if previous then
-      btn:SetPoint("TOPLEFT", previous, "BOTTOMLEFT", 0, -navGap)
-      btn:SetPoint("TOPRIGHT", previous, "BOTTOMRIGHT", 0, -navGap)
+      btn:SetPoint("TOP", previous, "BOTTOM", 0, -navGap)
+      btn:SetPoint("LEFT", host, "LEFT", buttonLeft, 0)
+      btn:SetPoint("RIGHT", host, "RIGHT", 0, 0)
     else
-      btn:SetPoint("TOPLEFT", host, "TOPLEFT", 0, 0)
+      btn:SetPoint("TOPLEFT", host, "TOPLEFT", buttonLeft, 0)
       btn:SetPoint("TOPRIGHT", host, "TOPRIGHT", 0, 0)
     end
 
@@ -2322,7 +2422,7 @@ local function _PUI_RefreshRootRegistryNav(frame)
 
       local tooltip = OptionsTooltip
       local label = self.__puiNode and (self.__puiNode.label or self.__puiNode.name or self.__puiNode.key) or "PleebUI"
-      local description = meta.pageDescription or meta.navDescription or meta.description or ""
+      local description = meta.navDescription or meta.pageDescription or meta.description or ""
       local help = meta.pageHelp or meta.helpText or meta.help or ""
 
       if description == "" and help == ""
@@ -2364,6 +2464,12 @@ local function _PUI_RefreshRootRegistryNav(frame)
 
       local node = self.__puiNode
       local meta = node and _PUI_GetRootNavMeta(node)
+
+      if meta and meta.navExpandable == true then
+        _PUI_SetRootNavGroupExpanded(meta.navGroup, not meta.navExpanded)
+        Addon:OpenOptions({ node.key }, false, true)
+        return
+      end
 
       if (not meta or meta.searchResult ~= true)
         and self.__puiSectionKey == _PUI_GetSelectedRootRegistryKey()
@@ -2808,7 +2914,7 @@ local function _PUI_EnsurePleebUIOptionsChrome(frame)
   local outerPad = 8
   local topHeaderHeight = 78
   local footerHeight = 62 + ns.KeyboardNavigation.GetGuideHeight(frame)
-  local navWidth = 258
+  local navWidth = 282
   local gutter = 12
 
   frame.__puiFooterShell:SetFrameStrata(frame:GetFrameStrata())
@@ -3882,6 +3988,10 @@ local function _PUI_RenderCustomOptionsPath(frame, AceConfigDialog, APP, path)
   State.optionsPathGeneration = (State.optionsPathGeneration or 0) + 1
 
   _PUI_RememberLastSectionFromPath(requestedPath)
+  local navGroup = _PUI_GetRootNavGroup(requestedPath[1])
+  if navGroup then
+    _PUI_SetRootNavGroupExpanded(navGroup, true)
+  end
   _PUI_RefreshRootRegistryNav(frame)
 
   local shell, info = _PUI_RefreshCustomPageShell(frame, requestedPath)

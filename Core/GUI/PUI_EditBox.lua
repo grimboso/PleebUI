@@ -50,6 +50,14 @@ function WidgetSkins.UIEditBox(edit)
   local controlColor, borderColor, textColor = Theme.GetControlStateColors(
     edit.obj and edit.obj.disabled == true, edit.__puiHovered == true, false, edit:HasFocus()
   )
+
+  if edit.__puiProminentInput and not (edit.obj and edit.obj.disabled == true) then
+    local accent = colors.accent
+    local borderAlpha = edit:HasFocus() and 1 or (edit.__puiHovered and 0.85 or 0.65)
+    controlColor = colors.pressedControl
+    borderColor = { accent[1], accent[2], accent[3], accent[4] * borderAlpha }
+  end
+
   Theme.SetSquareBackdrop(edit, {
     bg = controlColor,
     border = borderColor,

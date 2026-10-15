@@ -179,10 +179,11 @@ local function _PUI_InstallAceGUIHooks()
     widget.__puiLSMDropdownGeometryApplied = nil
     widget.__puiCheckboxControlType = nil
     widget.__puiGroupHeaderOffset = nil
+    widget.__puiScrollTargetMargin = nil
     widget.__puiLastTreeResizeWidth = nil
     widget.__puiLastTreeNativeRows = nil
     widget.__puiLastTreePCMRows = nil
-    if widget.__puiBlizzardTree and widget.__puiTreeViewport then
+    if widget.__puiTreePixelScroll and widget.__puiTreeViewport then
       for index, button in ipairs(widget.buttons) do
         if button:GetParent() == widget.__puiTreeViewport then
           button:SetParent(widget.treeframe)
@@ -201,8 +202,8 @@ local function _PUI_InstallAceGUIHooks()
       widget.__puiTreeViewport:Hide()
     end
     widget.__puiBlizzardTree = nil
+    widget.__puiTreePixelScroll = nil
     widget.__puiTreeSmoothScroll = nil
-    widget.__puiTreeSmoothStep = nil
     widget.__puiTreeRenderedRow = nil
     widget.__puiTreeNativeScroll = nil
     widget.__puiTreeSliderUpdating = nil
@@ -323,6 +324,9 @@ local function _PUI_InstallAceGUIHooks()
         or widget.__puiACDHostContainer == true
       )
     then
+      if widget.children then
+        widget:PauseLayout()
+      end
       ClearOwnership(widget)
     end
 
@@ -350,6 +354,17 @@ local function _PUI_InstallAceGUIHooks()
   end
 
   local widgetContainerBase = AceGUI.WidgetContainerBase
+  local originalReleaseChildren = widgetContainerBase.ReleaseChildren
+  widgetContainerBase.ReleaseChildren = function(self)
+    if not IsPleebUIOwner(self) or self.LayoutPaused then
+      return originalReleaseChildren(self)
+    end
+
+    -- Parent restoration can resize content while the child list is being cleared.
+    self:PauseLayout()
+    originalReleaseChildren(self)
+    self:ResumeLayout()
+  end
   local originalAddChild = widgetContainerBase.AddChild
   widgetContainerBase.AddChild = function(self, child, beforeWidget)
     PrepareChildOwnership(self, child)

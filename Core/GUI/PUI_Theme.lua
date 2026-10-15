@@ -707,7 +707,9 @@ local function _PUI_HideCreatedWidgetChrome(widget, object, seen)
 end
 
 local function _PUI_RestoreCreatedWidgetObject(object, state)
-  object:SetParent(state.parent)
+  if object:GetParent() ~= state.parent then
+    object:SetParent(state.parent)
+  end
   object:ClearAllPoints()
 
   for i = 1, #state.points do
@@ -860,7 +862,10 @@ function Theme.ReleaseCreatedWidget(widget)
 
   for i = 1, #lease.objects do
     local object = lease.objects[i]
-    object:SetParent(lease.states[object].parent)
+    local parent = lease.states[object].parent
+    if object:GetParent() ~= parent then
+      object:SetParent(parent)
+    end
   end
 
   for i = 1, #lease.objects do
@@ -1891,7 +1896,7 @@ local PUI_CONTROL_METRICS = {
   controlHeight = 20,
   sliderInputWidth = 74,
   widgetBoxHeight = 56,
-  treeGroupWidth = 190,
+  treeGroupWidth = 240,
   inlineGroupPaddingX = 8,
   inlineGroupPaddingY = 8,
   treeButtonGap = 6,
@@ -1902,7 +1907,7 @@ local PUI_COMPACT_CONTROL_METRICS = {
   controlHeight = 18,
   sliderInputWidth = 58,
   widgetBoxHeight = 38,
-  treeGroupWidth = 190,
+  treeGroupWidth = 240,
   inlineGroupPaddingX = 8,
   inlineGroupPaddingY = 8,
   treeButtonGap = 6,
@@ -1913,7 +1918,7 @@ local PUI_COMPACT_INLINE_CONTROL_METRICS = {
   controlHeight = 14,
   sliderInputWidth = 58,
   widgetBoxHeight = 24,
-  treeGroupWidth = 190,
+  treeGroupWidth = 240,
   inlineGroupPaddingX = 8,
   inlineGroupPaddingY = 8,
   treeButtonGap = 6,

@@ -20,7 +20,6 @@ local math_min = _G.math.min
 local WidgetSkins = Theme.WidgetSkins
 
 local WHITE8 = "Interface\\Buttons\\WHITE8x8"
-local ARROW_TEXTURE = "Interface\\ChatFrame\\UI-ChatIcon-ScrollDown-Up"
 local SEPARATOR_VALUE_PREFIX = "__PUI_SEPARATOR_BEFORE__"
 
 local function WatchDropdownOutsideClicks(widget, popup, button)
@@ -179,7 +178,7 @@ local function SkinLabel(label, box)
   label:SetTextColor(colors.text[1], colors.text[2], colors.text[3], colors.text[4])
 end
 
-local function SkinArrowBox(widget, box, colors)
+local function SkinArrowBox(widget, box)
   local geom = Theme.GetWidgetRowGeometry(widget)
   local arrowSize = math_max(10, geom.controlHeight - 4)
   local arrowBox = widget.__puiDropdownArrowBox
@@ -207,10 +206,7 @@ local function SkinArrowBox(widget, box, colors)
 
   arrow:ClearAllPoints()
   arrow:SetPoint("CENTER", arrowBox, "CENTER", 0, 0)
-  arrow:SetSize(arrowSize, arrowSize)
-  arrow:SetTexture(ARROW_TEXTURE)
-  arrow:SetAlpha(1)
-  arrow:SetVertexColor(colors.accent[1], colors.accent[2], colors.accent[3], 0.95)
+  Theme.ApplyArrowTexture(arrow, "down")
   arrow:Show()
 
   arrowBox:Show()
@@ -529,7 +525,7 @@ local function LayoutDropdownScrollLane(pullout)
   if pullout.__puiAceGUIOwnedByPleebUI ~= true then return end
   local width = Theme.GetOptionsPointerTargetSize(8)
   local offset = pullout.scrollStatus.offset or 0
-  local lane = pullout.slider:IsShown() and width + 4 or 0
+  local lane = width + 4
   pullout.itemFrame:SetPoint("TOPRIGHT", pullout.scrollFrame, "TOPRIGHT", -lane, offset)
   pullout.slider:ClearAllPoints()
   pullout.slider:SetPoint("TOPRIGHT", pullout.scrollFrame, "TOPRIGHT", -4, 0)
@@ -894,7 +890,7 @@ local function SkinDropdown(widget, isLSM)
   end
 
   local box, colors, edge = CreateBox(widget, frame, geom)
-  local arrowBox = SkinArrowBox(widget, box, colors)
+  local arrowBox = SkinArrowBox(widget, box)
 
   if widget.type == "LSM30_Statusbar" then
     SkinStatusbarPreview(widget, box, arrowBox)
@@ -1129,10 +1125,8 @@ local function PUI_Dropdown_Layout(widget, width)
   widget.button:SetPoint("TOPRIGHT", widget.frame, "TOPRIGHT", -geom.controlRight, -controlTop)
   widget.button:SetHeight(geom.controlHeight)
 
-  local arrowSize = math_max(10, geom.controlHeight - 4)
   widget.arrow:ClearAllPoints()
   widget.arrow:SetPoint("RIGHT", widget.button, "RIGHT", -4, 0)
-  widget.arrow:SetSize(arrowSize, arrowSize)
 
   widget.text:ClearAllPoints()
   widget.text:SetPoint("LEFT", widget.button, "LEFT", 6, 0)
@@ -1774,7 +1768,7 @@ local function PUI_Dropdown_Constructor(widgetType)
   Theme.ApplyFont(text, "body")
 
   local arrow = button:CreateTexture(nil, "ARTWORK")
-  arrow:SetTexture(ARROW_TEXTURE)
+  Theme.ApplyArrowTexture(arrow, "down")
 
   local widget = {
     type = widgetType or PUI_DROPDOWN_TYPE,
