@@ -42,7 +42,10 @@ local function QueueRefresh(rebuild)
     rebuildSettings = nil
     if active ~= panel or not panel or not panel:IsVisible() or InCombatLockdown() then return end
     if panel.skinSettings ~= SkinSettings() then callbacks.requireReload(); panel.skinSettings = SkinSettings() end
-    if rebuild then Settings.Show(panel, panel.path) else BindControls(panel.widget) end
+    if rebuild then
+      Settings.Show(panel, panel.path)
+      ns.KeyboardNavigation.QueueRestore()
+    else BindControls(panel.widget) end
     ns.InstallerPreview.SetSettingsPath(panel.path)
     callbacks.changed()
     ns.InstallerPreview.Refresh()
@@ -260,7 +263,7 @@ local function BuildOptions()
         end
       end
       control.order, control.width, control.fullWidth, control.relWidth = index * 10, "full", true, nil
-      local columns = math.min(2, ns.Theme.GetOptionsWidgetColumns(active:GetWidth()))
+      local columns = active.columns
       if columns > 1 then
         control.width, control.fullWidth, control.relWidth = "relative", nil, 1 / columns - 0.02
       end
@@ -283,6 +286,7 @@ function Settings.Show(panel, path)
   if active and active ~= panel then Settings.Hide(active) end
   active = panel
   panel.path = path
+  panel.columns = math.min(2, ns.Theme.GetOptionsWidgetColumns(panel:GetWidth()))
   panel.skinSettings = SkinSettings()
   if not panel.widget then
     local widget = AceGUI:Create("SimpleGroup")
@@ -330,6 +334,7 @@ function Settings.Create(parent, y, onHeightChanged)
     if self.widget then
       self.widget:SetWidth(width)
       self.widget:SetHeight(height)
+      if active == self and self.columns ~= math.min(2, ns.Theme.GetOptionsWidgetColumns(width)) then QueueRefresh(true) end
     end
   end)
   return panel
