@@ -36,7 +36,7 @@ local function ControlKey(control)
     local path = user.path or {}
     local parts = {}
     for index, value in ipairs(path) do parts[index] = tostring(value) end
-    local key = widget.__puiControl and widget.__puiControl.key
+    local key = user.keyboardKey or (widget.__puiControl and widget.__puiControl.key)
       or (user.puiControlTooltip and user.puiControlTooltip.label)
       or (#parts > 0 and widget.type or control.serial)
     return table.concat(parts, "\001") .. "\002" .. tostring(key) .. "\002" .. control.part
@@ -145,6 +145,7 @@ local GUIDE_TEXT = {
 }
 local HELP_TEXT = [[Moving between controls
 Tab moves forward; Shift+Tab moves backward. Focus does not change a setting.
+In the installer, Ctrl+Tab jumps between the page list, lesson and preview, settings, and window controls. Ctrl+Shift+Tab jumps back. Up/Down browses the page list; Enter opens a page.
 
 Trees and tabs
 Up/Down browses tree entries. Left/Right expands or collapses tree branches, or browses tabs. Enter opens the focused page; Space also selects a tab.
@@ -204,7 +205,8 @@ local function RefreshGuide(root, state)
       height = math.max(height, guide.label:GetStringHeight() + 12)
     end
     height = math.max(height, Theme.GetOptionsPointerTargetSize(24))
-    guide.label:SetText("Keyboard help · F1  |  " .. GUIDE_TEXT[GuideContext(state)])
+    guide.label:SetText("Keyboard help · F1  |  " .. (guide.settings.text or GUIDE_TEXT[GuideContext(state)]))
+    height = math.max(height, guide.label:GetStringHeight() + 12)
     guide.label:SetTextColor(colors.text[1], colors.text[2], colors.text[3], 0.9)
     guide.button:SetSize(width, height)
   end
@@ -492,6 +494,17 @@ function Navigation.ReleaseWidget(widget)
   Navigation.QueueRestore()
 end
 
+local function ControlRegion(control, regions)
+  local frame = control.frame
+  while frame do
+    for index, region in ipairs(regions) do
+      if frame == region then return index end
+    end
+    frame = frame:GetParent()
+  end
+  return #regions + 1
+end
+
 local function Collect(root)
   for widget in pairs(widgets) do
     if widget.__puiAceGUIOwnedByPleebUI == true and BelongsTo(widget.frame, root) then
@@ -507,6 +520,7 @@ local function Collect(root)
     end
   end
   local result = {}
+  local regions = windows[root].regions
   for frame, control in pairs(controls) do
     if frame:IsVisible() and BelongsTo(frame, root)
       and control.kind ~= "popup"
@@ -519,11 +533,13 @@ local function Collect(root)
       local top, left = row:GetTop(), frame:GetLeft()
       if top and left then
         control.top, control.left = math.floor(top + 0.5), left
+        control.region = regions and ControlRegion(control, regions) or 1
         result[#result + 1] = control
       end
     end
   end
   table.sort(result, function(a, b)
+    if a.region ~= b.region then return a.region < b.region end
     if a.top ~= b.top then return a.top > b.top end
     if a.left ~= b.left then return a.left < b.left end
     return a.serial < b.serial
@@ -571,6 +587,25 @@ FocusControl = function(control)
   if current == control and windows[activeWindow].active and not windows[activeWindow].helpShown then
     ScrollIntoView(control.frame)
   end
+end
+
+function Navigation.SetRegions(root, regions)
+  (windows[root] or pendingWindows[root]).regions = regions
+end
+
+function Navigation.FocusRegion(root, index)
+  local state = windows[root]
+  if root ~= activeWindow or not state or not state.active or state.helpShown
+    or InCombatLockdown() or not WindowNavigationEnabled(state) then return false end
+  for _, control in ipairs(Collect(root)) do
+    if control.region == index then
+      state.restoreKey = nil
+      restoreGeneration = restoreGeneration + 1
+      FocusControl(control)
+      return true
+    end
+  end
+  return false
 end
 
 MoveFocus = function(direction)
@@ -774,6 +809,15 @@ function Navigation.HandleKey(key, autoFocus)
     return true
   end
   if not state.active and state.movers then return ns.FrameUtil.HandleEditModeKeyDown(key) == true end
+  if key == "TAB" and IsControlKeyDown() and state.regions and not popup then
+    state.active = true
+    local direction = IsShiftKeyDown() and -1 or 1
+    local index = current and ControlRegion(current, state.regions) or (direction > 0 and 0 or 1)
+    for step = 1, #state.regions do
+      if Navigation.FocusRegion(activeWindow, (index - 1 + direction * step) % #state.regions + 1) then return true end
+    end
+    return true
+  end
   if key == "TAB" then
     if not state.active and text and controls[text] then current = controls[text] end
     if popup then
@@ -903,7 +947,7 @@ function Navigation.BindWindow(root, movers, cancel, enabled, keyHandler)
   receiver:SetPropagateKeyboardInput(true)
   receiver:Hide()
   local state = { receiver = receiver, movers = movers, cancel = cancel, enabled = enabled,
-    keyHandler = keyHandler, guide = pending and pending.guide }
+    keyHandler = keyHandler, guide = pending and pending.guide, regions = pending and pending.regions }
   windows[root] = state
   receiver:SetScript("OnKeyDown", function(self, key)
     if InCombatLockdown() then self:Hide(); return end
