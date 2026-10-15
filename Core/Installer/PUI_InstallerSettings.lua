@@ -83,13 +83,13 @@ local function BuildOptions()
   local record = ns.Registry.Options[path[1]]
   local previousPath = ns._PUIActiveOptionsPath
   ns._PUIActiveOptionsPath = active.optionsPath
-  local options = record.factory(Addon):GetOptions()
+  local options = ns.GUI.CopyOptionsNode(record.factory(Addon):GetOptions())
   ns.OptionsSchema.Apply(options, path[1])
   local current = options
   for index = 2, #path do
     local child = ns.Registry.Options[path[index]]
     if child and child.parentKey == path[index - 1] then
-      current.args[path[index]] = child.factory(Addon):GetOptions()
+      current.args[path[index]] = ns.GUI.CopyOptionsNode(child.factory(Addon):GetOptions())
     end
     current = current.args[path[index]]
   end
