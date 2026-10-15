@@ -1994,7 +1994,7 @@ local PUI_COMPACT_INLINE_WIDGET_ROW_GEOMETRY = {
 
 function Theme.GetOptionsPointerTargetSize(baseSize)
   if Addon:GetOptionsDB().largerPointerTargets ~= true then return baseSize end
-  return math.max(baseSize, math.ceil(24 / Theme.GetOptionsUIScale()))
+  return math.max(baseSize, math.ceil(32 / Theme.GetOptionsUIScale()))
 end
 
 local optionsWidgetGeometrySignature
