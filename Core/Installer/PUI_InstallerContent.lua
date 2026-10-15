@@ -494,7 +494,10 @@ local function BuildPage(key)
       { "Raid buffs", { "unitframes", "raid", "auras", "customDisplays", "buffs" } },
       { "Raid debuffs", { "unitframes", "raid", "auras", "customDisplays", "debuffs" } },
       { "Raid defensives", { "unitframes", "raid", "auras", "customDisplays", "defensives" } },
-    }, 1, function(choice) Preview("unitframes", choice[2]); Settings(choice[2]) end)
+    }, 1, function(choice)
+      Text("Sample auras stay visible when a display is off. The controls below change your real UI.")
+      Preview("unitframes", choice[2]); Settings(choice[2])
+    end)
     Text("Tip: /pui > Unit Frames > Auras has spell lists, filters, and dispel highlighting.")
   elseif key == "bars" then
     Text("Action bars hold spells and items.\n• Start with shared button size and spacing.\n• Individual bar overrides are optional.")
