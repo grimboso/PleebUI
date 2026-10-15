@@ -210,21 +210,25 @@ local function Preview(kind, path)
   ns.InstallerPreview.Show(previewHost, kind, path)
   local states = ns.InstallerPreview.GetSampleStates(kind, path)
   if not states then Text("Static example · sample data.") return end
-  local status = Text("Example paused: " .. states.values[states.initial] .. ".")
+  local status = Text(states.values and ("Example paused: " .. states.values[states.initial] .. ".") or "Example paused. Two buttons animate when enabled.")
   local play
-  Dropdown("Sample state", states.values, states.order, states.initial, function(value)
-    ns.InstallerPreview.SetSample(value)
-    if play then play:SetValue(false) end
-    status:SetText("Example paused: " .. states.values[value] .. ".")
-  end)
+  if states.values then
+    Dropdown("Sample state", states.values, states.order, states.initial, function(value)
+      ns.InstallerPreview.SetSample(value)
+      if play then play:SetValue(false) end
+      status:SetText("Example paused: " .. states.values[value] .. ".")
+    end)
+  end
   if states.animated then
     play = Check("Animate this example", false, function(value)
       local enabled = ns.InstallerPreview.SetPlaying(value)
       play:SetValue(enabled)
-      status:SetText(enabled and "Example playing. Uncheck to pause." or "Example paused. Choose a sample state.")
+      status:SetText(enabled and "Example playing. Uncheck to pause." or "Example paused.")
     end, true)
     play:SetDisabled(not ns.OptionsMotion.IsEnabled())
-    if not ns.OptionsMotion.IsEnabled() then Text("Motion is off in Accessibility; sample states still work.") end
+    if not ns.OptionsMotion.IsEnabled() then
+      Text(states.values and "Motion is off in Accessibility; sample states still work." or "Motion is off in Accessibility.")
+    end
   end
 end
 
