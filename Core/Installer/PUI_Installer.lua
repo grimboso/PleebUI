@@ -3,6 +3,7 @@ local _, ns = ...
 local Addon = ns.Addon
 local Theme = ns.Theme
 local Content = ns.InstallerContent
+local OptionsTooltip = LibStub("AceConfigDialog-3.0").tooltip
 local InCombatLockdown = _G.InCombatLockdown
 local wizardFrame
 local currentPage = 1
@@ -671,6 +672,8 @@ local function BuildFrame()
   frame:SetPoint("CENTER")
   frame:SetClampedToScreen(true)
   frame:SetFrameStrata("FULLSCREEN_DIALOG")
+  frame:SetToplevel(true)
+  frame.__puiOptionsTooltipOwner = true
   frame:EnableMouse(true)
   frame:SetMovable(true)
   frame:SetResizable(true)
@@ -725,14 +728,16 @@ local function BuildFrame()
     button:SetScript("OnEnter", function(self)
       local page = pages[index]
       if not page then return end
-      GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-      GameTooltip:SetText(string.format("%02d. %s", index, page[2]))
-      GameTooltip:AddLine(page[4], 1, 1, 1, true)
-      GameTooltip:Show()
+      OptionsTooltip:SetOwner(self, "ANCHOR_RIGHT")
+      OptionsTooltip:SetText(string.format("%02d. %s", index, page[2]))
+      OptionsTooltip:AddLine(page[4], 1, 1, 1, true)
+      OptionsTooltip:Show()
     end)
-    button:SetScript("OnLeave", function() GameTooltip:Hide() end)
+    button:SetScript("OnLeave", function()
+      if OptionsTooltip:GetOwner() == button then OptionsTooltip:Hide() end
+    end)
     button:HookScript("OnHide", function(self)
-      if GameTooltip:IsOwned(self) then GameTooltip:Hide() end
+      if OptionsTooltip:GetOwner() == self then OptionsTooltip:Hide() end
     end)
     frame.PageButtons[index] = button
   end
@@ -860,10 +865,10 @@ ShowInstaller = function()
   local screenHeight = UIParent:GetHeight() / wizardFrame:GetScale()
   wizardFrame:SetSize(math.min(1170, screenWidth - 24), math.min(820, screenHeight - 24))
   wizardFrame:Show()
+  wizardFrame:Raise()
   wizardFrame.Canvas:SetWidth(math.max(480, wizardFrame.Scroll:GetWidth() - 4))
   RefreshPage()
   if InCombatLockdown() then Content.Suspend(wizardFrame.Content) end
-  wizardFrame:Raise()
 end
 
 function Addon:IsInstallWizardPending()
