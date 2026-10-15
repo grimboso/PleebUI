@@ -75,7 +75,7 @@ function Addon:Slash_PUI(input)
     return
   end
 
-  if command == "install" or command == "setup" then
+  if command == "install" or command == "instal" or command == "setup" then
     self:ShowInstallWizard(true)
     return
   end
