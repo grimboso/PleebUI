@@ -12,6 +12,45 @@ local PluginMixin = {}
 local plugins = ns.Registry.Plugins
 local unitFrameDisplayNameListeners = {}
 
+local PluginOverview = {}
+
+function PluginOverview:GetOptions()
+  local names = {}
+  for _, plugin in pairs(plugins) do
+    names[#names + 1] = plugin.name
+  end
+  table.sort(names)
+
+  return {
+    type = "group",
+    name = "Plugins",
+    args = {
+      information = {
+        type = "description",
+        name = "Plugins add integrations and settings to PleebUI. Expand Plugins in the navigation to open a plugin's settings.",
+        order = 1,
+        fontSize = "medium",
+        width = "full",
+      },
+      available = {
+        type = "description",
+        name = #names > 0 and ("Registered plugins:\n" .. table.concat(names, "\n")) or "No plugins are registered.",
+        order = 2,
+        width = "full",
+      },
+    },
+  }
+end
+
+local pluginOverviewRecord = Addon:RegisterOptionsSection("PluginsOverview", function()
+  return PluginOverview
+end, 1000, "Plugins", nil, {
+  navDescription = "Integration settings and registered plugins.",
+  pageTitle = "Plugins",
+  pageDescription = "View registered plugins and configure their integrations.",
+})
+pluginOverviewRecord.disableProviderCache = true
+
 local MOVER_OPTION_KEYS = {
   "isAvailable",
   "onPreviewVisibilityChanged",

@@ -37,10 +37,8 @@ ns.Pixel = {}
 local Addon = AceAddon:NewAddon(ADDON_NAME, "NumyAceEvent-3.0")
 ns.Addon = Addon
 
-function Addon:Print(message)
-  local text = "|cff33ff99" .. ADDON_NAME .. "|r: " .. tostring(message)
-  DEFAULT_CHAT_FRAME:AddMessage(text)
-  ns.Registry.ChatLinks:RevealChatForMessage()
+function Addon:Print()
+  -- Temporarily suppress addon messages while isolating incoming-whisper taint.
 end
 
 function Addon:PUI_ResetAndReload(resetFn)
