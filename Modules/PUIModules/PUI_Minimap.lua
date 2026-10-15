@@ -628,7 +628,6 @@ local function ApplyClockCoordsBox(db)
   local tracking = (cluster and cluster.Tracking) or nil
   local calendar = _G.GameTimeFrame
   local mail = cluster and cluster.IndicatorFrame.MailFrame
-  local addonCompartment = _G.AddonCompartmentFrame
 
   if tracking and tracking.IsForbidden and tracking:IsForbidden() then
     tracking = nil
@@ -638,20 +637,6 @@ local function ApplyClockCoordsBox(db)
   end
   if mail and mail.IsForbidden and mail:IsForbidden() then
     mail = nil
-  end
-  if addonCompartment and addonCompartment.IsForbidden and addonCompartment:IsForbidden() then
-    addonCompartment = nil
-  end
-
-  -- Hide Blizzard Addon Compartment button.
-  if addonCompartment then
-    addonCompartment:Hide()
-    if not addonCompartment.__pui_hideHooked then
-      addonCompartment.__pui_hideHooked = true
-      hooksecurefunc(addonCompartment, "Show", function(self)
-        self:Hide()
-      end)
-    end
   end
 
   local showTracking = tracking and db.hideTracking ~= true
@@ -691,7 +676,6 @@ local function ApplyClockCoordsBox(db)
     if showCoords then
       coordsFS:Show()
     else
-      coordsFS:SetText("")
       coordsFS:Hide()
     end
   end
@@ -974,7 +958,29 @@ local function ApplyClockCoordsBox(db)
   box:Show()
 end
 
+local function ApplyAddonCompartmentVisibility(enabled)
+  local compartment = _G.AddonCompartmentFrame
+  if not compartment or compartment:IsForbidden() then
+    return
+  end
+
+  if enabled then
+    if not compartment.__pui_hideHooked then
+      compartment.__pui_hideHooked = true
+      compartment:HookScript("OnShow", function(self)
+        if MinimapModule:IsEnabled() and MinimapModule.db.profile.enabled then
+          self:Hide()
+        end
+      end)
+    end
+    compartment:Hide()
+  elseif compartment.__pui_hideHooked then
+    compartment:UpdateDisplay()
+  end
+end
+
 local function ApplyMinimapElementHides(db)
+  ApplyAddonCompartmentVisibility(true)
 
   local cluster = _G.MinimapCluster
   local boxOn = (db and db.clockBoxEnabled) and true or false
@@ -1373,6 +1379,7 @@ function MinimapModule:OnProfileChanged()
   ns.MinimapData.Initialize()
 
   if not db.enabled then
+    ApplyAddonCompartmentVisibility(false)
     local cluster = _G.MinimapCluster
     _CancelClockCoordinateTicker(cluster and cluster.__pui_clockBox)
     return
@@ -1389,6 +1396,7 @@ function MinimapModule:RefreshFromOptions(flags)
   ns.MinimapData.Initialize()
 
   if not db.enabled then
+    ApplyAddonCompartmentVisibility(false)
     local cluster = _G.MinimapCluster
     _CancelClockCoordinateTicker(cluster and cluster.__pui_clockBox)
     return
@@ -1483,6 +1491,7 @@ function MinimapModule:OnEnable()
 end
 
 function MinimapModule:OnDisable()
+  ApplyAddonCompartmentVisibility(false)
   ns.MinimapData.SetBucketEnabled(false)
   self:UnregisterEvent("PLAYER_MAP_CHANGED")
   self:UnregisterEvent("PLAYER_ENTERING_WORLD")
@@ -1901,6 +1910,7 @@ end
   _CancelClockCoordinateTicker = P:Def("_CancelClockCoordinateTicker", _CancelClockCoordinateTicker)
   MinimapModule.RefreshCoordinateUpdates = P:Def("MinimapModule.RefreshCoordinateUpdates", MinimapModule.RefreshCoordinateUpdates)
   ApplyClockCoordsBox = P:Def("ApplyClockCoordsBox", ApplyClockCoordsBox)
+  ApplyAddonCompartmentVisibility = P:Def("ApplyAddonCompartmentVisibility", ApplyAddonCompartmentVisibility)
   ApplyMinimapElementHides = P:Def("ApplyMinimapElementHides", ApplyMinimapElementHides)
   ApplySquareMask = P:Def("ApplySquareMask", ApplySquareMask)
   PleebUI_GetMinimapShape = P:Def("PleebUI_GetMinimapShape", PleebUI_GetMinimapShape)
