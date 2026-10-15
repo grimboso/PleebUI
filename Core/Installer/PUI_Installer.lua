@@ -673,6 +673,7 @@ local function BuildFrame()
   frame:SetClampedToScreen(true)
   frame:SetFrameStrata("FULLSCREEN_DIALOG")
   frame:SetToplevel(true)
+  frame.__puiOwnedApp = "PleebUI"
   frame.__puiOptionsTooltipOwner = true
   frame:EnableMouse(true)
   frame:SetMovable(true)
