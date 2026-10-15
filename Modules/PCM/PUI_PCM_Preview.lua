@@ -2868,7 +2868,7 @@ local function PCMPreview_RenderInstallerIcon(host, entry, draft, state)
     or 1
   local count = entry.kind == "charge"
       and (state == "READY" and maximum or state == "EMPTY" and 0 or math_max(0, maximum - 1))
-    or entry.kind == "stack"
+    or entry.kind == "stack" and state == "ACTIVE"
       and math_max(1, math_floor(maximum * 0.6 + 0.5))
     or 0
   local cooldownActive = state == "COOLDOWN" or state == "RECHARGING" or state == "EMPTY" or state == "ACTIVE"
