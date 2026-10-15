@@ -3139,6 +3139,8 @@ function Addon:RefreshOptionsTheme()
   ns.OptionsMotion.Reset()
   local frame = self._OptionsWindow
   if not frame then
+    ns.AceHooks.RefreshOwnedWidgets()
+    ns.KeyboardNavigation.RefreshWindows()
     return
   end
 
