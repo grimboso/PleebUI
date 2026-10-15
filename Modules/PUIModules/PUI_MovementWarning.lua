@@ -555,6 +555,7 @@ local function MovementWarning_BuildPreview(_, _, shell)
     root:SetScript("OnSizeChanged", function() MovementWarning:RefreshOptionsPreview() end)
   end
   optionsPreview:SetParent(host)
+  shell.__puiMovementWarningPreviewRoot = optionsPreview
   optionsPreview:ClearAllPoints()
   optionsPreview:SetAllPoints(host)
   optionsPreview:Show()
