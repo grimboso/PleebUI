@@ -106,8 +106,8 @@ local ROOT_CONTROLS = {
     { "controls/animateOptions", "Animate options", optional = true },
   },
   UITheme = {
-    { "fonts/font", "Global font" }, { "fonts/outline", "Global outline" },
-    { "optionsLayout/uiScale/UIScale", "Game UI scale (all characters)" },
+    { "text/global/font", "Global font" }, { "text/global/outline", "Global outline" },
+    { "layout/uiScale/UIScale", "Game UI scale (all characters)" },
   },
   Chat = {
     { "general/features/enabled", "Enable chat styling" },
