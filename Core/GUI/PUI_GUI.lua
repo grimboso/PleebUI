@@ -3295,6 +3295,7 @@ local function _PUI_ApplySelectedOptionsPath(path)
 
   _PUI_RecordOptionsHistory(path)
 
+  local selectionChanged = not _PUI_OptionsPathsEqual(State.currentOptionsPath, path)
   local previousPagePathKey = _PUI_GetOptionsPagePathKey(State.currentOptionsPath)
   local nextPagePathKey = _PUI_GetOptionsPagePathKey(path)
   local pageChanged = previousPagePathKey ~= nextPagePathKey
@@ -3328,6 +3329,7 @@ local function _PUI_ApplySelectedOptionsPath(path)
   if pageChanged then
     _PUI_RefreshCustomPageShell(frame, path)
   end
+  if selectionChanged then ns.KeyboardNavigation.QueueFocusRegion(frame, 4) end
   return true, optionsModelChanged
 end
 
@@ -3511,6 +3513,7 @@ local function _PUI_EnsureCustomOptionsFrame()
     ns.KeyboardNavigation.BindWindow(frame)
     ns.KeyboardNavigation.AttachGuide(frame, {
       bottom = 62,
+      text = "Ctrl+Tab Areas · Tab Next control · Enter Select · F1 Help",
       layout = function() _PUI_EnsurePleebUIOptionsChrome(frame) end,
     })
 
@@ -3586,6 +3589,9 @@ _PUI_RefreshCustomPageShell = function(frame, path)
   local contentShell = frame.__puiContentShell
   local shell = ns.PageShell.Ensure(contentShell)
   frame.__puiPageShell = shell
+  ns.KeyboardNavigation.SetRegions(frame, {
+    frame.__puiNavShell, shell.stickyStrip, shell.previewDock, shell.contentHost, frame,
+  })
 
   shell:SetParent(contentShell)
   shell:SetFrameStrata(frame:GetFrameStrata())
@@ -4044,7 +4050,10 @@ local function _PUI_RenderCustomOptionsPath(frame, AceConfigDialog, APP, path)
   frame.__puiSelectedOptionsPathKey = pathKey
   frame.__puiRenderingOptionsPath = nil
 
-  if revealContent then ns.OptionsMotion.Reveal(shell.body) end
+  if revealContent then
+    ns.OptionsMotion.Reveal(shell.body)
+    ns.KeyboardNavigation.QueueFocusRegion(frame, 4)
+  end
 
   local queuedPath = frame.__puiQueuedOptionsPath
   frame.__puiQueuedOptionsPath = nil
