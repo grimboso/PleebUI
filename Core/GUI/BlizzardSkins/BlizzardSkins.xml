@@ -1,5 +1,7 @@
 <Ui xmlns="http://www.blizzard.com/wow/ui/">
   <Script file="PUI_IconSelector.lua"/>
+  <Script file="PUI_Bank.lua"/>
+  <Script file="PUI_GuildBank.lua"/>
   <Script file="PUI_Macros.lua"/>
   <Script file="PUI_AddOnList.lua"/>
   <Script file="PUI_TimeManager.lua"/>
