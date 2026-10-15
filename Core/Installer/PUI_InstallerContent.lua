@@ -3,7 +3,7 @@ local Addon, Theme = ns.Addon, ns.Theme
 local AceGUI = LibStub("AceGUI-3.0")
 local Content = {}
 ns.InstallerContent = Content
-local callbacks, host, group, previewHost, settingsHost, practice
+local callbacks, host, group, previewHost, settingsHost, settingsPanel, practice
 local selected = {}
 local drafts = {}
 local activeKey
@@ -178,22 +178,27 @@ local function Panel(height)
   widget:SetHeight(height)
   widget:SetLayout("Fill")
   Add(widget)
-  return widget.content
+  return widget.content, widget
 end
 
 local function Settings(path)
   Heading("Start with these settings")
-  local parent = Panel(360)
+  local parent
+  parent, settingsPanel = Panel(1)
   settingsHost:SetParent(parent)
   settingsHost:ClearAllPoints()
-  settingsHost:SetAllPoints(parent)
+  settingsHost:SetPoint("TOPLEFT", parent, "TOPLEFT")
+  settingsHost:SetPoint("TOPRIGHT", parent, "TOPRIGHT")
   settingsHost:Show()
   ns.InstallerSettings.Show(settingsHost, path)
   Action("Open full settings for this feature", function() callbacks.openOptions(path) end)
 end
 
 local function Preview(kind, path)
-  local parent = Panel(335)
+  local height = kind == "unitframes" and (path[2] == "party" or path[2] == "raid") and 220
+    or kind == "unitframes" and 150 or 335
+  if kind == "unitframes" then Heading("Example · sample data") end
+  local parent = Panel(height)
   previewHost:SetParent(parent)
   previewHost:ClearAllPoints()
   previewHost:SetAllPoints(parent)
@@ -644,7 +649,12 @@ function Content.Create(parent, handlers)
     host:SetHeight(height + 16)
     callbacks.resize(height + 16)
   end
-  settingsHost = ns.InstallerSettings.Create(host, 0)
+  settingsHost = ns.InstallerSettings.Create(host, 0, function(height)
+    if settingsPanel and settingsPanel.frame:GetHeight() ~= height then
+      settingsPanel:SetHeight(height)
+      if not rebuilding then group:DoLayout() end
+    end
+  end)
   host.Settings = settingsHost
   settingsHost:Hide()
   previewHost = CreateFrame("Frame", nil, host)
@@ -666,6 +676,7 @@ function Content.Suspend()
 end
 
 function Content.Hide()
+  settingsPanel = nil
   ns.InstallerPreview.Hide()
   ns.InstallerSettings.Hide(settingsHost)
   settingsHost:Hide()
