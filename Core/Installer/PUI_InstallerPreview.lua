@@ -17,6 +17,7 @@ for _, owner in pairs(owners) do
   owner.state = { zoom = 1, pcmZooms = {} }
   function owner:GetPreviewState() return self.state end
 end
+owners.prd.state.allowReorder = false
 
 function Preview.SetOpenOptions(callback)
   openOptions = callback
