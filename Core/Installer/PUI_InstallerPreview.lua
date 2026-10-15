@@ -1,6 +1,18 @@
 local _, ns = ...
 local Preview = {}
 ns.InstallerPreview = Preview
+Preview.SampleStates = {
+  unitframes = { values = { [25] = "Low: 25%", [60] = "Medium: 60%", [100] = "Full: 100%" }, order = { 25, 60, 100 }, initial = 60 },
+  auras = { values = { ACTIVE = "Active", EXPIRING = "Expiring: 1 second left", INACTIVE = "Inactive: no auras" }, order = { "ACTIVE", "EXPIRING", "INACTIVE" }, initial = "ACTIVE", animated = true },
+  prd = { values = { [0] = "Empty", [0.5] = "Half full", [1] = "Full" }, order = { 0, 0.5, 1 }, initial = 0.5, animated = true },
+  actionbars = { values = { READY = "Ready", COOLDOWN = "On cooldown", ENDING = "Almost ready" }, order = { "READY", "COOLDOWN", "ENDING" }, initial = "COOLDOWN", animated = true },
+  cooldowns = { values = { [0] = "Start of sample", [4] = "4 seconds into sample", [8] = "8 seconds into sample" }, order = { 0, 4, 8 }, initial = 4, animated = true },
+}
+
+function Preview.GetSampleStates(kind, path)
+  return Preview.SampleStates[kind == "unitframes" and path[4] == "customDisplays" and "auras" or kind]
+end
+
 local owners = { unitframes = {}, actionbars = {}, cooldowns = {}, prd = {}, quality = {}, meters = {}, everyday = {}, movement = {} }
 local settingsRoots = { unitframes = "unitframes", actionbars = "ACTIONBARS", cooldowns = "CooldownManager", prd = "PRD", quality = "Quality" }
 local current
@@ -83,15 +95,53 @@ local function BuildCurrent()
   owner.previewHost = request.host
   if request.kind == "unitframes" then
     request.box = ns.UFPreview.BuildInstallerPreview(request.host, owner, request.path)
+    if request.path[4] == "customDisplays" then
+      if not request.playing then
+        for index = 1, request.box.__puiAuraPreviewIconPoolIndex do
+          local icon = request.box.__puiAuraPreviewIconPool[index]
+          local duration = icon.__puiAuraPreviewDurationValue
+          local remaining = request.sample == "EXPIRING" and 1 or duration * 0.75
+          icon.__puiAuraPreviewExpiration = GetTime() + remaining
+          icon.Cooldown:SetCooldown(GetTime() - duration + remaining, duration)
+          icon.Duration:SetText(ns.UFAuraButtons.DurationFormatter:FormatNumber(remaining))
+          icon:SetShown(request.sample ~= "INACTIVE")
+        end
+      end
+    else
+      for _, frame in ipairs(request.box.__puiAuraPreviewFramePool) do
+        if frame:IsShown() then
+          local provider = frame.__puiPresentationProvider
+          provider.health, provider.power = request.sample, request.sample
+          provider.healthText, provider.powerText = request.sample .. "%", request.sample .. "%"
+          ns.UFPresentation.ApplyVisibility(frame, { config = frame.config, forceShown = true })
+        end
+      end
+    end
   elseif request.kind == "actionbars" then
     ns.ActionBarsPreview.Build(navigation, owner, owner, request.path)
     request.box = owner.__puiActionBarsPreviewBox
+    if not request.playing then
+      local cooldown = request.box.sampleCooldown
+      cooldown.previewEnabled = false
+      if request.sample == "READY" then cooldown:Clear()
+      else cooldown:SetCooldown(GetTime() - (request.sample == "ENDING" and 4 or 2), 5) end
+    end
   elseif request.kind == "cooldowns" then
     ns.PCMPreview.Build(navigation, owner, owner, request.path)
     request.box = owner.__puiPCMPreviewBox
+    if not request.playing then
+      request.box.__puiPCMPreviewPhase = request.sample
+      ns.PCMPreview.RefreshBox(request.box)
+    end
   elseif request.kind == "prd" then
+    owner.state.paused = not request.playing
+    owner.state.sample = nil
+    if not request.playing then owner.state.sample = request.sample end
     ns.PRDPreview.Build(navigation, owner, owner)
     request.box = owner.__puiPRDPreviewBox
+    request.box.__puiPRDPreviewPauseButton:Hide()
+    request.box.__puiPRDPreviewSampleButton:Hide()
+    request.box:SetDescription("Sample values only. Choose a state below; your real resources are unchanged.")
   elseif request.kind == "quality" then
     ns.Registry.Options.Quality.meta.page.buildPreview(navigation, owner, owner, request.path)
     request.box = owner.__puiQualityPreviewRoot
@@ -108,7 +158,8 @@ end
 
 function Preview.Show(host, kind, path)
   Preview.Hide()
-  current = { host = host, kind = kind, path = path, playing = false }
+  local states = Preview.GetSampleStates(kind, path)
+  current = { host = host, kind = kind, path = path, playing = false, sample = states and states.initial }
   BuildCurrent()
 end
 
@@ -141,6 +192,12 @@ function Preview.GetDraftState()
   return current and current.state
 end
 
+function Preview.SetSample(value)
+  StopDraftTimer()
+  current.playing, current.sample = false, value
+  BuildCurrent()
+end
+
 AdvanceDraft = function()
   draftTimer = nil
   if not current or not current.draft or not current.playing
@@ -161,7 +218,8 @@ end
 function Preview.SetPlaying(enabled)
   if not current then return end
   StopDraftTimer()
-  current.playing = enabled == true and ns.OptionsMotion.IsEnabled()
+  local states = Preview.GetSampleStates(current.kind, current.path)
+  current.playing = enabled == true and ns.OptionsMotion.IsEnabled() and (current.draft ~= nil or states and states.animated == true) or false
   if current.playing and current.draft then AdvanceDraft() else BuildCurrent() end
   return current.playing
 end
