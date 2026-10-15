@@ -633,15 +633,20 @@ function Content.Create(parent, handlers)
   group.frame:SetFrameLevel(host:GetFrameLevel() + 1)
   group.frame:SetPoint("TOPLEFT", host, "TOPLEFT", 8, -8)
   ns.AceHooks.TakeOwnership(group)
-  group.frame:HookScript("OnSizeChanged", function(_, _, height)
-    if height > 0 then host:SetHeight(height + 16); callbacks.resize(height + 16) end
-  end)
+  function group:LayoutFinished(_, height)
+    self:SetHeight(height)
+    host:SetHeight(height + 16)
+    callbacks.resize(height + 16)
+  end
   settingsHost = ns.InstallerSettings.Create(host, 0)
   settingsHost:Hide()
   previewHost = CreateFrame("Frame", nil, host)
   previewHost:Hide()
   host:SetScript("OnSizeChanged", function(_, width)
-    if width > 0 then group:SetWidth(math.max(450, width - 16)) end
+    if width > 0 then
+      local contentWidth = math.max(450, width - 16)
+      if group.frame:GetWidth() ~= contentWidth then group:SetWidth(contentWidth) end
+    end
   end)
   ns.InstallerPreview.SetOpenOptions(callbacks.openOptions)
   return host
@@ -668,13 +673,13 @@ end
 function Content.Show(_, key)
   if rebuilding then return end
   rebuilding = true
+  group:PauseLayout()
   Content.Hide()
   activeKey = key
-  if InCombatLockdown() then rebuilding = nil return end
+  if InCombatLockdown() then group:ResumeLayout(); rebuilding = nil return end
   group.frame:SetFrameStrata(host:GetFrameStrata())
   group.frame:SetFrameLevel(host:GetFrameLevel() + 1)
   group:SetWidth(math.max(450, host:GetWidth() - 16))
-  group:PauseLayout()
   BuildPage(key)
   group:ResumeLayout()
   group.frame:Show()
