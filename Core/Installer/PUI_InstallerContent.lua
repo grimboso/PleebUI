@@ -263,24 +263,8 @@ local function TrackerPage(key)
     draft.presentation = value
     Rebuild()
   end)
-  local values, order = ns.Modules.CooldownManager:GetCustomBarSpellDropdown(
-    (draft.kind == "stack" or draft.kind == "duration") and "aura" or "cooldown")
-  if draft.kind == "charge" then
-    local eligible = {}
-    for _, entry in ipairs(ns.PCMAbilityCatalog:GetEntries()) do
-      if entry.hasCharges == true then
-        eligible[tostring(entry.chargeSpellID)] = true
-        eligible[tostring(entry.staticDisplaySpellID)] = true
-        eligible[tostring(entry.spellID)] = true
-      end
-    end
-    local filteredValues, filteredOrder = { none = "Demonstration only" }, { "none" }
-    for _, id in ipairs(order) do
-      if eligible[id] then filteredValues[id] = values[id]; filteredOrder[#filteredOrder + 1] = id end
-    end
-    values, order = filteredValues, filteredOrder
-    if #order == 1 then Text("No eligible charge spell is currently available in your tracked-spell list. You can still try every sample state.") end
-  end
+  local values, order, canCreate, reason = ns.PCMCustomTrackerInstaller:GetDraftChoices(draft)
+  if reason then Text(reason) end
   Dropdown("Tracked spell", values, order, draft.spellID and tostring(draft.spellID) or "none", function(value)
     draft.spellID = value ~= "none" and tonumber(value) or nil
     Rebuild()
@@ -330,7 +314,11 @@ local function TrackerPage(key)
     Text("You have an unfinished tracker in the creator. Continue it first; this sample does not replace it.")
     Action("Continue unfinished tracker", function() callbacks.openTracker() end)
   else
-    Action("Create this tracker", function() callbacks.openTracker(draft) end, draft.spellID == nil)
+    Action("Create this tracker", function()
+      local _, _, available, message = ns.PCMCustomTrackerInstaller:GetDraftChoices(draft)
+      if not available then callbacks.status(message); Rebuild(); return end
+      callbacks.openTracker(draft)
+    end, not canCreate)
   end
   Details({ "CooldownManager", "customTrackers" }, "Cooldown Manager / Custom trackers")
 end
@@ -491,7 +479,7 @@ local function BuildPage(key)
     choices[#choices + 1] = { "Stance bar", { "ACTIONBARS", "special", "stance" } }
     Choices("Action bar", choices, 1, function(choice) Preview("actionbars", choice[2]); Settings(choice[2]) end)
     Text("Vehicle, override, possess, extra-action, and zone-ability behavior follows its existing secure owner. Keep the required special controls visible and check them in the appropriate game situation.")
-    Action("Open keybind mode", function() callbacks.closeForOptions(); ns.ActionBarsCore.LibKeyBound:Toggle() end)
+    Action("Open keybind mode", callbacks.openKeybinds)
   elseif key == "prd" then
     Text("Health and primary power are independent bars. Set height and text below; detached bars have their own width and position. Use the preview arrows to change the actual stack order.")
     Check("Enable Personal Resource Display", ns.Modules.PRD:IsModuleEnabled(), function(value) ns.Modules.PRD:SetModuleEnabled(value) end)
@@ -526,7 +514,7 @@ local function BuildPage(key)
     end
     if #choices > 0 then Choices("Group", choices, 1, function(choice) Preview("cooldowns", choice[2]); Settings(choice[2]) end) end
     Text("Tracked spell selection belongs to Blizzard. Add the spells you want there, then style their displays here.")
-    Action("Choose tracked spells", function() callbacks.closeForOptions(); CooldownViewerSettings:TogglePanel() end)
+    Action("Choose tracked spells", callbacks.openTrackedSpells)
     Details({ "CooldownManager", "groups" }, "Cooldown Manager / Groups")
   elseif key == "trackerCooldown" or key == "trackerStacks" or key == "trackerCharges" then
     TrackerPage(key)
