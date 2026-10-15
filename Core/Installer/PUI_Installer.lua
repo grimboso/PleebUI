@@ -449,7 +449,7 @@ local PAGE_DEFINITIONS = {
   { "welcome", "Welcome", nil, "Meet PleebUI and choose comfortable text, controls, and accessibility settings." },
   { "profiles", "Profiles", nil, "Choose where to save your settings and which setup chapters to include." },
   { "appearance", "Appearance", nil, "Adjust fonts, scale, colors, and combat readability." },
-  { "navigation", "Options guide", nil, "Practice using categories, tabs, and controls without changing your settings." },
+  { "navigation", "Find settings", nil, "Learn how to use setup, find full settings, and return to the same page." },
   { "unitframes", "Unit frames", "frames", "Configure player, target, focus, pet, and boss frames." },
   { "group", "Group frames", "frames", "Set up party and raid layouts and their indicators." },
   { "auras", "Auras", "frames", "Explore buffs, debuffs, tracked effects, and dispel indicators." },
