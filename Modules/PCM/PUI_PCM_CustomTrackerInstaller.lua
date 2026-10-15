@@ -115,6 +115,12 @@ local function NewDraft()
   }
 end
 
+function Installer:CreateDraft(kind)
+  local value = NewDraft()
+  value.kind = kind
+  return value
+end
+
 local function DefaultPreviewState()
   if draft.kind == "charge" then
     return "RECHARGING"
@@ -701,6 +707,7 @@ local function BuildFrame()
   window.Next = nextButton
 
   local finish = CreateWindowButton(window, "Finish tracker", 160, function()
+    if InCombatLockdown() then return end
     local key = ns.PCM_CreateCustomTrackerFromDraft(draft)
     if key then
       local returnToCustomTrackerPage = closeCallback ~= nil
@@ -709,11 +716,11 @@ local function BuildFrame()
       page = 1
       window:Hide()
 
+      if returnToCustomTrackerPage then return end
+
       C_Timer.After(0, function()
         local path = { "CooldownManager", "customTrackers" }
-        if not returnToCustomTrackerPage then
-          path[3] = key
-        end
+        path[3] = key
         if not Addon:NavigateOpenOptionsPath(path) then
           Addon:OpenOptions(path, false, true)
         end
@@ -725,7 +732,10 @@ local function BuildFrame()
   window.Finish = finish
 
   CreatePreview(window)
+  window:SetScript("OnShow", function() window:RegisterEvent("PLAYER_REGEN_DISABLED") end)
+  window:SetScript("OnEvent", function() window:Hide() end)
   window:SetScript("OnHide", function()
+    window:UnregisterAllEvents()
     StopPreviewAdvance()
     ns.PCMPreview.HideInstallerDraft(window.PreviewHost)
 
@@ -742,9 +752,10 @@ local function BuildFrame()
   return window
 end
 
-function Installer:Open(onClose)
+function Installer:Open(onClose, initialDraft)
+  if InCombatLockdown() then return end
   if not draft then
-    draft = NewDraft()
+    draft = initialDraft and CopyTable(initialDraft) or NewDraft()
     page = 1
   end
   closeCallback = onClose
