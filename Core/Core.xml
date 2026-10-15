@@ -33,7 +33,11 @@
   <Script file="PUI_TestMode.lua"/>
   <Script file="PUI_EditModeGuidePractice.lua"/>
   <Script file="PUI_EditModeInput.lua"/>
-  <Script file="PUI_Onboarding.lua"/>
+  <Script file="Installer\PUI_InstallerSettings.lua"/>
+  <Script file="Installer\PUI_InstallerExamples.lua"/>
+  <Script file="Installer\PUI_InstallerPreview.lua"/>
+  <Script file="Installer\PUI_InstallerContent.lua"/>
+  <Script file="Installer\PUI_Installer.lua"/>
   <Script file="PUI_WhatsNew.lua"/>
   <Script file="GUI\PUI_AceHooks.lua"/>
   <Script file="PUI_IconSkin.lua"/>
