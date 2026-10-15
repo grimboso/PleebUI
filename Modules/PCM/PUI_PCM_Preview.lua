@@ -2867,11 +2867,11 @@ local function PCMPreview_RenderInstallerIcon(host, entry, draft, state)
       and math_max(1, math_floor(tonumber(config.maxStacks) or 3))
     or 1
   local count = entry.kind == "charge"
-      and (state == "READY" and maximum or math_max(1, maximum - 1))
+      and (state == "READY" and maximum or state == "EMPTY" and 0 or math_max(0, maximum - 1))
     or entry.kind == "stack"
       and math_max(1, math_floor(maximum * 0.6 + 0.5))
     or 0
-  local cooldownActive = state == "COOLDOWN" or state == "RECHARGING" or state == "ACTIVE"
+  local cooldownActive = state == "COOLDOWN" or state == "RECHARGING" or state == "EMPTY" or state == "ACTIVE"
   local size = math_max(20, tonumber(iconConfig.size) or 40)
 
   Presentation.Apply("PCMIcon", icon, {
@@ -2898,7 +2898,7 @@ local function PCMPreview_RenderInstallerIcon(host, entry, draft, state)
   }, {
     icon = entry.texture,
     cooldownText = cooldownActive and iconConfig.showDuration == true and "3" or "",
-    chargeText = iconConfig.showCount == true and count > 0 and tostring(count) or "",
+    chargeText = iconConfig.showCount == true and (entry.kind == "charge" or count > 0) and tostring(count) or "",
     glow = false,
   })
 
@@ -2910,7 +2910,7 @@ local function PCMPreview_RenderInstallerIcon(host, entry, draft, state)
   icon.cooldown:SetDrawEdge(cooldownActive and iconConfig.showSwipe == true)
   icon.cooldown:SetShown(cooldownActive and iconConfig.showSwipe == true)
   icon.cooldownText:SetShown(cooldownActive and iconConfig.showDuration == true)
-  icon.chargeText:SetShown(iconConfig.showCount == true and count > 0)
+  icon.chargeText:SetShown(iconConfig.showCount == true and (entry.kind == "charge" or count > 0))
 
   if cooldownActive and iconConfig.showSwipe == true then
     icon.cooldown:SetCooldown(GetTime(), 3)
@@ -3007,12 +3007,12 @@ local function PCMPreview_RenderInstallerBar(host, entry, draft, state)
 
   if entry.kind == "charge" then
     local maximum = bar.__puiPCMPreviewMaxCharges or PCMPreview_GetLiveMaxCharges(entry.spellID)
-    local count = state == "READY" and maximum or math_max(0, maximum - 1)
+    local count = state == "READY" and maximum or state == "EMPTY" and 0 or math_max(0, maximum - 1)
     PCMPresentation.ApplyChargeCount(bar.chargePresentation, count)
     for index = 1, maximum do
       local slot = bar.chargeSlots[index]
       if slot then
-        local recharging = state == "RECHARGING" and index == count + 1
+        local recharging = (state == "RECHARGING" or state == "EMPTY") and index == count + 1
         slot.rechargeBar:SetShown(recharging)
         if recharging then
           slot.rechargeBar:SetMinMaxValues(0, 1)
@@ -3020,6 +3020,9 @@ local function PCMPreview_RenderInstallerBar(host, entry, draft, state)
         end
       end
     end
+    PCMPresentation.AnchorChargeTimerText(bar.chargePresentation, config, state ~= "READY")
+    bar.chargePresentation.timerText:SetText(state == "READY" and "" or "3")
+    bar.chargePresentation.timerText:SetShown(config.showText ~= false and state ~= "READY")
   elseif entry.kind == "stack" then
     local maximum = bar.__puiPCMPreviewMaxStacks or math_max(1, tonumber(config.maxStacks) or 3)
     local count = state == "ACTIVE" and math_max(1, math_floor(maximum * 0.6 + 0.5)) or 0
@@ -3068,20 +3071,11 @@ function PCMPreview.RenderInstallerDraft(host, draft, state)
   end
 
   local entry = PCMPreview_BuildInstallerEntry(draft)
-  local icon = host.__puiPCMInstallerIcon
-  local bar = host.__puiPCMInstallerBar
+  PCMPreview.HideInstallerDraft(host)
 
   if draft.presentation == "BUTTON" then
-    if bar then
-      bar.frame:Hide()
-      PCMPreview_HideGlow(bar)
-    end
     PCMPreview_RenderInstallerIcon(host, entry, draft, state)
   else
-    if icon then
-      icon.frame:Hide()
-      PCMPreview_HideGlow(icon)
-    end
     PCMPreview_RenderInstallerBar(host, entry, draft, state)
   end
 end
@@ -3094,12 +3088,16 @@ function PCMPreview.HideInstallerDraft(host)
   local icon = host.__puiPCMInstallerIcon
   if icon then
     PCMPreview_HideGlow(icon)
+    icon.cooldown:Clear()
     icon.frame:Hide()
   end
 
   local bar = host.__puiPCMInstallerBar
   if bar then
     PCMPreview_HideGlow(bar)
+    bar.durationCooldown:Clear()
+    bar.durationFrame:Hide()
+    bar.durationIconFrame:Hide()
     bar.frame:Hide()
   end
 end
