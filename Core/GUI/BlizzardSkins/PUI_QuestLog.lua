@@ -132,6 +132,15 @@ local function InstallQuestLog(frame)
   Skins.Apply(frame, layout)
   SkinStoryHeader(QuestScrollFrame.Contents.StoryHeader)
 
+  local questScroll = frame.QuestsFrame.ScrollFrame
+  local scrollBar = questScroll.ScrollBar
+  questScroll.scrollBarX = 5
+  scrollBar:ClearAllPoints()
+  scrollBar:SetPoint("TOPLEFT", questScroll, "TOPRIGHT",
+    questScroll.scrollBarX, questScroll.scrollBarTopY)
+  scrollBar:SetPoint("BOTTOMLEFT", questScroll, "BOTTOMRIGHT",
+    questScroll.scrollBarX, questScroll.scrollBarBottomY)
+
   local session = frame.QuestSessionManagement
   local command = session.ExecuteSessionCommand
   Skins.Surface(command, true)
@@ -144,7 +153,7 @@ local function InstallQuestLog(frame)
   for index, key in ipairs({ "QuestsTab", "EventsTab", "MapLegendTab" }) do
     local tab = frame[key]
     Skins.Panel(tab)
-    tab:SetSize(30, 40)
+    tab:SetSize(40, 50)
     if index == 1 then
       tab:ClearAllPoints()
       tab:SetPoint("TOPLEFT", frame, "TOPRIGHT", 11, 24)
@@ -155,8 +164,20 @@ local function InstallQuestLog(frame)
       tab.Icon:SetPoint("CENTER")
       hooksecurefunc(tab.Icon, "SetPoint", PositionQuestTabIcon)
     end
-    Skins.Selection(tab.SelectedTexture, 0.08)
-    Skins.Selection(tab.HighlightTexture, 0.05)
+
+    local selected = tab.SelectedTexture
+    selected:ClearAllPoints()
+    selected:SetAllPoints(tab)
+    selected:SetDrawLayer("ARTWORK", -1)
+    selected:SetBlendMode("BLEND")
+    Skins.Selection(selected, 0.15)
+
+    local highlight = tab.HighlightTexture
+    highlight:ClearAllPoints()
+    highlight:SetAllPoints(tab)
+    highlight:SetBlendMode("BLEND")
+    Skins.Selection(highlight, 0.08)
+
     Skins.Hide(tab.TabGlow)
   end
   if frame.EventsFrame then

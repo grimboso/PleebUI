@@ -84,10 +84,14 @@ function Skins.Surface(frame, control, borderless)
   if not frame then return end
   local host = surfaces[frame]
   if not host then
-    host = CreateFrame("Frame", nil, frame)
-    host:SetAllPoints(frame)
-    host:SetFrameLevel(math.max(0, frame:GetFrameLevel() - 1))
-    host:EnableMouse(false)
+    if frame.__puiUseTextureBackdrop == true then
+      host = frame
+    else
+      host = CreateFrame("Frame", nil, frame)
+      host:SetAllPoints(frame)
+      host:SetFrameLevel(math.max(0, frame:GetFrameLevel() - 1))
+      host:EnableMouse(false)
+    end
     surfaces[frame] = host
   end
   surfaceRoles[frame] = borderless and (control and "flatControl" or "flatBackground") or (control and "control" or "background")
@@ -199,8 +203,7 @@ local function RefreshButtonState(button)
     text:SetTextColor(color[1], color[2], color[3], color[4])
   end
   if state.arrow then
-    local color = enabled and colors.text or colors.disabledText
-    state.arrow:SetTextColor(color[1], color[2], color[3], color[4])
+    Theme.ApplyArrowTexture(state.arrow, "down", enabled and nil or "disabled")
   end
   if state.dropdown then
     if state.label then Theme.ApplyFont(state.label, "body") end
@@ -248,6 +251,15 @@ function Skins.Button(button, borderless)
   RefreshButtonState(button)
 end
 
+function Skins.PositionSearchIcon(edit)
+  local icon = edit.searchIcon
+  if not icon then return end
+  local leftInset = edit:GetTextInsets()
+  local _, _, _, _, y = icon:GetPoint(1)
+  icon:ClearAllPoints()
+  icon:SetPoint("LEFT", edit, "LEFT", (leftInset - icon:GetWidth()) / 2, y)
+end
+
 function Skins.EditBox(edit)
   for _, key in ipairs({ "Left", "Middle", "Right", "left", "middle", "right",
     "LeftDisabled", "MiddleDisabled", "RightDisabled" }) do
@@ -257,6 +269,7 @@ function Skins.EditBox(edit)
   Skins.Surface(edit, true)
   Skins.Font(edit)
   Skins.Font(edit.Instructions)
+  Skins.PositionSearchIcon(edit)
 end
 
 function Skins.Icon(icon)
@@ -324,26 +337,67 @@ function Skins.Dropdown(dropdown)
     state.dropdown = true
     if dropdown.Arrow or dropdown.Text then
       if not state.arrow then
-        state.arrow = dropdown:CreateFontString(nil, "OVERLAY")
+        state.arrow = dropdown:CreateTexture(nil, "OVERLAY")
         if dropdown.Arrow then
           state.arrow:SetPoint("CENTER", dropdown.Arrow, "CENTER")
         else
           state.arrow:SetPoint("RIGHT", dropdown, "RIGHT", -8, 0)
         end
       end
-      Skins.Font(state.arrow, "button")
-      state.arrow:SetText("v")
+      Theme.ApplyArrowTexture(state.arrow, "down")
     end
     state.label = dropdown.Text
     if dropdown.OnButtonStateChanged then
       Skins.Hook(dropdown, "OnButtonStateChanged", RefreshButtonState)
     end
     RefreshButtonState(dropdown)
-    if dropdown.ResetButton then Skins.Button(dropdown.ResetButton) end
+    if dropdown.ResetButton then Skins.Arrow(dropdown.ResetButton, "X") end
   elseif dropdown.Button then
     -- UIDropDownMenuTemplate owns a separate arrow button.
-    Skins.Arrow(dropdown.Button, "v")
+    Skins.DropdownArrow(dropdown.Button)
   end
+end
+
+local puiDropdownMenuStyle
+
+function Skins.DropdownMenu(dropdown)
+  if not puiDropdownMenuStyle then
+    puiDropdownMenuStyle = CreateFromMixins(MenuStyle1Mixin)
+    function puiDropdownMenuStyle:Generate()
+      local colors = Theme.GetColors()
+      local control = colors.control
+      local borderColor = colors.controlBorder
+      local background = self:AttachTexture()
+      background:SetColorTexture(control[1] * 0.7, control[2] * 0.7, control[3] * 0.7, 1)
+      background:SetPoint("TOPLEFT", -8, 3)
+      background:SetPoint("BOTTOMRIGHT", 8, -3)
+
+      local top = self:AttachTexture()
+      top:SetColorTexture(borderColor[1], borderColor[2], borderColor[3], borderColor[4])
+      top:SetPoint("TOPLEFT", background, "TOPLEFT")
+      top:SetPoint("TOPRIGHT", background, "TOPRIGHT")
+      top:SetHeight(1)
+
+      local bottom = self:AttachTexture()
+      bottom:SetColorTexture(borderColor[1], borderColor[2], borderColor[3], borderColor[4])
+      bottom:SetPoint("BOTTOMLEFT", background, "BOTTOMLEFT")
+      bottom:SetPoint("BOTTOMRIGHT", background, "BOTTOMRIGHT")
+      bottom:SetHeight(1)
+
+      local left = self:AttachTexture()
+      left:SetColorTexture(borderColor[1], borderColor[2], borderColor[3], borderColor[4])
+      left:SetPoint("TOPLEFT", background, "TOPLEFT")
+      left:SetPoint("BOTTOMLEFT", background, "BOTTOMLEFT")
+      left:SetWidth(1)
+
+      local right = self:AttachTexture()
+      right:SetColorTexture(borderColor[1], borderColor[2], borderColor[3], borderColor[4])
+      right:SetPoint("TOPRIGHT", background, "TOPRIGHT")
+      right:SetPoint("BOTTOMRIGHT", background, "BOTTOMRIGHT")
+      right:SetWidth(1)
+    end
+  end
+  dropdown.menuMixin = puiDropdownMenuStyle
 end
 
 local function RefreshTabState(tab)
@@ -547,6 +601,18 @@ function Skins.Bar(bar)
   Theme.SkinStatusBar(bar)
 end
 
+function Skins.DropdownArrow(button)
+  Skins.Button(button)
+  Skins.Hide(button.Texture)
+  local state = InstallButtonState(button)
+  if not state.arrow then
+    state.arrow = button:CreateTexture(nil, "OVERLAY")
+    state.arrow:SetPoint("CENTER")
+  end
+  Theme.ApplyArrowTexture(state.arrow, "down")
+  RefreshButtonState(button)
+end
+
 function Skins.Arrow(button, text)
   Skins.Button(button)
   Skins.Hide(button.Texture)
@@ -614,20 +680,29 @@ function Skins.TabSystem(system)
   end
 end
 
-function Skins.Navigation(bar)
+local positioningNavigationButton
+
+local function PositionNavigationButton(button, point, relativeTo, relativePoint, x, y)
+  if positioningNavigationButton == button then return end
+  positioningNavigationButton = button
+  button:SetPoint(point, relativeTo, relativePoint, 1, y)
+  positioningNavigationButton = nil
+end
+
+function Skins.Navigation(bar, overflowDirection)
   if not navigationBars[bar] then
     navigationBars[bar] = true
     for _, region in ipairs({ bar:GetRegions() }) do
       if region:IsObjectType("Texture") then Skins.Hide(region) end
     end
     Skins.Chrome(bar)
-    Skins.Surface(bar, false, true)
-    -- The level-50 overlay is decorative and must not cover the navigation buttons.
     Skins.Hide(bar.overlay)
-    Skins.Arrow(bar.overflowButton, ">")
+    Skins.Arrow(bar.overflowButton, overflowDirection or ">")
     bar.overflowButton:SetWidth(30)
+    bar.overflowButton:SetHeight(24)
+    bar:SetHeight(24)
   end
-  for _, button in ipairs(bar.navList) do
+  for index, button in ipairs(bar.navList) do
     if not styledButtons[button] or not styledButtons[button].navigation then
       for _, region in ipairs({ button:GetRegions() }) do
         if region:IsObjectType("Texture") and region ~= button.selected
@@ -635,22 +710,40 @@ function Skins.Navigation(bar)
           Skins.Hide(region)
         end
       end
+      button:SetHeight(24)
       Skins.Button(button)
       InstallButtonState(button).navigation = true
       RefreshButtonState(button)
-      button:GetFontString():SetDrawLayer("OVERLAY", 7)
+      local label = button:GetFontString()
+      label:SetDrawLayer("OVERLAY", 7)
+      label:ClearAllPoints()
+      label:SetPoint("LEFT", button, "LEFT", 10, 0)
+
+      if button.MenuArrowButton then
+        label:SetPoint("RIGHT", button.MenuArrowButton, "LEFT", -4, 0)
+      else
+        label:SetPoint("RIGHT", button, "RIGHT", -10, 0)
+      end
+
+      label:SetJustifyH("LEFT")
+      label:SetJustifyV("MIDDLE")
+
       if button.selected then button.selected:SetDrawLayer("BACKGROUND", 1) end
       Skins.Selection(button.selected, 0.06)
       if button.MenuArrowButton then
         local menu = button.MenuArrowButton
-        Skins.Button(menu)
+        Skins.Hide(menu.Art)
+        Skins.DropdownArrow(menu)
         menu:SetWidth(24)
         menu:ClearAllPoints()
-        menu:SetPoint("TOPRIGHT", button, "TOPRIGHT", -2, -1)
-        menu:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT", -2, 1)
-        -- Native hover restores alpha on these borders, so retain empty texture slots.
+        menu:SetPoint("TOPRIGHT", button, "TOPRIGHT", -2, 0)
+        menu:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT", -2, 0)
         menu:GetNormalTexture():SetTexture(nil)
         menu:GetPushedTexture():SetTexture(nil)
+      end
+      if index > 1 then
+        PositionNavigationButton(button, button:GetPoint())
+        hooksecurefunc(button, "SetPoint", PositionNavigationButton)
       end
     end
   end

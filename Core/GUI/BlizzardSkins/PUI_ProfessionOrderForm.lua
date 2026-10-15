@@ -21,6 +21,10 @@ Skins.Register("Blizzard_ProfessionsCustomerOrders", "ProfessionsCustomerOrdersF
     Skins.Dropdown(form.OrderRecipientDropdown)
     local payment = form.PaymentContainer
     Templates.Fonts(payment)
+    for _, edit in ipairs({ payment.TipMoneyInputFrame.GoldBox, payment.TipMoneyInputFrame.SilverBox, payment.TipMoneyInputFrame.CopperBox }) do
+      Skins.EditBox(edit)
+      Skins.Font(edit.Text)
+    end
     Templates.Fonts(payment.TimeRemainingDisplay)
     Templates.Note(payment.NoteEditBox)
     Skins.Dropdown(payment.DurationDropdown)

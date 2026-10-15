@@ -149,6 +149,56 @@ local function RefreshCollectionModels()
   end
 end
 
+local function ShowFilterResetTooltip(button)
+  GameTooltip:SetOwner(button, "ANCHOR_RIGHT")
+  GameTooltip:SetText("Clear filters")
+  GameTooltip:Show()
+end
+
+local function AlignCollectionFilters()
+  for _, pair in ipairs({
+    { MountJournal.FilterDropdown, MountJournal.searchBox },
+    { PetJournal.FilterDropdown, PetJournal.searchBox },
+    { ToyBox.FilterDropdown, ToyBox.searchBox },
+    { HeirloomsJournal.FilterDropdown, HeirloomsJournal.SearchBox },
+    { WardrobeCollectionFrame.FilterButton, WardrobeCollectionFrame.SearchBox },
+  }) do
+    local dropdown, search = pair[1], pair[2]
+    dropdown:SetHeight(search:GetHeight())
+    dropdown.Text:ClearAllPoints()
+    dropdown.Text:SetPoint("LEFT", dropdown, "LEFT", 8, 0)
+    dropdown.Text:SetPoint("RIGHT", dropdown, "RIGHT", -21, 0)
+    dropdown.Text:SetJustifyH("LEFT")
+    Skins.DropdownMenu(dropdown)
+    dropdown.ResetButton:SetSize(search:GetHeight(), search:GetHeight())
+    dropdown.ResetButton:HookScript("OnEnter", ShowFilterResetTooltip)
+    dropdown.ResetButton:HookScript("OnLeave", GameTooltip_Hide)
+  end
+
+  for _, dropdown in ipairs({
+    HeirloomsJournal.ClassDropdown,
+    WardrobeCollectionFrame.ClassDropdown,
+    WardrobeCollectionFrame.ItemsCollectionFrame.WeaponDropdown,
+    WardrobeCollectionFrame.SetsCollectionFrame.DetailsFrame.VariantSetsDropdown,
+  }) do
+    Skins.DropdownMenu(dropdown)
+  end
+
+  MountJournal.FilterDropdown:ClearAllPoints()
+  MountJournal.FilterDropdown:SetPoint("TOPRIGHT", MountJournal.LeftInset, "TOPRIGHT", -5, -9)
+  PetJournal.FilterDropdown:ClearAllPoints()
+  PetJournal.FilterDropdown:SetPoint("TOPRIGHT", PetJournal.LeftInset, "TOPRIGHT", -5, -9)
+
+  HeirloomsJournal.ClassDropdown:SetHeight(HeirloomsJournal.SearchBox:GetHeight())
+  HeirloomsJournal.ClassDropdown:ClearAllPoints()
+  HeirloomsJournal.ClassDropdown:SetPoint("TOPLEFT", HeirloomsJournal, "TOPLEFT", 70, -35)
+  HeirloomsJournal.ClassDropdown.Arrow:ClearAllPoints()
+  HeirloomsJournal.ClassDropdown.Arrow:SetPoint("RIGHT", HeirloomsJournal.ClassDropdown, "RIGHT", 1, 0)
+  HeirloomsJournal.ClassDropdown.Text:ClearAllPoints()
+  HeirloomsJournal.ClassDropdown.Text:SetPoint("LEFT", HeirloomsJournal.ClassDropdown, "LEFT", 8, 0)
+  HeirloomsJournal.ClassDropdown.Text:SetPoint("RIGHT", HeirloomsJournal.ClassDropdown.Arrow, "LEFT", -2, 0)
+end
+
 local function AlignCollectionNavigation()
   local controls = WarbandSceneJournal.IconsFrame.Icons.Controls
   local campsitePaging = controls.PagingControls
@@ -176,12 +226,17 @@ local function AlignCollectionNavigation()
   showOwned:SetPoint("LEFT", campsitePaging.NextPageButton, "RIGHT", 25, 0)
   Skins.Font(showOwned.Text)
 
+  local scrollBar = MountJournal.ScrollBar
+  scrollBar:ClearAllPoints()
+  scrollBar:SetPoint("TOPLEFT", MountJournal.ScrollBox, "TOPRIGHT", 11, 31)
+  scrollBar:SetPoint("BOTTOMLEFT", MountJournal.ScrollBox, "BOTTOMRIGHT", 11, -1)
 end
 
 local function InstallCollections(frame)
   Skins.Shell(frame)
   for index = 1, 6 do Skins.Tab(_G["CollectionsJournalTab" .. index]) end
   Skins.Apply(_G, layout)
+  AlignCollectionFilters()
   AlignCollectionNavigation()
   RefreshCollectionRows()
   for index = 1, 18 do SkinCollectionSpell(ToyBox.iconsFrame["spellButton" .. index]) end

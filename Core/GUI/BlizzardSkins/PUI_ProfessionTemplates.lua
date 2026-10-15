@@ -61,7 +61,7 @@ function Templates.Rank(bar)
   Skins.Surface(bar, true, true)
   ns.Theme.ApplyFont(bar.Rank.Text, "tiny")
   bar.Rank.Text:SetHeight(0)
-  Skins.Arrow(bar.ExpansionDropdownButton, "v")
+  Skins.DropdownArrow(bar.ExpansionDropdownButton)
   -- Fill, mask and flare are owned by the native profession/rank animation.
 end
 
@@ -154,6 +154,7 @@ local function RefreshFlyout()
   local frame = activeFlyout
   if not flyouts[frame] then
     flyouts[frame] = true
+    frame.__puiUseTextureBackdrop = true
     Skins.Panel(frame)
     Skins.ScrollBar(frame.ScrollBar)
     Skins.CheckBox(frame.HideUnownedCheckbox)
