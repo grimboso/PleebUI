@@ -192,32 +192,36 @@ function Preview.Refresh()
   box.skin = skin
   box.previewCount = count
   Preview.RefreshIcons()
-  local cooldown = box.sampleCooldown
-  cooldown.previewEnabled = false
-  cooldown:Clear()
-  local cooldownButton = box.buttons[math.min(count, 4)]
-  cooldown:SetParent(cooldownButton)
-  cooldown:SetFrameStrata(strata)
-  cooldown:SetFrameLevel(cooldownButton:GetFrameLevel() + 1)
-  ns.IconSkin.SquareCooldown(cooldown)
-  ns.IconSkin.StyleCooldownText(cooldown, {
-    font = Core:ResolveFont(skin.cooldownFontFace),
-    size = skin.cooldownFontSize,
-    flags = skin.cooldownFontOutline or "",
-    color = skin.cooldownFontColor,
-    scope = "actionBars",
-  })
-  cooldown:SetHideCountdownNumbers(not skin.showCooldownText)
-  cooldown.previewEnabled = showCooldown
-  if showCooldown then
-    cooldown:SetCooldown(GetTime(), 5)
-  else
-    cooldown:Hide()
+  local firstButton = math.min(count, 4)
+  for index, cooldown in ipairs(box.sampleCooldowns) do
+    cooldown.previewEnabled = false
+    cooldown:Clear()
+    local buttonIndex = index == 1 and firstButton or (firstButton < count and firstButton + 1 or 1)
+    local cooldownButton = box.buttons[buttonIndex]
+    cooldown:SetParent(cooldownButton)
+    cooldown:SetFrameStrata(strata)
+    cooldown:SetFrameLevel(cooldownButton:GetFrameLevel() + 1)
+    ns.IconSkin.SquareCooldown(cooldown)
+    ns.IconSkin.StyleCooldownText(cooldown, {
+      font = Core:ResolveFont(skin.cooldownFontFace),
+      size = skin.cooldownFontSize,
+      flags = skin.cooldownFontOutline or "",
+      color = skin.cooldownFontColor,
+      scope = "actionBars",
+    })
+    cooldown:SetHideCountdownNumbers(not skin.showCooldownText)
+    cooldown.previewEnabled = showCooldown and index <= box.sampleCooldownCount and (index == 1 or count > 1)
+    cooldown.previewDuration = index == 1 and 5 or 8
+    if cooldown.previewEnabled then
+      cooldown:SetCooldown(GetTime() - (index - 1) * 2, cooldown.previewDuration)
+    else
+      cooldown:Hide()
+    end
   end
   bar:SetAlpha(skin.fadeOutEnabled and not box.hovered and skin.fadeOutAlpha or skin.alpha)
 end
 
-function Preview.Build(addon, optionsFrame, shell, path)
+function Preview.Build(addon, optionsFrame, shell, path, sampleCooldownCount)
   local host = shell.previewHost
   local box = shell.__puiActionBarsPreviewBox
   if not box then
@@ -249,8 +253,10 @@ function Preview.Build(addon, optionsFrame, shell, path)
     box:SetScript("OnEvent", Preview.RefreshIcons)
     box:SetScript("OnHide", function(self)
       self:UnregisterAllEvents()
-      self.sampleCooldown.previewEnabled = false
-      self.sampleCooldown:Clear()
+      for _, cooldown in ipairs(self.sampleCooldowns) do
+        cooldown.previewEnabled = false
+        cooldown:Clear()
+      end
       self.hovered = false
       self.iconsPending = nil
       self:SetScript("OnUpdate", nil)
@@ -273,22 +279,26 @@ function Preview.Build(addon, optionsFrame, shell, path)
       box.buttons[index] = button
     end
 
-    local cooldown = CreateFrame("Cooldown", nil, box.buttons[4], "CooldownFrameTemplate")
-    cooldown:SetDrawSwipe(true)
-    cooldown:SetDrawEdge(false)
-    cooldown:SetDrawBling(false)
-    cooldown:SetMinimumCountdownDuration(0)
-    cooldown:SetScript("OnCooldownDone", function(self)
-      if self.previewEnabled and box:IsVisible() then
-        self:SetCooldown(GetTime(), 5)
-      end
-    end)
-    box.sampleCooldown = cooldown
+    box.sampleCooldowns = {}
+    for index = 1, 2 do
+      local cooldown = CreateFrame("Cooldown", nil, box.buttons[index], "CooldownFrameTemplate")
+      cooldown:SetDrawSwipe(true)
+      cooldown:SetDrawEdge(false)
+      cooldown:SetDrawBling(false)
+      cooldown:SetMinimumCountdownDuration(0)
+      cooldown:SetScript("OnCooldownDone", function(self)
+        if self.previewEnabled and box:IsVisible() then
+          self:SetCooldown(GetTime(), self.previewDuration)
+        end
+      end)
+      box.sampleCooldowns[index] = cooldown
+    end
   end
 
   box.barKey = path[2] == "special" and (path[3] or "pet")
     or path[2] == "general" and "shared"
     or path[2] or "shared"
+  box.sampleCooldownCount = sampleCooldownCount or 1
   box:SetParent(host)
   box:ClearAllPoints()
   box:SetAllPoints(host)
