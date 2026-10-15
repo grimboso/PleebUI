@@ -34,11 +34,11 @@ local specGuides = {
     { "Balance", "Alternate Mana; Cat Form Combo Points", "Combo Points depend on Cat Form and can appear outside Feral." },
     { "Feral", "Combo Points", "The primary power changes with your form." },
     { "Guardian", "Ironfur; Cat Form Combo Points", "Ironfur is a Bear Form effect. Cat Combo Points are contextual." },
-    { "Restoration", "Primary power; contextual Combo Points", "Cat Form can expose Combo Points; group indicators have separate settings." },
+    { "Restoration", "Primary power; contextual Combo Points", "Cat Form can expose Combo Points; group indicators have separate settings.", healer = true },
   },
   EVOKER = {
     { "Devastation", "Essence", "Recharge and ready effects use the existing resource renderer." },
-    { "Preservation", "Essence", "Also explore healing indicators and empower castbars." },
+    { "Preservation", "Essence", "Also explore healing indicators and empower castbars.", healer = true },
     { "Augmentation", "Essence", "Effect-duration trackers are available separately." },
   },
   HUNTER = {
@@ -53,17 +53,17 @@ local specGuides = {
   },
   MONK = {
     { "Brewmaster", "Stagger", "Stagger severity and fill thresholds have dedicated options." },
-    { "Mistweaver", "Sheilun's Gift", "The supported count display is separate from ordinary power." },
+    { "Mistweaver", "Sheilun's Gift", "The supported count display is separate from ordinary power.", healer = true },
     { "Windwalker", "Chi", "Configure segments, text and visibility for a true resource." },
   },
   PALADIN = {
-    { "Holy", "Holy Power", "Group indicators can be customized in Unit Frames." },
+    { "Holy", "Holy Power", "Group indicators can be customized in Unit Frames.", healer = true },
     { "Protection", "Holy Power; Shining Light", "Shining Light is a tracked effect, not Holy Power." },
     { "Retribution", "Holy Power", "Choose the supported segments, text and resource cues." },
   },
   PRIEST = {
-    { "Discipline", "Primary power", "Healing indicators and optional effect trackers have separate settings." },
-    { "Holy", "Lightweaver", "This tracked effect can depend on your current talents." },
+    { "Discipline", "Primary power", "Healing indicators and optional effect trackers have separate settings.", healer = true },
+    { "Holy", "Lightweaver", "This tracked effect can depend on your current talents.", healer = true },
     { "Shadow", "Primary power; alternate Mana", "Alternate Mana is not a new class resource." },
   },
   ROGUE = {
@@ -74,7 +74,7 @@ local specGuides = {
   SHAMAN = {
     { "Elemental", "Primary power; alternate Mana", "Alternate Mana and primary power are different displays." },
     { "Enhancement", "Maelstrom Weapon; Hailstorm; Overflowing Maelstrom", "These are tracked stacks/effects, not new basic power types." },
-    { "Restoration", "Primary power", "Group indicators and effect-duration trackers are optional." },
+    { "Restoration", "Primary power", "Group indicators and effect-duration trackers are optional.", healer = true },
   },
   WARLOCK = {
     { "Affliction", "Soul Shards", "Choose segment visibility and count text." },
@@ -82,9 +82,9 @@ local specGuides = {
     { "Destruction", "Soul Shards", "Partial-shard fill and darkening are available in detailed options." },
   },
   WARRIOR = {
-    { "Arms", "Sweeping Strikes", "Other tracked effects are available without changing spec." },
-    { "Fury", "Optional Whirlwind stacks", "Check talent availability; an optional effect can start disabled." },
-    { "Protection", "Optional Ignore Pain", "Percentage and tick presentation are separate from power." },
+    { "Arms", "Sweeping Strikes", "Other tracked effects are available without changing spec.", preferredResource = "SWEEPING_STRIKES" },
+    { "Fury", "Optional Whirlwind stacks", "Check talent availability; an optional effect can start disabled.", preferredResource = "WHIRLWIND_STACKS" },
+    { "Protection", "Optional Ignore Pain", "Percentage and tick presentation are separate from power.", preferredResource = "IGNORE_PAIN" },
   },
 }
 Content.SpecializationGuides = specGuides
@@ -108,6 +108,17 @@ local function Heading(value)
   widget:SetText(value)
   widget:SetFullWidth(true)
   return Add(widget)
+end
+
+local function PrimaryPowerIntroduction()
+  local key = ns.Modules.PRD:GetPrimaryResourceKey()
+  local name = key and _G[key]
+  if name then
+    Heading("Your primary power: " .. name)
+    Text("Primary power settings control this bar's text and tick markers. Health and secondary resources have separate settings.")
+  else
+    Text("Your primary power is not available yet. Its name will appear when the game provides it.")
+  end
 end
 
 local function Action(value, callback, disabled)
@@ -481,11 +492,13 @@ local function BuildPage(key)
     Text("Vehicle, override, possess, extra-action, and zone-ability behavior follows its existing secure owner. Keep the required special controls visible and check them in the appropriate game situation.")
     Action("Open keybind mode", callbacks.openKeybinds)
   elseif key == "prd" then
-    Text("Health and primary power are independent bars. Set height and text below; detached bars have their own width and position. Use the preview arrows to change the actual stack order.")
+    Text("Health and primary power are independent bars. Set height and text below; detached bars have their own width and position. Sample playback does not change your saved layout. Open PRD settings to reorder the real stack.")
+    PrimaryPowerIntroduction()
     Check("Enable Personal Resource Display", ns.Modules.PRD:IsModuleEnabled(), function(value) ns.Modules.PRD:SetModuleEnabled(value) end)
     Preview("prd")
     Choices("Configure", { { "Health", { "PRD", "health" } }, { "Primary power and alternate Mana", { "PRD", "primary" } } }, 1, function(choice) Settings(choice[2]) end)
     Details({ "PRD", "health" }, "Personal Resource Display")
+    Action("Arrange my real UI in Edit Mode", callbacks.openEditMode)
   elseif key == "spec" then
     local className, class = UnitClass("player")
     local index = C_SpecializationInfo.GetSpecialization()
@@ -493,16 +506,42 @@ local function BuildPage(key)
     local id, name = C_SpecializationInfo.GetSpecializationInfo(index)
     local guide = Content.SpecializationGuides[class][index]
     Heading(className .. " — " .. name)
+    PrimaryPowerIntroduction()
     if guide then Text(guide[2] .. ". " .. guide[3]) end
     local choices = {}
+    local default = 1
     for _, resource in ipairs(ns.PRDSecondary:GetResourceOptionsForClass(class, id)) do
       choices[#choices + 1] = { resource.name .. (resource.category == "TRACKED_EFFECT" and " — Tracked effect" or " — Resource"), { "PRD", "resources", resource.key } }
+      if guide and guide.preferredResource == resource.key then default = #choices end
     end
     Text("These are settings for the selected specialization. A configured effect still needs its talent, spell, or form to be available. The preview shows sample values, not proof that an effect is currently active.")
     Preview("prd")
-    if #choices > 0 then Choices("Resource or effect", choices, 1, function(choice) Settings(choice[2]) end)
+    if #choices > 0 then Choices("Resource or effect", choices, default, function(choice)
+      if class == "DRUID" and choice[2][3] == "COMBO_POINTS" then
+        Text("Combo Points appear in Cat Form in any Druid specialization. Leaving Cat Form removes this contextual display; your saved settings are kept.")
+      elseif class == "DRUID" and choice[2][3] == "IRONFUR" then
+        Text("Ironfur is a Guardian Bear Form effect. Choose remaining duration or stack count. The example uses sample values and does not activate Ironfur on your character.")
+      end
+      Settings(choice[2])
+    end)
     else Text("This specialization has no dedicated secondary tracker. Configure its primary power or choose an optional custom tracker.") end
     Details({ "PRD", "primary" }, "Personal Resource Display / Primary power")
+    Heading("More to explore")
+    if guide and guide.healer then
+      Text("Party and raid aura indicators have separate settings for each group layout.")
+      Action("Open party aura indicators", function() callbacks.openOptions({ "unitframes", "party", "auras", "customDisplays" }) end)
+      Action("Open raid aura indicators", function() callbacks.openOptions({ "unitframes", "raid", "auras", "customDisplays" }) end)
+    end
+    if class == "EVOKER" then
+      Action("Open empower castbar settings", function() callbacks.openOptions({ "unitframes", "player", "empower" }) end)
+    end
+    if ns.Modules.Quality:IsPetWarningAvailable() then
+      Action("Open pet warnings", function() callbacks.openOptions({ "Quality", "combatTab" }) end)
+      Action("Open pet action bar", function() callbacks.openOptions({ "ACTIONBARS", "special", "pet" }) end)
+    end
+    Text("Custom trackers are optional. These lessons show examples before you choose whether to create one.")
+    Action("Explore custom cooldowns", function() callbacks.navigate("trackerCooldown") end)
+    Action("Explore stacks and effect durations", function() callbacks.navigate("trackerStacks") end)
   elseif key == "cooldowns" then
     Text("Cooldowns show when spells become available. Buff icons and bars show active effects. Choose a group to set its size, countdown, visibility, and icon overrides.")
     Check("Enable Cooldown Manager", ns.Modules.CooldownManager:IsModuleEnabledByUser(), function(value) ns.Modules.CooldownManager:SetModuleEnabled(value) end)
