@@ -39,25 +39,6 @@ function Preview.Hide()
   current = nil
 end
 
-local function ShieldUnitFrame(box)
-  local shield = box.__puiInstallerShield
-  if not shield then
-    shield = CreateFrame("Frame", nil, box)
-    shield:SetAllPoints(box)
-    shield:EnableMouse(true)
-    box.__puiInstallerShield = shield
-  end
-  shield:SetFrameLevel(box:GetFrameLevel() + 400)
-  shield:Show()
-  box.__puiAuraCreateToolbar:Hide()
-  box.__puiAuraSelectionLabel:Hide()
-  box.__puiAuraVisibilityButton:Hide()
-  box.__puiAuraPreviewZoomControl:Hide()
-  for _, control in pairs(box.__puiInlineDensityControls) do control:Hide() end
-  box.__puiAuraPreviewContext.allowDrag = false
-  box:SetDescription("Sample frame. Try the starter settings below; detailed editing is in full settings.")
-end
-
 local function BuildCurrent()
   if not current or not current.host:IsVisible() or InCombatLockdown() then return end
   local request = current
@@ -68,9 +49,7 @@ local function BuildCurrent()
   local owner = owners[request.kind]
   owner.previewHost = request.host
   if request.kind == "unitframes" then
-    ns.UFPreview.BuildUnitFramePreview(navigation, owner, owner, request.path)
-    request.box = owner.__puiAuraManagerPreviewBox
-    ShieldUnitFrame(request.box)
+    request.box = ns.UFPreview.BuildInstallerPreview(request.host, owner, request.path)
   elseif request.kind == "actionbars" then
     ns.ActionBarsPreview.Build(navigation, owner, owner, request.path)
     request.box = owner.__puiActionBarsPreviewBox
