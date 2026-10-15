@@ -5,7 +5,7 @@ Preview.SampleStates = {
   unitframes = { values = { [25] = "Low: 25%", [60] = "Medium: 60%", [100] = "Full: 100%" }, order = { 25, 60, 100 }, initial = 60 },
   auras = { values = { ACTIVE = "Active", EXPIRING = "Expiring: 1 second left", INACTIVE = "Inactive: no auras" }, order = { "ACTIVE", "EXPIRING", "INACTIVE" }, initial = "ACTIVE", animated = true },
   prd = { values = { [0] = "Empty", [0.5] = "Half full", [1] = "Full" }, order = { 0, 0.5, 1 }, initial = 0.5, animated = true },
-  actionbars = { values = { READY = "Ready", COOLDOWN = "On cooldown", ENDING = "Almost ready" }, order = { "READY", "COOLDOWN", "ENDING" }, initial = "COOLDOWN", animated = true },
+  actionbars = { animated = true },
   cooldowns = { values = { [0] = "Start of sample", [4] = "4 seconds into sample", [8] = "8 seconds into sample" }, order = { 0, 4, 8 }, initial = 4, animated = true },
 }
 
@@ -118,14 +118,8 @@ local function BuildCurrent()
       end
     end
   elseif request.kind == "actionbars" then
-    ns.ActionBarsPreview.Build(navigation, owner, owner, request.path)
+    ns.ActionBarsPreview.Build(navigation, owner, owner, request.path, 2)
     request.box = owner.__puiActionBarsPreviewBox
-    if not request.playing then
-      local cooldown = request.box.sampleCooldown
-      cooldown.previewEnabled = false
-      if request.sample == "READY" then cooldown:Clear()
-      else cooldown:SetCooldown(GetTime() - (request.sample == "ENDING" and 4 or 2), 5) end
-    end
   elseif request.kind == "cooldowns" then
     ns.PCMPreview.Build(navigation, owner, owner, request.path)
     request.box = owner.__puiPCMPreviewBox
