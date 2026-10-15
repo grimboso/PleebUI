@@ -478,7 +478,7 @@ local function BuildRoute(target)
   wipe(pages)
   currentPage = 1
   for _, definition in ipairs(PAGE_DEFINITIONS) do
-    if not definition[3] or sections[definition[3]] ~= false then
+    if not definition[3] or sections[definition[3]] ~= false or definition[1] == target then
       pages[#pages + 1] = definition
       if definition[1] == target then currentPage = #pages end
     end
@@ -494,10 +494,8 @@ local function SelectPage(index)
 end
 
 local function Navigate(id)
-  for index, definition in ipairs(pages) do
-    if definition[1] == id then SelectPage(index) return end
-  end
-  SetStatus("Include this chapter on the Profiles page to visit it.")
+  BuildRoute(id)
+  SelectPage(currentPage)
 end
 
 local function RequireReload()
