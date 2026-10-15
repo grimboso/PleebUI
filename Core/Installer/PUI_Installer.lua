@@ -485,10 +485,10 @@ local function BuildRoute(target)
 end
 
 local function SelectPage(index)
-  ns.KeyboardNavigation.ClearKeyboardFocus()
   currentPage = math.max(1, math.min(#pages, index))
   Onboarding().installerPage = pages[currentPage][1]
   RefreshPage()
+  ns.KeyboardNavigation.FocusRegion(wizardFrame, 2)
 end
 
 local function Navigate(id)
@@ -647,6 +647,7 @@ RefreshPage = function()
     button:SetShown(page ~= nil)
     if page then
       button:SetText(string.format("%02d. %s", index, page[2]))
+      button.selected = index == currentPage
       button:SetEnabled(index ~= currentPage)
     end
   end
@@ -740,6 +741,7 @@ local function BuildFrame()
     button:HookScript("OnHide", function(self)
       if OptionsTooltip:GetOwner() == self then OptionsTooltip:Hide() end
     end)
+    ns.KeyboardNavigation.RegisterFrame(button, "list", "installerPage" .. PAGE_DEFINITIONS[index][1], frame.SidebarCanvas)
     frame.PageButtons[index] = button
   end
   frame.Scroll = Scroll(frame)
@@ -810,6 +812,7 @@ local function BuildFrame()
   close:SetPoint("TOPRIGHT", -4, -4)
   close:SetScript("OnClick", function() frame:Hide() end)
   Theme.WidgetSkins.CloseButton(close)
+  ns.KeyboardNavigation.RegisterFrame(close, "button", "installerClose")
   local grip = CreateFrame("Button", nil, frame)
   grip:SetSize(18, 18)
   grip:SetPoint("BOTTOMRIGHT", -1, 1)
@@ -845,8 +848,24 @@ local function BuildFrame()
     end
   end)
   ns.KeyboardNavigation.BindWindow(frame, false, function() frame:Hide() end, nil, function(key, keyboardInput)
+    if key == "TAB" and IsControlKeyDown() then
+      Content.HandleKey(frame.Content, "GLOBAL_MOUSE_DOWN", false)
+      return false
+    end
     return Content.HandleKey(frame.Content, key, keyboardInput)
   end)
+  ns.KeyboardNavigation.SetRegions(frame, { frame.Sidebar, frame.Content, frame.Content.Settings, frame })
+  ns.KeyboardNavigation.AttachGuide(frame, {
+    bottom = 62,
+    text = "Ctrl+Tab Areas · Tab Next control · Enter Select · F1 Help",
+    layout = function(height)
+      frame.Sidebar:SetPoint("BOTTOMLEFT", 12, 116 + height)
+      frame.Scroll:SetPoint("BOTTOMRIGHT", -44, 116 + height)
+      frame.Status:SetPoint("BOTTOMLEFT", 265, 82 + height)
+      frame.Status:SetPoint("BOTTOMRIGHT", -30, 82 + height)
+      frame.Progress:SetPoint("BOTTOMLEFT", 24, 84 + height)
+    end,
+  })
   table.insert(UISpecialFrames, frame:GetName())
   return frame
 end
