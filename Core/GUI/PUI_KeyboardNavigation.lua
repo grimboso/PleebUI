@@ -75,6 +75,7 @@ local function ScrollIntoView(frame)
   local parent = frame:GetParent()
   while parent do
     if parent:GetObjectType() == "ScrollFrame" then
+      if parent.__puiKeyboardAutoScroll == false then return end
       local top, bottom = frame:GetTop(), frame:GetBottom()
       local viewportTop, viewportBottom = parent:GetTop(), parent:GetBottom()
       if top and bottom and viewportTop and viewportBottom then
@@ -163,7 +164,7 @@ Sliders and text
 Arrow keys adjust a focused slider. Tab reaches its minus button, numeric field and plus button. Enter commits numeric input; Escape restores it. In text fields, arrow keys move the caret.
 
 Scrolling
-Focus scrolls controls into view. Page Up/Down scrolls the focused control's containing area.
+Focus scrolls settings controls into view. The installer page list stays where you scroll it. Page Up/Down scrolls the focused control's containing area.
 
 Leaving navigation
 Escape closes a dropdown or cancels an edit first, then leaves keyboard navigation. Use the window's Close button or Escape afterward to close it. Clicking with the mouse clears navigation focus; Tab resumes it.
