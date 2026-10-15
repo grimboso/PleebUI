@@ -4,20 +4,6 @@ local Addon = ns.Addon
 local Theme = ns.Theme
 local WidgetSkins = Theme.WidgetSkins
 
-local PUI_TREE_BUTTON_DESCRIPTIONS = {
-  ["Auras"] = "Buffs, debuffs, filters, and layout.",
-  ["Unit Frame Appearance"] = "Borders, colors, and shared visuals.",
-  ["Essential Cooldowns"] = "Primary cooldown viewer.",
-  ["Utility Cooldowns"] = "Utility cooldown viewer.",
-  ["Groups"] = "Arrange groups and their entries.",
-  ["Custom trackers"] = "Duration, cooldown, charge, and stack trackers.",
-  ["Items & racials"] = "Consumables, trinkets, and racial abilities.",
-  ["Advanced"] = "Diagnostics and resets.",
-  ["Controls"] = "Enable, rename, or delete this bar.",
-  ["Spell Settings"] = "Tracked spell and visibility rules.",
-  ["Indicator"] = "Duration or stack display.",
-  ["No custom bars yet"] = "Create a bar to begin tracking.",
-}
 
 local function _PUI_NormalizeTreeButtonLabel(label)
   label = tostring(label or "")
@@ -32,13 +18,6 @@ local function _PUI_NormalizeTreeButtonLabel(label)
   return label:gsub("^%s+", ""):gsub("%s+$", "")
 end
 
-local function _PUI_GetTreeButtonText(button)
-  return _PUI_NormalizeTreeButtonLabel(button.text:GetText() or "")
-end
-
-local function _PUI_GetTreeButtonDescription(label)
-  return PUI_TREE_BUTTON_DESCRIPTIONS[tostring(label or "")] or ""
-end
 
 local function _PUI_TreeGroupUsesCustomCards(widget)
   local user = widget:GetUserDataTable()
@@ -71,10 +50,9 @@ local function _PUI_IsPCMManagerTree(widget)
   return hasOverview and hasGroups
 end
 
-local PCM_TREE_ROW_HEIGHT = 54
-local PCM_TREE_ROW_GAP = 4
-local PCM_TREE_TOP_INSET = 10
+local TREE_ROW_HEIGHT = 46
 local TREE_EDGE_INSET = 1
+local TREE_CHILD_HEIGHT_RATIO = 0.8
 local function _PUI_GetTreeScrollbarLane()
   return Theme.GetOptionsPointerTargetSize(20) + 6 + TREE_EDGE_INSET
 end
@@ -97,21 +75,23 @@ local function _PUI_ConfigureTreeExpandTarget(toggle, baseSize)
   end
 end
 
-local function _PUI_GetTreeRowHeight(pcmManagerTree)
-  if pcmManagerTree then
-    return math.max(PCM_TREE_ROW_HEIGHT, Theme.GetOptionsFontHeight("nav") + 20)
+local function _PUI_GetTreeRowHeight()
+  return math.max(TREE_ROW_HEIGHT, Theme.GetOptionsFontHeight("nav", 12) + 16)
+end
+
+local function _PUI_GetTreeButtonHeight(entry)
+  local height = _PUI_GetTreeRowHeight()
+  if (entry.level or 1) > 1 then
+    return math.floor(height * TREE_CHILD_HEIGHT_RATIO + 0.5)
   end
-  local descriptionHeight = math.max(20, Theme.GetOptionsFontHeight("tiny", 9) * 2)
-  return math.max(46, Theme.GetOptionsFontHeight("nav", 12) + descriptionHeight + 12)
+  return height
 end
 
 local function _PUI_GetTreeVisibleRows(widget)
   local metrics = Theme.GetControlMetrics()
-  local pcmManagerTree = widget.__puiPCMManagerTree == true
-  local topInset = pcmManagerTree and PCM_TREE_TOP_INSET or metrics.treeGroupTopInset
-  local gap = pcmManagerTree and PCM_TREE_ROW_GAP or metrics.treeButtonGap
-  local availableHeight = math.max(1, widget.treeframe:GetHeight() - topInset * 2)
-  return math.max(1, math.floor((availableHeight + gap) / (_PUI_GetTreeRowHeight(pcmManagerTree) + gap)))
+  local gap = metrics.treeButtonGap
+  local availableHeight = math.max(1, widget.treeframe:GetHeight() - metrics.treeGroupTopInset * 2)
+  return math.max(1, math.floor((availableHeight + gap) / (_PUI_GetTreeRowHeight() + gap)))
 end
 
 local function _PUI_RefreshStyledTree(widget, originalRefreshTree, scrollToSelection, fromOnUpdate)
@@ -195,7 +175,7 @@ end
 
 local function _PUI_GetBlizzardTreeScrollGeometry(widget, lineCount)
   local metrics = Theme.GetControlMetrics()
-  local rowHeight = _PUI_GetTreeRowHeight(false)
+  local rowHeight = _PUI_GetTreeRowHeight()
   local step = rowHeight + metrics.treeButtonGap
   local viewport = widget.__puiTreeViewport
   local viewportHeight = viewport and viewport:GetHeight() or 0
@@ -244,7 +224,7 @@ local function _PUI_RefreshBlizzardTree(widget, originalRefreshTree, scrollToSel
     for index = 1, lineCount do
       if widget.lines[index].uniquevalue == status.selected then
         local top = (index - 1) * step
-        local bottom = top + _PUI_GetTreeRowHeight(false)
+        local bottom = top + _PUI_GetTreeButtonHeight(widget.lines[index])
         local pixels = scroll * step
         if top < pixels then
           scroll = top / step
@@ -305,11 +285,8 @@ local function _PUI_SkinGenericTreeButton(button, isSelected)
       or { colors.controlBorder[1], colors.controlBorder[2], colors.controlBorder[3], colors.controlBorder[4] * 0.55 },
   }, Theme.GetEdgeSize())
 
-  for _, key in ipairs({ "__puiSelectedAccent", "__puiTreeDescription" }) do
-    local region = button[key]
-    if region then
-      region:Hide()
-    end
+  if button.__puiSelectedAccent then
+    button.__puiSelectedAccent:Hide()
   end
 
   local text = button.text
@@ -363,7 +340,7 @@ local function _PUI_SkinPCMTrackerTreeButton(button, isSelected, data)
   button:SetPushedTexture("")
   button:SetHighlightTexture("")
   button:SetDisabledTexture("")
-  button:SetHeight(_PUI_GetTreeRowHeight(button.__puiCompactPCMTree == true))
+  button:SetHeight(_PUI_GetTreeButtonHeight(button))
   button:SetHitRectInsets(0, 0, 0, 0)
 
   Theme.SetSquareBackdrop(button, {
@@ -374,10 +351,6 @@ local function _PUI_SkinPCMTrackerTreeButton(button, isSelected, data)
       and { colors.accent[1], colors.accent[2], colors.accent[3], colors.accent[4] * 0.72 }
       or { colors.controlBorder[1], colors.controlBorder[2], colors.controlBorder[3], colors.controlBorder[4] * 0.55 },
   }, edge)
-
-  if button.__puiTreeDescription then
-    button.__puiTreeDescription:Hide()
-  end
 
   if not button.__puiSelectedAccent then
     button.__puiSelectedAccent = button:CreateTexture(nil, "ARTWORK")
@@ -561,7 +534,7 @@ function WidgetSkins.TreeButton(button, isSelected)
     _PUI_HidePCMTrackerTreeCard(button)
     button.text:Show()
     _PUI_SkinGenericTreeButton(button, isSelected)
-    button:SetHeight(_PUI_GetTreeRowHeight(true))
+    button:SetHeight(_PUI_GetTreeButtonHeight(button))
 
     button.text:ClearAllPoints()
     button.text:SetPoint("LEFT", button, "LEFT", 12 * (button.level or 1), 0)
@@ -598,7 +571,7 @@ function WidgetSkins.TreeButton(button, isSelected)
   button:SetHighlightTexture("")
   button:SetDisabledTexture("")
 
-  local rowHeight = _PUI_GetTreeRowHeight(false)
+  local rowHeight = _PUI_GetTreeButtonHeight(button)
   local currentHeight = math.floor((tonumber(button:GetHeight()) or 0) + 0.5)
   if currentHeight ~= rowHeight then
     button:SetHeight(rowHeight)
@@ -609,15 +582,11 @@ function WidgetSkins.TreeButton(button, isSelected)
     button:SetHitRectInsets(0, 0, 0, 0)
   end
 
-  local labelText = _PUI_GetTreeButtonText(button)
-  local description = _PUI_GetTreeButtonDescription(labelText)
   local buttonWidth = math.floor((tonumber(button:GetWidth()) or 0) + 0.5)
 
   local layoutKey = table.concat({
     tostring(buttonWidth),
     tostring(rowHeight),
-    tostring(labelText),
-    tostring(description),
     tostring(button.toggle ~= nil),
   }, "\030")
 
@@ -669,48 +638,12 @@ function WidgetSkins.TreeButton(button, isSelected)
 
   if layoutChanged then
     text:ClearAllPoints()
-    if description ~= "" then
-      text:SetPoint("TOPLEFT", button, "TOPLEFT", 12, -6)
-    else
-      text:SetPoint("LEFT", button, "LEFT", 12, 0)
-    end
+    text:SetPoint("LEFT", button, "LEFT", 12, 0)
     text:SetPoint("RIGHT", button.toggle, "LEFT", -8, 0)
     text:SetHeight(Theme.GetOptionsFontHeight("nav", 12))
   end
 
   text:SetJustifyH("LEFT")
-
-  if not button.__puiTreeDescription then
-    button.__puiTreeDescription = button:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    button.__puiTreeDescription.__puiOptionsFontOwned = true
-    Theme.MarkCreatedWidgetChrome(button.__puiTreeDescription)
-    button.__puiTreeDescription:SetJustifyH("LEFT")
-    button.__puiTreeDescription:SetJustifyV("TOP")
-    button.__puiTreeDescription:SetWordWrap(true)
-    Theme.ApplyFont(button.__puiTreeDescription, "tiny", 9)
-    layoutChanged = true
-  end
-
-  Theme.ApplyFont(button.__puiTreeDescription, "tiny", 9)
-
-  if layoutChanged then
-    button.__puiTreeDescription:ClearAllPoints()
-    button.__puiTreeDescription:SetPoint("TOPLEFT", text, "BOTTOMLEFT", 0, -2)
-    button.__puiTreeDescription:SetPoint("RIGHT", text, "RIGHT", 0, 0)
-    button.__puiTreeDescription:SetHeight(math.max(20, Theme.GetOptionsFontHeight("tiny", 9) * 2))
-  end
-
-  if button.__puiTreeDescription:GetText() ~= description then
-    button.__puiTreeDescription:SetText(description)
-  end
-
-  button.__puiTreeDescription:SetTextColor(
-    colors.mutedText[1],
-    colors.mutedText[2],
-    colors.mutedText[3],
-    colors.mutedText[4]
-  )
-  button.__puiTreeDescription:SetShown(description ~= "")
   button.__puiTreeCardLayoutKey = layoutKey
 end
 
@@ -796,8 +729,8 @@ end
 local function _PUI_StyleTreeButtons(widget)
   local metrics = Theme.GetControlMetrics()
   local pcmManagerTree = _PUI_IsPCMManagerTree(widget)
-  local buttonGap = pcmManagerTree and PCM_TREE_ROW_GAP or metrics.treeButtonGap
-  local topInset = pcmManagerTree and PCM_TREE_TOP_INSET or metrics.treeGroupTopInset
+  local buttonGap = metrics.treeButtonGap
+  local topInset = metrics.treeGroupTopInset
   local useCustomCards = _PUI_TreeGroupUsesCustomCards(widget)
   local buttons = widget.buttons
   local prev
@@ -811,7 +744,7 @@ local function _PUI_StyleTreeButtons(widget)
     tostring(widget.showscroll == true),
     tostring(rightInset),
     tostring(buttonGap),
-    tostring(_PUI_GetTreeRowHeight(pcmManagerTree)),
+    tostring(_PUI_GetTreeRowHeight()),
     tostring(topInset),
     tostring(treeWidth),
     tostring(#buttons),
@@ -972,7 +905,7 @@ function WidgetSkins.TreeGroup(widget)
       end
 
       local pcmTree = self.__puiPCMManagerTree == true
-      local topInset = pcmTree and PCM_TREE_TOP_INSET or Theme.GetControlMetrics().treeGroupTopInset
+      local topInset = Theme.GetControlMetrics().treeGroupTopInset
       local rightInset = (pcmTree or show) and _PUI_GetTreeScrollbarLane() or TREE_EDGE_INSET
       firstButton:ClearAllPoints()
       firstButton:SetPoint("TOPLEFT", self.treeframe, "TOPLEFT", TREE_EDGE_INSET, -topInset)
@@ -1106,7 +1039,7 @@ function WidgetSkins.TreeGroup(widget)
   widget.__puiTreeChromeHooked = true
   _PUI_StyleTreeButtons(widget)
 
-  local rowHeight = _PUI_GetTreeRowHeight(pcmManagerTree)
+  local rowHeight = _PUI_GetTreeRowHeight()
   if _PUI_TreeGroupUsesCustomCards(widget) and widget.__puiTreeRowHeight ~= rowHeight then
     widget.__puiTreeRowHeight = rowHeight
     widget:RefreshTree()
