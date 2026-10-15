@@ -182,12 +182,14 @@ local function Panel(height)
 end
 
 local function Settings(path)
-  local parent = Panel(500)
+  Heading("Start with these settings")
+  local parent = Panel(360)
   settingsHost:SetParent(parent)
   settingsHost:ClearAllPoints()
   settingsHost:SetAllPoints(parent)
   settingsHost:Show()
   ns.InstallerSettings.Show(settingsHost, path)
+  Action("Open full settings for this feature", function() callbacks.openOptions(path) end)
 end
 
 local function Preview(kind, path)
@@ -460,45 +462,49 @@ local function BuildPage(key)
     end)
     Details({ "Accessibility" }, "Accessibility")
   elseif key == "unitframes" then
-    Text("Choose a frame to preview and configure. Each frame has its own size, text, power, and castbar settings; shared appearance is available separately.")
+    Text("Unit frames show health and power for you and the units you select. Pick a frame, then try its size, health text, and class colors in the example.")
+    Check("Enable unit frames", ns.UnitFrames:GetQuickSetupValue("enabled"), function(value) ns.UnitFrames:SetQuickSetupValue("enabled", value) end)
     Choices("Frame", {
       { "Player", { "unitframes", "player" } }, { "Target", { "unitframes", "target" } },
       { "Focus", { "unitframes", "focus" } }, { "Pet", { "unitframes", "player", "pet" } },
-      { "Boss", { "unitframes", "boss" } }, { "Shared appearance", { "unitframes", "general" } },
+      { "Boss", { "unitframes", "boss" } },
     }, 1, function(choice) Preview("unitframes", choice[2]); Settings(choice[2]) end)
-    Details({ "unitframes", "player" }, "Unit Frames")
+    Text("Find this later: /pui > Unit Frames. Cast bars, portraits, indicators, and detailed styling are in full settings.")
   elseif key == "group" then
-    Text("Party and raid layouts are independent. Role icons identify a member's role; defensive icons show supported protection effects; dispel indicators call attention to removable debuffs. Private aura information is controlled by Blizzard.")
+    Text("Party and raid frames help you follow your group. Set a readable size and spacing here; the next page introduces buffs, debuffs, and defensive indicators.")
     Choices("Group", { { "Party", { "unitframes", "party" } }, { "Raid", { "unitframes", "raid" } } }, 1, function(choice)
       Preview("unitframes", choice[2]); Settings(choice[2])
     end)
-    Details({ "unitframes", "party" }, "Unit Frames / Party and raid")
+    Text("Find this later: /pui > Unit Frames > Party or Raid. Sorting and detailed indicators are in full settings.")
   elseif key == "auras" then
-    Text("Buffs help a unit; debuffs affect it negatively. Tracked groups select specific effects. Defensive indicators and dispels have separate settings. Only mine and spell filters apply to the selected aura display.")
-    Choices("Aura display", {
-      { "Player buffs and tracked effects", { "unitframes", "player", "auras", "customDisplays" } },
-      { "Party buffs and debuffs", { "unitframes", "party", "auras", "customDisplays" } },
-      { "Raid buffs and debuffs", { "unitframes", "raid", "auras", "customDisplays" } },
-      { "Party dispels", { "unitframes", "party", "dispels" } },
-      { "Raid dispels", { "unitframes", "raid", "dispels" } },
+    Text("Buffs show helpful effects; debuffs show harmful ones. Pick an example to change its visibility and icon size. Defensive displays show protection from you and other players.")
+    Choices("Aura example", {
+      { "Player buffs", { "unitframes", "player", "auras", "customDisplays", "buffs" } },
+      { "Player debuffs", { "unitframes", "player", "auras", "customDisplays", "debuffs" } },
+      { "Party buffs", { "unitframes", "party", "auras", "customDisplays", "buffs" } },
+      { "Party debuffs", { "unitframes", "party", "auras", "customDisplays", "debuffs" } },
+      { "Party defensives", { "unitframes", "party", "auras", "customDisplays", "defensives" } },
+      { "Raid buffs", { "unitframes", "raid", "auras", "customDisplays", "buffs" } },
+      { "Raid debuffs", { "unitframes", "raid", "auras", "customDisplays", "debuffs" } },
+      { "Raid defensives", { "unitframes", "raid", "auras", "customDisplays", "defensives" } },
     }, 1, function(choice) Preview("unitframes", choice[2]); Settings(choice[2]) end)
-    Text("The preview cannot be dragged during setup. Use the selected display's settings to change filters or placement. More-specific display settings take precedence over shared settings.")
+    Text("Find this later: /pui > Unit Frames > Auras. Custom spell lists, filters, positions, and dispel highlighting are in full settings. Private aura information comes from Blizzard.")
   elseif key == "bars" then
-    Text("Shared settings establish the button layout. Turn on a bar's custom settings to override it, then choose its visibility and mouseover behavior. Special bars retain their own controls.")
+    Text("Action bars hold your spells and items. Start with the shared button size and spacing. Choose an individual bar only if you want it to look different, then turn on Customize this bar.")
     local choices = { { "Shared settings", { "ACTIONBARS", "general" } } }
     for index = 1, 12 do choices[#choices + 1] = { "Bar " .. index, { "ACTIONBARS", tostring(index) } } end
     choices[#choices + 1] = { "Pet bar", { "ACTIONBARS", "special", "pet" } }
     choices[#choices + 1] = { "Stance bar", { "ACTIONBARS", "special", "stance" } }
     Choices("Action bar", choices, 1, function(choice) Preview("actionbars", choice[2]); Settings(choice[2]) end)
-    Text("Vehicle, override, possess, extra-action, and zone-ability behavior follows its existing secure owner. Keep the required special controls visible and check them in the appropriate game situation.")
+    Text("Find this later: /pui > Action bars. Mouseover visibility, countdown styling, and special-bar behavior are in full settings. Keybind mode lets you assign keys by hovering over a button.")
     Action("Open keybind mode", callbacks.openKeybinds)
   elseif key == "prd" then
-    Text("Health and primary power are independent bars. Set height and text below; detached bars have their own width and position. Sample playback does not change your saved layout. Open PRD settings to reorder the real stack.")
+    Text("The Personal Resource Display keeps health and power near your character. Choose which bars to show, then make their text and height comfortable. The next page introduces your specialization's resources.")
     PrimaryPowerIntroduction()
     Check("Enable Personal Resource Display", ns.Modules.PRD:IsModuleEnabled(), function(value) ns.Modules.PRD:SetModuleEnabled(value) end)
     Preview("prd")
     Choices("Configure", { { "Health", { "PRD", "health" } }, { "Primary power and alternate Mana", { "PRD", "primary" } } }, 1, function(choice) Settings(choice[2]) end)
-    Details({ "PRD", "health" }, "Personal Resource Display")
+    Text("Find this later: /pui > Personal Resource Display. Stack order, detached bars, colors, and detailed text are in full settings.")
     Action("Arrange my real UI in Edit Mode", callbacks.openEditMode)
   elseif key == "spec" then
     local className, class = UnitClass("player")
@@ -544,7 +550,7 @@ local function BuildPage(key)
     Action("Explore custom cooldowns", function() callbacks.navigate("trackerCooldown") end)
     Action("Explore stacks and effect durations", function() callbacks.navigate("trackerStacks") end)
   elseif key == "cooldowns" then
-    Text("Cooldowns show when spells become available. Buff icons and bars show active effects. Choose a group to set its size, countdown, visibility, and icon overrides.")
+    Text("Cooldown icons show when spells are ready. Buff icons and bars show how long effects last. Pick a group and try a readable size; use Choose tracked spells to select what it tracks.")
     Check("Enable Cooldown Manager", ns.Modules.CooldownManager:IsModuleEnabledByUser(), function(value) ns.Modules.CooldownManager:SetModuleEnabled(value) end)
     local choices = {}
     local groups = ns.PCMGroupManager:GetGroups()
@@ -555,7 +561,7 @@ local function BuildPage(key)
     if #choices > 0 then Choices("Group", choices, 1, function(choice) Preview("cooldowns", choice[2]); Settings(choice[2]) end) end
     Text("Tracked spell selection belongs to Blizzard. Add the spells you want there, then style their displays here.")
     Action("Choose tracked spells", callbacks.openTrackedSpells)
-    Details({ "CooldownManager", "groups" }, "Cooldown Manager / Groups")
+    Text("Find this later: /pui > Cooldown Manager > Groups. Per-spell overrides, swipes, glows, and detailed styling are in full settings.")
   elseif key == "trackerCooldown" or key == "trackerStacks" or key == "trackerCharges" then
     TrackerPage(key)
   elseif key == "utility" then
@@ -581,7 +587,7 @@ local function BuildPage(key)
       end)
       Text("Select a particular fight from the segment menu on the live meter. Current and Overall above remain explicit choices.")
     end
-    Details({ "DamageMeters", "general" }, "Damage Meters")
+    Text("Find this later: /pui > Damage Meters. Saved history, breakdowns, and detailed styling are in full settings.")
   elseif key == "everyday" then
     Text("Choose a feature to see its example and existing controls. Changes apply to this profile; window skin changes take effect after reload.")
     Choices("Feature", {
