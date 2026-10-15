@@ -49,7 +49,13 @@ local function ShieldUnitFrame(box)
   end
   shield:SetFrameLevel(box:GetFrameLevel() + 400)
   shield:Show()
-  box:SetDescription("Sample frame. Use the settings below to change its layout, text, and auras.")
+  box.__puiAuraCreateToolbar:Hide()
+  box.__puiAuraSelectionLabel:Hide()
+  box.__puiAuraVisibilityButton:Hide()
+  box.__puiAuraPreviewZoomControl:Hide()
+  for _, control in pairs(box.__puiInlineDensityControls) do control:Hide() end
+  box.__puiAuraPreviewContext.allowDrag = false
+  box:SetDescription("Sample frame. Try the starter settings below; detailed editing is in full settings.")
 end
 
 local function BuildCurrent()
