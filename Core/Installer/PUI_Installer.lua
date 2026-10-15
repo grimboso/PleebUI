@@ -707,8 +707,6 @@ RefreshPage = function()
     button:SetHeight(rowHeight)
   end
   frame.SidebarCanvas:SetHeight(#pages * (rowHeight + 4))
-  local offset = (currentPage - 1) * (rowHeight + 4)
-  frame.SidebarScroll:SetVerticalScroll(math.max(0, math.min(frame.SidebarScroll:GetVerticalScrollRange(), offset - frame.SidebarScroll:GetHeight() / 2)))
   if accessibilityOpen then
     frame.Title:SetText("Accessibility")
     frame.Progress:SetText("Help and readability")
@@ -774,6 +772,7 @@ local function BuildFrame()
     return scroll
   end
   frame.SidebarScroll = Scroll(frame.Sidebar)
+  frame.SidebarScroll.__puiKeyboardAutoScroll = false
   frame.SidebarScroll:SetPoint("TOPLEFT", 6, -6)
   frame.SidebarScroll:SetPoint("BOTTOMRIGHT", -28, 6)
   frame.SidebarCanvas = CreateFrame("Frame", nil, frame.SidebarScroll)
