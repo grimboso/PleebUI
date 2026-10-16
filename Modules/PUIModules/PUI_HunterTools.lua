@@ -38,6 +38,7 @@ local SALVE_TEMPLATE_NAMES = { "PUI_AuraApplicationDurationTemplate" }
 local SalveAnchor
 local SalveSlot
 local SalveButton
+local SalveCooldownGate
 local SalvePreview
 local SalveDirty = false
 local EmergencySalveSpellDirty = true
@@ -178,6 +179,19 @@ local function EnsureSalveAnchor()
   return frame
 end
 
+local function RefreshSalveCooldown()
+  if not SalveCooldownGate then
+    return
+  end
+
+  local duration = C_Spell.GetSpellCooldownDuration(FEIGN_DEATH_SPELL_ID, true)
+  if duration then
+    SalveCooldownGate:SetAlphaFromBoolean(duration:IsZero(), 1, 0)
+  else
+    SalveCooldownGate:SetAlpha(0)
+  end
+end
+
 local function ApplySalveVisual(frame, text, icon)
   local db = NormalizeDB()
   local size = db.emergencySalveFontSize
@@ -213,6 +227,12 @@ local function StyleEmergencySalveButton(initializing)
 
   if initializing == true then
     local anchor = EnsureSalveAnchor()
+
+    -- Keep cooldown alpha outside the restricted aura button.
+    SalveCooldownGate = CreateFrame("Frame", nil, SalveButton:GetParent())
+    SalveCooldownGate:SetAllPoints(anchor)
+    SalveButton:SetParent(SalveCooldownGate)
+    RefreshSalveCooldown()
 
     SalveButton:ClearAllPoints()
     SalveButton:SetAllPoints(anchor)
@@ -322,6 +342,7 @@ local function EnsureSalveSlot()
 end
 
 local function RefreshEmergencySalve()
+  RefreshSalveCooldown()
   local db = NormalizeDB()
 
   local active = db.enabled == true
@@ -374,6 +395,7 @@ local function RefreshEventRegistration()
     and db.emergencySalveEnabled == true
 
   if salveActive then
+    HunterTools:RegisterEvent("SPELL_UPDATE_COOLDOWN", "OnHunterEvent")
     HunterTools:RegisterEvent("PLAYER_ENTERING_WORLD", "OnHunterEvent")
     HunterTools:RegisterEvent("PLAYER_TALENT_UPDATE", "OnHunterEvent")
     HunterTools:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED", "OnHunterEvent")
@@ -445,6 +467,11 @@ function HunterTools:OnEditModeChanged(enable)
 end
 
 function HunterTools:OnHunterEvent(event)
+  if event == "SPELL_UPDATE_COOLDOWN" then
+    RefreshSalveCooldown()
+    return
+  end
+
   if event == "ADDON_RESTRICTION_STATE_CHANGED" then
     if C_Secrets.ShouldAurasBeSecret() ~= true then
       RefreshEmergencySalve()
