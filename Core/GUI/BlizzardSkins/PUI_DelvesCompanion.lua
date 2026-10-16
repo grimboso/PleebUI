@@ -11,6 +11,7 @@ local function InstallSlot(slot)
   Theme.ApplyFont(slot.Label, "body")
   Theme.ApplyFont(slot.Value, "body")
   local list = slot.OptionsList
+  list:SetFrameStrata("HIGH")
   Skins.Hide(list.Top)
   Skins.Hide(list.Middle)
   Skins.Hide(list.Bottom)
