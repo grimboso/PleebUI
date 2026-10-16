@@ -20,7 +20,6 @@ local math_floor = _G.math.floor
 local tonumber = _G.tonumber
 local type = _G.type
 
-local AuraSlotDriver = ns.AuraSlotDriver
 local FrameUtil = ns.FrameUtil
 
 local EMERGENCY_SALVE_SPELL_ID = 459517
@@ -36,7 +35,7 @@ local SALVE_CANDIDATES = {
 local SALVE_TEMPLATE_NAMES = { "PUI_AuraApplicationDurationTemplate" }
 
 local SalveAnchor
-local SalveSlot
+local SalveContainer
 local SalveButton
 local SalveCooldownGate
 local SalvePreview
@@ -184,6 +183,16 @@ local function RefreshSalveCooldown()
     return
   end
 
+  local db = Addon.db.profile.hunterTools
+  if not HunterTools:IsEnabled()
+    or db.enabled ~= true
+    or db.emergencySalveEnabled ~= true
+    or EmergencySalveKnown ~= true
+  then
+    SalveCooldownGate:SetAlpha(0)
+    return
+  end
+
   local duration = C_Spell.GetSpellCooldownDuration(FEIGN_DEATH_SPELL_ID, true)
   if duration then
     SalveCooldownGate:SetAlphaFromBoolean(duration:IsZero(), 1, 0)
@@ -227,12 +236,6 @@ local function StyleEmergencySalveButton(initializing)
 
   if initializing == true then
     local anchor = EnsureSalveAnchor()
-
-    -- Keep cooldown alpha outside the restricted aura button.
-    SalveCooldownGate = CreateFrame("Frame", nil, SalveButton:GetParent())
-    SalveCooldownGate:SetAllPoints(anchor)
-    SalveButton:SetParent(SalveCooldownGate)
-    RefreshSalveCooldown()
 
     SalveButton:ClearAllPoints()
     SalveButton:SetAllPoints(anchor)
@@ -317,15 +320,25 @@ local function RefreshSalvePreview(show)
   end
 end
 
-local function EnsureSalveSlot()
-  if SalveSlot then
-    return SalveSlot
+local function EnsureSalveContainer()
+  if SalveContainer then
+    return SalveContainer
   end
 
-  EnsureSalveAnchor()
+  local anchor = EnsureSalveAnchor()
+  SalveCooldownGate = CreateFrame("Frame", nil, UIParent)
+  SalveCooldownGate:SetAllPoints(anchor)
+  RefreshSalveCooldown()
 
-  SalveSlot = AuraSlotDriver:CreateSlot(
-    "player",
+  local container = CreateFrame("AuraContainer", nil, SalveCooldownGate, "CustomAuraContainerTemplate")
+  SalveContainer = container
+  container:SetSize(1, 1)
+  container:SetUnit("player")
+  container:SetEnabled(false)
+  container:Hide()
+
+  container:AddAuraSlot(
+    "emergency_salve",
     "HARMFUL",
     {
       candidateFilters = SALVE_CANDIDATES,
@@ -338,7 +351,7 @@ local function EnsureSalveSlot()
     }
   )
 
-  return SalveSlot
+  return container
 end
 
 local function RefreshEmergencySalve()
@@ -358,29 +371,27 @@ local function RefreshEmergencySalve()
   if not active then
     SalveDirty = false
 
-    if SalveSlot then
-      AuraSlotDriver:SetSlotActive(SalveSlot, false)
+    if SalveContainer then
+      SalveContainer:SetEnabled(false)
+      SalveContainer:Hide()
     end
 
     return
   end
 
-  if not SalveSlot and InCombatLockdown() then
+  if not SalveContainer and InCombatLockdown() then
     SalveDirty = true
     return
   end
 
   SalveDirty = false
 
-  local slot = EnsureSalveSlot()
-
-  if slot.active ~= true then
-    AuraSlotDriver:SetSlotCandidates(slot, SALVE_CANDIDATES)
-    AuraSlotDriver:SetSlotActive(slot, true)
-  end
+  local container = EnsureSalveContainer()
+  container:SetEnabled(true)
+  container:Show()
 
   StyleEmergencySalveButton()
-  AuraSlotDriver:RefreshUnit("player")
+  container:UpdateAllAuras()
 end
 
 local function RefreshEventRegistration()
@@ -639,12 +650,17 @@ function HunterTools:OnDisable()
   self:UnregisterAllEvents()
   RefreshSalvePreview(false)
 
+  if SalveCooldownGate then
+    SalveCooldownGate:SetAlpha(0)
+  end
+
   if SalveAnchor then
     FrameUtil.SetMoverSuppressed("hunter_emergency_salve", true)
   end
 
-  if SalveSlot then
-    AuraSlotDriver:SetSlotActive(SalveSlot, false)
+  if SalveContainer then
+    SalveContainer:SetEnabled(false)
+    SalveContainer:Hide()
   end
 end
 
