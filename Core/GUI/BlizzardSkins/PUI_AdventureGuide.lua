@@ -84,7 +84,15 @@ local function SkinJourneyRow(row)
     return
   end
 
-  SkinGuideRow(row)
+  Skins.Surface(row, true)
+  Skins.Texts(row)
+  -- Blizzard reads these atlases to update the highlight on press and release.
+  Skins.Hide(row.NormalTexture)
+  Skins.Hide(row.PushedTexture)
+  Skins.Hide(row:GetHighlightTexture())
+  local highlight = row:CreateTexture(nil, "HIGHLIGHT")
+  highlight:SetColorTexture(1, 1, 1, 0.12)
+  highlight:SetAllPoints(row)
 
   if row.WatchedFactionToggleFrame then
     local checkbox = row.WatchedFactionToggleFrame.WatchFactionCheckbox
