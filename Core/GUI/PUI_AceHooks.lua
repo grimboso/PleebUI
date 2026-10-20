@@ -386,14 +386,15 @@ local function _PUI_InstallAceConfigDialogHooks()
   _PUI_InstallOptionsTooltipHook(AceConfigDialog.tooltip)
 
   local originalFeedGroup = AceConfigDialog.FeedGroup
-  AceConfigDialog.FeedGroup = function(dialog, appName, options, container, ...)
+  AceConfigDialog.FeedGroup = function(dialog, appName, options, container, rootframe, path, ...)
     if appName ~= "PleebUI" then
-      return originalFeedGroup(dialog, appName, options, container, ...)
+      return originalFeedGroup(dialog, appName, options, container, rootframe, path, ...)
     end
 
+    ns.GUI.PrepareOptionsGroup(options, path)
     optionsFeedDepth = optionsFeedDepth + 1
     PauseOptionsFeedLayout(container)
-    local result = originalFeedGroup(dialog, appName, options, container, ...)
+    local result = originalFeedGroup(dialog, appName, options, container, rootframe, path, ...)
     optionsFeedDepth = optionsFeedDepth - 1
 
     if optionsFeedDepth == 0 then
