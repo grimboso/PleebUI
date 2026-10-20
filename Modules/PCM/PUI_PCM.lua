@@ -850,11 +850,6 @@ local function _PCM_ReconcileRuntimeViewers(owner)
   ns.PCMAbilityRuntime:Flush()
   ns.PCMAuraRuntime:Flush()
 
-  _ForceAnchor(owner:GetViewerFrame("EssentialCooldownViewer"), "EssentialCooldownViewer")
-  _ForceAnchor(owner:GetViewerFrame("UtilityCooldownViewer"), "UtilityCooldownViewer")
-
-  FrameUtil.RelayoutSmartSnapCluster("PCM_EssentialCooldownViewer")
-  FrameUtil.RelayoutSmartSnapCluster("PCM_UtilityCooldownViewer")
   return true
 end
 
@@ -887,11 +882,21 @@ local function _PCM_FinalizeTransition(token)
   PCMTransitionState.Owner = nil
   PCMTransitionState.InvalidateClassSpellCache = false
 
+  owner:ConsumableTracker_Rebuild()
   ns.Modules.PCM_BB.RefreshAfterTalentSwap()
   owner:SpellBars_ReconcileAvailability()
   owner:CooldownStackBars_RefreshAfterTalentSwap()
   ns.PCM_RefreshCustomBarsOptionsAfterSpecializationChange()
   owner.RefreshKeybinds(nil)
+
+  ns.PCMGroupManager:Flush()
+  _ForceAnchor(owner:GetViewerFrame("EssentialCooldownViewer"), "EssentialCooldownViewer")
+  _ForceAnchor(owner:GetViewerFrame("UtilityCooldownViewer"), "UtilityCooldownViewer")
+  if not FrameUtil._profileTransitionActive then
+    FrameUtil.RefreshSmartSnapRuntimeLayout("PCM_EssentialCooldownViewer", true)
+    FrameUtil.RefreshSmartSnapRuntimeLayout("PCM_UtilityCooldownViewer", true)
+  end
+  FrameUtil.CompleteProfileTransition()
 end
 
 local function _PCM_FlushTransition(token)
@@ -913,7 +918,7 @@ local function _PCM_FlushTransition(token)
     return
   end
 
-  if PCMRuntime:IsDataRestricted() then
+  if owner.__puiPCMProfileRefreshPending or PCMRuntime:IsDataRestricted() then
     return
   end
 
@@ -930,6 +935,22 @@ local function _PCM_FlushTransition(token)
   end
 
   _PCM_FinalizeTransition(token)
+end
+
+function Cooldowns:BeginProfileTransition()
+  if not _PCM_IsModuleEnabledFast() then
+    return
+  end
+
+  self.__puiPCMProfileRefreshPending = true
+  _PCM_BeginTransition(self, true)
+end
+
+function Cooldowns:FinishProfileTransition()
+  self.__puiPCMProfileRefreshPending = nil
+  if _PCM_IsTransitionPending() then
+    _PCM_FlushTransition(PCMTransitionState.Token or 0)
+  end
 end
 
 _PCM_QueueTransitionFlush = function()
@@ -1380,6 +1401,7 @@ local function _RegisterViewerMover(info)
           Round(width - GetBorderPad())
         )
         Cooldowns:_FlushViewerRefreshImmediate("layout", info.key)
+        ns.PCMGroupManager:Flush()
         FrameUtil:RefreshGhostMover("PCM_" .. info.key)
       end,
     } or nil,
@@ -1654,6 +1676,7 @@ function Cooldowns:_PCM_RunDisableTeardown()
   self.__puiPCM_EditModeOn = false
   self.__puiPCM_BlizzardEditModeRetakePending = nil
   self.__puiPCMCustomTrackerLayoutPending = nil
+  self.__puiPCMProfileRefreshPending = nil
 
   PCMTransitionFlushFrame:Hide()
   PCMTransitionState.Queued = false
@@ -2094,7 +2117,7 @@ function Cooldowns:ApplySettings(flags)
     return
   end
 
-  local needsAbilityRefresh = flags.profile == true or flags.theme == true or flags.fonts == true
+  local needsAbilityRefresh = flags.profile ~= true and (flags.theme == true or flags.fonts == true)
 
   if flags.profile == true then
     _PCM_MigrateOwnedViewerTooltips()
@@ -2123,9 +2146,7 @@ function Cooldowns:ApplySettings(flags)
   end
 
   if flags.profile == true then
-    self:RefreshAbilityCatalog()
-    self:ApplyKeybindTextRulesNow(nil)
-    _PCM_ReconcileNativeCDM()
+    _PCM_BeginTransition(self, true)
   end
 end
 
@@ -2138,7 +2159,7 @@ function Cooldowns:SoftRebuild(flags)
     return
   end
 
-  if flags.profile ~= true and flags.layout ~= true and flags.movers ~= true then
+  if flags.profile == true or (flags.layout ~= true and flags.movers ~= true) then
     return
   end
 
@@ -2148,7 +2169,6 @@ function Cooldowns:SoftRebuild(flags)
 
   self:_SpellBars_SoftRebuild(flags)
   self:_CooldownStackBars_SoftRebuild(flags)
-  self:_ConsumableTracker_SoftRebuild(flags)
 end
 
 local function _PCM_AddCustomBarSpellID(spellSet, spellID)
@@ -2332,6 +2352,8 @@ end
   _ApplyPCMProfile = P:Def('_ApplyPCMProfile', _ApplyPCMProfile)
   Cooldowns._RequestViewerRefresh = P:Def('Cooldowns:_RequestViewerRefresh', Cooldowns._RequestViewerRefresh)
   Cooldowns.RefreshAbilityCatalog = P:Def('Cooldowns:RefreshAbilityCatalog', Cooldowns.RefreshAbilityCatalog)
+  Cooldowns.BeginProfileTransition = P:Def('Cooldowns:BeginProfileTransition', Cooldowns.BeginProfileTransition)
+  Cooldowns.FinishProfileTransition = P:Def('Cooldowns:FinishProfileTransition', Cooldowns.FinishProfileTransition)
   Cooldowns._FlushViewerRefreshImmediate = P:Def('Cooldowns:_FlushViewerRefreshImmediate', Cooldowns._FlushViewerRefreshImmediate)
   Cooldowns.RefreshViewerGlows = P:Def('Cooldowns:RefreshViewerGlows', Cooldowns.RefreshViewerGlows)
   _PCM_RegisterEditModeParticipant = P:Def('_PCM_RegisterEditModeParticipant', _PCM_RegisterEditModeParticipant)
