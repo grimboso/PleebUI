@@ -1765,7 +1765,11 @@ local function _PUI_GetRootRegistryNavNodes(searchText)
         end
       end
     else
-      local option = _PUI_CreateProviderOption(node)
+      local previousActivePath = ns._PUIActiveOptionsPath
+      local searchPath = {}
+      ns._PUIActiveOptionsPath = searchPath
+      local option = _PUI_CreateProviderOption(node, searchPath)
+      ns._PUIActiveOptionsPath = previousActivePath
       if type(option.args) == "table" then
         local rootName = node.label
         local rootPath = { node.key }
