@@ -171,10 +171,16 @@ local function PRDPreview_ConfigureStackColorSegments(bar, maximum, config)
 end
 
 local function PRDPreview_Navigate(box, path, sectionKey, optionKey)
+  local settingsPath = {}
+  for index, key in ipairs(path) do
+    settingsPath[index] = key
+  end
+  settingsPath[#settingsPath + 1] = sectionKey
+
   ns.PreviewBox.NavigateToOption(
     box.__puiPRDPreviewAddon or Addon,
-    path,
-    sectionKey,
+    settingsPath,
+    nil,
     optionKey
   )
 end
@@ -3199,6 +3205,15 @@ do
     return args
   end
 
+  local function PRD_ArrangeSettingsSections(args)
+    for _, group in pairs(args) do
+      if group.type == "group" then
+        group.inline = false
+      end
+    end
+    return args
+  end
+
   local function PRD_BuildHealthArgs()
     local s = GetPRDState()
     if not s then
@@ -3343,7 +3358,7 @@ do
     }
     PRD_ArrangeNativeBarArgs(args, s, "health")
     for key, group in pairs(PRD_BuildSharedStackArgs(s)) do args[key] = group end
-    return args
+    return PRD_ArrangeSettingsSections(args)
   end
 
   local DRUID_FORM_COLOR_VALUES = {
@@ -3829,7 +3844,7 @@ do
         },
       },
     }
-    return PRD_ArrangeNativeBarArgs(args, s, "primary")
+    return PRD_ArrangeSettingsSections(PRD_ArrangeNativeBarArgs(args, s, "primary"))
   end
 
   local RESOURCE_ANCHOR_VALUES = {
@@ -5109,12 +5124,11 @@ do
       arranged.stackRecolorCdmNotice = nil
     end
     if next(arranged.display.args) == nil then arranged.display = nil end
-    if arranged.display then arranged.display.inline = true end
-    arranged.cueGroup.inline = true
-    return arranged
+    arranged.feature.name = "Visibility"
+    return PRD_ArrangeSettingsSections(arranged)
   end
 
-  local function PRD_BuildSpecResourceArgs()
+  local function PRD_BuildSpecResourceArgs(activeResource, buildAll)
     local state = GetPRDState()
     if not state then
       return {
@@ -5129,7 +5143,9 @@ do
       resourceArgs[resource.key] = {
         type = "group", name = resource.name, order = index,
         desc = resource.category == "TRACKED_EFFECT" and "Tracked effect" or "Class resource",
-        args = PRD_BuildResourceLayoutArgs(state, resource),
+        childGroups = "tab",
+        args = (buildAll or activeResource == resource.key or not activeResource and index == 1)
+          and PRD_BuildResourceLayoutArgs(state, resource) or {},
       }
     end
     if #resources == 0 then
@@ -5141,10 +5157,30 @@ do
     return resourceArgs
   end
 
+  local function PRD_GetOptionsCacheKey(path)
+    local specID = tostring(ns.PRDSecondary.GetPlayerSpecialization() or 0)
+    if not path or path[1] ~= "PRD" then
+      return specID .. "\031all"
+    end
+    local activeTab = path[2] or "health"
+    local resourceKey = ""
+    if activeTab == "resources" then
+      local resources = ns.PRDSecondary:GetResourceOptionsForClass(PLAYER_CLASS)
+      resourceKey = path[3] or resources[1] and resources[1].key or ""
+    end
+    return table.concat({
+      specID, activeTab, resourceKey,
+    }, "\031")
+  end
+
   local function PRDRootProvider()
     local provider = {}
 
     function provider:GetOptions()
+      local activePath = ns._PUIActiveOptionsPath
+      local activeTab = type(activePath) == "table" and activePath[1] == "PRD"
+        and (activePath[2] or "health") or nil
+      local buildAll = activeTab == nil
       local options = {
         type = "group",
         name = "Personal Resource Display",
@@ -5154,20 +5190,23 @@ do
             type = "group",
             name = "Health",
             order = 1,
-            args = PRD_BuildHealthArgs(),
+            childGroups = "tree",
+            args = (buildAll or activeTab == "health") and PRD_BuildHealthArgs() or {},
           },
           primary = {
             type = "group",
             name = "Primary power",
             order = 2,
-            args = PRD_BuildPrimaryArgs(),
+            childGroups = "tree",
+            args = (buildAll or activeTab == "primary") and PRD_BuildPrimaryArgs() or {},
           },
           resources = {
             type = "group",
             name = select(2, ns.PRDSecondary.GetPlayerSpecialization()) or PLAYER_CLASS_NAME,
             order = 3,
             childGroups = "tree",
-            args = PRD_BuildSpecResourceArgs(),
+            args = (buildAll or activeTab == "resources")
+              and PRD_BuildSpecResourceArgs(activeTab and activePath[3], buildAll) or {},
           },
         },
       }
@@ -5193,6 +5232,8 @@ do
       buildPreview = ns.PRDPreview.Build,
     },
   })
+  ns.Registry.Options.PRD.dynamicOptions = true
+  ns.Registry.Options.PRD.optionsCacheKey = PRD_GetOptionsCacheKey
 end
 
   Clamp = P:Def("Clamp", Clamp)
