@@ -1355,13 +1355,13 @@ function UF:SuspendFrameElements(frame)
   end
 
   frame.__puiElementsPaused = true
+  frame.__puiTextApplyUnit = nil
   frame:PauseAllElements()
 
   for index = 1, #TAG_TEXT_FIELDS do
     local fontString = frame[TAG_TEXT_FIELDS[index]]
-    if fontString and fontString.__puiTagString then
-      frame:Untag(fontString)
-      fontString.__puiTagString = nil
+    if fontString then
+      UFText.TagOrClearFrame(frame, fontString, "")
     end
   end
 end
