@@ -621,7 +621,20 @@ local function _PUI_BuildOptionsPath(sectionKey, inlineTabKey, key)
   return path
 end
 
-function GUI.CopyOptionsNode(src, seen)
+local PUI_RENDER_OPTIONS_ROOTS = setmetatable({}, { __mode = "k" })
+local PUI_RENDER_OPTIONS_GROUPS = setmetatable({}, { __mode = "k" })
+
+local function _PUI_IsInlineOptionsGroup(option)
+  if option.dialogInline ~= nil then
+    return option.dialogInline
+  end
+  if option.guiInline ~= nil then
+    return option.guiInline
+  end
+  return option.inline == true
+end
+
+function GUI.CopyOptionsNode(src, seen, deferGroups)
   if type(src) ~= "table" then
     return src
   end
@@ -637,8 +650,19 @@ function GUI.CopyOptionsNode(src, seen)
   for k, v in pairs(src) do
     if k == "handler" then
       out[k] = v
+    elseif k == "args" and src.type == "group" and deferGroups then
+      local args = {}
+      out.args = args
+      for key, child in pairs(v) do
+        if child.type == "group" and not _PUI_IsInlineOptionsGroup(child) then
+          -- Navigation can read unopened groups without preparing their controls.
+          args[key] = child
+        else
+          args[key] = GUI.CopyOptionsNode(child, seen, deferGroups)
+        end
+      end
     elseif type(v) == "table" then
-      out[k] = GUI.CopyOptionsNode(v, seen)
+      out[k] = GUI.CopyOptionsNode(v, seen, deferGroups)
     else
       out[k] = v
     end
@@ -682,6 +706,10 @@ function GUI.CopyOptionsNode(src, seen)
   elseif out.type == "header" and (control == nil or control == "Heading") then
     out.dialogControl = "PUI_Heading"
     out.control = nil
+  end
+
+  if deferGroups and out.type == "group" then
+    PUI_RENDER_OPTIONS_GROUPS[out] = true
   end
 
   return out
@@ -735,30 +763,51 @@ local function _PUI_ApplyColumnWidthMetadata(option, relWidth, seen)
   local args = option.args
   if type(args) == "table" then
     for _, child in pairs(args) do
-      _PUI_ApplyColumnWidthMetadata(child, childRelWidth, seen)
+      if child.type ~= "group" or _PUI_IsInlineOptionsGroup(child) then
+        _PUI_ApplyColumnWidthMetadata(child, childRelWidth, seen)
+      end
     end
   end
 end
 
-local function _PUI_ApplyOptionsColumnWidthMetadata(root, activePath)
-  if type(root) ~= "table" then
+function GUI.PrepareOptionsGroup(root, path)
+  if not PUI_RENDER_OPTIONS_ROOTS[root] then
     return
   end
 
-  local activeRoot = type(activePath) == "table" and activePath[1] or nil
-  local target = nil
+  local group = root
+  local relWidth = _PUI_GetOptionsColumnRelWidth()
+  for index = 1, #path do
+    local arg = group.arg
+    local columns = type(arg) == "table" and tonumber(arg.puiWidgetColumns) or nil
+    if columns and columns > 0 then
+      relWidth = 1 / columns
+    end
 
-  if activeRoot and root.args then
-    target = root.args[activeRoot]
-  else
-    target = root
+    local key = path[index]
+    local args = group.args
+    if group.plugins then
+      for _, pluginArgs in pairs(group.plugins) do
+        if pluginArgs[key] then
+          args = pluginArgs
+          break
+        end
+      end
+    end
+
+    local child = args[key]
+    if type(child) ~= "table" or child.type ~= "group" then
+      return
+    end
+    if not PUI_RENDER_OPTIONS_GROUPS[child] then
+      child = GUI.CopyOptionsNode(child, nil, true)
+      args[key] = child
+    end
+    group = child
   end
 
-  if type(target) ~= "table" then
-    return
-  end
-
-  _PUI_ApplyColumnWidthMetadata(target, _PUI_GetOptionsColumnRelWidth())
+  _PUI_ApplyColumnWidthMetadata(group, relWidth)
+  return group
 end
 
 local function _PUI_BuildActiveOptionsTree(activePath)
@@ -802,7 +851,7 @@ local function _PUI_BuildActiveOptionsTree(activePath)
     end
 
     local sourceOption = _PUI_CreateProviderOption(node, activePath)
-    local option = GUI.CopyOptionsNode(sourceOption)
+    local option = GUI.CopyOptionsNode(sourceOption, nil, true)
     local kids = childrenByParent[node.key]
 
     if kids and #kids > 0 then
@@ -839,7 +888,7 @@ local function _PUI_BuildActiveOptionsTree(activePath)
     end
   end
 
-  _PUI_ApplyOptionsColumnWidthMetadata(root, activePath)
+  PUI_RENDER_OPTIONS_ROOTS[root] = true
 
   return root
 end
@@ -884,15 +933,9 @@ local function _PUI_RebindOptionsGroup(widget)
   end
 
   local options = _PUI_GetOptionsRoot()
-  local option = options
-
-  for i = 1, #user.path do
-    local args = option and option.args
-    option = args and args[user.path[i]] or nil
-
-    if type(option) ~= "table" then
-      return false
-    end
+  local option = GUI.PrepareOptionsGroup(options, user.path)
+  if not option then
+    return false
   end
 
   user.options = options
