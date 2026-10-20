@@ -340,7 +340,37 @@ local function ProfilesProvider(Addon)
     if not options then
       options = AceDBOptions:GetOptionsTable(db)
       LibDualSpec:EnhanceOptions(options, db)
+      options = ns.GUI.CopyOptionsNode(options)
+      for _, pluginArgs in pairs(options.plugins) do
+        for key, option in pairs(pluginArgs) do
+          options.args[key] = option
+        end
+      end
+      options.plugins = nil
       InstallResetProfileReload(options)
+
+      local current = {}
+      local specializations = {}
+      local maintenance = {}
+      local maintenanceKeys = {
+        descreset = true, reset = true, copydesc = true,
+        copyfrom = true, deldesc = true, delete = true,
+      }
+      for key, option in pairs(options.args) do
+        if key == "enabled" or key:match("^specProfile%d+$") then
+          specializations[key] = option
+        elseif maintenanceKeys[key] then
+          maintenance[key] = option
+        else
+          current[key] = option
+        end
+      end
+      options.childGroups = "tab"
+      options.args = {
+        current = { type = "group", name = "Current profile", order = 1, args = current },
+        specializations = { type = "group", name = "Specializations", order = 2, args = specializations },
+        maintenance = { type = "group", name = "Copy, reset, and delete", order = 3, args = maintenance },
+      }
       provider.__puiProfileOptions = options
     end
 
@@ -353,7 +383,6 @@ local function ProfilesProvider(Addon)
       type = "group",
       name = "Import and export",
       order = 500,
-      inline = true,
       args = {
         description = {
           type = "description",
