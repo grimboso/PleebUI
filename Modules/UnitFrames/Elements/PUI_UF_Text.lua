@@ -527,7 +527,7 @@ end
 
 function Text.RefreshTextForFrame(frame, fontRev)
   local unit = frame and frame.__puiConfigUnit
-  if not unit or not frame.config then
+  if not unit or not frame.config or frame.__puiElementsPaused == true then
     return
   end
 
@@ -549,6 +549,8 @@ function Text.TagOrClearFrame(frame, fontString, tagString)
   end
 
   if not tagString or tagString == "" then
+    fontString:Hide()
+
     if frame.Untag and fontString.__puiTagString then
       frame:Untag(fontString)
     end
@@ -559,6 +561,7 @@ function Text.TagOrClearFrame(frame, fontString, tagString)
   end
 
   if fontString.__puiTagString == tagString then
+    fontString:Show()
     return
   end
 
@@ -574,6 +577,8 @@ function Text.TagOrClearFrame(frame, fontString, tagString)
       fontString:UpdateTag()
     end
   end
+
+  fontString:Show()
 end
 
 function Text.Construct(frame, unit, cfg, deferLayout)
@@ -757,33 +762,24 @@ function Text.ApplyFrame(frame, unit, cfg, fontRev, opts)
 
     if hideNameText then
       Text.TagOrClearFrame(frame, frame.NameText, "")
-      frame.NameText:Hide()
     else
       Text.TagOrClearFrame(
         frame,
         frame.NameText,
         classColoredNames and "[raidcolor][pui:name]|r" or "[pui:name]"
       )
-      frame.NameText:Show()
     end
 
     if showHealth then
       Text.TagOrClearFrame(frame, frame.HealthText, healthTags[hpMode] or defaultHealthTag)
-      frame.HealthText:Show()
     else
       Text.TagOrClearFrame(frame, frame.HealthText, "")
-      frame.HealthText:Hide()
     end
 
     if showPower then
       Text.TagOrClearFrame(frame, frame.PowerText, powerTags[ppMode] or defaultPowerTag)
-
-      if frame.PowerText then
-        frame.PowerText:Show()
-      end
     elseif frame.PowerText then
       Text.TagOrClearFrame(frame, frame.PowerText, "")
-      frame.PowerText:Hide()
     end
   end
 
