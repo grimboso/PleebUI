@@ -837,11 +837,15 @@ end
 
 local function _PCM_ReconcileRuntimeViewers(owner)
   if not owner then
-    return
+    return false
   end
 
   ns.PCMAbilityCatalog:Invalidate("transition-finalize")
   ns.PCMAbilityCatalog:Refresh()
+  if not ns.PCMAbilityCatalog:GetNativeConfiguration() then
+    return false
+  end
+
   owner:_RequestViewerRefresh("all")
   ns.PCMAbilityRuntime:Flush()
   ns.PCMAuraRuntime:Flush()
@@ -851,6 +855,7 @@ local function _PCM_ReconcileRuntimeViewers(owner)
 
   FrameUtil.RelayoutSmartSnapCluster("PCM_EssentialCooldownViewer")
   FrameUtil.RelayoutSmartSnapCluster("PCM_UtilityCooldownViewer")
+  return true
 end
 
 
@@ -873,7 +878,9 @@ local function _PCM_FinalizeTransition(token)
     _PCM_InvalidateClassSpellCache()
   end
 
-  _PCM_ReconcileRuntimeViewers(owner)
+  if not _PCM_ReconcileRuntimeViewers(owner) then
+    return
+  end
   _PCM_ReconcileNativeCDM()
 
   PCMTransitionState.Queued = false
@@ -1896,12 +1903,18 @@ function Cooldowns:OnEnable()
     _PCM_OnNativeSettingsPending,
     self
   )
+  EventRegistry:RegisterCallback(
+    "CooldownViewerSettings.OnDataChanged",
+    _PCM_QueueTransitionFlush,
+    self
+  )
 end
 
 function Cooldowns:OnDisable()
   NativeCDMSettingsChanged = false
   EventRegistry:UnregisterCallback("CooldownViewerSettings.OnPendingChanges", self)
   EventRegistry:UnregisterCallback("CooldownViewerSettings.OnHide", self)
+  EventRegistry:UnregisterCallback("CooldownViewerSettings.OnDataChanged", self)
   PCMCVarFrame:UnregisterEvent("CVAR_UPDATE")
   PCMCVarRefreshFrame:Hide()
   PCMNativePolicy.ReconcilePending = false
