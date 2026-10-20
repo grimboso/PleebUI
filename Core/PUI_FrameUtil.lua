@@ -2688,7 +2688,7 @@ local function BuildSmartSnapLayoutSteps(layoutRoot)
   return layoutSteps
 end
 
-local function RelayoutSmartSnapCluster(startEntry, finalize, syncSize)
+local function RelayoutSmartSnapCluster(startEntry, finalize, syncSize, sizeSource)
   if FrameUtil._profileTransitionActive == true or not startEntry or not startEntry.key then
     return
   end
@@ -2716,7 +2716,7 @@ local function RelayoutSmartSnapCluster(startEntry, finalize, syncSize)
 
   FrameUtil._smartSnapApplying = true
 
-  local moved = syncSize == false and {} or ApplySmartSnapSizeSync(GetSmartSnapSizeSource(startEntry))
+  local moved = syncSize == false and {} or ApplySmartSnapSizeSync(GetSmartSnapSizeSource(sizeSource or startEntry))
   if pinnedRoot then
     moved[layoutRoot] = nil
     MoveEntryTo(layoutRoot, pinnedX, pinnedY, true)
@@ -2775,7 +2775,9 @@ end
 local function FlushPendingSmartSnapRelayouts(allowStartup)
   FrameUtil._smartSnapRuntimeRelayoutScheduled = false
 
-  if InCombatLockdown() then
+  if InCombatLockdown() or FrameUtil._profileTransitionActive == true
+    or (ns.PCM_IsTransitionPending() and not ns.PCMRuntime:IsDataRestricted())
+  then
     return
   end
 
@@ -2801,13 +2803,20 @@ local function FlushPendingSmartSnapRelayouts(allowStartup)
   end
   wipe(PendingSmartSnapRelayouts)
 
-  for key in pairs(PendingSmartSnapRuntimeRelayouts) do
+  for key, syncSize in pairs(PendingSmartSnapRuntimeRelayouts) do
     local root = GetStableSmartSnapRoot(key)
-    if root and not roots[root.key] then
-      roots[root.key] = {
-        finalize = false,
-        syncSize = startup,
-      }
+    if root then
+      local options = roots[root.key]
+      if not options then
+        options = { finalize = false, syncSize = startup }
+        roots[root.key] = options
+      end
+      if syncSize then
+        options.syncSize = true
+        if not options.sizeSource or key == root.key then
+          options.sizeSource = MoversByKey[key]
+        end
+      end
     end
   end
   wipe(PendingSmartSnapRuntimeRelayouts)
@@ -2815,13 +2824,15 @@ local function FlushPendingSmartSnapRelayouts(allowStartup)
   for rootKey, options in pairs(roots) do
     local root = MoversByKey[rootKey]
     if root then
-      RelayoutSmartSnapCluster(root, options.finalize, options.syncSize)
+      RelayoutSmartSnapCluster(root, options.finalize, options.syncSize, options.sizeSource)
     end
   end
 end
 
 local function SchedulePendingSmartSnapRelayouts()
   if FrameUtil._smartSnapRuntimeRelayoutScheduled
+    or FrameUtil._profileTransitionActive == true
+    or (ns.PCM_IsTransitionPending() and not ns.PCMRuntime:IsDataRestricted())
     or not FrameUtil._smartSnapWorldReady
     or InCombatLockdown()
   then
@@ -2867,29 +2878,29 @@ function FrameUtil:CompleteStartupLayout()
   return true
 end
 
-local function QueueSmartSnapRuntimeRelayout(key)
+local function QueueSmartSnapRuntimeRelayout(key, syncSize)
   if FrameUtil._profileTransitionActive == true or not key then
     return
   end
 
-  PendingSmartSnapRuntimeRelayouts[key] = true
+  PendingSmartSnapRuntimeRelayouts[key] = PendingSmartSnapRuntimeRelayouts[key] or syncSize == true
   if FrameUtil._smartSnapWorldReady then
     SchedulePendingSmartSnapRelayouts()
   end
 end
 
-function FrameUtil.RefreshSmartSnapRuntimeLayout(key)
+function FrameUtil.RefreshSmartSnapRuntimeLayout(key, syncSize)
   if not key then
     return
   end
 
   EnsureSmartSnapLoaded()
 
-  if not MoversByKey[key] or not SmartSnapLinks[key] then
+  if FrameUtil._smartSnapApplying or not MoversByKey[key] or not SmartSnapLinks[key] then
     return
   end
 
-  QueueSmartSnapRuntimeRelayout(key)
+  QueueSmartSnapRuntimeRelayout(key, syncSize)
 end
 
 local function PropagateSmartSnapDesign(startEntry)
@@ -6252,6 +6263,13 @@ end
 
 function FrameUtil.CompleteProfileTransition()
   if FrameUtil._profileTransitionActive ~= true then
+    return
+  end
+
+  local update = Addon._puiStaggeredUpdate
+  if (ns.PCM_IsTransitionPending() and not ns.PCMRuntime:IsDataRestricted())
+    or (update and update.running == true)
+  then
     return
   end
 
