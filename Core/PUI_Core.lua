@@ -1017,7 +1017,7 @@ function Addon:OnInitialize()
   ns.MinimapData.Initialize()
 end
 
-function Addon:RefreshIconFonts(atWorldEntry)
+function Addon:ApplyFontSettings()
   local media = self.db.profile.pui.media
 
   ns.Theme.RefreshFontSizeOffsetCache()
@@ -1033,14 +1033,19 @@ function Addon:RefreshIconFonts(atWorldEntry)
   end
 
   ns.Theme.RefreshAppliedFonts()
+end
 
-  ns.Modules.UnitFrames:SafeRefresh("text")
-  ns.Modules.PartyFrames:RefreshText()
-  ns.Modules.RaidFrames:RefreshText()
-  ns.Modules.CastBar:RefreshFromProfile()
-  ns.Modules.PRD:RefreshIconFonts()
-  ns.ActionBarsCore:RefreshAll({ fonts = true })
-  ns.Modules.CooldownManager:RefreshIconFonts()
+function Addon:RefreshIconFonts(atWorldEntry, profileRefresh)
+  if not profileRefresh then
+    self:ApplyFontSettings()
+    ns.Modules.UnitFrames:SafeRefresh("text")
+    ns.Modules.PartyFrames:RefreshText()
+    ns.Modules.RaidFrames:RefreshText()
+    ns.Modules.CastBar:RefreshFromProfile()
+    ns.Modules.PRD:RefreshIconFonts()
+    ns.ActionBarsCore:RefreshAll({ fonts = true })
+    ns.Modules.CooldownManager:RefreshIconFonts()
+  end
   if not atWorldEntry then
     ns.Registry.ChatLinks:RefreshFonts()
   end
@@ -1064,6 +1069,9 @@ Addon._puiUpdateBus = Addon._puiUpdateBus or {
   scheduled = false,
   deferredSoft = {},
 }
+
+local PUIProfileUpdateFrame = CreateFrame("Frame")
+PUIProfileUpdateFrame:Hide()
 
 local PUI_PROFILE_UPDATE_TARGETS = {
   "ActionBar",
@@ -1141,16 +1149,6 @@ local function _PUI_UB_RequestSoftTarget(ub, target, flags)
   _PUI_UB_ApplySoftTarget(target, flags)
 end
 
-local function _PUI_ST_Push(queue, name)
-  queue[#queue + 1] = name
-end
-
-function Addon:RequestProfileUpdates(flags)
-  for index = 1, #PUI_PROFILE_UPDATE_TARGETS do
-    self:RequestUpdate(PUI_PROFILE_UPDATE_TARGETS[index], flags)
-  end
-end
-
 function Addon:RequestThemeUpdates()
   for index = 1, #PUI_THEME_UPDATE_TARGETS do
     self:RequestUpdate(PUI_THEME_UPDATE_TARGETS[index], { theme = true })
@@ -1170,10 +1168,16 @@ function Addon:_RunStaggeredUpdateStep(step, flags)
     end
   elseif step == "ApplyQuality" then
     ns.Modules.Quality:ApplyAll()
-  elseif step == "RequestProfileUpdates" then
-    self:RequestProfileUpdates(flags)
-  elseif step == "RefreshFonts" and flags.fonts == true then
-    self:RefreshIconFonts()
+  elseif step == "ApplyFonts" then
+    if flags.fonts == true then
+      self:ApplyFontSettings()
+    end
+  elseif step == "RefreshFonts" then
+    if flags.fonts == true then
+      self:RefreshIconFonts(nil, flags.profile == true)
+    end
+  else
+    self:_FlushUpdateBus({ [step] = flags })
   end
 end
 
@@ -1183,28 +1187,32 @@ function Addon:_RunNextStaggeredUpdate()
     return
   end
 
+  if st.nextFlags then
+    local nextFlags = st.nextFlags
+    _PUI_UB_MergeFlags(nextFlags, st.flags)
+    st.running = false
+    self:StaggeredUpdateAll(nextFlags)
+    return
+  end
+
   local step = table.remove(st.queue, 1)
   if not step then
-    local nextFlags = st.nextFlags
     st.running = false
     st.flags = nil
-    st.nextFlags = nil
     st.queue = {}
-
-    if nextFlags and next(nextFlags) then
-      self:StaggeredUpdateAll(nextFlags)
-    else
-      ns.FrameUtil.CompleteProfileTransition()
-    end
-
+    ns.Modules.CooldownManager:FinishProfileTransition()
+    ns.FrameUtil.CompleteProfileTransition()
     return
   end
 
   self:_RunStaggeredUpdateStep(step, st.flags or {})
-  C_Timer.After(0.02, function()
-    Addon:_RunNextStaggeredUpdate()
-  end)
+  PUIProfileUpdateFrame:Show()
 end
+
+PUIProfileUpdateFrame:SetScript("OnUpdate", function(frame)
+  frame:Hide()
+  Addon:_RunNextStaggeredUpdate()
+end)
 
 function Addon:StaggeredUpdateAll(flags)
   local st = self._puiStaggeredUpdate
@@ -1226,10 +1234,17 @@ function Addon:StaggeredUpdateAll(flags)
 
   _PUI_UB_MergeFlags(st.flags, flags)
 
-  _PUI_ST_Push(st.queue, "ApplyScale")
-  _PUI_ST_Push(st.queue, "ApplyQuality")
-  _PUI_ST_Push(st.queue, "RequestProfileUpdates")
-  _PUI_ST_Push(st.queue, "RefreshFonts")
+  if st.flags.profile == true then
+    ns.Modules.CooldownManager:BeginProfileTransition()
+  end
+
+  st.queue[#st.queue + 1] = "ApplyScale"
+  st.queue[#st.queue + 1] = "ApplyFonts"
+  st.queue[#st.queue + 1] = "ApplyQuality"
+  for index = 1, #PUI_PROFILE_UPDATE_TARGETS do
+    st.queue[#st.queue + 1] = PUI_PROFILE_UPDATE_TARGETS[index]
+  end
+  st.queue[#st.queue + 1] = "RefreshFonts"
 
   self:_RunNextStaggeredUpdate()
 end
@@ -1252,13 +1267,15 @@ function Addon:RequestUpdate(target, flags)
   end)
 end
 
-function Addon:_FlushUpdateBus()
+function Addon:_FlushUpdateBus(targets)
   local ub = self._puiUpdateBus
   if not ub then return end
 
-  local targets = ub.targets
-  ub.targets = {}
-  ub.scheduled = false
+  if not targets then
+    targets = ub.targets
+    ub.targets = {}
+    ub.scheduled = false
+  end
 
   local flags = targets.ActionBar
   if flags then
