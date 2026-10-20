@@ -1831,13 +1831,7 @@ function Cooldowns:ConsumableTracker_Disable()
 end
 
 function Cooldowns:_ConsumableTracker_ApplySettings(flags)
-  if flags and (flags.profile or flags.theme or flags.fonts or flags.layout or flags.movers) then
-    self:ConsumableTracker_Rebuild()
-  end
-end
-
-function Cooldowns:_ConsumableTracker_SoftRebuild(flags)
-  if flags and (flags.profile or flags.layout or flags.movers) then
+  if flags and not flags.profile and (flags.theme or flags.fonts or flags.layout or flags.movers) then
     self:ConsumableTracker_Rebuild()
   end
 end
@@ -1874,7 +1868,9 @@ end
 ns.TestMode:RegisterParticipant(PARTICIPANT_KEY, TestParticipant)
 
 ns.PCMCatalog:RegisterListener(Tracker, function()
-  if Tracker.active and (GetDB().enabled == true or Tracker.testMode) then
+  if Tracker.active and not ns.PCM_IsTransitionPending()
+    and (GetDB().enabled == true or Tracker.testMode)
+  then
     RefreshDefinitions(function() return true end)
   end
 end)
@@ -1893,4 +1889,3 @@ Cooldowns.ConsumableTracker_SetTestMode = P:Def("Cooldowns:ConsumableTracker_Set
 Cooldowns.ConsumableTracker_Enable = P:Def("Cooldowns:ConsumableTracker_Enable", Cooldowns.ConsumableTracker_Enable)
 Cooldowns.ConsumableTracker_Disable = P:Def("Cooldowns:ConsumableTracker_Disable", Cooldowns.ConsumableTracker_Disable)
 Cooldowns._ConsumableTracker_ApplySettings = P:Def("Cooldowns:_ConsumableTracker_ApplySettings", Cooldowns._ConsumableTracker_ApplySettings)
-Cooldowns._ConsumableTracker_SoftRebuild = P:Def("Cooldowns:_ConsumableTracker_SoftRebuild", Cooldowns._ConsumableTracker_SoftRebuild)
