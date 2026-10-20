@@ -1111,7 +1111,7 @@ function GroupManager:Flush()
     flushFrame:SetShown(dynamicBoundsRefreshPasses > 0)
     return
   end
-  if ns.PCMCatalog:GetGeneration() == 0 then
+  if ns.PCM_IsTransitionPending() or ns.PCMCatalog:GetGeneration() == 0 then
     flushFrame:Hide()
     return
   end
