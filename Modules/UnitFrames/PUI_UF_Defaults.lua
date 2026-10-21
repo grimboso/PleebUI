@@ -787,6 +787,7 @@ function UFDefaults.GetRaidDefaults()
     sortDir = "ASC",
     roleSortOrder = UFDefaults.DefaultRoleSortOrder,
     numGroups = 5,
+    moverUseRaidSize = false,
     unitsPerColumn = 5,
     rowSpacing = 3,
     columnSpacing = 3,
