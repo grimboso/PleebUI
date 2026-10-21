@@ -1299,10 +1299,14 @@ local function RefreshRaidFrames(context)
     return true
   end
 
-  local groupCount = context:GetValue("uf.raidGroups")
+  local cfg, db, forceNoPower, configuredGroups = RaidFrames:GetTestFrameConfig()
+  if context.changedKey == "uf.raidGroupSettings" then
+    context.values["uf.raidGroups"] = configuredGroups
+  end
+  local groupCount = db.moverUseRaidSize == true and configuredGroups
+    or math_min(context:GetValue("uf.raidGroups"), configuredGroups)
   local membersPerGroup = context:GetValue("uf.raidMembersPerGroup")
   local visibleCount = groupCount * membersPerGroup
-  local cfg, db, forceNoPower = RaidFrames:GetTestFrameConfig()
   local frames = UnitFrameTest.presentationFrames.raid
   local groupFrames = UnitFrameTest.presentationFrames.raidGroups
 
@@ -1328,6 +1332,10 @@ local function RefreshRaidFrames(context)
       db.useClassColor ~= false,
       memberIndex
     )
+  end
+
+  for index = visibleCount + 1, #frames do
+    UnitFrameTest.activeFrames[frames[index]] = nil
   end
 
   if RaidFrames:LayoutTestFrames(frames, groupFrames, groupCount, membersPerGroup) == false then
@@ -1402,7 +1410,7 @@ function UnitFrameTest:Refresh(context)
     ApplyActivityToFrames(context)
     StartAnimation()
     return ready ~= false
-  elseif changedKey == "uf.raidSettings" then
+  elseif changedKey == "uf.raidSettings" or changedKey == "uf.raidGroupSettings" then
     local ready = RefreshRaidFrames(context)
     ApplyActivityToFrames(context)
     StartAnimation()
