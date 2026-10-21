@@ -459,6 +459,8 @@ local function CreateRecord(viewer, entry, preparedOnly)
 end
 
 local function ReleaseRecord(viewer, record)
+  record.stylePending = nil
+  record.alphaRestorePending = nil
   record.totemSlot = nil
   record.totemDuration = nil
   record.totemSpellID = nil
@@ -928,6 +930,26 @@ function AuraRuntime:Flush()
       for _, record in ipairs(viewer.orderedRecords) do
         if record.stylePending then
           ApplyRecordAppearance(record)
+          record.alphaRestorePending = nil
+        elseif record.alphaRestorePending then
+          local alpha = 1
+          if record.viewerKey == BUFF_ICON_VIEWER then
+            local style = GetIconStyle(record)
+            alpha = tonumber(style.appearance and style.appearance.auraAlpha) or 1
+          end
+          local restored = true
+          for unit, button in pairs(record.buttons) do
+            if unit ~= "totem" then
+              if button:CanBeAccessedInContext() then
+                button:SetAlpha(alpha)
+              else
+                restored = false
+              end
+            end
+          end
+          if restored then
+            record.alphaRestorePending = nil
+          end
         end
       end
     end
@@ -1028,7 +1050,7 @@ restrictionFrame:SetScript("OnEvent", function(_, event, restrictionType, state)
         for unit, button in pairs(record.buttons) do
           if unit ~= "totem" and button:CanBeAccessedInContext() then
             button:SetAlpha(1)
-            record.stylePending = true
+            record.alphaRestorePending = true
           end
         end
       end

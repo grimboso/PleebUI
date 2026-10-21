@@ -1052,9 +1052,6 @@ local function _CustomBars_ApplyConfig(id, cfg)
   if cfg.presentation == "BAR" then
     if cfg.kind == "duration" then
       local candidate = _customBarsAuraDriver:ResolveCandidate(cfg)
-      if DurationSource:Normalize(cfg) == "automatic" then
-        _customBarsAuraDriver:Attach(f, cfg)
-      end
       DurationSource:Attach(f, cfg, candidate.spellIDs, _CustomBars_RefreshDurationSource)
     else
       DurationSource:Detach(f)

@@ -1641,7 +1641,17 @@ local function RefreshCountsAndVisibility()
       ConfigureDurationAuraTrack(icon, icon.definition, icon.durationSpellIDs, cfg)
     end
   end
-  RelayoutVisibleIcons(cfg)
+
+  local runtimeVisible = ShouldShowContainer(cfg)
+  for index = 1, #Tracker.orderedIcons do
+    local icon = Tracker.orderedIcons[index]
+    if icon.groupRecord.groupVisible ~= (icon.trackerVisible == true and runtimeVisible) then
+      RelayoutVisibleIcons(cfg)
+      return
+    end
+  end
+
+  RefreshContainerVisibility(cfg)
 end
 
 local function GetItemInfoOwners(itemID)
@@ -1697,16 +1707,33 @@ PCMRuntime:RegisterSubscriber("ConsumableTracker", {
   end,
 })
 
-function Cooldowns:ConsumableTracker_RefreshKeybinds()
+function Cooldowns:ConsumableTracker_RefreshKeybinds(spellIDs)
   if not (Tracker.active and GetDB().showKeybinds) then
     return
   end
 
-  RefreshDefinitions(IsBagItemDefinition)
+  RefreshDefinitions(function(definition)
+    if not IsBagItemDefinition(definition) then
+      return false
+    end
+    if not spellIDs then
+      return true
+    end
+    for index = 1, #definition.itemIDs do
+      if ns.PCMKeybinds:IsAffected(spellIDs, nil, definition.itemIDs[index]) then
+        return true
+      end
+    end
+    return false
+  end)
 
   for index = 1, #Tracker.icons do
     local icon = Tracker.icons[index]
-    if icon.trackerVisible == true and not IsBagItemDefinition(icon.definition) then
+    if icon.trackerVisible == true and not IsBagItemDefinition(icon.definition)
+      and (not spellIDs or ns.PCMKeybinds:IsAffected(
+        spellIDs, icon.spellID, icon.itemID, icon.definition.equipSlot
+      ))
+    then
       icon.keybindText:SetText(GetKeybind(icon.definition, icon.itemID, icon.spellID))
     end
   end

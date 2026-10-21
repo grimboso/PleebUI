@@ -428,7 +428,7 @@ local function PrepareAuraButtonsForRestriction(restrictionType, state)
     for _, button in pairs(record.auraButtons) do
       if button and button:CanBeAccessedInContext() then
         button:SetAlpha(1)
-        record.auraStylePending = true
+        record.auraAlphaRestorePending = true
       end
     end
   end
@@ -521,7 +521,25 @@ local function QueuePendingAuraStyles()
 
   for _, record in pairs(activeByCooldownID) do
     if record.auraStylePending then
+      record.auraAlphaRestorePending = nil
       MarkRecordDirty(record, DIRTY_APPEARANCE, 0, APPEARANCE_STYLE)
+    elseif record.auraAlphaRestorePending then
+      local style = GetRecordStyle(record)
+      local appearance = style.appearance or {}
+      local alpha = tonumber(appearance.auraAlpha) or 1
+      local restored = true
+      for _, button in pairs(record.auraButtons) do
+        if button then
+          if CanRestyleAuraButton(button) then
+            button:SetAlpha(alpha)
+          else
+            restored = false
+          end
+        end
+      end
+      if restored then
+        record.auraAlphaRestorePending = nil
+      end
     end
   end
 
@@ -1307,6 +1325,7 @@ local function ReleaseRecord(record)
   record.appearanceDirtyMask = 0
   record.hasEventCooldownState = nil
   record.auraStylePending = nil
+  record.auraAlphaRestorePending = nil
   record.parts.frame:SetScript("OnEnter", nil)
   record.parts.frame:SetScript("OnLeave", nil)
   PCMPresentation.DeactivateOwnedIcon(record.parts)
@@ -1875,6 +1894,14 @@ function AbilityRuntime:MarkBucketDirty(bucketName, dirtyMask)
   MarkBucket(bucketName, dirtyMask)
 end
 
+function AbilityRuntime:RefreshKeybinds(spellIDs)
+  for _, record in pairs(buckets.keybind.records) do
+    if not spellIDs or PCMKeybinds:IsEntryAffected(spellIDs, record.entry, record) then
+      MarkRecordDirty(record, DIRTY_STATE, STATE_KEYBIND)
+    end
+  end
+end
+
 function AbilityRuntime:RebuildLayout()
   if not enabled then
     return
@@ -2134,6 +2161,7 @@ AbilityRuntime.ApplyViewerStyle = P:Def("AbilityRuntime:ApplyViewerStyle", Abili
 AbilityRuntime.ApplyEntrySettings = P:Def("AbilityRuntime:ApplyEntrySettings", AbilityRuntime.ApplyEntrySettings)
 AbilityRuntime.RefreshLayout = P:Def("AbilityRuntime:RefreshLayout", AbilityRuntime.RefreshLayout)
 AbilityRuntime.MarkBucketDirty = P:Def("AbilityRuntime:MarkBucketDirty", AbilityRuntime.MarkBucketDirty)
+AbilityRuntime.RefreshKeybinds = P:Def("AbilityRuntime:RefreshKeybinds", AbilityRuntime.RefreshKeybinds)
 AbilityRuntime.RebuildLayout = P:Def("AbilityRuntime:RebuildLayout", AbilityRuntime.RebuildLayout)
 AbilityRuntime.Flush = P:Def("AbilityRuntime:Flush", AbilityRuntime.Flush)
 AbilityRuntime.Enable = P:Def("AbilityRuntime:Enable", AbilityRuntime.Enable)

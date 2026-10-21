@@ -22,8 +22,11 @@ local _KB_ScheduleRebuild
 local _KB_UpdateConsumerState
 
 local _kbSpellKeyCache = {}
+local _kbSpellKeyBaseIDs = {}
 local _kbItemKeyCache = {}
+local _kbItemKeySpellIDs = {}
 local _kbEquipSlotKeyCache = {}
+local _kbEquipSlotKeyItemIDs = {}
 local _kbMacroSpellIDToKey = {}
 local _kbMacroSpellNameToKey = {}
 local _kbItemSlots = {}
@@ -42,6 +45,9 @@ local _kbActionSlotID = {}
 local _kbMappedPages = {}
 local _kbExtraBarPages = {}
 local _kbBarOffsets = {}
+local _kbChangedSpellIDs = {}
+local _kbChangedSpellFlush = {}
+local _kbAllContentChanged = false
 
 local _KB_MOD_LABELS = {
   SHIFT = "S",
@@ -207,8 +213,11 @@ end
 local function _KB_InvalidateBindings()
   wipe(_kbMacroSlotEntries)
   wipe(_kbSpellKeyCache)
+  wipe(_kbSpellKeyBaseIDs)
   wipe(_kbItemKeyCache)
+  wipe(_kbItemKeySpellIDs)
   wipe(_kbEquipSlotKeyCache)
+  wipe(_kbEquipSlotKeyItemIDs)
   wipe(_kbMacroSpellIDToKey)
   wipe(_kbMacroSpellNameToKey)
   wipe(_kbMacroItemToKey)
@@ -231,6 +240,49 @@ local function _KB_InvalidateActionContent()
   wipe(_kbEquipSlotKeyCache)
   _kbFallbackMapsBlocked = false
   _kbCacheReady = false
+end
+
+local function _KB_TrackChangedSpell(spellID)
+  if _KB_IsSecret(spellID) or type(spellID) ~= "number" or spellID <= 0 then
+    _kbAllContentChanged = true
+    return
+  end
+
+  local baseSpellID = C_Spell.GetBaseSpell(spellID)
+  if _KB_IsSecret(baseSpellID) or type(baseSpellID) ~= "number" or baseSpellID <= 0 then
+    _kbAllContentChanged = true
+    return
+  end
+
+  _kbChangedSpellIDs[spellID] = true
+  _kbChangedSpellIDs[baseSpellID] = true
+end
+
+local function _KB_IsSpellAffected(spellIDs, spellID)
+  return spellID ~= nil
+    and (spellIDs[spellID] == true or spellIDs[_kbSpellKeyBaseIDs[spellID]] == true)
+end
+
+local function _KB_IsItemAffected(spellIDs, itemID)
+  return itemID ~= nil and _KB_IsSpellAffected(spellIDs, _kbItemKeySpellIDs[itemID])
+end
+
+local function _KB_InvalidateSpellKeybinds(spellIDs)
+  for spellID in pairs(_kbSpellKeyCache) do
+    if _KB_IsSpellAffected(spellIDs, spellID) then
+      _kbSpellKeyCache[spellID] = nil
+    end
+  end
+  for itemID in pairs(_kbItemKeyCache) do
+    if _KB_IsItemAffected(spellIDs, itemID) then
+      _kbItemKeyCache[itemID] = nil
+    end
+  end
+  for equipSlot in pairs(_kbEquipSlotKeyCache) do
+    if _KB_IsItemAffected(spellIDs, _kbEquipSlotKeyItemIDs[equipSlot]) then
+      _kbEquipSlotKeyCache[equipSlot] = nil
+    end
+  end
 end
 
 local function _KB_ActionSlotContentChanged(slot)
@@ -261,6 +313,19 @@ local function _KB_ActionSlotContentChanged(slot)
         if not _kbActionSlotKnown[actionSlot]
           or previousType ~= normalizedType or _kbActionSlotID[actionSlot] ~= normalizedID then
           changed = true
+          if _kbActionSlotKnown[actionSlot]
+            and (previousType == "spell" or previousType == false)
+            and (normalizedType == "spell" or normalizedType == false)
+          then
+            if previousType == "spell" then
+              _KB_TrackChangedSpell(_kbActionSlotID[actionSlot])
+            end
+            if normalizedType == "spell" then
+              _KB_TrackChangedSpell(actionID)
+            end
+          else
+            _kbAllContentChanged = true
+          end
           if previousType == "item" or normalizedType == "item" then
             _kbItemMapBuilt = false
           end
@@ -274,6 +339,7 @@ local function _KB_ActionSlotContentChanged(slot)
         _kbActionSlotType[actionSlot] = normalizedType
         _kbActionSlotID[actionSlot] = normalizedID
       elseif _kbActionSlotKnown[actionSlot] then
+        _kbAllContentChanged = true
         _kbActionSlotKnown[actionSlot] = nil
         _kbItemMapBuilt = false
         _kbMacroMapBuilt = false
@@ -711,6 +777,10 @@ function Cooldowns:GetSpellKeybind(spellID)
   local baseSpellID, currentSpellID, blocked = _KB_NormalizeSpellID(requested)
   if blocked then return nil, true end
 
+  _kbSpellKeyBaseIDs[requested] = baseSpellID
+  _kbSpellKeyBaseIDs[currentSpellID] = baseSpellID
+  _kbSpellKeyBaseIDs[baseSpellID] = baseSpellID
+
   cached = _kbSpellKeyCache[baseSpellID]
   if cached ~= nil then
     _kbSpellKeyCache[requested] = cached
@@ -769,6 +839,7 @@ function Cooldowns:GetItemKeybind(itemID)
   local _, itemSpellID = C_Item.GetItemSpell(itemID)
   if _KB_IsSecret(itemSpellID) then return nil, true end
   itemSpellID = _KB_PositiveNumber(itemSpellID)
+  _kbItemKeySpellIDs[itemID] = itemSpellID
   if itemSpellID then
     local key, blocked = self:GetSpellKeybind(itemSpellID)
     if blocked then return nil, true end
@@ -818,6 +889,7 @@ function Cooldowns:GetEquipmentSlotKeybind(equipSlot)
   local itemID = GetInventoryItemID("player", equipSlot)
   if _KB_IsSecret(itemID) then return nil, true end
   itemID = _KB_PositiveNumber(itemID)
+  _kbEquipSlotKeyItemIDs[equipSlot] = itemID
   if itemID then
     local key, blocked = self:GetItemKeybind(itemID)
     if blocked then return nil, true end
@@ -841,13 +913,6 @@ function Cooldowns:GetEquipmentSlotKeybind(equipSlot)
 
   _kbEquipSlotKeyCache[equipSlot] = false
   return nil, false
-end
-
-local function _KB_RefreshOwnedKeybinds()
-  ns.PCMAbilityRuntime:MarkBucketDirty(
-    "keybind",
-    ns.PCMAbilityRuntime.DIRTY_STATE
-  )
 end
 
 function Cooldowns:GetKeybindTextEnabled(viewerKey)
@@ -898,8 +963,15 @@ local _KB_BINDING_REBUILD_EVENTS = {
 local _kbEventFrame = CreateFrame("Frame")
 _kbEventFrame:Hide()
 
-local function _KB_DoRefresh(full, content, bindings)
+local function _KB_DoRefresh(full, content, bindings, spellIDs)
   if not _kbActive then
+    return
+  end
+
+  if spellIDs then
+    _KB_InvalidateSpellKeybinds(spellIDs)
+    ns.PCMAbilityRuntime:RefreshKeybinds(spellIDs)
+    Cooldowns:ConsumableTracker_RefreshKeybinds(spellIDs)
     return
   end
 
@@ -916,7 +988,7 @@ local function _KB_DoRefresh(full, content, bindings)
   end
 
   _kbCacheReady = _KB_BuildFallbackMaps()
-  _KB_RefreshOwnedKeybinds()
+  ns.PCMAbilityRuntime:RefreshKeybinds()
   Cooldowns:ConsumableTracker_RefreshKeybinds()
 end
 
@@ -928,10 +1000,17 @@ local function _KB_OnRefreshFrameUpdate(self)
   local full = _kbFullRebuild
   local content = _kbContentRebuild
   local bindings = _kbBindingRebuild
+  local spellIDs = _kbChangedSpellIDs
+  _kbChangedSpellIDs = _kbChangedSpellFlush
+  _kbChangedSpellFlush = spellIDs
+  local targeted = content and not full and not bindings and not _kbAllContentChanged
+    and _kbCacheReady and not _kbFallbackMapsBlocked
   _kbFullRebuild = false
   _kbContentRebuild = false
   _kbBindingRebuild = false
-  _KB_DoRefresh(full, content, bindings)
+  _kbAllContentChanged = false
+  _KB_DoRefresh(full, content, bindings, targeted and spellIDs or nil)
+  wipe(spellIDs)
 end
 
 _KB_ScheduleRebuild = function(mode)
@@ -1056,11 +1135,44 @@ function Cooldowns:SetKeybindTextEnabled(viewerKey, enabled)
   cfg.keybind = enabled == true
   self._SetViewerCountFlagCached(viewerKey, "keybind", cfg.keybind)
   _KB_UpdateConsumerState()
-  _KB_RefreshOwnedKeybinds()
+  ns.PCMAbilityRuntime:RefreshKeybinds()
 end
 
 local PCMKeybinds = {}
 ns.PCMKeybinds = PCMKeybinds
+
+function PCMKeybinds:IsAffected(spellIDs, spellID, itemID, equipSlot)
+  return _KB_IsSpellAffected(spellIDs, spellID)
+    or _KB_IsItemAffected(spellIDs, itemID)
+    or (equipSlot ~= nil and _KB_IsItemAffected(spellIDs, _kbEquipSlotKeyItemIDs[equipSlot]))
+end
+
+function PCMKeybinds:IsEntryAffected(spellIDs, entry, runtimeRecord)
+  if entry.entryKind == "equipmentSlot" then
+    return self:IsAffected(spellIDs, nil, nil, entry.equipSlot)
+  end
+  if entry.entryKind == "spellCategory" then
+    if self:IsAffected(spellIDs, nil, runtimeRecord.safeContent.categoryItemID) then
+      return true
+    end
+    local itemIDs = Cooldowns:GetConsumableCategoryItemIDs(entry.spellCategoryID)
+    for index = 1, #(itemIDs or {}) do
+      if _KB_IsItemAffected(spellIDs, itemIDs[index]) then
+        return true
+      end
+    end
+    return false
+  end
+  if _KB_IsSpellAffected(spellIDs, runtimeRecord.runtimeSpellID) then
+    return true
+  end
+  for index = 1, #entry.identitySpellIDs do
+    if _KB_IsSpellAffected(spellIDs, entry.identitySpellIDs[index]) then
+      return true
+    end
+  end
+  return false
+end
 
 function PCMKeybinds:GetForEntry(entry, runtimeRecord)
   if not entry then
@@ -1126,7 +1238,7 @@ function Cooldowns:ApplyKeybindTextRulesNow(viewerKey)
   end
 
   _KB_UpdateConsumerState()
-  _KB_RefreshOwnedKeybinds()
+  ns.PCMAbilityRuntime:RefreshKeybinds()
   Cooldowns:ConsumableTracker_RefreshKeybinds()
 end
 
@@ -1171,6 +1283,9 @@ function Cooldowns:_Keybinds_Disable()
   _kbFullRebuild = false
   _kbContentRebuild = false
   _kbBindingRebuild = false
+  _kbAllContentChanged = false
+  wipe(_kbChangedSpellIDs)
+  wipe(_kbChangedSpellFlush)
   _kbEventFrame:Hide()
   _KB_UnregisterMappingEvents()
   _KB_UnregisterBootstrapEvents()
@@ -1182,7 +1297,7 @@ end
 
 function Cooldowns:_Keybinds_RefreshIconSettings(viewerKey)
   _KB_UpdateConsumerState()
-  _KB_RefreshOwnedKeybinds()
+  ns.PCMAbilityRuntime:RefreshKeybinds()
 end
 
 
@@ -1193,6 +1308,8 @@ _KB_IsMappedActionSlot = P:Def("_KB_IsMappedActionSlot", _KB_IsMappedActionSlot)
 _KB_InvalidateBindings = P:Def("_KB_InvalidateBindings", _KB_InvalidateBindings)
 _KB_InvalidateAll = P:Def("_KB_InvalidateAll", _KB_InvalidateAll)
 _KB_InvalidateActionContent = P:Def("_KB_InvalidateActionContent", _KB_InvalidateActionContent)
+_KB_TrackChangedSpell = P:Def("_KB_TrackChangedSpell", _KB_TrackChangedSpell)
+_KB_InvalidateSpellKeybinds = P:Def("_KB_InvalidateSpellKeybinds", _KB_InvalidateSpellKeybinds)
 _KB_ActionSlotContentChanged = P:Def("_KB_ActionSlotContentChanged", _KB_ActionSlotContentChanged)
 _KB_ButtonIndexForActionIndex = P:Def("_KB_ButtonIndexForActionIndex", _KB_ButtonIndexForActionIndex)
 _KB_KeybindForBinding = P:Def("_KB_KeybindForBinding", _KB_KeybindForBinding)

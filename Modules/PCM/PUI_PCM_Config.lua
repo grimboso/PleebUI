@@ -1,5 +1,5 @@
 -- File: PUI_PCM_Config.lua
-local ADDON_NAME, ns = ...
+local _, ns = ...
 
 
 
@@ -3443,7 +3443,6 @@ local function _PCM_BuildBuffBarsTabArgs()
       style.buffBar.orientation = value == "VERTICAL" and "VERTICAL" or "HORIZONTAL"
       ns.PCM_DBExports.GetStyleDB()
       ns.Modules.PCM_BuffBars:RefreshSettings()
-      LibStub("AceConfigRegistry-3.0"):NotifyChange(ADDON_NAME)
     end,
   }
 
@@ -3556,7 +3555,6 @@ local function _PCM_BuildBuffBarsTabArgs()
     set = function(_, value)
       ns.PCM_DBExports.GetStyleDB().buffBar.layoutMode = value
       ns.Modules.PCM_BuffBars:RefreshSettings()
-      LibStub("AceConfigRegistry-3.0"):NotifyChange(ADDON_NAME)
     end,
   }
 
@@ -4074,10 +4072,21 @@ end
 
 local _PCMValueCache = {}
 
-local function _PCM_ACD_NotifyPCM(targetKey)
+local function _PCM_RefreshCustomTrackerOptions(targetKey)
   wipe(_PCMValueCache)
 
   local targetPath = _PCM_GetCustomBarsTargetPath(targetKey)
+  local activePath = ns._PUIActiveOptionsPath
+  if targetKey and targetPath[#targetPath] == targetKey
+    and activePath and activePath[1] == "CooldownManager" and activePath[2] == "customTrackers"
+  then
+    local trackerIndex = activePath[3] == "__disabledNotLoaded" and 4 or 3
+    if activePath[trackerIndex] == targetKey then
+      for index = trackerIndex + 1, #activePath do
+        targetPath[#targetPath + 1] = activePath[index]
+      end
+    end
+  end
   Addon:NotifyOptionsTreeChanged("CooldownManager", targetPath)
 end
 
@@ -4252,7 +4261,7 @@ function ns.PCM_CreateCustomTrackerFromDraft(draft)
     Cooldowns.NormalizeSpellBarEntry(cfg, id)
     Cooldowns:SpellBars_Rebuild()
     local key = "spell:" .. tostring(id)
-    _PCM_ACD_NotifyPCM(key)
+    _PCM_RefreshCustomTrackerOptions(key)
     return key
   end
 
@@ -4262,7 +4271,7 @@ function ns.PCM_CreateCustomTrackerFromDraft(draft)
     Cooldowns.NormalizeCooldownStackBarEntry(cfg, id)
     Cooldowns:CooldownStackBars_Rebuild()
     local key = "chargeSpell:" .. tostring(id)
-    _PCM_ACD_NotifyPCM(key)
+    _PCM_RefreshCustomTrackerOptions(key)
     return key
   end
 
@@ -4289,7 +4298,7 @@ function ns.PCM_CreateCustomTrackerFromDraft(draft)
   API.EnsureStackBarDefaults(cfg, id)
   API.RebuildCustomBars()
   local key = "bb:" .. tostring(id)
-  _PCM_ACD_NotifyPCM(key)
+  _PCM_RefreshCustomTrackerOptions(key)
   return key
 end
 
@@ -5539,7 +5548,7 @@ local function _PCM_BuildSpellBarLeafArgs(id)
 
   local function RefreshNodeName()
     RebuildRuntime()
-    _PCM_ACD_NotifyPCM("spell:" .. tostring(id))
+    _PCM_RefreshCustomTrackerOptions("spell:" .. tostring(id))
   end
 
   flat.enabled = {
@@ -5574,7 +5583,7 @@ local function _PCM_BuildSpellBarLeafArgs(id)
       CM:Enable()
       CM:SpellBars_DeleteBar(id)
 
-      _PCM_ACD_NotifyPCM(nil)
+      _PCM_RefreshCustomTrackerOptions(nil)
     end,
   }
 
@@ -6163,7 +6172,7 @@ local function _PCM_BuildChargeCooldownBarLeafArgs(id)
 
   local function RefreshNodeName()
     RebuildRuntime()
-    _PCM_ACD_NotifyPCM("chargeSpell:" .. tostring(id))
+    _PCM_RefreshCustomTrackerOptions("chargeSpell:" .. tostring(id))
   end
 
   local function GetLiveMaxCharges()
@@ -6217,7 +6226,7 @@ local function _PCM_BuildChargeCooldownBarLeafArgs(id)
       CM:Enable()
       CM:CooldownStackBars_DeleteBar(id)
 
-      _PCM_ACD_NotifyPCM(nil)
+      _PCM_RefreshCustomTrackerOptions(nil)
     end,
   }
 
@@ -7274,7 +7283,7 @@ local function _PCM_BuildBuffBarLeafArgs(id)
 
   local function NotifyAndRebuildName()
     _PCM_RebuildBuffBarsRuntime()
-    _PCM_ACD_NotifyPCM("bb:" .. tostring(id))
+    _PCM_RefreshCustomTrackerOptions("bb:" .. tostring(id))
   end
 
   local function IsDuration()
@@ -7311,7 +7320,7 @@ local function _PCM_BuildBuffBarLeafArgs(id)
     ns.PCM_ReconcileNativeCDM()
 
     if rebuildOptions then
-      _PCM_ACD_NotifyPCM("bb:" .. tostring(id))
+      _PCM_RefreshCustomTrackerOptions("bb:" .. tostring(id))
     end
   end
 
@@ -7471,7 +7480,7 @@ local function _PCM_BuildBuffBarLeafArgs(id)
 
       API.DeleteCustomBar(actualId)
 
-      _PCM_ACD_NotifyPCM(nil)
+      _PCM_RefreshCustomTrackerOptions(nil)
     end,
   }
 
@@ -8719,7 +8728,7 @@ function ns.PCM_RefreshCustomBarsOptionsAfterSpecializationChange()
     targetKey = nil
   end
 
-  _PCM_ACD_NotifyPCM(targetKey)
+  _PCM_RefreshCustomTrackerOptions(targetKey)
   _PCM_RefreshPreview()
 end
 
@@ -9147,7 +9156,6 @@ local function _PCM_BuildCustomGroupSettings(groupID, group)
       set = function(_, value)
         layout.layoutMode = value
         ns.PCMGroupManager:RequestLayout()
-        LibStub("AceConfigRegistry-3.0"):NotifyChange(ADDON_NAME)
       end,
     }
     args.growthDirection = {
@@ -9311,7 +9319,6 @@ local function _PCM_BuildUnifiedManagerArgs(activeKey, activePath)
       set = function(_, value)
         if Cooldowns:SetModuleEnabled(value == true) then
           ns.PCMHooks.RefreshRuntimeState()
-          LibStub("AceConfigRegistry-3.0"):NotifyChange(ADDON_NAME)
         end
       end,
     }
@@ -10034,7 +10041,7 @@ ns.Registry.Options.CooldownManager.getSearchEntries = Options.GetSearchEntries
   _PCM_GetCustomBarsRootLists = P:Def('_PCM_GetCustomBarsRootLists', _PCM_GetCustomBarsRootLists)
   _PCM_GetCustomBarNodeLabel = P:Def('_PCM_GetCustomBarNodeLabel', _PCM_GetCustomBarNodeLabel)
   _PCM_GetCustomBarsTargetPath = P:Def('_PCM_GetCustomBarsTargetPath', _PCM_GetCustomBarsTargetPath)
-  _PCM_ACD_NotifyPCM = P:Def('_PCM_ACD_NotifyPCM', _PCM_ACD_NotifyPCM)
+  _PCM_RefreshCustomTrackerOptions = P:Def('_PCM_RefreshCustomTrackerOptions', _PCM_RefreshCustomTrackerOptions)
   _PCM_GetSpellBarById = P:Def('_PCM_GetSpellBarById', _PCM_GetSpellBarById)
   _PCM_GetSpecializations = P:Def('_PCM_GetSpecializations', _PCM_GetSpecializations)
   _PCM_GetSpecAssignment = P:Def('_PCM_GetSpecAssignment', _PCM_GetSpecAssignment)

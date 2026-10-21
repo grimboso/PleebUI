@@ -1,6 +1,6 @@
 -- File: PUI_PCM.lua
 
-local ADDON_NAME, ns = ...
+local _, ns = ...
 
 local Addon = ns.Addon
 local FrameUtil = ns.FrameUtil
@@ -47,6 +47,7 @@ PCMTransitionFlushFrame:Hide()
 
 local PCMTransitionState = {
   Queued = false,
+  SpellsChanged = false,
   FlushQueued = false,
   Owner = nil,
   InvalidateClassSpellCache = false,
@@ -759,6 +760,7 @@ local function _PCM_BeginTransition(owner, invalidateClassSpellCache)
     return
   end
 
+  PCMTransitionState.SpellsChanged = false
   PCMTransitionState.Queued = true
   PCMTransitionState.FlushQueued = false
   PCMTransitionState.Token = (PCMTransitionState.Token or 0) + 1
@@ -835,13 +837,15 @@ local function _PCM_OnNativeSettingsHidden()
   end
 end
 
-local function _PCM_ReconcileRuntimeViewers(owner)
+local function _PCM_ReconcileRuntimeViewers(owner, catalogReady)
   if not owner then
     return false
   end
 
-  ns.PCMAbilityCatalog:Invalidate("transition-finalize")
-  ns.PCMAbilityCatalog:Refresh()
+  if not catalogReady then
+    ns.PCMAbilityCatalog:Invalidate("transition-finalize")
+    ns.PCMAbilityCatalog:Refresh()
+  end
   if not ns.PCMAbilityCatalog:GetNativeConfiguration() then
     return false
   end
@@ -854,7 +858,7 @@ local function _PCM_ReconcileRuntimeViewers(owner)
 end
 
 
-local function _PCM_FinalizeTransition(token)
+local function _PCM_FinalizeTransition(token, catalogReady)
   if token ~= (PCMTransitionState.Token or 0) or not _PCM_IsTransitionPending() then
     return
   end
@@ -873,7 +877,7 @@ local function _PCM_FinalizeTransition(token)
     _PCM_InvalidateClassSpellCache()
   end
 
-  if not _PCM_ReconcileRuntimeViewers(owner) then
+  if not _PCM_ReconcileRuntimeViewers(owner, catalogReady) then
     return
   end
   _PCM_ReconcileNativeCDM()
@@ -906,13 +910,18 @@ local function _PCM_FlushTransition(token)
 
   PCMTransitionState.FlushQueued = false
 
-  if not _PCM_IsTransitionPending() then
+  local fullTransition = _PCM_IsTransitionPending()
+  if not fullTransition and not PCMTransitionState.SpellsChanged then
     return
   end
 
-  local owner = PCMTransitionState.Owner
+  local owner = Cooldowns
+  if fullTransition then
+    owner = PCMTransitionState.Owner
+  end
   if not owner or not _PCM_IsModuleEnabledFast() then
     PCMTransitionState.Queued = false
+    PCMTransitionState.SpellsChanged = false
     PCMTransitionState.Owner = nil
     PCMTransitionState.InvalidateClassSpellCache = false
     return
@@ -931,6 +940,25 @@ local function _PCM_FlushTransition(token)
   if type(provider.IsLayoutUpdateQueued) == "function"
     and provider:IsLayoutUpdateQueued()
   then
+    return
+  end
+
+  if not fullTransition then
+    _PCM_InvalidateClassSpellCache()
+    ns.PCMAbilityCatalog:Invalidate("spells-changed")
+    local changed = ns.PCMAbilityCatalog:Refresh()
+    if not ns.PCMAbilityCatalog:GetNativeConfiguration() then
+      return
+    end
+
+    PCMTransitionState.SpellsChanged = false
+    if not changed then
+      return
+    end
+
+    PCMTransitionState.Queued = true
+    PCMTransitionState.Owner = owner
+    _PCM_FinalizeTransition(token, true)
     return
   end
 
@@ -954,7 +982,9 @@ function Cooldowns:FinishProfileTransition()
 end
 
 _PCM_QueueTransitionFlush = function()
-  if not _PCM_IsTransitionPending() or PCMTransitionState.FlushQueued then
+  if PCMTransitionState.FlushQueued
+    or (not _PCM_IsTransitionPending() and not PCMTransitionState.SpellsChanged)
+  then
     return
   end
 
@@ -1071,7 +1101,7 @@ function Cooldowns:_OnDataRestrictionsCleared()
     end
   end
 
-  if _PCM_IsTransitionPending() then
+  if _PCM_IsTransitionPending() or PCMTransitionState.SpellsChanged then
     _PCM_QueueTransitionFlush()
   end
 
@@ -1680,6 +1710,7 @@ function Cooldowns:_PCM_RunDisableTeardown()
 
   PCMTransitionFlushFrame:Hide()
   PCMTransitionState.Queued = false
+  PCMTransitionState.SpellsChanged = false
   PCMTransitionState.FlushQueued = false
   PCMTransitionState.Owner = nil
   PCMTransitionState.InvalidateClassSpellCache = false
@@ -1717,7 +1748,8 @@ function Cooldowns:SetModuleEnabled(enabled)
     layout = true,
     movers = true,
   })
-  Addon:RequestUpdate("Options", { options = true })
+  Addon:InvalidateOptionsRender("CooldownManager")
+  ns.OptionsLifecycle.RefreshModel({ "CooldownManager" })
   return true
 end
 
@@ -1731,7 +1763,7 @@ PCMCVarRefreshFrame:SetScript("OnUpdate", function(frame)
   frame:Hide()
   _PCM_ReconcileNativeCDM()
   Addon:InvalidateOptionsRender("CooldownManager")
-  LibStub("AceConfigRegistry-3.0"):NotifyChange(ADDON_NAME)
+  ns.OptionsLifecycle.RefreshModel({ "CooldownManager" })
 end)
 
 local PCMCVarFrame = CreateFrame("Frame")
@@ -2035,7 +2067,15 @@ function Cooldowns:_OnSpellsChanged()
     return
   end
 
-  _PCM_BeginTransition(self, true)
+  self:ClearSavedSpellKnownCache()
+  if _PCM_IsTransitionPending() then
+    return
+  end
+
+  PCMTransitionState.SpellsChanged = true
+  if not PCMRuntime:IsDataRestricted() then
+    _PCM_QueueTransitionFlush()
+  end
 end
 
 local function _PCM_RuntimeLifecycleEvent(event, ...)
