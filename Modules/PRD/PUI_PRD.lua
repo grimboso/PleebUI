@@ -19,6 +19,7 @@ local PLAYER_CLASS = select(2, UnitClass("player"))
 
 local M = Addon:NewModule("PRD", "NumyAceEvent-3.0")
 M._puiResourceConfigCache = {}
+local _PRD_LAYOUT_ACTIVE = {}
 
 -- Central registry references (match PleebUI pattern)
 ns.Registry.PRD         = M
@@ -48,6 +49,7 @@ local defaults = {
     size = {
       width = 250,
       gap   = 0,
+      spacingByPair = {},
     },
 
     appearance = {
@@ -772,6 +774,7 @@ function M:IsPlayerHealthReplacementActive()
   local profile = self.db and self.db.profile
   if not profile
     or profile.enabled ~= true
+    or profile.hideHealth == true
     or profile.usePlayerHealth ~= true
     or self._puiRuntimeStarted ~= true
     or not self.health
@@ -849,7 +852,7 @@ function M:SetUsePlayerHealth(enabled)
     ns.TestMode:Refresh("unitframes", "player-health-replacement", "uf.singleSettings")
   end
 
-  Addon:NotifyOptionsTreeChanged("PRD", { "PRD", "health" })
+  ns.OptionsLifecycle.RefreshModel({ "PRD" })
   return true
 end
 
@@ -1170,6 +1173,7 @@ end
 
 function M:StopRuntime()
   self._puiRuntimeStarted = false
+  wipe(_PRD_LAYOUT_ACTIVE)
 
   local unitFrames = ns.UnitFrames
   if unitFrames and unitFrames.db then
@@ -1556,9 +1560,41 @@ local _PRD_LAYOUT_BARS = {
   primary = {},
 }
 
-local _PRD_LAYOUT_ACTIVE = {}
+local function PRD_GetSpacingPairKey(firstKey, secondKey)
+  if firstKey > secondKey then firstKey, secondKey = secondKey, firstKey end
+  return firstKey .. ":" .. secondKey
+end
 
-local function _AddPRDLayoutSlot(activeStack, count, key, record, gapBefore)
+function M:GetStackGap(firstKey, secondKey)
+  local profile = self.db.profile
+  local gap = profile.size.spacingByPair[PRD_GetSpacingPairKey(firstKey, secondKey)]
+  if gap == nil then
+    local bothResources = firstKey ~= "health" and firstKey ~= "primary"
+      and secondKey ~= "health" and secondKey ~= "primary"
+    gap = bothResources and (profile.secondary.gap or 2) or (profile.size.gap or 0)
+  end
+  return Round(gap)
+end
+
+function M:SetStackGap(firstKey, secondKey, gap)
+  self.db.profile.size.spacingByPair[PRD_GetSpacingPairKey(firstKey, secondKey)] = Round(math.max(0, math.min(20, gap)))
+  self:RequestRefresh({ layout = true })
+end
+
+function M:GetStackNeighbor(resourceKey, direction)
+  for index, entry in ipairs(_PRD_LAYOUT_ACTIVE) do
+    if entry.key == resourceKey then
+      local neighbor = _PRD_LAYOUT_ACTIVE[index + direction]
+      if not neighbor then return nil end
+      local key = neighbor.key
+      if key == "health" then return key, "Health" end
+      if key == "primary" then return key, "Primary power" end
+      return key, self.secondaryResourceByKey[key].config.resourceName
+    end
+  end
+end
+
+local function _AddPRDLayoutSlot(activeStack, count, key, record)
   count = count + 1
   local slot = activeStack[count]
   if not slot then
@@ -1569,7 +1605,7 @@ local function _AddPRDLayoutSlot(activeStack, count, key, record, gapBefore)
   slot.key = key
   slot.frame = record.frame
   slot.height = record.height
-  slot.gapBefore = count > 1 and gapBefore or 0
+  slot.gapBefore = 0
   return count
 end
 
@@ -1583,17 +1619,14 @@ function M:ApplyLayout()
   local healthAppearance = self:GetBarAppearance("health")
   local primaryAppearance = self:GetBarAppearance("primary")
   local primaryCfg = db.primary
-  local secondaryCfg = db.secondary
   local resources = self.secondaryResources or {}
   local resourceByKey = self.secondaryResourceByKey or {}
   local usePlayerHealth = self:IsPlayerHealthReplacementActive()
   local healthDetached = db.detachHealth == true and not usePlayerHealth
   local primaryDetached = primaryCfg.detached == true
   local savedStackWidth = Pixel.Round(size.width or 240)
-  local gap = Pixel.Round(size.gap or 0)
   local healthHeightPx = Pixel.Round(healthAppearance.height or 15)
   local primaryHeightPx = Pixel.Round(primaryAppearance.height or 15)
-  local secondaryResourceGap = Pixel.Round(secondaryCfg.gap or 2)
   local hideHealth = db.hideHealth == true
   local hidePrimary = db.hidePrimary == true
   local secondaryOn = self.secondaryUsesCustom == true
@@ -1633,37 +1666,30 @@ function M:ApplyLayout()
 
   local activeStack = _PRD_LAYOUT_ACTIVE
   local n = 0
-  local lastAttachedWasResource = false
 
   for _, key in ipairs(ordered) do
     if key == "health" then
       if hb.frame and not hb.hidden and not hb.detached then
-        n = _AddPRDLayoutSlot(activeStack, n, key, hb, gap)
-        lastAttachedWasResource = false
+        n = _AddPRDLayoutSlot(activeStack, n, key, hb)
       end
     elseif key == "primary" then
       if pb.frame and not pb.hidden and not pb.detached then
-        n = _AddPRDLayoutSlot(activeStack, n, key, pb, gap)
-        lastAttachedWasResource = false
+        n = _AddPRDLayoutSlot(activeStack, n, key, pb)
       end
     else
       local resource = resourceByKey[key]
       local record = resource and resourceRecords[key]
       if record and record.frame and not record.hidden and not record.detached then
-        n = _AddPRDLayoutSlot(
-          activeStack,
-          n,
-          key,
-          record,
-          lastAttachedWasResource and secondaryResourceGap or gap
-        )
-        lastAttachedWasResource = true
+        n = _AddPRDLayoutSlot(activeStack, n, key, record)
       end
     end
   end
 
   for i = #activeStack, n + 1, -1 do
     activeStack[i] = nil
+  end
+  for index = 2, n do
+    activeStack[index].gapBefore = self:GetStackGap(activeStack[index - 1].key, activeStack[index].key)
   end
   self._puiAttachedCount = n
 
@@ -2613,6 +2639,10 @@ end
   M.SetSecondaryResourceEnabled = P:Def("SetSecondaryResourceEnabled", M.SetSecondaryResourceEnabled)
   M.NormalizeStackOrder = P:Def("NormalizeStackOrder", M.NormalizeStackOrder)
   M.GetStackOrder = P:Def("GetStackOrder", M.GetStackOrder)
+  PRD_GetSpacingPairKey = P:Def("PRD_GetSpacingPairKey", PRD_GetSpacingPairKey)
+  M.GetStackGap = P:Def("GetStackGap", M.GetStackGap)
+  M.SetStackGap = P:Def("SetStackGap", M.SetStackGap)
+  M.GetStackNeighbor = P:Def("GetStackNeighbor", M.GetStackNeighbor)
   M.SwapStackItems = P:Def("SwapStackItems", M.SwapStackItems)
   M.ApplyLayout = P:Def("ApplyLayout", M.ApplyLayout)
   M.RefreshVisibility = P:Def("RefreshVisibility", M.RefreshVisibility)

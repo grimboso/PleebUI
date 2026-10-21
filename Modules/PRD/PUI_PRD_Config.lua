@@ -12,6 +12,19 @@ local LSM = ns.LSM
 local P = ns.Pleebug:DropIn({}, { name = "PRD_Config" })
 local PLAYER_CLASS_NAME, PLAYER_CLASS = UnitClass("player")
 
+local PRD_SETTINGS_SECTIONS = {
+  { key = "general", name = "General", order = 10,
+    groups = { "feature", "layoutGroup", "layout", "bar", "border", "ticksGroup", "outerBorderGroup", "appearanceCopyGroup" } },
+  { key = "text", name = "Text", order = 20,
+    groups = { "textGroup", "textAppearance" } },
+}
+local PRD_SETTINGS_SECTION_BY_GROUP = {}
+for _, section in ipairs(PRD_SETTINGS_SECTIONS) do
+  for _, key in ipairs(section.groups) do
+    PRD_SETTINGS_SECTION_BY_GROUP[key] = section.key
+  end
+end
+
 local PRDPreview = {}
 ns.PRDPreview = PRDPreview
 
@@ -175,7 +188,7 @@ local function PRDPreview_Navigate(box, path, sectionKey, optionKey)
   for index, key in ipairs(path) do
     settingsPath[index] = key
   end
-  settingsPath[#settingsPath + 1] = sectionKey
+  settingsPath[#settingsPath + 1] = PRD_SETTINGS_SECTION_BY_GROUP[sectionKey] or sectionKey
 
   ns.PreviewBox.NavigateToOption(
     box.__puiPRDPreviewAddon or Addon,
@@ -287,6 +300,7 @@ local function PRDPreview_OrderButtonOnClick(button)
 
   local PRD = ns.Modules.PRD
   PRD:SwapStackItems(button.__puiPRDOrderKey, targetKey)
+  ns.OptionsLifecycle.RefreshModel()
 end
 
 local function PRDPreview_CreateOrderButton(bar, text, point, relativePoint, xOffset)
@@ -1494,8 +1508,6 @@ local function PRDPreview_RefreshLayout(box)
   local resources = PRD.secondaryResources or {}
   local resourceByKey = PRD.secondaryResourceByKey or {}
   local stackWidth = PRDPreview_Clamp(profile.size.width or 240, 120, 600)
-  local stackGap = PRDPreview_Clamp(profile.size.gap or 0, 0, 20)
-  local secondaryGap = PRDPreview_Clamp(profile.secondary.gap or 2, 0, 20)
 
   local healthAppearance = profile.health
   local primaryAppearance = profile.primary
@@ -1521,7 +1533,7 @@ local function PRDPreview_RefreshLayout(box)
   box.__puiPRDPreviewActiveResources = {}
 
   local healthBar
-  if profile.hideHealth ~= true then
+  if profile.hideHealth ~= true and not PRD:IsPlayerHealthReplacementActive() then
     healthBar = PRDPreview_ConfigureBar(
       box,
       "health",
@@ -1620,7 +1632,7 @@ local function PRDPreview_RefreshLayout(box)
   local detached = {}
   local order = PRD:GetStackOrder()
 
-  local function AddBar(list, bar, key, gapBefore)
+  local function AddBar(list, bar, key)
     if not bar then
       return
     end
@@ -1628,25 +1640,17 @@ local function PRDPreview_RefreshLayout(box)
     list[#list + 1] = {
       bar = bar,
       key = key,
-      gapBefore = gapBefore or 0,
+      gapBefore = 0,
     }
   end
-
-  local lastAttachedWasResource = false
 
   for _, key in ipairs(order) do
     if key == "health" and healthBar then
       local list = profile.detachHealth == true and detached or attached
-      AddBar(list, healthBar, key, stackGap)
-      if list == attached then
-        lastAttachedWasResource = false
-      end
+      AddBar(list, healthBar, key)
     elseif key == "primary" and primaryBar then
       local list = profile.primary.detached == true and detached or attached
-      AddBar(list, primaryBar, key, stackGap)
-      if list == attached then
-        lastAttachedWasResource = false
-      end
+      AddBar(list, primaryBar, key)
     else
       local resource = resourceByKey[key]
       local bar = resource and box.__puiPRDPreviewBars[key]
@@ -1655,16 +1659,15 @@ local function PRDPreview_RefreshLayout(box)
         AddBar(
           list,
           bar,
-          key,
-          list == attached and lastAttachedWasResource and secondaryGap or stackGap
+          key
         )
-        if list == attached then
-          lastAttachedWasResource = true
-        end
       end
     end
   end
 
+  for index = 2, #attached do
+    attached[index].gapBefore = PRD:GetStackGap(attached[index - 1].key, attached[index].key)
+  end
   PRDPreview_ConfigureOrderButtons(box, attached)
 
   local attachedHeight = 0
@@ -2559,6 +2562,7 @@ do
 
   local function PRD_EnsureDefaults(db)
     db.size              = db.size      or {}
+    db.size.spacingByPair = db.size.spacingByPair or {}
     db.health            = db.health    or {}
     db.primary           = db.primary   or {}
     db.secondary         = db.secondary or {}
@@ -2708,7 +2712,6 @@ do
       healthCfg = db.health,
       primaryCfg = db.primary,
       primaryResourceCfg = primaryResourceCfg,
-      secondaryCfg = db.secondary,
       healthTextCfg = db.text.health,
     }
   end
@@ -2840,14 +2843,52 @@ do
     return true
   end
 
-  local function PRD_ArrangePresentationArgs(args, layoutKey)
+  local function PRD_ArrangePresentationArgs(args, layoutKey, state, resourceKey, config)
     local layout, appearance = args[layoutKey], args.appearanceGroup
     layout.name, layout.order = "Size and placement", 10
     layout.arg = { puiExplicit = true }
-    for index, key in ipairs({ "height", "detached", "width" }) do
+    for index, key in ipairs({ "height", "width", "detached" }) do
       local option = layout.args[key]
-      option.name = key == "width" and "Detached width" or key == "detached" and "Detach" or "Height"
+      option.name = key == "width" and "Width" or key == "detached" and "Detach" or "Height"
       option.order, option.width, option.relWidth = index * 10, "relative", 0.333
+    end
+    local detached, width = layout.args.detached, layout.args.width
+    local setDetachedWidth = width.set
+    width.name = function() return detached.get() and "Detached width" or "Width" end
+    width.desc = "Sets the shared stack width while attached, or this bar's width while detached."
+    width.disabled, width.arg = nil, nil
+    width.get = function()
+      return Clamp(detached.get() and (config.width or state.size.width or 240) or (state.size.width or 240), 120, 600)
+    end
+    width.set = function(info, value)
+      if detached.get() then
+        setDetachedWidth(info, value)
+      else
+        PRD:SetQuickSetupValue("width", value)
+      end
+    end
+    for _, entry in ipairs({ { "spacingAbove", -1, "above" }, { "spacingBelow", 1, "below" } }) do
+      local key, direction, position = entry[1], entry[2], entry[3]
+      layout.args[key] = {
+        type = "range", order = direction == -1 and 40 or 50,
+        min = 0, max = 20, step = 1, width = "relative", relWidth = 0.5,
+        name = function()
+          local _, name = PRD:GetStackNeighbor(resourceKey, direction)
+          return name and ("Spacing to " .. name) or ("Spacing " .. position)
+        end,
+        disabled = function() return detached.get() or PRD:GetStackNeighbor(resourceKey, direction) == nil end,
+        arg = { puiDisabledReason = function()
+          return detached.get() and "Available while attached." or ("No attached bar " .. position .. ".")
+        end },
+        get = function()
+          local neighbor = PRD:GetStackNeighbor(resourceKey, direction)
+          return neighbor and PRD:GetStackGap(resourceKey, neighbor) or 0
+        end,
+        set = function(_, value)
+          local neighbor = PRD:GetStackNeighbor(resourceKey, direction)
+          if neighbor then PRD:SetStackGap(resourceKey, neighbor, value) end
+        end,
+      }
     end
     for _, key in ipairs({ "point", "x", "y" }) do
       local option = layout.args[key]
@@ -2857,7 +2898,7 @@ do
     appearance.arg = { puiExplicit = true }
     local style = appearance.args
     args.border = {
-      type = "group", name = "Border", order = 30, inline = true,
+      type = "group", name = "Individual border", order = 30, inline = true,
       arg = { puiExplicit = true }, hidden = appearance.hidden, disabled = appearance.disabled,
       args = { borderSize = style.borderSize, borderColor = style.borderColor },
     }
@@ -2926,7 +2967,8 @@ do
       desc = "Gives this bar its own mover and width.",
       order = 0,
       get = function()
-        return role == "health" and state.db.detachHealth == true or role == "primary" and config.detached == true
+        return role == "health" and state.db.usePlayerHealth ~= true and state.db.detachHealth == true
+          or role == "primary" and config.detached == true
       end,
       set = function(_, value)
         if role == "health" then
@@ -2937,10 +2979,6 @@ do
         Addon:ApplyOptionsChange("PRD", { layout = true, mover = true })
       end,
     }
-    layout.width.arg = { puiDisabledReason = "Available when detached." }
-    layout.width.disabled = function()
-      return not layout.detached.get()
-    end
     local appearance = args.colorGroup
     appearance.name = "Appearance"
     appearance.order = 20
@@ -2968,13 +3006,34 @@ do
       },
     }
     if role == "health" then
-      args.feature.args.usePlayerHealth = {
-        type = "toggle", name = "Use Player health", order = 10, width = "relative", relWidth = 0.5,
-        desc = "Uses the Player unit frame in the PRD health position.",
+      args.feature.args.enabled = nil
+      args.feature.args.display = {
+        type = "select", name = "Health display", order = 5, width = "full",
+        values = { DISABLED = "Disabled", PRD = "PRD health bar", PLAYER = "Player health bar" },
+        sorting = { "DISABLED", "PRD", "PLAYER" },
         arg = { puiDisabledReason = "Available outside combat." },
         disabled = InCombatLockdown,
-        get = function() return state.db.usePlayerHealth == true end,
-        set = function(_, value) state.M:SetUsePlayerHealth(value) end,
+        get = function()
+          if state.db.hideHealth == true then return "DISABLED" end
+          return state.db.usePlayerHealth == true and "PLAYER" or "PRD"
+        end,
+        set = function(_, value)
+          state.db.hideHealth = value == "DISABLED"
+          local usePlayerHealth = value == "PLAYER"
+          if (state.db.usePlayerHealth == true) ~= usePlayerHealth then
+            state.M:SetUsePlayerHealth(usePlayerHealth)
+          else
+            PRD:SetQuickSetupValue("showHealth", value ~= "DISABLED")
+          end
+        end,
+      }
+      args.feature.args.playerSettingsDescription = {
+        type = "description", order = 10,
+        name = "Player health bar appearance, including height, texture, border, and text, is configured under Unit Frames > Player.",
+      }
+      args.feature.args.playerSettings = {
+        type = "execute", name = "Open Player settings", order = 15,
+        func = function() Addon:OpenOptions({ "unitframes", "player" }, false, true) end,
       }
     elseif args.visibilityGroup.args.hideAlternateMana then
       args.feature.args.hideAlternateMana = args.visibilityGroup.args.hideAlternateMana
@@ -2983,8 +3042,8 @@ do
       args.visibilityGroup.args.hideAlternateMana = nil
     end
     args.textGroup.order = 30
-    if args.ticksGroup then args.ticksGroup.order = 60 end
-    PRD_ArrangePresentationArgs(args, "layoutGroup")
+    if args.ticksGroup then args.ticksGroup.order = 90 end
+    PRD_ArrangePresentationArgs(args, "layoutGroup", state, role, config)
     if next(args.visibilityGroup.args) then
       args.visibilityGroup.inline, args.visibilityGroup.order = true, 40
       args.visibility = args.visibilityGroup
@@ -3001,8 +3060,7 @@ do
     return args
   end
 
-  local function PRD_BuildAppearanceCopyGroup(state)
-    local sourceKey = "health"
+  local function PRD_BuildAppearanceCopyGroup(state, sourceKey)
     local targetKey = "ALL"
     local labels = { health = "Health", primary = "Primary power" }
     local targets = {
@@ -3056,7 +3114,11 @@ do
                 if (key == "health" or key == "primary") and source.config.squareTexture ~= nil then
                   config.squareTexture = source.config.squareTexture
                 end
-                config.style = PRD_CopyResourceSetting(source.config.style)
+                local copiedStyle = PRD_CopyResourceSetting(source.config.style)
+                wipe(config.style)
+                for field, value in pairs(copiedStyle) do
+                  config.style[field] = value
+                end
                 for _, field in ipairs({ "font", "size", "flags", "useGlobalFont" }) do
                   target.font[field] = source.font[field]
                 end
@@ -3066,76 +3128,19 @@ do
               health = true, primary = true, healthText = true, primaryText = true,
               secondaryAppearance = true, secondaryText = true, layout = true,
             })
-            Addon:NotifyOptionsTreeChanged("PRD", { "PRD", "health" })
           end,
         },
       },
     }
   end
 
-  local function PRD_BuildSharedStackArgs(state)
-    local size, outerBorder = state.size, state.outerBorder
+  local function PRD_BuildCommonBarArgs(state, sourceKey)
+    local outerBorder = state.outerBorder
     local args = {
-      sharedStack = {
-        type = "group",
-        name = "Shared stack",
-        order = 80,
-        inline = true,
-        arg = { puiExplicit = true },
-        args = {
-          layoutIntro = {
-            type = "description",
-            name = "Use the arrows in the preview to change stack order. These settings control the shared layout when bars are not detached.",
-            order = 0,
-            fontSize = "medium",
-          },
-          width = {
-            type = "range",
-            name = "Shared width",
-            desc = "Controls the shared width used when the bars are stacked together.",
-            order = 1,
-            min = 120,
-            max = 600,
-            step = 1,
-            get = function()
-              return PRD:GetQuickSetupValue("width")
-            end,
-            set = function(_, val)
-              PRD:SetQuickSetupValue("width", val)
-            end,
-          },
-          resourceGap = {
-            type = "range", name = "Gap between resources", order = 3,
-            min = 0, max = 20, step = 1,
-            get = function() return Clamp(state.secondaryCfg.gap or 2, 0, 20) end,
-            set = function(_, value)
-              state.secondaryCfg.gap = Clamp(value, 0, 20)
-              Addon:ApplyOptionsChange("PRD", { secondaryLayout = true })
-            end,
-          },
-          stackGap = {
-            type = "range",
-            name = "Gap between stacked bars",
-            desc = "Controls the vertical gap between the stacked PRD bars when they are not detached.",
-            order = 2,
-            min = 0,
-            max = 20,
-            step = 1,
-            get = function()
-              return Clamp(size.gap or 0, 0, 20)
-            end,
-            set = function(_, val)
-              size.gap = Clamp(val, 0, 20)
-              Addon:ApplyOptionsChange("PRD", { layout = true })
-            end,
-          },
-
-        },
-      },
       outerBorderGroup = {
         type = "group",
-        name = "Shared stack border",
-        order = 90,
+        name = "Shared outer border",
+        order = 60,
         inline = true,
         arg = { puiExplicit = true },
         args = {
@@ -3191,7 +3196,7 @@ do
           },
         },
       },
-      appearanceCopyGroup = PRD_BuildAppearanceCopyGroup(state),
+      appearanceCopyGroup = PRD_BuildAppearanceCopyGroup(state, sourceKey),
     }
     for _, group in pairs(args) do
       group.arg = { puiExplicit = true }
@@ -3199,13 +3204,26 @@ do
         if option.type ~= "description" then option.width, option.relWidth = "relative", 0.333 end
       end
     end
-    args.sharedStack.args.width.relWidth = 0.5
-    args.sharedStack.args.stackGap.relWidth = 0.5
     args.appearanceCopyGroup.order = 100
     return args
   end
 
   local function PRD_ArrangeSettingsSections(args)
+    for _, section in ipairs(PRD_SETTINGS_SECTIONS) do
+      local groups = {}
+      for _, key in ipairs(section.groups) do
+        local group = args[key]
+        if group then
+          group.inline = true
+          groups[key], args[key] = group, nil
+        end
+      end
+      if next(groups) then
+        args[section.key] = {
+          type = "group", name = section.name, order = section.order, args = groups,
+        }
+      end
+    end
     for _, group in pairs(args) do
       if group.type == "group" then
         group.inline = false
@@ -3357,7 +3375,29 @@ do
       },
     }
     PRD_ArrangeNativeBarArgs(args, s, "health")
-    for key, group in pairs(PRD_BuildSharedStackArgs(s)) do args[key] = group end
+    for key, group in pairs(PRD_BuildCommonBarArgs(s, "health")) do args[key] = group end
+    local function healthAppearanceDisabled()
+      return s.db.hideHealth == true or s.db.usePlayerHealth == true
+    end
+    local function disableHealthAppearanceOverrides(group)
+      for _, option in pairs(group.args) do
+        local disabled = option.disabled
+        if disabled ~= nil then
+          option.disabled = function(info)
+            return healthAppearanceDisabled()
+              or (type(disabled) == "function" and disabled(info) or disabled == true)
+          end
+        end
+        if option.type == "group" then disableHealthAppearanceOverrides(option) end
+      end
+    end
+    for _, key in ipairs({ "bar", "border", "textGroup", "textAppearance", "appearanceCopyGroup" }) do
+      args[key].disabled = healthAppearanceDisabled
+      disableHealthAppearanceOverrides(args[key])
+    end
+    args.layoutGroup.args.height.disabled = healthAppearanceDisabled
+    args.layoutGroup.args.detached.disabled = healthAppearanceDisabled
+    args.layoutGroup.args.width.disabled = function() return s.db.hideHealth == true end
     return PRD_ArrangeSettingsSections(args)
   end
 
@@ -3464,10 +3504,6 @@ do
       return owner:GetPrimaryTickMaximum(tickConfig)
     end
 
-    local function RefreshTickOptions()
-      Addon:NotifyOptionsTreeChanged("PRD", { "PRD", "primary" })
-    end
-
     local args = {
       enabled = {
         type = "toggle",
@@ -3489,7 +3525,7 @@ do
           end
           tickConfig.enabled = value and true or false
           Addon:ApplyOptionsChange("PRD", { primaryTicks = true })
-          RefreshTickOptions()
+          Addon:NotifyOptionsTreeChanged("PRD", { "PRD", "primary" })
         end,
       },
       automaticMax = {
@@ -3509,7 +3545,6 @@ do
             owner:RefreshPrimaryResourceMaximum()
           end
           Addon:ApplyOptionsChange("PRD", { primaryTicks = true })
-          RefreshTickOptions()
         end,
       },
       detectedMax = {
@@ -3547,7 +3582,6 @@ do
         set = function(_, value)
           tickConfig.maxValue = tonumber(value) or 0
           Addon:ApplyOptionsChange("PRD", { primaryTicks = true })
-          RefreshTickOptions()
         end,
       },
       add = {
@@ -3569,7 +3603,7 @@ do
             color = { 1, 1, 1, 1 },
           }
           Addon:ApplyOptionsChange("PRD", { primaryTicks = true })
-          RefreshTickOptions()
+          Addon:NotifyOptionsTreeChanged("PRD", { "PRD", "primary" })
         end,
       },
     }
@@ -3661,7 +3695,7 @@ do
             func = function()
               table.remove(entries, tickIndex)
               Addon:ApplyOptionsChange("PRD", { primaryTicks = true })
-              RefreshTickOptions()
+              Addon:NotifyOptionsTreeChanged("PRD", { "PRD", "primary" })
             end,
           },
         },
@@ -3844,7 +3878,9 @@ do
         },
       },
     }
-    return PRD_ArrangeSettingsSections(PRD_ArrangeNativeBarArgs(args, s, "primary"))
+    PRD_ArrangeNativeBarArgs(args, s, "primary")
+    for key, group in pairs(PRD_BuildCommonBarArgs(s, "primary")) do args[key] = group end
+    return PRD_ArrangeSettingsSections(args)
   end
 
   local RESOURCE_ANCHOR_VALUES = {
@@ -5075,7 +5111,7 @@ do
       end,
     }
     args.enabled = nil
-    local arranged = PRD_ArrangePresentationArgs(args, "layout")
+    local arranged = PRD_ArrangePresentationArgs(args, "layout", state, resource.key, settings)
     if resource.key == "RUNES" then
       arranged.textGroup.name = "Rune text"
       arranged.textGroup.args.textMode.disabled = function() return settings.behavior.simpleRunes ~= true end
@@ -5125,6 +5161,7 @@ do
     end
     if next(arranged.display.args) == nil then arranged.display = nil end
     arranged.feature.name = "Visibility"
+    for key, group in pairs(PRD_BuildCommonBarArgs(state, resource.key)) do arranged[key] = group end
     return PRD_ArrangeSettingsSections(arranged)
   end
 
