@@ -973,6 +973,37 @@ function Inspector:BuildFrameSpec(frame)
 
   AddUnifiedFrameControls(controls, context, UpdatePanel)
 
+  if context.family == "raid" then
+    AddSlider(
+      controls,
+      "Groups to show",
+      1,
+      8,
+      1,
+      function()
+        return ns.UFLayout.GetRaidEffectiveNumGroups(context.profile)
+      end,
+      function(value)
+        context.profile.numGroups = RoundValue(value)
+        RaidFrames:SafeRefresh("layout")
+        TestMode:Refresh("unitframes", "quick-settings", "uf.raidGroupSettings")
+      end,
+      true
+    )
+    controls[#controls + 1] = {
+      type = "toggle",
+      label = "Display mover based on current raid size",
+      tooltip = "Fit the raid preview and mover to your current raid size, in groups of five, up to Groups to show. Outside a raid, use the configured group count.",
+      get = function()
+        return context.profile.moverUseRaidSize == true
+      end,
+      set = function(value)
+        context.profile.moverUseRaidSize = value == true
+        TestMode:Refresh("unitframes", "quick-settings", "uf.raidGroupSettings")
+      end,
+    }
+  end
+
   local unit = context.family == "single" and context.visualKey or nil
   if unit == "boss" then
     unit = "boss1"
