@@ -529,7 +529,7 @@ function RaidFrames:GetTestFrameConfig()
   local _, _, layoutGroups = GetActiveHeaderCount(db)
 
   if db.moverUseRaidSize == true and _G.IsInRaid() then
-    layoutGroups = math_min(layoutGroups, math_floor((_G.GetNumGroupMembers() + 4) / 5))
+    layoutGroups = math_floor((_G.GetNumGroupMembers() + 4) / 5)
   end
 
   return cfg, db, cfg.showPower ~= true, math_max(1, layoutGroups)
