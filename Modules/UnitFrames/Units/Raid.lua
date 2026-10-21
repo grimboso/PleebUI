@@ -528,6 +528,10 @@ function RaidFrames:GetTestFrameConfig()
   local cfg = BuildRaidFrameConfig(db)
   local _, _, layoutGroups = GetActiveHeaderCount(db)
 
+  if db.moverUseRaidSize == true and _G.IsInRaid() then
+    layoutGroups = math_min(layoutGroups, math_floor((_G.GetNumGroupMembers() + 4) / 5))
+  end
+
   return cfg, db, cfg.showPower ~= true, math_max(1, layoutGroups)
 end
 
@@ -1077,6 +1081,10 @@ function RaidFrames:RefreshRosterPresentation()
   end
 
   self:UpdateGroupLabels()
+
+  if self.db.profile.moverUseRaidSize == true and ns.TestMode:IsActive() then
+    ns.TestMode:Refresh("unitframes", "roster", "uf.raidSettings")
+  end
 end
 
 function RaidFrames:RefreshVisibility()
