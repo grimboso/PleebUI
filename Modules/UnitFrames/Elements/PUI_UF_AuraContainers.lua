@@ -969,6 +969,10 @@ function AuraContainers.RefreshAvailability(frame, event)
     return
   end
 
+  if event and frame.__puiGroupKind and ns.Pleebug:IsEnabled() then
+    ns.Pleebug:TrackEvent("PUI_UF_AuraContainers", frame.__puiGroupKind .. ":" .. event)
+  end
+
   local refreshNativeAuras = event == "UNIT_AREA_CHANGED"
     or event == "UNIT_CONNECTION"
     or event == "UNIT_OTHER_PARTY_CHANGED"

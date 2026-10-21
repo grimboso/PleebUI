@@ -947,7 +947,7 @@ local function UFCB_BuildGeneralAurasArgs()
       end,
       set = function(_, v)
         if UFCB_BlockCombat() then
-          LibStub("AceConfigRegistry-3.0"):NotifyChange("PleebUI")
+          ns.OptionsLifecycle.RefreshModel({ "unitframes" })
           return
         end
 
@@ -966,7 +966,7 @@ local function UFCB_BuildGeneralAurasArgs()
             ReloadUI()
           end,
           onNo = function()
-            LibStub("AceConfigRegistry-3.0"):NotifyChange("PleebUI")
+            ns.OptionsLifecycle.RefreshModel({ "unitframes" })
           end,
         })
       end,
@@ -1459,7 +1459,7 @@ local function UFCB_BuildUnitGeneralArgs(unitKey, extraNote)
             end
 
             Addon:ApplyOptionsChange("UnitFrames", { mode = "resize", unit = unitKey })
-            Addon:NotifyOptionsTreeChanged("unitframes", ns._PUIActiveOptionsPath)
+            ns.OptionsLifecycle.RefreshModel({ "unitframes" })
           end,
         },
       }),
@@ -1872,10 +1872,7 @@ local function UFCB_BuildUnitTextArgs(unitKey, kind)
           unit = unitKey,
         })
 
-        Addon:NotifyOptionsTreeChanged(
-          "unitframes",
-          ns._PUIActiveOptionsPath
-        )
+        ns.OptionsLifecycle.RefreshModel({ "unitframes" })
       end,
     },
     useCustomFont = {
@@ -2378,7 +2375,7 @@ local function UFCB_FocusAuraSlotSpellID(displayID)
 
     if editBox and editBox:IsShown()
       and option
-      and option.__puiAuraSlotSpellID == displayID
+      and option.arg and option.arg.puiAuraSlotSpellID == displayID
     then
       widget:SetFocus()
       widget:HighlightText()
@@ -2511,22 +2508,6 @@ local function UFCB_CreateCustomAuraEditor(getAuras, refresh, fixedDisplayID, un
     return path
   end
 
-  function editor:NotifyOptionsChanged(targetPath, afterSelect)
-    targetPath = targetPath or ns._PUIActiveOptionsPath
-    ns._PUIActiveOptionsPath = targetPath
-
-    C_Timer.After(0, function()
-      Addon:NotifyOptionsTreeChanged("unitframes", targetPath)
-
-      local dialog = LibStub("AceConfigDialog-3.0")
-      dialog:SelectGroup("PleebUI", unpack(targetPath))
-
-      if afterSelect then
-        afterSelect()
-      end
-    end)
-  end
-
   function editor:Refresh(rebuildOptions, targetPath, afterSelect, changeType, displayID)
     ns.UFPreview.RefreshAuraManagerPreview()
 
@@ -2544,7 +2525,7 @@ local function UFCB_CreateCustomAuraEditor(getAuras, refresh, fixedDisplayID, un
 
     if rebuildOptions then
       refresh(request)
-      self:NotifyOptionsChanged(targetPath, afterSelect)
+      Addon:NotifyOptionsTreeChanged("unitframes", targetPath or ns._PUIActiveOptionsPath, afterSelect)
       return
     end
 
@@ -3188,7 +3169,7 @@ local function UFCB_BuildCustomAuraDisplaysArgs(getAuras, refresh, displayID, de
           end,
         },
         includeSpellIDs = {
-          __puiAuraSlotSpellID = editor:IsSlotDisplay() and displayID or nil,
+          arg = editor:IsSlotDisplay() and { puiAuraSlotSpellID = displayID } or nil,
           type = "input",
           name = function()
             return editor:IsSlotDisplay() and "SpellID" or "Whitelist SpellIDs"
@@ -4229,7 +4210,7 @@ local function UFCB_SetGroupedModuleEnabled(kind, enabled)
   kind = UFCB_GetGroupedKind(kind)
 
   if UFCB_BlockCombat() then
-    LibStub("AceConfigRegistry-3.0"):NotifyChange("PleebUI")
+    ns.OptionsLifecycle.RefreshModel({ "unitframes" })
     return
   end
 
@@ -4250,7 +4231,7 @@ local function UFCB_SetGroupedModuleEnabled(kind, enabled)
       ReloadUI()
     end,
     onNo = function()
-      LibStub("AceConfigRegistry-3.0"):NotifyChange("PleebUI")
+      ns.OptionsLifecycle.RefreshModel({ "unitframes" })
     end,
   })
 end
@@ -4611,7 +4592,7 @@ local function UFCB_BuildPartyGeneralArgs(groupKind, opts)
 
   local function SetBlizzardRaidFramesHidden(_, value)
     if UFCB_BlockCombat() then
-      LibStub("AceConfigRegistry-3.0"):NotifyChange("PleebUI")
+      ns.OptionsLifecycle.RefreshModel({ "unitframes" })
       return
     end
 
@@ -4631,14 +4612,14 @@ local function UFCB_BuildPartyGeneralArgs(groupKind, opts)
         ReloadUI()
       end,
       onNo = function()
-        LibStub("AceConfigRegistry-3.0"):NotifyChange("PleebUI")
+        ns.OptionsLifecycle.RefreshModel({ "unitframes" })
       end,
     })
   end
 
   local function SetPartyPlayerShown(_, value)
     if UFCB_BlockCombat() then
-      LibStub("AceConfigRegistry-3.0"):NotifyChange("PleebUI")
+      ns.OptionsLifecycle.RefreshModel({ "unitframes" })
       return
     end
 
@@ -4658,7 +4639,7 @@ local function UFCB_BuildPartyGeneralArgs(groupKind, opts)
         ReloadUI()
       end,
       onNo = function()
-        LibStub("AceConfigRegistry-3.0"):NotifyChange("PleebUI")
+        ns.OptionsLifecycle.RefreshModel({ "unitframes" })
       end,
     })
   end
@@ -4852,7 +4833,7 @@ local function UFCB_BuildPartyGeneralArgs(groupKind, opts)
 
     UFCB_GetGroupedModule(groupedKind):SafeRefresh()
     UFCB_RefreshGroupedTestPreview(groupedKind)
-    Addon:NotifyOptionsTreeChanged("unitframes", ns._PUIActiveOptionsPath)
+    ns.OptionsLifecycle.RefreshModel({ "unitframes" })
   end
 
   local resetScope = isRaid
@@ -5779,10 +5760,7 @@ local function UFCB_BuildPartyTextArgs(kind, groupKind)
       end
     end)
 
-    Addon:NotifyOptionsTreeChanged(
-      "unitframes",
-      ns._PUIActiveOptionsPath
-    )
+    ns.OptionsLifecycle.RefreshModel({ "unitframes" })
   end
 
   prefixArgs.resetSection = {
@@ -7074,10 +7052,7 @@ local function UFCB_BuildCastbarArgs(unitKey)
       refresh()
       FrameUtil.RefreshSmartSnapState("CastBar_" .. tostring(castbarUnit))
 
-      Addon:NotifyOptionsTreeChanged(
-        "unitframes",
-        ns._PUIActiveOptionsPath
-      )
+      ns.OptionsLifecycle.RefreshModel({ "unitframes" })
     end,
   }
 
@@ -8019,7 +7994,7 @@ local function UFCB_CommitAuraManagerPreviewVisibility(unitKey, displayID, enabl
     })
   end
 
-  Addon:NotifyOptionsTreeChanged("unitframes", ns._PUIActiveOptionsPath)
+  ns.OptionsLifecycle.RefreshModel({ "unitframes" })
 end
 
 local function UFCB_CommitAuraManagerPreviewPosition(
@@ -8079,7 +8054,7 @@ local function UFCB_CommitAuraManagerPreviewPosition(
     })
   end
 
-  Addon:NotifyOptionsTreeChanged("unitframes", ns._PUIActiveOptionsPath)
+  ns.OptionsLifecycle.RefreshModel({ "unitframes" })
 end
 
 UFCB_CreateAuraManagerPreviewDisplay = P:Def(

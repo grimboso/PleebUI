@@ -1425,8 +1425,20 @@ function RaidFrames:Refresh()
 end
 
 function RaidFrames:RefreshAuraAvailability()
-  IterateRaidFrames(self, function(frame)
-    UFAuraContainers.RefreshAvailability(frame)
+  if self._auraAvailabilityRefreshTimer then
+    return
+  end
+
+  self._auraAvailabilityRefreshTimer = C_Timer.NewTimer(0, function()
+    self._auraAvailabilityRefreshTimer = nil
+
+    if not self:IsEnabled() or self.db.profile.enabled == false then
+      return
+    end
+
+    IterateRaidFrames(self, function(frame)
+      UFAuraContainers.RefreshAvailability(frame)
+    end)
   end)
 end
 
@@ -1601,6 +1613,11 @@ function RaidFrames:OnDisable()
   self._pendingAuraRefresh = nil
   self._auraRefreshScheduled = nil
 
+  if self._auraAvailabilityRefreshTimer then
+    self._auraAvailabilityRefreshTimer:Cancel()
+    self._auraAvailabilityRefreshTimer = nil
+  end
+
   if self._mainTankRosterRefreshTimer then
     self._mainTankRosterRefreshTimer:Cancel()
     self._mainTankRosterRefreshTimer = nil
@@ -1625,7 +1642,7 @@ end
 
 
 
-local P = select(1, ns.Pleebug:DropIn(RaidFrames, { name = "UnitFrames.Raid" }))
+local P = select(1, ns.Pleebug:DropIn(RaidFrames, { name = "UnitFrames.Raid", trackEmbeddedEvents = true }))
 
 
   RaidFrames.Construct_RaidFrames = P:Def("RaidFrames.Construct_RaidFrames", RaidFrames.Construct_RaidFrames)

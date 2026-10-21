@@ -1204,7 +1204,7 @@ end
 
 
 
-local P = select(1, ns.Pleebug:DropIn(PartyFrames, { name = "UnitFrames.Party" }))
+local P = select(1, ns.Pleebug:DropIn(PartyFrames, { name = "UnitFrames.Party", trackEmbeddedEvents = true }))
 
 
   PartyFrames.Construct_PartyFrames = P:Def("PartyFrames.Construct_PartyFrames", PartyFrames.Construct_PartyFrames)

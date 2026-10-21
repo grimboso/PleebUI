@@ -2228,7 +2228,7 @@ function UF:SoftRebuild(flags)
   end
 end
 
-local P = select(1, ns.Pleebug:DropIn(UF, { name = "UnitFrames.Core" }))
+local P = select(1, ns.Pleebug:DropIn(UF, { name = "UnitFrames.Core", trackEmbeddedEvents = true }))
 
 
   UF.EnsureConfigDefaults = P:Def("UF.EnsureConfigDefaults", UF.EnsureConfigDefaults)
