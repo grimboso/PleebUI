@@ -4546,7 +4546,13 @@ do
     C_Timer.After(0, function()
       session.queued = nil
       if not IsCurrentSession(session) then return end
-      Reconcile(session, dialog)
+      if session.targetPath then
+        local targetPath = session.targetPath
+        session.targetPath = nil
+        Addon:OpenOptions(targetPath, false, true)
+      else
+        Reconcile(session, dialog)
+      end
       if session.afterSelect then
         local afterSelect = session.afterSelect
         session.afterSelect = nil
@@ -4571,12 +4577,12 @@ do
   function Lifecycle.RefreshModel(targetPath, afterSelect)
     local current = State.currentOptionsPath
     if not current then return false end
-    if targetPath then
-      if #targetPath > #current then return false end
-      for index, key in ipairs(targetPath) do if current[index] ~= key then return false end end
-    end
+    if targetPath and current[1] ~= targetPath[1] then return false end
     for _, session in pairs(sessions) do
       if IsCurrentSession(session) then
+        if targetPath and not _PUI_OptionsPathStartsWith(current, targetPath) then
+          session.targetPath = CopyData(targetPath)
+        end
         session.afterSelect = afterSelect or session.afterSelect
         QueueRefresh(session, LibStub("AceConfigDialog-3.0"))
         return true
