@@ -142,6 +142,7 @@ local function _PUI_InstallAceGUIHooks()
 
     ns.KeyboardNavigation.ReleaseWidget(widget)
     ns.OptionsMotion.ReleaseWidget(widget)
+    ns.OptionsLifecycle.ReleaseWidget(widget)
     PUI_OWNED_WIDGETS[widget] = nil
     optionsFeedLayouts[widget] = nil
     if widget.type == "ColorPicker" then ns.ColorControls.Release(widget) end
@@ -356,7 +357,9 @@ local function _PUI_InstallAceGUIHooks()
   local widgetContainerBase = AceGUI.WidgetContainerBase
   local originalReleaseChildren = widgetContainerBase.ReleaseChildren
   widgetContainerBase.ReleaseChildren = function(self)
-    if not IsPleebUIOwner(self) or self.LayoutPaused then
+    local ownedByPleebUI = IsPleebUIOwner(self)
+    if ownedByPleebUI then ns.OptionsLifecycle.ReleaseWidget(self) end
+    if not ownedByPleebUI or self.LayoutPaused then
       return originalReleaseChildren(self)
     end
 
@@ -391,10 +394,11 @@ local function _PUI_InstallAceConfigDialogHooks()
       return originalFeedGroup(dialog, appName, options, container, rootframe, path, ...)
     end
 
-    ns.GUI.PrepareOptionsGroup(options, path)
+    options = ns.OptionsLifecycle.PrepareFeed(options, rootframe, path)
     optionsFeedDepth = optionsFeedDepth + 1
     PauseOptionsFeedLayout(container)
     local result = originalFeedGroup(dialog, appName, options, container, rootframe, path, ...)
+    ns.OptionsLifecycle.RecordGroup(rootframe, container, path, ...)
     optionsFeedDepth = optionsFeedDepth - 1
 
     if optionsFeedDepth == 0 then
@@ -406,6 +410,7 @@ local function _PUI_InstallAceConfigDialogHooks()
           widget:DoLayout()
         end
       end
+      ns.OptionsLifecycle.Bind(rootframe)
     end
     return result
   end
@@ -417,8 +422,15 @@ local function _PUI_InstallAceConfigDialogHooks()
     end
   end)
 
+  hooksecurefunc(AceConfigDialog, "ConfigTableChanged", function(_, _, appName)
+    if appName == "PleebUI" then ns.OptionsLifecycle.RefreshModel() end
+  end)
+
   local originalOpen = AceConfigDialog.Open
   AceConfigDialog.Open = function(dialog, appName, container, ...)
+    if ns.OptionsLifecycle.RequestRefresh(dialog, appName, container, ...) then
+      return
+    end
     if appName == "PleebUI" then
       ns.Theme.ResetWidgetRowBackgrounds()
     end

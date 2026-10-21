@@ -308,6 +308,8 @@ end
 function Addon:NotifyOptionsTreeChanged(sectionKey, targetPath, afterSelect)
   self:InvalidateOptionsRender(sectionKey)
 
+  if ns.OptionsLifecycle.RefreshModel(targetPath, afterSelect) then return end
+
   LibStub("AceConfigRegistry-3.0"):NotifyChange(PUI_OPTIONS_APP)
 
   local frame = Addon._OptionsWindow
@@ -4020,6 +4022,9 @@ local function _PUI_RenderCustomOptionsPath(frame, AceConfigDialog, APP, path)
     return
   end
 
+  if _PUI_OptionsPathsEqual(State.currentOptionsPath, requestedPath)
+    and ns.OptionsLifecycle.RefreshModel(requestedPath) then return end
+
   _PUI_RecordOptionsHistory(requestedPath)
 
   frame.__puiRenderingOptionsPath = true
@@ -4147,6 +4152,7 @@ function Addon:RefreshOpenOptions()
     or _PUI_GetStoredOptionsPath()
     or _PUI_GetFallbackOptionsPath()
 
+  if ns.OptionsLifecycle.RefreshModel(path) then return end
   _PUI_RenderCustomOptionsPath(frame, AceConfigDialog, APP, path)
 end
 
@@ -4196,3 +4202,386 @@ function Addon:OpenOptionsSection(sectionKey, inlineTabKey, key)
   Addon:OpenOptions(path, true, #path > 2)
 end
 
+do
+  local Lifecycle = {}
+  ns.OptionsLifecycle = Lifecycle
+  local sessions = setmetatable({}, { __mode = "k" })
+  local interactionEvents = { "OnClick", "OnValueChanged", "OnMouseUp", "OnValueConfirmed", "OnEnterPressed", "OnKeyChanged", "OnClosed" }
+  local inheritedFields = { get = true, disabled = true, hidden = true }
+  local literalStrings = { name = true, desc = true, width = true, image = true, fontSize = true }
+
+  local function CopyData(value)
+    if type(value) ~= "table" then return value end
+    local result = {}
+    for key, item in pairs(value) do result[key] = CopyData(item) end
+    return result
+  end
+
+  local function SameData(first, second)
+    if type(first) ~= "table" or type(second) ~= "table" then return first == second end
+    for key, value in pairs(first) do if not SameData(value, second[key]) then return false end end
+    for key in pairs(second) do if first[key] == nil then return false end end
+    return true
+  end
+
+  local function FindOption(options, path)
+    local node = options
+    for _, key in ipairs(path) do
+      local child
+      if node.plugins then
+        for _, plugin in pairs(node.plugins) do if plugin[key] then child = plugin[key]; break end end
+      end
+      node = child or node.args[key]
+      if not node then return nil end
+    end
+    return node
+  end
+
+  local function BuildControlState(options, path)
+    local node = options
+    local info = { [0] = PUI_OPTIONS_APP, appName = PUI_OPTIONS_APP, options = options, uiType = "dialog", uiName = "AceConfigDialog-3.0" }
+    local members = { get = node.get, disabled = node.disabled, hidden = node.hidden }
+    info.handler = node.handler
+    for index, key in ipairs(path) do
+      local child
+      if node.plugins then
+        for _, plugin in pairs(node.plugins) do if plugin[key] then child = plugin[key]; break end end
+      end
+      node = child or node.args[key]
+      if not node then return nil end
+      info[index] = key
+      info.handler = node.handler or info.handler
+      for field in pairs(inheritedFields) do if node[field] ~= nil then members[field] = node[field] end end
+    end
+    info.option, info.arg, info.type = node, node.arg, node.type
+    if node.dialogDisabled ~= nil then members.disabled = node.dialogDisabled
+    elseif node.guiDisabled ~= nil then members.disabled = node.guiDisabled end
+    if node.dialogHidden ~= nil then members.hidden = node.dialogHidden
+    elseif node.guiHidden ~= nil then members.hidden = node.guiHidden end
+    return { info = info, members = members }
+  end
+
+  local function ReadMember(control, field, ...)
+    local member
+    if inheritedFields[field] then member = control.members[field] else member = control.info.option[field] end
+    if type(member) == "function" then return member(control.info, ...) end
+    if type(member) == "string" and not literalStrings[field] then return control.info.handler[member](control.info.handler, control.info, ...) end
+    return member
+  end
+
+  local function IsInline(option)
+    if option.dialogInline ~= nil then return option.dialogInline end
+    if option.guiInline ~= nil then return option.guiInline end
+    return option.inline == true
+  end
+
+  local function DescribeChildren(options, node, path, controls, forcedInline)
+    local children = {}
+    for key, option in pairs(node.args or {}) do children[key] = option end
+    for _, plugin in pairs(node.plugins or {}) do for key, option in pairs(plugin) do children[key] = option end end
+    local shape = {}
+    for key, option in pairs(children) do
+      path[#path + 1] = key
+      local control = BuildControlState(options, path)
+      local inline = forcedInline or IsInline(option)
+      if not ReadMember(control, "hidden") and (controls or option.type == "group" and not inline) then
+        local image, imageWidth, imageHeight = ReadMember(control, "image")
+        local item = {
+          type = option.type, control = option.dialogControl or option.control,
+          style = option.style, multiline = option.multiline, tristate = option.tristate,
+          inline = inline, childGroups = option.childGroups, order = ReadMember(control, "order"),
+          width = ReadMember(control, "width"), relWidth = option.relWidth,
+          image = image, imageCoords = CopyData(ReadMember(control, "imageCoords")),
+          imageWidth = imageWidth or ReadMember(control, "imageWidth"), imageHeight = imageHeight or ReadMember(control, "imageHeight"),
+          itemControl = option.itemControl, descStyle = option.descStyle, hasArg = not not option.arg,
+        }
+        if option.type == "group" then
+          item.name = ReadMember(control, "name")
+          item.disabled = not inline and not not ReadMember(control, "disabled") or nil
+          item.args = DescribeChildren(options, option, path, controls and inline, inline)
+        elseif option.style == "radio" or option.type == "multiselect" and not item.control then
+          item.name = ReadMember(control, "name")
+          item.values = CopyData(ReadMember(control, "values"))
+          item.sorting = CopyData(ReadMember(control, "sorting"))
+        end
+        shape[key] = item
+      end
+      path[#path] = nil
+    end
+    return shape
+  end
+
+  local function DescribePage(options, page)
+    local group = GUI.PrepareOptionsGroup(options, page.path)
+    if not group then return nil end
+    local path = CopyData(page.path)
+    local forcedInline = false
+    local ancestor = options
+    for _, key in ipairs(path) do
+      ancestor = FindOption(ancestor, { key })
+      forcedInline = forcedInline or IsInline(ancestor)
+    end
+    return { childGroups = group.childGroups, inline = forcedInline,
+      args = DescribeChildren(options, group, path, true, forcedInline) }
+  end
+
+  local function ReadState(control)
+    local option = control.info.option
+    local kind = option.type
+    local state = { disabled = not not ReadMember(control, "disabled"), name = ReadMember(control, "name") }
+    local previous = control.state or {}
+    local function Snapshot(field)
+      local value = ReadMember(control, field)
+      return SameData(previous[field], value) and previous[field] or CopyData(value)
+    end
+    if kind == "color" then
+      state.value = { ReadMember(control, "get") }
+      state.hasAlpha = ReadMember(control, "hasAlpha")
+    elseif kind == "multiselect" then
+      state.values, state.sorting = Snapshot("values"), Snapshot("sorting")
+      if control.itemValue ~= nil then state.value = ReadMember(control, "get", control.itemValue)
+      else
+        state.value = {}
+        for key in pairs(state.values) do state.value[key] = ReadMember(control, "get", key) or false end
+      end
+    elseif kind ~= "execute" and kind ~= "description" and kind ~= "header" then
+      state.value = ReadMember(control, "get")
+      if kind == "select" then
+        state.values, state.sorting = Snapshot("values"), Snapshot("sorting")
+        if option.style == "radio" then state.value = state.value == control.itemValue
+        elseif not state.values[state.value] then state.value = nil end
+      elseif kind == "range" then
+        if type(state.value) ~= "number" then state.value = 0 end
+        state.range = { option.softMin or option.min or 0, option.softMax or option.max or 100, option.bigStep or option.step or 0 }
+        state.isPercent = option.isPercent
+      elseif kind == "input" and type(state.value) ~= "string" then state.value = "" end
+    end
+    if kind == "toggle" and option.descStyle == "inline" then state.description = ReadMember(control, "desc") end
+    if control.itemValue ~= nil and (kind == "select" or kind == "multiselect") then state.name = state.values[control.itemValue] end
+    state.fontSize = kind == "description" and ReadMember(control, "fontSize") or nil
+    if kind == "execute" then
+      local image = ReadMember(control, "image")
+      state.icon = type(image) == "string" or type(image) == "number"
+    end
+    return state
+  end
+
+  local function UpdateControl(control)
+    local widget, previous = control.widget, control.state
+    local state = ReadState(control)
+    local option, kind = control.info.option, control.info.type
+    local layout = false
+    if widget.SetDisabled and previous.disabled ~= state.disabled then widget:SetDisabled(state.disabled) end
+    if previous.name ~= state.name then
+      if kind == "header" or kind == "description" or kind == "execute" and not state.icon then widget:SetText(state.name)
+      else widget:SetLabel(state.name) end
+      layout = true
+    end
+    local listChanged = false
+    if kind == "select" or kind == "multiselect" and control.itemValue == nil then
+      if option.style ~= "radio" and (not SameData(previous.values, state.values) or not SameData(previous.sorting, state.sorting)) then
+        widget:SetList(state.values, state.sorting, option.itemControl)
+        listChanged = true
+      end
+    end
+    local rangeChanged = kind == "range" and not SameData(previous.range, state.range)
+    if rangeChanged then widget:SetSliderValues(unpack(state.range)) end
+    if kind == "range" and previous.isPercent ~= state.isPercent then widget:SetIsPercent(state.isPercent) end
+    if kind == "color" and previous.hasAlpha ~= state.hasAlpha then widget:SetHasAlpha(state.hasAlpha) end
+    if kind ~= "execute" and kind ~= "header" and kind ~= "description"
+      and (control.committed or listChanged or rangeChanged or not SameData(previous.value, state.value)) then
+      if kind == "color" then widget:SetColor(unpack(state.value))
+      elseif kind == "input" then widget:SetText(state.value)
+      elseif kind == "keybinding" then widget:SetKey(state.value)
+      elseif kind == "multiselect" and control.itemValue == nil then
+        for key, value in pairs(state.value) do if listChanged or control.committed or previous.value[key] ~= value then widget:SetItemValue(key, value) end end
+      else widget:SetValue(state.value) end
+    end
+    if previous.description ~= state.description then widget:SetDescription(state.description); layout = true end
+    if kind == "description" and previous.fontSize ~= state.fontSize then
+      widget:SetFontObject(state.fontSize == "large" and GameFontHighlightLarge or state.fontSize == "medium" and GameFontHighlight or GameFontHighlightSmall)
+      layout = true
+    end
+    control.state, control.committed = state, nil
+    return layout
+  end
+
+  local function IsCurrentSession(session)
+    local frame = Addon._OptionsWindow
+    return sessions[session.container] == session and frame == session.frame and frame:IsShown()
+      and session.container.frame:IsShown() and State.optionsPathGeneration == session.generation
+      and State.currentOptionsPath[1] == session.rootKey
+  end
+
+  local function BindWidgets(widget, session)
+    local feed = widget.__puiOptionsFeed
+    if feed and feed.rootframe == session.container then
+      local page = { container = widget, path = feed.path, isRoot = feed.isRoot }
+      page.shape = DescribePage(session.options, page)
+      session.pages[#session.pages + 1] = page
+    end
+    local user = widget:GetUserDataTable()
+    if user.appName == PUI_OPTIONS_APP and user.rootframe == session.container and user.option then
+      if user.option.type ~= "group" and not (widget.children and (user.option.type == "select" or user.option.type == "multiselect")) then
+        local control = BuildControlState(session.options, user.path)
+        control.widget, control.itemValue = widget, user.value
+        control.state = ReadState(control)
+        session.controls[#session.controls + 1] = control
+        local bindings = widget.__puiOptionsLifecycleBindings or {}
+        widget.__puiOptionsLifecycleBindings = bindings
+        for _, event in ipairs(interactionEvents) do
+          local callback = widget.events[event]
+          if callback then
+            local binding = bindings[event]
+            if not binding or callback ~= binding.dispatch then
+              binding = { callback = callback }
+              binding.dispatch = function(controlWidget, eventName, ...)
+                if not IsCurrentSession(binding.session) or controlWidget.__puiAceGUIOwnershipSerial ~= binding.serial or controlWidget.isQueuedForRelease then return end
+                binding.control.committed = true
+                return binding.callback(controlWidget, eventName, ...)
+              end
+              bindings[event] = binding
+              widget:SetCallback(event, binding.dispatch)
+            end
+            binding.session, binding.serial, binding.control = session, widget.__puiAceGUIOwnershipSerial, control
+          end
+        end
+      end
+    end
+    if widget.children then for _, child in ipairs(widget.children) do BindWidgets(child, session) end end
+  end
+
+  function Lifecycle.RecordGroup(rootframe, container, path, isRoot)
+    container.__puiOptionsFeed = { rootframe = rootframe, path = CopyData(path), isRoot = isRoot }
+  end
+
+  function Lifecycle.Bind(rootframe)
+    local user = rootframe:GetUserDataTable()
+    if user.appName ~= PUI_OPTIONS_APP or rootframe.__puiACDHostContainer ~= true then sessions[rootframe] = nil; return end
+    local options = _PUI_GetOptionsRoot()
+    local path = user.basepath
+    local session = { container = rootframe, frame = Addon._OptionsWindow, rootKey = path[1],
+      basepath = CopyData(path), generation = State.optionsPathGeneration, options = options, controls = {}, pages = {} }
+    sessions[rootframe] = session
+    BindWidgets(rootframe, session)
+  end
+
+  function Lifecycle.ReleaseWidget(widget)
+    local rootframe = widget:GetUserData("rootframe")
+    if rootframe then sessions[rootframe] = nil end
+    sessions[widget] = nil
+    widget.__puiOptionsLifecycleBindings, widget.__puiOptionsFeed = nil, nil
+  end
+
+  local function RebindWidgets(widget, options)
+    local user = widget:GetUserDataTable()
+    if user.appName == PUI_OPTIONS_APP and user.options then
+      local option = FindOption(options, user.path)
+      if option then
+        local argChanged = user.option.arg ~= option.arg
+        user.options, user.option = options, option
+        if argChanged and widget.SetCustomData and option.arg then widget:SetCustomData(option.arg) end
+      end
+    end
+    if widget.children then for _, child in ipairs(widget.children) do RebindWidgets(child, options) end end
+  end
+
+  function Lifecycle.PrepareFeed(options, rootframe, path)
+    if rootframe.__puiACDHostContainer == true then
+      if not _PUI_OptionsPathStartsWith(State.currentOptionsPath, path) then
+        _PUI_ApplySelectedOptionsPath(path)
+      end
+      options = _PUI_GetOptionsRoot()
+      GUI.PrepareOptionsGroup(options, path)
+      RebindWidgets(rootframe, options)
+    else
+      GUI.PrepareOptionsGroup(options, path)
+    end
+    return options
+  end
+
+  local function IsWithin(widget, ancestor)
+    while widget do if widget == ancestor then return true end; widget = widget.parent end
+    return false
+  end
+
+  local function Reconcile(session, dialog)
+    local options = _PUI_GetOptionsRoot()
+    if not _PUI_DoesOptionsPathExist(State.currentOptionsPath) then
+      local path = CopyData(State.currentOptionsPath)
+      repeat path[#path] = nil until #path == 1 or _PUI_DoesOptionsPathExist(path)
+      Addon:OpenOptions(path, false, true)
+      return
+    end
+    local changed = {}
+    for _, page in ipairs(session.pages) do
+      local shape = DescribePage(options, page)
+      if not SameData(page.shape, shape) then
+        local covered = false
+        for _, parent in ipairs(changed) do if IsWithin(page.container, parent.container) then covered = true; break end end
+        if not covered then changed[#changed + 1] = page end
+      end
+      page.shape = shape
+    end
+    RebindWidgets(session.container, options)
+    session.options = options
+    local layouts = {}
+    for _, control in ipairs(session.controls) do
+      local source = BuildControlState(options, control.widget:GetUserData("path"))
+      if source then
+        control.info, control.members = source.info, source.members
+        if UpdateControl(control) and control.widget.parent then layouts[control.widget.parent] = true end
+      end
+    end
+    for container in pairs(layouts) do container:DoLayout() end
+    for _, page in ipairs(changed) do
+      page.container:ReleaseChildren()
+      dialog:FeedGroup(PUI_OPTIONS_APP, options, page.container, session.container, page.path, page.isRoot)
+    end
+  end
+
+  local function QueueRefresh(session, dialog)
+    if session.queued then return end
+    session.queued = true
+    C_Timer.After(0, function()
+      session.queued = nil
+      if not IsCurrentSession(session) then return end
+      Reconcile(session, dialog)
+      if session.afterSelect then
+        local afterSelect = session.afterSelect
+        session.afterSelect = nil
+        local generation = State.optionsPathGeneration
+        C_Timer.After(0, function()
+          if session.frame:IsShown() and State.optionsPathGeneration == generation then afterSelect() end
+        end)
+      end
+    end)
+  end
+
+  function Lifecycle.RequestRefresh(dialog, appName, container, ...)
+    if appName ~= PUI_OPTIONS_APP or type(container) ~= "table" or container.__puiACDHostContainer ~= true then return false end
+    local frame = Addon._OptionsWindow
+    if frame.__puiRenderingOptionsPath then return false end
+    local session = sessions[container]
+    if not session or session.rootKey ~= (...) or not IsCurrentSession(session) then return true end
+    QueueRefresh(session, dialog)
+    return true
+  end
+
+  function Lifecycle.RefreshModel(targetPath, afterSelect)
+    local current = State.currentOptionsPath
+    if not current then return false end
+    if targetPath then
+      if #targetPath > #current then return false end
+      for index, key in ipairs(targetPath) do if current[index] ~= key then return false end end
+    end
+    for _, session in pairs(sessions) do
+      if IsCurrentSession(session) then
+        session.afterSelect = afterSelect or session.afterSelect
+        QueueRefresh(session, LibStub("AceConfigDialog-3.0"))
+        return true
+      end
+    end
+    return false
+  end
+end

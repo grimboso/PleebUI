@@ -1404,8 +1404,23 @@ function Addon:_FlushUpdateBus(targets)
   end
 end
 
+local startupLayoutPending = false
+
+local function CompleteStartupLayout()
+  startupLayoutPending = not ns.FrameUtil:CompleteStartupLayout()
+  if not startupLayoutPending then
+    Addon:UnregisterEvent("LOADING_SCREEN_DISABLED")
+  end
+end
+
+Addon:RegisterEvent("LOADING_SCREEN_DISABLED", CompleteStartupLayout)
+
 Addon:RegisterEvent("PLAYER_REGEN_ENABLED", function()
   Addon.FrameScale:ApplyPendingUIScale()
+
+  if startupLayoutPending then
+    CompleteStartupLayout()
+  end
 
   local ub = Addon._puiUpdateBus
   local deferredSoft = ub and ub.deferredSoft

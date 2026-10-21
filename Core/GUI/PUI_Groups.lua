@@ -570,12 +570,11 @@ function WidgetSkins.TreeButton(button, isSelected)
 
   text:SetTextColor(colors.text[1], colors.text[2], colors.text[3], isSelected and colors.text[4] or colors.text[4] * 0.86)
 
-  if layoutChanged then
-    text:ClearAllPoints()
-    text:SetPoint("LEFT", button, "LEFT", 12, 0)
-    text:SetPoint("RIGHT", button.toggle, "LEFT", -8, 0)
-    text:SetHeight(Theme.GetOptionsFontHeight("nav", labelFontSize))
-  end
+  -- The native tree refresh resets these anchors even when card dimensions stay unchanged.
+  text:ClearAllPoints()
+  text:SetPoint("LEFT", button, "LEFT", 12, 0)
+  text:SetPoint("RIGHT", button.toggle, "LEFT", -8, 0)
+  text:SetHeight(Theme.GetOptionsFontHeight("nav", labelFontSize))
 
   text:SetJustifyH("LEFT")
   button.__puiTreeCardLayoutKey = layoutKey
@@ -604,9 +603,16 @@ function WidgetSkins.InlineGroup(widget)
   if not widget.__puiInlineGroupLayoutHooked then
     widget.__puiInlineGroupLayoutHooked = true
     local originalLayoutFinished = widget.LayoutFinished
+    local originalSetTitle = widget.SetTitle
     widget.LayoutFinished = function(self, width, height)
       local extraHeight = self.__puiAceGUIOwnedByPleebUI == true and self.__puiInlineGroupExtraHeight or 0
       originalLayoutFinished(self, width, (height or 0) + extraHeight)
+    end
+    widget.SetTitle = function(self, text)
+      originalSetTitle(self, text)
+      if self.__puiAceGUIOwnedByPleebUI == true then
+        WidgetSkins.InlineGroup(self)
+      end
     end
   end
 
