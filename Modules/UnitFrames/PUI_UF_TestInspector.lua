@@ -974,32 +974,37 @@ function Inspector:BuildFrameSpec(frame)
   AddUnifiedFrameControls(controls, context, UpdatePanel)
 
   if context.family == "raid" then
-    AddSlider(
-      controls,
-      "Groups to show",
-      1,
-      8,
-      1,
-      function()
+    controls[#controls + 1] = {
+      type = "slider",
+      label = "Groups to show",
+      tooltip = "Set the manual group count. Turn off current raid size to change it.",
+      min = 1,
+      max = 8,
+      step = 1,
+      commitOnRelease = true,
+      disabled = function()
+        return context.profile.moverUseRaidSize == true
+      end,
+      get = function()
         return ns.UFLayout.GetRaidEffectiveNumGroups(context.profile)
       end,
-      function(value)
+      set = function(value)
         context.profile.numGroups = RoundValue(value)
         RaidFrames:SafeRefresh("layout")
         TestMode:Refresh("unitframes", "quick-settings", "uf.raidGroupSettings")
       end,
-      true
-    )
+    }
     controls[#controls + 1] = {
       type = "toggle",
       label = "Display mover based on current raid size",
-      tooltip = "Fit the raid preview and mover to your current raid size, in groups of five, up to Groups to show. Outside a raid, use the configured group count.",
+      tooltip = "Fit the raid preview and mover to your current raid size, in groups of five. This overrides the manual group count. Outside a raid, use the configured group count.",
       get = function()
         return context.profile.moverUseRaidSize == true
       end,
       set = function(value)
         context.profile.moverUseRaidSize = value == true
         TestMode:Refresh("unitframes", "quick-settings", "uf.raidGroupSettings")
+        UpdatePanel()
       end,
     }
   end
