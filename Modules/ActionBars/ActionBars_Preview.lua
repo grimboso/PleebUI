@@ -221,6 +221,83 @@ function Preview.Refresh()
   bar:SetAlpha(skin.fadeOutEnabled and not box.hovered and skin.fadeOutAlpha or skin.alpha)
 end
 
+local PREVIEW_TEXT = {
+  hotkey = { region = "hotkey", visible = "showHotkeyText" },
+  macro = { region = "macro", visible = "showMacroText" },
+  charge = { region = "count", visible = "showChargeText" },
+}
+
+local function ApplyPreviewText(box, changes)
+  local skin = box.skin
+  local special = box.barKey == "pet" or box.barKey == "stance"
+  for role, change in pairs(changes) do
+    if role == "cooldown" then
+      for _, cooldown in ipairs(box.sampleCooldowns) do
+        if change.font then
+          ns.IconSkin.StyleCooldownText(cooldown, {
+            font = Core:ResolveFont(skin.cooldownFontFace), size = skin.cooldownFontSize,
+            flags = skin.cooldownFontOutline or "", color = skin.cooldownFontColor, scope = "actionBars",
+          })
+        end
+        if change.visibility then cooldown:SetHideCountdownNumbers(not skin.showCooldownText) end
+      end
+    else
+      local definition = PREVIEW_TEXT[role]
+      for index, button in ipairs(box.buttons) do
+        local text = button[definition.region]
+        if change.font then StyleSampleText(text, skin, role) end
+        if change.visibility then
+          local visible = skin[definition.visible]
+          if role == "macro" then visible = visible and not special
+          elseif role == "charge" then visible = visible and not special and index == math.min(box.previewCount, 3) end
+          text:SetShown(visible)
+        end
+      end
+    end
+  end
+end
+
+function Preview.ApplyOptions(flags)
+  local box = Preview.box
+  if not box or not box:IsVisible() then return end
+  local selected = flags.bars and flags.bars[box.barKey]
+  for key in pairs(flags) do
+    if key ~= "bars" and key ~= "text" and key ~= "buttonLock" and key ~= "keyDown"
+      and key ~= "grid" and key ~= "countdown" and key ~= "tooltips" and key ~= "alpha" and key ~= "spellUI"
+    then
+      Preview.Refresh()
+      return
+    end
+  end
+  if selected then
+    for key in pairs(selected) do
+      if key ~= "text" and key ~= "petCooldowns" and key ~= "alpha" then
+        Preview.Refresh()
+        return
+      end
+    end
+  end
+  if flags.text or flags.alpha or selected and (selected.text or selected.alpha) then
+    local special = box.barKey == "pet" or box.barKey == "stance"
+    box.skin = special and Core:GetSpecialSkin(box.barKey, box.barKey == "pet" and 17 or 23)
+      or Core:GetEffectiveSkin(box.barKey, 35)
+    if flags.text then ApplyPreviewText(box, flags.text) end
+    if selected and selected.text then ApplyPreviewText(box, selected.text) end
+    if flags.alpha or selected and selected.alpha then
+      local skin = box.skin
+      box.sampleBar:SetAlpha(skin.fadeOutEnabled and not box.hovered and skin.fadeOutAlpha or skin.alpha)
+    end
+  end
+  if selected and selected.petCooldowns then
+    for index, cooldown in ipairs(box.sampleCooldowns) do
+      cooldown.previewEnabled = Core:GetDB().bars.pet.showCooldowns ~= false
+        and index <= box.sampleCooldownCount and (index == 1 or box.previewCount > 1)
+      if cooldown.previewEnabled then cooldown:SetCooldown(GetTime(), cooldown.previewDuration)
+      else cooldown:Clear(); cooldown:Hide() end
+    end
+  end
+end
+
 function Preview.Build(addon, optionsFrame, shell, path, sampleCooldownCount)
   local host = shell.previewHost
   local box = shell.__puiActionBarsPreviewBox
@@ -312,4 +389,6 @@ StyleSampleText = P:Def("StyleSampleText", StyleSampleText)
 Preview.RefreshIcons = P:Def("Preview.RefreshIcons", Preview.RefreshIcons)
 Preview.QueueIconRefresh = P:Def("Preview.QueueIconRefresh", Preview.QueueIconRefresh)
 Preview.Refresh = P:Def("Preview.Refresh", Preview.Refresh)
+Preview.ApplyOptions = P:Def("Preview.ApplyOptions", Preview.ApplyOptions)
+ApplyPreviewText = P:Def("ApplyPreviewText", ApplyPreviewText)
 Preview.Build = P:Def("Preview.Build", Preview.Build)

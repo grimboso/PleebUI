@@ -96,15 +96,17 @@ local function ActionBarsOptionsProvider(Addon)
       return (disabledFn and disabledFn()) or GetDisplayField(visibilityKey) == false
     end
 
-    local function MarkFontDirty()
+    local function MarkTextDirty(property)
+      local flags = { text = { [prefix] = { [property] = true } } }
       if barKey then
-        MarkBarDirtyFromOptions(barKey, { fonts = true })
+        MarkBarDirtyFromOptions(barKey, flags)
       else
-        MarkDirtyFromOptions({ fonts = true })
+        if prefix == "cooldown" and property == "visibility" then flags.countdown = true end
+        MarkDirtyFromOptions(flags)
       end
     end
 
-    MarkFontDirty = P:Def("MarkFontDirty", MarkFontDirty)
+    MarkTextDirty = P:Def("MarkTextDirty", MarkTextDirty)
 
     return {
       type = "group",
@@ -127,10 +129,8 @@ local function ActionBarsOptionsProvider(Addon)
             skinTable[visibilityKey] = value == true
             if not barKey and prefix == "cooldown" then
               Core:GetDB().countdownForCooldowns = value == true
-              MarkDirtyFromOptions({ fonts = true, cvars = true })
-            else
-              MarkFontDirty()
             end
+            MarkTextDirty("visibility")
           end,
         },
         useGlobalFont = {
@@ -148,7 +148,7 @@ local function ActionBarsOptionsProvider(Addon)
           end,
           set = function(_, v)
             skinTable[useGlobalKey] = v and true or false
-            MarkFontDirty()
+            MarkTextDirty("font")
           end,
         },
         fontFace = {
@@ -175,7 +175,7 @@ local function ActionBarsOptionsProvider(Addon)
           set = function(_, v)
             skinTable[faceKey] = v
             skinTable[useGlobalKey] = false
-            MarkFontDirty()
+            MarkTextDirty("font")
           end,
         },
         fontSize = {
@@ -191,7 +191,7 @@ local function ActionBarsOptionsProvider(Addon)
           end,
           set = function(_, v)
             skinTable[sizeKey] = v
-            MarkFontDirty()
+            MarkTextDirty("font")
           end,
         },
         fontOutline = {
@@ -213,7 +213,7 @@ local function ActionBarsOptionsProvider(Addon)
             else
               skinTable[outlineKey] = ThemeObj.NormalizeOutlineFlags(key)
             end
-            MarkFontDirty()
+            MarkTextDirty("font")
           end,
         },
         fontColor = {
@@ -228,7 +228,7 @@ local function ActionBarsOptionsProvider(Addon)
           end,
           set = function(_, r, g, b, a)
             skinTable[colorKey] = { r, g, b, a or 1 }
-            MarkFontDirty()
+            MarkTextDirty("font")
           end,
         },
       },
@@ -244,7 +244,6 @@ local function ActionBarsOptionsProvider(Addon)
       end
     end
     Addon:ApplyOptionsChange("ActionBars", flags)
-    ns.ActionBarsPreview.Refresh()
   end
 
   MarkBarDirtyFromOptions = function(barKey, flags)
@@ -289,14 +288,14 @@ local function ActionBarsOptionsProvider(Addon)
                     name = "Lock action bars",
                     order = 10,
                     get = function() return db.lockActionBars ~= false end,
-                    set = function(_, v) db.lockActionBars = v and true or false; MarkDirtyFromOptions({ cvars = true }) end,
+                    set = function(_, v) db.lockActionBars = v and true or false; MarkDirtyFromOptions({ buttonLock = true }) end,
                   },
                   castOnKeyDown = {
                     type = "toggle",
                     name = "Cast on key down",
                     order = 20,
                     get = function() return db.castOnKeyDown ~= false end,
-                    set = function(_, v) db.castOnKeyDown = v and true or false; MarkDirtyFromOptions({ cvars = true }) end,
+                    set = function(_, v) db.castOnKeyDown = v and true or false; MarkDirtyFromOptions({ keyDown = true }) end,
                   },
                   hideUnusedButtons = {
                     type = "toggle",
@@ -304,7 +303,7 @@ local function ActionBarsOptionsProvider(Addon)
                     desc = "Makes empty action-button slots invisible without changing bar layout.",
                     order = 30,
                     get = function() return db.alwaysShowGrid == false end,
-                    set = function(_, v) db.alwaysShowGrid = v ~= true; MarkDirtyFromOptions({ cvars = true }) end,
+                    set = function(_, v) db.alwaysShowGrid = v ~= true; MarkDirtyFromOptions({ grid = true }) end,
                   },
                   tooltipMode = {
                     type = "select",
@@ -460,7 +459,7 @@ local function ActionBarsOptionsProvider(Addon)
                     desc = "Adds padding around the buttons. Turn off to snap bars directly together.",
                     order = 80,
                     get = function() return skin.showBarBackground ~= false end,
-                    set = function(_, v) skin.showBarBackground = v and true or false; MarkDirtyFromOptions({ layout = true, skin = true }) end,
+                    set = function(_, v) skin.showBarBackground = v and true or false; MarkDirtyFromOptions({ backdrop = true }) end,
                   },
                   frameBorderSize = {
                     type = "range",
@@ -564,7 +563,7 @@ local function ActionBarsOptionsProvider(Addon)
                     desc = "Show the bars at full alpha while the Spellbook or talents are open.",
                     order = 50,
                     get = function() return db.spellUIForceAlpha and true or false end,
-                    set = function(_, v) db.spellUIForceAlpha = v and true or false; MarkDirtyFromOptions({ alpha = true }) end,
+                    set = function(_, v) db.spellUIForceAlpha = v and true or false; MarkDirtyFromOptions({ spellUI = true }) end,
                   },
                 },
               },
@@ -622,7 +621,7 @@ local function ActionBarsOptionsProvider(Addon)
                     name = "Use custom settings",
                     order = 10,
                     get = function() return override.useCustom == true end,
-                    set = function(_, v) override.useCustom = v and true or false; MarkBarDirty({ full = true }) end,
+                    set = function(_, v) override.useCustom = v and true or false; MarkBarDirty({ skin = true, layout = true, alpha = true }) end,
                   },
                   flyoutDirection = {
                     type = "select",
@@ -1005,7 +1004,7 @@ local function ActionBarsOptionsProvider(Addon)
             name = "Use custom settings",
             order = 10,
             get = function() return override.useCustom == true end,
-            set = function(_, v) override.useCustom = v and true or false; MarkSpecialDirty({ full = true }) end,
+            set = function(_, v) override.useCustom = v and true or false; MarkSpecialDirty({ skin = true, layout = true, alpha = true }) end,
           },
           buttonCount = {
             type = "range",
@@ -1037,7 +1036,7 @@ local function ActionBarsOptionsProvider(Addon)
             end,
             set = function(_, value)
               barConfig.showCooldowns = value and true or false
-              MarkSpecialDirty({ full = true })
+              MarkSpecialDirty({ petCooldowns = true })
             end,
           },
         },
@@ -1117,7 +1116,7 @@ local function ActionBarsOptionsProvider(Addon)
             order = 10,
             set = function(_, value)
               s.showBarBackground = value and true or false
-              MarkSpecialDirty({ layout = true, skin = true })
+              MarkSpecialDirty({ backdrop = true })
             end,
           },
           frameBgColor = {
@@ -1260,7 +1259,7 @@ local function ActionBarsOptionsProvider(Addon)
             customSkin[key] = nil
           end
           override.useCustom = false
-          MarkBarDirtyFromOptions(barKey, { full = true })
+          MarkBarDirtyFromOptions(barKey, { skin = true, layout = true, alpha = true })
         end,
       }
     end
@@ -1319,7 +1318,7 @@ local function ActionBarsOptionsProvider(Addon)
         order = 10,
         set = function(_, enabled)
           override.skin.showBarBackground = enabled == true
-          MarkBarDirtyFromOptions(barKey, { layout = true, skin = true })
+          MarkBarDirtyFromOptions(barKey, { backdrop = true })
         end,
       }
 

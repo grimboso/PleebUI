@@ -314,7 +314,7 @@ end
 function Core:InvalidateCaches(flags)
   flags = type(flags) == "table" and flags or { full = true }
 
-  if flags.full or flags.layout or flags.skin or flags.fonts or flags.alpha then
+  if flags.full or flags.layout or flags.skin or flags.fonts or flags.alpha or flags.text or flags.backdrop then
     self.skinCache = {}
   end
 
@@ -330,7 +330,7 @@ end
 function Core:InvalidateBarCache(barKey, flags)
   flags = type(flags) == "table" and flags or { full = true }
 
-  if flags.full or flags.layout or flags.skin or flags.fonts or flags.alpha then
+  if flags.full or flags.layout or flags.skin or flags.fonts or flags.alpha or flags.text or flags.backdrop then
     self.skinCache[barKey] = nil
   end
 
@@ -624,34 +624,103 @@ function Core:NormalizeButtonRegions(button)
   return icon
 end
 
-function Core:ApplyAuxiliaryFonts(button, skin)
-  local hotkey = button.HotKey
-  local count = button.Count
-  local macro = button.Name
+local TEXT_REGIONS = {
+  hotkey = { region = "HotKey", visible = "showHotkeyText", point = "TOPRIGHT", x = -2, y = -2 },
+  charge = { region = "Count", visible = "showChargeText", point = "BOTTOMRIGHT", x = -2, y = 2 },
+  macro = { region = "Name", visible = "showMacroText", point = "BOTTOM", x = 0, y = 2 },
+}
 
-  if hotkey then
-    ns.Theme.SetRuntimeFont(hotkey, self:ResolveFont(skin.hotkeyFontFace), Theme.ResolveFontSize(Clamp(skin.hotkeyFontSize, 6, 72), "actionBars"), skin.hotkeyFontOutline or "")
-    hotkey:SetTextColor(unpack(skin.hotkeyFontColor))
-    hotkey:SetAlpha(skin.showHotkeyText and 1 or 0)
-    hotkey:ClearAllPoints()
-    hotkey:SetPoint("TOPRIGHT", button, "TOPRIGHT", -2, -2)
+function Core:ApplyAuxiliaryFonts(button, skin, changes)
+  for role, definition in pairs(TEXT_REGIONS) do
+    local change = changes and changes[role]
+    local text = button[definition.region]
+    if text and (not changes or change) then
+      if not changes or change.font then
+        Theme.SetRuntimeFont(text, self:ResolveFont(skin[role .. "FontFace"]),
+          Theme.ResolveFontSize(Clamp(skin[role .. "FontSize"], 6, 72), "actionBars"), skin[role .. "FontOutline"] or "")
+        text:SetTextColor(unpack(skin[role .. "FontColor"]))
+      end
+      if not changes or change.visibility then
+        text:SetAlpha(skin[definition.visible] and 1 or 0)
+      end
+      if not changes then
+        text:ClearAllPoints()
+        text:SetPoint(definition.point, button, definition.point, definition.x, definition.y)
+      end
+    end
   end
+end
 
-  if count then
-    ns.Theme.SetRuntimeFont(count, self:ResolveFont(skin.chargeFontFace), Theme.ResolveFontSize(Clamp(skin.chargeFontSize, 6, 72), "actionBars"), skin.chargeFontOutline or "")
-    count:SetTextColor(unpack(skin.chargeFontColor))
-    count:SetAlpha(skin.showChargeText and 1 or 0)
-    count:ClearAllPoints()
-    count:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT", -2, 2)
+function Core:QueueCooldownFont(cooldown, skin)
+  if cooldown and not cooldown:IsForbidden() and skin.showCooldownText then
+    IconSkin.QueueCooldownText(cooldown, {
+      font = self:ResolveFont(skin.cooldownFontFace),
+      size = Clamp(skin.cooldownFontSize, 6, 72),
+      flags = skin.cooldownFontOutline or "",
+      color = CopyColor(skin.cooldownFontColor, skin.fontColor),
+      scope = "actionBars",
+    })
   end
+end
 
-  if macro then
-    ns.Theme.SetRuntimeFont(macro, self:ResolveFont(skin.macroFontFace), Theme.ResolveFontSize(Clamp(skin.macroFontSize, 6, 72), "actionBars"), skin.macroFontOutline or "")
-    macro:SetTextColor(unpack(skin.macroFontColor))
-    macro:SetAlpha(skin.showMacroText and 1 or 0)
-    macro:ClearAllPoints()
-    macro:SetPoint("BOTTOM", button, "BOTTOM", 0, 2)
+function Core:RefreshOptionState(flags, barKey)
+  for _, bar in pairs(self.bars) do
+    local key = bar.dbKey
+    if (not barKey or key == barKey) and (STANDARD_BAR_KEYS[key] or key == "pet" or key == "stance") then
+      local skin = STANDARD_BAR_KEYS[key] and self:GetEffectiveSkin(key, bar.defaultSize)
+        or self:GetSpecialSkin(key, bar.defaultSize)
+      if flags.backdrop then
+        if STANDARD_BAR_KEYS[key] then self.subsystems.standard:RefreshLayout(key)
+        elseif key == "pet" then self.subsystems.pet:RefreshLayout()
+        else self.subsystems.stance:RefreshLayout() end
+        self:ApplyBackdrop(bar, skin)
+      end
+      for _, button in ipairs(bar.buttons) do
+        if flags.text then
+          self:ApplyAuxiliaryFonts(button, skin, flags.text)
+          local cooldown = flags.text.cooldown
+          if cooldown then
+            if cooldown.font or cooldown.visibility then
+              self:QueueCooldownFont(button.cooldown, skin)
+              self:QueueCooldownFont(button.chargeCooldown, skin)
+            end
+            self:ApplyButtonCooldownAppearance(button, skin)
+          end
+          button.__puiActionBarSkin = skin
+        end
+        if STANDARD_BAR_KEYS[key] then
+          if flags.buttonLock then button:SetAttribute("buttonlock", self.lockActionBars ~= false) end
+          if flags.keyDown then button:SetAttribute("useOnKeyDown", self.castOnKeyDown ~= false) end
+          if flags.grid and button.__puiActionActive and button.__puiHasAction ~= true then
+            button:SetAlpha((self.alwaysShowGrid ~= false or self.actionGridShown == true) and 1 or 0)
+          end
+        end
+      end
+    end
   end
+  if flags.text and (not barKey or barKey == "1") then
+    local skin = self:GetEffectiveSkin("1", 35)
+    local index = 1
+    while _G["SpellFlyoutPopupButton" .. index] do
+      local button = _G["SpellFlyoutPopupButton" .. index]
+      self:ApplyAuxiliaryFonts(button, skin, flags.text)
+      if flags.text.cooldown then
+        self:QueueCooldownFont(button.cooldown, skin)
+        self:ApplyButtonCooldownAppearance(button, skin)
+      end
+      button.__puiActionBarSkin = skin
+      index = index + 1
+    end
+  end
+  if flags.grid or flags.buttonLock or flags.petCooldowns then
+    local pet = self.subsystems.pet
+    pet:LoadRuntimeConfig()
+    if flags.grid then pet:UpdateEmptyButtons() end
+    if flags.petCooldowns then
+      if pet.showCooldowns then pet:UpdateCooldowns() else pet:ClearCooldowns() end
+    end
+  end
+  if flags.spellUI then self:UpdateSpellUIVisibility() end
 end
 
 function Core:ApplyCooldownAppearance(cooldown, skin, hideNumbers, swipeColor)
@@ -683,15 +752,7 @@ function Core:ApplyCooldownAppearance(cooldown, skin, hideNumbers, swipeColor)
   if needsStyle then
     IconSkin.SquareCooldown(cooldown)
 
-    if skin.showCooldownText then
-      IconSkin.QueueCooldownText(cooldown, {
-        font = self:ResolveFont(skin.cooldownFontFace),
-        size = Clamp(skin.cooldownFontSize, 6, 72),
-        flags = skin.cooldownFontOutline or "",
-        color = CopyColor(skin.cooldownFontColor, skin.fontColor),
-        scope = "actionBars",
-      })
-    end
+    self:QueueCooldownFont(cooldown, skin)
 
     cooldown.__puiActionBarStyleVersion = version
   end
@@ -1120,7 +1181,7 @@ function Core:RegisterMover(bar)
         get = function() return skin.showHotkeyText end,
         set = function(value)
           GetCustomSkin().showHotkeyText = value == true
-          Refresh({ fonts = true })
+          Refresh({ text = { hotkey = { visibility = true } } })
         end,
       },
       {
@@ -1132,7 +1193,7 @@ function Core:RegisterMover(bar)
         get = function() return skin.hotkeyFontSize end,
         set = function(value)
           GetCustomSkin().hotkeyFontSize = Round(value)
-          Refresh({ fonts = true })
+          Refresh({ text = { hotkey = { font = true } } })
         end,
       },
       {
@@ -1141,7 +1202,7 @@ function Core:RegisterMover(bar)
         get = function() return skin.showMacroText end,
         set = function(value)
           GetCustomSkin().showMacroText = value == true
-          Refresh({ fonts = true })
+          Refresh({ text = { macro = { visibility = true } } })
         end,
       },
       {
@@ -1153,7 +1214,7 @@ function Core:RegisterMover(bar)
         get = function() return skin.macroFontSize end,
         set = function(value)
           GetCustomSkin().macroFontSize = Round(value)
-          Refresh({ fonts = true })
+          Refresh({ text = { macro = { font = true } } })
         end,
       },
       {
@@ -1165,7 +1226,7 @@ function Core:RegisterMover(bar)
         get = function() return skin.chargeFontSize end,
         set = function(value)
           GetCustomSkin().chargeFontSize = Round(value)
-          Refresh({ fonts = true })
+          Refresh({ text = { charge = { font = true } } })
         end,
       },
     }
@@ -1226,7 +1287,7 @@ function Core:RegisterMover(bar)
         get = function() return db.bars[barKey].enabled ~= false end,
         set = function(value)
           db.bars[barKey].enabled = value == true
-          Refresh({ full = true, visibility = true, layout = true })
+          Refresh({ visibility = true })
         end,
       })
     end
@@ -1435,11 +1496,12 @@ local function SetCVarIfChanged(name, value)
   end
 end
 
-function Core:SyncCVars()
-  SetCVarIfChanged("lockActionBars", self.lockActionBars ~= false and "1" or "0")
-  SetCVarIfChanged("ActionButtonUseKeyDown", self.castOnKeyDown ~= false and "1" or "0")
-  SetCVarIfChanged("alwaysShowActionBars", self.alwaysShowGrid ~= false and "1" or "0")
-  SetCVarIfChanged("countdownForCooldowns", self.countdownForCooldowns ~= false and "1" or "0")
+function Core:SyncCVars(flags)
+  local all = not flags or flags.full or flags.cvars
+  if all or flags.buttonLock then SetCVarIfChanged("lockActionBars", self.lockActionBars ~= false and "1" or "0") end
+  if all or flags.keyDown then SetCVarIfChanged("ActionButtonUseKeyDown", self.castOnKeyDown ~= false and "1" or "0") end
+  if all or flags.grid then SetCVarIfChanged("alwaysShowActionBars", self.alwaysShowGrid ~= false and "1" or "0") end
+  if all or flags.countdown then SetCVarIfChanged("countdownForCooldowns", self.countdownForCooldowns ~= false and "1" or "0") end
 end
 
 
@@ -1820,7 +1882,15 @@ end
 
 function Core:RefreshBar(barKey, flags)
   flags = type(flags) == "table" and flags or { full = true }
+  if InCombatLockdown() then
+    self:QueueRefresh({ bars = { [barKey] = flags } })
+    return
+  end
   self:InvalidateBarCache(barKey, flags)
+
+  if not flags.full and (flags.text or flags.backdrop or flags.petCooldowns) then
+    self:RefreshOptionState(flags, barKey)
+  end
 
   if STANDARD_BAR_KEYS[barKey] then
     self.subsystems.standard:RefreshBar(barKey, flags)
@@ -1834,10 +1904,10 @@ function Core:RefreshBar(barKey, flags)
 
   for _, bar in pairs(self.bars) do
     if bar.dbKey == barKey then
-      if flags.full or flags.layout or flags.visibility then
+      if flags.full or flags.layout or flags.visibility or flags.backdrop then
         FrameUtil:RefreshGhostMover(bar.moverKey)
       end
-      if STANDARD_BAR_KEYS[barKey] then
+      if STANDARD_BAR_KEYS[barKey] and (flags.full or flags.layout or flags.visibility or flags.backdrop) then
         FrameUtil.RefreshSmartSnapState(bar.moverKey)
       end
       break
@@ -1859,7 +1929,7 @@ function Core:RefreshAll(flags)
 
   if flags.profile then
     self:PrepareProfile()
-  elseif flags.full or flags.cvars or flags.tooltips then
+  elseif flags.full or flags.cvars or flags.tooltips or flags.buttonLock or flags.keyDown or flags.grid or flags.countdown or flags.spellUI then
     self:RefreshRuntimeSettings()
   end
 
@@ -1869,8 +1939,12 @@ function Core:RefreshAll(flags)
     self.spellUIVisible = PlayerSpellsFrame and PlayerSpellsFrame:IsShown() or false
   end
 
-  if flags.full or flags.cvars then
-    self:SyncCVars()
+  if flags.full or flags.cvars or flags.buttonLock or flags.keyDown or flags.grid or flags.countdown then
+    self:SyncCVars(flags)
+  end
+
+  if not flags.full and (flags.text or flags.backdrop or flags.buttonLock or flags.keyDown or flags.grid or flags.spellUI) then
+    self:RefreshOptionState(flags)
   end
 
   if flags.full then
@@ -1891,6 +1965,12 @@ function Core:RefreshAll(flags)
   end
 
   local barRequests = flags.bars
+  local cooldownTextChanged = flags.text and flags.text.cooldown
+  if not cooldownTextChanged and barRequests then
+    for _, barFlags in pairs(barRequests) do
+      if barFlags.text and barFlags.text.cooldown then cooldownTextChanged = true; break end
+    end
+  end
   if not flags.full and type(barRequests) == "table" then
     for barKey, barFlags in pairs(barRequests) do
       self:RefreshBar(barKey, barFlags)
@@ -1908,13 +1988,14 @@ function Core:RefreshAll(flags)
     end
   end
 
-  if flags.full or flags.layout or flags.visibility then
+  if flags.full or flags.layout or flags.visibility or flags.backdrop then
     FrameUtil:RefreshAllGhostMovers()
   end
 
   if (flags.full
       or flags.fonts
       or flags.skin
+      or cooldownTextChanged
       or HasBarRefreshFlag(barRequests, "full")
       or HasBarRefreshFlag(barRequests, "fonts")
       or HasBarRefreshFlag(barRequests, "skin"))
@@ -1925,7 +2006,7 @@ function Core:RefreshAll(flags)
   if flags.full then
     self.runtimeInitialized = true
   end
-  ns.ActionBarsPreview.Refresh()
+  ns.ActionBarsPreview.ApplyOptions(flags)
 end
 
 function Core:ReconcileWorldState()
@@ -2040,6 +2121,8 @@ Core.GetSpecialSkin = P:Def("Core:GetSpecialSkin", Core.GetSpecialSkin)
 Core.ResolveFont = P:Def("Core:ResolveFont", Core.ResolveFont)
 Core.NormalizeButtonRegions = P:Def("Core:NormalizeButtonRegions", Core.NormalizeButtonRegions)
 Core.ApplyAuxiliaryFonts = P:Def("Core:ApplyAuxiliaryFonts", Core.ApplyAuxiliaryFonts)
+Core.QueueCooldownFont = P:Def("Core:QueueCooldownFont", Core.QueueCooldownFont)
+Core.RefreshOptionState = P:Def("Core:RefreshOptionState", Core.RefreshOptionState)
 Core.ApplyCooldownAppearance = P:Def("Core:ApplyCooldownAppearance", Core.ApplyCooldownAppearance)
 Core.ApplyButtonCooldownAppearance = P:Def("Core:ApplyButtonCooldownAppearance", Core.ApplyButtonCooldownAppearance)
 Core.ApplyButtonAppearance = P:Def("Core:ApplyButtonAppearance", Core.ApplyButtonAppearance)
