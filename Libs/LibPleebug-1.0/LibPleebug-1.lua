@@ -1195,8 +1195,14 @@ function MemDebug:_InstallUniversalOnAttached(moduleName)
   for i = 1, #list do
     local obj = list[i]
     if obj and not _pleebug_IsRiskyObject(obj) then
-      -- 1) Events (AceEvent-style or any object exposing RegisterEvent/RegisterUnitEvent)
-      if self.InstallAceEventTracking then
+      -- 1) Events: observe the module-owned NumyAceEvent dispatcher rather than its handlers.
+      if opt.trackEmbeddedEvents == true then
+        local eventLibrary = LibStub("NumyAceEvent-3.0", true)
+        local embedded = eventLibrary and eventLibrary.embeds and eventLibrary.embeds[obj]
+        if embedded then
+          self:InstallFrameEventTracking(embedded.frame, moduleName)
+        end
+      elseif self.InstallAceEventTracking then
         self:InstallAceEventTracking(obj, moduleName)
       end
 
@@ -1609,8 +1615,8 @@ function MemDebug:InstallFrameEventTracking(obj, moduleName)
   -- Mark installed BEFORE HookScript to prevent re-entry / double hooks.
   self._frameEventInstalled[obj] = true
 
-  obj:HookScript("OnEvent", function(frame, event, ...)
-    MemDebug:TrackEvent(mName, event, select(1, ...))
+  obj:HookScript("OnEvent", function(_, event)
+    MemDebug:TrackEvent(mName, event)
   end)
 end
 

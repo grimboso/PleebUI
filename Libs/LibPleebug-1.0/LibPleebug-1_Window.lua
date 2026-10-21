@@ -233,10 +233,13 @@ function W:_BuildExportRows(snapshot)
   local root = { name = "root", path = "", count = 0, children = {} }
   local index = {}
   local cpu = MemDebug.CPU
-  for path in pairs(cpu._nativeFuncs) do
+  local registeredFunctions = cpu and cpu._nativeFuncs or {}
+  local registeredEvents = cpu and cpu._nativeEvents or {}
+
+  for path in pairs(registeredFunctions) do
     _treeEnsurePath(root, index, "Funcs." .. path)
   end
-  for eventName in pairs(cpu._nativeEvents) do
+  for eventName in pairs(registeredEvents) do
     _treeEnsurePath(root, index, "Events.Global." .. eventName)
   end
   _applyTreeSnapshot(root, index, snapshot, {}, {})
