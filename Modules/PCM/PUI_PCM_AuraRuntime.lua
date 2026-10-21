@@ -151,7 +151,6 @@ local function ConfigureIconButton(record, button, unit, initializing)
     unit,
     GetIconStyle(record)
   )
-  record.stylePending = nil
 end
 
 local function ConfigureBarButton(record, button, initializing)
@@ -165,7 +164,6 @@ local function ConfigureBarButton(record, button, initializing)
     viewers[record.viewerKey].style,
     button == record.buttons.totem
   )
-  record.stylePending = nil
 end
 
 local function InitializeAuraButton(record, button, unit)
@@ -309,6 +307,7 @@ local function PrepareTotemButton(record)
 end
 
 local function ApplyRecordAppearance(record)
+  record.stylePending = nil
   for spellID in pairs(record.candidateSpellIDs) do
     if TotemTracker.knownSpellIDs[spellID] then
       PrepareTotemButton(record)
