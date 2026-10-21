@@ -1,6 +1,6 @@
 <Ui xmlns="http://www.blizzard.com/wow/ui/">
   <Script file="PUI_Framescale.lua"/>
-  <Script file="PUI_FrameUtil.lua"/>
+  <Script file="EditMode\EditMode.lua"/>
   <Script file="PUI_AuraSlotDriver.lua"/>
   <Script file="GUI\PUI_Theme.lua"/>
   <Script file="GUI\PUI_OptionsMotion.lua"/>
@@ -29,10 +29,10 @@
   <Script file="GUI\PUI_PreviewBox.lua"/>
   <Script file="GUI\PUI_GUI.lua"/>
   <Script file="PUI_PublicAPI.lua"/>
-  <Script file="PUI_EditMode_QuickSettings.lua"/>
-  <Script file="PUI_TestMode.lua"/>
-  <Script file="PUI_EditModeGuidePractice.lua"/>
-  <Script file="PUI_EditModeInput.lua"/>
+  <Script file="EditMode\EditMode_QuickSettings.lua"/>
+  <Script file="EditMode\EditMode_TestMode.lua"/>
+  <Script file="EditMode\EditMode_GuidePractice.lua"/>
+  <Script file="EditMode\EditMode_Input.lua"/>
   <Script file="Installer\PUI_InstallerSettings.lua"/>
   <Script file="Installer\PUI_InstallerExamples.lua"/>
   <Script file="Installer\PUI_InstallerPreview.lua"/>

@@ -1,5 +1,3 @@
--- File: PUI_FrameUtil.lua
-
 local ns = select(2, ...)
 
 local Addon = ns.Addon
