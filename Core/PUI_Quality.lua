@@ -2594,14 +2594,14 @@ local QualityPreviewRoot
 
 local function Quality_GetPreviewWarnings()
   CombatWarning_RefreshMeleeSpec()
-  local warnings = { { kind = "Target warnings", slot = 1 } }
+  local warnings = { { kind = "Target warnings", slot = 4 } }
   if IsPetClass() then
     warnings[#warnings + 1] = { kind = "Missing pet", slot = 2 }
     warnings[#warnings + 1] = { kind = "Dead pet", slot = 3 }
     if IsHealPetClass() then
-      warnings[#warnings + 1] = { kind = "Low pet health", slot = 4 }
+      warnings[#warnings + 1] = { kind = "Low pet health", slot = 1 }
     else
-      warnings[#warnings + 1] = { kind = "Idle pet", slot = 4 }
+      warnings[#warnings + 1] = { kind = "Idle pet", slot = 1 }
     end
   end
   warnings[#warnings + 1] = { kind = "Combat message", slot = 5 }
