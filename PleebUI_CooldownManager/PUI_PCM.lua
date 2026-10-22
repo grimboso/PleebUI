@@ -1,6 +1,6 @@
 -- File: PUI_PCM.lua
 
-local _, ns = ...
+local ns = LibStub("AceAddon-3.0"):GetAddon("PleebUI").ModuleNamespace
 
 local Addon = ns.Addon
 local FrameUtil = ns.FrameUtil
@@ -35,6 +35,14 @@ local PCMCoreState = {
 
 local PCMEnabled
 local PCMStartupDataReady = false
+local PCMStartupFrame = CreateFrame("Frame")
+PCMStartupFrame:Hide()
+local PCMInitialPassFrame = CreateFrame("Frame")
+PCMInitialPassFrame:Hide()
+local PCMSettingsFrame = CreateFrame("Frame")
+PCMSettingsFrame:Hide()
+local PCMSettingsFlags = {}
+local PCMSoftRebuildFlags = {}
 
 local _EnsureViewerDurationCount
 local _PCM_GetDurationCountEnabledCached
@@ -977,7 +985,7 @@ end
 function Cooldowns:FinishProfileTransition()
   self.__puiPCMProfileRefreshPending = nil
   if _PCM_IsTransitionPending() then
-    _PCM_FlushTransition(PCMTransitionState.Token or 0)
+    _PCM_QueueTransitionFlush()
   end
 end
 
@@ -1660,16 +1668,13 @@ function Cooldowns:OnInitialize()
 
   PCMHooks.SetRuntimeEnabled(enabled)
   self:SetEnabledState(enabled)
-  ns.Modules.PCM_Buffs:SetEnabledState(enabled)
-  ns.Modules.PCM_BuffBars:SetEnabledState(enabled)
-  ns.Modules.PCM_BB:SetEnabledState(enabled)
 
   if enabled and PCMRuntime:IsInitializing() then
     C_AddOns.LoadAddOn("Blizzard_CooldownViewer")
     EventUtil.ContinueOnPlayerLogin(function()
       PCMStartupDataReady = true
       if self:IsEnabled() then
-        _PCM_RunInitialViewerPass(self)
+        PCMInitialPassFrame:Show()
       end
     end)
   end
@@ -1915,7 +1920,7 @@ local function _PCM_OnFrameScaleChanged(_, scale)
   Cooldowns:SoftRebuild({ layout = true })
 end
 
-function Cooldowns:OnEnable()
+function Cooldowns:StartRuntime()
   if not _PCM_IsModuleEnabledFast() then
     self:_PCM_RunDisableTeardown()
     self:Disable()
@@ -1965,7 +1970,41 @@ function Cooldowns:OnEnable()
   )
 end
 
+function Cooldowns:OnEnable()
+  self.__puiPCMStartPending = true
+  PCMRuntime:SetSubscriberEnabled("Coordinator", true)
+  PCMRuntime:Enable()
+  PCMStartupFrame:Show()
+end
+
+PCMStartupFrame:SetScript("OnUpdate", function(frame)
+  frame:Hide()
+  if Cooldowns.__puiPCMStartPending and Cooldowns:IsEnabled() then
+    Cooldowns.__puiPCMStartPending = nil
+    Cooldowns:StartRuntime()
+  end
+end)
+
+PCMInitialPassFrame:SetScript("OnUpdate", function(frame)
+  frame:Hide()
+  if Cooldowns:IsEnabled() then
+    if Cooldowns.__puiPCMStartPending then
+      Cooldowns.__puiPCMStartPending = nil
+      PCMStartupFrame:Hide()
+      Cooldowns:StartRuntime()
+    else
+      _PCM_RunInitialViewerPass(Cooldowns)
+    end
+  end
+end)
+
 function Cooldowns:OnDisable()
+  PCMSettingsFrame:Hide()
+  wipe(PCMSettingsFlags)
+  wipe(PCMSoftRebuildFlags)
+  self.__puiPCMStartPending = nil
+  PCMStartupFrame:Hide()
+  PCMInitialPassFrame:Hide()
   NativeCDMSettingsChanged = false
   EventRegistry:UnregisterCallback("CooldownViewerSettings.OnPendingChanges", self)
   EventRegistry:UnregisterCallback("CooldownViewerSettings.OnHide", self)
@@ -1982,6 +2021,7 @@ function Cooldowns:OnDisable()
   ns.PCMAbilityRuntime:Disable()
   ns.PCMAuraRuntime:Disable()
   self:_PCM_RunDisableTeardown()
+  ns.PCMAuraWidget.StopRuntime()
 end
 
 function Cooldowns:_RefreshCustomTrackerLayout()
@@ -2079,6 +2119,11 @@ function Cooldowns:_OnSpellsChanged()
 end
 
 local function _PCM_RuntimeLifecycleEvent(event, ...)
+  if Cooldowns.__puiPCMStartPending and Cooldowns:IsEnabled() then
+    Cooldowns.__puiPCMStartPending = nil
+    PCMStartupFrame:Hide()
+    Cooldowns:StartRuntime()
+  end
   if not _PCM_IsModuleEnabledFast() then
     return
   end
@@ -2129,7 +2174,7 @@ PCMRuntime:RegisterSubscriber("Coordinator", {
   OnLifecycleEvent = _PCM_RuntimeLifecycleEvent,
 })
 
-function Cooldowns:ApplySettings(flags)
+function Cooldowns:ApplyRuntimeSettings(flags)
   if not flags then
     return
   end
@@ -2190,7 +2235,7 @@ function Cooldowns:ApplySettings(flags)
   end
 end
 
-function Cooldowns:SoftRebuild(flags)
+function Cooldowns:RebuildRuntimeLayout(flags)
   if not _PCM_IsModuleEnabledFast() then
     return
   end
@@ -2210,6 +2255,44 @@ function Cooldowns:SoftRebuild(flags)
   self:_SpellBars_SoftRebuild(flags)
   self:_CooldownStackBars_SoftRebuild(flags)
 end
+
+function Cooldowns:ApplySettings(flags)
+  if not flags then return end
+  for key, value in pairs(flags) do
+    if value then PCMSettingsFlags[key] = value end
+  end
+  PCMSettingsFrame:Show()
+end
+
+function Cooldowns:SoftRebuild(flags)
+  if not flags then return end
+  for key, value in pairs(flags) do
+    if value then PCMSoftRebuildFlags[key] = value end
+  end
+  PCMSettingsFrame:Show()
+end
+
+PCMSettingsFrame:SetScript("OnUpdate", function(frame)
+  frame:Hide()
+  if Cooldowns.__puiPCMStartPending and Cooldowns:IsEnabled() then
+    Cooldowns.__puiPCMStartPending = nil
+    PCMStartupFrame:Hide()
+    Cooldowns:StartRuntime()
+  end
+  if next(PCMSettingsFlags) then
+    Cooldowns:ApplyRuntimeSettings(PCMSettingsFlags)
+    wipe(PCMSettingsFlags)
+  end
+  if Cooldowns.__puiPCMStartPending and Cooldowns:IsEnabled() then
+    Cooldowns.__puiPCMStartPending = nil
+    PCMStartupFrame:Hide()
+    Cooldowns:StartRuntime()
+  end
+  if next(PCMSoftRebuildFlags) then
+    Cooldowns:RebuildRuntimeLayout(PCMSoftRebuildFlags)
+    wipe(PCMSoftRebuildFlags)
+  end
+end)
 
 local function _PCM_AddCustomBarSpellID(spellSet, spellID)
   if _PCM_IsSecret(spellID) then
@@ -2406,6 +2489,9 @@ end
   _RunPCMStartupRefresh = P:Def('_RunPCMStartupRefresh', _RunPCMStartupRefresh)
   _PCM_RunViewerLayoutPass = P:Def('_PCM_RunViewerLayoutPass', _PCM_RunViewerLayoutPass)
   _PCM_RunInitialViewerPass = P:Def('_PCM_RunInitialViewerPass', _PCM_RunInitialViewerPass)
+  Cooldowns.StartRuntime = P:Def('Cooldowns:StartRuntime', Cooldowns.StartRuntime)
+  Cooldowns.ApplyRuntimeSettings = P:Def('Cooldowns:ApplyRuntimeSettings', Cooldowns.ApplyRuntimeSettings)
+  Cooldowns.RebuildRuntimeLayout = P:Def('Cooldowns:RebuildRuntimeLayout', Cooldowns.RebuildRuntimeLayout)
   Cooldowns.OnEnable = P:Def('Cooldowns:OnEnable', Cooldowns.OnEnable)
   Cooldowns.OnDisable = P:Def('Cooldowns:OnDisable', Cooldowns.OnDisable)
   Cooldowns._RefreshCustomTrackerLayout = P:Def('Cooldowns:_RefreshCustomTrackerLayout', Cooldowns._RefreshCustomTrackerLayout)

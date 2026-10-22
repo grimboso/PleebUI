@@ -3224,7 +3224,9 @@ function Addon:RefreshOptionsTheme()
   frame.__puiRootNavSignature = nil
   _PUI_RefreshRootRegistryNav(frame)
 
-  ns.PCMPreview.Refresh()
+  if ns.PCMPreview then
+    ns.PCMPreview.Refresh()
+  end
   ns.UFPreview.RefreshAuraManagerPreview()
   ns.KeyboardNavigation.RefreshWindows()
 end
@@ -4098,7 +4100,9 @@ local function _PUI_RenderCustomOptionsPath(frame, AceConfigDialog, APP, path)
     AceConfigDialog:Open(APP, container, unpack(renderPath))
   end
 
-  Addon:HandleOptionsPathOpened(requestedPath)
+  if ns.Modules.CooldownManager then
+    Addon:HandleOptionsPathOpened(requestedPath)
+  end
 
   frame.__puiLastRenderedOptionsPathKey = pathKey
   frame.__puiSelectedOptionsPathKey = pathKey

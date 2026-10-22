@@ -2774,7 +2774,7 @@ local function FlushPendingSmartSnapRelayouts(allowStartup)
   FrameUtil._smartSnapRuntimeRelayoutScheduled = false
 
   if InCombatLockdown() or FrameUtil._profileTransitionActive == true
-    or (ns.PCM_IsTransitionPending() and not ns.PCMRuntime:IsDataRestricted())
+    or (ns.Modules.CooldownManager and ns.PCM_IsTransitionPending() and not ns.PCMRuntime:IsDataRestricted())
   then
     return
   end
@@ -2830,7 +2830,7 @@ end
 local function SchedulePendingSmartSnapRelayouts()
   if FrameUtil._smartSnapRuntimeRelayoutScheduled
     or FrameUtil._profileTransitionActive == true
-    or (ns.PCM_IsTransitionPending() and not ns.PCMRuntime:IsDataRestricted())
+    or (ns.Modules.CooldownManager and ns.PCM_IsTransitionPending() and not ns.PCMRuntime:IsDataRestricted())
     or not FrameUtil._smartSnapWorldReady
     or InCombatLockdown()
   then
@@ -6265,7 +6265,7 @@ function FrameUtil.CompleteProfileTransition()
   end
 
   local update = Addon._puiStaggeredUpdate
-  if (ns.PCM_IsTransitionPending() and not ns.PCMRuntime:IsDataRestricted())
+  if (ns.Modules.CooldownManager and ns.PCM_IsTransitionPending() and not ns.PCMRuntime:IsDataRestricted())
     or (update and update.running == true)
   then
     return

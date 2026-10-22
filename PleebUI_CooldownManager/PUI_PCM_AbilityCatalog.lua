@@ -1,4 +1,4 @@
-local ADDON_NAME, ns = ...
+local ns = LibStub("AceAddon-3.0"):GetAddon("PleebUI").ModuleNamespace
 
 local Catalog = {}
 ns.PCMAbilityCatalog = Catalog
@@ -871,6 +871,10 @@ function Catalog:GetGeneration()
   return state.generation
 end
 
+function Catalog:GetSpecializationID()
+  return state.specializationID
+end
+
 function Catalog:GetEntries()
   return state.entries
 end
@@ -919,6 +923,8 @@ function Catalog:Refresh()
     return false, state.generation
   end
 
+  local specIndex = GetSpecialization()
+  state.specializationID = specIndex and GetSpecializationInfo(specIndex) or nil
   state.nativeConfiguration = candidate.nativeConfiguration
   local changed = state.generation == 0 or not GenerationEquals(candidate)
   if changed then

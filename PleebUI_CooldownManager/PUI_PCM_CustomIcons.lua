@@ -1,4 +1,4 @@
-local _, ns = ...
+local ns = LibStub("AceAddon-3.0"):GetAddon("PleebUI").ModuleNamespace
 
 local CustomIcons = {}
 ns.PCMCustomIcons = CustomIcons
@@ -8,8 +8,8 @@ local GameTooltip = GameTooltip
 local C_Timer = C_Timer
 local C_Secrets = C_Secrets
 local Presentation = ns.Presentation
-local AuraSlotDriver = ns.AuraSlotDriver
-local AuraWidget = ns.AuraWidget
+local AuraSlotDriver = ns.PCMAuraSlotDriver
+local AuraWidget = ns.PCMAuraWidget
 local BarWidget = ns.BarWidget
 local IconSkin = ns.IconSkin
 local FrameUtil = ns.FrameUtil

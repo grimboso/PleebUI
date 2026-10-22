@@ -1,7 +1,7 @@
 -- File: PUI_PCM_Keybinds.lua
 -- Purpose:
 --   - Resolve live action-bar keybinds and render them on PCM cooldown viewers.
-local ADDON_NAME, ns = ...
+local ns = LibStub("AceAddon-3.0"):GetAddon("PleebUI").ModuleNamespace
 local Cooldowns = ns.Modules.CooldownManager
 local IconSettings = ns.PCMIconSettings
 local DB = ns.PCM_DBExports
@@ -188,19 +188,27 @@ local function _KB_RefreshBarTopology()
   wipe(_kbExtraBarPages)
   wipe(_kbBarOffsets)
 
-  local bars = ns.ActionBarsCore:GetDB().bars
-  _kbBarOffsets["1"] = bars["1"].buttonOffset or 0
-
   for page in pairs(_KB_MAIN_STABLE_PAGES) do
     _kbMappedPages[page] = true
   end
 
-  for page, uiKey in pairs(_KB_BAR_UI_KEYS) do
-    local barDB = bars[uiKey]
-    if barDB.enabled ~= false then
-      _kbMappedPages[page] = true
-      _kbExtraBarPages[page] = true
-      _kbBarOffsets[uiKey] = barDB.buttonOffset or 0
+  if ns.ActionBarsCore then
+    local bars = ns.Addon.ActionBarsDB.profile.bars
+    _kbBarOffsets["1"] = bars["1"].buttonOffset or 0
+    for page, uiKey in pairs(_KB_BAR_UI_KEYS) do
+      local barDB = bars[uiKey]
+      if barDB.enabled ~= false then
+        _kbMappedPages[page] = true
+        _kbExtraBarPages[page] = true
+        _kbBarOffsets[uiKey] = barDB.buttonOffset or 0
+      end
+    end
+  else
+    for page in pairs(_KB_BAR_UI_KEYS) do
+      if not _KB_MAIN_STABLE_PAGES[page] then
+        _kbMappedPages[page] = true
+        _kbExtraBarPages[page] = true
+      end
     end
   end
 end

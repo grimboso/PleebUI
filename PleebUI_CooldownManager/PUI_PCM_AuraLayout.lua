@@ -1,4 +1,4 @@
-local _, ns = ...
+local ns = LibStub("AceAddon-3.0"):GetAddon("PleebUI").ModuleNamespace
 
 local AuraLayout = {}
 ns.PCMAuraLayout = AuraLayout
@@ -16,7 +16,8 @@ local BUFF_BAR_VIEWER = "BuffBarCooldownViewer"
 
 local registrations = {}
 local pending = {}
-local flushFrame
+local flushFrame = CreateFrame("Frame")
+flushFrame:Hide()
 
 local function Clamp(value, minimum, maximum)
   if value < minimum then
@@ -192,19 +193,16 @@ function AuraLayout:GetLastPlan(viewerKey)
   return registration and registration.lastPlan or nil
 end
 
+flushFrame:SetScript("OnUpdate", function(frame)
+  frame:Hide()
+  AuraLayout:Flush()
+end)
+
 function AuraLayout:RequestLayout(viewerKey)
   if not registrations[viewerKey] then
     return
   end
   pending[viewerKey] = true
-  if not flushFrame then
-    flushFrame = CreateFrame("Frame")
-    flushFrame:Hide()
-    flushFrame:SetScript("OnUpdate", function(frame)
-      frame:Hide()
-      AuraLayout:Flush()
-    end)
-  end
   flushFrame:Show()
 end
 

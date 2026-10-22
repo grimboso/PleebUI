@@ -1,12 +1,12 @@
-local _, ns = ...
+local ns = LibStub("AceAddon-3.0"):GetAddon("PleebUI").ModuleNamespace
 
 local Addon = ns.Addon
 local Cooldowns = ns.Modules.CooldownManager
 local FrameUtil = ns.FrameUtil
 local Presentation = ns.Presentation
 local IconSkin = ns.IconSkin
-local AuraSlotDriver = ns.AuraSlotDriver
-local AuraWidget = ns.AuraWidget
+local AuraSlotDriver = ns.PCMAuraSlotDriver
+local AuraWidget = ns.PCMAuraWidget
 local BarWidget = ns.BarWidget
 local Theme = ns.Theme
 local LSM = ns.LSM
@@ -180,7 +180,7 @@ local Tracker = {
   active = false,
   testMode = false,
   container = nil,
-  eventFrame = nil,
+  eventFrame = CreateFrame("Frame"),
   icons = {},
   orderedIcons = {},
   visibleIcons = {},
@@ -1764,7 +1764,6 @@ function Cooldowns:ConsumableTracker_Enable()
 
   Tracker.active = true
   PCMRuntime:SetSubscriberEnabled("ConsumableTracker", true)
-  Tracker.eventFrame = Tracker.eventFrame or CreateFrame("Frame")
   Tracker.eventFrame:SetScript("OnEvent", function(_, event, arg1, arg2, arg3, arg4, arg5)
     if event == "PLAYER_ENTERING_WORLD" then
       wipe(Tracker.combatLockouts)

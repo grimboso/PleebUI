@@ -3,7 +3,7 @@
 --   - Shared helper hooks for the CooldownManager (PCM) family.
 --   - Centralizes hooksecurefunc usage so PCM modules can stay lean.
 
-local ADDON_NAME, ns = ...
+local ns = LibStub("AceAddon-3.0"):GetAddon("PleebUI").ModuleNamespace
 
 local Hooks = {}
 ns.PCMHooks = Hooks

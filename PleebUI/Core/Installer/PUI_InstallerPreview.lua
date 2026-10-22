@@ -127,8 +127,24 @@ local function BuildCurrent()
       request.box = box
     end
   elseif request.kind == "cooldowns" then
-    ns.PCMPreview.Build(navigation, owner, owner, request.path)
-    request.box = owner.__puiPCMPreviewBox
+    if ns.PCMPreview then
+      ns.PCMPreview.Build(navigation, owner, owner, request.path)
+      request.box = owner.__puiPCMPreviewBox
+    else
+      local box = owner.disabledBox
+      if not box then
+        box = ns.PreviewBox.Create(request.host)
+        owner.disabledBox = box
+      end
+      box:SetParent(request.host)
+      box:ClearAllPoints()
+      box:SetAllPoints(request.host)
+      box:SetTitle("Addon disabled")
+      box:SetDescription("")
+      box:SetAlpha(0.5)
+      box:Show()
+      request.box = box
+    end
   elseif request.kind == "prd" then
     if ns.PRDPreview then
       owner.state.paused = not request.playing

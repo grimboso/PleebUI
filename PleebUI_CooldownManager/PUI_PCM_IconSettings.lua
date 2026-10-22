@@ -1,4 +1,4 @@
-local ADDON_NAME, ns = ...
+local ns = LibStub("AceAddon-3.0"):GetAddon("PleebUI").ModuleNamespace
 
 local Addon = ns.Addon
 
@@ -72,42 +72,6 @@ local function GetProfileRoot(create)
     profile.cooldownManager = root
   end
   return root
-end
-
-local function GetResourceCountStore(create)
-  local root = GetProfileRoot(create)
-  if not root then return nil end
-  local counts = root.resourceCounts
-  if not counts then
-    if not create then return nil end
-    counts = {}
-    root.resourceCounts = counts
-  end
-  if root.__puiSpecResourceCountsMigrated ~= true then
-    local legacy = {}
-    for key, value in pairs(counts) do
-      if type(key) == "string" then legacy[key] = value end
-    end
-    if next(legacy) then
-      for _, spec in ipairs(ns.PRDSecondary.Specializations) do
-        local settings = counts[spec.id] or {}
-        counts[spec.id] = settings
-        for key, value in pairs(legacy) do
-          if settings[key] == nil then settings[key] = value end
-        end
-      end
-      for key in pairs(legacy) do counts[key] = nil end
-    end
-    root.__puiSpecResourceCountsMigrated = true
-  end
-  local specID = GetCurrentSpecializationID()
-  if not specID then return nil end
-  local settings = counts[specID]
-  if not settings and create then
-    settings = {}
-    counts[specID] = settings
-  end
-  return settings
 end
 
 local function GetSpecializationStore(settingsFamily, create)
@@ -197,6 +161,7 @@ function IconSettings:InvalidateSettings()
 end
 
 function IconSettings:GetViewerEntries(viewerKey)
+  self:ApplyPendingResourceCounts()
   ResetCatalogForSpecialization()
 
   local cached = state.catalogs[viewerKey]
@@ -248,8 +213,8 @@ function IconSettings:GetRecordForEntry(entry, create)
 end
 
 function IconSettings:GetInheritedCountVisibility(entry, inherited)
-  local resourceKey = ns.PRDSecondary:GetCooldownCountResourceKey(entry)
-  local resourceCounts = GetResourceCountStore(false)
+  local resourceKey = ns.ResourceSettings:GetCooldownCountResourceKey(entry)
+  local resourceCounts = ns.ResourceCounts:GetStore(false)
   if resourceKey and resourceCounts and resourceCounts[resourceKey] ~= nil then
     return resourceCounts[resourceKey]
   end
@@ -266,11 +231,12 @@ function IconSettings:ResolveCountVisibility(entry, inherited)
 end
 
 function IconSettings:GetResourceCountEnabled(resourceKey)
+  self:ApplyPendingResourceCounts()
   local entries = ns.PCMCatalog:GetEntries()
   local found = false
   for index = 1, #entries do
     local entry = entries[index]
-    if entry.viewerKey and ns.PRDSecondary:GetCooldownCountResourceKey(entry) == resourceKey then
+    if entry.viewerKey and ns.ResourceSettings:GetCooldownCountResourceKey(entry) == resourceKey then
       found = true
       if self:ResolveCountVisibility(entry, ns.Modules.CooldownManager:GetChargeCountEnabled(entry.viewerKey)) then
         return true
@@ -281,7 +247,7 @@ function IconSettings:GetResourceCountEnabled(resourceKey)
     return false
   end
 
-  local resourceCounts = GetResourceCountStore(false)
+  local resourceCounts = ns.ResourceCounts:GetStore(false)
   if resourceCounts and resourceCounts[resourceKey] ~= nil then
     return resourceCounts[resourceKey]
   end
@@ -388,7 +354,7 @@ function IconSettings:ResolveOwnedStyle(entry, viewerKey, viewerStyle)
   )
   style.appearance = record and record.appearance or nil
   style.cooldown = record and record.cooldown or nil
-  local _, resourceCountSpellID = ns.PRDSecondary:GetCooldownCountResourceKey(entry)
+  local _, resourceCountSpellID = ns.ResourceSettings:GetCooldownCountResourceKey(entry)
   style.resourceCountSpellID = resourceCountSpellID
   style.charge = style.charge or {}
   style.charge.show = self:ResolveCountVisibility(
@@ -421,6 +387,8 @@ function IconSettings:PrimeRuntimeCache()
   if InCombatLockdown() then
     return false
   end
+
+  self:ApplyPendingResourceCounts()
 
   if state.catalogInvalidationPending then
     self:InvalidateCatalog()
@@ -571,8 +539,39 @@ local function PruneRecord(store, entry, record)
   end
 end
 
+function IconSettings:ApplyPendingResourceCounts()
+  local root = GetProfileRoot(false)
+  local pending = root and root.__puiPendingResourceCounts
+  local specID = GetCurrentSpecializationID()
+  local resources = pending and pending[specID]
+  if not resources or ns.PCMCatalog:GetGeneration() == 0
+    or ns.PCMCatalog:GetSpecializationID() ~= specID
+    or not ns.PCMCatalog:GetNativeConfiguration()
+  then
+    return
+  end
+  local store = GetSpecializationStore(SETTINGS_FAMILY_COOLDOWN, false)
+  if store then
+    local entries = ns.PCMCatalog:GetEntries()
+    for index = 1, #entries do
+      local entry = entries[index]
+      local resourceKey = ns.ResourceSettings:GetCooldownCountResourceKey(entry)
+      if resourceKey and resources[resourceKey] then
+        local record = store[entry.settingsKey]
+        if record and record.charge then
+          record.charge.show = nil
+          PruneRecord(store, entry, record)
+        end
+      end
+    end
+  end
+  pending[specID] = nil
+  if next(pending) == nil then root.__puiPendingResourceCounts = nil end
+  self:InvalidateSettings()
+end
+
 function IconSettings:SetResourceCountEnabled(resourceKey, enabled)
-  local resourceCounts = GetResourceCountStore(true)
+  local resourceCounts = ns.ResourceCounts:GetStore(true)
   resourceCounts[resourceKey] = enabled == true
 
   local store = GetSpecializationStore(SETTINGS_FAMILY_COOLDOWN, false)
@@ -580,7 +579,7 @@ function IconSettings:SetResourceCountEnabled(resourceKey, enabled)
     local entries = ns.PCMCatalog:GetEntries()
     for index = 1, #entries do
       local entry = entries[index]
-      if ns.PRDSecondary:GetCooldownCountResourceKey(entry) == resourceKey then
+      if ns.ResourceSettings:GetCooldownCountResourceKey(entry) == resourceKey then
         local record = store[entry.settingsKey]
         if record and record.charge then
           record.charge.show = nil
@@ -647,7 +646,6 @@ end
 
 IconSettings.GetCurrentSpecializationID = P:Def("GetCurrentSpecializationID", GetCurrentSpecializationID)
 GetSettingsFamily = P:Def("GetSettingsFamily", GetSettingsFamily)
-GetResourceCountStore = P:Def("GetResourceCountStore", GetResourceCountStore)
 IconSettings.InvalidateCatalog = P:Def("IconSettings:InvalidateCatalog", IconSettings.InvalidateCatalog)
 IconSettings.InvalidateSettings = P:Def("IconSettings:InvalidateSettings", IconSettings.InvalidateSettings)
 IconSettings.GetViewerEntries = P:Def("IconSettings:GetViewerEntries", IconSettings.GetViewerEntries)
@@ -655,6 +653,7 @@ IconSettings.GetRecordForEntry = P:Def("IconSettings:GetRecordForEntry", IconSet
 IconSettings.GetInheritedCountVisibility = P:Def("IconSettings:GetInheritedCountVisibility", IconSettings.GetInheritedCountVisibility)
 IconSettings.ResolveCountVisibility = P:Def("IconSettings:ResolveCountVisibility", IconSettings.ResolveCountVisibility)
 IconSettings.GetResourceCountEnabled = P:Def("IconSettings:GetResourceCountEnabled", IconSettings.GetResourceCountEnabled)
+IconSettings.ApplyPendingResourceCounts = P:Def("IconSettings:ApplyPendingResourceCounts", IconSettings.ApplyPendingResourceCounts)
 IconSettings.SetResourceCountEnabled = P:Def("IconSettings:SetResourceCountEnabled", IconSettings.SetResourceCountEnabled)
 IconSettings.ResolveSwipeSettings = P:Def("IconSettings:ResolveSwipeSettings", IconSettings.ResolveSwipeSettings)
 IconSettings.ResolveOwnedStyle = P:Def("IconSettings:ResolveOwnedStyle", IconSettings.ResolveOwnedStyle)

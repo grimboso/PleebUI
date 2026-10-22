@@ -1,5 +1,5 @@
 -- File: PUI_PCM_Config.lua
-local _, ns = ...
+local ns = LibStub("AceAddon-3.0"):GetAddon("PleebUI").ModuleNamespace
 
 
 
@@ -7,7 +7,7 @@ local Addon = ns.Addon
 local Cooldowns = ns.Modules.CooldownManager
 local OptionsUtil = ns.OptionsUtil
 local PCMPresentation = ns.PCMPresentation
-local AuraWidget = ns.AuraWidget
+local AuraWidget = ns.PCMAuraWidget
 local IconSkin = ns.IconSkin
 local IconSettings = ns.PCMIconSettings
 local DB = ns.PCM_DBExports
@@ -2628,7 +2628,7 @@ _PCM_BuildIconOverrideArgs = function(viewerKey, entry)
   _PCM_BuildIconTextSettingsArgs(args, viewerKey, entry, "charge", "Charge text", 30)
   _PCM_BuildIconTextSettingsArgs(args, viewerKey, entry, "keybind", "Keybind text", 50)
 
-  local resourceKey, _, countDefinition = ns.PRDSecondary:GetCooldownCountResourceKey(entry)
+  local resourceKey, _, countDefinition = ns.ResourceSettings:GetCooldownCountResourceKey(entry)
   if resourceKey then
     args.chargeDisplay = {
       type = "select",
@@ -2638,10 +2638,10 @@ _PCM_BuildIconOverrideArgs = function(viewerKey, entry)
       values = { ICONS = "Icons only", BAR = "Bar only", BOTH = "Both", NONE = "Nothing" },
       sorting = { "ICONS", "BAR", "BOTH", "NONE" },
       get = function()
-        return ns.PRDSecondary:GetResourceDisplayMode(resourceKey)
+        return ns.ResourceSettings:GetResourceDisplayMode(resourceKey)
       end,
       set = function(_, value)
-        ns.PRDSecondary:SetResourceDisplayMode(resourceKey, value)
+        ns.ResourceSettings:SetResourceDisplayMode(resourceKey, value)
       end,
     }
   end
@@ -8981,7 +8981,7 @@ local function _PCM_BuildGroupEntryArgs(groupID, record, order)
       local option = args[key]
       if option then
         if key ~= "swipeSource" then
-          local source = key == "chargeShow" and ns.PRDSecondary:GetCooldownCountResourceKey(entry)
+          local source = key == "chargeShow" and ns.ResourceSettings:GetCooldownCountResourceKey(entry)
             and "resource" or ICON_SETTING_SOURCES[record.viewerKey]
           option.desc = (option.desc and option.desc .. "\n\n" or "")
             .. "Use " .. source .. " settings to follow its current Show or Hide choice."
@@ -8989,7 +8989,7 @@ local function _PCM_BuildGroupEntryArgs(groupID, record, order)
         local values = option.values
         option.values = function()
           local effective = resolveValue()
-          local source = key == "chargeShow" and ns.PRDSecondary:GetCooldownCountResourceKey(entry)
+          local source = key == "chargeShow" and ns.ResourceSettings:GetCooldownCountResourceKey(entry)
             and "resource" or ICON_SETTING_SOURCES[record.viewerKey]
           values[ICON_INHERIT] = "Use " .. source .. " settings ("
             .. (type(effective) == "boolean" and (effective and "Show" or "Hide") or effective) .. ")"
@@ -9005,7 +9005,7 @@ local function _PCM_BuildGroupEntryArgs(groupID, record, order)
         local _, swipe = GetViewerSwipeDB(GetPCMRoot(), record.viewerKey)
         local effective = source or (swipe.forceCooldownSwipe == true and "COOLDOWN" or "AUTOMATIC")
         local owner = source and "This icon" or ICON_SETTING_SOURCES[record.viewerKey] .. " settings"
-        local countSource = ns.PRDSecondary:GetCooldownCountResourceKey(entry)
+        local countSource = ns.ResourceSettings:GetCooldownCountResourceKey(entry)
           and "resource settings" or ICON_SETTING_SOURCES[record.viewerKey] .. " settings"
         return "Buff duration timer: " .. (effective == "COOLDOWN" and "Disabled" or "Enabled")
           .. " (" .. owner .. "). Text and timers use " .. ICON_SETTING_SOURCES[record.viewerKey]
@@ -9312,6 +9312,18 @@ local function _PCM_BuildUnifiedManagerArgs(activeKey, activePath)
   end
   if activeKey == "overview" then
     overviewArgs = CreateGroupArgs()
+    overviewArgs.addon = {
+      type = "group", name = function() return "" end, inline = true, order = -10,
+      arg = { puiExplicit = true },
+      args = {
+        disableAddon = {
+          type = "execute", name = "Disable addon and reload", order = 1,
+          desc = "Disable Cooldown Manager for this character and reload the UI. Your settings are kept.",
+          disabled = InCombatLockdown,
+          func = function() Addon:SetCooldownManagerAddonEnabled(false) end,
+        },
+      },
+    }
     overviewArgs.enabled = {
       type = "toggle", name = "Enable Cooldown Manager", order = 1,
       disabled = InCombatLockdown,
@@ -9344,8 +9356,8 @@ local function _PCM_BuildUnifiedManagerArgs(activeKey, activePath)
             end
           end
         end
-        return tostring(#groups.order) .. " groups · " .. tostring(trackers) .. " custom trackers ("
-          .. tostring(enabledTrackers) .. " enabled) · Items & racials "
+        return tostring(#groups.order) .. " groups Â· " .. tostring(trackers) .. " custom trackers ("
+          .. tostring(enabledTrackers) .. " enabled) Â· Items & racials "
           .. (DB.GetConsumableTrackerDB().enabled == true and "enabled" or "disabled")
       end,
     }
@@ -9858,7 +9870,7 @@ _PCM_BuildDeveloperTabArgs = function()
             local enabled = value == "1"
             return "Native CDM CVar: "
               .. tostring(value)
-              .. " — "
+              .. " â€” "
               .. (enabled and "Enabled" or "Disabled")
           end,
           order = 1,

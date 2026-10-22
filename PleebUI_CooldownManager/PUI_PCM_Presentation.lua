@@ -1,10 +1,10 @@
-local _, ns = ...
+local ns = LibStub("AceAddon-3.0"):GetAddon("PleebUI").ModuleNamespace
 
 local Presentation = ns.Presentation
 local BarWidget = ns.BarWidget
 local IconSkin = ns.IconSkin
-local AuraSlotDriver = ns.AuraSlotDriver
-local AuraWidget = ns.AuraWidget
+local AuraSlotDriver = ns.PCMAuraSlotDriver
+local AuraWidget = ns.PCMAuraWidget
 local Theme = ns.Theme
 local LSM = ns.LSM
 local Round = ns.Pixel.Round

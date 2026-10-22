@@ -46,6 +46,7 @@
   <Script file="PUI_PRD.lua"/>
   <Script file="PUI_ResourceSettings.lua"/>
   <Script file="PUI_ResourceCounts.lua"/>
+  <Script file="PUI_CooldownManager.lua"/>
   <Include file="Widgets\PUI_AuraTemplates.xml"/>
   <Include file="Widgets\PUI_BarTemplates.xml"/>
   <Script file="Widgets\PUI_AuraWidget.lua"/>

@@ -315,6 +315,11 @@ local function Practice(kind)
 end
 
 local function TrackerPage(key)
+  if not ns.Modules.CooldownManager then
+    Preview("cooldowns", { "CooldownManager" })
+    Settings({ "CooldownManager" })
+    return
+  end
   local kind = key == "trackerCharges" and "charge" or key == "trackerStacks" and "stack" or "cooldown"
   local draft = drafts[key]
   if not draft then
@@ -368,8 +373,8 @@ local function Review()
     { "Party frames", ns.Modules.PartyFrames.db.profile.enabled ~= false, "group", 1 },
     { "Raid frames", ns.Modules.RaidFrames.db.profile.enabled ~= false, "group", 2 },
     { "Personal Resource Display", ns.Modules.PRD and ns.Modules.PRD:IsModuleEnabled(), "prd" },
-    { "Cooldown Manager", ns.Modules.CooldownManager:IsModuleEnabledByUser(), "cooldowns" },
-    { "Items and racials", ns.Modules.CooldownManager:GetConsumableTrackerEnabled(), "utility" },
+    { "Cooldown Manager", ns.Modules.CooldownManager and ns.Modules.CooldownManager:IsModuleEnabledByUser(), "cooldowns" },
+    { "Items and racials", ns.Modules.CooldownManager and ns.Modules.CooldownManager:GetConsumableTrackerEnabled(), "utility" },
     { "Damage meters", ns.Modules.DamageMeters and ns.Modules.DamageMeters.db.profile.enabled ~= false, "meters" },
   }) do
     Action(entry[1] .. ": " .. (entry[2] and "On" or "Off") .. " — Edit", function()
@@ -378,8 +383,10 @@ local function Review()
     end)
   end
   local count = 0
-  for _, entries in ipairs({ ns.Modules.CooldownManager:GetSpellBarsDB(), ns.Modules.CooldownManager:GetCooldownStackBarsDB(), ns.Modules.PCM_BB.GetStackBarsDB() }) do
-    for _, config in pairs(entries) do if type(config) == "table" then count = count + 1 end end
+  if ns.Modules.CooldownManager then
+    for _, entries in ipairs({ ns.Modules.CooldownManager:GetSpellBarsDB(), ns.Modules.CooldownManager:GetCooldownStackBarsDB(), ns.Modules.PCM_BB.GetStackBarsDB() }) do
+      for _, config in pairs(entries) do if type(config) == "table" then count = count + 1 end end
+    end
   end
   Text("Custom trackers: " .. count .. ". Optional; you can add or edit them later.")
   Text(Content.pendingReload and "Remaining: finish and reload to apply all choices." or "Your changes are saved. No reload is needed.")
@@ -532,6 +539,11 @@ local function BuildPage(key)
     end)
     else Text("This specialization has no dedicated secondary tracker. Configure its primary power or choose an optional custom tracker.") end
   elseif key == "cooldowns" then
+    if not ns.Modules.CooldownManager then
+      Preview("cooldowns", { "CooldownManager" })
+      Settings({ "CooldownManager" })
+      return
+    end
     Text("See when spells are ready and effects expire.\n• Pick one group to style.\n• Choose tracked spells separately.")
     Check("Enable Cooldown Manager", ns.Modules.CooldownManager:IsModuleEnabledByUser(), function(value) ns.Modules.CooldownManager:SetModuleEnabled(value) end)
     local choices = {}

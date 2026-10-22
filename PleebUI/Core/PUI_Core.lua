@@ -1279,7 +1279,9 @@ function Addon:RefreshIconFonts(atWorldEntry, profileRefresh)
     if ns.ActionBarsCore then
       ns.ActionBarsCore:RefreshAll({ fonts = true })
     end
-    ns.Modules.CooldownManager:RefreshIconFonts()
+    if ns.Modules.CooldownManager then
+      ns.Modules.CooldownManager:RefreshIconFonts()
+    end
   end
   if not atWorldEntry then
     ns.Registry.ChatLinks:RefreshFonts()
@@ -1372,7 +1374,7 @@ end
 
 local function _PUI_UB_ApplySoftTarget(target, flags)
   local module = ns.Modules[target]
-  if target ~= "PRD" or module then
+  if (target ~= "PRD" and target ~= "CooldownManager") or module then
     module:SoftRebuild(flags)
   end
 end
@@ -1443,7 +1445,9 @@ function Addon:_RunNextStaggeredUpdate()
     st.running = false
     st.flags = nil
     st.queue = {}
-    ns.Modules.CooldownManager:FinishProfileTransition()
+    if ns.Modules.CooldownManager then
+      ns.Modules.CooldownManager:FinishProfileTransition()
+    end
     ns.FrameUtil.CompleteProfileTransition()
     self:ShowRuntimeFontSlugNotice()
     return
@@ -1480,7 +1484,9 @@ function Addon:StaggeredUpdateAll(flags)
   _PUI_UB_MergeFlags(st.flags, flags)
 
   if st.flags.profile == true then
-    ns.Modules.CooldownManager:BeginProfileTransition()
+    if ns.Modules.CooldownManager then
+      ns.Modules.CooldownManager:BeginProfileTransition()
+    end
   end
 
   st.queue[#st.queue + 1] = "ApplyScale"
@@ -1580,7 +1586,7 @@ function Addon:_FlushUpdateBus(targets)
 
   local cooldownManager = ns.Modules.CooldownManager
   flags = targets.CooldownManager
-  if flags then
+  if flags and cooldownManager then
     cooldownManager:ApplySettings(flags)
 
     if flags.profile == true or flags.layout == true or flags.movers == true then

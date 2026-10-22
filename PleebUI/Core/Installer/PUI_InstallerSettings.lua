@@ -244,6 +244,7 @@ local function BuildOptions()
   if path[1] == "ACTIONBARS" and not ns.ActionBarsCore
     or path[1] == "DamageMeters" and not ns.Modules.DamageMeters
     or path[1] == "PRD" and not ns.Modules.PRD
+    or path[1] == "CooldownManager" and not ns.Modules.CooldownManager
   then
     return record.factory(Addon):GetOptions()
   end

@@ -1,4 +1,4 @@
-local ADDON_NAME, ns = ...
+local ns = LibStub("AceAddon-3.0"):GetAddon("PleebUI").ModuleNamespace
 
 local AbilityLayout = {}
 ns.PCMAbilityLayout = AbilityLayout
@@ -37,7 +37,8 @@ local MAX_FIXED_WIDTH = 1000
 
 local registeredViewers = {}
 local pendingViewers = {}
-local flushFrame
+local flushFrame = CreateFrame("Frame")
+flushFrame:Hide()
 
 local function Clamp(value, minimum, maximum)
   if value < minimum then
@@ -364,19 +365,10 @@ function AbilityLayout:FlushPendingLayouts()
   end
 end
 
-local function EnsureFlushFrame()
-  if flushFrame then
-    return flushFrame
-  end
-
-  flushFrame = CreateFrame("Frame")
-  flushFrame:Hide()
-  flushFrame:SetScript("OnUpdate", function(frame)
-    frame:Hide()
-    AbilityLayout:FlushPendingLayouts()
-  end)
-  return flushFrame
-end
+flushFrame:SetScript("OnUpdate", function(frame)
+  frame:Hide()
+  AbilityLayout:FlushPendingLayouts()
+end)
 
 function AbilityLayout:RequestLayout(viewerKey)
   if not IsViewerKey(viewerKey) or not registeredViewers[viewerKey] then
@@ -384,7 +376,7 @@ function AbilityLayout:RequestLayout(viewerKey)
   end
 
   pendingViewers[viewerKey] = true
-  EnsureFlushFrame():Show()
+  flushFrame:Show()
   return true
 end
 

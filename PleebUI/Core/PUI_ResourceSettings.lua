@@ -661,7 +661,7 @@ function Secondary:GetCooldownCountResourceKey(entry)
 end
 
 function Secondary:GetResourceDisplayMode(resourceKey)
-  local icons = ns.PCMIconSettings:GetResourceCountEnabled(resourceKey)
+  local icons = ns.ResourceCounts:GetEnabled(resourceKey)
   local profile = ns.Addon.PRDDB.profile
   if profile.secondary.__puiSpecResourcesMigrated ~= true then self:NormalizeProfile(profile) end
   local bar = self:GetResourceSettings(profile, resourceKey).enabled ~= false
@@ -670,7 +670,7 @@ function Secondary:GetResourceDisplayMode(resourceKey)
 end
 
 function Secondary:SetResourceDisplayMode(resourceKey, mode)
-  ns.PCMIconSettings:SetResourceCountEnabled(resourceKey, mode == "ICONS" or mode == "BOTH")
+  ns.ResourceCounts:SetEnabled(resourceKey, mode == "ICONS" or mode == "BOTH")
   local module = ns.Modules.PRD
   if module then
     module:SetSecondaryResourceEnabled(resourceKey, mode == "BAR" or mode == "BOTH")

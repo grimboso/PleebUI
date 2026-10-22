@@ -13,12 +13,16 @@ local function Text(parent, value, point, x, y, size)
 end
 
 local function Icon(parent, texture)
-  local icon = ns.Presentation.Create("PCMIcon", parent)
-  ns.Presentation.Apply("PCMIcon", icon, {
-    size = 32, borderSize = 1, borderColor = Theme.GetColors().border,
-    cooldownFont = { size = 12, flags = "OUTLINE" }, chargeFont = { size = 12, flags = "OUTLINE" },
-  }, { icon = texture, cooldownText = "8", chargeText = "2" })
-  return icon
+  local frame = CreateFrame("Frame", nil, parent)
+  frame:SetSize(32, 32)
+  local icon = frame:CreateTexture(nil, "ARTWORK")
+  icon:SetAllPoints(frame)
+  icon:SetTexture(texture)
+  ns.IconSkin.MakeIconSquare(icon, { crop = 0.08 })
+  local cooldownText = Text(frame, "8", "CENTER", 0, 0, 12)
+  local chargeText = Text(frame, "2", "BOTTOMRIGHT", -3, 3, 12)
+  ns.BarWidget.ApplyBorder(frame, 1, Theme.GetColors().border)
+  return { frame = frame, icon = icon, cooldownText = cooldownText, chargeText = chargeText }
 end
 
 local function Build(kind, host)
@@ -88,7 +92,7 @@ function Examples.Show(host, kind)
   Theme.ApplyFont(root.title, "header", 16)
   if kind == "chat" then
     local db = ns.Registry.ChatLinks.db.profile
-    root.title:SetText("Chat — sample messages")
+    root.title:SetText("Chat â€” sample messages")
     Theme.SetSquareBackdrop(root.body, db.chatWindowStyle, db.chatWindowStyle.borderSize)
     local typography = db.chatTypography.message
     Theme.ApplyFont(root.chat, "body", 14, typography.outline)
@@ -101,7 +105,7 @@ function Examples.Show(host, kind)
     root.chat:AddMessage("These messages only appear in this example.", 1, 1, 1)
   elseif kind == "minimap" then
     local db = ns.Registry.Minimap.db.profile
-    root.title:SetText("Minimap layout — sample map area")
+    root.title:SetText("Minimap layout â€” sample map area")
     local size = math.min(230, db.size)
     root.body:SetSize(size, size)
     Theme.ApplyFont(root.clock, "body", db.clockFontSize)
@@ -111,7 +115,7 @@ function Examples.Show(host, kind)
     root.coordinates:SetShown(db.clockBoxEnabled and db.clockBoxShowCoords)
     root.zone:SetShown(not db.hideZoneText)
   elseif kind == "buffs" or kind == "bags" then
-    root.title:SetText(kind == "buffs" and "Player buffs — sample icons" or "Bags — sample item slots")
+    root.title:SetText(kind == "buffs" and "Player buffs â€” sample icons" or "Bags â€” sample item slots")
     local config = kind == "buffs" and ns.Modules.PlayerBuffs.db.profile.buffs or nil
     local size = config and config.iconSize or 32
     for index, icon in ipairs(root.icons) do
@@ -125,11 +129,11 @@ function Examples.Show(host, kind)
     end
     root.body:SetSize(4 * (size + 5) + 32, 2 * (size + 20) + 40)
   elseif kind == "skins" then
-    root.title:SetText("Window skins — sample controls")
+    root.title:SetText("Window skins â€” sample controls")
     Theme.WidgetSkins.UIButton(root.button)
   elseif kind == "skyriding" then
     local db = ns.Addon.db.profile.dragonriding
-    root.title:SetText("Skyriding — sample vigor, Second Wind, and Whirling Surge")
+    root.title:SetText("Skyriding â€” sample vigor, Second Wind, and Whirling Surge")
     root.body:SetSize(db.width, db.height + db.swHeight * 2 + db.swGap * 2)
     for index, bar in ipairs(root.bars) do
       bar:ClearAllPoints()

@@ -1,4 +1,4 @@
-local _, ns = ...
+local ns = LibStub("AceAddon-3.0"):GetAddon("PleebUI").ModuleNamespace
 
 local Addon = ns.Addon
 local BuffBars = Addon:NewModule("PCM_BuffBars")
@@ -218,7 +218,7 @@ function BuffBars:ApplySettings(flags)
 end
 
 function BuffBars:OnInitialize()
-  self:SetEnabledState(ns.PCM_DBExports.IsPCMEnabled() == true)
+  self:SetEnabledState(false)
 end
 
 function BuffBars:OnEnable()

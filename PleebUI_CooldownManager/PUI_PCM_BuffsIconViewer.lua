@@ -1,4 +1,4 @@
-local _, ns = ...
+local ns = LibStub("AceAddon-3.0"):GetAddon("PleebUI").ModuleNamespace
 
 local Addon = ns.Addon
 local Buffs = Addon:NewModule("PCM_Buffs")
@@ -126,7 +126,7 @@ function Buffs:RefreshIndividualIconSettings()
 end
 
 function Buffs:OnInitialize()
-  self:SetEnabledState(ns.PCM_DBExports.IsPCMEnabled() == true)
+  self:SetEnabledState(false)
 end
 
 function Buffs:OnEnable()

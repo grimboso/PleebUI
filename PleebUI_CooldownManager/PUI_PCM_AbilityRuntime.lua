@@ -1,4 +1,4 @@
-local _, ns = ...
+local ns = LibStub("AceAddon-3.0"):GetAddon("PleebUI").ModuleNamespace
 
 local AbilityRuntime = {}
 ns.PCMAbilityRuntime = AbilityRuntime
@@ -9,7 +9,7 @@ local AbilityLayout = ns.PCMAbilityLayout
 local PCMPresentation = ns.PCMPresentation
 local IconSettings = ns.PCMIconSettings
 local PCMKeybinds = ns.PCMKeybinds
-local AuraSlotDriver = ns.AuraSlotDriver
+local AuraSlotDriver = ns.PCMAuraSlotDriver
 local TotemTracker = ns.PCMTotemTracker
 
 local CreateFrame = CreateFrame

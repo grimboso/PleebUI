@@ -1,4 +1,6 @@
 <Ui xmlns="http://www.blizzard.com/wow/ui/">
+  <Script file="PUI_PCM_AuraSlotDriver.lua"/>
+  <Script file="PUI_PCM_AuraWidget.lua"/>
   <Script file="PUI_PCM_Hooks.lua"/>
   <Script file="PUI_PCM_DB.lua"/>
   <Script file="PUI_PCM_AbilityCatalog.lua"/>
@@ -26,4 +28,5 @@
   <Script file="PUI_PCM_Preview.lua"/>
   <Script file="PUI_PCM_Options.lua"/>
   <Script file="PUI_PCM_Config.lua"/>
+  <Script file="PUI_Profiling.lua"/>
 </Ui>

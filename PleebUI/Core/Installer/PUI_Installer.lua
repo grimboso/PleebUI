@@ -230,15 +230,15 @@ function Addon:UndoCombatReadabilityPreset()
 
   local Cooldowns = ns.Modules.CooldownManager
 
-  if affected.spellBars then
+  if affected.spellBars and Cooldowns then
     Cooldowns:SpellBars_Rebuild()
   end
 
-  if affected.chargeBars then
+  if affected.chargeBars and Cooldowns then
     Cooldowns:CooldownStackBars_Rebuild()
   end
 
-  if affected.buffBars then
+  if affected.buffBars and Cooldowns then
     ns.Modules.PCM_BB.RebuildCustomBars()
   end
 
@@ -362,106 +362,108 @@ function Addon:ApplyCombatReadabilityPreset()
   local Cooldowns = ns.Modules.CooldownManager
   local BuffBars = ns.Modules.PCM_BB
 
-  local spellBars = Cooldowns:GetSpellBarsDB() or {}
-  for _, cfg in pairs(spellBars) do
-    if type(cfg) == "table" then
-      SetCombatReadabilityValue(
-        cfg, "fontSize", math_max(tonumber(cfg.fontSize) or 0, 16), "spellBars"
-      )
-      SetCombatReadabilityValue(
-        cfg, "fontOutline", "THICKOUTLINE", "spellBars"
-      )
+  if Cooldowns then
+    local spellBars = Cooldowns:GetSpellBarsDB() or {}
+    for _, cfg in pairs(spellBars) do
+      if type(cfg) == "table" then
+        SetCombatReadabilityValue(
+          cfg, "fontSize", math_max(tonumber(cfg.fontSize) or 0, 16), "spellBars"
+        )
+        SetCombatReadabilityValue(
+          cfg, "fontOutline", "THICKOUTLINE", "spellBars"
+        )
 
-      Cooldowns:NormalizeCustomTrackerPresentation(cfg, "cooldown")
+        Cooldowns:NormalizeCustomTrackerPresentation(cfg, "cooldown")
 
-      if cfg.presentation == "BUTTON" then
-        SetCombatReadabilityValue(
-          cfg.icon, "fontSize",
-          math_max(tonumber(cfg.icon.fontSize) or 0, 16),
-          "spellBars"
-        )
-        SetCombatReadabilityValue(
-          cfg.icon, "countFontSize",
-          math_max(tonumber(cfg.icon.countFontSize) or 0, 16),
-          "spellBars"
-        )
-        SetCombatReadabilityValue(
-          cfg.icon, "outline", "THICKOUTLINE", "spellBars"
-        )
+        if cfg.presentation == "BUTTON" then
+          SetCombatReadabilityValue(
+            cfg.icon, "fontSize",
+            math_max(tonumber(cfg.icon.fontSize) or 0, 16),
+            "spellBars"
+          )
+          SetCombatReadabilityValue(
+            cfg.icon, "countFontSize",
+            math_max(tonumber(cfg.icon.countFontSize) or 0, 16),
+            "spellBars"
+          )
+          SetCombatReadabilityValue(
+            cfg.icon, "outline", "THICKOUTLINE", "spellBars"
+          )
+        end
       end
     end
-  end
-  Cooldowns:SpellBars_Rebuild()
+    Cooldowns:SpellBars_Rebuild()
 
-  local chargeBars = Cooldowns:GetCooldownStackBarsDB() or {}
-  for _, cfg in pairs(chargeBars) do
-    if type(cfg) == "table" then
-      SetCombatReadabilityValue(
-        cfg, "fontSize", math_max(tonumber(cfg.fontSize) or 0, 16), "chargeBars"
-      )
-      SetCombatReadabilityValue(
-        cfg, "fontOutline", "THICKOUTLINE", "chargeBars"
-      )
-
-      Cooldowns:NormalizeCustomTrackerPresentation(cfg, "charge")
-
-      if cfg.presentation == "BUTTON" then
+    local chargeBars = Cooldowns:GetCooldownStackBarsDB() or {}
+    for _, cfg in pairs(chargeBars) do
+      if type(cfg) == "table" then
         SetCombatReadabilityValue(
-          cfg.icon, "fontSize",
-          math_max(tonumber(cfg.icon.fontSize) or 0, 16),
-          "chargeBars"
+          cfg, "fontSize", math_max(tonumber(cfg.fontSize) or 0, 16), "chargeBars"
         )
         SetCombatReadabilityValue(
-          cfg.icon, "countFontSize",
-          math_max(tonumber(cfg.icon.countFontSize) or 0, 16),
-          "chargeBars"
+          cfg, "fontOutline", "THICKOUTLINE", "chargeBars"
         )
-        SetCombatReadabilityValue(
-          cfg.icon, "outline", "THICKOUTLINE", "chargeBars"
-        )
+
+        Cooldowns:NormalizeCustomTrackerPresentation(cfg, "charge")
+
+        if cfg.presentation == "BUTTON" then
+          SetCombatReadabilityValue(
+            cfg.icon, "fontSize",
+            math_max(tonumber(cfg.icon.fontSize) or 0, 16),
+            "chargeBars"
+          )
+          SetCombatReadabilityValue(
+            cfg.icon, "countFontSize",
+            math_max(tonumber(cfg.icon.countFontSize) or 0, 16),
+            "chargeBars"
+          )
+          SetCombatReadabilityValue(
+            cfg.icon, "outline", "THICKOUTLINE", "chargeBars"
+          )
+        end
       end
     end
-  end
-  Cooldowns:CooldownStackBars_Rebuild()
+    Cooldowns:CooldownStackBars_Rebuild()
 
-  local buffBars = BuffBars.GetStackBarsDB() or {}
-  for _, cfg in pairs(buffBars) do
-    if type(cfg) == "table" then
-      SetCombatReadabilityValue(
-        cfg, "fontSize", math_max(tonumber(cfg.fontSize) or 0, 16), "buffBars"
-      )
-      SetCombatReadabilityValue(
-        cfg, "outline", "THICKOUTLINE", "buffBars"
-      )
-      SetCombatReadabilityValue(
-        cfg, "durationCountFontSize",
-        math_max(tonumber(cfg.durationCountFontSize) or 0, 16),
-        "buffBars"
-      )
-      SetCombatReadabilityValue(
-        cfg, "durationOutline", "THICKOUTLINE", "buffBars"
-      )
-
-      Cooldowns:NormalizeCustomTrackerPresentation(cfg, cfg.kind)
-
-      if cfg.presentation == "BUTTON" then
+    local buffBars = BuffBars.GetStackBarsDB() or {}
+    for _, cfg in pairs(buffBars) do
+      if type(cfg) == "table" then
         SetCombatReadabilityValue(
-          cfg.icon, "fontSize",
-          math_max(tonumber(cfg.icon.fontSize) or 0, 16),
+          cfg, "fontSize", math_max(tonumber(cfg.fontSize) or 0, 16), "buffBars"
+        )
+        SetCombatReadabilityValue(
+          cfg, "outline", "THICKOUTLINE", "buffBars"
+        )
+        SetCombatReadabilityValue(
+          cfg, "durationCountFontSize",
+          math_max(tonumber(cfg.durationCountFontSize) or 0, 16),
           "buffBars"
         )
         SetCombatReadabilityValue(
-          cfg.icon, "countFontSize",
-          math_max(tonumber(cfg.icon.countFontSize) or 0, 16),
-          "buffBars"
+          cfg, "durationOutline", "THICKOUTLINE", "buffBars"
         )
-        SetCombatReadabilityValue(
-          cfg.icon, "outline", "THICKOUTLINE", "buffBars"
-        )
+
+        Cooldowns:NormalizeCustomTrackerPresentation(cfg, cfg.kind)
+
+        if cfg.presentation == "BUTTON" then
+          SetCombatReadabilityValue(
+            cfg.icon, "fontSize",
+            math_max(tonumber(cfg.icon.fontSize) or 0, 16),
+            "buffBars"
+          )
+          SetCombatReadabilityValue(
+            cfg.icon, "countFontSize",
+            math_max(tonumber(cfg.icon.countFontSize) or 0, 16),
+            "buffBars"
+          )
+          SetCombatReadabilityValue(
+            cfg.icon, "outline", "THICKOUTLINE", "buffBars"
+          )
+        end
       end
     end
+    BuffBars.RebuildCustomBars()
   end
-  BuffBars.RebuildCustomBars()
 
   local changes = CombatReadabilityChanges
   CombatReadabilityChanges = nil
@@ -947,7 +949,7 @@ local function BuildFrame()
   end)
   frame.FooterControls = { frame.Previous, frame.Save, frame.Skip, frame.Next }
   frame.KeyboardGuideSettings = { bottom = 62,
-    text = "Ctrl+Tab Areas · Tab Next control · Enter Select · F1 Help",
+    text = "Ctrl+Tab Areas Â· Tab Next control Â· Enter Select Â· F1 Help",
     layout = function() LayoutChrome(frame) end,
   }
   frame:HookScript("OnSizeChanged", function() LayoutChrome(frame); ns.KeyboardNavigation.RefreshWindows() end)

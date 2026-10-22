@@ -1,5 +1,5 @@
 
-local ADDON_NAME, ns = ...
+local ns = LibStub("AceAddon-3.0"):GetAddon("PleebUI").ModuleNamespace
 
 local Addon = ns.Addon
 local P = select(1, ns.Pleebug:DropIn(ns, { name = "PCM", bucket = "DB" }))
@@ -1347,12 +1347,7 @@ local ConsumableTrackerDBCache = {
   profile = nil,
   cfg = nil,
 }
-local VIEWER_COUNT_DEFAULTS = {
-  cooldown = true,
-  buff = true,
-  charge = true,
-  keybind = true,
-}
+local VIEWER_COUNT_DEFAULTS = ns.ResourceCounts.ViewerDefaults
 local PCM_RENDERER_MIGRATION_VERSION = 2
 local PCM_OWNED_TOOLTIP_VIEWERS = {
   EssentialCooldownViewer = true,

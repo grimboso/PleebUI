@@ -1,4 +1,4 @@
-local ADDON_NAME, ns = ...
+local ns = LibStub("AceAddon-3.0"):GetAddon("PleebUI").ModuleNamespace
 
 local PCMPreview = {}
 ns.PCMPreview = PCMPreview
@@ -31,7 +31,7 @@ local PreviewBox = ns.PreviewBox
 local BarWidget = ns.BarWidget
 local Presentation = ns.Presentation
 local PCMPresentation = ns.PCMPresentation
-local AuraWidget = ns.AuraWidget
+local AuraWidget = ns.PCMAuraWidget
 local IconSkin = ns.IconSkin
 local IconSettings = ns.PCMIconSettings
 local Round = ns.Pixel.Round
@@ -647,7 +647,7 @@ local function PCMPreview_GetAbilityCapability(entry, index)
   if entry.charges == true then
     return "CHARGE"
   end
-  if ns.PRDSecondary:GetCooldownCountResourceKey(entry) then
+  if ns.ResourceSettings:GetCooldownCountResourceKey(entry) then
     return "RESOURCE_COUNT"
   end
   if entry.hasAura == true then

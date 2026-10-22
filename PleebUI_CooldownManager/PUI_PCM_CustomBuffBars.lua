@@ -1,4 +1,4 @@
-local ADDON_NAME, ns = ...
+local ns = LibStub("AceAddon-3.0"):GetAddon("PleebUI").ModuleNamespace
 
 local Addon = ns.Addon
 local BB = Addon:NewModule("PCM_BB")
@@ -21,8 +21,8 @@ local Theme = ns.Theme
 local Pixel = ns.Pixel
 local Round = Pixel.Round
 local FrameScale = ns.FrameScale
-local AuraWidget = ns.AuraWidget
-local AuraSlotDriver = ns.AuraSlotDriver
+local AuraWidget = ns.PCMAuraWidget
+local AuraSlotDriver = ns.PCMAuraSlotDriver
 local BarWidget = ns.BarWidget
 local FrameUtil = ns.FrameUtil
 local LSM = ns.LSM
@@ -2832,7 +2832,7 @@ PCMRuntime:RegisterSubscriber("CustomBuffBars", {
 })
 
 function BB:OnInitialize()
-  self:SetEnabledState(_PCM_BB_Enabled())
+  self:SetEnabledState(false)
 end
 
 function BB:OnEnable()
