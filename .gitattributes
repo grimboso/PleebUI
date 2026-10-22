@@ -4,4 +4,4 @@
 *.tga -text
 *.ttf -text
 *.otf -text
-/[Ll]ibs/** -text
+/PleebUI/[Ll]ibs/** -text

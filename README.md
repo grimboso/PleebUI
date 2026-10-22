@@ -1,4 +1,4 @@
-![PleebUI](Media/PleebUI.png)
+![PleebUI](PleebUI/Media/PleebUI.png)
 # PleebUI
 
 I developed PleebUI as an all-in-one UI addon for World of Warcraft Retail, built around the changes introduced with Midnight.
