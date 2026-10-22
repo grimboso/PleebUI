@@ -11,7 +11,6 @@
   <Include file="..\..\Core\GUI\BlizzardSkins\BlizzardSkins.xml"/>
   <Script file="PUI_Bags.lua"/>
   <Script file="PUI_EnchantTargets.lua"/>
-  <Script file="PUI_PlayerBuffs.lua"/>
   <Script file="PUI_RaidUtility.lua"/>
   <Script file="PUI_HunterTools.lua"/>
   <Script file="PUI_MovementWarning.lua"/>

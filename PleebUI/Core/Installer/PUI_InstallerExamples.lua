@@ -116,7 +116,7 @@ function Examples.Show(host, kind)
     root.zone:SetShown(not db.hideZoneText)
   elseif kind == "buffs" or kind == "bags" then
     root.title:SetText(kind == "buffs" and "Player buffs â€” sample icons" or "Bags â€” sample item slots")
-    local config = kind == "buffs" and ns.Modules.PlayerBuffs.db.profile.buffs or nil
+    local config = kind == "buffs" and ns.Modules.PlayerBuffs and ns.Modules.PlayerBuffs.db.buffs or nil
     local size = config and config.iconSize or 32
     for index, icon in ipairs(root.icons) do
       icon.frame:ClearAllPoints()

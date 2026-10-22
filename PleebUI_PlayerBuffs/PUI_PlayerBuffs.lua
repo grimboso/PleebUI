@@ -1,4 +1,4 @@
-local ADDON_NAME, ns = ...
+local ns = LibStub("AceAddon-3.0"):GetAddon("PleebUI").ModuleNamespace
 
 local Addon = ns.Addon
 
@@ -34,6 +34,11 @@ local type = _G.type
 local Theme = ns.Theme
 local FrameUtil = ns.FrameUtil
 
+local PlayerBuffsHost = CreateFrame("Frame")
+PlayerBuffsHost:Hide()
+local StartPending = false
+local QueuedSettings
+
 local PLAYER_BUFFS_DEFAULTS_VERSION = 2
 local PLAYER_BUFFS_MOVER_KEY = "PlayerBuffs"
 local PLAYER_DEBUFFS_MOVER_KEY = "PlayerDebuffs"
@@ -48,31 +53,7 @@ local FRAME_KIND_BY_KEY = {
   [PLAYER_DEBUFFS_MOVER_KEY] = "debuffs",
 }
 
-local DEFAULTS = {
-  enabled = true,
-  buffs = {
-    iconSize = 30,
-    textSize = 12,
-    fontOutline = "OUTLINE",
-    borderSize = 1,
-    anchor = {
-      moved = false,
-      x = 0,
-      y = 0,
-    },
-  },
-  debuffs = {
-    iconSize = 30,
-    textSize = 12,
-    fontOutline = "OUTLINE",
-    borderSize = 1,
-    anchor = {
-      moved = false,
-      x = 0,
-      y = 0,
-    },
-  },
-}
+local DEFAULTS = ns.PlayerBuffsDefaults
 
 local playerAuraFonts = {
   buffs = CreateFont("PUI_PlayerBuffFont"),
@@ -1020,7 +1001,7 @@ function PlayerBuffs:EnsureMovers()
   RegisterAuraMover("debuffs", PLAYER_DEBUFFS_MOVER_KEY, "PUI_PlayerDebuffsMover", "Player Debuffs")
 end
 
-function PlayerBuffs:ApplySettings(flags)
+function PlayerBuffs:ApplyRuntimeSettings(flags)
   local applyAll, applyStyle, applyBuffSize, applyDebuffSize = ResolveApplyFlags(flags)
 
   if not applyAll and not applyStyle and not applyBuffSize and not applyDebuffSize then
@@ -1216,6 +1197,7 @@ function PlayerBuffs:GetOptions()
     type = "group",
     name = "Player Buffs",
     args = {
+      addon = Addon:GetPlayerBuffsAddonControl(),
       general = {
         type = "group",
         name = "Player buffs",
@@ -1238,7 +1220,7 @@ function PlayerBuffs:GetOptions()
 
               local function RevertEnabled()
                 db.enabled = previous
-                LibStub("AceConfigRegistry-3.0"):NotifyChange(ADDON_NAME)
+                ns.OptionsLifecycle.RefreshModel({ "PLAYER_BUFFS" })
               end
 
               db.enabled = enabled
@@ -1279,7 +1261,7 @@ function PlayerBuffs:OnInitialize()
   })
 end
 
-function PlayerBuffs:OnEnable()
+function PlayerBuffs:StartRuntime()
   local db = GetProfileDB()
   self.db = db
   self.pendingBlizzardRestore = nil
@@ -1295,7 +1277,40 @@ function PlayerBuffs:OnEnable()
   self:ApplySettings({ playerBuffs = true })
 end
 
+function PlayerBuffs:ApplySettings(flags)
+  QueuedSettings = MergePendingApplyFlags(QueuedSettings, flags)
+  PlayerBuffsHost:Show()
+end
+
+function PlayerBuffs:OnEnable()
+  StartPending = true
+  PlayerBuffsHost:RegisterEvent("PLAYER_ENTERING_WORLD")
+  PlayerBuffsHost:Show()
+end
+
+local function FlushPlayerBuffs()
+  PlayerBuffsHost:Hide()
+  PlayerBuffsHost:UnregisterAllEvents()
+  if StartPending then
+    StartPending = false
+    PlayerBuffs:StartRuntime()
+  end
+  if QueuedSettings then
+    local flags = QueuedSettings
+    QueuedSettings = nil
+    PlayerBuffs:ApplyRuntimeSettings(flags)
+  end
+  if not StartPending and not QueuedSettings then PlayerBuffsHost:Hide() end
+end
+PlayerBuffsHost:SetScript("OnUpdate", FlushPlayerBuffs)
+PlayerBuffsHost:SetScript("OnEvent", FlushPlayerBuffs)
+
 function PlayerBuffs:OnDisable()
+  StartPending = false
+  QueuedSettings = nil
+  self.pendingApply = nil
+  PlayerBuffsHost:Hide()
+  PlayerBuffsHost:UnregisterAllEvents()
   self:UnregisterAllEvents()
   SetRuntimeEnabled(false)
 
@@ -1351,6 +1366,8 @@ end
   PlayerBuffs.RefreshMover = P:Def("PlayerBuffs.RefreshMover", PlayerBuffs.RefreshMover)
   PlayerBuffs.EnsureMovers = P:Def("PlayerBuffs.EnsureMovers", PlayerBuffs.EnsureMovers)
   PlayerBuffs.ApplySettings = P:Def("PlayerBuffs.ApplySettings", PlayerBuffs.ApplySettings)
+  PlayerBuffs.ApplyRuntimeSettings = P:Def("PlayerBuffs.ApplyRuntimeSettings", PlayerBuffs.ApplyRuntimeSettings)
+  PlayerBuffs.StartRuntime = P:Def("PlayerBuffs.StartRuntime", PlayerBuffs.StartRuntime)
   PlayerBuffs.RefreshFonts = P:Def("PlayerBuffs.RefreshFonts", PlayerBuffs.RefreshFonts)
   PlayerBuffs.UpdateUnit = P:Def("PlayerBuffs.UpdateUnit", PlayerBuffs.UpdateUnit)
   PlayerBuffs.OnRegenEnabled = P:Def("PlayerBuffs.OnRegenEnabled", PlayerBuffs.OnRegenEnabled)

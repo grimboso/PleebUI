@@ -2532,7 +2532,7 @@ local function _PUI_ThemeRegistry_NotifyChange(refreshPlayerBuffs, refreshFonts)
 
   if refreshFonts == false then
     Addon:RequestThemeUpdates()
-  elseif refreshPlayerBuffs then
+  elseif refreshPlayerBuffs and ns.Modules.PlayerBuffs then
     ns.Modules.PlayerBuffs:ApplySettings({ playerBuffsStyle = true })
   end
 end

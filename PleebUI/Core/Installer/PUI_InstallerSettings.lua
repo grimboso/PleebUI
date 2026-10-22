@@ -246,6 +246,8 @@ local function BuildOptions()
     or path[1] == "PRD" and not ns.Modules.PRD
     or path[1] == "CooldownManager" and not ns.Modules.CooldownManager
     or path[1] == "unitframes" and not ns.Modules.UnitFrames
+    or path[1] == "PLAYER_BUFFS" and not ns.Modules.PlayerBuffs
+    or path[1] == "MovementWarning" and not ns.Modules.MovementWarning
   then
     return record.factory(Addon):GetOptions()
   end

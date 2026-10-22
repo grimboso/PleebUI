@@ -1,0 +1,10 @@
+## Interface: 120105
+## Title: PleebUI Player Buffs
+## Notes: Player buffs for PleebUI.
+## Author: Pleeb
+## Version: @project-version@
+## Category-enUS: PleebUI
+## IconTexture: Interface\AddOns\PleebUI\Media\Logo.tga
+## Dependencies: PleebUI
+
+PlayerBuffs.xml

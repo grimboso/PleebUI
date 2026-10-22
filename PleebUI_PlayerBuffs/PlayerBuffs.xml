@@ -1,0 +1,4 @@
+<Ui xmlns="http://www.blizzard.com/wow/ui/">
+  <Script file="PUI_PlayerBuffs.lua"/>
+  <Script file="PUI_Profiling.lua"/>
+</Ui>

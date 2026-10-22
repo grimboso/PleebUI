@@ -1298,9 +1298,15 @@ function Addon:RefreshIconFonts(atWorldEntry, profileRefresh)
   if not atWorldEntry then
     ns.Registry.ChatLinks:RefreshFonts()
   end
-  ns.Modules.PlayerBuffs:RefreshFonts()
-  ns.Modules.HunterTools:RefreshFonts()
-  ns.Modules.MovementWarning:RefreshFonts()
+  if ns.Modules.PlayerBuffs then
+    ns.Modules.PlayerBuffs:RefreshFonts()
+  end
+  if ns.Modules.HunterTools then
+    ns.Modules.HunterTools:RefreshFonts()
+  end
+  if ns.Modules.MovementWarning then
+    ns.Modules.MovementWarning:RefreshFonts()
+  end
   ns.Registry.Minimap:RefreshFonts()
   ns.Modules.Quality:RefreshFonts()
   ns.Theme.RefreshRuntimeFonts()

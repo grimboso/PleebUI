@@ -51,6 +51,7 @@
   <Script file="PUI_UnitFramesDefaults.lua"/>
   <Script file="PUI_CastBarDefaults.lua"/>
   <Script file="PUI_UnitFrames.lua"/>
+  <Script file="PUI_PlayerBuffs.lua"/>
   <Include file="Widgets\PUI_AuraTemplates.xml"/>
   <Include file="Widgets\PUI_BarTemplates.xml"/>
   <Script file="Widgets\PUI_AuraWidget.lua"/>
