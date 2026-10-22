@@ -433,6 +433,18 @@ local function NormalizeDB()
   q.petWarningAnchor = SeedAnchorDefaults(q.petWarningAnchor, QUALITY_POSITION_DEFAULTS.petWarning)
 
   q.combatTimerFontSize = Clamp(q.combatTimerFontSize or 14, 10, 72)
+  if q.combatTimerBackground == nil then q.combatTimerBackground = true end
+  q.combatTimerWidth = Clamp(q.combatTimerWidth or math.max(120, q.combatTimerFontSize * 4 + 16), 20, 600)
+  q.combatTimerHeight = Clamp(q.combatTimerHeight or math.max(22, q.combatTimerFontSize + 8), 10, 200)
+  if q.combatTimerBorder == nil then q.combatTimerBorder = true end
+  q.combatTimerBorderSize = Clamp(q.combatTimerBorderSize or ns.Theme.GetEdgeSize(), 1, 8)
+  if not q.combatTimerBackgroundColor or not q.combatTimerBorderColor then
+    local colors = ns.Theme.GetColors()
+    q.combatTimerBackgroundColor = q.combatTimerBackgroundColor
+      or { r = colors.background[1], g = colors.background[2], b = colors.background[3], a = colors.background[4] }
+    q.combatTimerBorderColor = q.combatTimerBorderColor
+      or { r = colors.border[1], g = colors.border[2], b = colors.border[3], a = colors.border[4] }
+  end
   q.combatMessageFontSize = Clamp(q.combatMessageFontSize or 18, 10, 40)
   q.combatWarningFontSize = Clamp(q.combatWarningFontSize or 32, 16, 60)
 
@@ -628,6 +640,16 @@ local CombatTimerText
 local CombatTimerStart
 local CombatTimerTicker
 
+local function ApplyCombatTimerAppearance(frame, q)
+  local background = q.combatTimerBackgroundColor
+  local border = q.combatTimerBorderColor
+  frame:SetSize(q.combatTimerWidth, q.combatTimerHeight)
+  ns.Theme.SetSquareBackdrop(frame, {
+    bg = { background.r, background.g, background.b, q.combatTimerBackground and background.a or 0 },
+    border = { border.r, border.g, border.b, border.a },
+  }, q.combatTimerBackground and q.combatTimerBorder and q.combatTimerBorderSize or 0)
+end
+
 local function StopCombatTimerTicker()
   if CombatTimerTicker then
     CombatTimerTicker:Cancel()
@@ -656,29 +678,18 @@ local function EnsureCombatTimer()
 
   local f = CreateFrame("Frame", "PleebUI_CombatTimer", UIParent, "BackdropTemplate")
   CombatTimerFrame = f
-  f:SetSize(120, 22)
+  ApplyCombatTimerAppearance(f, q)
   f:SetFrameStrata("LOW")
   f:SetFrameLevel(1)
   f:EnableMouse(false)
   f:SetAlpha(0)
   f:Show()
 
-  ns.Theme.WidgetSkins.Frame(f)
-
   local fs = f:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
   fs:SetPoint("CENTER", f, "CENTER", 0, 0)
   fs:SetText("00:00")
   CombatTimerText = fs
 
-  local function ResizeCombatTimer()
-    f:SetSize(
-      math.max(120, math.ceil(fs:GetStringWidth()) + 16),
-      math.max(22, math.ceil(fs:GetStringHeight()) + 8)
-    )
-  end
-
-  hooksecurefunc(fs, "SetFont", ResizeCombatTimer)
-  hooksecurefunc(fs, "SetText", ResizeCombatTimer)
   ns.Theme.ApplyFont(fs, "body", q.combatTimerFontSize, nil, "qualityOfLife")
 
   local function ApplyAnchor()
@@ -2545,6 +2556,7 @@ function Quality:ApplyAll()
 
   ns.Theme.ApplyFont(CombatMsgText, "header", q.combatMessageFontSize, nil, "qualityOfLife")
   ns.Theme.ApplyFont(CombatTimerText, "body", q.combatTimerFontSize, nil, "qualityOfLife")
+  ApplyCombatTimerAppearance(CombatTimerFrame, q)
   EnsureLootFrame():RefreshState()
   EnsureMerchantDriver():RefreshState()
   EnsureKeystoneDriver():RefreshState()
@@ -2742,9 +2754,19 @@ local function Quality_RefreshPreview(root)
 
     local width = math.max(1, sample.text:GetStringWidth())
     local height = math.max(1, sample.text:GetStringHeight())
+    if kind == "Combat timer" then
+      ApplyCombatTimerAppearance(sample.content, q)
+      width = math.max(width, q.combatTimerWidth)
+      height = math.max(height, q.combatTimerHeight)
+    else
+      if sample.isCombatTimer then
+        ns.Theme.SetSquareBackdrop(sample.content, { bg = { 0, 0, 0, 0 }, border = { 0, 0, 0, 0 } }, 0)
+      end
+      sample.content:SetSize(width, height)
+    end
+    sample.isCombatTimer = kind == "Combat timer"
     local scale = math.min(1, (cellWidth - 12) / width, (cellHeight - 10) / height)
     sample:SetSize(cellWidth, cellHeight)
-    sample.content:SetSize(width, height)
     sample.content:SetScale(math.max(0.01, scale))
     sample:ClearAllPoints()
     sample:SetPoint("CENTER", root.CombatSamples, "TOPLEFT",
@@ -3496,6 +3518,35 @@ local function QualityProvider(AddonObj)
       }),
       timer = ns.OptionsSchema.BuildTextGroup("Time in combat", 20, {
         showText = timer, fontSize = combatStatus.args.combatTimerFontSize,
+        background = ToggleOption("Show background", "combatTimerBackground", 110,
+          nil, DisabledWhenOff("combatTimer")),
+        backgroundWidth = RangeOption("Background width", "combatTimerWidth", 20, 600, 1, 120,
+          DisabledWhenOff("combatTimerBackground")),
+        backgroundHeight = RangeOption("Background height", "combatTimerHeight", 10, 200, 1, 130,
+          DisabledWhenOff("combatTimerBackground")),
+        backgroundColor = ColorOption("Background color", "combatTimerBackgroundColor", 140,
+          DisabledWhenOff("combatTimerBackground")),
+        backgroundOpacity = {
+          type = "range", name = "Background opacity", order = 145,
+          min = 0, max = 1, step = 0.01, isPercent = true,
+          disabled = DisabledWhenOff("combatTimerBackground"),
+          get = function() return GetQ().combatTimerBackgroundColor.a end,
+          set = function(_, value) GetQ().combatTimerBackgroundColor.a = value; RequestApply() end,
+        },
+        border = ToggleOption("Show border", "combatTimerBorder", 150,
+          nil, DisabledWhenOff("combatTimerBackground")),
+        borderSize = RangeOption("Border thickness", "combatTimerBorderSize", 1, 8, 1, 160,
+          function() local qq = GetQ(); return not qq.combatTimerBackground or not qq.combatTimerBorder end),
+        borderColor = ColorOption("Border color", "combatTimerBorderColor", 170,
+          function() local qq = GetQ(); return not qq.combatTimerBackground or not qq.combatTimerBorder end),
+        borderOpacity = {
+          type = "range", name = "Border opacity", order = 175,
+          min = 0, max = 1, step = 0.01, isPercent = true,
+          disabled = function() local qq = GetQ(); return not qq.combatTimerBackground or not qq.combatTimerBorder end,
+          get = function() return GetQ().combatTimerBorderColor.a end,
+          set = function(_, value) GetQ().combatTimerBorderColor.a = value; RequestApply() end,
+        },
+        backgroundHelp = DescriptionOption("Background width and height stay fixed when the digits or font size change.", 180),
       }),
     }
     warnings.args.combatWarningFontSize.name = "Font size"
