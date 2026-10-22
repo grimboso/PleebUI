@@ -909,6 +909,7 @@ function Addon:OnInitialize()
   self.PartyFramesDB = self.db:RegisterNamespace("PartyFrames", ns.UFDefaults.GetPartyDefaults())
   self.RaidFramesDB = self.db:RegisterNamespace("RaidFrames", ns.UFDefaults.GetRaidDefaults())
   self.CastBarDB = self.db:RegisterNamespace("CastBar", ns.CastBarDefaults)
+  self.ChatLinksDB = self.db:RegisterNamespace("ChatLinks", ns.ChatDefaults)
 
   ns.Flags.OptionsDebug = self.db.profile.debug == true
   ns.Flags.__puiBlizzardEditModeActive = ns.Flags.__puiBlizzardEditModeActive or false
@@ -1295,7 +1296,7 @@ function Addon:RefreshIconFonts(atWorldEntry, profileRefresh)
       ns.Modules.CooldownManager:RefreshIconFonts()
     end
   end
-  if not atWorldEntry then
+  if not atWorldEntry and ns.Registry.ChatLinks then
     ns.Registry.ChatLinks:RefreshFonts()
   end
   if ns.Modules.PlayerBuffs then
@@ -1583,7 +1584,7 @@ function Addon:_FlushUpdateBus(targets)
 
   local chatLinks = ns.Registry.ChatLinks
   flags = targets.ChatLinks
-  if flags then
+  if flags and chatLinks then
     if flags.theme == true then
       chatLinks:RefreshTheme()
     else

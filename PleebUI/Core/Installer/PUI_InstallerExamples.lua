@@ -91,7 +91,7 @@ function Examples.Show(host, kind)
   Theme.SetSquareBackdrop(root.body, { bg = colors.background, border = colors.border }, Theme.GetEdgeSize())
   Theme.ApplyFont(root.title, "header", 16)
   if kind == "chat" then
-    local db = ns.Registry.ChatLinks.db.profile
+    local db = ns.Addon.ChatLinksDB.profile
     root.title:SetText("Chat â€” sample messages")
     Theme.SetSquareBackdrop(root.body, db.chatWindowStyle, db.chatWindowStyle.borderSize)
     local typography = db.chatTypography.message

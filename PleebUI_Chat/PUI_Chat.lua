@@ -1,4 +1,4 @@
-local _, ns = ...
+local ns = LibStub("AceAddon-3.0"):GetAddon("PleebUI").ModuleNamespace
 
 local Addon    = ns.Addon
 
@@ -10,6 +10,12 @@ local ChatLinks = Addon:NewModule("ChatLinks", "NumyAceEvent-3.0")
 ns.Registry.ChatLinks = ChatLinks
 
 local P = ns.Pleebug:DropIn(ChatLinks, { name = "Modules.Chat" })
+
+local ChatRuntimeHost = CreateFrame("Frame")
+ChatRuntimeHost:Hide()
+local ChatStartPending = false
+local PrimaryChatResizeHost = CreateFrame("Button", "PleebUI_PrimaryChatResizeHandle", UIParent)
+PrimaryChatResizeHost:Hide()
 
 local function ClampInt(value, minimum, maximum)
   value = math.floor(tonumber(value) or minimum)
@@ -188,96 +194,8 @@ local function _PUI_ShowPratChoicePopup(self)
 end
 
 function ChatLinks:OnInitialize()
-  self.db = Addon.db:RegisterNamespace("ChatLinks", {
-    profile = {
-      enabled         = true,   -- last runtime state (auto-managed)
-      manualDisabled  = false,  -- user explicitly turned PleebUI Chat off
-      enableUrlCopy   = true,   -- clickable URLs
-      enableCopyFrame = true,   -- chat copy button + window
-      enableChatTools = true,
-
-      -- Chat tweaks
-      chatTweaks = {
-        persistHistory = true,   -- persist chat history between sessions
-        savedLines     = 256,
-        historyTypes = {
-          WHISPER = true, GUILD = true, PARTY = true, RAID = true, INSTANCE = true,
-          CHANNEL = true, SAY = true, YELL = true, EMOTE = true,
-        },
-        scrollMessages = 3,
-      },
-
-      -- Chat formatting
-      chatFormat = {
-        timestamps = true,          -- use Blizzard timestamp prefix (before name)
-        tsPreset   = "HM24",        -- "HM24","HMS24","HM12","HMS12"
-        channelNumsOnly = false,    -- (disabled)
-      },
-
-      -- Edit Mode anchor for the Copy Chat window
-      copyFrame = {
-        point         = "CENTER",
-        relativeTo    = "UIParent",
-        relativePoint = "CENTER",
-        x             = 0,
-        y             = 0,
-
-        -- Copy window size (persisted)
-        w             = 600,
-        h             = 350,
-      },
-
-      -- Copy window custom style (independent of Theme background/border colors)
-      copyWindowStyle = {
-        bg = { 0.05, 0.05, 0.05, 0.92 },     -- r,g,b,a
-        border = { 0.20, 0.20, 0.20, 1.00 }, -- r,g,b,a
-        borderSize = 1,                      -- pixels
-      },
-
-      -- Chat window shell style (independent of Theme preset colors)
-      chatWindowStyle = {
-        bg = { 0.05, 0.05, 0.05, 1.00 },     -- r,g,b,a (opaque like your current shell)
-        border = { 0.20, 0.20, 0.20, 1.00 }, -- r,g,b,a
-        borderSize = 1,                      -- pixels
-      },
-
-      chatTypography = {
-        message = {
-          useGlobalFont = true,
-        },
-        tab = {
-          useGlobalFont = true,
-        },
-        input = {
-          useGlobalFont = true,
-        },
-      },
-
-      -- Edit Mode layout for the addon-owned primary chat holder.
-      chatFrame1 = {
-        point         = "BOTTOMLEFT",
-        relativeTo    = "UIParent",
-        relativePoint = "BOTTOMLEFT",
-        x             = 32,
-        y             = 32,
-        width         = 430,
-        height        = 180,
-      },
-
-      chatFade = {
-        fadeWindow = false,
-        windowDelay = 2,
-        windowFadeInAlpha = 1,
-        windowFadeOutAlpha = 0,
-        windowFadeInDuration = 0.3,
-        windowFadeOutDuration = 0.3,
-        enabled = true,
-        idleDelay = 100,
-        fadeUndockedTabs = false,
-        fadeTabsNoBackdrop = true,
-      },
-    },
-  })
+  self.db = Addon.ChatLinksDB
+  self.historyDB = ns.ChatHistoryStore.Open()
   self.db.profile.chatTweaks.maxLines = nil
   self.db.profile.copyClean = nil
 
@@ -1252,6 +1170,7 @@ local function ChatProvider(AddonObj)
     options.arg = { puiExplicit = true }
     options.args = {
       general = { type = "group", name = "General", order = 10, args = {
+        addon = Addon:GetChatAddonControl(),
         features = { type = "group", name = "Features and formatting", inline = true, order = 10, args = featureArgs },
         history = sections.tweaks,
       } },
@@ -2333,7 +2252,7 @@ local function EnsurePrimaryChatResizeHandle(holder)
     return handle
   end
 
-  handle = CreateFrame("Button", "PleebUI_PrimaryChatResizeHandle", UIParent)
+  handle = PrimaryChatResizeHost
   ChatLinks._primaryChatResizeHandle = handle
 
   handle:SetSize(22, 22)
@@ -3072,7 +2991,7 @@ function ChatLinks:OnProfileChanged()
   end
 end
 
-function ChatLinks:OnEnable()
+function ChatLinks:StartRuntime()
   if not self.db or not self.db.profile then
     return
   end
@@ -3095,7 +3014,6 @@ function ChatLinks:OnEnable()
   local chattyChoice = cdb.chattynator
   local pratChoice   = cdb.prat
 
-  -- 2) Chattynator or Prat already loaded at enable time
   if chattyLoaded then
     if chattyChoice == "chattynator" then
       db.manualDisabled = true
@@ -3132,8 +3050,6 @@ function ChatLinks:OnEnable()
     end
   end
 
-  -- 3) Chattynator NOT loaded (yet)
-  -- Watch for Chattynator or Prat loading later in this session.
   if not self.__puiChatConflictAddonHook then
     self.__puiChatConflictAddonHook = true
     self:RegisterEvent("ADDON_LOADED", function(_, event, addonName)
@@ -3194,8 +3110,6 @@ function ChatLinks:OnEnable()
     return
   end
 
-  -- 4) From here on, PleebUI Chat is enabled for this
-  --    session and Chattynator is NOT loaded.
 
   self._puiRuntimeEnabled = true
   self:StartChatTabs()
@@ -3210,7 +3124,27 @@ function ChatLinks:OnEnable()
 
 end
 
+function ChatLinks:OnEnable()
+  ChatStartPending = true
+  ChatRuntimeHost:RegisterEvent("PLAYER_ENTERING_WORLD")
+  ChatRuntimeHost:Show()
+end
+
+local function FlushChatStartup()
+  ChatRuntimeHost:Hide()
+  ChatRuntimeHost:UnregisterAllEvents()
+  if ChatStartPending then
+    ChatStartPending = false
+    ChatLinks:StartRuntime()
+  end
+end
+ChatRuntimeHost:SetScript("OnUpdate", FlushChatStartup)
+ChatRuntimeHost:SetScript("OnEvent", FlushChatStartup)
+
 function ChatLinks:OnDisable()
+  ChatStartPending = false
+  ChatRuntimeHost:Hide()
+  ChatRuntimeHost:UnregisterAllEvents()
   self._puiRuntimeEnabled = false
   self:UnregisterEvent("ADDON_LOADED")
   self.__puiChatConflictAddonHook = nil
@@ -3347,6 +3281,7 @@ end
   ChatLinks.RefreshChatFrames = P:Def("ChatLinks.RefreshChatFrames", ChatLinks.RefreshChatFrames)
   ChatLinks.RefreshTheme = P:Def("ChatLinks.RefreshTheme", ChatLinks.RefreshTheme)
   ChatLinks.OnProfileChanged = P:Def("ChatLinks.OnProfileChanged", ChatLinks.OnProfileChanged)
+  ChatLinks.StartRuntime = P:Def("ChatLinks.StartRuntime", ChatLinks.StartRuntime)
   ChatLinks.OnEnable = P:Def("ChatLinks.OnEnable", ChatLinks.OnEnable)
   ChatLinks.OnDisable = P:Def("ChatLinks.OnDisable", ChatLinks.OnDisable)
 

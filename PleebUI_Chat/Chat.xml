@@ -1,0 +1,10 @@
+<Ui xmlns="http://www.blizzard.com/wow/ui/">
+  <Script file="PUI_ChatHistoryDB.lua"/>
+  <Script file="PUI_Chat.lua"/>
+  <Script file="PUI_ChatArchive.lua"/>
+  <Script file="PUI_ChatTabs.lua"/>
+  <Script file="PUI_ChatFocus.lua"/>
+  <Script file="PUI_ChatWindows.lua"/>
+  <Script file="PUI_ChatHistory.lua"/>
+  <Script file="PUI_Profiling.lua"/>
+</Ui>

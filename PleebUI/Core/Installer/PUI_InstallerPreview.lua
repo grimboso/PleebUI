@@ -224,7 +224,23 @@ local function BuildCurrent()
       request.box = box
     end
   elseif request.kind == "everyday" then
-    request.box = ns.InstallerExamples.Show(request.host, request.path[1])
+    if request.path[1] == "chat" and not ns.Registry.ChatLinks then
+      local box = owner.disabledBox
+      if not box then
+        box = ns.PreviewBox.Create(request.host)
+        owner.disabledBox = box
+      end
+      box:SetParent(request.host)
+      box:ClearAllPoints()
+      box:SetAllPoints(request.host)
+      box:SetTitle("Addon disabled")
+      box:SetDescription("")
+      box:SetAlpha(0.5)
+      box:Show()
+      request.box = box
+    else
+      request.box = ns.InstallerExamples.Show(request.host, request.path[1])
+    end
   elseif request.kind == "movement" then
     if ns.Modules.MovementWarning then
       ns.Registry.Options.MovementWarning.meta.page.buildPreview(navigation, owner, owner, request.path)

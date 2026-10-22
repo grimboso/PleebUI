@@ -2,12 +2,6 @@
   <Script file="PUI_MinimapData.lua"/>
   <Script file="PUI_Minimap.lua"/>
   <Script file="PUI_Dragonriding.lua"/>
-  <Script file="Chat/PUI_Chat.lua"/>
-  <Script file="Chat/PUI_ChatArchive.lua"/>
-  <Script file="Chat/PUI_ChatTabs.lua"/>
-  <Script file="Chat/PUI_ChatFocus.lua"/>
-  <Script file="Chat/PUI_ChatWindows.lua"/>
-  <Script file="Chat/PUI_ChatHistory.lua"/>
   <Include file="..\..\Core\GUI\BlizzardSkins\BlizzardSkins.xml"/>
   <Script file="PUI_Bags.lua"/>
   <Script file="PUI_EnchantTargets.lua"/>

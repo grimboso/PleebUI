@@ -1,6 +1,5 @@
-local _, ns = ...
+local ns = LibStub("AceAddon-3.0"):GetAddon("PleebUI").ModuleNamespace
 local ChatLinks = ns.Registry.ChatLinks
-local Addon = ns.Addon
 local HistoryOwner = {}
 local P = ns.Pleebug:DropIn(HistoryOwner, { name = "Modules.Chat.History" })
 local HistoryFrame = CreateFrame("Frame")
@@ -107,20 +106,20 @@ end
 
 local function GetHistoryLog()
   if SavedLog then return SavedLog end
-  local log = Addon.db.char.chatHistoryLog
+  local log = ChatLinks.historyDB.char.chatHistoryLog
   if not log then
     log = { version = 5, windows = {}, conversations = { WHISPER = {}, BN_WHISPER = {} } }
-    Addon.db.char.chatHistoryLog = log
+    ChatLinks.historyDB.char.chatHistoryLog = log
   elseif log.version ~= 5 then
     local entries = {}
     for _, entry in ipairs(log.current) do
       if IsRetainedEntry(entry) then entries[#entries + 1] = entry end
     end
     log = { version = 5, windows = {}, conversations = { WHISPER = {}, BN_WHISPER = {} }, legacy = entries }
-    Addon.db.char.chatHistoryLog = log
+    ChatLinks.historyDB.char.chatHistoryLog = log
   end
-  if Addon.db.global.chatHistoryLog then log.legacy = log.legacy or {} end
-  local legacy = Addon.db.global.chatHistoryLog
+  if ChatLinks.historyDB.global.chatHistoryLog then log.legacy = log.legacy or {} end
+  local legacy = ChatLinks.historyDB.global.chatHistoryLog
   if legacy then
     -- Earlier releases only retained rendered text, so its original event is unknown.
     for _, entry in ipairs(legacy.current) do
@@ -148,7 +147,7 @@ local function GetHistoryLog()
         }
       end
     end
-    Addon.db.global.chatHistoryLog = nil
+    ChatLinks.historyDB.global.chatHistoryLog = nil
   end
   if log.legacy then
     log.migratedWindows = log.migratedWindows or {}

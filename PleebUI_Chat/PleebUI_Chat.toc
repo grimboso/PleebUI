@@ -1,0 +1,11 @@
+## Interface: 120105
+## Title: PleebUI Chat
+## Notes: Chat for PleebUI.
+## Author: Pleeb
+## Version: @project-version@
+## Category-enUS: PleebUI
+## IconTexture: Interface\AddOns\PleebUI\Media\Logo.tga
+## Dependencies: PleebUI
+## SavedVariables: PleebUIChatHistoryDB
+
+Chat.xml

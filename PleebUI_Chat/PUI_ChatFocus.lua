@@ -1,8 +1,9 @@
-local _, ns = ...
+local ns = LibStub("AceAddon-3.0"):GetAddon("PleebUI").ModuleNamespace
 local ChatLinks = ns.Registry.ChatLinks
 local FocusFade = {}
 local P = ns.Pleebug:DropIn(FocusFade, { name = "Modules.Chat.Focus" })
 local Driver = CreateFrame("Frame")
+Driver:Hide()
 local MessageEvents = CreateFrame("Frame")
 local Windows = {}
 local Widgets = {}
@@ -290,6 +291,7 @@ function ChatLinks:StartChatFocusFading()
   if not self.db.profile.chatFade.fadeWindow then self:StopChatFocusFading(); return end
   if Enabled then return end
   Enabled = true
+  Driver:Show()
   Editing = ns.Flags.IsEditing == true
   EventRegistry:RegisterCallback("ChatFrame.OnEditBoxFocusGained", InputFocusGained, FocusFade)
   EventRegistry:RegisterCallback("ChatFrame.OnEditBoxFocusLost", InputFocusLost, FocusFade)
@@ -308,6 +310,7 @@ function ChatLinks:StopChatFocusFading()
   MessageEvents:UnregisterAllEvents()
   if MessageTimer then MessageTimer:Cancel(); MessageTimer = nil end
   Driver:SetScript("OnUpdate", nil)
+  Driver:Hide()
   wipe(Animating)
   for panel in pairs(Panels) do
     CancelPanelTimer(panel)
