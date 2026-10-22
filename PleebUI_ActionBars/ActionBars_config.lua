@@ -1,6 +1,6 @@
 -- File: PUI_ActionBars_Config.lua
 
-local ADDON_NAME, ns = ...
+local ns = LibStub("AceAddon-3.0"):GetAddon("PleebUI").ModuleNamespace
 
 local Addon  = ns.Addon
 local Core = ns.ActionBarsCore
@@ -1231,6 +1231,29 @@ local function ActionBarsOptionsProvider(Addon)
     shared.layout.inline = nil
     shared.layout.order = 20
     shared.size = nil
+
+    shared.behavior.args.addon = {
+      type = "group",
+      name = function() return "" end,
+      inline = true,
+      hidden = false,
+      order = 0,
+      arg = { puiExplicit = true },
+      args = {
+        disableAddon = {
+          type = "execute",
+          name = "Disable addon and reload",
+          desc = "Disable Action Bars for this character and reload the UI. Your settings are kept.",
+          order = 10,
+          disabled = function()
+            return InCombatLockdown()
+          end,
+          func = function()
+            Addon:SetActionBarsAddonEnabled(false)
+          end,
+        },
+      },
+    }
 
     local function AddCustomizationControls(args, override, customSkin, barKey)
       args.sharedStatus = {

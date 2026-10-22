@@ -1,4 +1,4 @@
-local ADDON_NAME, ns = ...
+local ns = LibStub("AceAddon-3.0"):GetAddon("PleebUI").ModuleNamespace
 
 local Core = ns.ActionBarsCore
 
@@ -23,15 +23,13 @@ end
 local EXTRA_DEFAULT_POINT = { "CENTER", UIParent, "CENTER", -350, -300 }
 local ZONE_DEFAULT_POINT = { "CENTER", UIParent, "CENTER", 350, -300 }
 
+SpecialBar.eventFrame = CreateFrame("Frame")
+SpecialBar.eventFrame:SetScript("OnEvent", function(_, event)
+  SpecialBar:OnEvent(event)
+end)
+
 function SpecialBar:EnsureEventFrame()
   self.enabled = true
-
-  if not self.eventFrame then
-    self.eventFrame = CreateFrame("Frame")
-    self.eventFrame:SetScript("OnEvent", function(_, event)
-      SpecialBar:OnEvent(event)
-    end)
-  end
 
   if self.eventsRegistered then
     return
@@ -616,10 +614,8 @@ function SpecialBar:Disable()
   self.zoneAbilityRefreshQueued = nil
   self.vehicleRefreshQueued = nil
 
-  if self.eventFrame then
-    self.eventFrame:UnregisterAllEvents()
-    self.eventsRegistered = nil
-  end
+  self.eventFrame:UnregisterAllEvents()
+  self.eventsRegistered = nil
 
   if self.extraBar then
     self.extraBar.frame:Hide()

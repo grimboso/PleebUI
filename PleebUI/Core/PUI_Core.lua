@@ -36,6 +36,7 @@ ns.Pixel = {}
 
 local Addon = AceAddon:NewAddon(ADDON_NAME, "NumyAceEvent-3.0")
 ns.Addon = Addon
+Addon.ModuleNamespace = ns
 
 function Addon:Print()
   -- Temporarily suppress addon messages while isolating incoming-whisper taint.
@@ -901,6 +902,7 @@ function Addon:OnInitialize()
   self.db = AceDB:New("PleebUIDB", DB_DEFAULTS, "Default")
   self.db.global.runtimeFontSlugMigrationVersion = 1
   ns.DB = self.db
+  self.ActionBarsDB = self.db:RegisterNamespace("ActionBars", ns.ActionBarsDefaults)
 
   ns.Flags.OptionsDebug = self.db.profile.debug == true
   ns.Flags.__puiBlizzardEditModeActive = ns.Flags.__puiBlizzardEditModeActive or false
@@ -1270,7 +1272,9 @@ function Addon:RefreshIconFonts(atWorldEntry, profileRefresh)
     ns.Modules.RaidFrames:RefreshText()
     ns.Modules.CastBar:RefreshFromProfile()
     ns.Modules.PRD:RefreshIconFonts()
-    ns.ActionBarsCore:RefreshAll({ fonts = true })
+    if ns.ActionBarsCore then
+      ns.ActionBarsCore:RefreshAll({ fonts = true })
+    end
     ns.Modules.CooldownManager:RefreshIconFonts()
   end
   if not atWorldEntry then
@@ -1512,7 +1516,7 @@ function Addon:_FlushUpdateBus(targets)
   end
 
   local flags = targets.ActionBar
-  if flags then
+  if flags and ns.ActionBarsCore then
     ns.ActionBarsCore:RefreshAll({ full = true, profile = true })
   end
 
@@ -1606,7 +1610,7 @@ function Addon:_FlushUpdateBus(targets)
 
   local damageMeters = ns.Modules.DamageMeters
   flags = targets.DamageMeters
-  if flags then
+  if flags and damageMeters then
     if flags.profile == true then
       damageMeters:ApplyProfile()
     elseif flags.theme == true then

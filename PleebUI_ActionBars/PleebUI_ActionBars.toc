@@ -1,0 +1,10 @@
+## Interface: 120105
+## Title: PleebUI Action Bars
+## Notes: Action bars for PleebUI.
+## Author: Pleeb
+## Version: @project-version@
+## Category-enUS: PleebUI
+## IconTexture: Interface\AddOns\PleebUI\Media\Logo.tga
+## Dependencies: PleebUI
+
+ActionBars.xml

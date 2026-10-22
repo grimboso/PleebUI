@@ -24,6 +24,7 @@ externals:
   PackagerLibs/LibKeyBound-1.0: https://repos.wowace.com/wow/libkeybound-1-0/trunk/LibKeyBound-1.0
 
 move-folders:
+  PleebUI/PleebUI_ActionBars: PleebUI_ActionBars
   PleebUI/PackagerLibs/LibStub: PleebUI/PleebUI/Libs/LibStub
   PleebUI/PackagerLibs/LibEditModeOverride: PleebUI/PleebUI/Libs/LibEditModeOverride
   PleebUI/PackagerLibs/oUF: PleebUI/PleebUI/Libs/oUF

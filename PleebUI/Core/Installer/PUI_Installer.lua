@@ -4,6 +4,7 @@ local Addon = ns.Addon
 local Theme = ns.Theme
 local Content = ns.InstallerContent
 local OptionsTooltip = LibStub("AceConfigDialog-3.0").tooltip
+local LibKeyBound = LibStub("LibKeyBound-1.0")
 local InCombatLockdown = _G.InCombatLockdown
 local wizardFrame
 local currentPage = 1
@@ -545,7 +546,7 @@ local externalCallbacks = {}
 local function ClearExternalReturn()
   if not externalReturn then return end
   if externalReturn.kind == "keybinds" then
-    ns.ActionBarsCore.LibKeyBound.UnregisterCallback(externalCallbacks, "LIBKEYBOUND_DISABLED")
+    LibKeyBound.UnregisterCallback(externalCallbacks, "LIBKEYBOUND_DISABLED")
   else
     EventRegistry:UnregisterCallback("CooldownViewerSettings.OnHide", externalCallbacks)
   end
@@ -566,8 +567,8 @@ local function OpenKeybinds()
   ClearExternalReturn()
   wizardFrame:Hide()
   externalReturn = { kind = "keybinds" }
-  ns.ActionBarsCore.LibKeyBound.RegisterCallback(externalCallbacks, "LIBKEYBOUND_DISABLED", ResumeExternalSetup)
-  ns.ActionBarsCore.LibKeyBound:Activate()
+  LibKeyBound.RegisterCallback(externalCallbacks, "LIBKEYBOUND_DISABLED", ResumeExternalSetup)
+  LibKeyBound:Activate()
 end
 
 local function OpenTrackedSpells()

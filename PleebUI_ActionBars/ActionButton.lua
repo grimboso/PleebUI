@@ -1,4 +1,4 @@
-local ADDON_NAME, ns = ...
+local ns = LibStub("AceAddon-3.0"):GetAddon("PleebUI").ModuleNamespace
 
 local Core = ns.ActionBarsCore
 
@@ -304,9 +304,7 @@ local function StartButtonFlash(button, skipStateRefresh)
     button:UpdateState()
   end
 
-  if Engine.flashDriver then
-    Engine.flashDriver:Show()
-  end
+  Engine.flashDriver:Show()
 end
 
 local function StopButtonFlash(button, skipStateRefresh)
@@ -323,7 +321,7 @@ local function StopButtonFlash(button, skipStateRefresh)
     button:UpdateState()
   end
 
-  if Engine.flashingButtonCount == 0 and Engine.flashDriver then
+  if Engine.flashingButtonCount == 0 then
     Engine.flashDriver:Hide()
   end
 end
@@ -1806,6 +1804,17 @@ function Engine:OnEvent(event, arg1, arg2, ...)
   end
 end
 
+Engine.eventFrame = CreateFrame("Frame")
+Engine.eventFrame:SetScript("OnEvent", function(_, event, ...)
+  Engine:OnEvent(event, ...)
+end)
+Engine.runtimeUpdateFrame = CreateFrame("Frame")
+Engine.runtimeUpdateFrame:Hide()
+Engine.runtimeUpdateFrame:SetScript("OnUpdate", RuntimeUpdateOnUpdate)
+Engine.flashDriver = CreateFrame("Frame")
+Engine.flashDriver:Hide()
+Engine.flashDriver:SetScript("OnUpdate", FlashDriverOnUpdate)
+
 function Engine:Enable()
   if self.enabled then
     return
@@ -1813,18 +1822,6 @@ function Engine:Enable()
   self.enabled = true
 
   local frame = self.eventFrame
-  if not frame then
-    frame = CreateFrame("Frame")
-    frame:SetScript("OnEvent", function(_, event, ...)
-      Engine:OnEvent(event, ...)
-    end)
-    self.eventFrame = frame
-  end
-
-  if not self.runtimeUpdateFrame then
-    self.runtimeUpdateFrame = CreateFrame("Frame")
-    self.runtimeUpdateFrame:SetScript("OnUpdate", RuntimeUpdateOnUpdate)
-  end
   self.runtimeUpdateFrame:Hide()
 
   frame:RegisterEvent("ACTIONBAR_SLOT_CHANGED")
@@ -1870,10 +1867,6 @@ function Engine:Enable()
   frame:RegisterUnitEvent("UNIT_SPELLCAST_EMPOWER_STOP", "player")
   frame:RegisterUnitEvent("UNIT_SPELLCAST_SENT", "player")
 
-  if not self.flashDriver then
-    self.flashDriver = CreateFrame("Frame")
-    self.flashDriver:SetScript("OnUpdate", FlashDriverOnUpdate)
-  end
   self.flashDriver:Hide()
 
   EventRegistry:RegisterCallback("AssistedCombatManager.OnSetActionSpell", function()
@@ -1890,9 +1883,7 @@ function Engine:Disable()
 
   self.enabled = false
 
-  if self.eventFrame then
-    self.eventFrame:UnregisterAllEvents()
-  end
+  self.eventFrame:UnregisterAllEvents()
 
   EventRegistry:UnregisterCallback("AssistedCombatManager.OnSetActionSpell", self)
 
@@ -1906,13 +1897,9 @@ function Engine:Disable()
     ActionButtonSpellAlertManager:HideAlert(button)
   end
 
-  if self.flashDriver then
-    self.flashDriver:Hide()
-  end
+  self.flashDriver:Hide()
 
-  if self.runtimeUpdateFrame then
-    self.runtimeUpdateFrame:Hide()
-  end
+  self.runtimeUpdateFrame:Hide()
 
   wipe(self.flashingButtons)
   self.flashingButtonCount = 0

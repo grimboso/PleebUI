@@ -1,4 +1,4 @@
-local ADDON_NAME, ns = ...
+local ns = LibStub("AceAddon-3.0"):GetAddon("PleebUI").ModuleNamespace
 
 local Core = ns.ActionBarsCore
 local KeyBound = Core.LibKeyBound
@@ -187,23 +187,19 @@ local function CreateButton(bar, index)
   return button
 end
 
+StanceBar.eventFrame = CreateFrame("Frame")
+StanceBar.eventFrame:SetScript("OnEvent", function(_, event)
+  StanceBar:OnEvent(event)
+end)
+
+StanceBar.runtimeUpdateFrame = CreateFrame("Frame")
+StanceBar.runtimeUpdateFrame:Hide()
+StanceBar.runtimeUpdateFrame:SetScript("OnUpdate", function(frame)
+  frame:Hide()
+  StanceBar:FlushRuntimeUpdate()
+end)
+
 function StanceBar:EnsureEventFrame()
-  if not self.eventFrame then
-    self.eventFrame = CreateFrame("Frame")
-    self.eventFrame:SetScript("OnEvent", function(_, event)
-      StanceBar:OnEvent(event)
-    end)
-  end
-
-  if not self.runtimeUpdateFrame then
-    self.runtimeUpdateFrame = CreateFrame("Frame")
-    self.runtimeUpdateFrame:Hide()
-    self.runtimeUpdateFrame:SetScript("OnUpdate", function(frame)
-      frame:Hide()
-      StanceBar:FlushRuntimeUpdate()
-    end)
-  end
-
   if self.formsEventRegistered then
     return
   end
@@ -551,20 +547,16 @@ end
 function StanceBar:Disable()
   self.pendingStateUpdate = nil
   self.pendingCooldownUpdate = nil
-  if self.runtimeUpdateFrame then
-    self.runtimeUpdateFrame:Hide()
-  end
+  self.runtimeUpdateFrame:Hide()
   if self.bar then
     ClearOverrideBindings(self.bar.frame)
     UnregisterStateDriver(self.bar.frame, "visibility")
     self.bar.visibilityDriver = nil
     self.bar.frame:Hide()
   end
-  if self.eventFrame then
-    self.eventFrame:UnregisterAllEvents()
-    self.formsEventRegistered = nil
-    self.runtimeEventsRegistered = nil
-  end
+  self.eventFrame:UnregisterAllEvents()
+  self.formsEventRegistered = nil
+  self.runtimeEventsRegistered = nil
 end
 
 StanceBar.EnsureEventFrame = P:Def("StanceBar:EnsureEventFrame", StanceBar.EnsureEventFrame)

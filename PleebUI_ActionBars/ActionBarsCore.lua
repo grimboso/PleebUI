@@ -1,4 +1,4 @@
-local ADDON_NAME, ns = ...
+local ns = LibStub("AceAddon-3.0"):GetAddon("PleebUI").ModuleNamespace
 
 local Addon = ns.Addon
 local FrameUtil = ns.FrameUtil
@@ -10,6 +10,7 @@ local FrameScale = ns.FrameScale
 
 local ActionBar = Addon:NewModule("ActionBar", "NumyAceEvent-3.0")
 ns.Modules.ActionBar = ActionBar
+ActionBar.db = Addon.ActionBarsDB
 
 local Core = {}
 ns.ActionBarsCore = Core
@@ -84,96 +85,6 @@ local TOOLTIP_MODES = {
   enabled = true,
   nocombat = true,
   disabled = true,
-}
-
-local ACTIONBARS_DEFAULTS = {
-  profile = {
-    movers = {},
-
-    lockActionBars = true,
-    castOnKeyDown = true,
-    alwaysShowGrid = true,
-    countdownForCooldowns = true,
-    spellUIForceAlpha = false,
-    tooltipMode = "enabled",
-    useBlizzardVehicleUI = false,
-
-    bars = {
-      ["1"] = { enabled = true, buttonOffset = 0, flyoutDirection = "UP", visibility = {} },
-      ["2"] = { enabled = true, buttonOffset = 0, flyoutDirection = "UP", visibility = {} },
-      ["3"] = { enabled = true, buttonOffset = 0, flyoutDirection = "UP", visibility = {} },
-      ["4"] = { enabled = false, buttonOffset = 0, flyoutDirection = "UP", visibility = {} },
-      ["5"] = { enabled = false, buttonOffset = 0, flyoutDirection = "UP", visibility = {} },
-      ["6"] = { enabled = false, buttonOffset = 0, flyoutDirection = "UP", visibility = {} },
-      ["7"] = { enabled = false, buttonOffset = 0, flyoutDirection = "UP", visibility = {} },
-      ["8"] = { enabled = false, buttonOffset = 0, flyoutDirection = "UP", visibility = {} },
-      ["9"] = { enabled = false, buttonOffset = 0, flyoutDirection = "UP", visibility = {} },
-      ["10"] = { enabled = false, buttonOffset = 0, flyoutDirection = "UP", visibility = {} },
-      ["11"] = { enabled = false, buttonOffset = 0, flyoutDirection = "UP", visibility = {} },
-      ["12"] = { enabled = false, buttonOffset = 0, flyoutDirection = "UP", visibility = {} },
-
-      pet = {
-        buttonCount = 10,
-        showCooldowns = true,
-      },
-      stance = {},
-    },
-
-    frameBgColor = { 0, 0, 0, 0.7 },
-    frameBorderSize = 1,
-    frameBorderColor = { 0.20, 0.20, 0.24, 1.00 },
-
-    skin = {
-      iconSize = 35,
-      iconSpacing = 2,
-      iconsPerRow = 12,
-      iconsPerBar = 12,
-
-      borderSize = 2,
-      borderColor = { 0.20, 0.20, 0.24, 1.00 },
-
-      frameBorderSize = 1,
-      frameBorderColor = { 0.20, 0.20, 0.24, 1.00 },
-      frameBgColor = { 0, 0, 0, 0.7 },
-      showBarBackground = true,
-
-      fontSize = 12,
-      fontOutline = "OUTLINE",
-      fontColor = { 1, 1, 1, 1 },
-
-      showCooldownText = true,
-      showHotkeyText = true,
-      showMacroText = true,
-      showChargeText = true,
-
-      hotkeyFontFace = nil,
-      hotkeyFontSize = 15,
-      hotkeyFontOutline = nil,
-      hotkeyFontColor = nil,
-
-      macroFontFace = nil,
-      macroFontSize = 10,
-      macroFontOutline = nil,
-      macroFontColor = nil,
-
-      chargeFontFace = nil,
-      chargeFontSize = 15,
-      chargeFontOutline = nil,
-      chargeFontColor = nil,
-
-      cooldownFontFace = nil,
-      cooldownFontSize = 12,
-      cooldownFontOutline = nil,
-      cooldownFontColor = nil,
-
-      alpha = 1.0,
-      fadeOutAlpha = 0,
-      fadeOutEnabled = false,
-      fadeOutDuration = 0,
-    },
-
-    overrides = {},
-  },
 }
 
 local BLIZZARD_MULTI_BAR_FRAMES = {
@@ -263,10 +174,6 @@ local function PickFontFace(useCustom, customSkin, baseSkin, prefix)
 end
 
 function Core:GetDB()
-  if not ActionBar.db then
-    ActionBar.db = Addon.db:RegisterNamespace("ActionBars", ACTIONBARS_DEFAULTS)
-  end
-
   return ActionBar.db.profile
 end
 

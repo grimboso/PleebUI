@@ -1,4 +1,4 @@
-local ADDON_NAME, ns = ...
+local ns = LibStub("AceAddon-3.0"):GetAddon("PleebUI").ModuleNamespace
 
 local Core = ns.ActionBarsCore
 local Engine = ns.ActionButtonEngine
@@ -602,7 +602,7 @@ function StandardBars:RefreshLayout(barKey)
     end
   end
 
-  if actionMappingChanged then
+  if actionMappingChanged and ns.Modules.CooldownManager then
     ns.Modules.CooldownManager.RefreshKeybinds(nil)
   end
 end
@@ -614,7 +614,9 @@ function StandardBars:RefreshActions(barKey)
       UpdateBarActionStates(bar, def, bar.visibleButtonCount or #bar.buttons)
     end
   end
-  ns.Modules.CooldownManager.RefreshKeybinds(nil)
+  if ns.Modules.CooldownManager then
+    ns.Modules.CooldownManager.RefreshKeybinds(nil)
+  end
 end
 
 function StandardBars:RefreshFlyouts(barKey)
@@ -705,7 +707,9 @@ function StandardBars:RefreshFull(barKey)
     self:SkinFlyoutButtons()
   end
 
-  ns.Modules.CooldownManager.RefreshKeybinds(nil)
+  if ns.Modules.CooldownManager then
+    ns.Modules.CooldownManager.RefreshKeybinds(nil)
+  end
 end
 
 function StandardBars:RefreshBar(barKey, flags)
@@ -883,7 +887,9 @@ function StandardBars:Disable()
     end
   end
 
-  ns.Modules.CooldownManager.RefreshKeybinds(nil)
+  if ns.Modules.CooldownManager then
+    ns.Modules.CooldownManager.RefreshKeybinds(nil)
+  end
 end
 
 StandardBars.EnsurePetBattleController = P:Def("StandardBars:EnsurePetBattleController", StandardBars.EnsurePetBattleController)

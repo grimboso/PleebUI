@@ -241,6 +241,11 @@ end
 local function BuildOptions()
   local path = active.path
   local record = ns.Registry.Options[path[1]]
+  if path[1] == "ACTIONBARS" and not ns.ActionBarsCore
+    or path[1] == "DamageMeters" and not ns.Modules.DamageMeters
+  then
+    return record.factory(Addon):GetOptions()
+  end
   local previousPath = ns._PUIActiveOptionsPath
   ns._PUIActiveOptionsPath = path
   local options = ns.GUI.CopyOptionsNode(record.factory(Addon):GetOptions())

@@ -7,4 +7,5 @@
   <Script file="SpecialActionBar.lua"/>
   <Script file="ActionBars_Preview.lua"/>
   <Script file="ActionBars_config.lua"/>
+  <Script file="PUI_Profiling.lua"/>
 </Ui>

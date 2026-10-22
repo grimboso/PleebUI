@@ -370,7 +370,7 @@ local function Review()
     { "Personal Resource Display", ns.Modules.PRD:IsModuleEnabled(), "prd" },
     { "Cooldown Manager", ns.Modules.CooldownManager:IsModuleEnabledByUser(), "cooldowns" },
     { "Items and racials", ns.Modules.CooldownManager:GetConsumableTrackerEnabled(), "utility" },
-    { "Damage meters", ns.Modules.DamageMeters.db.profile.enabled ~= false, "meters" },
+    { "Damage meters", ns.Modules.DamageMeters and ns.Modules.DamageMeters.db.profile.enabled ~= false, "meters" },
   }) do
     Action(entry[1] .. ": " .. (entry[2] and "On" or "Off") .. " — Edit", function()
       if entry[4] then selected.group = entry[4] end
@@ -545,6 +545,7 @@ local function BuildPage(key)
     Text("Meters summarize combat.\n• Current follows the current session.\n• Overall combines session data; choose a fight on the live meter.")
     Preview("meters")
     Settings({ "DamageMeters", "general" })
+    if not ns.Modules.DamageMeters then return end
     local db = ns.Modules.DamageMeters.db.profile
     if db.windowCount > 0 then
       local window = ns.DamageMeterConfig.GetWindowDB(1)

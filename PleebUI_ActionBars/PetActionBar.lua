@@ -1,4 +1,4 @@
-local ADDON_NAME, ns = ...
+local ns = LibStub("AceAddon-3.0"):GetAddon("PleebUI").ModuleNamespace
 
 local Core = ns.ActionBarsCore
 local KeyBound = Core.LibKeyBound
@@ -277,38 +277,32 @@ local function CreateButton(bar, index)
   return button
 end
 
+PetBar.eventFrame = CreateFrame("Frame")
+PetBar.eventFrame:SetScript("OnEvent", function(_, event)
+  PetBar:OnEvent(event)
+end)
+
+PetBar.visibleEventFrame = CreateFrame("Frame")
+PetBar.visibleEventFrame:SetScript("OnEvent", function(_, event)
+  if event == "PET_BAR_UPDATE_COOLDOWN" then
+    PetBar:QueueRuntimeUpdate("cooldown")
+  elseif event == "UPDATE_VEHICLE_ACTIONBAR" then
+    PetBar:QueueRuntimeUpdate("full")
+  elseif event == "PET_BAR_UPDATE_USABLE" then
+    PetBar:QueueRuntimeUpdate("usability")
+  else
+    PetBar:QueueRuntimeUpdate("state")
+  end
+end)
+
+PetBar.runtimeUpdateFrame = CreateFrame("Frame")
+PetBar.runtimeUpdateFrame:Hide()
+PetBar.runtimeUpdateFrame:SetScript("OnUpdate", function(frame)
+  frame:Hide()
+  PetBar:FlushRuntimeUpdate()
+end)
+
 function PetBar:EnsureEventFrame()
-  if not self.eventFrame then
-    self.eventFrame = CreateFrame("Frame")
-    self.eventFrame:SetScript("OnEvent", function(_, event)
-      PetBar:OnEvent(event)
-    end)
-  end
-
-  if not self.visibleEventFrame then
-    self.visibleEventFrame = CreateFrame("Frame")
-    self.visibleEventFrame:SetScript("OnEvent", function(_, event)
-      if event == "PET_BAR_UPDATE_COOLDOWN" then
-        PetBar:QueueRuntimeUpdate("cooldown")
-      elseif event == "UPDATE_VEHICLE_ACTIONBAR" then
-        PetBar:QueueRuntimeUpdate("full")
-      elseif event == "PET_BAR_UPDATE_USABLE" then
-        PetBar:QueueRuntimeUpdate("usability")
-      else
-        PetBar:QueueRuntimeUpdate("state")
-      end
-    end)
-  end
-
-  if not self.runtimeUpdateFrame then
-    self.runtimeUpdateFrame = CreateFrame("Frame")
-    self.runtimeUpdateFrame:Hide()
-    self.runtimeUpdateFrame:SetScript("OnUpdate", function(frame)
-      frame:Hide()
-      PetBar:FlushRuntimeUpdate()
-    end)
-  end
-
   if self.eventsRegistered then
     return
   end
@@ -348,7 +342,6 @@ end
 
 function PetBar:SetVisibleEventsEnabled(enabled, reconcile)
   local frame = self.visibleEventFrame
-  if not frame then return end
 
   enabled = enabled == true
   local visibilityChanged = self.runtimeVisible ~= enabled
@@ -401,9 +394,7 @@ function PetBar:SetVisibleEventsEnabled(enabled, reconcile)
   self.pendingStateUpdate = nil
   self.pendingUsabilityUpdate = nil
   self.pendingCooldownUpdate = nil
-  if self.runtimeUpdateFrame then
-    self.runtimeUpdateFrame:Hide()
-  end
+  self.runtimeUpdateFrame:Hide()
 end
 
 function PetBar:QueueRuntimeUpdate(kind)
@@ -423,7 +414,7 @@ function PetBar:QueueRuntimeUpdate(kind)
     self.pendingCooldownUpdate = true
   end
 
-  if self.runtimeUpdateFrame and not self.runtimeUpdateFrame:IsShown() then
+  if not self.runtimeUpdateFrame:IsShown() then
     self.runtimeUpdateFrame:Show()
   end
 end
@@ -744,14 +735,10 @@ function PetBar:Disable()
   self.pendingStateUpdate = nil
   self.pendingUsabilityUpdate = nil
   self.pendingCooldownUpdate = nil
-  if self.runtimeUpdateFrame then
-    self.runtimeUpdateFrame:Hide()
-  end
+  self.runtimeUpdateFrame:Hide()
 
-  if self.eventFrame then
-    self.eventFrame:UnregisterAllEvents()
-    self.eventsRegistered = nil
-  end
+  self.eventFrame:UnregisterAllEvents()
+  self.eventsRegistered = nil
   if not self.bar then return end
   ClearOverrideBindings(self.bar.frame)
   UnregisterStateDriver(self.bar.frame, "visibility")

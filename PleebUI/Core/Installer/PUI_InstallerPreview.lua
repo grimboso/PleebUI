@@ -108,8 +108,24 @@ local function BuildCurrent()
     request.box.animationTime, request.box.animationElapsed = 0, 0
     request.box:SetScript("OnUpdate", request.playing and request.path[4] ~= "customDisplays" and AnimateUnitFrames or nil)
   elseif request.kind == "actionbars" then
-    ns.ActionBarsPreview.Build(navigation, owner, owner, request.path, 2)
-    request.box = owner.__puiActionBarsPreviewBox
+    if ns.ActionBarsPreview then
+      ns.ActionBarsPreview.Build(navigation, owner, owner, request.path, 2)
+      request.box = owner.__puiActionBarsPreviewBox
+    else
+      local box = owner.disabledBox
+      if not box then
+        box = ns.PreviewBox.Create(request.host)
+        owner.disabledBox = box
+      end
+      box:SetParent(request.host)
+      box:ClearAllPoints()
+      box:SetAllPoints(request.host)
+      box:SetTitle("Addon disabled")
+      box:SetDescription("")
+      box:SetAlpha(0.5)
+      box:Show()
+      request.box = box
+    end
   elseif request.kind == "cooldowns" then
     ns.PCMPreview.Build(navigation, owner, owner, request.path)
     request.box = owner.__puiPCMPreviewBox
@@ -126,7 +142,23 @@ local function BuildCurrent()
     ns.Registry.Options.Quality.meta.page.buildPreview(navigation, owner, owner, request.path)
     request.box = owner.__puiQualityPreviewRoot
   elseif request.kind == "meters" then
-    request.box = ns.DamageMeterWindows.BuildPreview(request.host, owner)
+    if ns.DamageMeterWindows then
+      request.box = ns.DamageMeterWindows.BuildPreview(request.host, owner)
+    else
+      local box = owner.disabledBox
+      if not box then
+        box = ns.PreviewBox.Create(request.host)
+        owner.disabledBox = box
+      end
+      box:SetParent(request.host)
+      box:ClearAllPoints()
+      box:SetAllPoints(request.host)
+      box:SetTitle("Addon disabled")
+      box:SetDescription("")
+      box:SetAlpha(0.5)
+      box:Show()
+      request.box = box
+    end
   elseif request.kind == "everyday" then
     request.box = ns.InstallerExamples.Show(request.host, request.path[1])
   elseif request.kind == "movement" then
