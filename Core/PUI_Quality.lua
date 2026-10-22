@@ -2594,21 +2594,18 @@ local QualityPreviewRoot
 
 local function Quality_GetPreviewWarnings()
   CombatWarning_RefreshMeleeSpec()
-  local warnings = { "No target" }
-  if CombatWarningMeleeSpec then
-    warnings[#warnings + 1] = "Out of melee range"
-  end
+  local warnings = { { kind = "Target warnings", slot = 1 } }
   if IsPetClass() then
-    warnings[#warnings + 1] = "Missing pet"
-    warnings[#warnings + 1] = "Dead pet"
+    warnings[#warnings + 1] = { kind = "Missing pet", slot = 2 }
+    warnings[#warnings + 1] = { kind = "Dead pet", slot = 3 }
     if IsHealPetClass() then
-      warnings[#warnings + 1] = "Low pet health"
+      warnings[#warnings + 1] = { kind = "Low pet health", slot = 4 }
     else
-      warnings[#warnings + 1] = "Idle pet"
+      warnings[#warnings + 1] = { kind = "Idle pet", slot = 4 }
     end
   end
-  warnings[#warnings + 1] = "Combat message"
-  warnings[#warnings + 1] = "Combat timer"
+  warnings[#warnings + 1] = { kind = "Combat message", slot = 5 }
+  warnings[#warnings + 1] = { kind = "Combat timer", slot = 6 }
   return warnings
 end
 
@@ -2682,14 +2679,18 @@ local function Quality_RefreshPreview(root)
   root.Title:SetText("Combat warnings and displays")
   root.PreviewHelp:SetText("Samples use your current settings")
   local columns = 3
-  local rowCount = math.ceil(#warnings / columns)
+  local rowCount = 2
   local cellWidth = math.max(1, (root:GetWidth() - 32) / columns)
   local cellHeight = math.max(1, (root:GetHeight() - 64) / rowCount)
-  for index, kind in ipairs(warnings) do
+  for _, sample in pairs(root.samples) do sample:Hide() end
+  for _, warning in ipairs(warnings) do
+    local index, kind = warning.slot, warning.kind
     local sample = root.samples[index]
     if not sample then
       sample = CreateFrame("Frame", nil, root.CombatSamples)
+      sample:SetSize(1, 1)
       sample.content = CreateFrame("Frame", nil, sample)
+      sample.content:SetSize(1, 1)
       sample.content:SetPoint("CENTER", sample, "CENTER")
       sample.text = sample.content:CreateFontString(nil, "OVERLAY")
       sample.text:SetPoint("CENTER", sample.content, "CENTER")
@@ -2700,12 +2701,8 @@ local function Quality_RefreshPreview(root)
     local size = 20
     local color = { r = 1, g = 1, b = 1, a = 1 }
 
-    if kind == "No target" then
-      text = "NO TARGET"
-      size = q.combatWarningFontSize
-      color = { r = 1, g = 0, b = 0, a = 1 }
-    elseif kind == "Out of melee range" then
-      text = "OUT OF MELEE RANGE"
+    if kind == "Target warnings" then
+      text = CombatWarningMeleeSpec and "NO TARGET\nOUT OF MELEE RANGE" or "NO TARGET"
       size = q.combatWarningFontSize
       color = { r = 1, g = 0, b = 0, a = 1 }
     elseif kind == "Missing pet" then
@@ -2752,29 +2749,15 @@ local function Quality_RefreshPreview(root)
     )
     sample.text:SetText(text)
 
-    local width = math.max(1, sample.text:GetStringWidth())
-    local height = math.max(1, sample.text:GetStringHeight())
     if kind == "Combat timer" then
       ApplyCombatTimerAppearance(sample.content, q)
-      width = math.max(width, q.combatTimerWidth)
-      height = math.max(height, q.combatTimerHeight)
-    else
-      if sample.isCombatTimer then
-        ns.Theme.SetSquareBackdrop(sample.content, { bg = { 0, 0, 0, 0 }, border = { 0, 0, 0, 0 } }, 0)
-      end
-      sample.content:SetSize(width, height)
     end
-    sample.isCombatTimer = kind == "Combat timer"
-    local scale = math.min(1, (cellWidth - 12) / width, (cellHeight - 10) / height)
-    sample:SetSize(cellWidth, cellHeight)
-    sample.content:SetScale(math.max(0.01, scale))
     sample:ClearAllPoints()
     sample:SetPoint("CENTER", root.CombatSamples, "TOPLEFT",
       16 + (index - 1) % columns * cellWidth + cellWidth / 2,
       -34 - math.floor((index - 1) / columns) * cellHeight - cellHeight / 2)
     sample:Show()
   end
-  for index = #warnings + 1, #root.samples do root.samples[index]:Hide() end
 end
 
 local function Quality_BuildPreview(_, _, shell, path)
