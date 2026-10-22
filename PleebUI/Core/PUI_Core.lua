@@ -121,6 +121,7 @@ end
 local DB_DEFAULTS = {
   profile = {
     debug          = false,
+    childAddons = { ["*"] = true },
 
     blizzardFonts = {},
     movementWarning = {
@@ -899,7 +900,9 @@ function Addon:OnInitialize()
     end
   end
 
+  self:MigrateChildAddonProfiles(saved)
   self.db = AceDB:New("PleebUIDB", DB_DEFAULTS, "Default")
+  self.db.global.childAddonProfileMigrationVersion = 1
   self.db.global.runtimeFontSlugMigrationVersion = 1
   ns.DB = self.db
   self.ActionBarsDB = self.db:RegisterNamespace("ActionBars", ns.ActionBarsDefaults)
@@ -1488,6 +1491,7 @@ PUIProfileUpdateFrame:SetScript("OnUpdate", function(frame)
 end)
 
 function Addon:StaggeredUpdateAll(flags)
+  if flags and flags.profile == true then self:QueueChildAddonProfileCheck() end
   if runtimeFontSlugNotice then runtimeFontSlugNotice:Hide() end
   local st = self._puiStaggeredUpdate
   if not st then

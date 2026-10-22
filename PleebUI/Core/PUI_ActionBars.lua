@@ -103,13 +103,8 @@ function Addon:SetActionBarsAddonEnabled(enabled)
     return
   end
 
-  local character = UnitNameUnmodified("player")
-  if enabled then
-    C_AddOns.EnableAddOn("PleebUI_ActionBars", character)
-  else
-    C_AddOns.DisableAddOn("PleebUI_ActionBars", character)
-  end
-  ReloadUI()
+  self.db.profile.childAddons.PleebUI_ActionBars = enabled == true
+  self:ApplyChildAddonProfile()
 end
 
 function DisabledActionBars:GetOptions()
@@ -126,7 +121,7 @@ function DisabledActionBars:GetOptions()
       enableAddon = {
         type = "execute",
         name = "Enable addon and reload",
-        desc = "Enable Action Bars for this character and reload the UI. Your settings are kept.",
+        desc = "Enable Action Bars for this profile and reload the UI. Your settings are kept.",
         order = 2,
         disabled = IsActionBarsAddonChangeBlocked,
         func = function()

@@ -41,13 +41,8 @@ function Addon:SetPlayerBuffsAddonEnabled(enabled)
     return
   end
 
-  local character = UnitNameUnmodified("player")
-  if enabled then
-    C_AddOns.EnableAddOn("PleebUI_PlayerBuffs", character)
-  else
-    C_AddOns.DisableAddOn("PleebUI_PlayerBuffs", character)
-  end
-  ReloadUI()
+  self.db.profile.childAddons.PleebUI_PlayerBuffs = enabled == true
+  self:ApplyChildAddonProfile()
 end
 
 function DisabledPlayerBuffs:GetOptions()
@@ -64,7 +59,7 @@ function DisabledPlayerBuffs:GetOptions()
       enableAddon = {
         type = "execute",
         name = "Enable addon and reload",
-        desc = "Enable Player Buffs for this character and reload the UI. Your settings are kept.",
+        desc = "Enable Player Buffs for this profile and reload the UI. Your settings are kept.",
         order = 2,
         disabled = IsPlayerBuffsAddonChangeBlocked,
         func = function()
@@ -143,7 +138,7 @@ function Addon:GetPlayerBuffsAddonControl()
     arg = { puiExplicit = true },
     args = { disableAddon = {
       type = "execute", name = "Disable addon and reload", order = 1,
-      desc = "Disable Player Buffs for this character and reload the UI. Your settings are kept.",
+      desc = "Disable Player Buffs for this profile and reload the UI. Your settings are kept.",
       disabled = InCombatLockdown,
       func = function() Addon:SetPlayerBuffsAddonEnabled(false) end,
     } },

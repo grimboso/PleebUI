@@ -11,6 +11,7 @@
   <Script file="GUI\PUI_ColorPicker.lua"/>
   <Script file="GUI\PUI_Window.lua"/>
   <Script file="PUI_Profiles.lua"/>
+  <Script file="PUI_ChildAddons.lua"/>
   <Script file="GUI\PUI_TabGroup.lua"/>
   <Script file="GUI\PUI_Groups.lua"/>
   <Script file="GUI\PUI_Dropdown.lua"/>

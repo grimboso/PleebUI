@@ -3410,7 +3410,7 @@ do
         disableAddon = {
           type = "execute",
           name = "Disable addon and reload",
-          desc = "Disable Resource Display for this character and reload the UI. Your settings are kept.",
+          desc = "Disable Resource Display for this profile and reload the UI. Your settings are kept.",
           order = 10,
           disabled = function() return InCombatLockdown() end,
           func = function() Addon:SetPRDAddonEnabled(false) end,

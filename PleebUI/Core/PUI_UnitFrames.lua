@@ -13,13 +13,8 @@ function Addon:SetUnitFramesAddonEnabled(enabled)
     return
   end
 
-  local character = UnitNameUnmodified("player")
-  if enabled then
-    C_AddOns.EnableAddOn("PleebUI_UnitFrames", character)
-  else
-    C_AddOns.DisableAddOn("PleebUI_UnitFrames", character)
-  end
-  ReloadUI()
+  self.db.profile.childAddons.PleebUI_UnitFrames = enabled == true
+  self:ApplyChildAddonProfile()
 end
 
 function DisabledUnitFrames:GetOptions()
@@ -36,7 +31,7 @@ function DisabledUnitFrames:GetOptions()
       enableAddon = {
         type = "execute",
         name = "Enable addon and reload",
-        desc = "Enable Unit Frames for this character and reload the UI. Your settings are kept.",
+        desc = "Enable Unit Frames for this profile and reload the UI. Your settings are kept.",
         order = 2,
         disabled = IsUnitFramesAddonChangeBlocked,
         func = function()

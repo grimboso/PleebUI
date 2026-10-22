@@ -1243,7 +1243,7 @@ local function ActionBarsOptionsProvider(Addon)
         disableAddon = {
           type = "execute",
           name = "Disable addon and reload",
-          desc = "Disable Action Bars for this character and reload the UI. Your settings are kept.",
+          desc = "Disable Action Bars for this profile and reload the UI. Your settings are kept.",
           order = 10,
           disabled = function()
             return InCombatLockdown()

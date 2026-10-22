@@ -7733,7 +7733,7 @@ local function UFCB_BuildGeneralRootLeafSpecs()
     args = {
       disableAddon = {
         type = "execute", name = "Disable addon and reload", order = 1,
-        desc = "Disable Unit Frames for this character and reload the UI. Your settings are kept.",
+        desc = "Disable Unit Frames for this profile and reload the UI. Your settings are kept.",
         disabled = InCombatLockdown,
         func = function() Addon:SetUnitFramesAddonEnabled(false) end,
       },

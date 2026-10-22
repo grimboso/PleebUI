@@ -13,13 +13,8 @@ function Addon:SetCombatToolsAddonEnabled(enabled)
     return
   end
 
-  local character = UnitNameUnmodified("player")
-  if enabled then
-    C_AddOns.EnableAddOn("PleebUI_CombatTools", character)
-  else
-    C_AddOns.DisableAddOn("PleebUI_CombatTools", character)
-  end
-  ReloadUI()
+  self.db.profile.childAddons.PleebUI_CombatTools = enabled == true
+  self:ApplyChildAddonProfile()
 end
 
 function DisabledCombatTools:GetOptions()
@@ -36,7 +31,7 @@ function DisabledCombatTools:GetOptions()
       enableAddon = {
         type = "execute",
         name = "Enable addon and reload",
-        desc = "Enable Combat Tools for this character and reload the UI. Your settings are kept.",
+        desc = "Enable Combat Tools for this profile and reload the UI. Your settings are kept.",
         order = 2,
         disabled = IsCombatToolsAddonChangeBlocked,
         func = function()
@@ -111,7 +106,7 @@ function Addon:GetCombatToolsAddonControl()
     arg = { puiExplicit = true },
     args = { disableAddon = {
       type = "execute", name = "Disable addon and reload", order = 1,
-      desc = "Disable Combat Tools for this character and reload the UI. Your settings are kept.",
+      desc = "Disable Combat Tools for this profile and reload the UI. Your settings are kept.",
       disabled = InCombatLockdown,
       func = function() Addon:SetCombatToolsAddonEnabled(false) end,
     } },

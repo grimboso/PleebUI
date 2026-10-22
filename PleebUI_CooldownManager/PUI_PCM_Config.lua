@@ -9318,7 +9318,7 @@ local function _PCM_BuildUnifiedManagerArgs(activeKey, activePath)
       args = {
         disableAddon = {
           type = "execute", name = "Disable addon and reload", order = 1,
-          desc = "Disable Cooldown Manager for this character and reload the UI. Your settings are kept.",
+          desc = "Disable Cooldown Manager for this profile and reload the UI. Your settings are kept.",
           disabled = InCombatLockdown,
           func = function() Addon:SetCooldownManagerAddonEnabled(false) end,
         },

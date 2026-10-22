@@ -72,13 +72,8 @@ function Addon:SetDamageMetersAddonEnabled(enabled)
     return
   end
 
-  local character = UnitNameUnmodified("player")
-  if enabled then
-    C_AddOns.EnableAddOn("PleebUI_DamageMeters", character)
-  else
-    C_AddOns.DisableAddOn("PleebUI_DamageMeters", character)
-  end
-  ReloadUI()
+  self.db.profile.childAddons.PleebUI_DamageMeters = enabled == true
+  self:ApplyChildAddonProfile()
 end
 
 function DisabledDamageMeters:GetOptions()
@@ -95,7 +90,7 @@ function DisabledDamageMeters:GetOptions()
       enableAddon = {
         type = "execute",
         name = "Enable addon and reload",
-        desc = "Enable Damage Meters for this character and reload the UI. Your settings are kept.",
+        desc = "Enable Damage Meters for this profile and reload the UI. Your settings are kept.",
         order = 2,
         disabled = IsDamageMetersAddonChangeBlocked,
         func = function()

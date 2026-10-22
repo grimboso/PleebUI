@@ -175,13 +175,8 @@ function Addon:SetPRDAddonEnabled(enabled)
     return
   end
 
-  local character = UnitNameUnmodified("player")
-  if enabled then
-    C_AddOns.EnableAddOn("PleebUI_PRD", character)
-  else
-    C_AddOns.DisableAddOn("PleebUI_PRD", character)
-  end
-  ReloadUI()
+  self.db.profile.childAddons.PleebUI_PRD = enabled == true
+  self:ApplyChildAddonProfile()
 end
 
 function DisabledPRD:GetOptions()
@@ -198,7 +193,7 @@ function DisabledPRD:GetOptions()
       enableAddon = {
         type = "execute",
         name = "Enable addon and reload",
-        desc = "Enable Resource Display for this character and reload the UI. Your settings are kept.",
+        desc = "Enable Resource Display for this profile and reload the UI. Your settings are kept.",
         order = 2,
         disabled = IsPRDAddonChangeBlocked,
         func = function()

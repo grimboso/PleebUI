@@ -13,13 +13,8 @@ function Addon:SetCooldownManagerAddonEnabled(enabled)
     return
   end
 
-  local character = UnitNameUnmodified("player")
-  if enabled then
-    C_AddOns.EnableAddOn("PleebUI_CooldownManager", character)
-  else
-    C_AddOns.DisableAddOn("PleebUI_CooldownManager", character)
-  end
-  ReloadUI()
+  self.db.profile.childAddons.PleebUI_CooldownManager = enabled == true
+  self:ApplyChildAddonProfile()
 end
 
 function DisabledCooldownManager:GetOptions()
@@ -36,7 +31,7 @@ function DisabledCooldownManager:GetOptions()
       enableAddon = {
         type = "execute",
         name = "Enable addon and reload",
-        desc = "Enable Cooldown Manager for this character and reload the UI. Your settings are kept.",
+        desc = "Enable Cooldown Manager for this profile and reload the UI. Your settings are kept.",
         order = 2,
         disabled = IsCooldownManagerAddonChangeBlocked,
         func = function()

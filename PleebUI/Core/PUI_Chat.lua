@@ -104,13 +104,8 @@ function Addon:SetChatAddonEnabled(enabled)
     return
   end
 
-  local character = UnitNameUnmodified("player")
-  if enabled then
-    C_AddOns.EnableAddOn("PleebUI_Chat", character)
-  else
-    C_AddOns.DisableAddOn("PleebUI_Chat", character)
-  end
-  ReloadUI()
+  self.db.profile.childAddons.PleebUI_Chat = enabled == true
+  self:ApplyChildAddonProfile()
 end
 
 function DisabledChat:GetOptions()
@@ -127,7 +122,7 @@ function DisabledChat:GetOptions()
       enableAddon = {
         type = "execute",
         name = "Enable addon and reload",
-        desc = "Enable Chat for this character and reload the UI. Your settings are kept.",
+        desc = "Enable Chat for this profile and reload the UI. Your settings are kept.",
         order = 2,
         disabled = IsChatAddonChangeBlocked,
         func = function()
@@ -206,7 +201,7 @@ function Addon:GetChatAddonControl()
     arg = { puiExplicit = true },
     args = { disableAddon = {
       type = "execute", name = "Disable addon and reload", order = 1,
-      desc = "Disable Chat for this character and reload the UI. Your settings are kept.",
+      desc = "Disable Chat for this profile and reload the UI. Your settings are kept.",
       disabled = InCombatLockdown,
       func = function() Addon:SetChatAddonEnabled(false) end,
     } },
