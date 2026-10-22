@@ -30,6 +30,7 @@ move-folders:
   PleebUI/PleebUI_CooldownManager: PleebUI_CooldownManager
   PleebUI/PleebUI_UnitFrames: PleebUI_UnitFrames
   PleebUI/PleebUI_PlayerBuffs: PleebUI_PlayerBuffs
+  PleebUI/PleebUI_CombatTools: PleebUI_CombatTools
   PleebUI/PackagerLibs/LibStub: PleebUI/PleebUI/Libs/LibStub
   PleebUI/PackagerLibs/LibEditModeOverride: PleebUI/PleebUI/Libs/LibEditModeOverride
   PleebUI/PackagerLibs/oUF: PleebUI/PleebUI/Libs/oUF

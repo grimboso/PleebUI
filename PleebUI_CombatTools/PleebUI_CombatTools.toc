@@ -1,0 +1,10 @@
+## Interface: 120105
+## Title: PleebUI Combat Tools
+## Notes: Combat tools for PleebUI.
+## Author: Pleeb
+## Version: @project-version@
+## Category-enUS: PleebUI
+## IconTexture: Interface\AddOns\PleebUI\Media\Logo.tga
+## Dependencies: PleebUI
+
+CombatTools.xml

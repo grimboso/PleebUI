@@ -1,7 +1,6 @@
 <Ui xmlns="http://www.blizzard.com/wow/ui/">
   <Script file="PUI_Framescale.lua"/>
   <Script file="EditMode\EditMode.lua"/>
-  <Script file="PUI_AuraSlotDriver.lua"/>
   <Script file="GUI\PUI_Theme.lua"/>
   <Script file="GUI\PUI_OptionsMotion.lua"/>
   <Script file="GUI\PUI_KeyboardNavigation.lua"/>
@@ -52,6 +51,7 @@
   <Script file="PUI_CastBarDefaults.lua"/>
   <Script file="PUI_UnitFrames.lua"/>
   <Script file="PUI_PlayerBuffs.lua"/>
+  <Script file="PUI_CombatTools.lua"/>
   <Include file="Widgets\PUI_AuraTemplates.xml"/>
   <Include file="Widgets\PUI_BarTemplates.xml"/>
   <Script file="Widgets\PUI_AuraWidget.lua"/>

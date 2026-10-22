@@ -1,0 +1,8 @@
+<Ui xmlns="http://www.blizzard.com/wow/ui/">
+  <Script file="PUI_CombatTools_Runtime.lua"/>
+  <Script file="PUI_HunterTools.lua"/>
+  <Script file="PUI_MovementWarning.lua"/>
+  <Script file="PUI_RaidUtility.lua"/>
+  <Script file="PUI_CombatQuality.lua"/>
+  <Script file="PUI_Profiling.lua"/>
+</Ui>

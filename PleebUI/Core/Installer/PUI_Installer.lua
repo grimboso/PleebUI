@@ -1003,7 +1003,7 @@ loginFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
 loginFrame:SetScript("OnEvent", function(self)
   self:UnregisterAllEvents()
   if InCombatLockdown() then self:RegisterEvent("PLAYER_REGEN_ENABLED") return end
-  if Addon.db.global.onboarding.movementReminderPromptPending then
+  if Addon.db.global.onboarding.movementReminderPromptPending and ns.Modules.MovementWarning then
     ns.Modules.MovementWarning:ShowEnablePrompt(function()
       if Addon:IsInstallWizardPending() then ShowInstaller() end
     end)

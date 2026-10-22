@@ -187,8 +187,24 @@ local function BuildCurrent()
       request.box = box
     end
   elseif request.kind == "quality" then
-    ns.Registry.Options.Quality.meta.page.buildPreview(navigation, owner, owner, request.path)
-    request.box = owner.__puiQualityPreviewRoot
+    if ns.CombatQuality then
+      ns.Registry.Options.Quality.meta.page.buildPreview(navigation, owner, owner, request.path)
+      request.box = owner.__puiQualityPreviewRoot
+    else
+      local box = owner.disabledBox
+      if not box then
+        box = ns.PreviewBox.Create(request.host)
+        owner.disabledBox = box
+      end
+      box:SetParent(request.host)
+      box:ClearAllPoints()
+      box:SetAllPoints(request.host)
+      box:SetTitle("Addon disabled")
+      box:SetDescription("")
+      box:SetAlpha(0.5)
+      box:Show()
+      request.box = box
+    end
   elseif request.kind == "meters" then
     if ns.DamageMeterWindows then
       request.box = ns.DamageMeterWindows.BuildPreview(request.host, owner)
@@ -210,8 +226,24 @@ local function BuildCurrent()
   elseif request.kind == "everyday" then
     request.box = ns.InstallerExamples.Show(request.host, request.path[1])
   elseif request.kind == "movement" then
-    ns.Registry.Options.MovementWarning.meta.page.buildPreview(navigation, owner, owner, request.path)
-    request.box = owner.__puiMovementWarningPreviewRoot
+    if ns.Modules.MovementWarning then
+      ns.Registry.Options.MovementWarning.meta.page.buildPreview(navigation, owner, owner, request.path)
+      request.box = owner.__puiMovementWarningPreviewRoot
+    else
+      local box = owner.disabledBox
+      if not box then
+        box = ns.PreviewBox.Create(request.host)
+        owner.disabledBox = box
+      end
+      box:SetParent(request.host)
+      box:ClearAllPoints()
+      box:SetAllPoints(request.host)
+      box:SetTitle("Addon disabled")
+      box:SetDescription("")
+      box:SetAlpha(0.5)
+      box:Show()
+      request.box = box
+    end
   end
   if not request.playing then PausePresentation(request.box) end
 end

@@ -1,4 +1,4 @@
-local ADDON_NAME, ns = ...
+local ns = LibStub("AceAddon-3.0"):GetAddon("PleebUI").ModuleNamespace
 local Module = {}
 ns.RaidUtilityModule = Module
 
@@ -16,97 +16,14 @@ local Round = ns.Pixel.Round
 local NormalizeDB = API.NormalizeDB
 local Clamp = API.Clamp
 local SeedAnchorDefaults = API.SeedAnchorDefaults
-
-local POSITION_DEFAULTS = {
-  bresLustWidget = {
-    x = -300,
-    y = -300,
-  },
-  raidUtilityButtons = {
-    enabled = false,
-    x = 300,
-    y = -244,
-  },
-  raidUtilityRaidMarkers = {
-    enabled = false,
-    x = 300,
-    y = -300,
-  },
-  raidUtilityWorldMarkers = {
-    enabled = false,
-    x = 300,
-    y = -356,
-  },
-}
-
-function Module.NormalizeDB(q)
-  if q.bresWidgetEnable == nil then q.bresWidgetEnable = true end
-  if q.lustWidgetEnable == nil then q.lustWidgetEnable = false end
-  if q.bresLustWidgetShowOnlyInGroup == nil then q.bresLustWidgetShowOnlyInGroup = true end
-  q.bresLustWidgetIconSize = Clamp(q.bresLustWidgetIconSize or 32, 16, 64)
-  q.bresLustWidgetAnchor = SeedAnchorDefaults(q.bresLustWidgetAnchor, POSITION_DEFAULTS.bresLustWidget)
-
-  if q.raidUtilityButtonsEnable == nil then
-    q.raidUtilityButtonsEnable = POSITION_DEFAULTS.raidUtilityButtons.enabled
-  end
-  if q.raidUtilityRaidMarkersEnable == nil then
-    q.raidUtilityRaidMarkersEnable = POSITION_DEFAULTS.raidUtilityRaidMarkers.enabled
-  end
-  if q.raidUtilityWorldMarkersEnable == nil then
-    q.raidUtilityWorldMarkersEnable = POSITION_DEFAULTS.raidUtilityWorldMarkers.enabled
-  end
-
-  if q.raidUtilityShowOnlyInGroup == nil then q.raidUtilityShowOnlyInGroup = true end
-  q.raidUtilityPullTimerSeconds = Clamp(q.raidUtilityPullTimerSeconds or 10, 1, 60)
-  q.raidUtilityExtraPullTimers = q.raidUtilityExtraPullTimers or {}
-  if type(q.raidUtilityExtraPullTimers) ~= "table" then
-    q.raidUtilityExtraPullTimers = {}
-  end
-
-  do
-    local cleaned = {}
-    for i, v in ipairs(q.raidUtilityExtraPullTimers) do
-      local n = tonumber(v)
-      if n then
-        cleaned[#cleaned + 1] = Clamp(n, 1, 60)
-      end
-    end
-    q.raidUtilityExtraPullTimers = cleaned
-  end
-
-  if q.raidUtilityButtonsHideInCombat == nil then q.raidUtilityButtonsHideInCombat = true end
-  if q.raidUtilityButtonsMouseover == nil then q.raidUtilityButtonsMouseover = false end
-  if q.raidUtilityButtonsFreeMove == nil then q.raidUtilityButtonsFreeMove = false end
-  q.raidUtilityButtonsAlpha = Clamp(q.raidUtilityButtonsAlpha or 1, 0, 1)
-  q.raidUtilityButtonsFadeOutAlpha = Clamp(q.raidUtilityButtonsFadeOutAlpha or 0, 0, 1)
-  q.raidUtilityButtonsFadeOutDuration = Clamp(q.raidUtilityButtonsFadeOutDuration or 0, 0, 10)
-
-  if q.raidUtilityRaidMarkersHideInCombat == nil then q.raidUtilityRaidMarkersHideInCombat = false end
-  if q.raidUtilityRaidMarkersMouseover == nil then q.raidUtilityRaidMarkersMouseover = false end
-  if q.raidUtilityRaidMarkersFreeMove == nil then q.raidUtilityRaidMarkersFreeMove = false end
-  q.raidUtilityRaidMarkersAlpha = Clamp(q.raidUtilityRaidMarkersAlpha or 1, 0, 1)
-  q.raidUtilityRaidMarkersFadeOutAlpha = Clamp(q.raidUtilityRaidMarkersFadeOutAlpha or 0, 0, 1)
-  q.raidUtilityRaidMarkersFadeOutDuration = Clamp(q.raidUtilityRaidMarkersFadeOutDuration or 0, 0, 10)
-  q.raidUtilityRaidMarkerButtonSize = Clamp(q.raidUtilityRaidMarkerButtonSize or 22, 18, 40)
-
-  if q.raidUtilityWorldMarkersHideInCombat == nil then q.raidUtilityWorldMarkersHideInCombat = false end
-  if q.raidUtilityWorldMarkersMouseover == nil then q.raidUtilityWorldMarkersMouseover = false end
-  if q.raidUtilityWorldMarkersFreeMove == nil then q.raidUtilityWorldMarkersFreeMove = false end
-  q.raidUtilityWorldMarkersAlpha = Clamp(q.raidUtilityWorldMarkersAlpha or 1, 0, 1)
-  q.raidUtilityWorldMarkersFadeOutAlpha = Clamp(q.raidUtilityWorldMarkersFadeOutAlpha or 0, 0, 1)
-  q.raidUtilityWorldMarkersFadeOutDuration = Clamp(q.raidUtilityWorldMarkersFadeOutDuration or 0, 0, 10)
-  q.raidUtilityWorldMarkerButtonSize = Clamp(q.raidUtilityWorldMarkerButtonSize or 22, 18, 40)
-
-  q.raidUtilityButtonsAnchor = SeedAnchorDefaults(q.raidUtilityButtonsAnchor, POSITION_DEFAULTS.raidUtilityButtons)
-  q.raidUtilityRaidMarkersAnchor = SeedAnchorDefaults(q.raidUtilityRaidMarkersAnchor, POSITION_DEFAULTS.raidUtilityRaidMarkers)
-  q.raidUtilityWorldMarkersAnchor = SeedAnchorDefaults(q.raidUtilityWorldMarkersAnchor, POSITION_DEFAULTS.raidUtilityWorldMarkers)
-end
+local POSITION_DEFAULTS = API.RaidPositionDefaults
 
 local BRLWidgetFrame
 local BRLWidgetGhostMover
 local BRLWidgetBres
 local BRLWidgetLust
-local BRLWidgetEvents
+local BRLWidgetEvents = CreateFrame("Frame", "PleebUI_QualityBresLustEvents")
+BRLWidgetEvents:Hide()
 local BRLWidgetConfig
 local BRLWidget_UpdateGhostMover
 local BresLustWidget_UpdateLustDisplay
@@ -497,45 +414,42 @@ BresLustWidget_Refresh = function(updateBres, updateLust)
   f:Show()
 end
 
-local function EnsureBresLustWidgetEvents(enableBres, enableLust)
-  if not BRLWidgetEvents then
-    BRLWidgetEvents = CreateFrame("Frame", "PleebUI_QualityBresLustEvents")
-    BRLWidgetEvents:SetScript("OnEvent", function(_, event)
-      if event == "UNIT_AURA" then
-        BresLustWidget_OnPlayerAuraChanged()
-        return
-      end
-
-      if event == "SPELL_UPDATE_CHARGES" then
-        BresLustWidget_Refresh(true, false)
-        return
-      end
-
-      if event == "PLAYER_SPECIALIZATION_CHANGED"
-        or event == "PLAYER_TALENT_UPDATE"
-        or event == "TRAIT_CONFIG_UPDATED"
-      then
-        BresLustWidget_Refresh(true, false)
-        return
-      end
-
-      if event == "PLAYER_DEAD" then
-        BRLState.satedSince = nil
-        BRL_StopLustWindow()
-        BresLustWidget_Refresh(false, true)
-        return
-      end
-
-      if event == "PLAYER_ALIVE" then
-        BRLState.satedSince = nil
-        BresLustWidget_Refresh(false, true)
-        return
-      end
-
-      BresLustWidget_Refresh()
-    end)
+BRLWidgetEvents:SetScript("OnEvent", function(_, event)
+  if event == "UNIT_AURA" then
+    BresLustWidget_OnPlayerAuraChanged()
+    return
   end
 
+  if event == "SPELL_UPDATE_CHARGES" then
+    BresLustWidget_Refresh(true, false)
+    return
+  end
+
+  if event == "PLAYER_SPECIALIZATION_CHANGED"
+    or event == "PLAYER_TALENT_UPDATE"
+    or event == "TRAIT_CONFIG_UPDATED"
+  then
+    BresLustWidget_Refresh(true, false)
+    return
+  end
+
+  if event == "PLAYER_DEAD" then
+    BRLState.satedSince = nil
+    BRL_StopLustWindow()
+    BresLustWidget_Refresh(false, true)
+    return
+  end
+
+  if event == "PLAYER_ALIVE" then
+    BRLState.satedSince = nil
+    BresLustWidget_Refresh(false, true)
+    return
+  end
+
+  BresLustWidget_Refresh()
+end)
+
+local function EnsureBresLustWidgetEvents(enableBres, enableLust)
   enableBres = not not enableBres
   enableLust = not not enableLust
 
@@ -599,7 +513,8 @@ end
 
 local RaidUtilityFrames = {}
 local RaidUtilityGhostMovers = {}
-local RaidUtilityEvents
+local RaidUtilityEvents = CreateFrame("Frame", "PleebUI_QualityRaidUtilityEvents")
+RaidUtilityEvents:Hide()
 local RaidUtilityPendingRefresh = false
 local RaidUtilityDragState
 
@@ -2159,38 +2074,30 @@ local function EnsureRaidUtility()
   return RaidUtilityFrames
 end
 
-local function EnsureRaidUtilityEvents()
-  if RaidUtilityEvents then return RaidUtilityEvents end
+RaidUtilityEvents:SetScript("OnEvent", function(_, event)
+  if event == "UPDATE_BINDINGS" then
+    RaidUtility_UpdateMarkerHotkeys()
+    return
+  end
 
-  local f = CreateFrame("Frame", "PleebUI_QualityRaidUtilityEvents")
-  RaidUtilityEvents = f
-  f:SetScript("OnEvent", function(_, event)
-    if event == "UPDATE_BINDINGS" then
-      RaidUtility_UpdateMarkerHotkeys()
-      return
+  if event == "PLAYER_REGEN_DISABLED" then
+    RaidUtility_CancelWindowDrag()
+    for _, kind in ipairs(RAID_UTILITY_WINDOW_ORDER) do
+      RaidUtility_UpdateWindowAlpha(kind, false, false)
     end
+    return
+  end
 
-    if event == "PLAYER_REGEN_DISABLED" then
-      RaidUtility_CancelWindowDrag()
-      for _, kind in ipairs(RAID_UTILITY_WINDOW_ORDER) do
-        RaidUtility_UpdateWindowAlpha(kind, false, false)
-      end
-      return
-    end
+  if event == "PLAYER_REGEN_ENABLED" and RaidUtilityPendingRefresh then
+    ApplyRaidUtility()
+    return
+  end
 
-    if event == "PLAYER_REGEN_ENABLED" and RaidUtilityPendingRefresh then
-      ApplyRaidUtility()
-      return
-    end
-
-    RaidUtility_Refresh()
-  end)
-
-  return f
-end
+  RaidUtility_Refresh()
+end)
 
 local function RaidUtility_UpdateEventRegistration()
-  local f = EnsureRaidUtilityEvents()
+  local f = RaidUtilityEvents
   local q = NormalizeDB()
   local buttonsEnabled = q.raidUtilityButtonsEnable == true
   local raidMarkersEnabled = q.raidUtilityRaidMarkersEnable == true
@@ -2420,7 +2327,6 @@ end
 
 
 
-  Module.NormalizeDB = P:Def("Module.NormalizeDB", Module.NormalizeDB)
   BRL_StopLustWindow = P:Def("BRL_StopLustWindow", BRL_StopLustWindow)
   BRL_StartLustWindow = P:Def("BRL_StartLustWindow", BRL_StartLustWindow)
   BRL_CreateIcon = P:Def("BRL_CreateIcon", BRL_CreateIcon)
@@ -2489,7 +2395,6 @@ end
   RaidUtility_UpdateWindowDrag = P:Def("RaidUtility_UpdateWindowDrag", RaidUtility_UpdateWindowDrag)
   RaidUtility_StartWindowDrag = P:Def("RaidUtility_StartWindowDrag", RaidUtility_StartWindowDrag)
   EnsureRaidUtility = P:Def("EnsureRaidUtility", EnsureRaidUtility)
-  EnsureRaidUtilityEvents = P:Def("EnsureRaidUtilityEvents", EnsureRaidUtilityEvents)
   RaidUtility_UpdateEventRegistration = P:Def("RaidUtility_UpdateEventRegistration", RaidUtility_UpdateEventRegistration)
   ApplyRaidUtility = P:Def("ApplyRaidUtility", ApplyRaidUtility)
   Module.ApplyAll = P:Def("Module.ApplyAll", Module.ApplyAll)

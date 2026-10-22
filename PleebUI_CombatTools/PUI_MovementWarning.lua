@@ -1,4 +1,4 @@
-local ADDON_NAME, ns = ...
+local ns = LibStub("AceAddon-3.0"):GetAddon("PleebUI").ModuleNamespace
 
 local Addon = ns.Addon
 local MovementWarning = Addon:NewModule("MovementWarning", "NumyAceEvent-3.0")
@@ -459,7 +459,7 @@ function MovementWarning:OnMovementEvent(event, unit)
   self:RefreshOptionsPreview()
 end
 
-function MovementWarning:ApplySettings()
+function MovementWarning:ApplyRuntimeSettings()
   self:UnregisterAllEvents()
   NormalizeReminderSettings()
   local db = Addon.db.profile.movementWarning
@@ -578,6 +578,7 @@ function MovementWarning:GetOptions()
   local options = {
     type = "group", name = "Movement Reminder", arg = { puiExplicit = true },
     args = {
+      addon = Addon:GetCombatToolsAddonControl(),
       general = {
         type = "group", name = "General", inline = true, order = 10,
         args = {
@@ -636,7 +637,7 @@ function MovementWarning:GetOptions()
             end
             selected[spellID] = value
             if self:IsEnabled() and db.enabled then
-              RefreshSelectedSpells()
+              self:ApplySettings()
             else
               self:RefreshOptionsPreview()
             end
@@ -735,11 +736,16 @@ function MovementWarning:OnInitialize()
     })
 end
 
+function MovementWarning:ApplySettings()
+  ns.CombatToolsRuntime:Request(self, "ApplyRuntimeSettings")
+end
+
 function MovementWarning:OnEnable()
   self:ApplySettings()
 end
 
 function MovementWarning:OnDisable()
+  ns.CombatToolsRuntime:Cancel(self)
   self:UnregisterAllEvents()
   if anchor then
     for index = 1, #rows do
@@ -762,3 +768,5 @@ MovementWarning.ShowEnablePrompt = P:Def("MovementWarning:ShowEnablePrompt", Mov
 MovementWarning.OnInitialize = P:Def("MovementWarning:OnInitialize", MovementWarning.OnInitialize)
 MovementWarning.OnEnable = P:Def("MovementWarning:OnEnable", MovementWarning.OnEnable)
 MovementWarning.OnDisable = P:Def("MovementWarning:OnDisable", MovementWarning.OnDisable)
+
+MovementWarning.ApplyRuntimeSettings = P:Def("MovementWarning:ApplyRuntimeSettings", MovementWarning.ApplyRuntimeSettings)

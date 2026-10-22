@@ -302,6 +302,91 @@ local function SeedAnchorDefaults(anchor, defaults)
   return anchor
 end
 
+local POSITION_DEFAULTS = {
+  bresLustWidget = {
+    x = -300,
+    y = -300,
+  },
+  raidUtilityButtons = {
+    enabled = false,
+    x = 300,
+    y = -244,
+  },
+  raidUtilityRaidMarkers = {
+    enabled = false,
+    x = 300,
+    y = -300,
+  },
+  raidUtilityWorldMarkers = {
+    enabled = false,
+    x = 300,
+    y = -356,
+  },
+}
+
+local function NormalizeRaidUtilityDB(q)
+  if q.bresWidgetEnable == nil then q.bresWidgetEnable = true end
+  if q.lustWidgetEnable == nil then q.lustWidgetEnable = false end
+  if q.bresLustWidgetShowOnlyInGroup == nil then q.bresLustWidgetShowOnlyInGroup = true end
+  q.bresLustWidgetIconSize = Clamp(q.bresLustWidgetIconSize or 32, 16, 64)
+  q.bresLustWidgetAnchor = SeedAnchorDefaults(q.bresLustWidgetAnchor, POSITION_DEFAULTS.bresLustWidget)
+
+  if q.raidUtilityButtonsEnable == nil then
+    q.raidUtilityButtonsEnable = POSITION_DEFAULTS.raidUtilityButtons.enabled
+  end
+  if q.raidUtilityRaidMarkersEnable == nil then
+    q.raidUtilityRaidMarkersEnable = POSITION_DEFAULTS.raidUtilityRaidMarkers.enabled
+  end
+  if q.raidUtilityWorldMarkersEnable == nil then
+    q.raidUtilityWorldMarkersEnable = POSITION_DEFAULTS.raidUtilityWorldMarkers.enabled
+  end
+
+  if q.raidUtilityShowOnlyInGroup == nil then q.raidUtilityShowOnlyInGroup = true end
+  q.raidUtilityPullTimerSeconds = Clamp(q.raidUtilityPullTimerSeconds or 10, 1, 60)
+  q.raidUtilityExtraPullTimers = q.raidUtilityExtraPullTimers or {}
+  if type(q.raidUtilityExtraPullTimers) ~= "table" then
+    q.raidUtilityExtraPullTimers = {}
+  end
+
+  do
+    local cleaned = {}
+    for i, v in ipairs(q.raidUtilityExtraPullTimers) do
+      local n = tonumber(v)
+      if n then
+        cleaned[#cleaned + 1] = Clamp(n, 1, 60)
+      end
+    end
+    q.raidUtilityExtraPullTimers = cleaned
+  end
+
+  if q.raidUtilityButtonsHideInCombat == nil then q.raidUtilityButtonsHideInCombat = true end
+  if q.raidUtilityButtonsMouseover == nil then q.raidUtilityButtonsMouseover = false end
+  if q.raidUtilityButtonsFreeMove == nil then q.raidUtilityButtonsFreeMove = false end
+  q.raidUtilityButtonsAlpha = Clamp(q.raidUtilityButtonsAlpha or 1, 0, 1)
+  q.raidUtilityButtonsFadeOutAlpha = Clamp(q.raidUtilityButtonsFadeOutAlpha or 0, 0, 1)
+  q.raidUtilityButtonsFadeOutDuration = Clamp(q.raidUtilityButtonsFadeOutDuration or 0, 0, 10)
+
+  if q.raidUtilityRaidMarkersHideInCombat == nil then q.raidUtilityRaidMarkersHideInCombat = false end
+  if q.raidUtilityRaidMarkersMouseover == nil then q.raidUtilityRaidMarkersMouseover = false end
+  if q.raidUtilityRaidMarkersFreeMove == nil then q.raidUtilityRaidMarkersFreeMove = false end
+  q.raidUtilityRaidMarkersAlpha = Clamp(q.raidUtilityRaidMarkersAlpha or 1, 0, 1)
+  q.raidUtilityRaidMarkersFadeOutAlpha = Clamp(q.raidUtilityRaidMarkersFadeOutAlpha or 0, 0, 1)
+  q.raidUtilityRaidMarkersFadeOutDuration = Clamp(q.raidUtilityRaidMarkersFadeOutDuration or 0, 0, 10)
+  q.raidUtilityRaidMarkerButtonSize = Clamp(q.raidUtilityRaidMarkerButtonSize or 22, 18, 40)
+
+  if q.raidUtilityWorldMarkersHideInCombat == nil then q.raidUtilityWorldMarkersHideInCombat = false end
+  if q.raidUtilityWorldMarkersMouseover == nil then q.raidUtilityWorldMarkersMouseover = false end
+  if q.raidUtilityWorldMarkersFreeMove == nil then q.raidUtilityWorldMarkersFreeMove = false end
+  q.raidUtilityWorldMarkersAlpha = Clamp(q.raidUtilityWorldMarkersAlpha or 1, 0, 1)
+  q.raidUtilityWorldMarkersFadeOutAlpha = Clamp(q.raidUtilityWorldMarkersFadeOutAlpha or 0, 0, 1)
+  q.raidUtilityWorldMarkersFadeOutDuration = Clamp(q.raidUtilityWorldMarkersFadeOutDuration or 0, 0, 10)
+  q.raidUtilityWorldMarkerButtonSize = Clamp(q.raidUtilityWorldMarkerButtonSize or 22, 18, 40)
+
+  q.raidUtilityButtonsAnchor = SeedAnchorDefaults(q.raidUtilityButtonsAnchor, POSITION_DEFAULTS.raidUtilityButtons)
+  q.raidUtilityRaidMarkersAnchor = SeedAnchorDefaults(q.raidUtilityRaidMarkersAnchor, POSITION_DEFAULTS.raidUtilityRaidMarkers)
+  q.raidUtilityWorldMarkersAnchor = SeedAnchorDefaults(q.raidUtilityWorldMarkersAnchor, POSITION_DEFAULTS.raidUtilityWorldMarkers)
+end
+
 local function NormalizeDB()
   local db = GetProfile()
 
@@ -412,8 +497,7 @@ local function NormalizeDB()
   if q.auctionHouseCurrentExpansionOnly == nil then q.auctionHouseCurrentExpansionOnly = false end
   if q.crosshair == nil then q.crosshair = true end
 
-  local raidUtilityModule = ns.RaidUtilityModule
-  raidUtilityModule.NormalizeDB(q)
+  NormalizeRaidUtilityDB(q)
 
   -- Move Core hide toggles here (same keys)
   q.hideElements = q.hideElements or {}
@@ -455,6 +539,8 @@ ns.QualityAPI = ns.QualityAPI or {}
 ns.QualityAPI.NormalizeDB = NormalizeDB
 ns.QualityAPI.Clamp = Clamp
 ns.QualityAPI.SeedAnchorDefaults = SeedAnchorDefaults
+ns.QualityAPI.PositionDefaults = QUALITY_POSITION_DEFAULTS
+ns.QualityAPI.RaidPositionDefaults = POSITION_DEFAULTS
 
 local QualityQ
 
@@ -469,634 +555,6 @@ local function GetQ()
   end
 
   return QualityQ
-end
-
-local function SaveMoverPosition(frame, anchorKey)
-  local q = NormalizeDB()
-  q[anchorKey] = q[anchorKey] or {}
-  local x, y = ns.FrameUtil.GetMoverOffsets(frame)
-
-  q[anchorKey].x = math.floor((x or 0) + 0.5)
-  q[anchorKey].y = math.floor((y or 0) + 0.5)
-end
-
-local CombatMsgFrame
-local CombatMsgText
-local CombatMsgAnimIn
-local CombatMsgAnimOut
-
-local function EnsureCombatMsgFrame()
-  local d = QUALITY_POSITION_DEFAULTS.combatMessage
-
-  if CombatMsgFrame then
-    CombatMsgFrame:__puiApplyAnchor()
-    return CombatMsgFrame
-  end
-
-  local q = GetQ()
-  q.combatMessageAnchor = SeedAnchorDefaults(q.combatMessageAnchor, d)
-
-  local f = CreateFrame("Frame", "PleebUI_QualityCombatMsg", UIParent)
-  CombatMsgFrame = f
-  f:SetSize(360, 44)
-  f:SetFrameStrata("LOW")
-  f:SetFrameLevel(1)
-  f:EnableMouse(false)
-  f:SetAlpha(0)
-  f:Show()
-
-  local fs = f:CreateFontString(nil, "OVERLAY", "GameFontHighlightLarge")
-  CombatMsgText = fs
-  fs:SetPoint("CENTER", f, "CENTER", 0, 0)
-  ns.Theme.ApplyFont(fs, "header", q.combatMessageFontSize, nil, "qualityOfLife")
-  fs:SetJustifyH("CENTER")
-  fs:SetJustifyV("MIDDLE")
-  fs:SetText("")
-
-  local function ApplyAnchor()
-    local qq = GetQ()
-    local a = qq.combatMessageAnchor or d
-    f:ClearAllPoints()
-    f:SetPoint("CENTER", UIParent, "CENTER", a.x or d.x, a.y or d.y)
-  end
-
-  f.__puiApplyAnchor = ApplyAnchor
-  ApplyAnchor()
-
-  local agIn = f:CreateAnimationGroup()
-  CombatMsgAnimIn = agIn
-  local aIn = agIn:CreateAnimation("Alpha")
-  aIn:SetFromAlpha(0)
-  aIn:SetToAlpha(1)
-  aIn:SetDuration(1.0)
-  aIn:SetSmoothing("IN_OUT")
-
-  local agOut = f:CreateAnimationGroup()
-  CombatMsgAnimOut = agOut
-  local aOut = agOut:CreateAnimation("Alpha")
-  aOut:SetFromAlpha(1)
-  aOut:SetToAlpha(0)
-  aOut:SetDuration(2.0)
-  aOut:SetSmoothing("IN_OUT")
-
-  agOut:SetScript("OnFinished", function()
-    f:SetAlpha(0)
-  end)
-
-  agIn:SetScript("OnFinished", function()
-    CombatMsgAnimOut:Play()
-  end)
-
-  local function ShowMessage(text)
-    local qq = GetQ()
-    if not qq.combatMessage then
-      f:SetAlpha(0)
-      return
-    end
-
-    ApplyAnchor()
-    CombatMsgText:SetText(tostring(text or ""))
-
-    if CombatMsgAnimOut:IsPlaying() then
-      CombatMsgAnimOut:Stop()
-    end
-    if CombatMsgAnimIn:IsPlaying() then
-      CombatMsgAnimIn:Stop()
-    end
-
-    f:SetAlpha(0)
-    CombatMsgAnimIn:Play()
-  end
-
-  ns.FrameUtil:RegisterMover("quality_combat_message", f, {
-    label = "Combat Message",
-    defaultVisibility = { Solo = false },
-    moduleKey = "quality",
-    moduleLabel = "Quality of Life",
-    optionsString = "Quality,combatTab",
-    savePosition = function()
-      SaveMoverPosition(f, "combatMessageAnchor")
-    end,
-    resetPosition = function()
-      local qq = GetQ()
-      qq.combatMessageAnchor = SeedAnchorDefaults(nil, d)
-      ApplyAnchor()
-    end,
-    quickSettings = function()
-      local qq = GetQ()
-      return {
-        ownerKey = "quality_combat_message",
-        title = "Combat Message",
-        description = "Live combat message settings.",
-        controls = {
-          {
-            type = "slider",
-            label = "Font size",
-            min = 10,
-            max = 40,
-            step = 1,
-            get = function() return qq.combatMessageFontSize end,
-            set = function(value)
-              qq.combatMessageFontSize = Clamp(value, 10, 40)
-              ns.Theme.ApplyFont(fs, "header", qq.combatMessageFontSize, nil, "qualityOfLife")
-            end,
-          },
-        },
-      }
-    end,
-  })
-
-  f:SetScript("OnEvent", function(_, event)
-    if event == "PLAYER_REGEN_DISABLED" then
-      ShowMessage("Entering Combat")
-    elseif event == "PLAYER_REGEN_ENABLED" then
-      ShowMessage("Leaving Combat")
-    end
-  end)
-
-  function f:RefreshState()
-    local qq = GetQ()
-    self:UnregisterAllEvents()
-
-    if qq.combatMessage then
-      self:RegisterEvent("PLAYER_REGEN_DISABLED")
-      self:RegisterEvent("PLAYER_REGEN_ENABLED")
-    else
-      if CombatMsgAnimIn:IsPlaying() then
-        CombatMsgAnimIn:Stop()
-      end
-      if CombatMsgAnimOut:IsPlaying() then
-        CombatMsgAnimOut:Stop()
-      end
-      self:SetAlpha(0)
-    end
-  end
-
-  return f
-end
-
-local CombatTimerFrame
-local CombatTimerText
-local CombatTimerStart
-local CombatTimerTicker
-
-local function ApplyCombatTimerAppearance(frame, q)
-  local background = q.combatTimerBackgroundColor
-  local border = q.combatTimerBorderColor
-  frame:SetSize(q.combatTimerWidth, q.combatTimerHeight)
-  ns.Theme.SetSquareBackdrop(frame, {
-    bg = { background.r, background.g, background.b, q.combatTimerBackground and background.a or 0 },
-    border = { border.r, border.g, border.b, border.a },
-  }, q.combatTimerBackground and q.combatTimerBorder and q.combatTimerBorderSize or 0)
-end
-
-local function StopCombatTimerTicker()
-  if CombatTimerTicker then
-    CombatTimerTicker:Cancel()
-    CombatTimerTicker = nil
-  end
-end
-
-local function RefreshCombatTimerVisibility()
-  if ns.Flags.IsEditing then
-    local previewVisible = ns.FrameUtil.IsMoverPreviewVisible("quality_combat_timer")
-    if previewVisible and not CombatTimerStart then
-      CombatTimerText:SetText("01:23")
-    end
-    CombatTimerFrame:SetAlpha(previewVisible and 1 or 0)
-  else
-    CombatTimerFrame:SetAlpha(GetQ().combatTimer and CombatTimerStart and 1 or 0)
-  end
-end
-
-local function EnsureCombatTimer()
-  if CombatTimerFrame then return CombatTimerFrame end
-
-  local q = GetQ()
-  local d = QUALITY_POSITION_DEFAULTS.combatTimer
-  q.combatTimerAnchor = SeedAnchorDefaults(q.combatTimerAnchor, d)
-
-  local f = CreateFrame("Frame", "PleebUI_CombatTimer", UIParent, "BackdropTemplate")
-  CombatTimerFrame = f
-  ApplyCombatTimerAppearance(f, q)
-  f:SetFrameStrata("LOW")
-  f:SetFrameLevel(1)
-  f:EnableMouse(false)
-  f:SetAlpha(0)
-  f:Show()
-
-  local fs = f:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-  fs:SetPoint("CENTER", f, "CENTER", 0, 0)
-  fs:SetText("00:00")
-  CombatTimerText = fs
-
-  ns.Theme.ApplyFont(fs, "body", q.combatTimerFontSize, nil, "qualityOfLife")
-
-  local function ApplyAnchor()
-    local qq = GetQ()
-    local a = qq.combatTimerAnchor or d
-    f:ClearAllPoints()
-    f:SetPoint("CENTER", UIParent, "CENTER", a.x or d.x, a.y or d.y)
-  end
-
-  f.__puiApplyAnchor = ApplyAnchor
-  ApplyAnchor()
-
-  ns.FrameUtil:RegisterMover("quality_combat_timer", f, {
-    label = "Combat Timer",
-    onPreviewVisibilityChanged = RefreshCombatTimerVisibility,
-    moduleKey = "quality",
-    moduleLabel = "Quality of Life",
-    optionsString = "Quality,combatTab",
-    smartSnap = {
-      family = "positionOnly",
-    },
-    savePosition = function()
-      SaveMoverPosition(f, "combatTimerAnchor")
-    end,
-    resetPosition = function()
-      local qq = GetQ()
-      qq.combatTimerAnchor = SeedAnchorDefaults(nil, d)
-      ApplyAnchor()
-    end,
-    quickSettings = function()
-      local qq = GetQ()
-      return {
-        ownerKey = "quality_combat_timer",
-        title = "Combat Timer",
-        description = "Live combat timer settings.",
-        controls = {
-          {
-            type = "slider",
-            label = "Font size",
-            min = 10,
-            max = 72,
-            step = 1,
-            get = function() return qq.combatTimerFontSize end,
-            set = function(value)
-              qq.combatTimerFontSize = Clamp(value, 10, 72)
-              ns.Theme.ApplyFont(fs, "body", qq.combatTimerFontSize, nil, "qualityOfLife")
-            end,
-          },
-        },
-      }
-    end,
-  })
-
-  local function CombatTimer_Update()
-    if not CombatTimerStart then return end
-
-    local elapsed = GetTime() - CombatTimerStart
-    if elapsed < 0 then elapsed = 0 end
-
-    local total = math.floor(elapsed)
-    if total == (f.__puiCombatTimerLastSecond or -1) then
-      return
-    end
-    f.__puiCombatTimerLastSecond = total
-
-    local m = math.floor(total / 60)
-    local s = total - (m * 60)
-    local mm = (m < 10) and ("0" .. m) or tostring(m)
-    local ss = (s < 10) and ("0" .. s) or tostring(s)
-    CombatTimerText:SetText(mm .. ":" .. ss)
-  end
-
-  f.__puiCombatTimerUpdate = CombatTimer_Update
-
-  return f
-end
-
-local CombatTimerEventFrame
-
-local function EnsureCombatTimerEvents()
-  if CombatTimerEventFrame then return CombatTimerEventFrame end
-  local f = CreateFrame("Frame", "PleebUI_QualityCombatTimerEvents")
-  CombatTimerEventFrame = f
-  f:SetScript("OnEvent", function(_, event)
-    local q = GetQ()
-    local ct = EnsureCombatTimer()
-
-    if not q.combatTimer then
-      CombatTimerStart = nil
-      StopCombatTimerTicker()
-      RefreshCombatTimerVisibility()
-      return
-    end
-
-    if event == "PLAYER_REGEN_DISABLED" then
-      CombatTimerStart = GetTime()
-      ct.__puiCombatTimerLastSecond = -1
-      StopCombatTimerTicker()
-
-      if q.combatTimerAnchor then
-        local d = QUALITY_POSITION_DEFAULTS.combatTimer
-        ct:ClearAllPoints()
-        ct:SetPoint("CENTER", UIParent, "CENTER", q.combatTimerAnchor.x or d.x, q.combatTimerAnchor.y or d.y)
-      end
-
-      local fontPath, _, flags = ns.Theme.GetRuntimeFont(CombatTimerText)
-      ns.Theme.SetRuntimeFont(
-        CombatTimerText,
-        fontPath,
-        ns.Theme.ResolveFontSize(q.combatTimerFontSize or 14, "qualityOfLife"),
-        flags or "OUTLINE"
-      )
-      ct.__puiCombatTimerUpdate()
-      RefreshCombatTimerVisibility()
-      CombatTimerTicker = C_Timer.NewTicker(1, ct.__puiCombatTimerUpdate)
-    elseif event == "PLAYER_REGEN_ENABLED" then
-      CombatTimerStart = nil
-      StopCombatTimerTicker()
-      RefreshCombatTimerVisibility()
-    end
-  end)
-
-  function f:RefreshState()
-    local q = GetQ()
-    EnsureCombatTimer()
-
-    self:UnregisterAllEvents()
-
-    if q.combatTimer then
-      self:RegisterEvent("PLAYER_REGEN_DISABLED")
-      self:RegisterEvent("PLAYER_REGEN_ENABLED")
-    else
-      CombatTimerStart = nil
-      StopCombatTimerTicker()
-    end
-    RefreshCombatTimerVisibility()
-  end
-
-  return f
-end
-
-local COMBAT_WARNING_MELEE_RANGE_ITEM = 8149
-local COMBAT_WARNING_RANGE_INTERVAL = 0.15
-
-local CombatWarningFrame
-local CombatWarningNoTargetText
-local CombatWarningNotAttackingFrame
-local CombatWarningNotAttackingText
-local CombatWarningEventFrame
-local CombatWarningRangeTicker
-local CombatWarningPlayerInCombat = false
-local CombatWarningRelevantContent = false
-local CombatWarningMeleeSpec = false
-
-local function CombatWarning_RefreshMeleeSpec()
-  local _, classFile = UnitClass("player")
-
-  if classFile == "DEATHKNIGHT" or classFile == "ROGUE" or classFile == "WARRIOR" then
-    CombatWarningMeleeSpec = true
-    return
-  end
-
-  local specIndex = GetSpecialization()
-  local specID = specIndex and GetSpecializationInfo(specIndex)
-  if not specID then
-    CombatWarningMeleeSpec = false
-    return
-  end
-
-  if classFile == "DRUID" then
-    CombatWarningMeleeSpec = specID ~= 102 and specID ~= 105
-  elseif classFile == "DEMONHUNTER" then
-    CombatWarningMeleeSpec = specID == 577 or specID == 581
-  elseif classFile == "HUNTER" then
-    CombatWarningMeleeSpec = specID ~= 253 and specID ~= 254
-  elseif classFile == "PALADIN" then
-    CombatWarningMeleeSpec = specID ~= 65
-  elseif classFile == "SHAMAN" then
-    CombatWarningMeleeSpec = specID == 263
-  elseif classFile == "MONK" then
-    CombatWarningMeleeSpec = specID ~= 270
-  else
-    CombatWarningMeleeSpec = false
-  end
-end
-
-local function CombatWarning_RefreshContent()
-  local _, instanceType = IsInInstance()
-  CombatWarningRelevantContent = instanceType == "raid" or C_ChallengeMode.IsChallengeModeActive()
-end
-
-local function CombatWarning_StopRangeTicker()
-  if CombatWarningRangeTicker then
-    CombatWarningRangeTicker:Cancel()
-    CombatWarningRangeTicker = nil
-  end
-end
-
-local function EnsureCombatWarningFrame()
-  if CombatWarningFrame then
-    return CombatWarningFrame
-  end
-
-  local d = QUALITY_POSITION_DEFAULTS.combatWarning
-  local q = GetQ()
-  q.combatWarningAnchor = SeedAnchorDefaults(q.combatWarningAnchor, d)
-
-  local f = CreateFrame("Frame", "PleebUI_CombatWarning", UIParent)
-  CombatWarningFrame = f
-  f:SetSize(600, 80)
-  f:SetFrameStrata("LOW")
-  f:SetFrameLevel(1)
-  f:EnableMouse(false)
-  f:Show()
-
-  local noTargetText = f:CreateFontString(nil, "OVERLAY", "GameFontHighlightLarge")
-  CombatWarningNoTargetText = noTargetText
-  noTargetText:SetPoint("CENTER", f, "CENTER", 0, 0)
-  noTargetText:SetJustifyH("CENTER")
-  noTargetText:SetJustifyV("MIDDLE")
-  noTargetText:SetTextColor(1, 0, 0, 1)
-  noTargetText:SetText("NO TARGET")
-  noTargetText:Hide()
-
-  local notAttackingFrame = CreateFrame("Frame", nil, f)
-  CombatWarningNotAttackingFrame = notAttackingFrame
-  notAttackingFrame:SetAllPoints(f)
-  notAttackingFrame:EnableMouse(false)
-  notAttackingFrame:Hide()
-
-  local notAttackingText = notAttackingFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlightLarge")
-  CombatWarningNotAttackingText = notAttackingText
-  notAttackingText:SetPoint("CENTER", notAttackingFrame, "CENTER", 0, 0)
-  notAttackingText:SetJustifyH("CENTER")
-  notAttackingText:SetJustifyV("MIDDLE")
-  notAttackingText:SetTextColor(1, 0, 0, 1)
-  notAttackingText:SetText("OUT OF MELEE RANGE")
-  notAttackingText:Show()
-
-  local function ApplyAnchor()
-    local qq = GetQ()
-    local a = qq.combatWarningAnchor or d
-    f:ClearAllPoints()
-    f:SetPoint("CENTER", UIParent, "CENTER", a.x or d.x, a.y or d.y)
-  end
-
-  function f:RefreshVisuals()
-    local qq = GetQ()
-    ApplyAnchor()
-    ns.Theme.ApplyFont(noTargetText, "header", qq.combatWarningFontSize, nil, "qualityOfLife")
-    ns.Theme.ApplyFont(notAttackingText, "header", qq.combatWarningFontSize, nil, "qualityOfLife")
-  end
-
-  f:RefreshVisuals()
-
-  ns.FrameUtil:RegisterMover("quality_combat_warning", f, {
-    label = "Combat Warning",
-    defaultVisibility = { Solo = false },
-    moduleKey = "quality",
-    moduleLabel = "Quality of Life",
-    optionsString = "Quality,combatTab",
-    smartSnap = {
-      family = "positionOnly",
-    },
-    savePosition = function()
-      SaveMoverPosition(f, "combatWarningAnchor")
-    end,
-    resetPosition = function()
-      local qq = GetQ()
-      qq.combatWarningAnchor = SeedAnchorDefaults(nil, d)
-      ApplyAnchor()
-    end,
-    quickSettings = function()
-      local qq = GetQ()
-      return {
-        ownerKey = "quality_combat_warning",
-        title = "Combat Warning",
-        description = "No target and melee range warnings.",
-        controls = {
-          {
-            type = "slider",
-            label = "Font size",
-            min = 16,
-            max = 60,
-            step = 1,
-            get = function() return qq.combatWarningFontSize end,
-            set = function(value)
-              qq.combatWarningFontSize = Clamp(value, 16, 60)
-              ns.Theme.ApplyFont(noTargetText, "header", qq.combatWarningFontSize, nil, "qualityOfLife")
-              ns.Theme.ApplyFont(notAttackingText, "header", qq.combatWarningFontSize, nil, "qualityOfLife")
-            end,
-          },
-        },
-      }
-    end,
-  })
-
-  return f
-end
-
-local function CombatWarning_UpdateRange()
-  -- The range result may be secret in combat, so it must go directly into a render API.
-  CombatWarningNotAttackingText:SetAlphaFromBoolean(C_Item.IsItemInRange(COMBAT_WARNING_MELEE_RANGE_ITEM, "target"), 0, 1)
-end
-
-local function CombatWarning_Update()
-  local q = GetQ()
-
-  if not CombatWarningPlayerInCombat or not CombatWarningRelevantContent then
-    CombatWarning_StopRangeTicker()
-    CombatWarningNoTargetText:Hide()
-    CombatWarningNotAttackingFrame:Hide()
-    return
-  end
-
-  if not UnitExists("target") then
-    CombatWarning_StopRangeTicker()
-    CombatWarningNotAttackingFrame:Hide()
-
-    if q.noTargetWarning then
-      CombatWarningNoTargetText:Show()
-    else
-      CombatWarningNoTargetText:Hide()
-    end
-    return
-  end
-
-  CombatWarningNoTargetText:Hide()
-
-  if not q.notAttackingWarning
-    or not CombatWarningMeleeSpec
-    or not UnitCanAttack("player", "target") then
-    CombatWarning_StopRangeTicker()
-    CombatWarningNotAttackingFrame:Hide()
-    return
-  end
-
-  if not CombatWarningRangeTicker then
-    CombatWarningRangeTicker = C_Timer.NewTicker(COMBAT_WARNING_RANGE_INTERVAL, CombatWarning_UpdateRange)
-  end
-
-  CombatWarningNotAttackingFrame:Show()
-  CombatWarning_UpdateRange()
-end
-
-local function EnsureCombatWarningEvents()
-  if CombatWarningEventFrame then
-    return CombatWarningEventFrame
-  end
-
-  local f = CreateFrame("Frame", "PleebUI_QualityCombatWarningEvents")
-  CombatWarningEventFrame = f
-  f:SetScript("OnEvent", function(_, event, unit)
-    if event == "PLAYER_REGEN_DISABLED" then
-      CombatWarningPlayerInCombat = true
-    elseif event == "PLAYER_REGEN_ENABLED" then
-      CombatWarningPlayerInCombat = false
-    elseif event == "PLAYER_SPECIALIZATION_CHANGED" then
-      if unit and unit ~= "player" then
-        return
-      end
-      CombatWarning_RefreshMeleeSpec()
-    elseif event == "CHALLENGE_MODE_START" then
-      CombatWarningRelevantContent = true
-    elseif event == "CHALLENGE_MODE_COMPLETED" or event == "CHALLENGE_MODE_RESET" then
-      CombatWarningRelevantContent = false
-    elseif event == "PLAYER_ENTERING_WORLD" or event == "ZONE_CHANGED_NEW_AREA" then
-      CombatWarningPlayerInCombat = UnitAffectingCombat("player")
-      CombatWarning_RefreshContent()
-    end
-
-    CombatWarning_Update()
-  end)
-
-  function f:RefreshState()
-    local q = GetQ()
-    local warningFrame = EnsureCombatWarningFrame()
-    warningFrame:RefreshVisuals()
-
-    self:UnregisterAllEvents()
-    CombatWarning_StopRangeTicker()
-    CombatWarningPlayerInCombat = UnitAffectingCombat("player")
-    CombatWarning_RefreshContent()
-    CombatWarning_RefreshMeleeSpec()
-
-    if q.noTargetWarning or q.notAttackingWarning then
-      self:RegisterEvent("PLAYER_ENTERING_WORLD")
-      self:RegisterEvent("PLAYER_REGEN_DISABLED")
-      self:RegisterEvent("PLAYER_REGEN_ENABLED")
-      self:RegisterEvent("PLAYER_TARGET_CHANGED")
-      if q.notAttackingWarning then
-        self:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED")
-        self:RegisterUnitEvent("UNIT_FACTION", "target")
-        self:RegisterUnitEvent("UNIT_TARGETABLE_CHANGED", "target")
-      end
-      self:RegisterEvent("ZONE_CHANGED_NEW_AREA")
-      self:RegisterEvent("CHALLENGE_MODE_START")
-      self:RegisterEvent("CHALLENGE_MODE_COMPLETED")
-      self:RegisterEvent("CHALLENGE_MODE_RESET")
-      CombatWarning_Update()
-    else
-      CombatWarningNoTargetText:Hide()
-      CombatWarningNotAttackingFrame:Hide()
-    end
-  end
-
-  return f
 end
 
 local LootFrame
@@ -1737,294 +1195,6 @@ local function ApplyHideElements()
   GhostManagedFrame(ZoneAbilityFrame, not not h.zoneAbility)
 end
 
-local CursorRing
-local CursorRingScale = UIParent:GetEffectiveScale()
-local CursorRingClicking = false
-local CursorRingCachedShowOutline = true
-
-local function CursorRing_SyncScale()
-  CursorRingScale = UIParent:GetEffectiveScale()
-
-  if CursorRing then
-    CursorRing.__puiLastCursorX = nil
-    CursorRing.__puiLastCursorY = nil
-  end
-end
-
-local function CursorRing_UpdateClickOutline()
-  local f = CursorRing
-  if not f then return end
-
-  CursorRingClicking = CursorRingCachedShowOutline
-    and (IsMouseButtonDown("LeftButton") or IsMouseButtonDown("RightButton"))
-    or false
-
-  if f.__puiCursorRingOutlineShown ~= CursorRingClicking then
-    f.__puiCursorRingOutlineShown = CursorRingClicking
-    f.Outline:SetShown(CursorRingClicking)
-  end
-end
-
-local function EnsureCursorRing()
-  if CursorRing then return CursorRing end
-
-  local f = CreateFrame("Frame", "PleebUI_CursorRing", UIParent)
-  f:SetFrameStrata("LOW")
-  f:SetFrameLevel(1)
-  f:SetSize(1, 1)
-  f:SetPoint("CENTER", UIParent, "BOTTOMLEFT", 0, 0)
-
-  -- Never participate in input.
-  if f.EnableMouse then f:EnableMouse(false) end
-  if f.EnableMouseWheel then f:EnableMouseWheel(false) end
-  if f.SetMouseClickEnabled then f:SetMouseClickEnabled(false) end
-  if f.SetMouseMotionEnabled then f:SetMouseMotionEnabled(false) end
-  if f.EnableKeyboard then f:EnableKeyboard(false) end
-  if f.SetPropagateKeyboardInput then f:SetPropagateKeyboardInput(true) end
-
-  local texPath = [[Interface\AddOns\PleebUI\Media\Textures\Pleebring.tga]]
-
-  f.Outline = f:CreateTexture(nil, "BACKGROUND")
-  f.Outline:SetPoint("CENTER")
-  f.Outline:SetTexture(texPath)
-  f.Outline:Hide()
-
-  f.Ring = f:CreateTexture(nil, "OVERLAY")
-  f.Ring:SetPoint("CENTER")
-  f.Ring:SetTexture(texPath)
-
-  f:SetScript("OnEvent", function(_, event)
-    if event == "UI_SCALE_CHANGED" or event == "DISPLAY_SIZE_CHANGED" then
-      CursorRing_SyncScale()
-    else
-      CursorRing_UpdateClickOutline()
-    end
-  end)
-
-  CursorRing = f
-  return f
-end
-
-local function CursorRing_Apply()
-  local q = NormalizeDB()
-  local f = EnsureCursorRing()
-
-  q.cursorRingSize = Clamp(q.cursorRingSize or 26, 8, 128)
-  q.cursorRingOutlineSize = Clamp(q.cursorRingOutlineSize or 10, 0, 128)
-
-  q.cursorRingColor = q.cursorRingColor or { r = 1, g = 1, b = 1, a = 0.55 }
-  q.cursorRingOutlineColor = q.cursorRingOutlineColor or { r = 1, g = 1, b = 1, a = 0.35 }
-  if q.cursorRingShowOutline == nil then q.cursorRingShowOutline = true end
-  if q.cursorRingShowInner == nil then q.cursorRingShowInner = true end
-
-  local ringSize = Round(q.cursorRingSize)
-  f:SetSize(ringSize, ringSize)
-  f.Ring:SetSize(ringSize, ringSize)
-  f.Ring:SetVertexColor(q.cursorRingColor.r, q.cursorRingColor.g, q.cursorRingColor.b, q.cursorRingColor.a)
-  f.Ring:SetShown(not not q.cursorRingShowInner)
-
-  local outSz = Round(q.cursorRingSize + q.cursorRingOutlineSize)
-  f.Outline:SetSize(outSz, outSz)
-  f.Outline:SetVertexColor(q.cursorRingOutlineColor.r, q.cursorRingOutlineColor.g, q.cursorRingOutlineColor.b, q.cursorRingOutlineColor.a)
-
-  CursorRingCachedShowOutline = not not q.cursorRingShowOutline
-end
-
-local function CursorRing_OnUpdate()
-  local f = CursorRing
-  local x, y = GetCursorPosition()
-
-  if x == f.__puiLastCursorX and y == f.__puiLastCursorY then
-    return
-  end
-
-  f.__puiLastCursorX = x
-  f.__puiLastCursorY = y
-  f:SetPoint("CENTER", UIParent, "BOTTOMLEFT", x / CursorRingScale, y / CursorRingScale)
-end
-
-local function ApplyCursorRing(enabled)
-  local f = EnsureCursorRing()
-
-  f:UnregisterAllEvents()
-
-  if enabled then
-    CursorRing_Apply()
-    CursorRing_SyncScale()
-
-    f.__puiCursorRingOutlineShown = nil
-    f:RegisterEvent("GLOBAL_MOUSE_DOWN")
-    f:RegisterEvent("GLOBAL_MOUSE_UP")
-    f:RegisterEvent("UI_SCALE_CHANGED")
-    f:RegisterEvent("DISPLAY_SIZE_CHANGED")
-    f:SetScript("OnUpdate", CursorRing_OnUpdate)
-    f:Show()
-
-    CursorRing_OnUpdate()
-    CursorRing_UpdateClickOutline()
-  else
-    f:SetScript("OnUpdate", nil)
-    f.Outline:Hide()
-    f.__puiCursorRingOutlineShown = nil
-    f:Hide()
-    CursorRingClicking = false
-  end
-end
-
-----
--- Crosshair (screen center)
-----
-local Crosshair
-
-local function EnsureCrosshair()
-  if Crosshair then return Crosshair end
-
-  local f = CreateFrame("Frame", "PleebUI_Crosshair", UIParent)
-  f:SetFrameStrata("LOW")
-  f:SetFrameLevel(1)
-  f:SetAllPoints(UIParent)
-
-  -- Fullscreen visual only, never capture mouse.
-  if f.EnableMouse then f:EnableMouse(false) end
-  if f.EnableMouseWheel then f:EnableMouseWheel(false) end
-  if f.SetMouseClickEnabled then f:SetMouseClickEnabled(false) end
-  if f.SetMouseMotionEnabled then f:SetMouseMotionEnabled(false) end
-
-  local function MakeLine(layer)
-    local t = f:CreateTexture(nil, layer)
-    t:SetTexture([[Interface\Buttons\WHITE8x8]])
-    t:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
-    return t
-  end
-
-  f.H = MakeLine("OVERLAY")
-  f.V = MakeLine("OVERLAY")
-
-  Crosshair = f
-  return f
-end
-
-local function Crosshair_Apply()
-  local q = NormalizeDB()
-  local f = EnsureCrosshair()
-
-  q.crosshairLength = Clamp(q.crosshairLength or 10, 2, 100)
-  q.crosshairThickness = Clamp(q.crosshairThickness or 1, 1, 10)
-  q.crosshairColor = q.crosshairColor or { r = 1, g = 1, b = 1, a = 0.35 }
-
-  local lineLength = Round(q.crosshairLength * 2)
-  local lineThickness = Round(q.crosshairThickness)
-
-  f.H:ClearAllPoints()
-  f.H:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
-  f.H:SetSize(lineLength, lineThickness)
-
-  f.V:ClearAllPoints()
-  f.V:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
-  f.V:SetSize(lineThickness, lineLength)
-
-  f.H:SetVertexColor(q.crosshairColor.r, q.crosshairColor.g, q.crosshairColor.b, q.crosshairColor.a)
-  f.V:SetVertexColor(q.crosshairColor.r, q.crosshairColor.g, q.crosshairColor.b, q.crosshairColor.a)
-end
-
-local function ApplyCrosshair(enabled)
-  local f = EnsureCrosshair()
-  if enabled then
-    Crosshair_Apply()
-    f:Show()
-  else
-    f:Hide()
-  end
-end
-
-----
--- Pet warning helpers
-----
-local PET_HEAL_WARN_HUNTER_SPELL_ID = 136
-local PET_HEAL_WARN_WARLOCK_SPELL_ID = 755
-local PET_HEAL_WARN_THROTTLE = 0.20
-
-local PetHealWarnCurve
-local PetHealWarnCurveThreshold
-local PetHealWarnNextUpdate = 0
-
-local function IsHealPetClass()
-  local _, class = UnitClass("player")
-  return class == "HUNTER" or class == "WARLOCK", class
-end
-
-local function GetHealPetSpellID()
-  local ok, class = IsHealPetClass()
-  if not ok then
-    return nil
-  end
-
-  if class == "HUNTER" then
-    return PET_HEAL_WARN_HUNTER_SPELL_ID
-  end
-
-  return PET_HEAL_WARN_WARLOCK_SPELL_ID
-end
-
-local function BuildPetHealWarnCurve()
-  local q = GetQ()
-  local threshold = Clamp(q.petHealWarningThreshold or 50, 10, 50) / 100
-  if PetHealWarnCurve and PetHealWarnCurveThreshold == threshold then
-    return
-  end
-
-  local epsilon = 0.0001
-
-  PetHealWarnCurve = C_CurveUtil.CreateColorCurve()
-  PetHealWarnCurveThreshold = threshold
-  PetHealWarnCurve:SetType(Enum.LuaCurveType.Step)
-  PetHealWarnCurve:AddPoint(0.00, CreateColor(1, 1, 1, 1))
-  PetHealWarnCurve:AddPoint(threshold, CreateColor(1, 1, 1, 1))
-  PetHealWarnCurve:AddPoint(math.min(1.00, threshold + epsilon), CreateColor(1, 1, 1, 0))
-  PetHealWarnCurve:AddPoint(1.00, CreateColor(1, 1, 1, 0))
-end
-
-----
--- Missing Pet warning (pet dead / missing + pet not attacking)
-----
-local PetWarnFrame
-local PetWarnText
-local PetWarnReadyCheckActive = false
-
-local PetWarnClasses = {
-  HUNTER = true,
-  WARLOCK = true,
-  DEATHKNIGHT = true,
-  MAGE = true,
-}
-
-local function IsPetClass()
-  local _, class = UnitClass("player")
-  if not (class and PetWarnClasses[class]) then
-    return false
-  end
-
-  -- Mage: only warn if the player actually knows Summon Water Elemental.
-  if class == "MAGE" then
-    return IsPlayerSpell(31687)
-  end
-
-  if class == "HUNTER" or class == "DEATHKNIGHT" then
-    local specIndex = GetSpecialization()
-    local specID = specIndex and GetSpecializationInfo(specIndex)
-    if class == "HUNTER" then
-      return specID ~= 254
-    end
-    return specID == 252
-  end
-
-  return true
-end
-
-function Quality:IsPetWarningAvailable()
-  return IsPetClass()
-end
-
 function Quality:GetQuickSetupValue(key)
   local q = GetQ()
   return not not q[key]
@@ -2046,436 +1216,6 @@ function Quality:SetQuickSetupValue(key, value, deferApply)
   return q
 end
 
-
-local function EnsurePetWarnFrame()
-  if PetWarnFrame then return PetWarnFrame end
-
-  local f = CreateFrame("Frame", "PleebUI_PetWarning", UIParent)
-  PetWarnFrame = f
-  f:SetSize(350, 50)
-  f:SetFrameStrata("LOW")
-  f:SetFrameLevel(1)
-  f:EnableMouse(false)
-  f:Hide()
-
-  local fs = f:CreateFontString(nil, "OVERLAY", "GameFontHighlightLarge")
-  PetWarnText = fs
-  fs:SetPoint("CENTER", f, "CENTER", 0, 0)
-  fs:SetJustifyH("CENTER")
-  fs:SetText("")
-
-  local q = NormalizeDB()
-  local d = QUALITY_POSITION_DEFAULTS.petWarning
-  q.petWarningAnchor = SeedAnchorDefaults(q.petWarningAnchor, d)
-  f:SetPoint("CENTER", UIParent, "CENTER", q.petWarningAnchor.x or d.x, q.petWarningAnchor.y or d.y)
-
-  ns.FrameUtil:RegisterMover("quality_pet_warning", f, {
-    label = "Pet Warning",
-    isAvailable = function() return Quality:IsPetWarningAvailable() end,
-    moduleKey = "quality",
-    moduleLabel = "Quality of Life",
-    optionsString = "Quality,combatTab",
-    savePosition = function()
-      SaveMoverPosition(f, "petWarningAnchor")
-    end,
-    resetPosition = function()
-      local qq = NormalizeDB()
-      local d = QUALITY_POSITION_DEFAULTS.petWarning
-      qq.petWarningAnchor = SeedAnchorDefaults(nil, d)
-      f:ClearAllPoints()
-      f:SetPoint("CENTER", UIParent, "CENTER", d.x, d.y)
-    end,
-    quickSettings = function()
-      local qq = NormalizeDB()
-      return {
-        ownerKey = "quality_pet_warning",
-        title = "Pet Warning",
-        description = "Live pet warning settings.",
-        controls = {
-          {
-            type = "slider",
-            label = "Font size",
-            min = 5,
-            max = 100,
-            step = 1,
-            get = function() return qq.petHealWarningFontSize end,
-            set = function(value)
-              qq.petHealWarningFontSize = Clamp(value, 5, 100)
-
-              if PetWarnFrame then
-                PetWarnFrame.__puiPetWarnBaseFontSize = qq.petHealWarningFontSize
-              end
-
-              ns.Theme.SetRuntimeFont(
-                PetWarnText,
-                STANDARD_TEXT_FONT,
-                ns.Theme.ResolveFontSize(qq.petHealWarningFontSize, "qualityOfLife"),
-                "OUTLINE"
-              )
-            end,
-          },
-        },
-      }
-    end,
-  })
-
-  return f
-end
-
-local function PetWarn_Hide()
-  if PetWarnFrame and PetWarnFrame:IsShown() then
-    PetWarnFrame:SetAlpha(0)
-    PetWarnFrame:Hide()
-  end
-end
-
-local function FormatPetWarningText(message, size, iconOnly, showIcon, icon)
-  if iconOnly and icon then
-    return string.format("|T%s:%d:%d:0:0:64:64:5:59:5:59|t", tostring(icon), size, size)
-  elseif showIcon and icon then
-    return string.format("%s |T%s:%d:%d:0:0:64:64:5:59:5:59|t", message, tostring(icon), size, size)
-  end
-
-  return message
-end
-
-local function PetWarn_Show(msg, opts)
-  local f = EnsurePetWarnFrame()
-  local size = 20
-
-  if opts and opts.fontSize then
-    size = Clamp(opts.fontSize, 5, 100)
-  end
-
-  local color = opts and opts.color or nil
-  local r = color and tonumber(color.r or color[1]) or 1
-  local g = color and tonumber(color.g or color[2]) or 1
-  local b = color and tonumber(color.b or color[3]) or 1
-  local a = color and tonumber(color.a or color[4]) or 1
-  local iconOnly = opts and opts.iconOnly == true or false
-  local showIcon = opts and opts.showIcon == true or false
-  local icon = opts and opts.icon or nil
-  local message = tostring(msg or "")
-
-  if f:IsShown()
-    and f.__puiPetWarnMessage == message
-    and f.__puiPetWarnFontSize == size
-    and f.__puiPetWarnColorR == r
-    and f.__puiPetWarnColorG == g
-    and f.__puiPetWarnColorB == b
-    and f.__puiPetWarnColorA == a
-    and f.__puiPetWarnIconOnly == iconOnly
-    and f.__puiPetWarnShowIcon == showIcon
-    and f.__puiPetWarnIcon == icon
-  then
-    return
-  end
-
-  f.__puiPetWarnMessage = message
-  f.__puiPetWarnFontSize = size
-  f.__puiPetWarnBaseFontSize = size
-  f.__puiPetWarnColorR = r
-  f.__puiPetWarnColorG = g
-  f.__puiPetWarnColorB = b
-  f.__puiPetWarnColorA = a
-  f.__puiPetWarnIconOnly = iconOnly
-  f.__puiPetWarnShowIcon = showIcon
-  f.__puiPetWarnIcon = icon
-
-  ns.Theme.SetRuntimeFont(
-    PetWarnText,
-    STANDARD_TEXT_FONT,
-    ns.Theme.ResolveFontSize(size, "qualityOfLife"),
-    "OUTLINE"
-  )
-  PetWarnText:SetTextColor(r, g, b, a)
-
-  PetWarnText:SetText(FormatPetWarningText(message, size, iconOnly, showIcon, icon))
-
-  f:SetSize((PetWarnText:GetStringWidth() or 300) + 40, (PetWarnText:GetStringHeight() or 30) + 20)
-
-  local q = GetQ()
-  if q.petWarningAnchor then
-    local d = QUALITY_POSITION_DEFAULTS.petWarning
-    f:ClearAllPoints()
-    f:SetPoint("CENTER", UIParent, "CENTER", q.petWarningAnchor.x or d.x, q.petWarningAnchor.y or d.y)
-  end
-
-  f:SetAlpha(1)
-  f:Show()
-end
-
-local function IsDragonridingActive()
-  return IsMounted() and IsFlying() and IsAdvancedFlyableArea()
-end
-
-local function PetWarn_ShouldHideForDragonriding(q)
-  return q.hidePetWarningWhileDragonriding and IsDragonridingActive()
-end
-
-local function PetWarn_GetPetState()
-  local hasPet = UnitExists("pet")
-  local petDead = hasPet and UnitIsDead("pet")
-  return hasPet, petDead
-end
-
-local function PetWarn_CheckMissingPet(q, hasPet, petDead)
-  if not q.missingPetWarning then
-    return false
-  end
-
-  if not IsPetClass() then
-    return false
-  end
-
-  local _, class = UnitClass("player")
-  if class ~= "HUNTER" then
-    if not hasPet or petDead then
-      PetWarn_Show(petDead and "***DEAD PET***" or "***SUMMON PET***", {
-        fontSize = petDead and q.petDeadWarningFontSize or q.petMissingWarningFontSize,
-        color = petDead and q.petDeadWarningColor or q.petMissingWarningColor,
-      })
-      return true
-    end
-    return false
-  end
-
-  if petDead then
-    if UnitAffectingCombat("player") then
-      PetWarn_Show("PET DIED", {
-        fontSize = q.petDeadWarningFontSize or 52,
-        color = q.petDeadWarningColor,
-      })
-    else
-      PetWarn_Show("DEAD PET", {
-        fontSize = q.petMissingWarningFontSize or 34,
-        color = q.petMissingWarningColor,
-      })
-    end
-    return true
-  end
-
-  if not hasPet then
-    PetWarn_Show(PetWarnReadyCheckActive and "NO PET" or "SUMMON PET", {
-      fontSize = q.petMissingWarningFontSize or 34,
-      color = q.petMissingWarningColor,
-    })
-    return true
-  end
-
-  return false
-end
-
-local function PetWarn_CheckPetNotAttacking(q, hasPet, petDead)
-  if not q.idlePetWarning then
-    return false
-  end
-
-  if IsHealPetClass() then
-    return false
-  end
-
-  if not IsPetClass() then
-    return false
-  end
-
-  if not hasPet or petDead then
-    return false
-  end
-
-  if not InCombatLockdown() or not UnitAffectingCombat("player") then
-    return false
-  end
-
-  if not UnitExists("pettarget") and not UnitAffectingCombat("pet") then
-    PetWarn_Show("***PET NOT ATTACKING***", {
-      fontSize = q.petIdleWarningFontSize,
-      color = q.petIdleWarningColor,
-    })
-    return true
-  end
-
-  return false
-end
-
-local function PetWarn_CheckHealPet(q, hasPet, petDead)
-  if not q.lowHealthPetWarning or not hasPet or petDead then
-    return false
-  end
-
-  local healClassOK, class = IsHealPetClass()
-  if not healClassOK then
-    return false
-  end
-
-  local hpColor = UnitHealthPercent("pet", true, PetHealWarnCurve)
-  local _, _, _, hpAlpha = hpColor:GetRGBA()
-  local spellID = GetHealPetSpellID()
-  local icon = spellID and C_Spell.GetSpellTexture(spellID) or nil
-
-  PetWarn_Show(q.petHealWarningText or "Heal Pet", {
-    fontSize = q.petHealWarningFontSize or 20,
-    color = class == "HUNTER" and q.petLowHealthWarningColor or nil,
-    showIcon = not not q.petHealWarningShowIcon,
-    iconOnly = not not q.petHealWarningIconOnly,
-    icon = icon,
-  })
-
-  if PetWarnFrame then
-    PetWarnFrame:SetAlpha(hpAlpha or 0)
-  end
-
-  return true
-end
-
-local function PetWarn_Check()
-  local q = GetQ()
-
-  if not q.petWarningsEnabled then
-    PetWarn_Hide()
-    return
-  end
-
-  if PetWarn_ShouldHideForDragonriding(q) then
-    PetWarn_Hide()
-    return
-  end
-
-  local hasPet, petDead = PetWarn_GetPetState()
-
-  if PetWarn_CheckMissingPet(q, hasPet, petDead) then
-    return
-  end
-
-  if PetWarn_CheckPetNotAttacking(q, hasPet, petDead) then
-    return
-  end
-
-  if PetWarn_CheckHealPet(q, hasPet, petDead) then
-    return
-  end
-
-  PetWarn_Hide()
-end
-
-local PetWarnEvents
-local ApplyPetWarnings
-local function EnsurePetWarnEvents()
-  if PetWarnEvents then return PetWarnEvents end
-
-  local f = CreateFrame("Frame", "PleebUI_QualityPetWarnEvents")
-  PetWarnEvents = f
-
-  f:SetScript("OnEvent", function(_, event, unit)
-    if event == "UNIT_PET"
-      and unit
-      and unit ~= "player"
-    then
-      return
-    end
-
-    if (
-      event == "UNIT_FLAGS"
-      or event == "UNIT_TARGET"
-      or event == "UNIT_HEALTH"
-    ) and unit ~= "pet"
-    then
-      return
-    end
-
-    if event == "READY_CHECK" then
-      PetWarnReadyCheckActive = true
-    elseif event == "READY_CHECK_FINISHED" then
-      PetWarnReadyCheckActive = false
-    elseif event == "PLAYER_ENTERING_WORLD" then
-      PetWarnReadyCheckActive = false
-    end
-
-    if event == "UNIT_HEALTH" then
-      local now = GetTime()
-
-      if now < PetHealWarnNextUpdate then
-        return
-      end
-
-      PetHealWarnNextUpdate =
-        now + PET_HEAL_WARN_THROTTLE
-    end
-
-    if event == "PLAYER_TALENT_UPDATE"
-      or event == "PLAYER_SPECIALIZATION_CHANGED"
-      or event == "TRAIT_CONFIG_UPDATED"
-      or event == "TRAIT_CONFIG_LIST_UPDATED"
-    then
-      C_Timer.After(0, ApplyPetWarnings)
-      return
-    end
-
-    PetWarn_Check()
-  end)
-
-  function f:RefreshState()
-    local q = GetQ()
-
-    self:UnregisterAllEvents()
-
-    local petClass = IsPetClass()
-    local healClass = IsHealPetClass()
-    local needsMissing = petClass and q.missingPetWarning
-    local needsIdle = petClass and not healClass and q.idlePetWarning
-    local needsHealth = healClass and q.lowHealthPetWarning
-
-    if q.petWarningsEnabled and (q.missingPetWarning or q.idlePetWarning or q.lowHealthPetWarning) then
-      self:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED")
-      self:RegisterEvent("PLAYER_TALENT_UPDATE")
-      self:RegisterEvent("TRAIT_CONFIG_UPDATED")
-      self:RegisterEvent("TRAIT_CONFIG_LIST_UPDATED")
-    end
-
-    if q.petWarningsEnabled and (needsMissing or needsIdle or needsHealth) then
-      self:RegisterEvent("PLAYER_ENTERING_WORLD")
-      self:RegisterEvent("PLAYER_REGEN_DISABLED")
-      self:RegisterEvent("PLAYER_REGEN_ENABLED")
-      self:RegisterEvent("UNIT_PET")
-      self:RegisterEvent("PET_BAR_UPDATE")
-
-      if needsMissing then
-        self:RegisterEvent("READY_CHECK")
-        self:RegisterEvent("READY_CHECK_FINISHED")
-      end
-
-      if needsMissing or needsIdle then
-        self:RegisterUnitEvent("UNIT_FLAGS", "pet")
-      end
-
-      if needsIdle then
-        self:RegisterUnitEvent("UNIT_TARGET", "pet")
-      end
-
-      if needsMissing or needsHealth then
-        self:RegisterUnitEvent("UNIT_HEALTH", "pet")
-      end
-    else
-      PetWarnReadyCheckActive = false
-      PetHealWarnNextUpdate = 0
-    end
-  end
-
-  return f
-end
-
-ApplyPetWarnings = function()
-  local q = GetQ()
-
-  if q.petWarningsEnabled and q.lowHealthPetWarning and IsHealPetClass() then
-    BuildPetHealWarnCurve()
-  end
-
-  local f = EnsurePetWarnEvents()
-  f:RefreshState()
-
-  PetWarn_Check()
-end
 
 local AuctionHouseQoLFrame
 
@@ -2530,33 +1270,9 @@ function Quality:RefreshAuctionHousePreference()
   end
 end
 
-function Quality:RefreshFonts()
-  if not PetWarnText then
-    return
-  end
-
-  local q = GetQ()
-  local baseSize = PetWarnFrame and PetWarnFrame.__puiPetWarnBaseFontSize or q.petHealWarningFontSize or 20
-
-  ns.Theme.SetRuntimeFont(
-    PetWarnText,
-    STANDARD_TEXT_FONT,
-    ns.Theme.ResolveFontSize(baseSize, "qualityOfLife"),
-    "OUTLINE"
-  )
-end
-
-
 function Quality:ApplyAll()
   local q = RefreshQ()
 
-  EnsureCombatMsgFrame():RefreshState()
-  EnsureCombatTimerEvents():RefreshState()
-  EnsureCombatWarningEvents():RefreshState()
-
-  ns.Theme.ApplyFont(CombatMsgText, "header", q.combatMessageFontSize, nil, "qualityOfLife")
-  ns.Theme.ApplyFont(CombatTimerText, "body", q.combatTimerFontSize, nil, "qualityOfLife")
-  ApplyCombatTimerAppearance(CombatTimerFrame, q)
   EnsureLootFrame():RefreshState()
   EnsureMerchantDriver():RefreshState()
   EnsureKeystoneDriver():RefreshState()
@@ -2578,309 +1294,23 @@ function Quality:ApplyAll()
 
   ApplyHideElements()
 
-  ApplyPetWarnings()
   self:RefreshAuctionHousePreference()
 
-  local raidUtilityModule = ns.RaidUtilityModule
-  raidUtilityModule.ApplyAll()
-
-  ApplyCrosshair(not not q.crosshair)
-  ApplyCursorRing((not not q.cursorRingShowInner) or (not not q.cursorRingShowOutline))
+  if ns.CombatQuality then
+    ns.CombatToolsRuntime:Request(ns.CombatQuality, "ApplyRuntimeSettings")
+  end
 
   C_CVar.SetCVar("autoLootDefault", q.autoLoot and "1" or "0")
 end
 
-local QualityPreviewRoot
-
-local function Quality_GetPreviewWarnings()
-  CombatWarning_RefreshMeleeSpec()
-  local warnings = { { kind = "Target warnings", slot = 4 } }
-  if IsPetClass() then
-    warnings[#warnings + 1] = { kind = "Missing pet", slot = 2 }
-    warnings[#warnings + 1] = { kind = "Dead pet", slot = 3 }
-    if IsHealPetClass() then
-      warnings[#warnings + 1] = { kind = "Low pet health", slot = 1 }
-    else
-      warnings[#warnings + 1] = { kind = "Idle pet", slot = 1 }
-    end
-  end
-  warnings[#warnings + 1] = { kind = "Combat message", slot = 5 }
-  warnings[#warnings + 1] = { kind = "Combat timer", slot = 6 }
-  return warnings
-end
-
-local function Quality_RefreshPreview(root)
-  root = root or QualityPreviewRoot
-  if not root or not root:IsVisible() then
-    return
-  end
-
-  local q = GetQ()
-  local isCursor = root.__puiQualityPreviewTab == "cursorTab"
-  local isGroup = root.__puiQualityPreviewTab == "groupTab"
-
-  root.CombatSamples:SetShown(not isCursor and not isGroup)
-  root.CursorLabel:SetShown(isCursor)
-  root.CrosshairLabel:SetShown(isCursor)
-  root.GroupSamples:SetShown(isGroup)
-  root.PreviewHelp:SetShown(not isCursor)
-  root.PreviewHelp:ClearAllPoints()
-  root.PreviewHelp:SetPoint("BOTTOM", root, "BOTTOM", 0, isGroup and 42 or 8)
-  root.Ring:SetShown(isCursor and q.cursorRingShowInner ~= false)
-  root.ClickRing:SetShown(isCursor and q.cursorRingShowOutline ~= false)
-  root.Horizontal:SetShown(isCursor and q.crosshair)
-  root.Vertical:SetShown(isCursor and q.crosshair)
-
-  if isGroup then
-    root.Title:SetText("Group tools — sample displays")
-    root.PreviewHelp:SetText("Disabled tools are dimmed")
-    local size = Clamp(q.bresLustWidgetIconSize or 32, 16, 64)
-    root.Bres:SetSize(size, size)
-    root.Lust:SetSize(size, size)
-    root.Bres:SetAlpha(q.bresWidgetEnable and 1 or 0.35)
-    root.Lust:SetAlpha(q.lustWidgetEnable and 1 or 0.35)
-    root.Ready:SetAlpha(q.raidUtilityButtonsEnable and 1 or 0.35)
-    root.Pull:SetAlpha(q.raidUtilityButtonsEnable and 1 or 0.35)
-    root.Pull:SetText("Pull " .. tostring(q.raidUtilityPullTimerSeconds or 10))
-    return
-  end
-
-  if isCursor then
-    local ringSize = Clamp(q.cursorRingSize or 26, 8, 128)
-    local extraSize = Clamp(q.cursorRingOutlineSize or 10, 0, 128)
-    local ringColor = q.cursorRingColor or { r = 1, g = 1, b = 1, a = 0.55 }
-    local clickColor = q.cursorRingOutlineColor or { r = 1, g = 1, b = 1, a = 0.35 }
-    local crosshairColor = q.crosshairColor or { r = 1, g = 1, b = 1, a = 0.35 }
-    local length = Clamp(q.crosshairLength or 10, 2, 100) * 2
-    local thickness = Clamp(q.crosshairThickness or 1, 1, 10)
-
-    root.Ring:SetSize(ringSize, ringSize)
-    root.Ring:SetVertexColor(ringColor.r, ringColor.g, ringColor.b, ringColor.a)
-
-    root.ClickRing:SetSize(ringSize + extraSize, ringSize + extraSize)
-    root.ClickRing:SetVertexColor(clickColor.r, clickColor.g, clickColor.b, clickColor.a)
-
-    root.Horizontal:SetSize(length, thickness)
-    root.Vertical:SetSize(thickness, length)
-    root.Horizontal:SetVertexColor(
-      crosshairColor.r, crosshairColor.g, crosshairColor.b, crosshairColor.a
-    )
-    root.Vertical:SetVertexColor(
-      crosshairColor.r, crosshairColor.g, crosshairColor.b, crosshairColor.a
-    )
-
-    root.Title:SetText("Position indicators")
-    root.CursorLabel:SetText("Cursor ring")
-    root.CrosshairLabel:SetText("Screen-center crosshair")
-    return
-  end
-
-  local warnings = Quality_GetPreviewWarnings()
-  root.Title:SetText("Combat warnings and displays")
-  root.PreviewHelp:SetText("Samples use your current settings")
-  local columns = 3
-  local rowCount = 2
-  local cellWidth = math.max(1, (root:GetWidth() - 32) / columns)
-  local cellHeight = math.max(1, (root:GetHeight() - 64) / rowCount)
-  for _, sample in pairs(root.samples) do sample:Hide() end
-  for _, warning in ipairs(warnings) do
-    local index, kind = warning.slot, warning.kind
-    local sample = root.samples[index]
-    if not sample then
-      sample = CreateFrame("Frame", nil, root.CombatSamples)
-      sample:SetSize(1, 1)
-      sample.content = CreateFrame("Frame", nil, sample)
-      sample.content:SetSize(1, 1)
-      sample.content:SetPoint("CENTER", sample, "CENTER")
-      sample.text = sample.content:CreateFontString(nil, "OVERLAY")
-      sample.text:SetPoint("CENTER", sample.content, "CENTER")
-      sample.text:SetJustifyH("CENTER")
-      root.samples[index] = sample
-    end
-    local text = ""
-    local size = 20
-    local color = { r = 1, g = 1, b = 1, a = 1 }
-
-    if kind == "Target warnings" then
-      text = CombatWarningMeleeSpec and "NO TARGET\nOUT OF MELEE RANGE" or "NO TARGET"
-      size = q.combatWarningFontSize
-      color = { r = 1, g = 0, b = 0, a = 1 }
-    elseif kind == "Missing pet" then
-      text = "SUMMON PET"
-      size = q.petMissingWarningFontSize
-      color = q.petMissingWarningColor
-    elseif kind == "Dead pet" then
-      text = "PET DIED"
-      size = q.petDeadWarningFontSize
-      color = q.petDeadWarningColor
-    elseif kind == "Idle pet" then
-      text = "***PET NOT ATTACKING***"
-      size = q.petIdleWarningFontSize
-      color = q.petIdleWarningColor
-    elseif kind == "Low pet health" then
-      text = q.petHealWarningText
-      size = q.petHealWarningFontSize
-      local _, class = IsHealPetClass()
-      color = class == "HUNTER"
-        and q.petLowHealthWarningColor
-        or { r = 1, g = 1, b = 1, a = 1 }
-      local spellID = GetHealPetSpellID()
-      local icon = spellID and C_Spell.GetSpellTexture(spellID) or nil
-      text = FormatPetWarningText(text, size, q.petHealWarningIconOnly, q.petHealWarningShowIcon, icon)
-    elseif kind == "Combat message" then
-      text = "Entering Combat"
-      size = q.combatMessageFontSize
-    else
-      text = "01:23"
-      size = q.combatTimerFontSize
-    end
-
-    if kind == "Missing pet" or kind == "Dead pet" or kind == "Idle pet" or kind == "Low pet health" then
-      ns.Theme.SetRuntimeFont(sample.text, STANDARD_TEXT_FONT, ns.Theme.ResolveFontSize(size, "qualityOfLife"), "OUTLINE")
-    else
-      ns.Theme.ApplyFont(sample.text, kind == "Combat timer" and "body" or "header", size, nil, "qualityOfLife")
-    end
-    if kind == "Combat message" or kind == "Combat timer" then
-      local themeColor = ns.Theme.GetColors().text
-      color = { r = themeColor[1], g = themeColor[2], b = themeColor[3], a = themeColor[4] }
-    end
-    sample.text:SetTextColor(
-      color.r or 1, color.g or 1, color.b or 1, color.a or 1
-    )
-    sample.text:SetText(text)
-
-    if kind == "Combat timer" then
-      ApplyCombatTimerAppearance(sample.content, q)
-    end
-    sample:ClearAllPoints()
-    sample:SetPoint("CENTER", root.CombatSamples, "TOPLEFT",
-      16 + (index - 1) % columns * cellWidth + cellWidth / 2,
-      -34 - math.floor((index - 1) / columns) * cellHeight - cellHeight / 2)
-    sample:Show()
-  end
-end
-
-local function Quality_BuildPreview(_, _, shell, path)
-  local host = shell.previewHost
-
-  if not shell.__puiQualityPreviewRoot then
-    local root = CreateFrame("Frame", nil, host, "BackdropTemplate")
-    shell.__puiQualityPreviewRoot = root
-    root:EnableMouse(false)
-
-    local title = root:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    title:SetPoint("TOP", root, "TOP", 0, -12)
-    root.Title = title
-
-    root.CombatSamples = CreateFrame("Frame", nil, root)
-    root.CombatSamples:SetAllPoints(root)
-    root.samples = {}
-
-    local ringTexture = [[Interface\AddOns\PleebUI\Media\Textures\Pleebring.tga]]
-
-    root.ClickRing = root:CreateTexture(nil, "ARTWORK")
-    root.ClickRing:SetTexture(ringTexture)
-    root.ClickRing:SetPoint("CENTER", root, "CENTER", -100, 0)
-
-    root.Ring = root:CreateTexture(nil, "OVERLAY")
-    root.Ring:SetTexture(ringTexture)
-    root.Ring:SetPoint("CENTER", root, "CENTER", -100, 0)
-
-    root.Horizontal = root:CreateTexture(nil, "OVERLAY")
-    root.Horizontal:SetTexture([[Interface\Buttons\WHITE8x8]])
-    root.Horizontal:SetPoint("CENTER", root, "CENTER", 100, 0)
-
-    root.Vertical = root:CreateTexture(nil, "OVERLAY")
-    root.Vertical:SetTexture([[Interface\Buttons\WHITE8x8]])
-    root.Vertical:SetPoint("CENTER", root, "CENTER", 100, 0)
-
-    root.CursorLabel = root:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    root.CursorLabel:SetPoint("BOTTOM", root, "BOTTOM", -100, 18)
-    root.CrosshairLabel = root:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    root.CrosshairLabel:SetPoint("BOTTOM", root, "BOTTOM", 100, 18)
-    root.PreviewHelp = root:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    root.PreviewHelp:SetPoint("BOTTOM", root, "BOTTOM", 0, 8)
-
-    root.GroupSamples = CreateFrame("Frame", nil, root)
-    root.GroupSamples:SetAllPoints(root)
-    for _, sample in ipairs({
-      { key = "Bres", texture = 136080, text = "Battle resurrection", time = "04:30", count = "1", x = -100 },
-      { key = "Lust", texture = 136012, text = "Bloodlust", time = "00:32", x = 100 },
-    }) do
-      local icon = CreateFrame("Frame", nil, root.GroupSamples)
-      icon:SetPoint("CENTER", root.GroupSamples, "CENTER", sample.x, 10)
-      local texture = icon:CreateTexture(nil, "ARTWORK")
-      texture:SetAllPoints(icon)
-      texture:SetTexture(sample.texture)
-      icon.icon = texture
-      ns.IconSkin.MakeIconSquare(icon, { crop = 0.08 })
-      ns.IconSkin.ApplyBorder(icon, { enabled = true, thickness = 2, useThemeColor = true })
-      local timer = icon:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-      timer:SetPoint("TOP", icon, "BOTTOM", 0, -4)
-      timer:SetText(sample.time)
-      ns.Theme.ApplyFont(timer, "body")
-      if sample.count then
-        local count = icon:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-        count:SetPoint("TOPRIGHT", icon, "TOPRIGHT", -2, -2)
-        count:SetText(sample.count)
-        ns.Theme.ApplyFont(count, "body")
-      end
-      local label = icon:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-      label:SetPoint("BOTTOM", icon, "TOP", 0, 6)
-      label:SetText(sample.text)
-      ns.Theme.ApplyFont(label, "header")
-      root[sample.key] = icon
-    end
-    for index, sample in ipairs({ { key = "Ready", text = "Ready check" }, { key = "Pull", text = "Pull 10" } }) do
-      local button = CreateFrame("Button", nil, root.GroupSamples, "UIPanelButtonTemplate")
-      button:SetSize(120, 24)
-      button:SetPoint("BOTTOM", root.GroupSamples, "BOTTOM", (index - 1.5) * 132, 12)
-      button:SetText(sample.text)
-      button:EnableMouse(false)
-      ns.Theme.WidgetSkins.UIButton(button)
-      root[sample.key] = button
-    end
-
-    root:SetScript("OnSizeChanged", Quality_RefreshPreview)
-  end
-
-  local root = shell.__puiQualityPreviewRoot
-  QualityPreviewRoot = root
-  root.__puiQualityPreviewTab = path[2] or "combatTab"
-  root:SetParent(host)
-  root:ClearAllPoints()
-  root:SetAllPoints(host)
-  root:Show()
-
-  local colors = ns.Theme.GetColors()
-  ns.Theme.SetSquareBackdrop(root, {
-    bg = colors.background,
-    border = colors.border,
-  }, ns.Theme.GetEdgeSize())
-
-  ns.Theme.ApplyFont(root.Title, "header")
-  root.Title:SetTextColor(colors.text[1], colors.text[2], colors.text[3], colors.text[4])
-
-  if root.__puiQualityPreviewTab == "automationTab" then
-    root:Hide()
-  else
-    Quality_RefreshPreview()
-  end
-  return true
-end
-
-local function QualityProvider(AddonObj)
-  local provider = {}
-
-  function provider:GetOptions()
-    local raidUtilityModule = ns.RaidUtilityModule
+function ns.QualityAPI.BuildOptionsContext(AddonObj)
     local function GetQ()
       return NormalizeDB()
     end
 
     local function RequestApply(flags)
       AddonObj:ApplyOptionsChange("Quality", flags or {})
-      Quality_RefreshPreview()
+      if ns.CombatQuality then ns.CombatQuality.RefreshPreview() end
     end
 
     local q = GetQ()
@@ -3044,164 +1474,35 @@ local function QualityProvider(AddonObj)
       return opt
     end
 
+    return { GetQ = GetQ, RequestApply = RequestApply, ToggleOption = ToggleOption, DisabledWhenOff = DisabledWhenOff, DisabledWhenPetFeatureOff = DisabledWhenPetFeatureOff, DescriptionOption = DescriptionOption, RangeOption = RangeOption, InputOption = InputOption, ColorOption = ColorOption, DisabledInviteFilters = DisabledInviteFilters, RefreshMerchantDriverOption = RefreshMerchantDriverOption }
+end
+
+local function QualityProvider(AddonObj)
+  local provider = {}
+  function provider:GetOptions()
+    local context = ns.QualityAPI.BuildOptionsContext(AddonObj)
+    local DisabledInviteFilters = context.DisabledInviteFilters
+    local RefreshMerchantDriverOption = context.RefreshMerchantDriverOption
+    local GetQ = context.GetQ
+    local RequestApply = context.RequestApply
+    local ToggleOption = context.ToggleOption
+    local DisabledWhenOff = context.DisabledWhenOff
+    local DisabledWhenPetFeatureOff = context.DisabledWhenPetFeatureOff
+    local DescriptionOption = context.DescriptionOption
+    local RangeOption = context.RangeOption
+    local InputOption = context.InputOption
+    local ColorOption = context.ColorOption
     local options = {
       type = "group",
       name = "Quality of Life",
       order = 15,
       childGroups = "tab",
       args = {
-        qualityTab = {
-          type = "group",
-          name = "Visual helpers",
-          order = 1,
-          args = {
-            combatWarnings = {
-              type = "group",
-              name = "Combat warnings",
-              order = 5,
-              inline = true,
-              args = {
-                combatWarningsHelp = DescriptionOption("Only shown during combat in a raid instance or active Mythic+ key.", 1),
-                noTargetWarning = ToggleOption("No target", "noTargetWarning", 2),
-                notAttackingWarning = ToggleOption("Not attacking (melee)", "notAttackingWarning", 3),
-                combatWarningFontSize = RangeOption("Warning size", "combatWarningFontSize", 16, 60, 1, 4),
-              },
-            },
-            petWarnings = {
-              type = "group",
-              name = "Pet warnings",
-              order = 10,
-              inline = true,
-              hidden = function()
-                return not Quality:IsPetWarningAvailable()
-              end,
-              args = {
-                petWarningsEnabled = ToggleOption("Show pet warnings", "petWarningsEnabled", 1),
-                hidePetWarningWhileDragonriding = ToggleOption(
-                  "Hide while skyriding",
-                  "hidePetWarningWhileDragonriding",
-                  2, nil, DisabledWhenOff("petWarningsEnabled")
-                ),
-                missingPet = {
-                  type = "group",
-                  name = "Missing or dead pet",
-                  order = 10,
-                  inline = true,
-                  hidden = function() return not IsPetClass() end,
-                  args = {
-                    enabled = ToggleOption("Show missing or dead pet", "missingPetWarning", 1,
-                      nil, DisabledWhenOff("petWarningsEnabled")),
-                    missingSize = RangeOption("Missing pet size", "petMissingWarningFontSize",
-                      10, 100, 1, 2, DisabledWhenPetFeatureOff("missingPetWarning")),
-                    missingColor = ColorOption("Missing pet color", "petMissingWarningColor",
-                      3, DisabledWhenPetFeatureOff("missingPetWarning")),
-                    deadSize = RangeOption("Dead pet size", "petDeadWarningFontSize",
-                      10, 100, 1, 4, DisabledWhenPetFeatureOff("missingPetWarning")),
-                    deadColor = ColorOption("Dead pet color", "petDeadWarningColor",
-                      5, DisabledWhenPetFeatureOff("missingPetWarning")),
-                  },
-                },
-                idlePet = {
-                  type = "group",
-                  name = "Idle pet",
-                  order = 20,
-                  inline = true,
-                  hidden = function()
-                    return not IsPetClass() or IsHealPetClass()
-                  end,
-                  args = {
-                    enabled = ToggleOption("Show idle pet warning", "idlePetWarning", 1,
-                      nil, DisabledWhenOff("petWarningsEnabled")),
-                    size = RangeOption("Idle warning size", "petIdleWarningFontSize",
-                      5, 100, 1, 2, DisabledWhenPetFeatureOff("idlePetWarning")),
-                    color = ColorOption("Idle warning color", "petIdleWarningColor",
-                      3, DisabledWhenPetFeatureOff("idlePetWarning")),
-                  },
-                },
-                lowHealth = {
-                  type = "group",
-                  name = "Low health",
-                  order = 30,
-                  inline = true,
-                  hidden = function() return not IsHealPetClass() end,
-                  args = {
-                    enabled = ToggleOption("Show low health warning", "lowHealthPetWarning",
-                      1, nil, DisabledWhenOff("petWarningsEnabled")),
-                    threshold = RangeOption("Health threshold", "petHealWarningThreshold",
-                      10, 50, 1, 2, DisabledWhenPetFeatureOff("lowHealthPetWarning")),
-                    size = RangeOption("Warning size", "petHealWarningFontSize",
-                      5, 100, 1, 3, DisabledWhenPetFeatureOff("lowHealthPetWarning")),
-                    color = ColorOption(
-                      "Warning color",
-                      "petLowHealthWarningColor",
-                      4,
-                      DisabledWhenPetFeatureOff("lowHealthPetWarning"),
-                      function()
-                        local _, class = IsHealPetClass()
-                        return class ~= "HUNTER"
-                      end
-                    ),
-                    showIcon = ToggleOption("Show heal icon", "petHealWarningShowIcon",
-                      5, nil, DisabledWhenPetFeatureOff("lowHealthPetWarning")),
-                    iconOnly = ToggleOption("Icon only", "petHealWarningIconOnly",
-                      6, nil, DisabledWhenPetFeatureOff("lowHealthPetWarning")),
-                    text = InputOption("Warning text", "petHealWarningText",
-                      7, DisabledWhenPetFeatureOff("lowHealthPetWarning")),
-                  },
-                },
-              },
-            },
-            cursorRing = {
-              type = "group",
-              name = "Cursor ring",
-              order = 20,
-              inline = true,
-              args = {
-                cursorRingShowInner = ToggleOption("Show inner ring", "cursorRingShowInner", 1),
-                cursorRingSize = RangeOption("Inner ring size", "cursorRingSize", 8, 128, 1, 2),
-                cursorRingColor = ColorOption("Inner ring color", "cursorRingColor", 3),
-                cursorRingShowOutline = ToggleOption("Show click ring", "cursorRingShowOutline", 4),
-                cursorRingOutlineSize = RangeOption("Click ring size", "cursorRingOutlineSize", 0, 128, 1, 5),
-                cursorRingOutlineColor = ColorOption("Click ring color", "cursorRingOutlineColor", 6),
-              },
-            },
-            crosshairSettings = {
-              type = "group",
-              name = "Crosshair",
-              order = 30,
-              inline = true,
-              args = {
-                crosshairLength = RangeOption("Length", "crosshairLength", 2, 100, 1, 1),
-                crosshairThickness = RangeOption("Thickness", "crosshairThickness", 1, 10, 1, 2),
-                crosshairColor = ColorOption("Color", "crosshairColor", 3),
-              },
-            },
-            battleResLust = raidUtilityModule.BuildBresLustOptions({
-              ToggleOption = ToggleOption,
-              RangeOption = RangeOption,
-            }),
-            raidUtility = raidUtilityModule.BuildRaidUtilityOptions({
-              GetQ = GetQ,
-              RequestApply = RequestApply,
-              Clamp = Clamp,
-            }),
-          },
-        },
         automationTab = {
           type = "group",
           name = "Automation",
           order = 2,
           args = {
-            combat = {
-              type = "group",
-              name = "Combat",
-              order = 10,
-              inline = true,
-              args = {
-                combatMessage = ToggleOption("Combat status messages", "combatMessage", 1),
-                combatTimer = ToggleOption("Combat timer", "combatTimer", 2),
-              },
-            },
             loot = {
               type = "group",
               name = "Loot",
@@ -3291,7 +1592,6 @@ local function QualityProvider(AddonObj)
                 hideRestedZzz = ToggleOption("Hide rested Zzz", "hideRestedZzz", 2),
                 maxCameraZoom = ToggleOption("Max camera zoom", "maxCameraZoom", 3),
                 suppressGuildAchievementToasts = ToggleOption("Suppress guild achievement toasts", "suppressGuildAchievementToasts", 4),
-                crosshair = ToggleOption("Crosshair (screen center)", "crosshair", 5),
                 showAuraSpellIDs = ToggleOption(
                   "Show aura spell IDs outside /pui",
                   "showAuraSpellIDs",
@@ -3307,85 +1607,7 @@ local function QualityProvider(AddonObj)
       },
     }
 
-    local visual = options.args.qualityTab.args
     local automation = options.args.automationTab.args
-
-    local crosshair = visual.crosshairSettings
-    crosshair.name = "Crosshair"
-    crosshair.order = 20
-    crosshair.args.crosshair = automation.uiAndCamera.args.crosshair
-    crosshair.args.crosshair.order = 1
-    crosshair.args.crosshairLength.order = 2
-    crosshair.args.crosshairThickness.order = 3
-    crosshair.args.crosshairColor.order = 4
-
-    crosshair.args.crosshairLength.disabled = DisabledWhenOff("crosshair")
-    crosshair.args.crosshairThickness.disabled = DisabledWhenOff("crosshair")
-    crosshair.args.crosshairColor.disabled = DisabledWhenOff("crosshair")
-    automation.uiAndCamera.args.crosshair = nil
-
-    -- The click ring size is added to the inner ring size.
-    local ring = visual.cursorRing
-    ring.order = 10
-    ring.args.cursorRingSize.disabled = function()
-      local qq = GetQ()
-      return not qq.cursorRingShowInner and not qq.cursorRingShowOutline
-    end
-    ring.args.cursorRingColor.disabled = DisabledWhenOff("cursorRingShowInner")
-    ring.args.cursorRingOutlineSize.disabled = DisabledWhenOff("cursorRingShowOutline")
-    ring.args.cursorRingOutlineColor.disabled = DisabledWhenOff("cursorRingShowOutline")
-    ring.args.cursorRingSize.desc =
-      "Base size used by both rings. It still changes the click ring when the inner ring is hidden."
-    ring.args.cursorRingColor.desc = "Color of the inner ring."
-    ring.args.cursorRingOutlineSize.desc =
-      "Extra size added to the base ring size when you click."
-    ring.args.cursorRingOutlineColor.desc = "Color of the ring shown when you click."
-
-    local warnings = visual.combatWarnings
-    warnings.name = "Target and range warnings"
-    warnings.args.notAttackingWarning.name = "Out of melee range"
-    warnings.args.notAttackingWarning.hidden = function()
-      CombatWarning_RefreshMeleeSpec()
-      return not CombatWarningMeleeSpec
-    end
-    warnings.args.combatWarningFontSize.disabled = function()
-      local qq = GetQ()
-      CombatWarning_RefreshMeleeSpec()
-      return not qq.noTargetWarning and (not CombatWarningMeleeSpec or not qq.notAttackingWarning)
-    end
-
-    local combatStatus = automation.combat
-    combatStatus.name = "Combat status"
-    combatStatus.order = 10
-    combatStatus.args.combatMessageFontSize = RangeOption(
-      "Message font size", "combatMessageFontSize",
-      10, 40, 1, 3, DisabledWhenOff("combatMessage"),
-      function(qq)
-        ns.Theme.ApplyFont(
-          CombatMsgText,
-          "header",
-          qq.combatMessageFontSize,
-          nil,
-          "qualityOfLife"
-        )
-        Quality_RefreshPreview()
-      end
-    )
-
-    combatStatus.args.combatTimerFontSize = RangeOption(
-      "Timer font size", "combatTimerFontSize",
-      10, 72, 1, 4, DisabledWhenOff("combatTimer"),
-      function(qq)
-        ns.Theme.ApplyFont(
-          CombatTimerText,
-          "body",
-          qq.combatTimerFontSize,
-          nil,
-          "qualityOfLife"
-        )
-        Quality_RefreshPreview()
-      end
-    )
     automation.loot.args.fasterLooting.desc =
       "Takes items as soon as loot is ready and confirms loot-binding prompts. Auto loot is configured separately."
     automation.merchant.args.autoRepair.desc =
@@ -3394,37 +1616,6 @@ local function QualityProvider(AddonObj)
       "Automatically sells poor-quality items. Hold Shift when opening a merchant to skip both merchant automations."
     automation.dialogs.args.easyItemDestroy.desc =
       "Automatically fills the required confirmation text when deleting an item. You still confirm the deletion."
-
-    options.args.combatTab = {
-      type = "group",
-      name = "Combat",
-      order = 1,
-      args = {
-        combatStatus = combatStatus,
-        combatWarnings = warnings,
-        petWarnings = visual.petWarnings,
-      },
-    }
-
-    options.args.cursorTab = {
-      type = "group",
-      name = "Position indicators",
-      order = 2,
-      args = {
-        cursorRing = ring,
-        crosshairSettings = crosshair,
-      },
-    }
-
-    options.args.groupTab = {
-      type = "group",
-      name = "Group tools",
-      order = 3,
-      args = {
-        battleResLust = visual.battleResLust,
-        raidUtility = visual.raidUtility,
-      },
-    }
 
     local interfaceSettings = automation.uiAndCamera
     automation.loot.name = "Everyday conveniences"
@@ -3482,132 +1673,22 @@ local function QualityProvider(AddonObj)
     options.args.automationTab.name = "Convenience"
     options.args.automationTab.order = 4
 
-    options.args.qualityTab = nil
 
-    -- Feature groups own their behavior, appearance, visibility, and text together.
-    local message = combatStatus.args.combatMessage
-    message.name = "Show text"
-    message.desc = "Briefly shows Entering Combat or Leaving Combat when your combat status changes."
-    local timer = combatStatus.args.combatTimer
-    timer.name = "Show text"
-    timer.desc = "Shows elapsed time in minutes and seconds while you are in combat. The timer starts again when you enter combat."
-    combatStatus.args = {
-      message = ns.OptionsSchema.BuildTextGroup("Combat status messages", 10, {
-        showText = message, fontSize = combatStatus.args.combatMessageFontSize,
-      }),
-      timer = ns.OptionsSchema.BuildTextGroup("Time in combat", 20, {
-        showText = timer, fontSize = combatStatus.args.combatTimerFontSize,
-        background = ToggleOption("Show background", "combatTimerBackground", 110,
-          nil, DisabledWhenOff("combatTimer")),
-        backgroundWidth = RangeOption("Background width", "combatTimerWidth", 20, 600, 1, 120,
-          DisabledWhenOff("combatTimerBackground")),
-        backgroundHeight = RangeOption("Background height", "combatTimerHeight", 10, 200, 1, 130,
-          DisabledWhenOff("combatTimerBackground")),
-        backgroundColor = ColorOption("Background color", "combatTimerBackgroundColor", 140,
-          DisabledWhenOff("combatTimerBackground")),
-        backgroundOpacity = {
-          type = "range", name = "Background opacity", order = 145,
-          min = 0, max = 1, step = 0.01, isPercent = true,
-          disabled = DisabledWhenOff("combatTimerBackground"),
-          get = function() return GetQ().combatTimerBackgroundColor.a end,
-          set = function(_, value) GetQ().combatTimerBackgroundColor.a = value; RequestApply() end,
-        },
-        border = ToggleOption("Show border", "combatTimerBorder", 150,
-          nil, DisabledWhenOff("combatTimerBackground")),
-        borderSize = RangeOption("Border thickness", "combatTimerBorderSize", 1, 8, 1, 160,
-          function() local qq = GetQ(); return not qq.combatTimerBackground or not qq.combatTimerBorder end),
-        borderColor = ColorOption("Border color", "combatTimerBorderColor", 170,
-          function() local qq = GetQ(); return not qq.combatTimerBackground or not qq.combatTimerBorder end),
-        borderOpacity = {
-          type = "range", name = "Border opacity", order = 175,
-          min = 0, max = 1, step = 0.01, isPercent = true,
-          disabled = function() local qq = GetQ(); return not qq.combatTimerBackground or not qq.combatTimerBorder end,
-          get = function() return GetQ().combatTimerBorderColor.a end,
-          set = function(_, value) GetQ().combatTimerBorderColor.a = value; RequestApply() end,
-        },
-        backgroundHelp = DescriptionOption("Background width and height stay fixed when the digits or font size change.", 180),
-      }),
-    }
-    warnings.args.combatWarningFontSize.name = "Font size"
-    warnings.args.combatWarningFontSize.order = 50
-    options.args.combatTab.args.combatMessages = combatStatus.args.message
-    options.args.combatTab.args.combatTimer = combatStatus.args.timer
-    options.args.combatTab.args.combatStatus = nil
-
-    local pets = visual.petWarnings.args
-    local missingGroup = pets.missingPet
-    local missing = missingGroup.args
-    pets.missingPetWarning = missing.enabled
-    pets.missingPetWarning.order = 3
-    pets.missingPetWarning.hidden = missingGroup.hidden
-    pets.missing = ns.OptionsSchema.BuildTextGroup("Missing pet", 10, {
-      fontSize = missing.missingSize, textColor = missing.missingColor,
-    })
-    pets.dead = ns.OptionsSchema.BuildTextGroup("Dead pet", 15, {
-      fontSize = missing.deadSize, textColor = missing.deadColor,
-    })
-    pets.missing.hidden, pets.dead.hidden = missingGroup.hidden, missingGroup.hidden
-    pets.missingPet = nil
-    for _, key in ipairs({ "idlePet", "lowHealth" }) do
-      local args = pets[key].args
-      args.size.name, args.color.name = "Font size", "Text color"
-      args.size.order, args.color.order = 50, 70
+    local tabs
+    if ns.CombatQuality then
+      tabs = ns.CombatQuality.BuildOptions(context)
+    else
+      tabs = {}
+      for _, spec in ipairs({ { "combatTab", "Combat", 1 }, { "cursorTab", "Position indicators", 2 }, { "groupTab", "Group tools", 3 } }) do
+        tabs[spec[1]] = { type = "group", name = spec[2], order = spec[3], args = ns.CombatToolsDisabledOptions:GetOptions().args }
+      end
     end
-    ring.args = {
-      inner = { type = "group", name = "Inner ring", inline = true, order = 10, arg = { puiExplicit = true }, args = {
-        shown = ring.args.cursorRingShowInner, size = ring.args.cursorRingSize, color = ring.args.cursorRingColor,
-      } },
-      click = { type = "group", name = "Click ring", inline = true, order = 20, arg = { puiExplicit = true }, args = {
-        shown = ring.args.cursorRingShowOutline, size = ring.args.cursorRingOutlineSize, color = ring.args.cursorRingOutlineColor,
-      } },
-    }
-    for _, group in pairs(ring.args) do
-      group.args.shown.name, group.args.shown.order = "Show ring", 10
-      group.args.size.name, group.args.size.order = "Size", 20
-      group.args.color.name, group.args.color.order = "Color", 30
-    end
-    ring.args.click.args.size.name = "Extra size"
-    options.args.cursorTab.args.innerRing = ring.args.inner
-    options.args.cursorTab.args.clickRing = ring.args.click
-    options.args.cursorTab.args.cursorRing = nil
-    local groupTools = options.args.groupTab.args
-    local bres = groupTools.battleResLust
-    local bresArgs = bres.args.general.args
-    bresArgs.bresLustWidgetIconSize = bres.args.layout.args.bresLustWidgetIconSize
-    bresArgs.bresLustWidgetIconSize.order = 4
-    bresArgs.bresLustWidgetIconSize.disabled = function()
-      local qq = GetQ()
-      return qq.bresWidgetEnable ~= true and qq.lustWidgetEnable ~= true
-    end
-    bresArgs.bresLustWidgetShowOnlyInGroup.disabled = bresArgs.bresLustWidgetIconSize.disabled
-    bres.args = bresArgs
-    bres.order = 20
-    local utility = groupTools.raidUtility.args
-    utility.buttons.name = "Ready check and pull timer"
-    utility.raidMarkers.name = "Target markers"
-    utility.worldMarkers.name = "World markers"
-    utility.general.name = "Group visibility"
-    utility.buttons.order, utility.raidMarkers.order, utility.worldMarkers.order = 30, 40, 50
-    groupTools.raidUtility = nil
-    for key, group in pairs(utility) do
-      groupTools[key] = group
-      if group.args.freeMove then group.args.freeMove.name = "Allow dragging" end
-      if group.args.fadeOutDuration then group.args.fadeOutDuration.name = "Fade-out time (seconds)" end
-    end
-    for _, tab in pairs(options.args) do
-      tab.arg = { puiExplicit = true }
-    end
-    local _, playerClass = UnitClass("player")
-    if playerClass == "HUNTER" then
-      options.args.combatTab.args.emergencySalve = ns.Modules.HunterTools:GetOptions()
-    end
-
+    for key, tab in pairs(tabs) do options.args[key] = tab end
+    for _, tab in pairs(options.args) do tab.arg = { puiExplicit = true } end
     return options
   end
-
   return provider
 end
-
 
 Addon:RegisterOptionsSection("Quality", QualityProvider, 80, "Quality of Life", nil, {
   allowPreview = true,
@@ -3617,9 +1698,11 @@ Addon:RegisterOptionsSection("Quality", QualityProvider, 80, "Quality of Life", 
     previewWidth = 340,
     previewHeight = 190,
     previewPathMatches = function(path)
-      return path[2] == "combatTab" or path[2] == "cursorTab" or path[2] == "groupTab" or path[2] == "automationTab"
+      return ns.CombatQuality ~= nil and (path[2] == "combatTab" or path[2] == "cursorTab" or path[2] == "groupTab" or path[2] == "automationTab")
     end,
-    buildPreview = Quality_BuildPreview,
+    buildPreview = function(...)
+      if ns.CombatQuality then return ns.CombatQuality.BuildPreview(...) end
+    end,
   },
 })
 

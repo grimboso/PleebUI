@@ -1,4 +1,4 @@
-local ADDON_NAME, ns = ...
+local ns = LibStub("AceAddon-3.0"):GetAddon("PleebUI").ModuleNamespace
 
 local Addon = ns.Addon
 local HunterTools = Addon:NewModule("HunterTools", "NumyAceEvent-3.0")
@@ -430,7 +430,7 @@ local function RefreshEventRegistration()
   end
 end
 
-function HunterTools:ApplySettings()
+function HunterTools:ApplyRuntimeSettings()
   if not IsHunter() then return end
   NormalizeDB()
   RefreshEmergencySalveKnown()
@@ -642,11 +642,16 @@ function HunterTools:OnInitialize()
 
 end
 
+function HunterTools:ApplySettings()
+  ns.CombatToolsRuntime:Request(self, "ApplyRuntimeSettings")
+end
+
 function HunterTools:OnEnable()
   self:ApplySettings()
 end
 
 function HunterTools:OnDisable()
+  ns.CombatToolsRuntime:Cancel(self)
   self:UnregisterAllEvents()
   RefreshSalvePreview(false)
 
@@ -687,3 +692,5 @@ HunterTools.OnEnable =
 
 HunterTools.OnDisable =
   P:Def("HunterTools:OnDisable", HunterTools.OnDisable)
+
+HunterTools.ApplyRuntimeSettings = P:Def("HunterTools:ApplyRuntimeSettings", HunterTools.ApplyRuntimeSettings)

@@ -1308,7 +1308,9 @@ function Addon:RefreshIconFonts(atWorldEntry, profileRefresh)
     ns.Modules.MovementWarning:RefreshFonts()
   end
   ns.Registry.Minimap:RefreshFonts()
-  ns.Modules.Quality:RefreshFonts()
+  if ns.CombatQuality then
+    ns.CombatQuality:RefreshFonts()
+  end
   ns.Theme.RefreshRuntimeFonts()
   RefreshRuntimeFontSlugNotice()
 end
@@ -1618,18 +1620,18 @@ function Addon:_FlushUpdateBus(targets)
 
   local playerBuffs = ns.Modules.PlayerBuffs
   flags = targets.PlayerBuffs
-  if flags then
+  if flags and playerBuffs then
     playerBuffs:ApplySettings(flags)
   end
 
   local hunterTools = ns.Modules.HunterTools
   flags = targets.HunterTools
-  if flags then
+  if flags and hunterTools then
     hunterTools:ApplySettings(flags)
   end
 
   flags = targets.MovementWarning
-  if flags then
+  if flags and ns.Modules.MovementWarning then
     ns.Modules.MovementWarning:ApplySettings()
   end
 

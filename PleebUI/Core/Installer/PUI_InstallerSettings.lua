@@ -251,6 +251,9 @@ local function BuildOptions()
   then
     return record.factory(Addon):GetOptions()
   end
+  if path[1] == "Quality" and path[2] ~= "automationTab" and not ns.CombatQuality then
+    return ns.CombatToolsDisabledOptions:GetOptions()
+  end
   local previousPath = ns._PUIActiveOptionsPath
   ns._PUIActiveOptionsPath = path
   local options = ns.GUI.CopyOptionsNode(record.factory(Addon):GetOptions())
