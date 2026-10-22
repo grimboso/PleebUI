@@ -16,7 +16,7 @@ local LibStub = _G.LibStub
 if not LibStub then return end
 local Pleebug, minor = LibStub("LibPleebug-1", true)
 -- Components must match the core selected by LibStub across bundled copies.
-if not Pleebug or minor ~= 6 then return end
+if not Pleebug or minor ~= 9 then return end
 
 -- Backwards-compatible alias (rest of file can keep using MemDebug)
 local MemDebug = Pleebug
@@ -37,7 +37,7 @@ local t_unpack = table.unpack or unpack
 ---------------------
 -- Tick hook: publish native function/event deltas and the retained addon overview.
 ---------------------
-if MemDebug and MemDebug.RegisterTickHook then
+if MemDebug:IsDebuggingEnabled() then
   MemDebug:RegisterTickHook("CPU", function(self, now)
     local cpu = self.CPU
     if not cpu then
@@ -288,6 +288,7 @@ function CPU:HandleOverviewEvent(event, ...)
 end
 
 function CPU:StartOverview()
+  if not MemDebug:IsDebuggingEnabled() or not self._overviewAddonName then return end
   if not self._overview then
     self:ResetOverviewRuntime()
   end
@@ -350,7 +351,7 @@ end
 
 function CPU:GetOverview(windowSeconds, nowT)
   local overview = self._overview
-  if not overview then return nil end
+  if not MemDebug:IsDebuggingEnabled() or not overview or not self._overviewAddonName then return nil end
 
   nowT = nowT or overview.endedAt or _now()
   local window = tonumber(windowSeconds) or 5
@@ -430,6 +431,7 @@ function CPU:SnapshotOverview(snap, nowT)
 end
 
 function CPU:RefreshAddonMemory()
+  if not MemDebug:IsDebuggingEnabled() then return nil end
   if type(UpdateAddOnMemoryUsage) ~= "function"
     or type(GetAddOnMemoryUsage) ~= "function"
     or not self._overviewAddonName
@@ -656,6 +658,7 @@ end
 
 
 function CPU:NativeFunctionSamplingEnabled()
+  if not MemDebug:IsDebuggingEnabled() then return false end
   local cdb = _EnsureCDB()
   if MemDebug and MemDebug.GetDebugMode and MemDebug:GetDebugMode() == "full" then
     return false
@@ -670,6 +673,7 @@ function CPU:SetNativeFunctionSamplingEnabled(on)
 end
 
 function CPU:NativeEventSamplingEnabled()
+  if not MemDebug:IsDebuggingEnabled() then return false end
   local cdb = _EnsureCDB()
   if MemDebug and MemDebug.GetDebugMode and MemDebug:GetDebugMode() == "full" then
     return false
@@ -684,6 +688,7 @@ function CPU:SetNativeEventSamplingEnabled(on)
 end
 
 function CPU:ApplyDebugModeDefaults(mode)
+  if not MemDebug:IsDebuggingEnabled() then return end
   local cdb = _EnsureCDB()
   if not cdb then return end
 
@@ -719,6 +724,7 @@ function CPU:SetScriptProfile(on)
 end
 
 function CPU:SetScriptProfileAndReload(on)
+  if not MemDebug:IsDebuggingEnabled() then return false end
   self:SetScriptProfile(on == true)
   local db = MemDebug and MemDebug.GetDB and MemDebug:GetDB() or nil
   if db then
@@ -745,6 +751,7 @@ end
 
 
 function CPU:RegisterFunction(moduleName, bucket, funcName, fn, opt)
+  if not MemDebug:IsDebuggingEnabled() then return end
   if type(fn) ~= "function" then return end
   opt = opt or {}
   moduleName = tostring(moduleName or "Unknown")
@@ -849,6 +856,7 @@ function CPU:GetFullMeasurementBackend()
 end
 
 function CPU:GetMeasurementState(path)
+  if not MemDebug:IsDebuggingEnabled() then return "Debugging disabled" end
   local rec, alias = self:GetFunctionRegistration(path)
   if not (rec and alias) then return nil end
 
@@ -899,6 +907,7 @@ function CPU:GetMeasurementState(path)
 end
 
 function CPU:RegisterEvent(eventName)
+  if not MemDebug:IsDebuggingEnabled() then return end
   if type(eventName) ~= "string" or eventName == "" then return end
   self._nativeEvents = self._nativeEvents or {}
   if not self._nativeEvents[eventName] then
@@ -908,6 +917,7 @@ function CPU:RegisterEvent(eventName)
 end
 
 function CPU:PrimeNativeBaselines()
+  if not MemDebug:IsDebuggingEnabled() then return end
   if self._nativeByFunction and type(GetFunctionCPUUsage) == "function" then
     for _, rec in pairs(self._nativeByFunction) do
       if type(rec) == "table" and not rec.retired and type(rec.fn) == "function" then
@@ -1018,6 +1028,7 @@ function CPU:SampleNativeEvents(nowT)
 end
 
 function CPU:PollNative(nowT)
+  if not MemDebug:IsDebuggingEnabled() then return end
   nowT = tonumber(nowT) or _now()
   if self.SampleNativeFunctions then
     self:SampleNativeFunctions(nowT)

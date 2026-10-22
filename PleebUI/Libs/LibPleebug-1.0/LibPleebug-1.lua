@@ -3,6 +3,10 @@
 -- Purpose: Dev-only profiling of events and function call frequency.
 --
 -- Modes:
+--   Disabled
+--     Preserves original functions and installs no collection hooks or samplers.
+--     Enabling or disabling debugging requires a reload.
+--
 --   Light mode
 --     Uses Blizzard native CPU counters such as GetFunctionCPUUsage.
 --     It keeps original function references in the execution path and avoids wrapper calls.
@@ -24,7 +28,7 @@
 
 
 
-local MAJOR, MINOR = "LibPleebug-1", 6
+local MAJOR, MINOR = "LibPleebug-1", 9
 local LibStub = _G.LibStub
 if not LibStub then return end
 
@@ -37,10 +41,18 @@ _G.LibPleebugDB = _G.LibPleebugDB or {}
 
 local function _GetSavedDebugMode()
   local db = _G.LibPleebugDB
-  if type(db) == "table" and db.debugMode == "full" then
-    return "full"
+  if type(db) ~= "table" then return "off" end
+
+  if db.debuggingOptInVersion ~= 1 then
+    MemDebug._disableLegacyScriptProfile = db.debugMode == "light" or db.debugMode == "full"
+    db.debuggingOptInVersion = 1
+    db.debuggingEnabled = false
+    db.debugMode = "full"
+    db.openAfterReload = false
   end
-  return "light"
+
+  if db.debuggingEnabled ~= true then return "off" end
+  return db.debugMode == "light" and "light" or "full"
 end
 
 MemDebug.__pleebugLoadMode = _GetSavedDebugMode()
@@ -57,8 +69,11 @@ MemDebug._lastSnapshot = MemDebug._lastSnapshot or {}
 MemDebug._wrapped = MemDebug._wrapped or setmetatable({}, { __mode = "k" })
 MemDebug._origNewModule = MemDebug._origNewModule or nil
 
--- Runtime-only source grouping. Rebuilt from DropIn caller paths every load.
-MemDebug._moduleGroups = {}
+-- Addon presentation metadata belongs to the loaded addon, not SavedVariables.
+MemDebug._registeredAddons = MemDebug._registeredAddons or {}
+MemDebug._bucketDisplayNames = MemDebug._bucketDisplayNames or {}
+MemDebug._addonSortOrders = MemDebug._addonSortOrders or {}
+MemDebug._addonRegistrationVersion = MemDebug._addonRegistrationVersion or 0
 
 local function _now()
   if GetTimePreciseSec then
@@ -128,11 +143,10 @@ local function _ensureDB()
 
   -- Wrapper interception is an explicit persisted choice read before Lua files load.
   -- scriptProfile controls Blizzard's native counters, not whether Pleebug wraps functions.
-  mdb.debugMode = mdb.debugMode == "full" and "full" or "light"
+  mdb.debugMode = mdb.debugMode == "light" and "light" or "full"
   mdb.__pleebugLoadMode = nil
   mdb.__pleebugForceFullDebug = nil
   mdb.fullDebugOnNextLoad = nil
-  MemDebug.__pleebugLoadMode = mdb.debugMode
 
   -- One-shot UI restore after mode/CVar reload buttons.
   if type(mdb.openAfterReload) ~= "boolean" then mdb.openAfterReload = false end
@@ -157,9 +171,11 @@ local function _ensureDB()
   mdb.traceStyle = nil
   mdb.traceWindow = nil
 
-  -- Pleebug now has one bucket per source file and no nested bucket metadata.
-  mdb.buckets = {}
-  mdb.bucketLists = {}
+  -- Registered ownership is rebuilt from loaded source files, not restored from a previous session.
+  mdb.moduleAddon = {}
+  mdb.moduleAddonName = nil
+  mdb.buckets = nil
+  mdb.bucketLists = nil
 
   -- Flush pending known modules (Attach/Ping can run before DB exists)
   if MemDebug._pendingKnownModules then
@@ -184,15 +200,36 @@ function MemDebug:GetDB()
 end
 
 function MemDebug:GetDebugMode()
-  return self.__pleebugLoadMode or "light"
+  return self.__pleebugLoadMode
 end
 
 function MemDebug:GetLoadMode()
   -- Action-button registration uses the mode loaded before its secure callbacks.
-  return self.__pleebugLoadMode or "light"
+  return self.__pleebugLoadMode
+end
+
+function MemDebug:IsDebuggingEnabled()
+  return self.__pleebugLoadMode ~= "off"
+end
+
+function MemDebug:SetDebuggingEnabledAndReload(enabled)
+  if InCombatLockdown() then return false end
+  enabled = enabled == true
+  local db = _ensureDB()
+  if db.debuggingEnabled == enabled and self:IsDebuggingEnabled() == enabled then
+    return true
+  end
+
+  self:Stop()
+  db.debuggingEnabled = enabled
+  db.openAfterReload = true
+  self.CPU:SetScriptProfile(enabled and db.debugMode == "light")
+  ReloadUI()
+  return true
 end
 
 function MemDebug:SetDebugMode(mode)
+  if not self:IsDebuggingEnabled() then return false end
   mode = tostring(mode or "light")
   if mode ~= "full" then
     mode = "light"
@@ -225,7 +262,7 @@ function MemDebug:SetDebugMode(mode)
 end
 
 function MemDebug:SetDebugModeAndReload(mode)
-  if InCombatLockdown() then return false end
+  if InCombatLockdown() or not self:IsDebuggingEnabled() then return false end
   mode = tostring(mode or "light")
   if mode ~= "full" then
     mode = "light"
@@ -479,10 +516,70 @@ function MemDebug:GetKnownModules()
   return out
 end
 
+function MemDebug:RegisterAddon(addonName, displayName, bucketLabels, sortOrder)
+  if type(addonName) ~= "string" or addonName == "" then return end
+
+  local changed = false
+  local name = self._registeredAddons[addonName] or addonName
+  if type(displayName) == "string" and displayName ~= "" then
+    name = displayName
+  end
+  if self._registeredAddons[addonName] ~= name then
+    self._registeredAddons[addonName] = name
+    changed = true
+  end
+  if type(sortOrder) == "number" and self._addonSortOrders[addonName] ~= sortOrder then
+    self._addonSortOrders[addonName] = sortOrder
+    changed = true
+  end
+  if type(bucketLabels) == "table" then
+    local labels = self._bucketDisplayNames[addonName]
+    if not labels then
+      labels = {}
+      self._bucketDisplayNames[addonName] = labels
+    end
+    for moduleName, label in pairs(bucketLabels) do
+      if type(moduleName) == "string" and moduleName ~= ""
+        and type(label) == "string" and label ~= "" and labels[moduleName] ~= label then
+        labels[moduleName] = label
+        changed = true
+      end
+    end
+  end
+  if changed then
+    self._addonRegistrationVersion = self._addonRegistrationVersion + 1
+  end
+end
+
+function MemDebug:GetRegisteredAddons()
+  return self._registeredAddons
+end
+
+function MemDebug:GetAddonSortOrder(addonName)
+  return self._addonSortOrders[addonName] or 50
+end
+
+function MemDebug:GetModuleAddon(moduleName)
+  local mdb = _ensureDB()
+  return mdb and mdb.moduleAddon and mdb.moduleAddon[moduleName] or nil
+end
+
+function MemDebug:GetAddonDisplayName(addonName)
+  return self._registeredAddons[addonName] or tostring(addonName or "Unattributed")
+end
+
+function MemDebug:GetProfilerBucketName(moduleName)
+  local alias = self:GetModuleAlias(moduleName)
+  if alias then return alias end
+  local owner = self:GetModuleAddon(moduleName)
+  local labels = owner and self._bucketDisplayNames[owner]
+  local name = labels and labels[moduleName]
+  if name then return name end
+  return (tostring(moduleName or "Unknown"):gsub("_", " "):gsub("(%l)(%u)", "%1 %2"))
+end
+
 function MemDebug:GetModuleGroup(moduleName)
-  moduleName = tostring(moduleName or "Unknown")
-  local groups = self._moduleGroups
-  return groups and groups[moduleName] or nil
+  return self:GetModuleAddon(moduleName)
 end
 
 function MemDebug:GetModuleGroupState(groupName)
@@ -513,8 +610,16 @@ function MemDebug:GetModuleGroupState(groupName)
   return totalCount > 0 and enabledCount == totalCount, enabledCount, totalCount
 end
 
+local function _ReloadForTrackingSelection(self, changed)
+  if changed and self:GetLoadMode() == "full" then
+    self:Stop()
+    _ensureDB().openAfterReload = true
+    ReloadUI()
+  end
+end
+
 function MemDebug:SetModuleGroupEnabled(groupName, enabled)
-  if self:GetDebugMode() == "full" then return false end
+  if self:GetLoadMode() == "full" and InCombatLockdown() then return false end
   groupName = tostring(groupName or "")
   if groupName == "" then return end
 
@@ -523,16 +628,19 @@ function MemDebug:SetModuleGroupEnabled(groupName, enabled)
 
   enabled = not not enabled
   mdb.modules = mdb.modules or {}
+  local changed = false
 
   local knownModules = mdb.knownModules or {}
   for moduleName, known in pairs(knownModules) do
     if known == true and self:GetModuleGroup(moduleName) == groupName then
+      changed = changed or (mdb.modules[moduleName] ~= false) ~= enabled
       mdb.modules[moduleName] = enabled
-      if enabled and self:IsEnabled() then
+      if enabled and self:IsEnabled() and self:GetLoadMode() ~= "full" then
         self:_InstallUniversalOnAttached(moduleName)
       end
     end
   end
+  _ReloadForTrackingSelection(self, changed)
 end
 
 function MemDebug:IsModuleEnabled(moduleName)
@@ -548,31 +656,40 @@ function MemDebug:IsModuleEnabled(moduleName)
 end
 
 function MemDebug:EnableAllModules()
-  if self:GetDebugMode() == "full" then return false end
+  if self:GetLoadMode() == "full" and InCombatLockdown() then return false end
   local mdb = _ensureDB()
   if not mdb then return end
   mdb.modules = mdb.modules or {}
   mdb.knownModules = mdb.knownModules or {}
+  local changed = false
 
   for name, v in pairs(mdb.knownModules) do
     if v == true then
+      changed = changed or mdb.modules[name] == false
       mdb.modules[name] = true
+      if self:IsEnabled() and self:GetLoadMode() ~= "full" then
+        self:_InstallUniversalOnAttached(name)
+      end
     end
   end
+  _ReloadForTrackingSelection(self, changed)
 end
 
 function MemDebug:DisableAllModules()
-  if self:GetDebugMode() == "full" then return false end
+  if self:GetLoadMode() == "full" and InCombatLockdown() then return false end
   local mdb = _ensureDB()
   if not mdb then return end
   mdb.modules = mdb.modules or {}
   mdb.knownModules = mdb.knownModules or {}
+  local changed = false
 
   for name, v in pairs(mdb.knownModules) do
     if v == true then
+      changed = changed or mdb.modules[name] ~= false
       mdb.modules[name] = false
     end
   end
+  _ReloadForTrackingSelection(self, changed)
 end
 
 function MemDebug:GetModuleAlias(moduleName)
@@ -594,9 +711,13 @@ function MemDebug:SetModuleAlias(moduleName, alias)
   self:_RegisterKnownModule(moduleName)
 
   mdb.moduleAliases = mdb.moduleAliases or {}
+  local previous = mdb.moduleAliases[moduleName]
 
   if alias == nil then
     mdb.moduleAliases[moduleName] = nil
+    if previous ~= nil then
+      self._addonRegistrationVersion = self._addonRegistrationVersion + 1
+    end
     return
   end
 
@@ -606,6 +727,9 @@ function MemDebug:SetModuleAlias(moduleName, alias)
     mdb.moduleAliases[moduleName] = nil
   else
     mdb.moduleAliases[moduleName] = alias
+  end
+  if mdb.moduleAliases[moduleName] ~= previous then
+    self._addonRegistrationVersion = self._addonRegistrationVersion + 1
   end
 end
 
@@ -621,7 +745,7 @@ end
 
 
 function MemDebug:SetModuleEnabled(moduleName, enabled)
-  if self:GetDebugMode() == "full" then return false end
+  if self:GetLoadMode() == "full" and InCombatLockdown() then return false end
   local mdb = _ensureDB()
   if not mdb then return end
 
@@ -629,11 +753,13 @@ function MemDebug:SetModuleEnabled(moduleName, enabled)
   self:_RegisterKnownModule(moduleName)
 
   enabled = not not enabled
+  local changed = (mdb.modules[moduleName] ~= false) ~= enabled
   mdb.modules[moduleName] = enabled
 
-  if enabled and self:IsEnabled() then
+  if enabled and self:IsEnabled() and self:GetLoadMode() ~= "full" then
     self:_InstallUniversalOnAttached(moduleName)
   end
+  _ReloadForTrackingSelection(self, changed)
 end
 function MemDebug:TrackKey(key, amount)
   if not self:IsEnabled() then return end
@@ -816,6 +942,11 @@ function MemDebug:NewPrivate(moduleName, opt)
       return fn
     end
 
+    if not MemDebug:IsDebuggingEnabled() then
+      rawset(self, name, fn)
+      return fn
+    end
+
     -- Optional: allow a per-function default bucket
     if bucketOverride ~= nil then
       self.__pleebugFnBuckets = self.__pleebugFnBuckets or {}
@@ -870,6 +1001,11 @@ function MemDebug:NewPrivate(moduleName, opt)
       return
     end
 
+    if not MemDebug:IsDebuggingEnabled() then
+      rawset(self, name, fn)
+      return fn
+    end
+
     local cpu = MemDebug.CPU
     local path, rec = cpu:RegisterFunction(module, bucket, name, fn, {
       kind = "secure-native",
@@ -898,11 +1034,9 @@ function MemDebug:NewPrivate(moduleName, opt)
 end
 
 ---------------------------
--- DropIn: one source file, one Pleebug bucket.
---
--- The caller filename is the bucket identity. opt.name, opt.bucket, opt.buckets,
--- and opt.bucketFunc are not used for function grouping. Local functions still
--- need P:Def(name, fn) because Lua does not expose local references to DropIn.
+-- DropIn registers functions under their unchanged source-file identity.
+-- The UI groups these registrations under the actual owning addon and uses
+-- human-readable labels. Local functions still need P:Def(name, fn).
 ---------------------------
 function MemDebug:DropIn(primary, opt, ...)
   opt = opt or {}
@@ -910,11 +1044,6 @@ function MemDebug:DropIn(primary, opt, ...)
   local stack = debugstack(2, 1, 0):gsub("\\", "/")
   local inferredAddon = stack:match("Interface/AddOns/([^/]+)/")
   local moduleName = stack:match("([^/]+)%.lua:%d+") or stack:match("([^/]+)%.lua")
-  local moduleGroup = stack:match("Modules/([^/]+)/")
-
-  if moduleGroup and moduleName then
-    self._moduleGroups[moduleName] = moduleGroup
-  end
 
   local fileOpt = {}
   for key, value in pairs(opt) do
@@ -925,14 +1054,10 @@ function MemDebug:DropIn(primary, opt, ...)
   fileOpt.name = moduleName
 
   local mdb = _ensureDB()
-  mdb.moduleAddon = mdb.moduleAddon or {}
-  mdb.moduleAddonName = mdb.moduleAddonName or {}
-
-  local addonName = fileOpt.addonName or fileOpt.addon or inferredAddon or mdb.moduleAddon[moduleName] or mdb.moduleAddonName[moduleName]
-  mdb.moduleAddon[moduleName] = addonName
-  mdb.moduleAddonName[moduleName] = addonName
-  if self.CPU and self.CPU.SetOverviewAddonName then
-    self.CPU:SetOverviewAddonName(addonName)
+  local addonName = fileOpt.addonName or fileOpt.addon or inferredAddon
+  if addonName then
+    mdb.moduleAddon[moduleName] = addonName
+    self:RegisterAddon(addonName)
   end
 
   local P = self:NewPrivate(moduleName)
@@ -1018,6 +1143,7 @@ function MemDebug:_AttachInternal(moduleName, primary, ...)
 
   -- DropIn/Attach is the single owner of source-file discovery.
   self:_RegisterKnownModule(moduleName)
+  if not self:IsDebuggingEnabled() then return end
 
   local entry = self._attached[moduleName]
 
@@ -1149,8 +1275,7 @@ end
 
 -- Internal: install event/callback wrappers + optional function wrapping on all attached objects.
 function MemDebug:_InstallUniversalOnAttached(moduleName)
-
-
+  if not self:IsDebuggingEnabled() then return end
   local mdb = _ensureDB()
   if mdb and not _moduleAllowed(mdb, moduleName) then
     return
@@ -1326,7 +1451,7 @@ function MemDebug:SnapshotAndReset()
 end
 
 function MemDebug:Start()
-  if self._enabled then return end
+  if not self:IsDebuggingEnabled() or self._enabled then return end
   if self._ticker then
     self._ticker:Cancel()
     self._ticker = nil
@@ -1496,12 +1621,14 @@ end
 
 -- Public helper so an explicitly attached source file can install event tracking.
 function MemDebug:InstallAceEventTracking(obj, moduleName)
+  if not self:IsDebuggingEnabled() then return end
   _installOnObject(obj, moduleName)
 end
 
 -- Optional: callback tracking (AceCallback/CallbackHandler style)
 -- We count callbacks as Events with an "CB:" prefix so the existing UI stays unchanged.
 function MemDebug:InstallCallbackTracking(obj, moduleName)
+  if not self:IsDebuggingEnabled() then return end
   if not obj or obj.__pleebugCallbackInstalled then return end
   obj.__pleebugCallbackInstalled = true
 
@@ -1535,6 +1662,7 @@ function MemDebug:InstallCallbackTracking(obj, moduleName)
 end
 
 function MemDebug:InstallFrameEventTracking(obj, moduleName)
+  if not self:IsDebuggingEnabled() then return end
   if not obj then
     return
   end
@@ -1646,6 +1774,7 @@ local function _BuildKnownFuncSetForModule(self, moduleName)
 end
 
 function MemDebug:PollFrames(moduleName)
+  if not self:IsDebuggingEnabled() then return 0 end
   if type(EnumerateFrames) ~= "function" then
     return 0
   end
@@ -1731,6 +1860,7 @@ function MemDebug:IsAutoPollFramesEnabled()
 end
 
 function MemDebug:_StartAutoPollTicker()
+  if not self:IsDebuggingEnabled() then return end
   self:_StopAutoPollTicker()
 
   local mdb = _ensureDB()
@@ -1776,19 +1906,33 @@ if not SLASH_PLEEBBUG1 then
   end
 end
 
--- One-shot reopen after the mode/CVar reload buttons.
+-- One-shot migration cleanup and reopen after debugging reload controls.
 -- Delayed until PLAYER_LOGIN so LibPleebug-1_Window.lua has registered MemDebug.Window.
 if not MemDebug.__pleebugOpenAfterReloadFrame then
   local _openFrame = CreateFrame("Frame")
   MemDebug.__pleebugOpenAfterReloadFrame = _openFrame
   _openFrame:RegisterEvent("PLAYER_LOGIN")
-  _openFrame:SetScript("OnEvent", function()
-    if C_Timer and C_Timer.After then
-      C_Timer.After(0.25, function()
-        MemDebug:OpenAfterReloadIfRequested()
-      end)
-    else
+  _openFrame:SetScript("OnEvent", function(self)
+    self:UnregisterEvent("PLAYER_LOGIN")
+    C_Timer.After(0.25, function()
+      if MemDebug._disableLegacyScriptProfile then
+        MemDebug._disableLegacyScriptProfile = nil
+        if MemDebug.CPU:IsScriptProfileEnabled() then
+          MemDebug.CPU:SetScriptProfile(false)
+          MemDebug._debuggingReloadPending = true
+        end
+      end
+      if MemDebug._debuggingReloadPending then
+        if InCombatLockdown() then
+          self:RegisterEvent("PLAYER_REGEN_ENABLED")
+          return
+        end
+        MemDebug._debuggingReloadPending = nil
+        self:UnregisterEvent("PLAYER_REGEN_ENABLED")
+        ReloadUI()
+        return
+      end
       MemDebug:OpenAfterReloadIfRequested()
-    end
+    end)
   end)
 end
