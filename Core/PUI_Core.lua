@@ -141,7 +141,8 @@ local DB_DEFAULTS = {
       media = {
         iconTextGlobalFont  = "FiraSans Heavy",
         iconTextGlobalFlags = "OUTLINE",
-        runtimeFontSlug     = false,
+        runtimeFontSlug     = true,
+        runtimeFontSlugNoticePending = false,
         fontSizeOffset      = 0,
         fontSizeScopes = {
           general         = true,
@@ -192,6 +193,7 @@ local DB_DEFAULTS = {
     reloadCount = 0,
     installed   = false,
     blizzardEditModeNoticeDismissed = false,
+    runtimeFontSlugMigrationVersion = 0,
     schemaVersion = 6,
     whatsNew = {
       disabled = false,
@@ -883,7 +885,21 @@ end
 
 
 function Addon:OnInitialize()
+  local saved = _G.PleebUIDB
+  if saved and (not saved.global or (saved.global.runtimeFontSlugMigrationVersion or 0) < 1) then
+    for _, profile in pairs(saved.profiles or {}) do
+      local pui = _PUI_EnsureTable(profile, "pui")
+      local media = _PUI_EnsureTable(pui, "media")
+      -- Preserve the previous default before AceDB applies the new one.
+      if media.runtimeFontSlug == nil then
+        media.runtimeFontSlug = false
+      end
+      media.runtimeFontSlugNoticePending = true
+    end
+  end
+
   self.db = AceDB:New("PleebUIDB", DB_DEFAULTS, "Default")
+  self.db.global.runtimeFontSlugMigrationVersion = 1
   ns.DB = self.db
 
   ns.Flags.OptionsDebug = self.db.profile.debug == true
@@ -1017,6 +1033,217 @@ function Addon:OnInitialize()
   ns.MinimapData.Initialize()
 end
 
+local runtimeFontSlugNotice
+local runtimeFontSlugNoticeSeen = setmetatable({}, { __mode = "k" })
+local runtimeFontSlugWorldEntered = false
+
+local function RefreshRuntimeFontSlugNotice()
+  local frame = runtimeFontSlugNotice
+  if not frame or not frame:IsShown() then return end
+
+  local enabled = Addon:GetMediaDB().runtimeFontSlug == true
+  frame.toggle:SetText(enabled and "Disable SLUG" or "Enable SLUG")
+  frame.toggle:SetEnabled(not InCombatLockdown())
+  frame.status:SetText("Runtime text: " .. (enabled and "SLUG enabled" or "SLUG disabled")
+    .. (InCombatLockdown() and "\nYou can compare rendering again after combat." or ""))
+  local font = ns.LSM:Fetch("font", ns.Theme.GetFont())
+  local size = ns.Theme.ResolveFontSize(16, "general")
+  frame.demoOn:SetFont(font, size, "OUTLINE, SLUG")
+  frame.demoOff:SetFont(font, size, "OUTLINE")
+  frame:Layout()
+end
+
+local function CreateRuntimeFontSlugNotice()
+  local Theme = ns.Theme
+  local frame = CreateFrame("Frame", nil, UIParent, "BackdropTemplate")
+  frame:Hide()
+  frame:SetSize(620, 420)
+  frame:SetPoint("CENTER")
+  frame:SetFrameStrata("DIALOG")
+  frame:SetToplevel(true)
+  frame:SetClampedToScreen(true)
+  frame:EnableMouse(true)
+  frame:SetMovable(true)
+  frame:SetResizable(true)
+  frame:SetResizeBounds(460, 300)
+  frame:RegisterForDrag("LeftButton")
+  frame:SetScript("OnDragStart", frame.StartMoving)
+  frame:SetScript("OnDragStop", frame.StopMovingOrSizing)
+  Theme.WidgetSkins.Frame(frame)
+
+  local function CreateText(parent, role, text)
+    local label = parent:CreateFontString(nil, "OVERLAY")
+    if role then
+      label.__puiOptionsFontOwned = true
+      Theme.ApplyFont(label, role)
+    else
+      label:SetFont(ns.LSM:Fetch("font", Theme.GetFont()), Theme.ResolveFontSize(16, "general"), "OUTLINE")
+    end
+    local color = Theme.GetColors().text
+    label:SetTextColor(color[1], color[2], color[3], color[4])
+    label:SetJustifyH("LEFT")
+    label:SetJustifyV("TOP")
+    label:SetWordWrap(true)
+    label:SetText(text)
+    return label
+  end
+
+  frame.title = CreateText(frame, "title", "SLUG rendering in PleebUI")
+  frame.title:SetPoint("TOPLEFT", 20, -20)
+  frame.title:SetPoint("TOPRIGHT", -20, -20)
+
+  local scroll = CreateFrame("ScrollFrame", nil, frame, "UIPanelScrollFrameTemplate")
+  frame.scroll = scroll
+  local content = CreateFrame("Frame", nil, scroll)
+  scroll:SetScrollChild(content)
+  frame.body = CreateText(content, "body",
+    "SLUG draws text with smooth edges so letters stay clear at different sizes. Compare the samples below and choose what looks best to you.")
+  frame.body:SetPoint("TOPLEFT", content, "TOPLEFT", 0, 0)
+  frame.body:SetPoint("TOPRIGHT", content, "TOPRIGHT", 0, 0)
+
+  frame.demoOnTitle = CreateText(content, "header", "SLUG on")
+  frame.demoOffTitle = CreateText(content, "header", "SLUG off")
+  local sample = "The quick brown fox\nHealth 123,456 / 78%"
+  frame.demoOn = CreateText(content, nil, sample)
+  frame.demoOff = CreateText(content, nil, sample)
+
+  frame.status = CreateText(frame, "body", "")
+
+  local checkbox = LibStub("AceGUI-3.0"):Create("PUI_Checkbox")
+  ns.AceHooks.TakeOwnership(checkbox)
+  checkbox.frame:SetParent(frame)
+  checkbox.__puiWrapLabel = true
+  checkbox:SetLabel("Don't show this again")
+  checkbox:SetValue(false)
+  checkbox.frame:Show()
+  frame.dismiss = checkbox
+
+  local function CreateButton(text, point, x)
+    local button = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
+    button:SetPoint(point, frame, point, x, 20)
+    button:SetText(text)
+    Theme.WidgetSkins.UIButton(button)
+    return button
+  end
+
+  frame.toggle = CreateButton("Enable SLUG", "BOTTOMLEFT", 20)
+  frame.toggle:SetScript("OnClick", function()
+    if InCombatLockdown() then return end
+    local media = Addon:GetMediaDB()
+    media.runtimeFontSlug = media.runtimeFontSlug ~= true
+    Addon:RefreshIconFonts()
+    Addon:RequestUpdate("Options", { options = true })
+  end)
+
+  frame.save = CreateButton("Save and Close", "BOTTOMRIGHT", -20)
+  frame.save:SetScript("OnClick", function()
+    Addon:GetMediaDB().runtimeFontSlugNoticePending = not checkbox:GetValue()
+    frame:Hide()
+  end)
+
+  local function LayoutContent()
+    local width = math.max(1, scroll:GetWidth())
+    content:SetWidth(width)
+    local columnWidth = math.max(1, (width - 20) * 0.5)
+    local titleTop = frame.body:GetStringHeight() + 20
+    frame.demoOnTitle:ClearAllPoints()
+    frame.demoOnTitle:SetPoint("TOPLEFT", content, "TOPLEFT", 0, -titleTop)
+    frame.demoOnTitle:SetWidth(columnWidth)
+    frame.demoOffTitle:ClearAllPoints()
+    frame.demoOffTitle:SetPoint("TOPLEFT", content, "TOPLEFT", columnWidth + 20, -titleTop)
+    frame.demoOffTitle:SetWidth(columnWidth)
+    local sampleTop = titleTop + math.max(frame.demoOnTitle:GetStringHeight(), frame.demoOffTitle:GetStringHeight()) + 8
+    frame.demoOn:ClearAllPoints()
+    frame.demoOn:SetPoint("TOPLEFT", content, "TOPLEFT", 0, -sampleTop)
+    frame.demoOn:SetWidth(columnWidth)
+    frame.demoOff:ClearAllPoints()
+    frame.demoOff:SetPoint("TOPLEFT", content, "TOPLEFT", columnWidth + 20, -sampleTop)
+    frame.demoOff:SetWidth(columnWidth)
+    local contentHeight = sampleTop + math.max(frame.demoOn:GetStringHeight(), frame.demoOff:GetStringHeight()) + 4
+    content:SetHeight(contentHeight)
+    local overflow = math.max(0, contentHeight - scroll:GetHeight())
+    scroll:SetVerticalScroll(math.min(scroll:GetVerticalScroll(), overflow))
+    scroll:UpdateScrollChildRect()
+    return contentHeight
+  end
+
+  function frame:Layout(fitContent)
+    local width = self:GetWidth() - 40
+    local buttonHeight = math.max(34, self.toggle:GetFontString():GetStringHeight() + 18,
+      self.save:GetFontString():GetStringHeight() + 18)
+    self.toggle:SetSize((width - 12) * 0.5, buttonHeight)
+    self.save:SetSize((width - 12) * 0.5, buttonHeight)
+    checkbox:SetWidth(width)
+    checkbox:SetHeight(math.max(32, checkbox.text:GetStringHeight() + 12))
+    checkbox.frame:ClearAllPoints()
+    checkbox.frame:SetPoint("BOTTOMLEFT", self, "BOTTOMLEFT", 20, 32 + buttonHeight)
+    local statusBottom = 44 + buttonHeight + checkbox.frame:GetHeight()
+    self.status:ClearAllPoints()
+    self.status:SetPoint("BOTTOMLEFT", self, "BOTTOMLEFT", 20, statusBottom)
+    self.status:SetWidth(width)
+    self.status:SetHeight(self.status:GetStringHeight())
+    scroll:ClearAllPoints()
+    scroll:SetPoint("TOPLEFT", self, "TOPLEFT", 20, -36 - self.title:GetStringHeight())
+    scroll:SetPoint("BOTTOMRIGHT", self, "BOTTOMRIGHT", -46, statusBottom + self.status:GetHeight() + 12)
+    local contentHeight = LayoutContent()
+    if fitContent then
+      local height = 36 + self.title:GetStringHeight() + contentHeight + statusBottom + self.status:GetHeight() + 12
+      self:SetHeight(math.min(self.maxHeight, math.max(300, math.ceil(height))))
+      LayoutContent()
+    end
+  end
+
+  local grip = CreateFrame("Button", nil, frame)
+  grip:SetSize(18, 18)
+  grip:SetPoint("BOTTOMRIGHT", -1, 1)
+  local texture = grip:CreateTexture(nil, "OVERLAY")
+  texture:SetAllPoints(grip)
+  texture:SetAtlas("damagemeters-scalehandle")
+  grip:SetScript("OnMouseDown", function(_, button)
+    if button == "LeftButton" then frame:StartSizing("BOTTOMRIGHT") end
+  end)
+  grip:SetScript("OnMouseUp", function() frame:StopMovingOrSizing() end)
+  frame.resizeGrip = grip
+  frame:SetScript("OnSizeChanged", function(self) self:Layout() end)
+  scroll:SetScript("OnSizeChanged", LayoutContent)
+  Theme.WidgetSkins.Scrollbar(scroll.ScrollBar)
+
+  frame:SetScript("OnShow", function(self)
+    self:RegisterEvent("PLAYER_REGEN_DISABLED")
+    self:RegisterEvent("PLAYER_REGEN_ENABLED")
+    RefreshRuntimeFontSlugNotice()
+  end)
+  frame:SetScript("OnHide", function(self)
+    self:StopMovingOrSizing()
+    self:UnregisterAllEvents()
+  end)
+  frame:SetScript("OnEvent", RefreshRuntimeFontSlugNotice)
+  ns.KeyboardNavigation.BindWindow(frame, false, function() frame:Hide() end)
+  return frame
+end
+
+function Addon:ShowRuntimeFontSlugNotice()
+  local media = self:GetMediaDB()
+  if runtimeFontSlugNotice then runtimeFontSlugNotice:Hide() end
+  if not runtimeFontSlugWorldEntered or InCombatLockdown() or self:IsInstallWizardPending()
+    or media.runtimeFontSlugNoticePending ~= true or runtimeFontSlugNoticeSeen[media] then
+    return
+  end
+
+  runtimeFontSlugNotice = runtimeFontSlugNotice or CreateRuntimeFontSlugNotice()
+  local frame = runtimeFontSlugNotice
+  frame.dismiss:SetValue(false)
+  local maxWidth, maxHeight = UIParent:GetWidth() / frame:GetScale() - 24, UIParent:GetHeight() / frame:GetScale() - 24
+  frame.maxHeight = maxHeight
+  frame:SetResizeBounds(math.min(460, maxWidth), math.min(300, maxHeight), maxWidth, maxHeight)
+  frame:SetSize(math.min(frame:GetWidth(), maxWidth), math.min(frame:GetHeight(), maxHeight))
+  frame.scroll:SetVerticalScroll(0)
+  runtimeFontSlugNoticeSeen[media] = true
+  frame:Show()
+  frame:Layout(true)
+  frame:Raise()
+end
+
 function Addon:ApplyFontSettings()
   local media = self.db.profile.pui.media
 
@@ -1055,10 +1282,15 @@ function Addon:RefreshIconFonts(atWorldEntry, profileRefresh)
   ns.Registry.Minimap:RefreshFonts()
   ns.Modules.Quality:RefreshFonts()
   ns.Theme.RefreshRuntimeFonts()
+  RefreshRuntimeFontSlugNotice()
 end
 
 Addon:RegisterEvent("PLAYER_ENTERING_WORLD", function()
   Addon:RefreshIconFonts(true)
+  if not runtimeFontSlugWorldEntered then
+    runtimeFontSlugWorldEntered = true
+    Addon:ShowRuntimeFontSlugNotice()
+  end
 end)
 
 
@@ -1202,6 +1434,7 @@ function Addon:_RunNextStaggeredUpdate()
     st.queue = {}
     ns.Modules.CooldownManager:FinishProfileTransition()
     ns.FrameUtil.CompleteProfileTransition()
+    self:ShowRuntimeFontSlugNotice()
     return
   end
 
@@ -1215,6 +1448,7 @@ PUIProfileUpdateFrame:SetScript("OnUpdate", function(frame)
 end)
 
 function Addon:StaggeredUpdateAll(flags)
+  if runtimeFontSlugNotice then runtimeFontSlugNotice:Hide() end
   local st = self._puiStaggeredUpdate
   if not st then
     self._puiStaggeredUpdate = { queue = {}, running = false, flags = nil, nextFlags = nil }
@@ -1417,6 +1651,9 @@ Addon:RegisterEvent("LOADING_SCREEN_DISABLED", CompleteStartupLayout)
 
 Addon:RegisterEvent("PLAYER_REGEN_ENABLED", function()
   Addon.FrameScale:ApplyPendingUIScale()
+  if not runtimeFontSlugNotice or not runtimeFontSlugNotice:IsShown() then
+    Addon:ShowRuntimeFontSlugNotice()
+  end
 
   if startupLayoutPending then
     CompleteStartupLayout()

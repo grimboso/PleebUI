@@ -73,6 +73,10 @@ local function RefreshScrollbarState(scrollbar)
   )
 end
 
+local function RefreshScrollFrameScrollbar(scrollFrame)
+  scrollFrame.ScrollBar:SetShown(scrollFrame:GetVerticalScrollRange() > 1)
+end
+
 function WidgetSkins.Scrollbar(widget, visibleHeight, contentHeight, minimumThumbHeight)
   local scrollbar = widget.ScrollBar or widget
   local colors = Theme.GetColors()
@@ -180,6 +184,17 @@ function WidgetSkins.Scrollbar(widget, visibleHeight, contentHeight, minimumThum
     scrollbar:HookScript("OnShow", RefreshScrollbarState)
   end
   RefreshScrollbarState(scrollbar)
+
+  local scrollFrame = scrollbar:GetParent()
+  if scrollFrame.ScrollBar == scrollbar then
+    scrollFrame.scrollBarHideable = true
+    if not scrollFrame.__puiScrollbarVisibilityHooked then
+      scrollFrame.__puiScrollbarVisibilityHooked = true
+      scrollFrame:HookScript("OnScrollRangeChanged", RefreshScrollFrameScrollbar)
+      scrollFrame:HookScript("OnShow", RefreshScrollFrameScrollbar)
+    end
+    RefreshScrollFrameScrollbar(scrollFrame)
+  end
 end
 
 local function LayoutScrollFrameTargets(widget)
