@@ -905,6 +905,10 @@ function Addon:OnInitialize()
   self.ActionBarsDB = self.db:RegisterNamespace("ActionBars", ns.ActionBarsDefaults)
   self.DamageMetersDB = self.db:RegisterNamespace("DamageMeters", ns.DamageMetersDefaults)
   self.PRDDB = self.db:RegisterNamespace("PRD", ns.PRDDefaults)
+  self.UnitFramesDB = self.db:RegisterNamespace("UnitFrames", { profile = CopyTable(ns.UFDefaults.Profile) })
+  self.PartyFramesDB = self.db:RegisterNamespace("PartyFrames", ns.UFDefaults.GetPartyDefaults())
+  self.RaidFramesDB = self.db:RegisterNamespace("RaidFrames", ns.UFDefaults.GetRaidDefaults())
+  self.CastBarDB = self.db:RegisterNamespace("CastBar", ns.CastBarDefaults)
 
   ns.Flags.OptionsDebug = self.db.profile.debug == true
   ns.Flags.__puiBlizzardEditModeActive = ns.Flags.__puiBlizzardEditModeActive or false
@@ -1269,10 +1273,18 @@ end
 function Addon:RefreshIconFonts(atWorldEntry, profileRefresh)
   if not profileRefresh then
     self:ApplyFontSettings()
-    ns.Modules.UnitFrames:SafeRefresh("text")
-    ns.Modules.PartyFrames:RefreshText()
-    ns.Modules.RaidFrames:RefreshText()
-    ns.Modules.CastBar:RefreshFromProfile()
+    if ns.Modules.UnitFrames then
+      ns.UFRuntime:Request(ns.Modules.UnitFrames, "SafeRefresh", "text")
+    end
+    if ns.Modules.PartyFrames then
+      ns.UFRuntime:Request(ns.Modules.PartyFrames, "RefreshText")
+    end
+    if ns.Modules.RaidFrames then
+      ns.UFRuntime:Request(ns.Modules.RaidFrames, "RefreshText")
+    end
+    if ns.Modules.CastBar then
+      ns.UFRuntime:Request(ns.Modules.CastBar, "RefreshFromProfile")
+    end
     if ns.Modules.PRD then
       ns.Modules.PRD:RefreshIconFonts()
     end
@@ -1374,8 +1386,12 @@ end
 
 local function _PUI_UB_ApplySoftTarget(target, flags)
   local module = ns.Modules[target]
-  if (target ~= "PRD" and target ~= "CooldownManager") or module then
-    module:SoftRebuild(flags)
+  if module then
+    if target == "UnitFrames" or target == "CastBar" then
+      ns.UFRuntime:Request(module, "SoftRebuild", flags)
+    else
+      module:SoftRebuild(flags)
+    end
   end
 end
 
@@ -1535,14 +1551,14 @@ function Addon:_FlushUpdateBus(targets)
 
   local partyFrames = ns.Modules.PartyFrames
   flags = targets.PartyFrames
-  if flags then
-    partyFrames:Refresh()
+  if flags and partyFrames then
+    ns.UFRuntime:Request(partyFrames, "Refresh")
   end
 
   local raidFrames = ns.Modules.RaidFrames
   flags = targets.RaidFrames
-  if flags then
-    raidFrames:Refresh()
+  if flags and raidFrames then
+    ns.UFRuntime:Request(raidFrames, "Refresh")
   end
 
   local dragonriding = ns.Modules.Dragonriding
@@ -1569,8 +1585,8 @@ function Addon:_FlushUpdateBus(targets)
 
   local unitFrames = ns.Modules.UnitFrames
   flags = targets.UnitFrames
-  if flags then
-    unitFrames:ApplySettings(flags)
+  if flags and unitFrames then
+    ns.UFRuntime:Request(unitFrames, "ApplySettings", flags)
 
     if flags.profile ~= true and (flags.layout == true or flags.movers == true) then
       _PUI_UB_RequestSoftTarget(ub, "UnitFrames", flags)

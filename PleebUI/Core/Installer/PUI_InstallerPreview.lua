@@ -104,9 +104,25 @@ local function BuildCurrent()
   local owner = owners[request.kind]
   owner.previewHost = request.host
   if request.kind == "unitframes" then
-    request.box = ns.UFPreview.BuildInstallerPreview(request.host, owner, request.path)
-    request.box.animationTime, request.box.animationElapsed = 0, 0
-    request.box:SetScript("OnUpdate", request.playing and request.path[4] ~= "customDisplays" and AnimateUnitFrames or nil)
+    if ns.UFPreview then
+      request.box = ns.UFPreview.BuildInstallerPreview(request.host, owner, request.path)
+      request.box.animationTime, request.box.animationElapsed = 0, 0
+      request.box:SetScript("OnUpdate", request.playing and request.path[4] ~= "customDisplays" and AnimateUnitFrames or nil)
+    else
+      local box = owner.disabledBox
+      if not box then
+        box = ns.PreviewBox.Create(request.host)
+        owner.disabledBox = box
+      end
+      box:SetParent(request.host)
+      box:ClearAllPoints()
+      box:SetAllPoints(request.host)
+      box:SetTitle("Addon disabled")
+      box:SetDescription("")
+      box:SetAlpha(0.5)
+      box:Show()
+      request.box = box
+    end
   elseif request.kind == "actionbars" then
     if ns.ActionBarsPreview then
       ns.ActionBarsPreview.Build(navigation, owner, owner, request.path, 2)

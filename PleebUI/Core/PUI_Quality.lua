@@ -2574,7 +2574,7 @@ function Quality:ApplyAll()
   ApplyMaxCameraZoom(not not q.maxCameraZoom)
   ApplySuppressGuildAchievementToasts(not not q.suppressGuildAchievementToasts)
 
-  ns.UFAuraFilters.ApplyAuraSpellIDTooltipPreference(q.showAuraSpellIDs == true)
+  ns.AuraTooltipSettings.ApplyPreference(q.showAuraSpellIDs == true)
 
   ApplyHideElements()
 
@@ -3297,7 +3297,7 @@ local function QualityProvider(AddonObj)
                   "showAuraSpellIDs",
                   6,
                   function(_, value)
-                    ns.UFAuraFilters.ApplyAuraSpellIDTooltipPreference(value == true)
+                    ns.AuraTooltipSettings.ApplyPreference(value == true)
                   end
                 ),
               },

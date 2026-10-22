@@ -20,6 +20,5 @@ Core\Core.xml
 Modules\PUIModules\PUIModules.xml
 
 # Feature modules
-Modules\UnitFrames\UnitFrames.xml
 
 

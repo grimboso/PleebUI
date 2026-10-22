@@ -369,9 +369,9 @@ local function Review()
   if index then name = select(2, C_SpecializationInfo.GetSpecializationInfo(index)) end
   Text("Specialization: " .. (name or "Not selected") .. ". Settings are saved as you change them. Examples are separate.")
   for _, entry in ipairs({
-    { "Unit frames", ns.UnitFrames:GetQuickSetupValue("enabled"), "unitframes" },
-    { "Party frames", ns.Modules.PartyFrames.db.profile.enabled ~= false, "group", 1 },
-    { "Raid frames", ns.Modules.RaidFrames.db.profile.enabled ~= false, "group", 2 },
+    { "Unit frames", ns.Modules.UnitFrames and ns.UnitFrames:GetQuickSetupValue("enabled"), "unitframes" },
+    { "Party frames", ns.Modules.PartyFrames and ns.Modules.PartyFrames.db.profile.enabled ~= false, "group", 1 },
+    { "Raid frames", ns.Modules.RaidFrames and ns.Modules.RaidFrames.db.profile.enabled ~= false, "group", 2 },
     { "Personal Resource Display", ns.Modules.PRD and ns.Modules.PRD:IsModuleEnabled(), "prd" },
     { "Cooldown Manager", ns.Modules.CooldownManager and ns.Modules.CooldownManager:IsModuleEnabledByUser(), "cooldowns" },
     { "Items and racials", ns.Modules.CooldownManager and ns.Modules.CooldownManager:GetConsumableTrackerEnabled(), "utility" },
@@ -450,6 +450,11 @@ local function BuildPage(key)
     Text("Tip: settings save as you change them. Examples use sample data.")
     Action("Open full options (optional)", function() callbacks.openOptions({ "unitframes", "player" }) end)
   elseif key == "unitframes" then
+    if not ns.Modules.UnitFrames then
+      Preview("unitframes", { "unitframes" })
+      Settings({ "unitframes" })
+      return
+    end
     Text("Unit frames show health and power.\n• Pick the frame you want to change.\n• Start with a readable size and health text.")
     Check("Enable unit frames", ns.UnitFrames:GetQuickSetupValue("enabled"), function(value) ns.UnitFrames:SetQuickSetupValue("enabled", value) end)
     Choices("Frame", {
@@ -459,12 +464,22 @@ local function BuildPage(key)
     }, 1, function(choice) Preview("unitframes", choice[2]); Settings(choice[2]) end)
     Text("Tip: /pui > Unit Frames has castbars, portraits, and detailed styling.")
   elseif key == "group" then
+    if not ns.Modules.UnitFrames then
+      Preview("unitframes", { "unitframes" })
+      Settings({ "unitframes" })
+      return
+    end
     Text("Follow your group at a glance.\n• Choose Party or Raid.\n• Give each frame enough size and space.")
     Choices("Group", { { "Party", { "unitframes", "party" } }, { "Raid", { "unitframes", "raid" } } }, 1, function(choice)
       Preview("unitframes", choice[2]); Settings(choice[2])
     end)
     Text("Tip: /pui > Unit Frames > Party or Raid has sorting and indicators.")
   elseif key == "auras" then
+    if not ns.Modules.UnitFrames then
+      Preview("unitframes", { "unitframes" })
+      Settings({ "unitframes" })
+      return
+    end
     Text("Auras show effects on a unit.\n• Buffs help; debuffs harm.\n• Defensive icons show protection.")
     Choices("Aura example", {
       { "Player buffs", { "unitframes", "player", "auras", "customDisplays", "buffs" } },

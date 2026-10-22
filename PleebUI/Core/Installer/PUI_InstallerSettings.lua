@@ -245,6 +245,7 @@ local function BuildOptions()
     or path[1] == "DamageMeters" and not ns.Modules.DamageMeters
     or path[1] == "PRD" and not ns.Modules.PRD
     or path[1] == "CooldownManager" and not ns.Modules.CooldownManager
+    or path[1] == "unitframes" and not ns.Modules.UnitFrames
   then
     return record.factory(Addon):GetOptions()
   end

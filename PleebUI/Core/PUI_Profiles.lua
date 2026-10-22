@@ -1,10 +1,9 @@
-local ADDON_NAME, ns = ...
+local _, ns = ...
 local Addon = ns.Addon
 local Theme = ns.Theme
 
 local AceDBOptions = LibStub("AceDBOptions-3.0")
 local LibDualSpec = LibStub("LibDualSpec-1.0")
-local AceConfigReg = LibStub("AceConfigRegistry-3.0")
 
 local unpack = _G.unpack
 local CreateFrame = _G.CreateFrame
@@ -294,7 +293,7 @@ local function PUI_Profile_ShowImportNameDialog(importText, state)
     if profileName == "" then
       state.statusText = "Enter a profile name."
       frame.status:SetText(state.statusText)
-      AceConfigReg:NotifyChange(ADDON_NAME)
+      ns.OptionsLifecycle.RefreshModel({ "Profiles" })
       PUI_Profile_SelectText(frame.editBox)
       return
     end
@@ -305,14 +304,14 @@ local function PUI_Profile_ShowImportNameDialog(importText, state)
     if ok then
       state.statusText = "Imported and switched to profile '" .. tostring(nameOrErr) .. "'."
       frame.status:SetText(state.statusText)
-      AceConfigReg:NotifyChange(ADDON_NAME)
+      ns.OptionsLifecycle.RefreshModel({ "Profiles" })
       frame:Hide()
       return
     end
 
     state.statusText = tostring(nameOrErr)
     frame.status:SetText(state.statusText)
-    AceConfigReg:NotifyChange(ADDON_NAME)
+    ns.OptionsLifecycle.RefreshModel({ "Profiles" })
   end)
 
   frame:Show()
@@ -403,7 +402,7 @@ local function ProfilesProvider(Addon)
             else
               state.statusText = tostring(err or "Export failed.")
             end
-            AceConfigReg:NotifyChange(ADDON_NAME)
+            ns.OptionsLifecycle.RefreshModel({ "Profiles" })
           end,
         },
         importProfile = {

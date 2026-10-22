@@ -213,7 +213,10 @@ function API:GetPlugin(key)
 end
 
 function API:GetUnitFrameDisplayName(unit)
-  return ns.UFTags.GetDisplayName(unit)
+  if ns.Modules.UnitFrames then
+    return ns.UFTags.GetDisplayName(unit)
+  end
+  return UnitName(unit)
 end
 
 function API:RegisterUnitFrameDisplayNameListener(owner, callback)

@@ -27,6 +27,7 @@
   <Script file="GUI\PUI_OptionsSchema.lua"/>
   <Script file="GUI\PUI_PageShell.lua"/>
   <Script file="GUI\PUI_PreviewBox.lua"/>
+  <Script file="PUI_AuraTooltipSettings.lua"/>
   <Script file="GUI\PUI_GUI.lua"/>
   <Script file="PUI_PublicAPI.lua"/>
   <Script file="EditMode\EditMode_QuickSettings.lua"/>
@@ -47,6 +48,9 @@
   <Script file="PUI_ResourceSettings.lua"/>
   <Script file="PUI_ResourceCounts.lua"/>
   <Script file="PUI_CooldownManager.lua"/>
+  <Script file="PUI_UnitFramesDefaults.lua"/>
+  <Script file="PUI_CastBarDefaults.lua"/>
+  <Script file="PUI_UnitFrames.lua"/>
   <Include file="Widgets\PUI_AuraTemplates.xml"/>
   <Include file="Widgets\PUI_BarTemplates.xml"/>
   <Script file="Widgets\PUI_AuraWidget.lua"/>

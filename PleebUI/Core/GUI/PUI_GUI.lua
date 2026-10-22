@@ -23,7 +23,7 @@ local function _PUI_ApplyAuraSpellIDTooltipCVarForOptions(optionsOpen)
     enabled = quality and quality.showAuraSpellIDs == true or false
   end
 
-  ns.UFAuraFilters.ApplyAuraSpellIDTooltipCVar(enabled)
+  ns.AuraTooltipSettings.ApplyCVar(enabled)
 end
 
 
@@ -171,60 +171,6 @@ local function _PUI_MergeApplyFlags(dst, src)
   end
 end
 
-local function _PUI_FlushUFOptions(flags)
-  local uf = ns.Modules.UnitFrames
-
-  if flags.textures then
-    ns.UFStyle.RefreshAllFrameTextures(uf)
-  end
-
-  if flags.mouseover then
-    uf:RefreshMouseoverSettings()
-  end
-
-  if flags.auras then
-    uf:RefreshAuraDisplay(flags)
-  end
-
-  local needsSafeRefresh = false
-  for key, value in pairs(flags) do
-    if value
-      and key ~= "textures"
-      and key ~= "mouseover"
-      and key ~= "auras"
-      and key ~= "unit"
-      and key ~= "rebuildDB"
-      and key ~= "displayID"
-      and key ~= "auraChange"
-      and key ~= "auraType"
-      and key ~= "highlight"
-      and key ~= "highlightState"
-      and key ~= "highlightPresentation"
-    then
-      needsSafeRefresh = true
-      break
-    end
-  end
-
-  if needsSafeRefresh then
-    uf:SafeRefresh(flags)
-  end
-
-  local testMode = ns.TestMode
-  if testMode:IsActive() then
-    testMode:Refresh("unitframes", "unit-frame-options", "uf.singleSettings")
-  end
-end
-
-local function _PUI_FlushCastBarOptions()
-  ns.Modules.CastBar:UpdateAllLayouts()
-
-  local testMode = ns.TestMode
-  if testMode:IsActive() then
-    testMode:Refresh("unitframes", "castbar-options", "uf.castbars")
-  end
-end
-
 local function _PUI_FlushOptionsApplyBucket(kind, flags)
   if kind == "ActionBars" then
     ns.ActionBarsCore:RefreshAll(flags)
@@ -232,10 +178,6 @@ local function _PUI_FlushOptionsApplyBucket(kind, flags)
     if ns.Modules.PRD then
       ns.Modules.PRD:RequestRefresh(flags)
     end
-  elseif kind == "UnitFrames" then
-    _PUI_FlushUFOptions(flags)
-  elseif kind == "CastBar" then
-    _PUI_FlushCastBarOptions(flags)
   elseif kind == "Quality" then
     ns.Modules.Quality:ApplyAll()
   elseif kind == "Minimap" then
@@ -246,6 +188,14 @@ local function _PUI_FlushOptionsApplyBucket(kind, flags)
 end
 
 function Addon:ApplyOptionsChange(kind, flags)
+  if kind == "UnitFrames" or kind == "CastBar" then
+    local module = ns.Modules[kind]
+    if module then
+      ns.UFRuntime:Request(module, "ApplyOptions", flags)
+      if kind == "UnitFrames" then ns.UFPreview.RefreshAuraManagerPreview() end
+    end
+    return
+  end
   local buckets = _PUI_OptionsApplyState.buckets
   local bucket = buckets[kind]
   if not bucket then
@@ -254,10 +204,6 @@ function Addon:ApplyOptionsChange(kind, flags)
   end
 
   _PUI_MergeApplyFlags(bucket.flags, flags)
-
-  if kind == "UnitFrames" then
-    ns.UFPreview.RefreshAuraManagerPreview()
-  end
 
   if bucket.queued then
     return
@@ -3227,7 +3173,9 @@ function Addon:RefreshOptionsTheme()
   if ns.PCMPreview then
     ns.PCMPreview.Refresh()
   end
-  ns.UFPreview.RefreshAuraManagerPreview()
+  if ns.UFPreview then
+    ns.UFPreview.RefreshAuraManagerPreview()
+  end
   ns.KeyboardNavigation.RefreshWindows()
 end
 

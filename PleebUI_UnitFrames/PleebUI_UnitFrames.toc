@@ -1,0 +1,10 @@
+## Interface: 120105
+## Title: PleebUI Unit Frames
+## Notes: Unit frames for PleebUI.
+## Author: Pleeb
+## Version: @project-version@
+## Category-enUS: PleebUI
+## IconTexture: Interface\AddOns\PleebUI\Media\Logo.tga
+## Dependencies: PleebUI
+
+UnitFrames.xml

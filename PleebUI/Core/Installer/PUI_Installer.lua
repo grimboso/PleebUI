@@ -185,7 +185,7 @@ function Addon:UndoCombatReadabilityPreset()
     end
   end
 
-  if affected.unitFrames then
+  if affected.unitFrames and ns.Modules.UnitFrames then
     ns.Modules.UnitFrames:SafeRefresh("text")
   end
 
@@ -205,11 +205,11 @@ function Addon:UndoCombatReadabilityPreset()
   for i = 1, #groupedModules do
     local group = groupedModules[i]
 
-    if affected[group.textOwner] then
+    if group.module and affected[group.textOwner] then
       group.module:SafeRefresh("text")
     end
 
-    if affected[group.auraOwner] then
+    if group.module and affected[group.auraOwner] then
       group.module:RefreshAuraDisplay()
     end
   end
@@ -258,19 +258,20 @@ function Addon:ApplyCombatReadabilityPreset()
 
   local moduleProfiles = CaptureCombatReadabilityProfiles()
   local UF = ns.Modules.UnitFrames
-  local ufDB = UF.db.profile
+  if UF then
+    local ufDB = UF.db.profile
 
-  SetCombatReadabilityValue(ufDB.text, "shortenValues", true, "unitFrames")
-  ApplyCombatReadabilityTextConfig(ufDB.text, 16, 16, 14, "unitFrames")
+    SetCombatReadabilityValue(ufDB.text, "shortenValues", true, "unitFrames")
+    ApplyCombatReadabilityTextConfig(ufDB.text, 16, 16, 14, "unitFrames")
 
-  for _, cfg in pairs(ufDB.units or {}) do
-    if type(cfg) == "table" then
-      ApplyCombatReadabilityTextConfig(cfg.text, 16, 16, 14, "unitFrames")
+    for _, cfg in pairs(ufDB.units or {}) do
+      if type(cfg) == "table" then
+        ApplyCombatReadabilityTextConfig(cfg.text, 16, 16, 14, "unitFrames")
+      end
     end
+
+    UF:SafeRefresh("text")
   end
-
-  UF:SafeRefresh("text")
-
   local groupedModules = {
     {
       module = ns.Modules.PartyFrames,
