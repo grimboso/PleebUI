@@ -1,8 +1,8 @@
-local ADDON_NAME, ns = ...
+local ns = LibStub("AceAddon-3.0"):GetAddon("PleebUI").ModuleNamespace
 
 local Secondary = ns.PRDSecondary
-local AuraWidget = ns.AuraWidget
-local AuraSlotDriver = ns.AuraSlotDriver
+local AuraWidget = ns.PRDAuraWidget
+local AuraSlotDriver = ns.PRDAuraSlotDriver
 local P = ns.Pleebug:DropIn({}, { name = "PRD_Secondary_AuraStacks" })
 local _, PLAYER_CLASS = UnitClass("player")
 local PLAYER_CLASS_COLOR = RAID_CLASS_COLORS[PLAYER_CLASS]

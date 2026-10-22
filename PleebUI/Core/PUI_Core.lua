@@ -904,6 +904,7 @@ function Addon:OnInitialize()
   ns.DB = self.db
   self.ActionBarsDB = self.db:RegisterNamespace("ActionBars", ns.ActionBarsDefaults)
   self.DamageMetersDB = self.db:RegisterNamespace("DamageMeters", ns.DamageMetersDefaults)
+  self.PRDDB = self.db:RegisterNamespace("PRD", ns.PRDDefaults)
 
   ns.Flags.OptionsDebug = self.db.profile.debug == true
   ns.Flags.__puiBlizzardEditModeActive = ns.Flags.__puiBlizzardEditModeActive or false
@@ -1272,7 +1273,9 @@ function Addon:RefreshIconFonts(atWorldEntry, profileRefresh)
     ns.Modules.PartyFrames:RefreshText()
     ns.Modules.RaidFrames:RefreshText()
     ns.Modules.CastBar:RefreshFromProfile()
-    ns.Modules.PRD:RefreshIconFonts()
+    if ns.Modules.PRD then
+      ns.Modules.PRD:RefreshIconFonts()
+    end
     if ns.ActionBarsCore then
       ns.ActionBarsCore:RefreshAll({ fonts = true })
     end
@@ -1368,7 +1371,10 @@ local function _PUI_UB_MergeFlags(dst, flags)
 end
 
 local function _PUI_UB_ApplySoftTarget(target, flags)
-  ns.Modules[target]:SoftRebuild(flags)
+  local module = ns.Modules[target]
+  if target ~= "PRD" or module then
+    module:SoftRebuild(flags)
+  end
 end
 
 local function _PUI_UB_RequestSoftTarget(ub, target, flags)
@@ -1601,7 +1607,7 @@ function Addon:_FlushUpdateBus(targets)
 
   local prd = ns.Modules.PRD
   flags = targets.PRD
-  if flags then
+  if flags and prd then
     prd:ApplySettings(flags)
 
     if flags.profile == true or flags.layout == true or flags.movers == true then

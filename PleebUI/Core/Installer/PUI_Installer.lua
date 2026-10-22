@@ -214,7 +214,7 @@ function Addon:UndoCombatReadabilityPreset()
     end
   end
 
-  if affected.prd then
+  if affected.prd and ns.Modules.PRD then
     local PRD = ns.Modules.PRD
     PRD:InvalidateRuntimeConfig()
     PRD:RequestRefresh({
@@ -242,7 +242,7 @@ function Addon:UndoCombatReadabilityPreset()
     ns.Modules.PCM_BB.RebuildCustomBars()
   end
 
-  LibStub("AceConfigRegistry-3.0"):NotifyChange("PleebUI")
+  ns.OptionsLifecycle.RefreshModel()
   SetStatus("Combat readability settings restored.")
   return true
 end

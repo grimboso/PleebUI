@@ -21,7 +21,6 @@ Modules\PUIModules\PUIModules.xml
 
 # Feature modules
 Modules\PCM\PCM.xml
-Modules\PRD\PRD.xml
 Modules\UnitFrames\UnitFrames.xml
 
 

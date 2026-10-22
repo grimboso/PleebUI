@@ -1,5 +1,5 @@
 
-local ADDON_NAME, ns = ...
+local ns = LibStub("AceAddon-3.0"):GetAddon("PleebUI").ModuleNamespace
 
 
 local Theme = ns.Theme
@@ -11,8 +11,8 @@ local PLAYER_CLASS = select(2, UnitClass("player"))
 
 local M     = ns.Modules.PRD
 local Secondary = ns.PRDSecondary
-local AuraSlotDriver = ns.AuraSlotDriver
-local AuraWidget = ns.AuraWidget
+local AuraSlotDriver = ns.PRDAuraSlotDriver
+local AuraWidget = ns.PRDAuraWidget
 
 
 local _GetSecondaryInactiveAlpha

@@ -1,5 +1,5 @@
 
-local ADDON_NAME, ns = ...
+local ns = LibStub("AceAddon-3.0"):GetAddon("PleebUI").ModuleNamespace
 
 
 
@@ -28,171 +28,10 @@ ns.Registry.Modules.PRD = M
 
 local P, TrackThis = ns.Pleebug:DropIn({}, {
   name = "PRD",
-  bucket = "Core",
+  bucket = "PRD",
 })
 
 
-local defaults = {
-  profile = {
-    enabled = true,
-    locked  = false,
-
-    anchor = {
-      point    = "CENTER",
-      rel      = "UIParent",
-      relPoint = "CENTER",
-      x        = 0,
-      y        = -250,
-    },
-
-
-    size = {
-      width = 250,
-      gap   = 0,
-      spacingByPair = {},
-    },
-
-    appearance = {
-      unified       = true,
-      height        = 15,
-      texture       = "Pleebar",
-      squareTexture = true,
-      style = {
-        borderColor = { 0.20, 0.20, 0.24, 1.00 },
-        borderSize  = 1,
-        bgColor     = { 0, 0, 0, 0.65 },
-      },
-      text = {
-        size = 14,
-        flags = "",
-        useGlobalFont = true,
-      },
-    },
-
-    outerBorder = {
-      enabled = false,
-      size = 1,
-      color = { 0.20, 0.20, 0.24, 1.00 },
-    },
-
-    health = {
-      height                 = 15,
-      texture                = "Pleebar",
-      squareTexture          = true,
-      style = {
-        borderColor = { 0.20, 0.20, 0.24, 1.00 },
-        borderSize  = 1,
-        bgColor     = { 0, 0, 0, 0.65 },
-      },
-      text = {
-        size = 14,
-        flags = "",
-        useGlobalFont = true,
-      },
-      colorMode              = "DEFAULT",
-      useCustomColor         = false,
-      useBlizzardHealthColor = true,
-      customColor            = { 1, 1, 1, 1 },
-    },
-
-    hideHealth  = false,
-    hidePrimary = false,
-    usePlayerHealth = false,
-    stackOrder = { "health", "primary" },
-
-    primary = {
-      height                 = 15,
-      texture                = "Pleebar",
-      squareTexture          = true,
-      style = {
-        borderColor = { 0.20, 0.20, 0.24, 1.00 },
-        borderSize  = 1,
-        bgColor     = { 0, 0, 0, 0.65 },
-      },
-      detached              = false,
-      hideAlternateMana     = false,
-      colorMode             = "DEFAULT",
-      useCustomColor        = false,
-      useBlizzardPowerColor = true,
-      customColor           = { 1, 1, 1, 1 },
-      resourceSettings = {},
-
-      anchor = {
-
-        point = "CENTER",
-        x     = 0,
-        y     = -250,
-      },
-      width = nil,
-    },
-
-    secondary = {
-      detached              = false,
-      height                = 15,
-      perSegment            = false,
-      texture               = "Pleebar",
-      style = {
-        borderColor = { 0.20, 0.20, 0.24, 1.00 },
-        borderSize  = 1,
-        bgColor     = { 0, 0, 0, 0.65 },
-      },
-      useCustomColor        = false,
-      useBlizzardPowerColor = true,
-      customColor           = { 1, 1, 1, 1 },
-      resourceSettings      = {},
-      inactiveAlpha         = 0.15,
-      showDividers          = true,
-      dividerSize           = 1,
-      dividerColor          = { 0.20, 0.20, 0.24, 1.00 },
-      gap       = 2,
-
-      anchor = {
-        point = "CENTER",
-        x     = 0,
-        y     = -230,
-      },
-      width = nil,
-    },
-
-    text = {
-      health = {
-        leftVisibility = "ALWAYS",
-        rightVisibility = "HIDE",
-        centerText = true,
-        left = {
-          size = 14,
-          flags = "",
-          useGlobalFont = true,
-        },
-        right = {
-          size = 14,
-          flags = "",
-          useGlobalFont = true,
-        },
-      },
-      secondary = {
-        mode = "CUR",
-        showNumber = true,
-        size = 14,
-        flags = "",
-        useGlobalFont = true,
-      },
-    },
-    class = {
-      DRUID = {
-        forms = {
-          CAT     = { primary = {} },
-          BEAR    = { primary = {} },
-          MOONKIN = { primary = {} },
-          CASTER  = { primary = {} },
-        },
-      },
-    },
-  },
-  char = {
-    __puiSeededHidePrimaryBySpec = false,
-  },
-}
 
 local function PRD_CopySmartSnapValue(value)
   if type(value) ~= "table" then
@@ -418,7 +257,7 @@ end
 function M:OnInitialize()
 
 
-  self.db = Addon.db:RegisterNamespace("PRD", defaults)
+  self.db = Addon.PRDDB
   self:NormalizeProfile()
   self:SetEnabledState(self.db.profile.enabled and true or false)
 
@@ -684,15 +523,9 @@ function M:RequestInitialSettleRefresh()
   end)
 end
 
-function M:EnsurePEWFrame()
-  local f = self._puiPEWFrame
-  if f then
-    f._puiOwner = self
-    return f
-  end
-
-  f = CreateFrame("Frame")
-  f._puiOwner = self
+do
+  local f = CreateFrame("Frame")
+  f._puiOwner = M
   f:SetScript("OnEvent", function(frame, event)
     if event ~= "PLAYER_ENTERING_WORLD" then
       return
@@ -702,9 +535,7 @@ function M:EnsurePEWFrame()
 
     frame._puiOwner:RunInitialPEWRefresh()
   end)
-
-  self._puiPEWFrame = f
-  return f
+  M._puiPEWFrame = f
 end
 
 function M:RunDeferredShutdownCleanup()
@@ -724,21 +555,13 @@ function M:RunDeferredShutdownCleanup()
   end
 end
 
-function M:EnsureShutdownFrame()
-  local frame = self._puiShutdownFrame
-  if frame then
-    frame._puiOwner = self
-    return frame
-  end
-
-  frame = CreateFrame("Frame")
-  frame._puiOwner = self
+do
+  local frame = CreateFrame("Frame")
+  frame._puiOwner = M
   frame:SetScript("OnEvent", function(shutdownFrame)
     shutdownFrame._puiOwner:RunDeferredShutdownCleanup()
   end)
-
-  self._puiShutdownFrame = frame
-  return frame
+  M._puiShutdownFrame = frame
 end
 
 function M:RequestDeferredShutdownCleanup()
@@ -748,7 +571,7 @@ function M:RequestDeferredShutdownCleanup()
   if self._puiShutdownCleanupPending
     or self._puiNativeRestorePending
   then
-    local frame = self:EnsureShutdownFrame()
+    local frame = self._puiShutdownFrame
     frame:RegisterEvent("PLAYER_REGEN_ENABLED")
     frame:RegisterEvent("PLAYER_ENTERING_WORLD")
   end
@@ -1041,7 +864,7 @@ function M:RequestRefresh(flags, delay)
     end
 
     self._puiPRDRefreshTimer = nil
-    self:RunPendingRefresh()
+    self._puiRuntimeFrame:Show()
     return
   end
 
@@ -1050,9 +873,8 @@ function M:RequestRefresh(flags, delay)
   end
 
   self._puiPRDRefreshTimer = C_Timer.NewTimer(wait, function()
-    if self then
-      self:RunPendingRefresh()
-    end
+    self._puiPRDRefreshTimer = nil
+    self._puiRuntimeFrame:Show()
   end)
 end
 
@@ -1130,6 +952,18 @@ function M:OnEnable()
     return
   end
 
+  if not self._puiDidPEWRefresh then
+    self._puiPEWFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
+  end
+  self._puiRuntimeStartPending = true
+  self._puiRuntimeFrame:Show()
+end
+
+function M:StartRuntime()
+  if not self.db or not self.db.profile or self.db.profile.enabled ~= true then
+    return
+  end
+
   self._puiSecondaryDefinitionDirty = true
   self._puiBarTextSynced = nil
   self:EnsureInitialized()
@@ -1156,22 +990,22 @@ function M:OnEnable()
   self:RegisterEvent("EDIT_MODE_LAYOUTS_UPDATED", "RequestBlizzardBarTextSync")
   self:RequestBlizzardBarTextSync()
 
-  if not self._puiDidPEWRefresh then
-    local f = self:EnsurePEWFrame()
-    f:UnregisterEvent("PLAYER_ENTERING_WORLD")
-    f:RegisterEvent("PLAYER_ENTERING_WORLD")
-  end
 
   if _G.PersonalResourceDisplayFrame then
     self:RequestRefresh({ all = true })
     self:RequestInitialSettleRefresh()
   end
 
-  ns.PCM_ReconcileNativeCDM()
+  if ns.Modules.CooldownManager then
+    ns.PCM_ReconcileNativeCDM()
+  end
 
 end
 
 function M:StopRuntime()
+  self._puiRuntimeStartPending = nil
+  self._puiRuntimeFrame:Hide()
+  ns.PRDAuraWidget.StopRuntime()
   self._puiRuntimeStarted = false
   wipe(_PRD_LAYOUT_ACTIVE)
 
@@ -1864,15 +1698,9 @@ end
 
 
 
-function M:EnsureMoverRefreshFrame()
-  local frame = self._puiMoverRefreshFrame
-  if frame then
-    frame._puiOwner = self
-    return frame
-  end
-
-  frame = CreateFrame("Frame")
-  frame._puiOwner = self
+do
+  local frame = CreateFrame("Frame")
+  frame._puiOwner = M
   frame:SetScript("OnEvent", function(moverFrame)
     local owner = moverFrame._puiOwner
     if owner._puiRuntimeStarted == true then
@@ -1881,16 +1709,14 @@ function M:EnsureMoverRefreshFrame()
       moverFrame:UnregisterAllEvents()
     end
   end)
-
-  self._puiMoverRefreshFrame = frame
-  return frame
+  M._puiMoverRefreshFrame = frame
 end
 
 function M:AttachMover()
   -- PRD movers are addon-owned and must join startup SmartSnap before world entry.
   if InCombatLockdown() and FrameUtil._smartSnapWorldReady then
     self._puiMoverRefreshPending = true
-    self:EnsureMoverRefreshFrame():RegisterEvent("PLAYER_REGEN_ENABLED")
+    self._puiMoverRefreshFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
     return
   end
 
@@ -2541,7 +2367,9 @@ function M:ApplySettings(flags)
   end
 
   local wantEnabled = self:SyncEnabledState()
-  ns.PCM_ReconcileNativeCDM()
+  if ns.Modules.CooldownManager then
+    ns.PCM_ReconcileNativeCDM()
+  end
   if not wantEnabled then
     return
   end
@@ -2584,7 +2412,9 @@ end
 
 function M:OnDisable()
   self:StopRuntime()
-  ns.PCM_ReconcileNativeCDM()
+  if ns.Modules.CooldownManager then
+    ns.PCM_ReconcileNativeCDM()
+  end
 end
 
   M.NormalizeDruidFormPrimary = P:Def("NormalizeDruidFormPrimary", M.NormalizeDruidFormPrimary)
@@ -2607,9 +2437,7 @@ end
   M.RunInitialPEWRefresh = P:Def("RunInitialPEWRefresh", M.RunInitialPEWRefresh)
   M.RunInitialSettleRefresh = P:Def("RunInitialSettleRefresh", M.RunInitialSettleRefresh)
   M.RequestInitialSettleRefresh = P:Def("RequestInitialSettleRefresh", M.RequestInitialSettleRefresh)
-  M.EnsurePEWFrame = P:Def("EnsurePEWFrame", M.EnsurePEWFrame)
   M.RunDeferredShutdownCleanup = P:Def("RunDeferredShutdownCleanup", M.RunDeferredShutdownCleanup)
-  M.EnsureShutdownFrame = P:Def("EnsureShutdownFrame", M.EnsureShutdownFrame)
   M.RequestDeferredShutdownCleanup = P:Def("RequestDeferredShutdownCleanup", M.RequestDeferredShutdownCleanup)
   M.UnregisterAllMovers = P:Def("UnregisterAllMovers", M.UnregisterAllMovers)
   M.IsPlayerHealthReplacementActive = P:Def("IsPlayerHealthReplacementActive", M.IsPlayerHealthReplacementActive)
@@ -2646,7 +2474,6 @@ end
   M.SwapStackItems = P:Def("SwapStackItems", M.SwapStackItems)
   M.ApplyLayout = P:Def("ApplyLayout", M.ApplyLayout)
   M.RefreshVisibility = P:Def("RefreshVisibility", M.RefreshVisibility)
-  M.EnsureMoverRefreshFrame = P:Def("EnsureMoverRefreshFrame", M.EnsureMoverRefreshFrame)
   M.AttachMover = P:Def("AttachMover", M.AttachMover)
   M.AcquireBlizzardFrames = P:Def("AcquireBlizzardFrames", M.AcquireBlizzardFrames)
   M.GetDruidFormKey = P:Def("GetDruidFormKey", M.GetDruidFormKey)
@@ -2660,4 +2487,19 @@ end
   M.OnProfileReset = P:Def("OnProfileReset", M.OnProfileReset)
   M.OnNewProfile = P:Def("OnNewProfile", M.OnNewProfile)
   M.OnEnable = P:Def("OnEnable", M.OnEnable)
+  M.StartRuntime = P:Def("StartRuntime", M.StartRuntime)
   M.OnDisable = P:Def("OnDisable", M.OnDisable)
+
+M._puiRuntimeFrame = CreateFrame("Frame")
+M._puiRuntimeFrame:Hide()
+M._puiRuntimeFrame:SetScript("OnUpdate", function(frame)
+  frame:Hide()
+  if M._puiRuntimeStartPending then
+    M._puiRuntimeStartPending = nil
+    M:StartRuntime()
+  end
+  M:RunPendingRefresh()
+  if not M._puiRuntimeStartPending and not M._puiPendingRefreshFlags then
+    frame:Hide()
+  end
+end)

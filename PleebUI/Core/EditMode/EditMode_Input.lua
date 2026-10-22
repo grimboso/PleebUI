@@ -321,7 +321,7 @@ local function EditModeOptionsProvider()
           setter(value)
           util.CommitEditHistory(history)
           ns.TestMode:QueueToolbarRefresh()
-          Addon:NotifyOptionsTreeChanged(nil, ns._PUIActiveOptionsPath)
+          ns.OptionsLifecycle.RefreshModel({ "EditMode" })
         end,
       }
     end

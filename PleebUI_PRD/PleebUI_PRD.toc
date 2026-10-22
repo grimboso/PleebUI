@@ -1,0 +1,10 @@
+## Interface: 120105
+## Title: PleebUI Resource Display
+## Notes: Resource display for PleebUI.
+## Author: Pleeb
+## Version: @project-version@
+## Category-enUS: PleebUI
+## IconTexture: Interface\AddOns\PleebUI\Media\Logo.tga
+## Dependencies: PleebUI
+
+PRD.xml

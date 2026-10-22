@@ -1,4 +1,4 @@
-local ADDON_NAME, ns = ...
+local ns = LibStub("AceAddon-3.0"):GetAddon("PleebUI").ModuleNamespace
 
 local M = ns.Modules.PRD
 local Secondary = ns.PRDSecondary
@@ -124,6 +124,21 @@ local function UpdateActiveSegment(owner, segment)
   end
 end
 
+do
+  local driver = CreateFrame("Frame")
+  local group = driver:CreateAnimationGroup()
+  local animation = group:CreateAnimation("Animation")
+  animation:SetDuration(0.05)
+  group:SetLooping("REPEAT")
+  group:SetScript("OnLoop", function()
+    local activeSegment = M._puiEssenceActiveSegment
+    if activeSegment then
+      UpdateActiveSegment(M, activeSegment)
+    end
+  end)
+  M._puiEssenceAnimationGroup = group
+end
+
 local function StartSegmentDriver(owner, segment, partialFraction)
   if not segment then
     owner:StopEssenceDriver()
@@ -159,20 +174,6 @@ local function StartSegmentDriver(owner, segment, partialFraction)
   owner._puiEssenceDriverDuration = duration
   UpdateActiveSegment(owner, segment)
 
-  if not owner._puiEssenceAnimationGroup then
-    local driver = CreateFrame("Frame")
-    local group = driver:CreateAnimationGroup()
-    local animation = group:CreateAnimation("Animation")
-    animation:SetDuration(0.05)
-    group:SetLooping("REPEAT")
-    group:SetScript("OnLoop", function()
-      local activeSegment = owner._puiEssenceActiveSegment
-      if activeSegment then
-        UpdateActiveSegment(owner, activeSegment)
-      end
-    end)
-    owner._puiEssenceAnimationGroup = group
-  end
   owner._puiEssenceAnimationGroup:Play()
 
   if owner._puiEssShowCooldownCount ~= false then

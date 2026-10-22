@@ -1,4 +1,4 @@
-local ADDON_NAME, ns = ...
+local ns = LibStub("AceAddon-3.0"):GetAddon("PleebUI").ModuleNamespace
 
 local Addon = ns.Addon
 
@@ -6,7 +6,7 @@ local OptionsUtil = ns.OptionsUtil
 local Presentation = ns.Presentation
 local Theme = ns.Theme
 local FrameUtil = ns.FrameUtil
-local AuraWidget = ns.AuraWidget
+local AuraWidget = ns.PRDAuraWidget
 local LSM = ns.LSM
 
 local P = ns.Pleebug:DropIn({}, { name = "PRD_Config" })
@@ -3398,7 +3398,26 @@ do
     args.layoutGroup.args.height.disabled = healthAppearanceDisabled
     args.layoutGroup.args.detached.disabled = healthAppearanceDisabled
     args.layoutGroup.args.width.disabled = function() return s.db.hideHealth == true end
-    return PRD_ArrangeSettingsSections(args)
+    local sections = PRD_ArrangeSettingsSections(args)
+    sections.general.args.addon = {
+      type = "group",
+      name = function() return "" end,
+      inline = true,
+      hidden = false,
+      order = -10,
+      arg = { puiExplicit = true },
+      args = {
+        disableAddon = {
+          type = "execute",
+          name = "Disable addon and reload",
+          desc = "Disable Resource Display for this character and reload the UI. Your settings are kept.",
+          order = 10,
+          disabled = function() return InCombatLockdown() end,
+          func = function() Addon:SetPRDAddonEnabled(false) end,
+        },
+      },
+    }
+    return sections
   end
 
   local DRUID_FORM_COLOR_VALUES = {
@@ -5096,8 +5115,8 @@ do
     if definition.cooldownCountSpellIDs then
       args.display.args.showIconCount = {
         type = "toggle", name = "Show count on spell icons", order = 8,
-        get = function() return ns.PCMIconSettings:GetResourceCountEnabled(resource.key) end,
-        set = function(_, value) ns.PCMIconSettings:SetResourceCountEnabled(resource.key, value) end,
+        get = function() return ns.ResourceCounts:GetEnabled(resource.key) end,
+        set = function(_, value) ns.ResourceCounts:SetEnabled(resource.key, value) end,
       }
     end
     args.feature.args.enabled.width, args.feature.args.enabled.relWidth = "relative", 0.5

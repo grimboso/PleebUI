@@ -2037,7 +2037,7 @@ function Quality:SetQuickSetupValue(key, value, deferApply)
   if not deferApply then
     if key == "auctionHouseCurrentExpansionOnly" then
       Quality:RefreshAuctionHousePreference()
-      Addon:NotifyOptionsTreeChanged("Quality", ns._PUIActiveOptionsPath)
+      ns.OptionsLifecycle.RefreshModel({ "Quality" })
     else
       Addon:ApplyOptionsChange("Quality", {})
     end
@@ -2883,10 +2883,6 @@ local function QualityProvider(AddonObj)
       Quality_RefreshPreview()
     end
 
-    local function RefreshQualityOptions()
-      AddonObj:NotifyOptionsTreeChanged("Quality", ns._PUIActiveOptionsPath)
-    end
-
     local q = GetQ()
     q.cursorRingSize = tonumber(q.cursorRingSize) or 26
     q.cursorRingOutlineSize = tonumber(q.cursorRingOutlineSize) or 10
@@ -3252,7 +3248,7 @@ local function QualityProvider(AddonObj)
               order = 32,
               inline = true,
               args = {
-                autoAcceptRoleCheck = ToggleOption("Auto accept role checks", "autoAcceptRoleCheck", 1, RefreshQualityOptions),
+                autoAcceptRoleCheck = ToggleOption("Auto accept role checks", "autoAcceptRoleCheck", 1),
                 roleCheckHelp = DescriptionOption("Accept role checks from:", 2, DisabledWhenOff("autoAcceptRoleCheck")),
                 acceptRoleCheckFriends = ToggleOption("Friends", "acceptRoleCheckFriends", 3, nil, DisabledWhenOff("autoAcceptRoleCheck")),
                 acceptRoleCheckBattleNetFriends = ToggleOption("Battle.net friends", "acceptRoleCheckBattleNetFriends", 4, nil, DisabledWhenOff("autoAcceptRoleCheck")),
@@ -3266,9 +3262,9 @@ local function QualityProvider(AddonObj)
               order = 34,
               inline = true,
               args = {
-                autoAcceptInvites = ToggleOption("Auto accept invites", "autoAcceptInvites", 1, RefreshQualityOptions),
+                autoAcceptInvites = ToggleOption("Auto accept invites", "autoAcceptInvites", 1),
                 invitesHelp = DescriptionOption("Accept invites from:", 2, DisabledWhenOff("autoAcceptInvites")),
-                acceptInviteEveryone = ToggleOption("Everyone", "acceptInviteEveryone", 3, RefreshQualityOptions, DisabledWhenOff("autoAcceptInvites")),
+                acceptInviteEveryone = ToggleOption("Everyone", "acceptInviteEveryone", 3, nil, DisabledWhenOff("autoAcceptInvites")),
                 acceptInviteFriends = ToggleOption("Friends", "acceptInviteFriends", 4, nil, DisabledInviteFilters),
                 acceptInviteBattleNetFriends = ToggleOption("Battle.net friends", "acceptInviteBattleNetFriends", 5, nil, DisabledInviteFilters),
                 acceptInviteGuildMembers = ToggleOption("Guild members", "acceptInviteGuildMembers", 6, nil, DisabledInviteFilters),

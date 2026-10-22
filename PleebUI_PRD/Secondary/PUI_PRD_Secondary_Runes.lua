@@ -1,4 +1,4 @@
-local ADDON_NAME, ns = ...
+local ns = LibStub("AceAddon-3.0"):GetAddon("PleebUI").ModuleNamespace
 
 local Pixel = ns.Pixel
 local M = ns.Modules.PRD
@@ -254,6 +254,19 @@ local function RefreshRuneWidget(bar)
   ApplyRuneResourceCues(bar._puiRuneOwner, readyCount)
 end
 
+if select(2, UnitClass("player")) == "DEATHKNIGHT" then
+  M.runeBars = {}
+  for index = 1, 6 do
+    local bar = CreateFrame("Frame", nil, UIParent)
+    bar:Hide()
+    bar._fill = CreateFrame("StatusBar", nil, bar)
+    bar._fill:SetAllPoints(bar)
+    bar._puiRuneTimer = C_DurationUtil.CreateDuration()
+    bar:SetScript("OnEvent", RefreshRuneWidget)
+    M.runeBars[index] = bar
+  end
+end
+
 function M:BuildRuneBars()
   Secondary.EnsureSecondaryContainerBox(self)
 
@@ -270,14 +283,6 @@ function M:BuildRuneBars()
 
   for i = 1, 6 do
     local bar = self.runeBars[i]
-    if not bar then
-      bar = CreateFrame("Frame", nil, runeContainer)
-      bar._fill = CreateFrame("StatusBar", nil, bar)
-      bar._fill:SetAllPoints(bar)
-      bar._puiRuneTimer = C_DurationUtil.CreateDuration()
-      bar:SetScript("OnEvent", RefreshRuneWidget)
-      self.runeBars[i] = bar
-    end
 
     bar:SetParent(runeContainer)
     bar:SetFrameLevel(runeContainer:GetFrameLevel() + 1)

@@ -130,14 +130,30 @@ local function BuildCurrent()
     ns.PCMPreview.Build(navigation, owner, owner, request.path)
     request.box = owner.__puiPCMPreviewBox
   elseif request.kind == "prd" then
-    owner.state.paused = not request.playing
-    owner.state.sample = nil
-    if not request.playing then owner.state.sample = 0.5 end
-    ns.PRDPreview.Build(navigation, owner, owner)
-    request.box = owner.__puiPRDPreviewBox
-    request.box.__puiPRDPreviewPauseButton:Hide()
-    request.box.__puiPRDPreviewSampleButton:Hide()
-    request.box:SetDescription("Sample values only. Use Animate this example below; your real resources are unchanged.")
+    if ns.PRDPreview then
+      owner.state.paused = not request.playing
+      owner.state.sample = nil
+      if not request.playing then owner.state.sample = 0.5 end
+      ns.PRDPreview.Build(navigation, owner, owner)
+      request.box = owner.__puiPRDPreviewBox
+      request.box.__puiPRDPreviewPauseButton:Hide()
+      request.box.__puiPRDPreviewSampleButton:Hide()
+      request.box:SetDescription("Sample values only. Use Animate this example below; your real resources are unchanged.")
+    else
+      local box = owner.disabledBox
+      if not box then
+        box = ns.PreviewBox.Create(request.host)
+        owner.disabledBox = box
+      end
+      box:SetParent(request.host)
+      box:ClearAllPoints()
+      box:SetAllPoints(request.host)
+      box:SetTitle("Addon disabled")
+      box:SetDescription("")
+      box:SetAlpha(0.5)
+      box:Show()
+      request.box = box
+    end
   elseif request.kind == "quality" then
     ns.Registry.Options.Quality.meta.page.buildPreview(navigation, owner, owner, request.path)
     request.box = owner.__puiQualityPreviewRoot

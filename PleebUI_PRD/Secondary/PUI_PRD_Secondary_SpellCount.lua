@@ -1,4 +1,4 @@
-local ADDON_NAME, ns = ...
+local ns = LibStub("AceAddon-3.0"):GetAddon("PleebUI").ModuleNamespace
 
 local Secondary = ns.PRDSecondary
 local P = ns.Pleebug:DropIn({}, { name = "PRD_Secondary_SpellCount" })

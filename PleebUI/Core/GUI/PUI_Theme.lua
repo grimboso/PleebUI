@@ -2550,7 +2550,7 @@ function Theme.SetFontSizeOffset(value)
   Addon:GetMediaDB().fontSizeOffset = value
   Addon:RefreshIconFonts()
   Addon:RefreshOptionsTheme()
-  Addon:NotifyOptionsTreeChanged(nil, ns._PUIActiveOptionsPath)
+  ns.OptionsLifecycle.RefreshModel()
 end
 
 function Theme.GetFontSizeScope(scope)
@@ -2561,7 +2561,7 @@ function Theme.SetFontSizeScope(scope, enabled)
   Addon:GetMediaDB().fontSizeScopes[scope] = enabled == true
   Addon:RefreshIconFonts()
   Addon:RefreshOptionsTheme()
-  Addon:NotifyOptionsTreeChanged(nil, ns._PUIActiveOptionsPath)
+  ns.OptionsLifecycle.RefreshModel()
 end
 
 function Theme.GetAllFontSizeScopes()
@@ -2584,7 +2584,7 @@ function Theme.SetAllFontSizeScopes(enabled)
 
   Addon:RefreshIconFonts()
   Addon:RefreshOptionsTheme()
-  Addon:NotifyOptionsTreeChanged(nil, ns._PUIActiveOptionsPath)
+  ns.OptionsLifecycle.RefreshModel()
 end
 
 Theme.OptionsFontSizeRange = Theme.OptionsFontSizeRange or {
@@ -2641,13 +2641,13 @@ function Theme.SetOptionsFontSize(value)
 
   Addon:GetOptionsDB().puiOptionsFontSize = value
   _PUI_ThemeRegistry_NotifyChange()
-  Addon:NotifyOptionsTreeChanged(nil, ns._PUIActiveOptionsPath)
+  ns.OptionsLifecycle.RefreshModel()
 end
 
 local function RefreshOptionsTypography()
   Theme.RefreshAppliedFonts()
   Addon:RefreshOptionsTheme()
-  Addon:NotifyOptionsTreeChanged(nil, ns._PUIActiveOptionsPath)
+  ns.OptionsLifecycle.RefreshModel()
 end
 
 function Theme.SetOptionsFontDefaults(role, enabled)
@@ -2757,7 +2757,7 @@ function Theme.SetOptionsUIScale(value)
   Addon:ApplyOptionsUIScale()
   Addon:RefreshOptionsTheme()
   ns.UFPreview.RefreshAuraManagerPreview()
-  Addon:NotifyOptionsTreeChanged(nil, ns._PUIActiveOptionsPath)
+  Addon:NotifyOptionsTreeChanged("UITheme", ns._PUIActiveOptionsPath)
 end
 
 Theme.ColorPresets = {
@@ -3126,7 +3126,7 @@ local function AccessibilityOptionsProvider()
               end,
               func = function()
                 Addon:ApplyCombatReadabilityPreset()
-                LibStub("AceConfigRegistry-3.0"):NotifyChange(ADDON_NAME)
+                ns.OptionsLifecycle.RefreshModel({ "Accessibility" })
               end,
             },
             undo = {
@@ -3193,7 +3193,7 @@ local function AccessibilityOptionsProvider()
           end,
           set = function(_, key)
             selectedAccessibilityPreset = key
-            LibStub("AceConfigRegistry-3.0"):NotifyChange(ADDON_NAME)
+            ns.OptionsLifecycle.RefreshModel({ "Accessibility" })
           end,
         },
         sample = {
@@ -3239,7 +3239,7 @@ local function AccessibilityOptionsProvider()
       set = function(_, enabled)
         Addon:GetOptionsDB().largerPointerTargets = enabled == true
         Addon:RefreshOptionsTheme()
-        Addon:NotifyOptionsTreeChanged(nil, ns._PUIActiveOptionsPath)
+        ns.OptionsLifecycle.RefreshModel()
       end,
     }
 

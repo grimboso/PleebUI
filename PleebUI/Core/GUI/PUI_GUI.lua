@@ -229,7 +229,9 @@ local function _PUI_FlushOptionsApplyBucket(kind, flags)
   if kind == "ActionBars" then
     ns.ActionBarsCore:RefreshAll(flags)
   elseif kind == "PRD" then
-    ns.Modules.PRD:ApplyRequestedFlags(flags)
+    if ns.Modules.PRD then
+      ns.Modules.PRD:RequestRefresh(flags)
+    end
   elseif kind == "UnitFrames" then
     _PUI_FlushUFOptions(flags)
   elseif kind == "CastBar" then

@@ -1,4 +1,4 @@
-local ADDON_NAME, ns = ...
+local ns = LibStub("AceAddon-3.0"):GetAddon("PleebUI").ModuleNamespace
 
 local M = ns.Modules.PRD
 local Secondary = ns.PRDSecondary
@@ -408,15 +408,9 @@ function M:UpdateSecondary()
   adapter.Update(self, bar, text, "player")
 end
 
-local function EnsureEventFrame(owner)
-  local frame = owner._puiSecondaryEventFrame
-  if frame then
-    frame._puiOwner = owner
-    return frame
-  end
-
-  frame = CreateFrame("Frame")
-  frame._puiOwner = owner
+do
+  local frame = CreateFrame("Frame")
+  frame._puiOwner = M
   frame:SetScript("OnEvent", function(eventFrame, event, ...)
     local currentOwner = eventFrame._puiOwner
     if currentOwner._puiRuntimeStarted ~= true then
@@ -466,13 +460,11 @@ local function EnsureEventFrame(owner)
       end
     end
   end)
-
-  owner._puiSecondaryEventFrame = frame
-  return frame
+  M._puiSecondaryEventFrame = frame
 end
 
 function M:RegisterSecondaryEvents()
-  local frame = EnsureEventFrame(self)
+  local frame = self._puiSecondaryEventFrame
   frame:UnregisterAllEvents()
   frame._puiAdapterEvents = nil
 
@@ -582,7 +574,6 @@ M.RefreshSecondaryText = P:Def(
   M.RefreshSecondaryText
 )
 M.UpdateSecondary = P:Def("UpdateSecondary", M.UpdateSecondary)
-EnsureEventFrame = P:Def("EnsureEventFrame", EnsureEventFrame)
 M.RegisterSecondaryEvents = P:Def("RegisterSecondaryEvents", M.RegisterSecondaryEvents)
 M.UnregisterSecondaryEvents = P:Def("UnregisterSecondaryEvents", M.UnregisterSecondaryEvents)
 M.CompleteSecondaryShutdown = P:Def("CompleteSecondaryShutdown", M.CompleteSecondaryShutdown)

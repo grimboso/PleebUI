@@ -117,7 +117,7 @@ local function Heading(value)
 end
 
 local function PrimaryPowerIntroduction()
-  local key = ns.Modules.PRD:GetPrimaryResourceKey()
+  local key = ns.Modules.PRD and ns.Modules.PRD:GetPrimaryResourceKey()
   local name = key and _G[key]
   if name then
     Text("Your primary power: " .. name .. ". Health and class resources are separate.")
@@ -367,7 +367,7 @@ local function Review()
     { "Unit frames", ns.UnitFrames:GetQuickSetupValue("enabled"), "unitframes" },
     { "Party frames", ns.Modules.PartyFrames.db.profile.enabled ~= false, "group", 1 },
     { "Raid frames", ns.Modules.RaidFrames.db.profile.enabled ~= false, "group", 2 },
-    { "Personal Resource Display", ns.Modules.PRD:IsModuleEnabled(), "prd" },
+    { "Personal Resource Display", ns.Modules.PRD and ns.Modules.PRD:IsModuleEnabled(), "prd" },
     { "Cooldown Manager", ns.Modules.CooldownManager:IsModuleEnabledByUser(), "cooldowns" },
     { "Items and racials", ns.Modules.CooldownManager:GetConsumableTrackerEnabled(), "utility" },
     { "Damage meters", ns.Modules.DamageMeters and ns.Modules.DamageMeters.db.profile.enabled ~= false, "meters" },
@@ -491,11 +491,21 @@ local function BuildPage(key)
   elseif key == "prd" then
     Text("Keep health and power near your character.\n• Choose which bars to show.\n• Make their height and text easy to read.")
     PrimaryPowerIntroduction()
+    if not ns.Modules.PRD then
+      Preview("prd", { "PRD" })
+      Settings({ "PRD" })
+      return
+    end
     Check("Enable Personal Resource Display", ns.Modules.PRD:IsModuleEnabled(), function(value) ns.Modules.PRD:SetModuleEnabled(value) end)
     Preview("prd")
     Choices("Configure", { { "Health", { "PRD", "health" } }, { "Primary power and alternate Mana", { "PRD", "primary" } } }, 1, function(choice) Settings(choice[2]) end)
     Text("Tip: /pui > Personal Resource Display has stack order and colors. Move bars on Arrange UI later.")
   elseif key == "spec" then
+    if not ns.Modules.PRD then
+      Preview("prd", { "PRD" })
+      Settings({ "PRD" })
+      return
+    end
     local className, class = UnitClass("player")
     local index = C_SpecializationInfo.GetSpecialization()
     if not index then Text("Choose a specialization in the game to see its resource settings.") return end

@@ -1,5 +1,6 @@
-local ADDON_NAME, ns = ...
+local ns = LibStub("AceAddon-3.0"):GetAddon("PleebUI").ModuleNamespace
 
+local M = ns.Modules.PRD
 local Secondary = ns.PRDSecondary
 local P = ns.Pleebug:DropIn({}, { name = "PRD_Secondary_Stagger" })
 local STAGGER_POLL_INTERVAL = 0.3
@@ -39,23 +40,24 @@ local function Poll(owner, group)
   owner:UpdateSecondary()
 end
 
+do
+  local driver = CreateFrame("Frame")
+  local group = driver:CreateAnimationGroup()
+  group:SetLooping("REPEAT")
+
+  local animation = group:CreateAnimation("Animation")
+  animation:SetDuration(STAGGER_POLL_INTERVAL)
+
+  group:SetScript("OnLoop", function()
+    Poll(M, group)
+  end)
+
+  M._puiStaggerPollDriver = driver
+  M._puiStaggerPollGroup = group
+end
+
 local function StartPolling(owner)
   local group = owner._puiStaggerPollGroup
-  if not group then
-    local driver = CreateFrame("Frame")
-    group = driver:CreateAnimationGroup()
-    group:SetLooping("REPEAT")
-
-    local animation = group:CreateAnimation("Animation")
-    animation:SetDuration(STAGGER_POLL_INTERVAL)
-
-    group:SetScript("OnLoop", function()
-      Poll(owner, group)
-    end)
-
-    owner._puiStaggerPollDriver = driver
-    owner._puiStaggerPollGroup = group
-  end
 
   if not group:IsPlaying() then
     group:Play()

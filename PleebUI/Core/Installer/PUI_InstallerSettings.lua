@@ -243,6 +243,7 @@ local function BuildOptions()
   local record = ns.Registry.Options[path[1]]
   if path[1] == "ACTIONBARS" and not ns.ActionBarsCore
     or path[1] == "DamageMeters" and not ns.Modules.DamageMeters
+    or path[1] == "PRD" and not ns.Modules.PRD
   then
     return record.factory(Addon):GetOptions()
   end
