@@ -1,4 +1,4 @@
-local _, ns = ...
+local ns = LibStub("AceAddon-3.0"):GetAddon("PleebUI").ModuleNamespace
 
 local Addon = ns.Addon
 
@@ -382,21 +382,6 @@ local function RunScheduledCombatRefresh()
     DamageMeters.runtimeRefreshRate * slotDistance / windowCount
   )
   DamageMeters.combatRefreshGroup:Play()
-end
-
-local function EnsureCombatRefreshDriver()
-  if DamageMeters.combatRefreshGroup then
-    return
-  end
-
-  local driver = CreateFrame("Frame")
-  local group = driver:CreateAnimationGroup()
-  local animation = group:CreateAnimation("Animation")
-  animation:SetDuration(1)
-  group:SetScript("OnFinished", RunScheduledCombatRefresh)
-
-  DamageMeters.combatRefreshGroup = group
-  DamageMeters.combatRefreshAnimation = animation
 end
 
 function DamageMeters:CompileRuntimeConfig()
@@ -1146,7 +1131,7 @@ function DamageMeters:ApplyProfile()
 end
 
 function DamageMeters:OnInitialize()
-  self.db = Addon.db:RegisterNamespace("DamageMeters", Config.DEFAULTS)
+  self.db = Addon.DamageMetersDB
   self.db.RegisterCallback(self, "OnDatabaseShutdown", "OnDatabaseShutdown")
   Config.SanitizeProfile()
   self.windowSelections = {}
@@ -1155,7 +1140,6 @@ function DamageMeters:OnInitialize()
   self.runtimeEventsRegistered = false
   self.combatGeneration = 0
 
-  EnsureCombatRefreshDriver()
   self:InitializeLauncher()
 
   Addon:RegisterOptionsSection("DamageMeters", function()
@@ -1178,7 +1162,6 @@ IsGroupInCombat = P:Def("IsGroupInCombat", IsGroupInCombat)
 GetFirstDirtyCombatRefreshWindowIndex = P:Def("GetFirstDirtyCombatRefreshWindowIndex", GetFirstDirtyCombatRefreshWindowIndex)
 StartCombatRefreshCycle = P:Def("StartCombatRefreshCycle", StartCombatRefreshCycle)
 RunScheduledCombatRefresh = P:Def("RunScheduledCombatRefresh", RunScheduledCombatRefresh)
-EnsureCombatRefreshDriver = P:Def("EnsureCombatRefreshDriver", EnsureCombatRefreshDriver)
 RunScheduledTargetAnalysisRefresh = P:Def("RunScheduledTargetAnalysisRefresh", RunScheduledTargetAnalysisRefresh)
 RunHistoryCaptureWork = P:Def("RunHistoryCaptureWork", RunHistoryCaptureWork)
 RunScheduledEncounterEndRefresh = P:Def("RunScheduledEncounterEndRefresh", RunScheduledEncounterEndRefresh)
@@ -1210,3 +1193,11 @@ DamageMeters.CHALLENGE_MODE_RESET = P:Def("DamageMeters.CHALLENGE_MODE_RESET", D
 DamageMeters.OnInitialize = P:Def("DamageMeters.OnInitialize", DamageMeters.OnInitialize)
 DamageMeters.OnEnable = P:Def("DamageMeters.OnEnable", DamageMeters.OnEnable)
 DamageMeters.OnDisable = P:Def("DamageMeters.OnDisable", DamageMeters.OnDisable)
+
+local combatRefreshDriver = CreateFrame("Frame")
+local combatRefreshGroup = combatRefreshDriver:CreateAnimationGroup()
+local combatRefreshAnimation = combatRefreshGroup:CreateAnimation("Animation")
+combatRefreshAnimation:SetDuration(1)
+combatRefreshGroup:SetScript("OnFinished", RunScheduledCombatRefresh)
+DamageMeters.combatRefreshGroup = combatRefreshGroup
+DamageMeters.combatRefreshAnimation = combatRefreshAnimation

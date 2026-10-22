@@ -1,4 +1,4 @@
-local _, ns = ...
+local ns = LibStub("AceAddon-3.0"):GetAddon("PleebUI").ModuleNamespace
 
 local DamageMeters = ns.Modules.DamageMeters
 local Config = ns.DamageMeterConfig
@@ -30,64 +30,6 @@ local DEFAULT_WINDOW_POSITIONS = {
   [10] = { x = 588, y = -82 },
 }
 
-local DEFAULTS = {
-  profile = {
-    enabled = true,
-    visible = true,
-    windowCount = 1,
-    refreshRate = 1,
-    headerHeight = 30,
-    barHeight = 20,
-    barSpacing = 2,
-    fontSize = 11,
-    barAlpha = 0.82,
-    showSpecIcons = true,
-    history = {
-      saveBossKills = true,
-      bossKillsToKeep = 15,
-      saveKeystones = true,
-      dungeonSummariesToKeep = 10,
-    },
-    breakdown = {
-      position = "AUTO",
-      width = 360,
-      height = 260,
-      targetHeight = 150,
-      x = 0,
-      y = 0,
-      showIcons = true,
-      amounts = "BOTH",
-      showPercent = true,
-      maxSpells = 20,
-      showSpellTooltips = true,
-    },
-    minimap = {
-      hide = false,
-      minimapPos = 250,
-    },
-    windows = {
-      [1] = {
-        meter = "DAMAGE_DONE",
-        session = "CURRENT",
-        syncSegments = false,
-        autoCurrentOnCombat = false,
-        locked = true,
-        shown = true,
-        width = 320,
-        height = 180,
-        x = 420,
-        y = -250,
-      },
-    },
-  },
-  char = {
-    history = {
-      savedSegments = {},
-      savedDungeons = {},
-      nextRecordID = 0,
-    },
-  },
-}
 local function GetWindowDB(index)
   local db = DamageMeters.db.profile
   local windowDB = db.windows[index]
@@ -617,6 +559,28 @@ function DamageMeters:GetOptions()
   breakdown.args = {
     details = { type = "group", name = "Spell breakdown", inline = true, order = 10, args = details },
   }
+  general.args.addon = {
+    type = "group",
+    name = function() return "" end,
+    inline = true,
+    hidden = false,
+    order = 0,
+    arg = { puiExplicit = true },
+    args = {
+      disableAddon = {
+        type = "execute",
+        name = "Disable addon and reload",
+        desc = "Disable Damage Meters for this character and reload the UI. Your settings are kept.",
+        order = 10,
+        disabled = function()
+          return InCombatLockdown()
+        end,
+        func = function()
+          ns.Addon:SetDamageMetersAddonEnabled(false)
+        end,
+      },
+    },
+  }
   general.args.bar = { type = "group", name = "Bars", order = 20, inline = true, arg = { puiExplicit = true }, args = {
     showSpecIcons = appearance.showSpecIcons, height = appearance.barHeight, spacing = appearance.barSpacing,
     headerHeight = appearance.headerHeight, opacity = appearance.barAlpha, fontSize = appearance.fontSize,
@@ -647,7 +611,6 @@ GetWindowDB = P:Def("GetWindowDB", GetWindowDB)
 SanitizeProfile = P:Def("SanitizeProfile", SanitizeProfile)
 DamageMeters.GetOptions = P:Def("DamageMeters.GetOptions", DamageMeters.GetOptions)
 
-Config.DEFAULTS = DEFAULTS
 Config.DEFAULT_WINDOW_POSITIONS = DEFAULT_WINDOW_POSITIONS
 Config.GetWindowDB = GetWindowDB
 Config.SanitizeProfile = SanitizeProfile

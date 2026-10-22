@@ -42,6 +42,7 @@
   <Script file="GUI\PUI_AceHooks.lua"/>
   <Script file="PUI_IconSkin.lua"/>
   <Script file="PUI_ActionBars.lua"/>
+  <Script file="PUI_DamageMeters.lua"/>
   <Include file="Widgets\PUI_AuraTemplates.xml"/>
   <Include file="Widgets\PUI_BarTemplates.xml"/>
   <Script file="Widgets\PUI_AuraWidget.lua"/>

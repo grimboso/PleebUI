@@ -903,6 +903,7 @@ function Addon:OnInitialize()
   self.db.global.runtimeFontSlugMigrationVersion = 1
   ns.DB = self.db
   self.ActionBarsDB = self.db:RegisterNamespace("ActionBars", ns.ActionBarsDefaults)
+  self.DamageMetersDB = self.db:RegisterNamespace("DamageMeters", ns.DamageMetersDefaults)
 
   ns.Flags.OptionsDebug = self.db.profile.debug == true
   ns.Flags.__puiBlizzardEditModeActive = ns.Flags.__puiBlizzardEditModeActive or false

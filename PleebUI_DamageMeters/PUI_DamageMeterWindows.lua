@@ -1,4 +1,4 @@
-local _, ns = ...
+local ns = LibStub("AceAddon-3.0"):GetAddon("PleebUI").ModuleNamespace
 
 local Addon = ns.Addon
 local FrameUtil = ns.FrameUtil
@@ -1399,6 +1399,15 @@ function DamageMeters:SelectCurrentSessionsOnCombat()
   return changed
 end
 
+local windowDrivers = {}
+for index = 1, MAX_WINDOWS do
+  local dragDriver = CreateFrame("Frame", nil, UIParent)
+  dragDriver:Hide()
+  local resizeDriver = CreateFrame("Frame", nil, UIParent)
+  resizeDriver:Hide()
+  windowDrivers[index] = { drag = dragDriver, resize = resizeDriver }
+end
+
 local function CreateDamageMeterWindow(index)
   local window = {
     index = index,
@@ -1527,7 +1536,7 @@ local function CreateDamageMeterWindow(index)
     StopWindowDrag(window)
   end)
 
-  local dragDriver = CreateFrame("Frame", nil, UIParent)
+  local dragDriver = windowDrivers[index].drag
   dragDriver:SetScript("OnUpdate", function()
     UpdateWindowDrag(window)
   end)
@@ -1572,7 +1581,7 @@ local function CreateDamageMeterWindow(index)
     StopWindowResize(window)
   end)
 
-  local resizeDriver = CreateFrame("Frame", nil, UIParent)
+  local resizeDriver = windowDrivers[index].resize
   resizeDriver:SetScript("OnUpdate", function()
     UpdateWindowResize(window)
   end)

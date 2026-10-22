@@ -1,0 +1,10 @@
+## Interface: 120105
+## Title: PleebUI Damage Meters
+## Notes: Damage meters for PleebUI.
+## Author: Pleeb
+## Version: @project-version@
+## Category-enUS: PleebUI
+## IconTexture: Interface\AddOns\PleebUI\Media\Logo.tga
+## Dependencies: PleebUI
+
+DamageMeters.xml

@@ -1,4 +1,4 @@
-local _, ns = ...
+local ns = LibStub("AceAddon-3.0"):GetAddon("PleebUI").ModuleNamespace
 
 local DamageMeters = ns.Modules.DamageMeters
 local Sessions = ns.DamageMeterSessions
