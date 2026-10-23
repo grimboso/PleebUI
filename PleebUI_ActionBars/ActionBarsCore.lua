@@ -1951,6 +1951,7 @@ function Core:DispatchEvent(event)
   end
 
   if event == "PLAYER_ENTERING_WORLD" then
+    self.hasEnteredWorld = true
     if self.runtimeInitialized then
       self:ReconcileWorldState()
     else
@@ -1992,7 +1993,9 @@ function ActionBar:OnEnable()
   ns.ActionButtonEngine:Enable()
   FrameScale:RegisterScaleListener(ActionBarScaleChanged)
 
-  Core:RefreshAll({ full = true })
+  if Core.hasEnteredWorld then
+    Core:RefreshAll({ full = true })
+  end
 end
 
 function ActionBar:OnDisable()
