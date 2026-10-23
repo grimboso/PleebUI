@@ -487,6 +487,7 @@ end
 local PAGE_DEFINITIONS = {
   { "welcome", "Welcome", nil, "Meet PleebUI and choose comfortable text, controls, and accessibility settings." },
   { "profiles", "Profiles", nil, "Choose where to save your settings and which setup chapters to include." },
+  { "modules", "Choose modules", nil, "Choose which PleebUI addons load for this profile. Disabled modules keep their settings." },
   { "appearance", "Appearance", nil, "Adjust fonts, scale, colors, and combat readability." },
   { "navigation", "Find settings", nil, "Learn how to use setup, find full settings, and return to the same page." },
   { "unitframes", "Unit frames", "frames", "Configure player, target, focus, pet, and boss frames." },
@@ -631,10 +632,10 @@ local function Finish(reload)
   db.installVersion = ns.InstallFlowVersion
   Addon.db.global.installed = true
   ns.Flags.FirstRunPending = false
-  reload = reload or db.installerReload == true
+  reload = reload or db.installerReload == true or Addon:ChildAddonProfileNeedsReload()
   db.installerReload = nil
   wizardFrame:Hide()
-  if reload then ReloadUI() end
+  if reload then Addon:ApplyChildAddonProfile() end
 end
 
 local function LayoutChrome(frame)
@@ -700,11 +701,12 @@ local function ApplyWindowTheme(frame)
 end
 
 local function RefreshChrome(frame)
+  Content.pendingReload = Onboarding().installerReload == true or Addon:ChildAddonProfileNeedsReload()
   ApplyWindowTheme(frame)
   frame:SetScale(math.min(Theme.GetOptionsUIScale(), UIParent:GetWidth() / (MIN_WIDTH + 24), UIParent:GetHeight() / (MIN_HEIGHT + 24)))
   RestoreWindowGeometry(frame)
   Content.Relayout()
-  frame.Next:SetText(accessibilityOpen and "Return to setup" or pages[currentPage][1] == "welcome" and "Start setup" or currentPage == #pages and (Onboarding().installerReload and "Finish and reload" or "Finish setup") or "Continue")
+  frame.Next:SetText(accessibilityOpen and "Return to setup" or pages[currentPage][1] == "welcome" and "Start setup" or currentPage == #pages and (Content.pendingReload and "Finish and reload" or "Finish setup") or "Continue")
   LayoutChrome(frame)
   ns.KeyboardNavigation.RefreshWindows()
 end
@@ -721,7 +723,7 @@ end
 RefreshPage = function()
   local frame = wizardFrame
   local definition = pages[currentPage]
-  Content.pendingReload = Onboarding().installerReload == true
+  Content.pendingReload = Onboarding().installerReload == true or Addon:ChildAddonProfileNeedsReload()
   frame.Title:SetText(definition[2])
   frame.Progress:SetText(string.format("%d / %d", currentPage, #pages))
   frame.Status:SetText("")
@@ -881,7 +883,10 @@ local function BuildFrame()
     if accessibilityOpen then accessibilityOpen = false; RefreshPage() else SelectPage(currentPage - 1) end
   end)
   frame.Previous:SetPoint("BOTTOMLEFT", 18, 22)
-  frame.Save = Button(frame, "Save and exit", 145, function() frame:Hide() end)
+  frame.Save = Button(frame, "Save and exit", 145, function()
+    frame:Hide()
+    Addon:QueueChildAddonProfileCheck()
+  end)
   frame.Save:SetPoint("LEFT", frame.Previous, "RIGHT", 12, 0)
   frame.Skip = Button(frame, "Skip section", 140, function()
     local chapter = pages[currentPage][3]
@@ -907,7 +912,10 @@ local function BuildFrame()
   frame.Help:SetPoint("RIGHT", frame.Accessibility, "LEFT", -8, 0)
   local close = CreateFrame("Button", nil, frame, "UIPanelCloseButton")
   close:SetPoint("TOPRIGHT", -4, -4)
-  close:SetScript("OnClick", function() frame:Hide() end)
+  close:SetScript("OnClick", function()
+    frame:Hide()
+    Addon:QueueChildAddonProfileCheck()
+  end)
   Theme.WidgetSkins.CloseButton(close)
   ns.KeyboardNavigation.RegisterFrame(close, "button", "installerClose")
   local grip = CreateFrame("Button", nil, frame)
@@ -927,6 +935,7 @@ local function BuildFrame()
     Content.Hide(frame.Content)
   end)
   frame:SetScript("OnShow", function()
+    Addon:QueueChildAddonProfileCheck()
     for _, event in ipairs({ "OnProfileChanged", "OnProfileCopied", "OnProfileReset" }) do Addon.db.RegisterCallback(profileCallbacks, event, "Changed") end
     frame:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED")
     frame:RegisterEvent("PLAYER_TALENT_UPDATE")
@@ -954,7 +963,10 @@ local function BuildFrame()
     layout = function() LayoutChrome(frame) end,
   }
   frame:HookScript("OnSizeChanged", function() LayoutChrome(frame); ns.KeyboardNavigation.RefreshWindows() end)
-  ns.KeyboardNavigation.BindWindow(frame, false, function() frame:Hide() end, nil, function(key, keyboardInput)
+  ns.KeyboardNavigation.BindWindow(frame, false, function()
+    frame:Hide()
+    Addon:QueueChildAddonProfileCheck()
+  end, nil, function(key, keyboardInput)
     if key == "TAB" and IsControlKeyDown() then
       Content.HandleKey(frame.Content, "GLOBAL_MOUSE_DOWN", false)
       return false
