@@ -14,7 +14,6 @@ local GetTime = GetTime
 local C_Spell = C_Spell
 local C_DurationUtil = C_DurationUtil
 local CreateFrame = CreateFrame
-local issecretvalue = issecretvalue
 
 local CB_GCD_DUMMY_SPELL_ID = 61304
 local CB_INSTANT_CLEANUP_DURATION = 1.50
@@ -44,18 +43,8 @@ function Module:OnCreate(bar)
   bar.__puiInstantCleanupAnimation = animation
 end
 
-local function CB_GetPublicGCDDuration(displayDuration)
-  local cooldown = C_Spell.GetSpellCooldown(CB_GCD_DUMMY_SPELL_ID)
-  if not cooldown
-    or issecretvalue(cooldown.startTime)
-    or issecretvalue(cooldown.duration)
-    or issecretvalue(cooldown.modRate)
-  then
-    return nil, nil
-  end
-
-  local duration = displayDuration
-  duration:SetTimeFromStart(cooldown.startTime, cooldown.duration, cooldown.modRate)
+local function CB_GetPublicGCDDuration()
+  local duration = C_Spell.GetSpellCooldownDuration(CB_GCD_DUMMY_SPELL_ID)
   if not duration or duration:HasSecretValues() then
     return nil, nil
   end
@@ -155,14 +144,14 @@ function Module:StopActive(owner)
   end
 end
 
-local function CB_PresentInstant(bar, spellID, duration, cleanupDuration)
+local function CB_ApplyInstantVisuals(bar, spellID)
   local spellName = bar.__puiInstantSpellNames[spellID]
   local spellTexture = bar.__puiInstantSpellTextures[spellID]
 
   if not spellName then
     spellName = C_Spell.GetSpellName(spellID)
     if not spellName then
-      return
+      return false
     end
 
     spellTexture = C_Spell.GetSpellTexture(spellID)
@@ -170,8 +159,7 @@ local function CB_PresentInstant(bar, spellID, duration, cleanupDuration)
     bar.__puiInstantSpellTextures[spellID] = spellTexture
   end
 
-  local element = bar.instantStatus
-  element:SetStatusBarColor(
+  bar.instantStatus:SetStatusBarColor(
     bar.__puiInstantColorR,
     bar.__puiInstantColorG,
     bar.__puiInstantColorB,
@@ -203,20 +191,36 @@ local function CB_PresentInstant(bar, spellID, duration, cleanupDuration)
   bar.uninterruptLeft:Hide()
   bar.uninterruptRight:Hide()
 
+  return true
+end
+
+local function CB_ApplyInstantTimer(bar, duration)
+  local element = bar.instantStatus
   element:SetTimerDuration(
     duration,
     Enum.StatusBarInterpolation.Immediate,
     bar.__puiInstantTimerDirection
   )
   element:Show()
+end
 
+local function CB_StartInstantCleanup(bar, cleanupDuration)
   bar.__puiInstantCast = true
   bar.__puiInstantCleanupGroup:Stop()
   bar.__puiInstantCleanupAnimation:SetDuration(cleanupDuration)
   bar.__puiInstantCleanupGroup:Play()
 end
 
-local function CB_ProcessPendingInstant(frame)
+local function CB_PresentInstant(bar, spellID, duration, cleanupDuration)
+  if not CB_ApplyInstantVisuals(bar, spellID) then
+    return
+  end
+
+  CB_ApplyInstantTimer(bar, duration)
+  CB_StartInstantCleanup(bar, cleanupDuration)
+end
+
+local function CB_ConsumePendingInstant(frame)
   frame:Hide()
 
   local bar = Module.pendingBar
@@ -231,7 +235,16 @@ local function CB_ProcessPendingInstant(frame)
     return
   end
 
-  local duration, cleanupDuration = CB_GetPublicGCDDuration(bar.__puiInstantFallbackDuration)
+  return bar, spellID
+end
+
+local function CB_OnPendingFrameUpdate(frame)
+  local bar, spellID = CB_ConsumePendingInstant(frame)
+  if not bar then
+    return
+  end
+
+  local duration, cleanupDuration = CB_GetPublicGCDDuration()
   if not duration then
     duration = bar.__puiInstantFallbackDuration
     duration:SetTimeFromStart(GetTime(), CB_INSTANT_CLEANUP_DURATION)
@@ -277,10 +290,12 @@ end
 
 local P = select(1, ns.Pleebug:DropIn(Module, { name = "UnitFrames.CastBar.Instant" }))
 
-CB_PresentInstant = P:Def("Instant.Present", CB_PresentInstant)
-CB_ProcessPendingInstant = P:Def("Instant.Pending", CB_ProcessPendingInstant)
+CB_ApplyInstantVisuals = P:Def("Instant.Visuals", CB_ApplyInstantVisuals)
+CB_ApplyInstantTimer = P:Def("Instant.Timer", CB_ApplyInstantTimer)
+CB_StartInstantCleanup = P:Def("Instant.Cleanup", CB_StartInstantCleanup)
+CB_ConsumePendingInstant = P:Def("Instant.Pending", CB_ConsumePendingInstant)
 CB_GetPublicGCDDuration = P:Def("Instant.GetPublicGCDDuration", CB_GetPublicGCDDuration)
 
 Module.pendingFrame = CreateFrame("Frame")
-Module.pendingFrame:SetScript("OnUpdate", CB_ProcessPendingInstant)
+Module.pendingFrame:SetScript("OnUpdate", CB_OnPendingFrameUpdate)
 Module.pendingFrame:Hide()
