@@ -1,4 +1,5 @@
 local ADDON_NAME, ns = ...
+local PUI_OptionsProfiler = select(1, ns.Pleebug:DropIn({}))
 
 local Addon = ns.Addon
 local AceGUI = LibStub("AceGUI-3.0")
@@ -25,6 +26,8 @@ local function _PUI_ApplyAuraSpellIDTooltipCVarForOptions(optionsOpen)
 
   ns.AuraTooltipSettings.ApplyCVar(enabled)
 end
+_PUI_ApplyAuraSpellIDTooltipCVarForOptions = PUI_OptionsProfiler:Def("_PUI_ApplyAuraSpellIDTooltipCVarForOptions", _PUI_ApplyAuraSpellIDTooltipCVarForOptions)
+
 
 
 local function _PUI_RefreshConfirmDialogSkin(f)
@@ -41,6 +44,8 @@ local function _PUI_RefreshConfirmDialogSkin(f)
   ns.Theme.ApplyFont(f._msg, "body", 12)
   f._msg:SetTextColor(tr, tg, tb, ta)
 end
+_PUI_RefreshConfirmDialogSkin = PUI_OptionsProfiler:Def("_PUI_RefreshConfirmDialogSkin", _PUI_RefreshConfirmDialogSkin)
+
 
 local function _PUI_CreateConfirmDialog()
 
@@ -81,26 +86,28 @@ local function _PUI_CreateConfirmDialog()
   ns.Theme.WidgetSkins.UIButton(btnNo)
 
   -- Wire clicks once (no re-SetScript each open)
-  btnYes:SetScript("OnClick", function()
+  btnYes:SetScript("OnClick", PUI_OptionsProfiler:DefCallback("_PUI_CreateConfirmDialog > btnYes.SetScript OnClick", function()
     f:Hide()
     local cb = f._onYes
     f._onYes = nil
     f._onNo  = nil
     if cb then cb() end
-  end)
+  end))
 
-  btnNo:SetScript("OnClick", function()
+  btnNo:SetScript("OnClick", PUI_OptionsProfiler:DefCallback("_PUI_CreateConfirmDialog > btnNo.SetScript OnClick", function()
     f:Hide()
     local cb = f._onNo
     f._onYes = nil
     f._onNo  = nil
     if cb then cb() end
-  end)
+  end))
 
   f:Hide()
-  ns.KeyboardNavigation.BindWindow(f, false, function() f._btnNo:Click("LeftButton") end)
+  ns.KeyboardNavigation.BindWindow(f, false, PUI_OptionsProfiler:DefCallback("_PUI_CreateConfirmDialog > ns.KeyboardNavigation.BindWindow", function() f._btnNo:Click("LeftButton") end))
   return f
 end
+_PUI_CreateConfirmDialog = PUI_OptionsProfiler:Def("_PUI_CreateConfirmDialog", _PUI_CreateConfirmDialog)
+
 
 local function _PUI_GetConfirmDialog()
   if not Addon._PUIConfirmDialog then
@@ -108,6 +115,8 @@ local function _PUI_GetConfirmDialog()
   end
   return Addon._PUIConfirmDialog
 end
+_PUI_GetConfirmDialog = PUI_OptionsProfiler:Def("_PUI_GetConfirmDialog", _PUI_GetConfirmDialog)
+
 
 function Addon:PUI_ConfirmAction(opts)
   opts = opts or {}
@@ -132,6 +141,8 @@ function Addon:PUI_ConfirmAction(opts)
   f:Raise()
   ns.KeyboardNavigation.HandleKey("TAB", true)
 end
+Addon.PUI_ConfirmAction = PUI_OptionsProfiler:Def("Addon.PUI_ConfirmAction", Addon.PUI_ConfirmAction)
+
 
 function Addon:PUI_ConfirmResetAndReload(opts)
   local title = opts.title or "Reset"
@@ -142,16 +153,18 @@ function Addon:PUI_ConfirmResetAndReload(opts)
     text    = text,
     yesText = opts.yesText or "Reset + Reload",
     noText  = opts.noText or CANCEL,
-    onYes   = function()
+    onYes   = PUI_OptionsProfiler:DefCallback("Addon.PUI_ConfirmResetAndReload > onYes", function()
       if InCombatLockdown() then
         Addon:Print("|cffff4444[PUI]|r Cannot reset + reload while in combat.")
         return
       end
       opts.resetFn()
       ReloadUI()
-    end,
+    end),
   })
 end
+Addon.PUI_ConfirmResetAndReload = PUI_OptionsProfiler:Def("Addon.PUI_ConfirmResetAndReload", Addon.PUI_ConfirmResetAndReload)
+
 
 local optionsRegistry = ns.Registry.Options
 local _PUI_OptionsApplyState = { buckets = {} }
@@ -170,6 +183,8 @@ local function _PUI_MergeApplyFlags(dst, src)
     end
   end
 end
+_PUI_MergeApplyFlags = PUI_OptionsProfiler:Def("_PUI_MergeApplyFlags", _PUI_MergeApplyFlags)
+
 
 local function _PUI_FlushOptionsApplyBucket(kind, flags)
   if kind == "ActionBars" then
@@ -186,6 +201,8 @@ local function _PUI_FlushOptionsApplyBucket(kind, flags)
     ns.Modules.Dragonriding:Refresh()
   end
 end
+_PUI_FlushOptionsApplyBucket = PUI_OptionsProfiler:Def("_PUI_FlushOptionsApplyBucket", _PUI_FlushOptionsApplyBucket)
+
 
 function Addon:ApplyOptionsChange(kind, flags)
   if kind == "UnitFrames" or kind == "CastBar" then
@@ -211,13 +228,15 @@ function Addon:ApplyOptionsChange(kind, flags)
 
   bucket.queued = true
 
-  C_Timer.After(0, function()
+  C_Timer.After(0, PUI_OptionsProfiler:DefCallback("Addon.ApplyOptionsChange > C_Timer.After", function()
     local pending = bucket.flags
     bucket.flags = {}
     bucket.queued = false
     _PUI_FlushOptionsApplyBucket(kind, pending)
-  end)
+  end))
 end
+Addon.ApplyOptionsChange = PUI_OptionsProfiler:Def("Addon.ApplyOptionsChange", Addon.ApplyOptionsChange)
+
 
 local _PUI_CopyOptionsPath
 
@@ -229,6 +248,8 @@ local function _PUI_ClearOptionsProviderCache(rec)
   rec.__puiOptions = nil
   rec.__puiOptionsByPathKey = nil
 end
+_PUI_ClearOptionsProviderCache = PUI_OptionsProfiler:Def("_PUI_ClearOptionsProviderCache", _PUI_ClearOptionsProviderCache)
+
 
 local function _PUI_InvalidateOptionsProviderCache(sectionKey)
   if sectionKey then
@@ -240,6 +261,8 @@ local function _PUI_InvalidateOptionsProviderCache(sectionKey)
     _PUI_ClearOptionsProviderCache(rec)
   end
 end
+_PUI_InvalidateOptionsProviderCache = PUI_OptionsProfiler:Def("_PUI_InvalidateOptionsProviderCache", _PUI_InvalidateOptionsProviderCache)
+
 
 function Addon:InvalidateOptionsRender(sectionKey)
   _PUI_InvalidateOptionsProviderCache(sectionKey)
@@ -252,6 +275,8 @@ function Addon:InvalidateOptionsRender(sectionKey)
     frame.__puiLastRenderedOptionsPathKey = nil
   end
 end
+Addon.InvalidateOptionsRender = PUI_OptionsProfiler:Def("Addon.InvalidateOptionsRender", Addon.InvalidateOptionsRender)
+
 
 function Addon:NotifyOptionsTreeChanged(sectionKey, targetPath, afterSelect)
   self:InvalidateOptionsRender(sectionKey)
@@ -268,7 +293,7 @@ function Addon:NotifyOptionsTreeChanged(sectionKey, targetPath, afterSelect)
 
   local pathGeneration = State.optionsPathGeneration or 0
 
-  C_Timer.After(0, function()
+  C_Timer.After(0, PUI_OptionsProfiler:DefCallback("Addon.NotifyOptionsTreeChanged > C_Timer.After", function()
     if not (frame and frame:IsShown())
       or (State.optionsPathGeneration or 0) ~= pathGeneration
     then
@@ -280,14 +305,16 @@ function Addon:NotifyOptionsTreeChanged(sectionKey, targetPath, afterSelect)
     if type(afterSelect) == "function" then
       local selectedGeneration = State.optionsPathGeneration or 0
 
-      C_Timer.After(0, function()
+      C_Timer.After(0, PUI_OptionsProfiler:DefCallback("Addon.NotifyOptionsTreeChanged > C_Timer.After > C_Timer.After", function()
         if frame:IsShown() and (State.optionsPathGeneration or 0) == selectedGeneration then
           afterSelect()
         end
-      end)
+      end))
     end
-  end)
+  end))
 end
+Addon.NotifyOptionsTreeChanged = PUI_OptionsProfiler:Def("Addon.NotifyOptionsTreeChanged", Addon.NotifyOptionsTreeChanged)
+
 
 local function _PUI_SortRegistryNodes(a, b)
   if a.order == b.order then
@@ -295,6 +322,8 @@ local function _PUI_SortRegistryNodes(a, b)
   end
   return a.order < b.order
 end
+_PUI_SortRegistryNodes = PUI_OptionsProfiler:Def("_PUI_SortRegistryNodes", _PUI_SortRegistryNodes)
+
 
 local function _PUI_GetSortedRegistryNodes()
   local nodes = {}
@@ -315,6 +344,8 @@ local function _PUI_GetSortedRegistryNodes()
   table.sort(nodes, _PUI_SortRegistryNodes)
   return nodes
 end
+_PUI_GetSortedRegistryNodes = PUI_OptionsProfiler:Def("_PUI_GetSortedRegistryNodes", _PUI_GetSortedRegistryNodes)
+
 
 local _PUI_GetSectionPath
 local _PUI_GetValidatedOptionsPath
@@ -348,6 +379,8 @@ local function _PUI_GetFirstSelectableRegistryKey()
 
   return nodes[1] and nodes[1].key or nil
 end
+_PUI_GetFirstSelectableRegistryKey = PUI_OptionsProfiler:Def("_PUI_GetFirstSelectableRegistryKey", _PUI_GetFirstSelectableRegistryKey)
+
 
 local PUI_DEFAULT_OPTIONS_CHILD = {
   unitframes = "general",
@@ -361,6 +394,8 @@ local function _PUI_IsRootRegistryKey(sectionKey)
   local rec = optionsRegistry[sectionKey]
   return rec and (not rec.parentKey or rec.parentKey == "") or false
 end
+_PUI_IsRootRegistryKey = PUI_OptionsProfiler:Def("_PUI_IsRootRegistryKey", _PUI_IsRootRegistryKey)
+
 
 local function _PUI_GetFirstChildRegistryKey(parentKey)
   if PUI_DEFAULT_OPTIONS_CHILD[parentKey] then
@@ -377,6 +412,8 @@ local function _PUI_GetFirstChildRegistryKey(parentKey)
 
   return nil
 end
+_PUI_GetFirstChildRegistryKey = PUI_OptionsProfiler:Def("_PUI_GetFirstChildRegistryKey", _PUI_GetFirstChildRegistryKey)
+
 
 local function _PUI_GetRootHomeSelectionPath(sectionKey)
   local path = _PUI_GetSectionPath(sectionKey)
@@ -391,6 +428,8 @@ local function _PUI_GetRootHomeSelectionPath(sectionKey)
 
   return _PUI_GetValidatedOptionsPath(path)
 end
+_PUI_GetRootHomeSelectionPath = PUI_OptionsProfiler:Def("_PUI_GetRootHomeSelectionPath", _PUI_GetRootHomeSelectionPath)
+
 
 local function _PUI_GetPreferredRootSelectionPath(sectionKey)
   local stateDB = Addon.db.global.pui.optionsState
@@ -402,10 +441,14 @@ local function _PUI_GetPreferredRootSelectionPath(sectionKey)
 
   return _PUI_GetRootHomeSelectionPath(sectionKey)
 end
+_PUI_GetPreferredRootSelectionPath = PUI_OptionsProfiler:Def("_PUI_GetPreferredRootSelectionPath", _PUI_GetPreferredRootSelectionPath)
+
 
 local function _PUI_ShouldCacheProviderOptions(node)
   return node.rec.disableProviderCache ~= true
 end
+_PUI_ShouldCacheProviderOptions = PUI_OptionsProfiler:Def("_PUI_ShouldCacheProviderOptions", _PUI_ShouldCacheProviderOptions)
+
 
 local function _PUI_GetProviderOptionsCacheKey(rec, activePath)
   if rec.dynamicOptions ~= true then
@@ -418,6 +461,8 @@ local function _PUI_GetProviderOptionsCacheKey(rec, activePath)
   end
   return tostring(type(activePath) == "table" and activePath[2] or "")
 end
+_PUI_GetProviderOptionsCacheKey = PUI_OptionsProfiler:Def("_PUI_GetProviderOptionsCacheKey", _PUI_GetProviderOptionsCacheKey)
+
 
 local function _PUI_SanitizeOptionsNode(opts)
   if type(opts) ~= "table" then
@@ -453,6 +498,8 @@ local function _PUI_SanitizeOptionsNode(opts)
 
   return opts
 end
+_PUI_SanitizeOptionsNode = PUI_OptionsProfiler:Def("_PUI_SanitizeOptionsNode", _PUI_SanitizeOptionsNode)
+
 
 local function _PUI_CreateProviderOption(node, activePath)
   local rec = node.rec
@@ -508,9 +555,11 @@ local function _PUI_CreateProviderOption(node, activePath)
 
   return opts
 end
+_PUI_CreateProviderOption = PUI_OptionsProfiler:Def("_PUI_CreateProviderOption", _PUI_CreateProviderOption)
 
 
-_PUI_GetSectionPath = function(sectionKey)
+
+_PUI_GetSectionPath = PUI_OptionsProfiler:Def("_PUI_GetSectionPath", function(sectionKey)
   if not optionsRegistry[sectionKey] then
     return nil
   end
@@ -532,9 +581,9 @@ _PUI_GetSectionPath = function(sectionKey)
   end
 
   return out
-end
+end)
 
-_PUI_CopyOptionsPath = function(path)
+_PUI_CopyOptionsPath = PUI_OptionsProfiler:Def("_PUI_CopyOptionsPath", function(path)
   if type(path) ~= "table" or #path == 0 then
     return nil
   end
@@ -549,7 +598,7 @@ _PUI_CopyOptionsPath = function(path)
   end
 
   return (#out > 0) and out or nil
-end
+end)
 
 local _PUI_GetOptionsStateDB
 
@@ -570,6 +619,8 @@ local function _PUI_BuildOptionsPath(sectionKey, inlineTabKey, key)
 
   return path
 end
+_PUI_BuildOptionsPath = PUI_OptionsProfiler:Def("_PUI_BuildOptionsPath", _PUI_BuildOptionsPath)
+
 
 local PUI_RENDER_OPTIONS_ROOTS = setmetatable({}, { __mode = "k" })
 local PUI_RENDER_OPTIONS_GROUPS = setmetatable({}, { __mode = "k" })
@@ -583,6 +634,8 @@ local function _PUI_IsInlineOptionsGroup(option)
   end
   return option.inline == true
 end
+_PUI_IsInlineOptionsGroup = PUI_OptionsProfiler:Def("_PUI_IsInlineOptionsGroup", _PUI_IsInlineOptionsGroup)
+
 
 function GUI.CopyOptionsNode(src, seen, deferGroups)
   if type(src) ~= "table" then
@@ -664,6 +717,8 @@ function GUI.CopyOptionsNode(src, seen, deferGroups)
 
   return out
 end
+GUI.CopyOptionsNode = PUI_OptionsProfiler:Def("GUI.CopyOptionsNode", GUI.CopyOptionsNode)
+
 
 local PUI_COLUMN_WIDTH_OPTION_TYPES = {
   toggle = true,
@@ -686,6 +741,8 @@ local function _PUI_GetOptionsColumnRelWidth()
 
   return 1 / ns.Theme.GetOptionsWidgetColumns(availableWidth)
 end
+_PUI_GetOptionsColumnRelWidth = PUI_OptionsProfiler:Def("_PUI_GetOptionsColumnRelWidth", _PUI_GetOptionsColumnRelWidth)
+
 
 local function _PUI_ApplyColumnWidthMetadata(option, relWidth, seen)
   if type(option) ~= "table" then
@@ -719,6 +776,8 @@ local function _PUI_ApplyColumnWidthMetadata(option, relWidth, seen)
     end
   end
 end
+_PUI_ApplyColumnWidthMetadata = PUI_OptionsProfiler:Def("_PUI_ApplyColumnWidthMetadata", _PUI_ApplyColumnWidthMetadata)
+
 
 function GUI.PrepareOptionsGroup(root, path)
   if not PUI_RENDER_OPTIONS_ROOTS[root] then
@@ -759,6 +818,8 @@ function GUI.PrepareOptionsGroup(root, path)
   _PUI_ApplyColumnWidthMetadata(group, relWidth)
   return group
 end
+GUI.PrepareOptionsGroup = PUI_OptionsProfiler:Def("GUI.PrepareOptionsGroup", GUI.PrepareOptionsGroup)
+
 
 local function _PUI_BuildActiveOptionsTree(activePath)
   local root = {
@@ -821,6 +882,8 @@ local function _PUI_BuildActiveOptionsTree(activePath)
     built[node.key] = option
     return option
   end
+  BuildNode = PUI_OptionsProfiler:DefCallback("_PUI_BuildActiveOptionsTree > BuildNode", BuildNode)
+
 
   for i = 1, #nodes do
     local node = nodes[i]
@@ -842,6 +905,8 @@ local function _PUI_BuildActiveOptionsTree(activePath)
 
   return root
 end
+_PUI_BuildActiveOptionsTree = PUI_OptionsProfiler:Def("_PUI_BuildActiveOptionsTree", _PUI_BuildActiveOptionsTree)
+
 
 local function _PUI_GetOptionsRootPathKey(path)
   local rootKey = type(path) == "table" and path[1] or nil
@@ -856,6 +921,8 @@ local function _PUI_GetOptionsRootPathKey(path)
 
   return rootKey
 end
+_PUI_GetOptionsRootPathKey = PUI_OptionsProfiler:Def("_PUI_GetOptionsRootPathKey", _PUI_GetOptionsRootPathKey)
+
 
 local function _PUI_GetOptionsRoot()
   local activePath = _PUI_CopyOptionsPath(State.currentOptionsPath) or _PUI_GetStoredOptionsPath()
@@ -872,6 +939,8 @@ local function _PUI_GetOptionsRoot()
 
   return root
 end
+_PUI_GetOptionsRoot = PUI_OptionsProfiler:Def("_PUI_GetOptionsRoot", _PUI_GetOptionsRoot)
+
 
 local function _PUI_RebindOptionsGroup(widget)
   local user = widget and widget:GetUserDataTable()
@@ -892,6 +961,8 @@ local function _PUI_RebindOptionsGroup(widget)
   user.option = option
   return true
 end
+_PUI_RebindOptionsGroup = PUI_OptionsProfiler:Def("_PUI_RebindOptionsGroup", _PUI_RebindOptionsGroup)
+
 
 local function _PUI_DoesOptionsPathExist(path)
   path = _PUI_CopyOptionsPath(path)
@@ -1012,6 +1083,8 @@ local function _PUI_DoesOptionsPathExist(path)
 
   return true
 end
+_PUI_DoesOptionsPathExist = PUI_OptionsProfiler:Def("_PUI_DoesOptionsPathExist", _PUI_DoesOptionsPathExist)
+
 
 local function _PUI_ConfigStringToPath(configString)
   if type(configString) ~= "string" or configString == "" then
@@ -1029,8 +1102,10 @@ local function _PUI_ConfigStringToPath(configString)
 
   return _PUI_CopyOptionsPath(path)
 end
+_PUI_ConfigStringToPath = PUI_OptionsProfiler:Def("_PUI_ConfigStringToPath", _PUI_ConfigStringToPath)
 
-_PUI_GetValidatedOptionsPath = function(path)
+
+_PUI_GetValidatedOptionsPath = PUI_OptionsProfiler:Def("_PUI_GetValidatedOptionsPath", function(path)
   path = _PUI_CopyOptionsPath(path)
   local record = path and optionsRegistry[path[1]]
   if record and record.parentKey and record.parentKey ~= "" then
@@ -1049,7 +1124,7 @@ _PUI_GetValidatedOptionsPath = function(path)
   end
 
   return path
-end
+end)
 
 local function _PUI_NormalizeRequestedOptionsPath(request)
   if type(request) == "table" then
@@ -1078,8 +1153,10 @@ local function _PUI_NormalizeRequestedOptionsPath(request)
 
   return _PUI_GetValidatedOptionsPath(_PUI_GetSectionPath(request))
 end
+_PUI_NormalizeRequestedOptionsPath = PUI_OptionsProfiler:Def("_PUI_NormalizeRequestedOptionsPath", _PUI_NormalizeRequestedOptionsPath)
 
-_PUI_GetStoredOptionsPath = function()
+
+_PUI_GetStoredOptionsPath = PUI_OptionsProfiler:Def("_PUI_GetStoredOptionsPath", function()
   local path = _PUI_GetValidatedOptionsPath(_PUI_GetOptionsStateDB().lastOptionsPath)
 
   if path and #path == 1 and _PUI_IsRootRegistryKey(path[1]) then
@@ -1087,7 +1164,7 @@ _PUI_GetStoredOptionsPath = function()
   end
 
   return path
-end
+end)
 
 local function _PUI_OptionsPathsEqual(a, b)
   if not a or not b or #a ~= #b then
@@ -1102,6 +1179,8 @@ local function _PUI_OptionsPathsEqual(a, b)
 
   return true
 end
+_PUI_OptionsPathsEqual = PUI_OptionsProfiler:Def("_PUI_OptionsPathsEqual", _PUI_OptionsPathsEqual)
+
 
 local function _PUI_RecordOptionsHistory(path)
   path = _PUI_GetValidatedOptionsPath(path)
@@ -1135,6 +1214,8 @@ local function _PUI_RecordOptionsHistory(path)
   history[#history + 1] = _PUI_CopyOptionsPath(path)
   State.optionsHistoryIndex = #history
 end
+_PUI_RecordOptionsHistory = PUI_OptionsProfiler:Def("_PUI_RecordOptionsHistory", _PUI_RecordOptionsHistory)
+
 
 local function _PUI_NavigateOptionsHistory(direction)
   local history = State.optionsHistory
@@ -1162,19 +1243,21 @@ local function _PUI_NavigateOptionsHistory(direction)
 
   return false
 end
+_PUI_NavigateOptionsHistory = PUI_OptionsProfiler:Def("_PUI_NavigateOptionsHistory", _PUI_NavigateOptionsHistory)
 
-_PUI_GetCurrentOptionsPath = function()
+
+_PUI_GetCurrentOptionsPath = PUI_OptionsProfiler:Def("_PUI_GetCurrentOptionsPath", function()
   return _PUI_GetValidatedOptionsPath(State.currentOptionsPath)
-end
+end)
 
-_PUI_GetFallbackOptionsPath = function()
+_PUI_GetFallbackOptionsPath = PUI_OptionsProfiler:Def("_PUI_GetFallbackOptionsPath", function()
   local fallbackKey = _PUI_GetFirstSelectableRegistryKey()
   if not fallbackKey then
     return nil
   end
 
   return _PUI_GetPreferredRootSelectionPath(fallbackKey) or _PUI_GetValidatedOptionsPath(_PUI_GetSectionPath(fallbackKey))
-end
+end)
 
 local function _PUI_GetToggleMode(frame, request)
   local requestedPath = _PUI_NormalizeRequestedOptionsPath(request)
@@ -1197,6 +1280,8 @@ local function _PUI_GetToggleMode(frame, request)
 
   return "Open", requestedPath
 end
+_PUI_GetToggleMode = PUI_OptionsProfiler:Def("_PUI_GetToggleMode", _PUI_GetToggleMode)
+
 
 local PUI_ROOT_NAV_GENERAL_KEYS = {
   Accessibility = true,
@@ -1253,18 +1338,24 @@ local function _PUI_GetRootNavGroup(key)
 
   return nil
 end
+_PUI_GetRootNavGroup = PUI_OptionsProfiler:Def("_PUI_GetRootNavGroup", _PUI_GetRootNavGroup)
+
 
 local function _PUI_IsRootNavGroupExpanded(groupKey)
   local db = _PUI_GetOptionsStateDB()
   local expanded = db.rootNavExpanded
   return type(expanded) == "table" and expanded[groupKey] == true
 end
+_PUI_IsRootNavGroupExpanded = PUI_OptionsProfiler:Def("_PUI_IsRootNavGroupExpanded", _PUI_IsRootNavGroupExpanded)
+
 
 local function _PUI_SetRootNavGroupExpanded(groupKey, expanded)
   local db = _PUI_GetOptionsStateDB()
   db.rootNavExpanded = db.rootNavExpanded or {}
   db.rootNavExpanded[groupKey] = expanded
 end
+_PUI_SetRootNavGroupExpanded = PUI_OptionsProfiler:Def("_PUI_SetRootNavGroupExpanded", _PUI_SetRootNavGroupExpanded)
+
 
 local function _PUI_CopyRootNavNode(node, label, groupKey, isChild)
   local copy = {}
@@ -1293,6 +1384,8 @@ local function _PUI_CopyRootNavNode(node, label, groupKey, isChild)
   copy.meta = meta
   return copy
 end
+_PUI_CopyRootNavNode = PUI_OptionsProfiler:Def("_PUI_CopyRootNavNode", _PUI_CopyRootNavNode)
+
 
 local function _PUI_BuildRootNavGroups(nodes)
   local roots = {}
@@ -1311,23 +1404,23 @@ local function _PUI_BuildRootNavGroups(nodes)
     end
   end
 
-  table.sort(generalChildren, function(a, b)
+  table.sort(generalChildren, PUI_OptionsProfiler:DefCallback("_PUI_BuildRootNavGroups > table.sort", function(a, b)
     local aLabel = string.lower(PUI_ROOT_NAV_GENERAL_LABELS[a.key] or a.label)
     local bLabel = string.lower(PUI_ROOT_NAV_GENERAL_LABELS[b.key] or b.label)
     if aLabel == bLabel then
       return a.key < b.key
     end
     return aLabel < bLabel
-  end)
+  end))
 
-  table.sort(pluginChildren, function(a, b)
+  table.sort(pluginChildren, PUI_OptionsProfiler:DefCallback("_PUI_BuildRootNavGroups > table.sort #2", function(a, b)
     local aOrder = tonumber(a.order) or 50
     local bOrder = tonumber(b.order) or 50
     if aOrder == bOrder then
       return tostring(a.label) < tostring(b.label)
     end
     return aOrder < bOrder
-  end)
+  end))
 
   local out = {}
   local placed = {}
@@ -1349,6 +1442,8 @@ local function _PUI_BuildRootNavGroups(nodes)
       end
     end
   end
+  AddGroup = PUI_OptionsProfiler:DefCallback("_PUI_BuildRootNavGroups > AddGroup", AddGroup)
+
 
   AddGroup("UITheme", "General", "General", generalChildren)
 
@@ -1372,6 +1467,8 @@ local function _PUI_BuildRootNavGroups(nodes)
 
   return out
 end
+_PUI_BuildRootNavGroups = PUI_OptionsProfiler:Def("_PUI_BuildRootNavGroups", _PUI_BuildRootNavGroups)
+
 
 local function _PUI_NormalizeRootNavSearch(text)
   text = type(text) == "string" and text or ""
@@ -1383,6 +1480,8 @@ local function _PUI_NormalizeRootNavSearch(text)
 
   return string.lower(text)
 end
+_PUI_NormalizeRootNavSearch = PUI_OptionsProfiler:Def("_PUI_NormalizeRootNavSearch", _PUI_NormalizeRootNavSearch)
+
 
 local function _PUI_SearchValue(value)
   local valueType = type(value)
@@ -1391,6 +1490,8 @@ local function _PUI_SearchValue(value)
   end
   return ""
 end
+_PUI_SearchValue = PUI_OptionsProfiler:Def("_PUI_SearchValue", _PUI_SearchValue)
+
 
 local function _PUI_CopySearchPath(path)
   local out = {}
@@ -1401,12 +1502,16 @@ local function _PUI_CopySearchPath(path)
   end
   return out
 end
+_PUI_CopySearchPath = PUI_OptionsProfiler:Def("_PUI_CopySearchPath", _PUI_CopySearchPath)
+
 
 local function _PUI_CopySearchPathWith(path, key)
   local out = _PUI_CopySearchPath(path)
   out[#out + 1] = key
   return out
 end
+_PUI_CopySearchPathWith = PUI_OptionsProfiler:Def("_PUI_CopySearchPathWith", _PUI_CopySearchPathWith)
+
 
 local function _PUI_GetOptionSearchName(key, opt)
   local name = opt and opt.name
@@ -1421,6 +1526,8 @@ local function _PUI_GetOptionSearchName(key, opt)
 
   return tostring(key or "")
 end
+_PUI_GetOptionSearchName = PUI_OptionsProfiler:Def("_PUI_GetOptionSearchName", _PUI_GetOptionSearchName)
+
 
 local function _PUI_GetRootNavNodeSearchText(node)
   local meta = node and node.meta
@@ -1444,6 +1551,8 @@ local function _PUI_GetRootNavNodeSearchText(node)
     _PUI_SearchValue(meta.help),
   }, " "))
 end
+_PUI_GetRootNavNodeSearchText = PUI_OptionsProfiler:Def("_PUI_GetRootNavNodeSearchText", _PUI_GetRootNavNodeSearchText)
+
 
 local function _PUI_GetOptionNodeSearchText(key, opt, labelPath)
   return string.lower(table.concat({
@@ -1458,6 +1567,8 @@ local function _PUI_GetOptionNodeSearchText(key, opt, labelPath)
     table.concat(labelPath or {}, " "),
   }, " "))
 end
+_PUI_GetOptionNodeSearchText = PUI_OptionsProfiler:Def("_PUI_GetOptionNodeSearchText", _PUI_GetOptionNodeSearchText)
+
 
 local function _PUI_SearchTextMatches(text, searchText)
   for token in string.gmatch(searchText, "%S+") do
@@ -1468,6 +1579,8 @@ local function _PUI_SearchTextMatches(text, searchText)
 
   return true
 end
+_PUI_SearchTextMatches = PUI_OptionsProfiler:Def("_PUI_SearchTextMatches", _PUI_SearchTextMatches)
+
 
 local function _PUI_FilterRootRegistryNavNodes(nodes, searchText)
   searchText = _PUI_NormalizeRootNavSearch(searchText)
@@ -1487,6 +1600,8 @@ local function _PUI_FilterRootRegistryNavNodes(nodes, searchText)
 
   return out
 end
+_PUI_FilterRootRegistryNavNodes = PUI_OptionsProfiler:Def("_PUI_FilterRootRegistryNavNodes", _PUI_FilterRootRegistryNavNodes)
+
 
 local function _PUI_InsertRootNavSearchHeader(nodes)
   if type(nodes) ~= "table" or #nodes == 0 then
@@ -1516,6 +1631,8 @@ local function _PUI_InsertRootNavSearchHeader(nodes)
 
   return out
 end
+_PUI_InsertRootNavSearchHeader = PUI_OptionsProfiler:Def("_PUI_InsertRootNavSearchHeader", _PUI_InsertRootNavSearchHeader)
+
 
 local function _PUI_GetSearchRenderPath(path)
   path = _PUI_CopySearchPath(path)
@@ -1530,6 +1647,8 @@ local function _PUI_GetSearchRenderPath(path)
 
   return path
 end
+_PUI_GetSearchRenderPath = PUI_OptionsProfiler:Def("_PUI_GetSearchRenderPath", _PUI_GetSearchRenderPath)
+
 
 local function _PUI_AddDeepOptionsSearchResults(results, seen, rootNode, opt, key, path, labelPath, parentPath, parentLabels, searchText, depth)
   if type(opt) ~= "table" or depth > 12 or opt.hidden == true then
@@ -1638,18 +1757,20 @@ local function _PUI_AddDeepOptionsSearchResults(results, seen, rootNode, opt, ke
     end
   end
 
-  table.sort(childNodes, function(a, b)
+  table.sort(childNodes, PUI_OptionsProfiler:DefCallback("_PUI_AddDeepOptionsSearchResults > table.sort", function(a, b)
     if a.order == b.order then
       return tostring(a.name) < tostring(b.name)
     end
     return a.order < b.order
-  end)
+  end))
 
   for i = 1, #childNodes do
     local child = childNodes[i]
     _PUI_AddDeepOptionsSearchResults(results, seen, rootNode, child.opt, child.key, optionPath, optionLabels, optionPath, optionLabels, searchText, depth + 1)
   end
 end
+_PUI_AddDeepOptionsSearchResults = PUI_OptionsProfiler:Def("_PUI_AddDeepOptionsSearchResults", _PUI_AddDeepOptionsSearchResults)
+
 
 local function _PUI_GetRootRegistryNavNodes(searchText)
   searchText = _PUI_NormalizeRootNavSearch(searchText)
@@ -1734,29 +1855,37 @@ local function _PUI_GetRootRegistryNavNodes(searchText)
     end
   end
 
-  table.sort(results, function(a, b)
+  table.sort(results, PUI_OptionsProfiler:DefCallback("_PUI_GetRootRegistryNavNodes > table.sort", function(a, b)
     if a.order == b.order then
       return tostring(a.label) < tostring(b.label)
     end
     return a.order < b.order
-  end)
+  end))
 
   return _PUI_InsertRootNavSearchHeader(results)
 end
+_PUI_GetRootRegistryNavNodes = PUI_OptionsProfiler:Def("_PUI_GetRootRegistryNavNodes", _PUI_GetRootRegistryNavNodes)
+
 
 local function _PUI_GetSelectedRootRegistryKeyFromPath(path)
   path = _PUI_CopyOptionsPath(path)
   return type(path) == "table" and path[1] or nil
 end
+_PUI_GetSelectedRootRegistryKeyFromPath = PUI_OptionsProfiler:Def("_PUI_GetSelectedRootRegistryKeyFromPath", _PUI_GetSelectedRootRegistryKeyFromPath)
+
 
 local function _PUI_GetSelectedRootRegistryKey()
   local path = _PUI_GetCurrentOptionsPath() or _PUI_GetStoredOptionsPath() or _PUI_GetFallbackOptionsPath()
   return _PUI_GetSelectedRootRegistryKeyFromPath(path)
 end
+_PUI_GetSelectedRootRegistryKey = PUI_OptionsProfiler:Def("_PUI_GetSelectedRootRegistryKey", _PUI_GetSelectedRootRegistryKey)
+
 
 local function _PUI_GetRootNavMeta(node)
   return node.meta
 end
+_PUI_GetRootNavMeta = PUI_OptionsProfiler:Def("_PUI_GetRootNavMeta", _PUI_GetRootNavMeta)
+
 
 local function _PUI_ClearForeignRootNavArt(btn)
   for _, region in ipairs({ btn:GetRegions() }) do
@@ -1767,6 +1896,8 @@ local function _PUI_ClearForeignRootNavArt(btn)
     end
   end
 end
+_PUI_ClearForeignRootNavArt = PUI_OptionsProfiler:Def("_PUI_ClearForeignRootNavArt", _PUI_ClearForeignRootNavArt)
+
 
 local function _PUI_EnsureRootNavButton(btn)
   if btn.__puiRootNavReady then
@@ -1782,7 +1913,7 @@ local function _PUI_EnsureRootNavButton(btn)
   btn.__puiRootNavHover:SetAllPoints(btn)
   btn.__puiRootNavHover:SetTexture("Interface\\Buttons\\WHITE8x8")
   btn.__puiRootNavHover:SetAlpha(0)
-  btn:HookScript("OnHide", function(self) self.__puiRootNavHovered = nil end)
+  btn:HookScript("OnHide", PUI_OptionsProfiler:DefCallback("_PUI_EnsureRootNavButton > btn.HookScript OnHide", function(self) self.__puiRootNavHovered = nil end))
 
   btn.__puiRootNavSelected = btn:CreateTexture(nil, "ARTWORK")
   btn.__puiRootNavSelected.__puiRootNavOwned = true
@@ -1836,6 +1967,8 @@ local function _PUI_EnsureRootNavButton(btn)
   ns.Theme.ApplyFont(btn.__puiRootNavBadge, "tiny", 9)
   ns.Theme.ApplyFont(btn.__puiRootNavExpand, "nav", 12)
 end
+_PUI_EnsureRootNavButton = PUI_OptionsProfiler:Def("_PUI_EnsureRootNavButton", _PUI_EnsureRootNavButton)
+
 
 local function _PUI_StyleRootNavButton(btn, node, isSelected)
   _PUI_EnsureRootNavButton(btn)
@@ -1966,6 +2099,8 @@ local function _PUI_StyleRootNavButton(btn, node, isSelected)
     btn.__puiRootNavDescription:Hide()
   end
 end
+_PUI_StyleRootNavButton = PUI_OptionsProfiler:Def("_PUI_StyleRootNavButton", _PUI_StyleRootNavButton)
+
 
 local function _PUI_GetRootNavSignature(nodes)
   local parts = {
@@ -1995,6 +2130,8 @@ local function _PUI_GetRootNavSignature(nodes)
 
   return table.concat(parts, "\031")
 end
+_PUI_GetRootNavSignature = PUI_OptionsProfiler:Def("_PUI_GetRootNavSignature", _PUI_GetRootNavSignature)
+
 
 local function _PUI_ScrollRootNavButtonIntoView(frame, button)
   local scroll = frame.__puiRootNavScroll
@@ -2026,15 +2163,20 @@ local function _PUI_ScrollRootNavButtonIntoView(frame, button)
     scroll:SetVerticalScroll(math.max(0, math.min(scroll:GetVerticalScrollRange(), target)))
   end
 end
+_PUI_ScrollRootNavButtonIntoView = PUI_OptionsProfiler:Def("_PUI_ScrollRootNavButtonIntoView", _PUI_ScrollRootNavButtonIntoView)
+
 
 local function _PUI_UpdateRootNavSelection(frame, selectedKey)
+  local previousKey = frame.__puiRootNavSelectedKey
   frame.__puiRootNavSelectedKey = selectedKey
 
   local selectedButton
   for _, btn in ipairs(frame.__puiRootNavHost.__puiButtons) do
     if btn.__puiNode and btn:IsShown() then
       local isSelected = btn.__puiSectionKey == selectedKey
-      _PUI_StyleRootNavButton(btn, btn.__puiNode, isSelected)
+      if isSelected or btn.__puiSectionKey == previousKey then
+        _PUI_StyleRootNavButton(btn, btn.__puiNode, isSelected)
+      end
       if isSelected then
         selectedButton = btn
       end
@@ -2043,6 +2185,8 @@ local function _PUI_UpdateRootNavSelection(frame, selectedKey)
 
   _PUI_ScrollRootNavButtonIntoView(frame, selectedButton)
 end
+_PUI_UpdateRootNavSelection = PUI_OptionsProfiler:Def("_PUI_UpdateRootNavSelection", _PUI_UpdateRootNavSelection)
+
 
 local function _PUI_RefreshRootRegistryNav(frame)
 
@@ -2065,37 +2209,37 @@ local function _PUI_RefreshRootRegistryNav(frame)
 
     ns.Theme.ApplyFont(search.__puiPlaceholder, "tiny", 10)
 
-    search:SetScript("OnEnter", function(self)
+    search:SetScript("OnEnter", PUI_OptionsProfiler:DefCallback("_PUI_RefreshRootRegistryNav > search.SetScript OnEnter", function(self)
       OptionsTooltip:SetOwner(self, "ANCHOR_RIGHT")
       OptionsTooltip:SetText("Search", 1, 1, 1, 1, true)
       OptionsTooltip:AddLine("Type at least 2 letters to search settings.", 0.78, 0.78, 0.82, true)
       OptionsTooltip:AddLine("Press Enter to open the first result.", 0.55, 0.68, 0.86, true)
       OptionsTooltip:Show()
-    end)
+    end))
 
-    search:SetScript("OnLeave", function(self)
+    search:SetScript("OnLeave", PUI_OptionsProfiler:DefCallback("_PUI_RefreshRootRegistryNav > search.SetScript OnLeave", function(self)
       if OptionsTooltip:IsOwned(self) then
         OptionsTooltip:Hide()
       end
-    end)
+    end))
 
-    search:SetScript("OnEditFocusGained", function(self)
+    search:SetScript("OnEditFocusGained", PUI_OptionsProfiler:DefCallback("_PUI_RefreshRootRegistryNav > search.SetScript OnEditFocusGained", function(self)
       self.__puiPlaceholder:SetShown(self:GetText() == "")
-    end)
+    end))
 
-    search:SetScript("OnEditFocusLost", function(self)
+    search:SetScript("OnEditFocusLost", PUI_OptionsProfiler:DefCallback("_PUI_RefreshRootRegistryNav > search.SetScript OnEditFocusLost", function(self)
       self.__puiPlaceholder:SetShown(self:GetText() == "")
-    end)
+    end))
 
-    search:SetScript("OnEscapePressed", function(self)
+    search:SetScript("OnEscapePressed", PUI_OptionsProfiler:DefCallback("_PUI_RefreshRootRegistryNav > search.SetScript OnEscapePressed", function(self)
       if self:GetText() ~= "" then
         self:SetText("")
       else
         self:ClearFocus()
       end
-    end)
+    end))
 
-    search:SetScript("OnEnterPressed", function(self)
+    search:SetScript("OnEnterPressed", PUI_OptionsProfiler:DefCallback("_PUI_RefreshRootRegistryNav > search.SetScript OnEnterPressed", function(self)
       self:ClearFocus()
 
       if _PUI_NormalizeRootNavSearch(self:GetText()) == "" then
@@ -2121,9 +2265,9 @@ local function _PUI_RefreshRootRegistryNav(frame)
           return
         end
       end
-    end)
+    end))
 
-    search:SetScript("OnTextChanged", function(self)
+    search:SetScript("OnTextChanged", PUI_OptionsProfiler:DefCallback("_PUI_RefreshRootRegistryNav > search.SetScript OnTextChanged", function(self)
       local text = self:GetText()
       local normalized = _PUI_NormalizeRootNavSearch(text)
 
@@ -2147,7 +2291,7 @@ local function _PUI_RefreshRootRegistryNav(frame)
       end
 
       _PUI_RefreshRootRegistryNav(frame)
-    end)
+    end))
 
     frame.__puiRootNavSearch = search
   end
@@ -2224,13 +2368,13 @@ local function _PUI_RefreshRootRegistryNav(frame)
     local scroll = CreateFrame("ScrollFrame", nil, frame.__puiNavShell, "UIPanelScrollFrameTemplate")
     scroll.scrollBarHideable = true
     scroll:EnableMouseWheel(true)
-    scroll:SetScript("OnMouseWheel", function(self, delta)
+    scroll:SetScript("OnMouseWheel", PUI_OptionsProfiler:DefCallback("_PUI_RefreshRootRegistryNav > scroll.SetScript OnMouseWheel", function(self, delta)
       local maxScroll = self:GetVerticalScrollRange()
       local target = self:GetVerticalScroll() - (delta * 42)
       self:SetVerticalScroll(math.max(0, math.min(maxScroll, target)))
-    end)
+    end))
 
-    scroll:SetScript("OnSizeChanged", function(self, width, height)
+    scroll:SetScript("OnSizeChanged", PUI_OptionsProfiler:DefCallback("_PUI_RefreshRootRegistryNav > scroll.SetScript OnSizeChanged", function(self, width, height)
       local child = self:GetScrollChild()
       width = math.max(120, width - 24)
       local rectKey = tostring(width) .. "\030" .. tostring(math.floor(height + 0.5))
@@ -2244,7 +2388,7 @@ local function _PUI_RefreshRootRegistryNav(frame)
         self.__puiRootNavScrollRectKey = rectKey
         self:UpdateScrollChildRect()
       end
-    end)
+    end))
 
     frame.__puiRootNavScroll = scroll
   end
@@ -2408,7 +2552,7 @@ local function _PUI_RefreshRootRegistryNav(frame)
       btn:SetPoint("TOPRIGHT", host, "TOPRIGHT", 0, 0)
     end
 
-    btn:SetScript("OnEnter", function(self)
+    btn:SetScript("OnEnter", PUI_OptionsProfiler:DefCallback("_PUI_RefreshRootRegistryNav > btn.SetScript OnEnter", function(self)
       self.__puiRootNavHovered = true
       _PUI_StyleRootNavButton(self, self.__puiNode, self.__puiSectionKey == (frame.__puiRootNavSelectedKey or _PUI_GetSelectedRootRegistryKey()))
 
@@ -2441,9 +2585,9 @@ local function _PUI_RefreshRootRegistryNav(frame)
       end
 
       tooltip:Show()
-    end)
+    end))
 
-    btn:SetScript("OnLeave", function(self)
+    btn:SetScript("OnLeave", PUI_OptionsProfiler:DefCallback("_PUI_RefreshRootRegistryNav > btn.SetScript OnLeave", function(self)
       self.__puiRootNavHovered = false
 
       if OptionsTooltip:IsOwned(self) then
@@ -2451,10 +2595,10 @@ local function _PUI_RefreshRootRegistryNav(frame)
       end
 
       _PUI_StyleRootNavButton(self, self.__puiNode, self.__puiSectionKey == (frame.__puiRootNavSelectedKey or _PUI_GetSelectedRootRegistryKey()))
-    end)
+    end))
 
     btn:RegisterForClicks("LeftButtonUp")
-    btn:SetScript("OnClick", function(self)
+    btn:SetScript("OnClick", PUI_OptionsProfiler:DefCallback("_PUI_RefreshRootRegistryNav > btn.SetScript OnClick", function(self)
       if self.__puiDisabled then
         return
       end
@@ -2514,7 +2658,7 @@ local function _PUI_RefreshRootRegistryNav(frame)
       else
         Addon:OpenOptions(self.__puiSectionKey, false, true)
       end
-    end)
+    end))
 
     _PUI_StyleRootNavButton(btn, node, node.key == selectedKey)
     btn:Show()
@@ -2547,6 +2691,8 @@ local function _PUI_RefreshRootRegistryNav(frame)
     end
   end
 end
+_PUI_RefreshRootRegistryNav = PUI_OptionsProfiler:Def("_PUI_RefreshRootRegistryNav", _PUI_RefreshRootRegistryNav)
+
 
 local function _PUI_RememberLastSectionFromPath(path)
   path = _PUI_GetValidatedOptionsPath(path)
@@ -2561,14 +2707,16 @@ local function _PUI_RememberLastSectionFromPath(path)
     db.lastOptionsPathByRoot[path[1]] = _PUI_CopyOptionsPath(path)
   end
 end
+_PUI_RememberLastSectionFromPath = PUI_OptionsProfiler:Def("_PUI_RememberLastSectionFromPath", _PUI_RememberLastSectionFromPath)
 
 
-_PUI_GetOptionsStateDB = function()
+
+_PUI_GetOptionsStateDB = PUI_OptionsProfiler:Def("_PUI_GetOptionsStateDB", function()
   local globalPUI = Addon.db.global.pui
   globalPUI.optionsState = globalPUI.optionsState or {}
   globalPUI.optionsState.lastOptionsSection = nil
   return globalPUI.optionsState
-end
+end)
 
 local PUI_OPTIONS_WINDOW_DEFAULT_WIDTH = 1024
 local PUI_OPTIONS_WINDOW_DEFAULT_HEIGHT = 768
@@ -2581,12 +2729,16 @@ local function _PUI_GetOptionsWindowDB()
   globalPUI.optionsWindow = globalPUI.optionsWindow or {}
   return globalPUI.optionsWindow
 end
+_PUI_GetOptionsWindowDB = PUI_OptionsProfiler:Def("_PUI_GetOptionsWindowDB", _PUI_GetOptionsWindowDB)
+
 
 local function _PUI_GetOptionsWindowSize()
   local db = _PUI_GetOptionsWindowDB()
   return tonumber(db.optionsWindowWidth) or PUI_OPTIONS_WINDOW_DEFAULT_WIDTH,
     tonumber(db.optionsWindowHeight) or PUI_OPTIONS_WINDOW_DEFAULT_HEIGHT
 end
+_PUI_GetOptionsWindowSize = PUI_OptionsProfiler:Def("_PUI_GetOptionsWindowSize", _PUI_GetOptionsWindowSize)
+
 
 local function _PUI_GetOptionsWindowScreenSize(frame)
   frame = frame or Addon._OptionsWindow
@@ -2595,6 +2747,8 @@ local function _PUI_GetOptionsWindowScreenSize(frame)
   local ratio = parentScale / scale
   return GetScreenWidth() * ratio, GetScreenHeight() * ratio, ratio
 end
+_PUI_GetOptionsWindowScreenSize = PUI_OptionsProfiler:Def("_PUI_GetOptionsWindowScreenSize", _PUI_GetOptionsWindowScreenSize)
+
 
 function Addon:GetOptionsWindowResizeBounds(frame)
   local screenWidth, screenHeight, ratio = _PUI_GetOptionsWindowScreenSize(frame or self._OptionsWindow)
@@ -2605,6 +2759,8 @@ function Addon:GetOptionsWindowResizeBounds(frame)
 
   return minWidth, minHeight, maxWidth, maxHeight
 end
+Addon.GetOptionsWindowResizeBounds = PUI_OptionsProfiler:Def("Addon.GetOptionsWindowResizeBounds", Addon.GetOptionsWindowResizeBounds)
+
 
 local function _PUI_GetDefaultOptionsWindowSize(frame)
   local width, height = _PUI_GetOptionsWindowSize()
@@ -2615,6 +2771,8 @@ local function _PUI_GetDefaultOptionsWindowSize(frame)
 
   return width, height
 end
+_PUI_GetDefaultOptionsWindowSize = PUI_OptionsProfiler:Def("_PUI_GetDefaultOptionsWindowSize", _PUI_GetDefaultOptionsWindowSize)
+
 
 local function _PUI_ClampOptionsWindowBounds(width, height, frame)
   local defaultWidth, defaultHeight = _PUI_GetDefaultOptionsWindowSize(frame)
@@ -2625,6 +2783,8 @@ local function _PUI_ClampOptionsWindowBounds(width, height, frame)
 
   return width, height
 end
+_PUI_ClampOptionsWindowBounds = PUI_OptionsProfiler:Def("_PUI_ClampOptionsWindowBounds", _PUI_ClampOptionsWindowBounds)
+
 
 local function _PUI_UpdateOptionsWindowSize(frame, appName)
   local minWidth, minHeight, maxWidth, maxHeight = Addon:GetOptionsWindowResizeBounds(frame)
@@ -2635,6 +2795,8 @@ local function _PUI_UpdateOptionsWindowSize(frame, appName)
 
   LibStub("AceConfigDialog-3.0"):SetDefaultSize(appName, _PUI_GetDefaultOptionsWindowSize(frame))
 end
+_PUI_UpdateOptionsWindowSize = PUI_OptionsProfiler:Def("_PUI_UpdateOptionsWindowSize", _PUI_UpdateOptionsWindowSize)
+
 
 local function _PUI_SaveOptionsWindowState(frame)
   local db = _PUI_GetOptionsWindowDB()
@@ -2649,6 +2811,8 @@ local function _PUI_SaveOptionsWindowState(frame)
     db.offsetY = y - screenHeight * 0.5
   end
 end
+_PUI_SaveOptionsWindowState = PUI_OptionsProfiler:Def("_PUI_SaveOptionsWindowState", _PUI_SaveOptionsWindowState)
+
 
 function Addon:GetOptionsWindowGeometry()
   local frame = self._OptionsWindow
@@ -2670,6 +2834,8 @@ function Addon:GetOptionsWindowGeometry()
   end
   return width, height, math.max(-maxX, math.min(maxX, x)), math.max(-maxY, math.min(maxY, y)), maxX, maxY
 end
+Addon.GetOptionsWindowGeometry = PUI_OptionsProfiler:Def("Addon.GetOptionsWindowGeometry", Addon.GetOptionsWindowGeometry)
+
 
 function Addon:PreviewOptionsWindowSize(width, height)
   local frame = self._OptionsWindow
@@ -2690,6 +2856,8 @@ function Addon:PreviewOptionsWindowSize(width, height)
     frame:SetPoint("CENTER", UIParent, "CENTER", x, y)
   end
 end
+Addon.PreviewOptionsWindowSize = PUI_OptionsProfiler:Def("Addon.PreviewOptionsWindowSize", Addon.PreviewOptionsWindowSize)
+
 
 function Addon:SetOptionsWindowGeometry(width, height, x, y)
   local currentWidth, currentHeight, currentX, currentY = self:GetOptionsWindowGeometry()
@@ -2712,6 +2880,8 @@ function Addon:SetOptionsWindowGeometry(width, height, x, y)
   -- AceConfig refreshes the controls after committing; only their geometry bounds changed.
   self:InvalidateOptionsRender("UITheme")
 end
+Addon.SetOptionsWindowGeometry = PUI_OptionsProfiler:Def("Addon.SetOptionsWindowGeometry", Addon.SetOptionsWindowGeometry)
+
 
 local function _PUI_RestoreOptionsWindowState(frame)
   local db = _PUI_GetOptionsWindowDB()
@@ -2725,6 +2895,8 @@ local function _PUI_RestoreOptionsWindowState(frame)
   frame:ClearAllPoints()
   frame:SetPoint("CENTER", UIParent, "CENTER", x, y)
 end
+_PUI_RestoreOptionsWindowState = PUI_OptionsProfiler:Def("_PUI_RestoreOptionsWindowState", _PUI_RestoreOptionsWindowState)
+
 
 local function _PUI_FitOptionsWindowToScreen(frame)
   local _, _, maxWidth, maxHeight = Addon:GetOptionsWindowResizeBounds(frame)
@@ -2741,11 +2913,15 @@ local function _PUI_FitOptionsWindowToScreen(frame)
 
   return true
 end
+_PUI_FitOptionsWindowToScreen = PUI_OptionsProfiler:Def("_PUI_FitOptionsWindowToScreen", _PUI_FitOptionsWindowToScreen)
+
 
 local function _PUI_StopOptionsWindowDrag(frame)
   frame:StopMovingOrSizing()
   _PUI_SaveOptionsWindowState(frame)
 end
+_PUI_StopOptionsWindowDrag = PUI_OptionsProfiler:Def("_PUI_StopOptionsWindowDrag", _PUI_StopOptionsWindowDrag)
+
 
 local function _PUI_StyleHeaderActionButton(btn)
   ns.Theme.WidgetSkins.UIButton(btn)
@@ -2759,6 +2935,8 @@ local function _PUI_StyleHeaderActionButton(btn)
   fs:SetJustifyH("CENTER")
   fs:SetJustifyV("MIDDLE")
 end
+_PUI_StyleHeaderActionButton = PUI_OptionsProfiler:Def("_PUI_StyleHeaderActionButton", _PUI_StyleHeaderActionButton)
+
 
 local function _PUI_CreateHeaderButton(parent, width, text, onClick)
   local btn = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate")
@@ -2773,6 +2951,8 @@ local function _PUI_CreateHeaderButton(parent, width, text, onClick)
 
   return btn
 end
+_PUI_CreateHeaderButton = PUI_OptionsProfiler:Def("_PUI_CreateHeaderButton", _PUI_CreateHeaderButton)
+
 
 local function _PUI_ApplyShellBackdrop(target, bgColor, borderColor, edge)
   ns.Theme.SetSquareBackdrop(target, {
@@ -2780,9 +2960,11 @@ local function _PUI_ApplyShellBackdrop(target, bgColor, borderColor, edge)
     border = borderColor,
   }, edge)
 end
+_PUI_ApplyShellBackdrop = PUI_OptionsProfiler:Def("_PUI_ApplyShellBackdrop", _PUI_ApplyShellBackdrop)
 
 
-local function _PUI_EnsurePleebUIOptionsChrome(frame)
+
+local function _PUI_EnsurePleebUIOptionsChrome(frame, skipNavigationRefresh)
   local baseLevel = frame:GetFrameLevel()
   local colors = ns.Theme.GetColors()
   local edge = ns.Theme.GetEdgeSize()
@@ -2820,22 +3002,22 @@ local function _PUI_EnsurePleebUIOptionsChrome(frame)
     local drag = CreateFrame("Frame", nil, frame)
     drag:EnableMouse(true)
     drag:RegisterForDrag("LeftButton")
-    drag:SetScript("OnDragStart", function()
+    drag:SetScript("OnDragStart", PUI_OptionsProfiler:DefCallback("_PUI_EnsurePleebUIOptionsChrome > drag.SetScript OnDragStart", function()
       frame:StartMoving()
-    end)
-    drag:SetScript("OnDragStop", function()
+    end))
+    drag:SetScript("OnDragStop", PUI_OptionsProfiler:DefCallback("_PUI_EnsurePleebUIOptionsChrome > drag.SetScript OnDragStop", function()
       _PUI_StopOptionsWindowDrag(frame)
-    end)
-    drag:SetScript("OnMouseDown", function(_, button)
+    end))
+    drag:SetScript("OnMouseDown", PUI_OptionsProfiler:DefCallback("_PUI_EnsurePleebUIOptionsChrome > drag.SetScript OnMouseDown", function(_, button)
       if button == "LeftButton" then
         frame:StartMoving()
       end
-    end)
-    drag:SetScript("OnMouseUp", function(_, button)
+    end))
+    drag:SetScript("OnMouseUp", PUI_OptionsProfiler:DefCallback("_PUI_EnsurePleebUIOptionsChrome > drag.SetScript OnMouseUp", function(_, button)
       if button == "LeftButton" then
         _PUI_StopOptionsWindowDrag(frame)
       end
-    end)
+    end))
     frame.__puiDragHeader = drag
   end
 
@@ -2848,25 +3030,25 @@ local function _PUI_EnsurePleebUIOptionsChrome(frame)
     grip.tex:SetSize(16, 16)
     grip.tex:SetTexture("Interface\\Buttons\\WHITE8x8")
 
-    grip:SetScript("OnEnter", function(self)
+    grip:SetScript("OnEnter", PUI_OptionsProfiler:DefCallback("_PUI_EnsurePleebUIOptionsChrome > grip.SetScript OnEnter", function(self)
       local accent = ns.Theme.GetColors().accent
       self.tex:SetVertexColor(accent[1], accent[2], accent[3], 0.75)
-    end)
+    end))
 
-    grip:SetScript("OnLeave", function(self)
+    grip:SetScript("OnLeave", PUI_OptionsProfiler:DefCallback("_PUI_EnsurePleebUIOptionsChrome > grip.SetScript OnLeave", function(self)
       local accent = ns.Theme.GetColors().accent
       self.tex:SetVertexColor(accent[1], accent[2], accent[3], 0.35)
-    end)
+    end))
 
-    grip:SetScript("OnMouseDown", function(_, button)
+    grip:SetScript("OnMouseDown", PUI_OptionsProfiler:DefCallback("_PUI_EnsurePleebUIOptionsChrome > grip.SetScript OnMouseDown", function(_, button)
       if button ~= "LeftButton" then
         return
       end
 
       frame:StartSizing("BOTTOMRIGHT")
-    end)
+    end))
 
-    grip:SetScript("OnMouseUp", function()
+    grip:SetScript("OnMouseUp", PUI_OptionsProfiler:DefCallback("_PUI_EnsurePleebUIOptionsChrome > grip.SetScript OnMouseUp", function()
       frame:StopMovingOrSizing()
       _PUI_SaveOptionsWindowState(frame)
 
@@ -2874,7 +3056,7 @@ local function _PUI_EnsurePleebUIOptionsChrome(frame)
       if frame:IsShown() and type(path) == "table" then
         Addon:NotifyOptionsTreeChanged(path[1], path)
       end
-    end)
+    end))
 
     frame.__puiResizeGrip = grip
   end
@@ -3020,49 +3202,49 @@ local function _PUI_EnsurePleebUIOptionsChrome(frame)
       key = "__puiBtnDebug",
       width = 70,
       text = "Close",
-      onClick = function()
+      onClick = PUI_OptionsProfiler:DefCallback("_PUI_EnsurePleebUIOptionsChrome > onClick", function()
         frame:Hide()
-      end,
+      end),
     },
     {
       key = "__puiBtnPCM",
       width = 108,
       text = "Cooldowns",
-      onClick = function()
+      onClick = PUI_OptionsProfiler:DefCallback("_PUI_EnsurePleebUIOptionsChrome > onClick #2", function()
         _G.CooldownViewerSettings:ShowUIPanel(false)
-      end,
+      end),
     },
     {
       key = "__puiBtnTest",
       width = 62,
       text = "Test",
-      onClick = function()
+      onClick = PUI_OptionsProfiler:DefCallback("_PUI_EnsurePleebUIOptionsChrome > onClick #3", function()
         Addon:SetEditMode(not Addon:IsEditMode())
-      end,
+      end),
     },
     {
       key = "__puiBtnMovers",
       width = 80,
       text = "Movers",
-      onClick = function()
+      onClick = PUI_OptionsProfiler:DefCallback("_PUI_EnsurePleebUIOptionsChrome > onClick #4", function()
         Addon:SetEditMode(not Addon:IsEditMode())
-      end,
+      end),
     },
     {
       key = "__puiBtnSetup",
       width = 70,
       text = "Setup",
-      onClick = function()
+      onClick = PUI_OptionsProfiler:DefCallback("_PUI_EnsurePleebUIOptionsChrome > onClick #5", function()
         Addon:ShowInstallWizard(true)
-      end,
+      end),
     },
     {
       key = "__puiBtnWhatsNew",
       width = 92,
       text = "What's new",
-      onClick = function()
+      onClick = PUI_OptionsProfiler:DefCallback("_PUI_EnsurePleebUIOptionsChrome > onClick #6", function()
         Addon:ShowWhatsNew(true)
-      end,
+      end),
     },
   }
 
@@ -3101,7 +3283,9 @@ local function _PUI_EnsurePleebUIOptionsChrome(frame)
     previous = btn
   end
 
-  _PUI_RefreshRootRegistryNav(frame)
+  if not skipNavigationRefresh then
+    _PUI_RefreshRootRegistryNav(frame)
+  end
 
   local resizeAccent = colors.accent
   local resizeAlpha = frame.__puiResizeGrip:IsMouseOver() and 0.75 or 0.35
@@ -3115,6 +3299,8 @@ local function _PUI_EnsurePleebUIOptionsChrome(frame)
   frame.__puiResizeGrip:Show()
   frame.__puiResizeGrip:EnableMouse(true)
 end
+_PUI_EnsurePleebUIOptionsChrome = PUI_OptionsProfiler:Def("_PUI_EnsurePleebUIOptionsChrome", _PUI_EnsurePleebUIOptionsChrome)
+
 
 function Addon:ApplyOptionsUIScale()
   local frame = self._OptionsWindow
@@ -3131,6 +3317,8 @@ function Addon:ApplyOptionsUIScale()
     _PUI_SaveOptionsWindowState(frame)
   end
 end
+Addon.ApplyOptionsUIScale = PUI_OptionsProfiler:Def("Addon.ApplyOptionsUIScale", Addon.ApplyOptionsUIScale)
+
 
 function Addon:RefreshOptionsTheme()
   ns.OptionsMotion.Reset()
@@ -3178,6 +3366,8 @@ function Addon:RefreshOptionsTheme()
   end
   ns.KeyboardNavigation.RefreshWindows()
 end
+Addon.RefreshOptionsTheme = PUI_OptionsProfiler:Def("Addon.RefreshOptionsTheme", Addon.RefreshOptionsTheme)
+
 
 
 local function _PUI_GetPageShellInfo(path)
@@ -3221,6 +3411,8 @@ local function _PUI_GetPageShellInfo(path)
     end
     return nil
   end
+  Pick = PUI_OptionsProfiler:DefCallback("_PUI_GetPageShellInfo > Pick", Pick)
+
 
   local title = Pick(page.title, activeMeta.pageTitle, activeMeta.title, rootMeta.pageTitle, rootMeta.title, activeRec.label, activeRec.name, activeRec.key)
   local description = Pick(page.description, activeMeta.pageDescription, activeMeta.description, rootMeta.pageDescription, rootMeta.description)
@@ -3262,6 +3454,8 @@ local function _PUI_GetPageShellInfo(path)
     pluginPageKey = activeRec.pluginPageKey,
   }
 end
+_PUI_GetPageShellInfo = PUI_OptionsProfiler:Def("_PUI_GetPageShellInfo", _PUI_GetPageShellInfo)
+
 
 local function _PUI_BuildSelectedOptionsPath(widget, uniquevalue)
   local user = widget:GetUserDataTable()
@@ -3277,6 +3471,8 @@ local function _PUI_BuildSelectedOptionsPath(widget, uniquevalue)
 
   return _PUI_GetValidatedOptionsPath(path)
 end
+_PUI_BuildSelectedOptionsPath = PUI_OptionsProfiler:Def("_PUI_BuildSelectedOptionsPath", _PUI_BuildSelectedOptionsPath)
+
 
 local function _PUI_GetOptionsPagePathKey(path)
   if type(path) ~= "table" then
@@ -3287,6 +3483,8 @@ local function _PUI_GetOptionsPagePathKey(path)
   return tostring(path[1] or "") .. "\031"
     .. (record and record.optionsCacheKey and record.optionsCacheKey(path) or tostring(path[2] or ""))
 end
+_PUI_GetOptionsPagePathKey = PUI_OptionsProfiler:Def("_PUI_GetOptionsPagePathKey", _PUI_GetOptionsPagePathKey)
+
 
 local function _PUI_ApplySelectedOptionsPath(path)
   path = _PUI_GetValidatedOptionsPath(path)
@@ -3333,6 +3531,8 @@ local function _PUI_ApplySelectedOptionsPath(path)
   if selectionChanged then ns.KeyboardNavigation.QueueFocusRegion(frame, 4) end
   return true, optionsModelChanged
 end
+_PUI_ApplySelectedOptionsPath = PUI_OptionsProfiler:Def("_PUI_ApplySelectedOptionsPath", _PUI_ApplySelectedOptionsPath)
+
 
 function Addon:HandleOptionsGroupSelection(widget, uniquevalue)
   local path = _PUI_BuildSelectedOptionsPath(widget, uniquevalue)
@@ -3351,6 +3551,8 @@ function Addon:HandleOptionsGroupSelection(widget, uniquevalue)
 
   return true, optionsModelChanged
 end
+Addon.HandleOptionsGroupSelection = PUI_OptionsProfiler:Def("Addon.HandleOptionsGroupSelection", Addon.HandleOptionsGroupSelection)
+
 
 local function _PUI_OptionsPathStartsWith(path, prefix)
   if type(path) ~= "table" or type(prefix) ~= "table" or #prefix > #path then
@@ -3365,6 +3567,8 @@ local function _PUI_OptionsPathStartsWith(path, prefix)
 
   return true
 end
+_PUI_OptionsPathStartsWith = PUI_OptionsProfiler:Def("_PUI_OptionsPathStartsWith", _PUI_OptionsPathStartsWith)
+
 
 local function _PUI_FindRetainedOptionsGroup(root, path)
   local bestWidget
@@ -3404,10 +3608,14 @@ local function _PUI_FindRetainedOptionsGroup(root, path)
       Walk(child)
     end
   end
+  Walk = PUI_OptionsProfiler:DefCallback("_PUI_FindRetainedOptionsGroup > Walk", Walk)
+
 
   Walk(root)
   return bestWidget, bestValue
 end
+_PUI_FindRetainedOptionsGroup = PUI_OptionsProfiler:Def("_PUI_FindRetainedOptionsGroup", _PUI_FindRetainedOptionsGroup)
+
 
 function Addon:NavigateOpenOptionsPath(targetPath)
   local path = _PUI_GetValidatedOptionsPath(targetPath)
@@ -3440,6 +3648,8 @@ function Addon:NavigateOpenOptionsPath(targetPath)
   widget:SelectByValue(value)
   return true
 end
+Addon.NavigateOpenOptionsPath = PUI_OptionsProfiler:Def("Addon.NavigateOpenOptionsPath", Addon.NavigateOpenOptionsPath)
+
 
 function Addon:SelectOptionsPath(targetPath)
   local path = _PUI_GetValidatedOptionsPath(targetPath)
@@ -3450,6 +3660,8 @@ function Addon:SelectOptionsPath(targetPath)
   _PUI_ApplySelectedOptionsPath(path)
   LibStub("AceConfigDialog-3.0"):SelectGroup(PUI_OPTIONS_APP, unpack(path))
 end
+Addon.SelectOptionsPath = PUI_OptionsProfiler:Def("Addon.SelectOptionsPath", Addon.SelectOptionsPath)
+
 
 local function _PUI_EnsureCustomOptionsFrame()
   local frame = Addon._OptionsWindow
@@ -3470,11 +3682,11 @@ local function _PUI_EnsureCustomOptionsFrame()
     frame:EnableMouse(true)
     frame:SetUserPlaced(false)
 
-    frame:SetScript("OnShow", function(self)
+    frame:SetScript("OnShow", PUI_OptionsProfiler:DefCallback("_PUI_EnsureCustomOptionsFrame > frame.SetScript OnShow", function(self)
       self:RegisterEvent("GLOBAL_MOUSE_DOWN")
-    end)
+    end))
 
-    frame:SetScript("OnEvent", function(_, event, button)
+    frame:SetScript("OnEvent", PUI_OptionsProfiler:DefCallback("_PUI_EnsureCustomOptionsFrame > frame.SetScript OnEvent", function(_, event, button)
       if event ~= "GLOBAL_MOUSE_DOWN" then
         return
       end
@@ -3484,9 +3696,9 @@ local function _PUI_EnsureCustomOptionsFrame()
       elseif button == "Button5" then
         _PUI_NavigateOptionsHistory(1)
       end
-    end)
+    end))
 
-    frame:SetScript("OnHide", function(self)
+    frame:SetScript("OnHide", PUI_OptionsProfiler:DefCallback("_PUI_EnsureCustomOptionsFrame > frame.SetScript OnHide", function(self)
       ns.OptionsMotion.Reset()
       self:UnregisterEvent("GLOBAL_MOUSE_DOWN")
 
@@ -3508,14 +3720,14 @@ local function _PUI_EnsureCustomOptionsFrame()
       ns.Theme.ResetWidgetRowBackgrounds()
       ns.Flags.__puiPCM_OptionsOpen = nil
       _PUI_ApplyAuraSpellIDTooltipCVarForOptions(false)
-    end)
+    end))
 
     Addon._OptionsWindow = frame
     ns.KeyboardNavigation.BindWindow(frame)
     ns.KeyboardNavigation.AttachGuide(frame, {
       bottom = 62,
       text = "Ctrl+Tab Areas · Tab Next control · Enter Select · F1 Help",
-      layout = function() _PUI_EnsurePleebUIOptionsChrome(frame) end,
+      layout = PUI_OptionsProfiler:DefCallback("_PUI_EnsureCustomOptionsFrame > layout", function() _PUI_EnsurePleebUIOptionsChrome(frame) end),
     })
 
     Addon:ApplyOptionsUIScale()
@@ -3527,15 +3739,17 @@ local function _PUI_EnsureCustomOptionsFrame()
 
   local colors = ns.Theme.GetColors()
   _PUI_ApplyShellBackdrop(frame, colors.background, colors.border, ns.Theme.GetEdgeSize())
-  _PUI_EnsurePleebUIOptionsChrome(frame)
+  _PUI_EnsurePleebUIOptionsChrome(frame, true)
 
   return frame
 end
+_PUI_EnsureCustomOptionsFrame = PUI_OptionsProfiler:Def("_PUI_EnsureCustomOptionsFrame", _PUI_EnsureCustomOptionsFrame)
+
 
 
 local _PUI_RefreshShellNavigationContext
 
-_PUI_HideActiveCustomOptionsPage = function(frame)
+_PUI_HideActiveCustomOptionsPage = PUI_OptionsProfiler:Def("_PUI_HideActiveCustomOptionsPage", function(frame)
   local active = frame and frame.__puiActiveCustomOptionsPage
   if not active then
     return
@@ -3564,7 +3778,7 @@ _PUI_HideActiveCustomOptionsPage = function(frame)
       UISpecialFrames[#UISpecialFrames + 1] = active.rootName
     end
   end
-end
+end)
 
 local function _PUI_SuspendEmbeddedSpecialFrame(root)
   local rootName = root and root.GetName and root:GetName() or nil
@@ -3583,8 +3797,10 @@ local function _PUI_SuspendEmbeddedSpecialFrame(root)
 
   return rootName, removed == true
 end
+_PUI_SuspendEmbeddedSpecialFrame = PUI_OptionsProfiler:Def("_PUI_SuspendEmbeddedSpecialFrame", _PUI_SuspendEmbeddedSpecialFrame)
 
-_PUI_RefreshCustomPageShell = function(frame, path)
+
+_PUI_RefreshCustomPageShell = PUI_OptionsProfiler:Def("_PUI_RefreshCustomPageShell", function(frame, path)
   _PUI_HideActiveCustomOptionsPage(frame)
   local info = _PUI_GetPageShellInfo(path)
   local contentShell = frame.__puiContentShell
@@ -3684,11 +3900,11 @@ _PUI_RefreshCustomPageShell = function(frame, path)
       btn.text:SetTextColor(colors.text[1], colors.text[2], colors.text[3], colors.text[4])
     end
 
-    btn:SetScript("OnClick", function()
+    btn:SetScript("OnClick", PUI_OptionsProfiler:DefCallback("_PUI_RefreshCustomPageShell > btn.SetScript OnClick", function()
       local db = _PUI_GetOptionsStateDB()
       db.previewBoxEnabled = not (db.previewBoxEnabled == true)
       _PUI_RefreshCustomPageShell(frame, info.path)
-    end)
+    end))
 
     btn:Show()
   elseif frame.__puiPreviewToggleButton then
@@ -3721,7 +3937,7 @@ _PUI_RefreshCustomPageShell = function(frame, path)
   end
 
   return shell, info
-end
+end)
 
 local PUI_SHELL_TOP_TAB_UX = {
   unitframes = {
@@ -3782,8 +3998,10 @@ local function _PUI_GetShellTopTabUX(rootKey, childKey)
   end
   return nil
 end
+_PUI_GetShellTopTabUX = PUI_OptionsProfiler:Def("_PUI_GetShellTopTabUX", _PUI_GetShellTopTabUX)
 
-_PUI_RefreshShellNavigationContext = function(_, shell, path)
+
+_PUI_RefreshShellNavigationContext = PUI_OptionsProfiler:Def("_PUI_RefreshShellNavigationContext", function(_, shell, path)
   local rootKey = path[1]
   local activeChildKey = path[2]
   local rootOption = _PUI_GetOptionsRoot().args[rootKey]
@@ -3904,7 +4122,7 @@ _PUI_RefreshShellNavigationContext = function(_, shell, path)
 
   shell:SetStickyShown(false)
   return false
-end
+end)
 
 local function _PUI_GetRenderableOptionsPath(path)
   path = _PUI_CopyOptionsPath(path)
@@ -3935,6 +4153,8 @@ local function _PUI_GetRenderableOptionsPath(path)
 
   return path
 end
+_PUI_GetRenderableOptionsPath = PUI_OptionsProfiler:Def("_PUI_GetRenderableOptionsPath", _PUI_GetRenderableOptionsPath)
+
 
 local function _PUI_SelectEmbeddedOptionsPath(AceConfigDialog, appName, path)
   local option = _PUI_GetOptionsRoot().args[path[1]]
@@ -3963,6 +4183,8 @@ local function _PUI_SelectEmbeddedOptionsPath(AceConfigDialog, appName, path)
     option = option.args[key]
   end
 end
+_PUI_SelectEmbeddedOptionsPath = PUI_OptionsProfiler:Def("_PUI_SelectEmbeddedOptionsPath", _PUI_SelectEmbeddedOptionsPath)
+
 
 local function _PUI_RenderCustomOptionsPath(frame, AceConfigDialog, APP, path)
   local requestedPath = _PUI_GetValidatedOptionsPath(path)
@@ -4065,13 +4287,15 @@ local function _PUI_RenderCustomOptionsPath(frame, AceConfigDialog, APP, path)
   frame.__puiQueuedOptionsPath = nil
 
   if queuedPath and not _PUI_OptionsPathsEqual(queuedPath, requestedPath) then
-    C_Timer.After(0, function()
+    C_Timer.After(0, PUI_OptionsProfiler:DefCallback("_PUI_RenderCustomOptionsPath > C_Timer.After", function()
       if frame:IsShown() then
         _PUI_RenderCustomOptionsPath(frame, AceConfigDialog, APP, queuedPath)
       end
-    end)
+    end))
   end
 end
+_PUI_RenderCustomOptionsPath = PUI_OptionsProfiler:Def("_PUI_RenderCustomOptionsPath", _PUI_RenderCustomOptionsPath)
+
 
 local function _PUI_EnsureOptionsDialog()
   local AceConfigRegistry = LibStub("AceConfigRegistry-3.0")
@@ -4080,14 +4304,16 @@ local function _PUI_EnsureOptionsDialog()
 
   if not State.dialogRegistered then
     State.dialogRegistered = true
-    AceConfigRegistry:RegisterOptionsTable(APP, function()
+    AceConfigRegistry:RegisterOptionsTable(APP, PUI_OptionsProfiler:DefCallback("_PUI_EnsureOptionsDialog > AceConfigRegistry.RegisterOptionsTable", function()
       return _PUI_GetOptionsRoot()
-    end)
+    end))
   end
 
   _PUI_UpdateOptionsWindowSize(nil, APP)
   return AceConfigDialog, APP
 end
+_PUI_EnsureOptionsDialog = PUI_OptionsProfiler:Def("_PUI_EnsureOptionsDialog", _PUI_EnsureOptionsDialog)
+
 
 function Addon:RefreshOpenOptions()
   local frame = Addon._OptionsWindow
@@ -4109,6 +4335,8 @@ function Addon:RefreshOpenOptions()
   if ns.OptionsLifecycle.RefreshModel(path) then return end
   _PUI_RenderCustomOptionsPath(frame, AceConfigDialog, APP, path)
 end
+Addon.RefreshOpenOptions = PUI_OptionsProfiler:Def("Addon.RefreshOpenOptions", Addon.RefreshOpenOptions)
+
 
 function Addon:OpenOptions(request, preserveEditMode, forceOpen)
   local wasEditing = preserveEditMode and Addon:IsEditMode() or false
@@ -4143,6 +4371,8 @@ function Addon:OpenOptions(request, preserveEditMode, forceOpen)
     Addon:SetEditMode(true)
   end
 end
+Addon.OpenOptions = PUI_OptionsProfiler:Def("Addon.OpenOptions", Addon.OpenOptions)
+
 
 
 function Addon:OpenOptionsSection(sectionKey, inlineTabKey, key)
@@ -4155,6 +4385,8 @@ function Addon:OpenOptionsSection(sectionKey, inlineTabKey, key)
 
   Addon:OpenOptions(path, true, #path > 2)
 end
+Addon.OpenOptionsSection = PUI_OptionsProfiler:Def("Addon.OpenOptionsSection", Addon.OpenOptionsSection)
+
 
 do
   local Lifecycle = {}
@@ -4170,6 +4402,8 @@ do
     for key, item in pairs(value) do result[key] = CopyData(item) end
     return result
   end
+  CopyData = PUI_OptionsProfiler:Def("CopyData", CopyData)
+
 
   local function SameData(first, second)
     if type(first) ~= "table" or type(second) ~= "table" then return first == second end
@@ -4177,6 +4411,8 @@ do
     for key in pairs(second) do if first[key] == nil then return false end end
     return true
   end
+  SameData = PUI_OptionsProfiler:Def("SameData", SameData)
+
 
   local function FindOption(options, path)
     local node = options
@@ -4190,6 +4426,8 @@ do
     end
     return node
   end
+  FindOption = PUI_OptionsProfiler:Def("FindOption", FindOption)
+
 
   local function BuildControlState(options, path)
     local node = options
@@ -4214,6 +4452,8 @@ do
     elseif node.guiHidden ~= nil then members.hidden = node.guiHidden end
     return { info = info, members = members }
   end
+  BuildControlState = PUI_OptionsProfiler:Def("BuildControlState", BuildControlState)
+
 
   local function ReadMember(control, field, ...)
     local member
@@ -4222,12 +4462,16 @@ do
     if type(member) == "string" and not literalStrings[field] then return control.info.handler[member](control.info.handler, control.info, ...) end
     return member
   end
+  ReadMember = PUI_OptionsProfiler:Def("ReadMember", ReadMember)
+
 
   local function IsInline(option)
     if option.dialogInline ~= nil then return option.dialogInline end
     if option.guiInline ~= nil then return option.guiInline end
     return option.inline == true
   end
+  IsInline = PUI_OptionsProfiler:Def("IsInline", IsInline)
+
 
   local function DescribeChildren(options, node, path, controls, forcedInline)
     local children = {}
@@ -4264,6 +4508,8 @@ do
     end
     return shape
   end
+  DescribeChildren = PUI_OptionsProfiler:Def("DescribeChildren", DescribeChildren)
+
 
   local function DescribePage(options, page)
     local group = GUI.PrepareOptionsGroup(options, page.path)
@@ -4278,6 +4524,8 @@ do
     return { childGroups = group.childGroups, inline = forcedInline,
       args = DescribeChildren(options, group, path, true, forcedInline) }
   end
+  DescribePage = PUI_OptionsProfiler:Def("DescribePage", DescribePage)
+
 
   local function ReadState(control)
     local option = control.info.option
@@ -4288,6 +4536,8 @@ do
       local value = ReadMember(control, field)
       return SameData(previous[field], value) and previous[field] or CopyData(value)
     end
+    Snapshot = PUI_OptionsProfiler:DefCallback("ReadState > Snapshot", Snapshot)
+
     if kind == "color" then
       state.value = { ReadMember(control, "get") }
       state.hasAlpha = ReadMember(control, "hasAlpha")
@@ -4319,6 +4569,8 @@ do
     end
     return state
   end
+  ReadState = PUI_OptionsProfiler:Def("ReadState", ReadState)
+
 
   local function UpdateControl(control)
     local widget, previous = control.widget, control.state
@@ -4359,6 +4611,8 @@ do
     control.state, control.committed = state, nil
     return layout
   end
+  UpdateControl = PUI_OptionsProfiler:Def("UpdateControl", UpdateControl)
+
 
   local function IsCurrentSession(session)
     local frame = Addon._OptionsWindow
@@ -4366,6 +4620,8 @@ do
       and session.container.frame:IsShown() and State.optionsPathGeneration == session.generation
       and State.currentOptionsPath[1] == session.rootKey
   end
+  IsCurrentSession = PUI_OptionsProfiler:Def("IsCurrentSession", IsCurrentSession)
+
 
   local function BindWidgets(widget, session)
     local feed = widget.__puiOptionsFeed
@@ -4389,11 +4645,11 @@ do
             local binding = bindings[event]
             if not binding or callback ~= binding.dispatch then
               binding = { callback = callback }
-              binding.dispatch = function(controlWidget, eventName, ...)
+              binding.dispatch = PUI_OptionsProfiler:DefCallback("BindWidgets > binding.dispatch", function(controlWidget, eventName, ...)
                 if not IsCurrentSession(binding.session) or controlWidget.__puiAceGUIOwnershipSerial ~= binding.serial or controlWidget.isQueuedForRelease then return end
                 binding.control.committed = true
                 return binding.callback(controlWidget, eventName, ...)
-              end
+              end)
               bindings[event] = binding
               widget:SetCallback(event, binding.dispatch)
             end
@@ -4404,10 +4660,14 @@ do
     end
     if widget.children then for _, child in ipairs(widget.children) do BindWidgets(child, session) end end
   end
+  BindWidgets = PUI_OptionsProfiler:Def("BindWidgets", BindWidgets)
+
 
   function Lifecycle.RecordGroup(rootframe, container, path, isRoot)
     container.__puiOptionsFeed = { rootframe = rootframe, path = CopyData(path), isRoot = isRoot }
   end
+  Lifecycle.RecordGroup = PUI_OptionsProfiler:Def("Lifecycle.RecordGroup", Lifecycle.RecordGroup)
+
 
   function Lifecycle.Bind(rootframe)
     local user = rootframe:GetUserDataTable()
@@ -4419,6 +4679,8 @@ do
     sessions[rootframe] = session
     BindWidgets(rootframe, session)
   end
+  Lifecycle.Bind = PUI_OptionsProfiler:Def("Lifecycle.Bind", Lifecycle.Bind)
+
 
   function Lifecycle.ReleaseWidget(widget)
     local rootframe = widget:GetUserData("rootframe")
@@ -4426,6 +4688,8 @@ do
     sessions[widget] = nil
     widget.__puiOptionsLifecycleBindings, widget.__puiOptionsFeed = nil, nil
   end
+  Lifecycle.ReleaseWidget = PUI_OptionsProfiler:Def("Lifecycle.ReleaseWidget", Lifecycle.ReleaseWidget)
+
 
   local function RebindWidgets(widget, options)
     local user = widget:GetUserDataTable()
@@ -4439,6 +4703,8 @@ do
     end
     if widget.children then for _, child in ipairs(widget.children) do RebindWidgets(child, options) end end
   end
+  RebindWidgets = PUI_OptionsProfiler:Def("RebindWidgets", RebindWidgets)
+
 
   function Lifecycle.PrepareFeed(options, rootframe, path)
     if rootframe.__puiACDHostContainer == true then
@@ -4453,11 +4719,15 @@ do
     end
     return options
   end
+  Lifecycle.PrepareFeed = PUI_OptionsProfiler:Def("Lifecycle.PrepareFeed", Lifecycle.PrepareFeed)
+
 
   local function IsWithin(widget, ancestor)
     while widget do if widget == ancestor then return true end; widget = widget.parent end
     return false
   end
+  IsWithin = PUI_OptionsProfiler:Def("IsWithin", IsWithin)
+
 
   local function Reconcile(session, dialog)
     local options = _PUI_GetOptionsRoot()
@@ -4493,11 +4763,13 @@ do
       dialog:FeedGroup(PUI_OPTIONS_APP, options, page.container, session.container, page.path, page.isRoot)
     end
   end
+  Reconcile = PUI_OptionsProfiler:Def("Reconcile", Reconcile)
+
 
   local function QueueRefresh(session, dialog)
     if session.queued then return end
     session.queued = true
-    C_Timer.After(0, function()
+    C_Timer.After(0, PUI_OptionsProfiler:DefCallback("QueueRefresh > C_Timer.After", function()
       session.queued = nil
       if not IsCurrentSession(session) then return end
       if session.targetPath then
@@ -4511,12 +4783,14 @@ do
         local afterSelect = session.afterSelect
         session.afterSelect = nil
         local generation = State.optionsPathGeneration
-        C_Timer.After(0, function()
+        C_Timer.After(0, PUI_OptionsProfiler:DefCallback("QueueRefresh > C_Timer.After > C_Timer.After", function()
           if session.frame:IsShown() and State.optionsPathGeneration == generation then afterSelect() end
-        end)
+        end))
       end
-    end)
+    end))
   end
+  QueueRefresh = PUI_OptionsProfiler:Def("QueueRefresh", QueueRefresh)
+
 
   function Lifecycle.RequestRefresh(dialog, appName, container, ...)
     if appName ~= PUI_OPTIONS_APP or type(container) ~= "table" or container.__puiACDHostContainer ~= true then return false end
@@ -4527,6 +4801,8 @@ do
     QueueRefresh(session, dialog)
     return true
   end
+  Lifecycle.RequestRefresh = PUI_OptionsProfiler:Def("Lifecycle.RequestRefresh", Lifecycle.RequestRefresh)
+
 
   function Lifecycle.RefreshModel(targetPath, afterSelect)
     local current = State.currentOptionsPath
@@ -4544,4 +4820,6 @@ do
     end
     return false
   end
+  Lifecycle.RefreshModel = PUI_OptionsProfiler:Def("Lifecycle.RefreshModel", Lifecycle.RefreshModel)
+
 end

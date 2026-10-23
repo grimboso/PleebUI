@@ -1,4 +1,5 @@
 local _, ns = ...
+local PUI_OptionsProfiler = select(1, ns.Pleebug:DropIn({}))
 
 local Theme = ns.Theme
 local Pixel = ns.Pixel
@@ -23,6 +24,8 @@ local function ClearTexture(texture)
     texture:Hide()
   end
 end
+ClearTexture = PUI_OptionsProfiler:Def("ClearTexture", ClearTexture)
+
 
 local function StripButtonTextures(button)
   button:SetNormalTexture("")
@@ -49,6 +52,8 @@ local function StripButtonTextures(button)
     button:SetBackdrop(nil)
   end
 end
+StripButtonTextures = PUI_OptionsProfiler:Def("StripButtonTextures", StripButtonTextures)
+
 
 local function ApplyButtonText(button, fallbackText, textColor)
   local text = button:GetFontString() or fallbackText
@@ -62,6 +67,8 @@ local function ApplyButtonText(button, fallbackText, textColor)
   text:SetTextColor(textColor[1], textColor[2], textColor[3], textColor[4])
   text:Show()
 end
+ApplyButtonText = PUI_OptionsProfiler:Def("ApplyButtonText", ApplyButtonText)
+
 
 local function ApplyButtonVisual(button, fallbackText)
   local enabled = button:IsEnabled()
@@ -89,6 +96,8 @@ local function ApplyButtonVisual(button, fallbackText)
 
   ApplyButtonText(button, fallbackText, textColor)
 end
+ApplyButtonVisual = PUI_OptionsProfiler:Def("ApplyButtonVisual", ApplyButtonVisual)
+
 
 local function HookButtonState(button, fallbackText, owner)
   if button.__puiButtonStateHooked then
@@ -110,22 +119,26 @@ local function HookButtonState(button, fallbackText, owner)
     end
     ApplyButtonVisual(self, fallbackText)
   end
+  Refresh = PUI_OptionsProfiler:DefCallback("HookButtonState > Refresh", Refresh)
 
-  button:HookScript("OnShow", function(self) Refresh(self) end)
-  button:HookScript("OnEnable", function(self) Refresh(self) end)
-  button:HookScript("OnDisable", function(self) Refresh(self) end)
-  button:HookScript("OnHide", function(self) Refresh(self) end)
-  button:HookScript("OnEnter", function(self) Refresh(self, "__puiHovered", true) end)
-  button:HookScript("OnLeave", function(self)
+
+  button:HookScript("OnShow", PUI_OptionsProfiler:DefCallback("HookButtonState > button.HookScript OnShow", function(self) Refresh(self) end))
+  button:HookScript("OnEnable", PUI_OptionsProfiler:DefCallback("HookButtonState > button.HookScript OnEnable", function(self) Refresh(self) end))
+  button:HookScript("OnDisable", PUI_OptionsProfiler:DefCallback("HookButtonState > button.HookScript OnDisable", function(self) Refresh(self) end))
+  button:HookScript("OnHide", PUI_OptionsProfiler:DefCallback("HookButtonState > button.HookScript OnHide", function(self) Refresh(self) end))
+  button:HookScript("OnEnter", PUI_OptionsProfiler:DefCallback("HookButtonState > button.HookScript OnEnter", function(self) Refresh(self, "__puiHovered", true) end))
+  button:HookScript("OnLeave", PUI_OptionsProfiler:DefCallback("HookButtonState > button.HookScript OnLeave", function(self)
     Refresh(self, "__puiHovered", nil)
-  end)
-  button:HookScript("OnMouseDown", function(self, mouseButton)
+  end))
+  button:HookScript("OnMouseDown", PUI_OptionsProfiler:DefCallback("HookButtonState > button.HookScript OnMouseDown", function(self, mouseButton)
     if mouseButton == "LeftButton" then Refresh(self, "__puiPressed", true) end
-  end)
-  button:HookScript("OnMouseUp", function(self, mouseButton)
+  end))
+  button:HookScript("OnMouseUp", PUI_OptionsProfiler:DefCallback("HookButtonState > button.HookScript OnMouseUp", function(self, mouseButton)
     if mouseButton == "LeftButton" then Refresh(self, "__puiPressed", nil) end
-  end)
+  end))
 end
+HookButtonState = PUI_OptionsProfiler:Def("HookButtonState", HookButtonState)
+
 
 function WidgetSkins.UIButton(button)
   ns.KeyboardNavigation.RegisterFrame(button, "button", "button")
@@ -134,6 +147,8 @@ function WidgetSkins.UIButton(button)
   ApplyButtonVisual(button)
   HookButtonState(button)
 end
+WidgetSkins.UIButton = PUI_OptionsProfiler:Def("WidgetSkins.UIButton", WidgetSkins.UIButton)
+
 
 function WidgetSkins.Button(widget, owner)
   local button = widget.button or widget.frame or widget
@@ -166,6 +181,8 @@ function WidgetSkins.Button(widget, owner)
   ApplyButtonVisual(button, fallbackText)
   HookButtonState(button, fallbackText, hookOwner)
 end
+WidgetSkins.Button = PUI_OptionsProfiler:Def("WidgetSkins.Button", WidgetSkins.Button)
+
 
 function WidgetSkins.Keybinding(widget)
   WidgetSkins.Button(widget)
@@ -187,6 +204,8 @@ function WidgetSkins.Keybinding(widget)
   Pixel.Point(msgframe.msg, "CENTER", msgframe, "CENTER", 0, 0)
   Theme.ApplyFont(msgframe.msg, "body")
 end
+WidgetSkins.Keybinding = PUI_OptionsProfiler:Def("WidgetSkins.Keybinding", WidgetSkins.Keybinding)
+
 
 local function PUI_Button_Layout(widget, width)
   local geom = Theme.GetWidgetRowGeometry(widget)
@@ -202,6 +221,8 @@ local function PUI_Button_Layout(widget, width)
   Pixel.Point(widget.button, "CENTER", widget.frame, "TOP", 0, -geom.controlTop - geom.controlHeight * 0.5)
   Pixel.Size(widget.button, buttonWidth, geom.controlHeight)
 end
+PUI_Button_Layout = PUI_OptionsProfiler:Def("PUI_Button_Layout", PUI_Button_Layout)
+
 
 local function PUI_Button_RefreshVisualState(widget)
   local background, border, textColor = Theme.GetControlStateColors(
@@ -222,12 +243,16 @@ local function PUI_Button_RefreshVisualState(widget)
     textColor[4]
   )
 end
+PUI_Button_RefreshVisualState = PUI_OptionsProfiler:Def("PUI_Button_RefreshVisualState", PUI_Button_RefreshVisualState)
+
 
 local function PUI_Button_OnClick(button, ...)
   AceGUI:ClearFocus()
   PlaySound(852)
   button.obj:Fire("OnClick", ...)
 end
+PUI_Button_OnClick = PUI_OptionsProfiler:Def("PUI_Button_OnClick", PUI_Button_OnClick)
+
 
 local function PUI_Button_OnEnter(button)
   local widget = button.obj
@@ -239,6 +264,8 @@ local function PUI_Button_OnEnter(button)
 
   widget:Fire("OnEnter")
 end
+PUI_Button_OnEnter = PUI_OptionsProfiler:Def("PUI_Button_OnEnter", PUI_Button_OnEnter)
+
 
 local function PUI_Button_OnLeave(button)
   local widget = button.obj
@@ -248,6 +275,8 @@ local function PUI_Button_OnLeave(button)
   PUI_Button_RefreshVisualState(widget)
   widget:Fire("OnLeave")
 end
+PUI_Button_OnLeave = PUI_OptionsProfiler:Def("PUI_Button_OnLeave", PUI_Button_OnLeave)
+
 
 local function PUI_Button_OnMouseDown(button, mouseButton)
   local widget = button.obj
@@ -259,6 +288,8 @@ local function PUI_Button_OnMouseDown(button, mouseButton)
   button.__puiPressed = true
   PUI_Button_RefreshVisualState(widget)
 end
+PUI_Button_OnMouseDown = PUI_OptionsProfiler:Def("PUI_Button_OnMouseDown", PUI_Button_OnMouseDown)
+
 
 local function PUI_Button_OnMouseUp(button, mouseButton)
   if mouseButton ~= "LeftButton" then
@@ -268,15 +299,19 @@ local function PUI_Button_OnMouseUp(button, mouseButton)
   button.__puiPressed = nil
   PUI_Button_RefreshVisualState(button.obj)
 end
+PUI_Button_OnMouseUp = PUI_OptionsProfiler:Def("PUI_Button_OnMouseUp", PUI_Button_OnMouseUp)
+
 
 local function PUI_Button_OnHide(button)
   button.__puiHovered = nil
   button.__puiPressed = nil
   PUI_Button_RefreshVisualState(button.obj)
 end
+PUI_Button_OnHide = PUI_OptionsProfiler:Def("PUI_Button_OnHide", PUI_Button_OnHide)
+
 
 local PUI_Button_Methods = {
-  OnAcquire = function(self)
+  OnAcquire = PUI_OptionsProfiler:Def("OnAcquire", function(self)
     self:SetHeight(Theme.GetControlMetrics().widgetBoxHeight)
     self:SetWidth(200)
     self.button.__puiHovered = nil
@@ -284,27 +319,27 @@ local PUI_Button_Methods = {
     self:SetText("")
     self:SetDisabled(false)
     self:RefreshTheme()
-  end,
+  end),
 
-  OnRelease = function(self)
+  OnRelease = PUI_OptionsProfiler:Def("OnRelease", function(self)
     self.button.__puiHovered = nil
     self.button.__puiPressed = nil
-  end,
+  end),
 
-  OnWidthSet = function(self, width)
+  OnWidthSet = PUI_OptionsProfiler:Def("OnWidthSet", function(self, width)
     PUI_Button_Layout(self, width)
-  end,
+  end),
 
-  OnHeightSet = function(self)
+  OnHeightSet = PUI_OptionsProfiler:Def("OnHeightSet", function(self)
     PUI_Button_Layout(self, self.frame:GetWidth())
-  end,
+  end),
 
-  SetText = function(self, text)
+  SetText = PUI_OptionsProfiler:Def("SetText", function(self, text)
     self.text:SetText(text or "")
     PUI_Button_Layout(self, self.frame:GetWidth())
-  end,
+  end),
 
-  SetDisabled = function(self, disabled)
+  SetDisabled = PUI_OptionsProfiler:Def("SetDisabled", function(self, disabled)
     disabled = disabled == true
     self.disabled = disabled
     self.button.__puiHovered = nil
@@ -317,13 +352,13 @@ local PUI_Button_Methods = {
     end
 
     PUI_Button_RefreshVisualState(self)
-  end,
+  end),
 
-  RefreshTheme = function(self)
+  RefreshTheme = PUI_OptionsProfiler:Def("RefreshTheme", function(self)
     Theme.ApplyFont(self.text, "button")
     PUI_Button_Layout(self, self.frame:GetWidth())
     PUI_Button_RefreshVisualState(self)
-  end,
+  end),
 }
 
 local function PUI_Button_Constructor()
@@ -368,5 +403,7 @@ local function PUI_Button_Constructor()
 
   return AceGUI:RegisterAsWidget(widget)
 end
+PUI_Button_Constructor = PUI_OptionsProfiler:Def("PUI_Button_Constructor", PUI_Button_Constructor)
+
 
 AceGUI:RegisterWidgetType(PUI_BUTTON_TYPE, PUI_Button_Constructor, PUI_BUTTON_VERSION)

@@ -1,4 +1,5 @@
 local _, ns = ...
+local PUI_OptionsProfiler = select(1, ns.Pleebug:DropIn({}))
 
 local Addon = ns.Addon
 local Theme = ns.Theme
@@ -17,6 +18,8 @@ local function _PUI_NormalizeTreeButtonLabel(label)
   label = label:gsub("^%[Stack%]%s*", "")
   return label:gsub("^%s+", ""):gsub("%s+$", "")
 end
+_PUI_NormalizeTreeButtonLabel = PUI_OptionsProfiler:Def("_PUI_NormalizeTreeButtonLabel", _PUI_NormalizeTreeButtonLabel)
+
 
 
 local function _PUI_TreeGroupUsesCustomCards(widget)
@@ -35,6 +38,8 @@ local function _PUI_TreeGroupUsesCustomCards(widget)
 
   return false
 end
+_PUI_TreeGroupUsesCustomCards = PUI_OptionsProfiler:Def("_PUI_TreeGroupUsesCustomCards", _PUI_TreeGroupUsesCustomCards)
+
 
 local function _PUI_IsPCMManagerTree(widget)
   local hasOverview = false
@@ -49,6 +54,8 @@ local function _PUI_IsPCMManagerTree(widget)
   end
   return hasOverview and hasGroups
 end
+_PUI_IsPCMManagerTree = PUI_OptionsProfiler:Def("_PUI_IsPCMManagerTree", _PUI_IsPCMManagerTree)
+
 
 local TREE_ROW_HEIGHT = 46
 local TREE_EDGE_INSET = 1
@@ -57,6 +64,8 @@ local TREE_CHILD_HEIGHT_RATIO = 0.8
 local function _PUI_GetTreeScrollbarLane()
   return Theme.GetOptionsPointerTargetSize(20) + 6 + TREE_EDGE_INSET
 end
+_PUI_GetTreeScrollbarLane = PUI_OptionsProfiler:Def("_PUI_GetTreeScrollbarLane", _PUI_GetTreeScrollbarLane)
+
 
 local function _PUI_ConfigureTreeExpandTarget(toggle, baseSize)
   local size = Theme.GetOptionsPointerTargetSize(baseSize)
@@ -75,10 +84,14 @@ local function _PUI_ConfigureTreeExpandTarget(toggle, baseSize)
     end
   end
 end
+_PUI_ConfigureTreeExpandTarget = PUI_OptionsProfiler:Def("_PUI_ConfigureTreeExpandTarget", _PUI_ConfigureTreeExpandTarget)
+
 
 local function _PUI_GetTreeRowHeight()
   return math.max(TREE_ROW_HEIGHT, Theme.GetOptionsFontHeight("nav", 12) + 16)
 end
+_PUI_GetTreeRowHeight = PUI_OptionsProfiler:Def("_PUI_GetTreeRowHeight", _PUI_GetTreeRowHeight)
+
 
 local function _PUI_GetTreeButtonHeight(entry)
   local height = _PUI_GetTreeRowHeight()
@@ -87,10 +100,14 @@ local function _PUI_GetTreeButtonHeight(entry)
   end
   return height
 end
+_PUI_GetTreeButtonHeight = PUI_OptionsProfiler:Def("_PUI_GetTreeButtonHeight", _PUI_GetTreeButtonHeight)
+
 
 local function _PUI_GetTreeButtonIndent(button)
   return math.max(0, (button.level or 1) - 1) * TREE_CHILD_INDENT
 end
+_PUI_GetTreeButtonIndent = PUI_OptionsProfiler:Def("_PUI_GetTreeButtonIndent", _PUI_GetTreeButtonIndent)
+
 
 local function _PUI_GetTreeVisibleRows(widget)
   local metrics = Theme.GetControlMetrics()
@@ -98,6 +115,8 @@ local function _PUI_GetTreeVisibleRows(widget)
   local availableHeight = math.max(1, widget.treeframe:GetHeight() - metrics.treeGroupTopInset * 2)
   return math.max(1, math.floor((availableHeight + gap) / (_PUI_GetTreeRowHeight() + gap)))
 end
+_PUI_GetTreeVisibleRows = PUI_OptionsProfiler:Def("_PUI_GetTreeVisibleRows", _PUI_GetTreeVisibleRows)
+
 
 
 
@@ -116,6 +135,8 @@ local function _PUI_GetTreePixelGeometry(widget, lineCount)
   local contentHeight = math.max(0, lineCount * step - gap)
   return step, viewportHeight, math.max(0, (contentHeight - viewportHeight) / step), contentHeight
 end
+_PUI_GetTreePixelGeometry = PUI_OptionsProfiler:Def("_PUI_GetTreePixelGeometry", _PUI_GetTreePixelGeometry)
+
 
 local function _PUI_PositionScrolledTreeButtons(widget)
   local viewport = widget.__puiTreeViewport
@@ -130,6 +151,8 @@ local function _PUI_PositionScrolledTreeButtons(widget)
   first:SetPoint("TOPLEFT", viewport, "TOPLEFT", _PUI_GetTreeButtonIndent(first), offset)
   first:SetPoint("TOPRIGHT", viewport, "TOPRIGHT", 0, offset)
 end
+_PUI_PositionScrolledTreeButtons = PUI_OptionsProfiler:Def("_PUI_PositionScrolledTreeButtons", _PUI_PositionScrolledTreeButtons)
+
 
 local function _PUI_RefreshPixelTree(widget, originalRefreshTree, scrollToSelection, fromOnUpdate)
   local status = widget.status or widget.localstatus
@@ -196,6 +219,8 @@ local function _PUI_RefreshPixelTree(widget, originalRefreshTree, scrollToSelect
   widget.scrollbar:SetValue(scroll)
   widget.__puiTreeSliderUpdating = nil
 end
+_PUI_RefreshPixelTree = PUI_OptionsProfiler:Def("_PUI_RefreshPixelTree", _PUI_RefreshPixelTree)
+
 
 local function _PUI_SkinGenericTreeButton(button, isSelected)
   local colors = Theme.GetColors()
@@ -225,6 +250,8 @@ local function _PUI_SkinGenericTreeButton(button, isSelected)
   text:SetTextColor(colors.text[1], colors.text[2], colors.text[3], isSelected and colors.text[4] or colors.text[4] * 0.82)
   text:Show()
 end
+_PUI_SkinGenericTreeButton = PUI_OptionsProfiler:Def("_PUI_SkinGenericTreeButton", _PUI_SkinGenericTreeButton)
+
 
 local PCM_TRACKER_TREE_REGIONS = {
   "__puiPCMTrackerSpellIcon",
@@ -245,6 +272,8 @@ local function _PUI_HidePCMTrackerTreeCard(button)
     end
   end
 end
+_PUI_HidePCMTrackerTreeCard = PUI_OptionsProfiler:Def("_PUI_HidePCMTrackerTreeCard", _PUI_HidePCMTrackerTreeCard)
+
 
 local function _PUI_GetPCMTrackerTreeData(button)
   local raw = button.text and button.text:GetText() or ""
@@ -260,6 +289,8 @@ local function _PUI_GetPCMTrackerTreeData(button)
     unavailable = raw:sub(1, 10) == "|cff808080",
   }
 end
+_PUI_GetPCMTrackerTreeData = PUI_OptionsProfiler:Def("_PUI_GetPCMTrackerTreeData", _PUI_GetPCMTrackerTreeData)
+
 
 local function _PUI_SkinPCMTrackerTreeButton(button, isSelected, data)
   local colors = Theme.GetColors()
@@ -450,6 +481,8 @@ local function _PUI_SkinPCMTrackerTreeButton(button, isSelected, data)
   button.toggle:ClearAllPoints()
   button.toggle:SetPoint("RIGHT", button, "RIGHT", -8, 0)
 end
+_PUI_SkinPCMTrackerTreeButton = PUI_OptionsProfiler:Def("_PUI_SkinPCMTrackerTreeButton", _PUI_SkinPCMTrackerTreeButton)
+
 
 function WidgetSkins.TreeButton(button, isSelected)
   ns.OptionsMotion.StyleTreeHover(button)
@@ -579,6 +612,8 @@ function WidgetSkins.TreeButton(button, isSelected)
   text:SetJustifyH("LEFT")
   button.__puiTreeCardLayoutKey = layoutKey
 end
+WidgetSkins.TreeButton = PUI_OptionsProfiler:Def("WidgetSkins.TreeButton", WidgetSkins.TreeButton)
+
 
 function WidgetSkins.InlineGroup(widget)
   local colors = Theme.GetColors()
@@ -604,16 +639,16 @@ function WidgetSkins.InlineGroup(widget)
     widget.__puiInlineGroupLayoutHooked = true
     local originalLayoutFinished = widget.LayoutFinished
     local originalSetTitle = widget.SetTitle
-    widget.LayoutFinished = function(self, width, height)
+    widget.LayoutFinished = PUI_OptionsProfiler:DefCallback("WidgetSkins.InlineGroup > widget.LayoutFinished", function(self, width, height)
       local extraHeight = self.__puiAceGUIOwnedByPleebUI == true and self.__puiInlineGroupExtraHeight or 0
       originalLayoutFinished(self, width, (height or 0) + extraHeight)
-    end
-    widget.SetTitle = function(self, text)
+    end)
+    widget.SetTitle = PUI_OptionsProfiler:DefCallback("WidgetSkins.InlineGroup > widget.SetTitle", function(self, text)
       originalSetTitle(self, text)
       if self.__puiAceGUIOwnedByPleebUI == true then
         WidgetSkins.InlineGroup(self)
       end
-    end
+    end)
   end
 
   outer:SetBackdrop(nil)
@@ -665,6 +700,8 @@ function WidgetSkins.InlineGroup(widget)
   end
   accent:SetPoint("RIGHT", frame, "TOPRIGHT", 0, -titleHeight / 2)
 end
+WidgetSkins.InlineGroup = PUI_OptionsProfiler:Def("WidgetSkins.InlineGroup", WidgetSkins.InlineGroup)
+
 
 local function _PUI_StyleTreeButtons(widget)
   local metrics = Theme.GetControlMetrics()
@@ -740,6 +777,8 @@ local function _PUI_StyleTreeButtons(widget)
     _PUI_PositionScrolledTreeButtons(widget)
   end
 end
+_PUI_StyleTreeButtons = PUI_OptionsProfiler:Def("_PUI_StyleTreeButtons", _PUI_StyleTreeButtons)
+
 
 local function _PUI_RefreshTreeSelection(widget)
   local previousValue = widget.__puiPreviousTreeSelection
@@ -762,6 +801,8 @@ local function _PUI_RefreshTreeSelection(widget)
     end
   end
 end
+_PUI_RefreshTreeSelection = PUI_OptionsProfiler:Def("_PUI_RefreshTreeSelection", _PUI_RefreshTreeSelection)
+
 
 local function _PUI_HandleTreeGroupClick(widget, _, uniquevalue, wasSelected)
   widget.__puiTreeSelectionOnlyRefresh = nil
@@ -779,6 +820,8 @@ local function _PUI_HandleTreeGroupClick(widget, _, uniquevalue, wasSelected)
     end
   end
 end
+_PUI_HandleTreeGroupClick = PUI_OptionsProfiler:Def("_PUI_HandleTreeGroupClick", _PUI_HandleTreeGroupClick)
+
 
 function WidgetSkins.TreeGroup(widget)
   if widget.__puiAceGUIOwnedByPleebUI ~= true then
@@ -805,7 +848,7 @@ function WidgetSkins.TreeGroup(widget)
   if widget.__puiTreePixelScroll and not widget.__puiTreeSmoothInputHooked then
     widget.__puiTreeSmoothInputHooked = true
     local originalSliderScript = widget.scrollbar:GetScript("OnValueChanged")
-    widget.scrollbar:SetScript("OnValueChanged", function(slider, value)
+    widget.scrollbar:SetScript("OnValueChanged", PUI_OptionsProfiler:DefCallback("WidgetSkins.TreeGroup > widget.scrollbar.SetScript OnValueChanged", function(slider, value)
       if not widget.__puiTreePixelScroll or widget.__puiAceGUIOwnedByPleebUI ~= true then
         return originalSliderScript(slider, value)
       end
@@ -819,11 +862,11 @@ function WidgetSkins.TreeGroup(widget)
       else
         _PUI_PositionScrolledTreeButtons(widget)
       end
-    end)
+    end))
 
     local treeframe = widget.treeframe
     local originalWheelScript = treeframe:GetScript("OnMouseWheel")
-    treeframe:SetScript("OnMouseWheel", function(frame, delta)
+    treeframe:SetScript("OnMouseWheel", PUI_OptionsProfiler:DefCallback("WidgetSkins.TreeGroup > treeframe.SetScript OnMouseWheel", function(frame, delta)
       if not widget.__puiTreePixelScroll or widget.__puiAceGUIOwnedByPleebUI ~= true then
         return originalWheelScript(frame, delta)
       end
@@ -831,13 +874,13 @@ function WidgetSkins.TreeGroup(widget)
         local step = _PUI_GetTreePixelGeometry(widget, #widget.lines)
         widget.scrollbar:SetValue(widget.scrollbar:GetValue() - delta * 42 / step)
       end
-    end)
+    end))
   end
 
   if not widget.__puiTreeShowScrollHooked then
     widget.__puiTreeShowScrollHooked = true
     local originalShowScroll = widget.ShowScroll
-    widget.ShowScroll = function(self, show)
+    widget.ShowScroll = PUI_OptionsProfiler:DefCallback("WidgetSkins.TreeGroup > widget.ShowScroll", function(self, show)
       if self.__puiAceGUIOwnedByPleebUI == true and self.__puiTreePixelScroll then
         self.showscroll = show
         self.scrollbar:SetShown(show)
@@ -860,13 +903,13 @@ function WidgetSkins.TreeGroup(widget)
       firstButton:ClearAllPoints()
       firstButton:SetPoint("TOPLEFT", self.treeframe, "TOPLEFT", TREE_EDGE_INSET, -topInset)
       firstButton:SetPoint("TOPRIGHT", self.treeframe, "TOPRIGHT", -rightInset, -topInset)
-    end
+    end)
   end
 
   if not widget.__puiTreeRefreshHooked then
     widget.__puiTreeRefreshHooked = true
     local originalRefreshTree = widget.RefreshTree
-    widget.RefreshTree = function(self, ...)
+    widget.RefreshTree = PUI_OptionsProfiler:DefCallback("WidgetSkins.TreeGroup > widget.RefreshTree", function(self, ...)
       if self.__puiTreeSelectionOnlyRefresh == true then
         _PUI_RefreshTreeSelection(self)
         return
@@ -881,13 +924,13 @@ function WidgetSkins.TreeGroup(widget)
       if self.__puiAceGUIOwnedByPleebUI == true then
         WidgetSkins.TreeGroup(self)
       end
-    end
+    end)
   end
 
   local treeframe = widget.treeframe
   if not widget.__puiTreeResizeHooked then
     widget.__puiTreeResizeHooked = true
-    treeframe:SetScript("OnSizeChanged", function(_, width, height)
+    treeframe:SetScript("OnSizeChanged", PUI_OptionsProfiler:DefCallback("WidgetSkins.TreeGroup > treeframe.SetScript OnSizeChanged", function(_, width, height)
       local user = widget:GetUserDataTable()
       if user.appName ~= "PleebUI" or not user.path or user.path[1] ~= "CooldownManager" then
         widget:RefreshTree()
@@ -910,7 +953,7 @@ function WidgetSkins.TreeGroup(widget)
       widget.__puiLastTreeNativeRows = nativeRows
       widget.__puiLastTreePCMRows = pcmRows
       widget:RefreshTree()
-    end)
+    end))
   end
 
   local border = widget.border
@@ -995,3 +1038,4 @@ function WidgetSkins.TreeGroup(widget)
     widget:RefreshTree()
   end
 end
+WidgetSkins.TreeGroup = PUI_OptionsProfiler:Def("WidgetSkins.TreeGroup", WidgetSkins.TreeGroup)

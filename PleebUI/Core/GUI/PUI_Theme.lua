@@ -1,5 +1,6 @@
 
 local ADDON_NAME, ns = ...
+local PUI_OptionsProfiler = select(1, ns.Pleebug:DropIn({}))
 
 local Addon = ns.Addon
 local LSM = ns.LSM
@@ -64,6 +65,8 @@ do
       LSM:Register(LSM.MediaType.FONT, name, path)
     end
   end
+  RegisterPleebUIFontAssets = PUI_OptionsProfiler:Def("RegisterPleebUIFontAssets", RegisterPleebUIFontAssets)
+
 
   RegisterPleebUIFontAssets()
 end
@@ -81,6 +84,8 @@ Theme.outlineList = {
 function Theme.GetOutlineList()
   return Theme.outlineList
 end
+Theme.GetOutlineList = PUI_OptionsProfiler:Def("Theme.GetOutlineList", Theme.GetOutlineList)
+
 
 function Theme.NormalizeOutlineFlags(flags)
   if flags == nil then
@@ -105,6 +110,8 @@ function Theme.NormalizeOutlineFlags(flags)
 
   return base
 end
+Theme.NormalizeOutlineFlags = PUI_OptionsProfiler:Def("Theme.NormalizeOutlineFlags", Theme.NormalizeOutlineFlags)
+
 
 do
   local function RegisterPleebUIStatusbarAssets()
@@ -129,6 +136,8 @@ do
       LSM:Register(LSM.MediaType.STATUSBAR, name, path)
     end
   end
+  RegisterPleebUIStatusbarAssets = PUI_OptionsProfiler:Def("RegisterPleebUIStatusbarAssets", RegisterPleebUIStatusbarAssets)
+
 
   RegisterPleebUIStatusbarAssets()
 end
@@ -179,10 +188,14 @@ Theme.FontRoles = {
 function Theme.GetFont()
   return Addon:GetMediaDB().iconTextGlobalFont
 end
+Theme.GetFont = PUI_OptionsProfiler:Def("Theme.GetFont", Theme.GetFont)
+
 
 function Theme.GetFontRoleInfo(role)
   return Theme.FontRoles[role]
 end
+Theme.GetFontRoleInfo = PUI_OptionsProfiler:Def("Theme.GetFontRoleInfo", Theme.GetFontRoleInfo)
+
 
 Theme.OptionsFontRoles = {
   body = { name = "Body and controls", font = "FiraSans Medium", size = 14, outline = "OUTLINE", shadow = false, fontSlug = false },
@@ -202,6 +215,8 @@ function Theme.GetOptionsFontSettings(role)
   local fonts = Addon:GetOptionsDB().optionsFonts
   return fonts and fonts[role] or Theme.OptionsFontRoles[role]
 end
+Theme.GetOptionsFontSettings = PUI_OptionsProfiler:Def("Theme.GetOptionsFontSettings", Theme.GetOptionsFontSettings)
+
 
 Theme.DefaultColors = Theme.DefaultColors or {
   background = { 0.12, 0.12, 0.16, 0.92 },
@@ -217,6 +232,8 @@ Theme.DefaultColors = Theme.DefaultColors or {
 local function _PUI_CopyColor(src)
   return { src[1], src[2], src[3], src[4] }
 end
+_PUI_CopyColor = PUI_OptionsProfiler:Def("_PUI_CopyColor", _PUI_CopyColor)
+
 
 local function _PUI_CopyColorWithAlpha(src, alphaMultiplier)
   return {
@@ -226,6 +243,8 @@ local function _PUI_CopyColorWithAlpha(src, alphaMultiplier)
     (src[4] or 1) * (alphaMultiplier or 1),
   }
 end
+_PUI_CopyColorWithAlpha = PUI_OptionsProfiler:Def("_PUI_CopyColorWithAlpha", _PUI_CopyColorWithAlpha)
+
 
 local function _PUI_BlendControlColor(base, accent, amount)
   return {
@@ -235,6 +254,8 @@ local function _PUI_BlendControlColor(base, accent, amount)
     base[4],
   }
 end
+_PUI_BlendControlColor = PUI_OptionsProfiler:Def("_PUI_BlendControlColor", _PUI_BlendControlColor)
+
 
 local function _PUI_CopyColors(src)
   local out = {}
@@ -243,6 +264,8 @@ local function _PUI_CopyColors(src)
   end
   return out
 end
+_PUI_CopyColors = PUI_OptionsProfiler:Def("_PUI_CopyColors", _PUI_CopyColors)
+
 
 local function DeriveControlColors(colors)
   colors.mutedText = _PUI_CopyColorWithAlpha(colors.text, 0.72)
@@ -255,6 +278,8 @@ local function DeriveControlColors(colors)
   colors.hoverControl = _PUI_BlendControlColor(colors.control, colors.accent, 0.08)
   colors.pressedControl = _PUI_BlendControlColor(colors.control, colors.accent, 0.16)
 end
+DeriveControlColors = PUI_OptionsProfiler:Def("DeriveControlColors", DeriveControlColors)
+
 
 -- Direct skin settings only.
 local _PUI_ThemeColorsCache
@@ -282,6 +307,8 @@ function Theme.GetColors()
       colors[dstKey] = _PUI_CopyColor(src)
     end
   end
+  ApplyColorOverride = PUI_OptionsProfiler:DefCallback("Theme.GetColors > ApplyColorOverride", ApplyColorOverride)
+
 
   ApplyColorOverride("background", "backgroundColor")
   ApplyColorOverride("control", "controlBgColor")
@@ -299,6 +326,8 @@ function Theme.GetColors()
 
   return colors
 end
+Theme.GetColors = PUI_OptionsProfiler:Def("Theme.GetColors", Theme.GetColors)
+
 
 function Theme.GetControlStateColors(disabled, hovered, pressed, active, palette)
   local colors = palette or Theme.GetColors()
@@ -316,6 +345,8 @@ function Theme.GetControlStateColors(disabled, hovered, pressed, active, palette
   end
   return colors.control, colors.controlBorder, colors.text
 end
+Theme.GetControlStateColors = PUI_OptionsProfiler:Def("Theme.GetControlStateColors", Theme.GetControlStateColors)
+
 
 local PUI_EXPAND_ATLAS = "ui-questtrackerbutton-secondary-expand"
 local PUI_EXPAND_PRESSED_ATLAS = "ui-questtrackerbutton-secondary-expand-pressed"
@@ -329,6 +360,8 @@ local function _PUI_StyleExpandCollapseTexture(texture)
   texture:SetDesaturated(true)
   texture:SetVertexColor(color[1], color[2], color[3], color[4])
 end
+_PUI_StyleExpandCollapseTexture = PUI_OptionsProfiler:Def("_PUI_StyleExpandCollapseTexture", _PUI_StyleExpandCollapseTexture)
+
 
 function Theme.ApplyExpandCollapseTexture(texture, expanded)
   if not texture then
@@ -339,6 +372,8 @@ function Theme.ApplyExpandCollapseTexture(texture, expanded)
   texture:SetAtlas(expanded and PUI_COLLAPSE_ATLAS or PUI_EXPAND_ATLAS, true)
   _PUI_StyleExpandCollapseTexture(texture)
 end
+Theme.ApplyExpandCollapseTexture = PUI_OptionsProfiler:Def("Theme.ApplyExpandCollapseTexture", Theme.ApplyExpandCollapseTexture)
+
 
 function Theme.ApplyExpandCollapseButton(button, expanded)
   if not button then
@@ -370,6 +405,8 @@ function Theme.ApplyExpandCollapseButton(button, expanded)
     end
   end
 end
+Theme.ApplyExpandCollapseButton = PUI_OptionsProfiler:Def("Theme.ApplyExpandCollapseButton", Theme.ApplyExpandCollapseButton)
+
 
 function Theme.RefreshExpandCollapseControls()
   for button, expanded in pairs(Theme._ExpandCollapseButtons) do
@@ -379,10 +416,14 @@ function Theme.RefreshExpandCollapseControls()
     Theme.ApplyExpandCollapseTexture(texture, expanded)
   end
 end
+Theme.RefreshExpandCollapseControls = PUI_OptionsProfiler:Def("Theme.RefreshExpandCollapseControls", Theme.RefreshExpandCollapseControls)
+
 
 function Theme.GetBarTexture()
   return LSM:Fetch("statusbar", "Pleebar", true)
 end
+Theme.GetBarTexture = PUI_OptionsProfiler:Def("Theme.GetBarTexture", Theme.GetBarTexture)
+
 
 
 Theme.FontSizeOffsetRange = {
@@ -432,6 +473,8 @@ function Theme.RefreshFontSizeOffsetCache()
     _PUI_FontSizeScopeEnabled[key] = scopes[key] ~= false
   end
 end
+Theme.RefreshFontSizeOffsetCache = PUI_OptionsProfiler:Def("Theme.RefreshFontSizeOffsetCache", Theme.RefreshFontSizeOffsetCache)
+
 
 function Theme.ResolveFontSize(baseSize, scope)
   local size = tonumber(baseSize) or 12
@@ -442,6 +485,8 @@ function Theme.ResolveFontSize(baseSize, scope)
   if size < 1 then size = 1 end
   return size
 end
+Theme.ResolveFontSize = PUI_OptionsProfiler:Def("Theme.ResolveFontSize", Theme.ResolveFontSize)
+
 
 Theme._AppliedFonts = setmetatable({}, { __mode = "k" })
 
@@ -493,6 +538,8 @@ local function _PUI_CopyBackdrop(backdrop)
   end
   return copy
 end
+_PUI_CopyBackdrop = PUI_OptionsProfiler:Def("_PUI_CopyBackdrop", _PUI_CopyBackdrop)
+
 
 local function _PUI_CaptureCreatedWidgetObject(lease, object)
   if not object
@@ -595,6 +642,8 @@ local function _PUI_CaptureCreatedWidgetObject(lease, object)
   lease.states[object] = state
   lease.objects[#lease.objects + 1] = object
 end
+_PUI_CaptureCreatedWidgetObject = PUI_OptionsProfiler:Def("_PUI_CaptureCreatedWidgetObject", _PUI_CaptureCreatedWidgetObject)
+
 
 local function _PUI_IsOtherAceGUIWidgetFrame(widget, object)
   if not object:IsObjectType("Frame") then
@@ -606,6 +655,8 @@ local function _PUI_IsOtherAceGUIWidgetFrame(widget, object)
     and owner ~= widget
     and owner.AceGUIWidgetVersion ~= nil
 end
+_PUI_IsOtherAceGUIWidgetFrame = PUI_OptionsProfiler:Def("_PUI_IsOtherAceGUIWidgetFrame", _PUI_IsOtherAceGUIWidgetFrame)
+
 
 local function _PUI_CaptureCreatedWidgetTree(lease, object)
   if not object
@@ -632,11 +683,15 @@ local function _PUI_CaptureCreatedWidgetTree(lease, object)
     _PUI_CaptureCreatedWidgetTree(lease, child)
   end
 end
+_PUI_CaptureCreatedWidgetTree = PUI_OptionsProfiler:Def("_PUI_CaptureCreatedWidgetTree", _PUI_CaptureCreatedWidgetTree)
+
 
 function Theme.MarkCreatedWidgetChrome(object)
   object.__puiCreatedWidgetChrome = true
   return object
 end
+Theme.MarkCreatedWidgetChrome = PUI_OptionsProfiler:Def("Theme.MarkCreatedWidgetChrome", Theme.MarkCreatedWidgetChrome)
+
 
 function Theme.CaptureCreatedWidgetFrameTree(widget, object)
   local lease = widget and widget.__puiCreatedWidgetLease
@@ -651,6 +706,8 @@ function Theme.CaptureCreatedWidgetFrameTree(widget, object)
 
   _PUI_CaptureCreatedWidgetTree(lease, object)
 end
+Theme.CaptureCreatedWidgetFrameTree = PUI_OptionsProfiler:Def("Theme.CaptureCreatedWidgetFrameTree", Theme.CaptureCreatedWidgetFrameTree)
+
 
 function Theme.BeginCreatedWidgetLease(widget)
   if widget.__puiCreatedWidgetLease then
@@ -676,6 +733,8 @@ function Theme.BeginCreatedWidgetLease(widget)
     Theme.CaptureCreatedWidgetFrameTree(widget, widget[PUI_CREATED_WIDGET_ROOT_FIELDS[i]])
   end
 end
+Theme.BeginCreatedWidgetLease = PUI_OptionsProfiler:Def("Theme.BeginCreatedWidgetLease", Theme.BeginCreatedWidgetLease)
+
 
 local function _PUI_HideCreatedWidgetChrome(widget, object, seen)
   if not object
@@ -705,6 +764,8 @@ local function _PUI_HideCreatedWidgetChrome(widget, object, seen)
     _PUI_HideCreatedWidgetChrome(widget, child, seen)
   end
 end
+_PUI_HideCreatedWidgetChrome = PUI_OptionsProfiler:Def("_PUI_HideCreatedWidgetChrome", _PUI_HideCreatedWidgetChrome)
+
 
 local function _PUI_RestoreCreatedWidgetObject(object, state)
   if object:GetParent() ~= state.parent then
@@ -823,6 +884,8 @@ local function _PUI_RestoreCreatedWidgetObject(object, state)
 
   object:SetShown(state.shown)
 end
+_PUI_RestoreCreatedWidgetObject = PUI_OptionsProfiler:Def("_PUI_RestoreCreatedWidgetObject", _PUI_RestoreCreatedWidgetObject)
+
 
 function Theme.ReleaseCreatedWidget(widget)
   local lease = widget and widget.__puiCreatedWidgetLease
@@ -889,10 +952,14 @@ function Theme.ReleaseCreatedWidget(widget)
   widget.width = lease.widgetFields.width
   widget.__puiCreatedWidgetLease = nil
 end
+Theme.ReleaseCreatedWidget = PUI_OptionsProfiler:Def("Theme.ReleaseCreatedWidget", Theme.ReleaseCreatedWidget)
+
 
 local function _PUI_GetOptionsFontSizeDelta()
   return (tonumber(Addon:GetOptionsDB().puiOptionsFontSize) or 14) - 14
 end
+_PUI_GetOptionsFontSizeDelta = PUI_OptionsProfiler:Def("_PUI_GetOptionsFontSizeDelta", _PUI_GetOptionsFontSizeDelta)
+
 
 local function GetOptionsOwnedFontSize(role, size)
   local base = Theme.FontRoles[role == "label" and "body" or role].size
@@ -903,6 +970,8 @@ local function GetOptionsOwnedFontSize(role, size)
 
   return finalSize
 end
+GetOptionsOwnedFontSize = PUI_OptionsProfiler:Def("GetOptionsOwnedFontSize", GetOptionsOwnedFontSize)
+
 
 local optionsFontMeasure
 local optionsFontHeights = {}
@@ -916,12 +985,27 @@ function Theme.GetOptionsFontSignature(role, size)
     tostring(Theme.ResolveFontSize(12, "options")),
   }, "|")
 end
+Theme.GetOptionsFontSignature = PUI_OptionsProfiler:Def("Theme.GetOptionsFontSignature", Theme.GetOptionsFontSignature)
+
 
 function Theme.GetOptionsFontHeight(role, size)
-  local signature = Theme.GetOptionsFontSignature(role, size)
   local key = role .. "|" .. tostring(size)
   local cached = optionsFontHeights[key]
-  if not cached or cached.signature ~= signature then
+  local settings = Theme.GetOptionsFontSettings(role)
+  local optionsFontSlug = Addon:GetOptionsDB().optionsFontSlug == true
+  local fontSizeDelta = _PUI_GetOptionsFontSizeDelta()
+  local resolvedOptionsFontSize = Theme.ResolveFontSize(12, "options")
+
+  if not cached
+    or cached.font ~= settings.font
+    or cached.outline ~= settings.outline
+    or cached.shadow ~= settings.shadow
+    or cached.fontSlug ~= settings.fontSlug
+    or cached.size ~= settings.size
+    or cached.optionsFontSlug ~= optionsFontSlug
+    or cached.fontSizeDelta ~= fontSizeDelta
+    or cached.resolvedOptionsFontSize ~= resolvedOptionsFontSize
+  then
     if not optionsFontMeasure then
       local frame = CreateFrame("Frame")
       frame:Hide()
@@ -933,12 +1017,24 @@ function Theme.GetOptionsFontHeight(role, size)
     Theme.ApplyFont(optionsFontMeasure, role, size)
     optionsFontMeasure:SetText("Agj0123456789")
     local _, fontSize = optionsFontMeasure:GetFont()
-    cached = { signature = signature, height = math.ceil(math.max(fontSize, optionsFontMeasure:GetStringHeight()) + 2) }
+    cached = {
+      font = settings.font,
+      outline = settings.outline,
+      shadow = settings.shadow,
+      fontSlug = settings.fontSlug,
+      size = settings.size,
+      optionsFontSlug = optionsFontSlug,
+      fontSizeDelta = fontSizeDelta,
+      resolvedOptionsFontSize = resolvedOptionsFontSize,
+      height = math.ceil(math.max(fontSize, optionsFontMeasure:GetStringHeight()) + 2),
+    }
     optionsFontHeights[key] = cached
   end
 
   return cached.height
 end
+Theme.GetOptionsFontHeight = PUI_OptionsProfiler:Def("Theme.GetOptionsFontHeight", Theme.GetOptionsFontHeight)
+
 
 local function _PUI_ApplyOwnedWidgetFontString(fs, role)
   if not fs or fs.__puiSkipOptionsGlobalFont == true then
@@ -950,6 +1046,8 @@ local function _PUI_ApplyOwnedWidgetFontString(fs, role)
   local meta = Theme._AppliedFonts[fs]
   Theme.ApplyFont(fs, meta and meta.role or role or "body", meta and meta.size, meta and meta.outline)
 end
+_PUI_ApplyOwnedWidgetFontString = PUI_OptionsProfiler:Def("_PUI_ApplyOwnedWidgetFontString", _PUI_ApplyOwnedWidgetFontString)
+
 
 local function _PUI_ApplyCreatedWidgetFonts(widget)
   local widgetType = widget.type
@@ -985,6 +1083,8 @@ local function _PUI_ApplyCreatedWidgetFonts(widget)
   _PUI_ApplyOwnedWidgetFontString(widget.hightext, "body")
   _PUI_ApplyOwnedWidgetFontString(widget.__puiDropdownValueText, "body")
 end
+_PUI_ApplyCreatedWidgetFonts = PUI_OptionsProfiler:Def("_PUI_ApplyCreatedWidgetFonts", _PUI_ApplyCreatedWidgetFonts)
+
 
 Theme.ApplyCreatedWidgetFonts = _PUI_ApplyCreatedWidgetFonts
 
@@ -1056,6 +1156,8 @@ function Theme.ApplyFont(fs, role, size, outline, scope)
     end
   end
 end
+Theme.ApplyFont = PUI_OptionsProfiler:Def("Theme.ApplyFont", Theme.ApplyFont)
+
 
 local function RuntimeFontFlags(flags)
   flags = flags or ""
@@ -1064,6 +1166,8 @@ local function RuntimeFontFlags(flags)
   end
   return flags
 end
+RuntimeFontFlags = PUI_OptionsProfiler:Def("RuntimeFontFlags", RuntimeFontFlags)
+
 
 function Theme.SetRuntimeFont(target, path, size, flags)
   Theme._AppliedFonts[target] = nil
@@ -1076,6 +1180,8 @@ function Theme.SetRuntimeFont(target, path, size, flags)
   font.appliedFlags = RuntimeFontFlags(font.flags)
   return target:SetFont(path, size, font.appliedFlags)
 end
+Theme.SetRuntimeFont = PUI_OptionsProfiler:Def("Theme.SetRuntimeFont", Theme.SetRuntimeFont)
+
 
 function Theme.GetRuntimeFont(target)
   local path, size, flags = target:GetFont()
@@ -1085,11 +1191,15 @@ function Theme.GetRuntimeFont(target)
   end
   return path, size, flags
 end
+Theme.GetRuntimeFont = PUI_OptionsProfiler:Def("Theme.GetRuntimeFont", Theme.GetRuntimeFont)
+
 
 function Theme.RestoreRuntimeFont(target, path, size, flags)
   runtimeFonts[target] = nil
   target:SetFont(path, size, flags)
 end
+Theme.RestoreRuntimeFont = PUI_OptionsProfiler:Def("Theme.RestoreRuntimeFont", Theme.RestoreRuntimeFont)
+
 
 function Theme.RefreshRuntimeFonts()
   for target, font in pairs(runtimeFonts) do
@@ -1100,12 +1210,16 @@ function Theme.RefreshRuntimeFonts()
     end
   end
 end
+Theme.RefreshRuntimeFonts = PUI_OptionsProfiler:Def("Theme.RefreshRuntimeFonts", Theme.RefreshRuntimeFonts)
+
 
 function Theme.RefreshAppliedFonts()
   for fs, meta in pairs(Theme._AppliedFonts) do
     Theme.ApplyFont(fs, meta.role, meta.size, meta.outline, meta.scope)
   end
 end
+Theme.RefreshAppliedFonts = PUI_OptionsProfiler:Def("Theme.RefreshAppliedFonts", Theme.RefreshAppliedFonts)
+
 
 Theme.iconText = {
   cooldown = {
@@ -1139,14 +1253,20 @@ Theme.iconTextGlobal = {
 function Theme.GetIconTextGlobal()
   return Theme.iconTextGlobal.font, Theme.iconTextGlobal.flags
 end
+Theme.GetIconTextGlobal = PUI_OptionsProfiler:Def("Theme.GetIconTextGlobal", Theme.GetIconTextGlobal)
+
 
 function Theme.SetIconTextGlobalFont(fontKey)
   Theme.iconTextGlobal.font = fontKey ~= nil and fontKey ~= "" and fontKey or "FiraSans Heavy"
 end
+Theme.SetIconTextGlobalFont = PUI_OptionsProfiler:Def("Theme.SetIconTextGlobalFont", Theme.SetIconTextGlobalFont)
+
 
 function Theme.SetIconTextGlobalFlags(flags)
   Theme.iconTextGlobal.flags = Theme.NormalizeOutlineFlags(flags) or "OUTLINE"
 end
+Theme.SetIconTextGlobalFlags = PUI_OptionsProfiler:Def("Theme.SetIconTextGlobalFlags", Theme.SetIconTextGlobalFlags)
+
 
 
 function Theme.ResolveIconTextRole(role)
@@ -1168,6 +1288,8 @@ function Theme.ResolveIconTextRole(role)
 
   return out
 end
+Theme.ResolveIconTextRole = PUI_OptionsProfiler:Def("Theme.ResolveIconTextRole", Theme.ResolveIconTextRole)
+
 
 local function SyncBackdropFrame(target, bg)
   if not target or not bg then
@@ -1193,6 +1315,8 @@ local function SyncBackdropFrame(target, bg)
   bg:Lower()
   bg:Show()
 end
+SyncBackdropFrame = PUI_OptionsProfiler:Def("SyncBackdropFrame", SyncBackdropFrame)
+
 
 local function EnsureBackdropFrame(target)
   local bg = target._puiBg
@@ -1207,14 +1331,16 @@ local function EnsureBackdropFrame(target)
 
   if target.__puiBackdropLayerHooked ~= true then
     target.__puiBackdropLayerHooked = true
-    target:HookScript("OnShow", function(self)
+    target:HookScript("OnShow", PUI_OptionsProfiler:DefCallback("EnsureBackdropFrame > target.HookScript OnShow", function(self)
       SyncBackdropFrame(self, self._puiBg)
-    end)
+    end))
   end
 
   SyncBackdropFrame(target, bg)
   return bg
 end
+EnsureBackdropFrame = PUI_OptionsProfiler:Def("EnsureBackdropFrame", EnsureBackdropFrame)
+
 
 Theme.SyncBackdropFrame = SyncBackdropFrame
 ns.Theme.EnsureBackdropFrame = EnsureBackdropFrame
@@ -1224,10 +1350,14 @@ Theme.ControlBorderSize = 1
 function ns.Theme.GetEdgeSize()
   return 1
 end
+ns.Theme.GetEdgeSize = PUI_OptionsProfiler:Def("ns.Theme.GetEdgeSize", ns.Theme.GetEdgeSize)
+
 
 function Theme.UnpackColor(color)
   return color[1], color[2], color[3], color[4] or 1
 end
+Theme.UnpackColor = PUI_OptionsProfiler:Def("Theme.UnpackColor", Theme.UnpackColor)
+
 
 ns.FontDropdown = {
   STANDARD_FONT_KEY = "__PUI_STANDARD_FONT__",
@@ -1250,6 +1380,8 @@ function Theme.BuildGlobalFontList()
   _cache.fontsGlobal = list
   return list
 end
+Theme.BuildGlobalFontList = PUI_OptionsProfiler:Def("Theme.BuildGlobalFontList", Theme.BuildGlobalFontList)
+
 
 local PUI_WIDGET_ROW_TYPES = {
   Button = true,
@@ -1280,11 +1412,15 @@ Theme._WidgetRowWidgets = Theme._WidgetRowWidgets or setmetatable({}, { __mode =
 function Theme.GetWidgetRowBackgroundsEnabled()
   return Addon:GetOptionsDB().skin.widgetRowBackgrounds ~= false
 end
+Theme.GetWidgetRowBackgroundsEnabled = PUI_OptionsProfiler:Def("Theme.GetWidgetRowBackgroundsEnabled", Theme.GetWidgetRowBackgroundsEnabled)
+
 
 function Theme.ResetWidgetRowBackgrounds()
   Theme.__puiWidgetRowSerial = 0
   Theme.__puiWidgetRowStamp = (Theme.__puiWidgetRowStamp or 0) + 1
 end
+Theme.ResetWidgetRowBackgrounds = PUI_OptionsProfiler:Def("Theme.ResetWidgetRowBackgrounds", Theme.ResetWidgetRowBackgrounds)
+
 
 function Theme.SetWidgetRowBackgroundIndex(widget, index)
   if PUI_WIDGET_ROW_TYPES[widget.type] ~= true then
@@ -1324,6 +1460,8 @@ function Theme.SetWidgetRowBackgroundIndex(widget, index)
   Pixel.SetColorTexture(bg, color[1], color[2], color[3], alpha)
   bg:Show()
 end
+Theme.SetWidgetRowBackgroundIndex = PUI_OptionsProfiler:Def("Theme.SetWidgetRowBackgroundIndex", Theme.SetWidgetRowBackgroundIndex)
+
 
 function Theme.ReleaseWidgetRowBackground(widget)
   Theme._WidgetRowWidgets[widget] = nil
@@ -1335,6 +1473,8 @@ function Theme.ReleaseWidgetRowBackground(widget)
     bg:Hide()
   end
 end
+Theme.ReleaseWidgetRowBackground = PUI_OptionsProfiler:Def("Theme.ReleaseWidgetRowBackground", Theme.ReleaseWidgetRowBackground)
+
 
 function Theme.ApplyWidgetRowBackground(widget)
   local index = widget.__puiWidgetRowIndex
@@ -1346,17 +1486,23 @@ function Theme.ApplyWidgetRowBackground(widget)
 
   Theme.SetWidgetRowBackgroundIndex(widget, index or 1)
 end
+Theme.ApplyWidgetRowBackground = PUI_OptionsProfiler:Def("Theme.ApplyWidgetRowBackground", Theme.ApplyWidgetRowBackground)
+
 
 function Theme.RefreshWidgetRowBackgrounds()
   for widget in pairs(Theme._WidgetRowWidgets) do
     Theme.SetWidgetRowBackgroundIndex(widget, widget.__puiWidgetRowIndex or 1)
   end
 end
+Theme.RefreshWidgetRowBackgrounds = PUI_OptionsProfiler:Def("Theme.RefreshWidgetRowBackgrounds", Theme.RefreshWidgetRowBackgrounds)
+
 
 function Theme.SetWidgetRowBackgroundsEnabled(enabled)
   Addon:GetOptionsDB().skin.widgetRowBackgrounds = enabled == true
   Theme.RefreshWidgetRowBackgrounds()
 end
+Theme.SetWidgetRowBackgroundsEnabled = PUI_OptionsProfiler:Def("Theme.SetWidgetRowBackgroundsEnabled", Theme.SetWidgetRowBackgroundsEnabled)
+
 
 local function _PUI_ApplyCreatedWidgetSizing(widget, opts)
   if PUI_WIDGET_ROW_TYPES[widget.type] ~= true then
@@ -1384,6 +1530,8 @@ local function _PUI_ApplyCreatedWidgetSizing(widget, opts)
   widget:SetHeight(height)
   Pixel.Height(widget.frame, height)
 end
+_PUI_ApplyCreatedWidgetSizing = PUI_OptionsProfiler:Def("_PUI_ApplyCreatedWidgetSizing", _PUI_ApplyCreatedWidgetSizing)
+
 
 
 local _PUI_BlizzBaseSize = setmetatable({}, { __mode = "k" })
@@ -1396,6 +1544,8 @@ local function _PUI_GetBaseSize(obj, curSize)
   end
   return base
 end
+_PUI_GetBaseSize = PUI_OptionsProfiler:Def("_PUI_GetBaseSize", _PUI_GetBaseSize)
+
 
 
 local function _PUI_ApplyToFontObjectKeepSize(fontObject, fontPath, sizeDelta, forcedFlags)
@@ -1410,6 +1560,8 @@ local function _PUI_ApplyToFontObjectKeepSize(fontObject, fontPath, sizeDelta, f
   local flags = (forcedFlags == nil) and (curFlags or "") or forcedFlags
   fontObject:SetFont(fontPath, size, flags)
 end
+_PUI_ApplyToFontObjectKeepSize = PUI_OptionsProfiler:Def("_PUI_ApplyToFontObjectKeepSize", _PUI_ApplyToFontObjectKeepSize)
+
 
 local function _PUI_ApplyToFontStringKeepSize(fs, fontPath, sizeDelta, forcedFlags)
   local _, curSize, curFlags = fs:GetFont()
@@ -1423,6 +1575,8 @@ local function _PUI_ApplyToFontStringKeepSize(fs, fontPath, sizeDelta, forcedFla
   local flags = (forcedFlags == nil) and (curFlags or "") or forcedFlags
   fs:SetFont(fontPath, size, flags)
 end
+_PUI_ApplyToFontStringKeepSize = PUI_OptionsProfiler:Def("_PUI_ApplyToFontStringKeepSize", _PUI_ApplyToFontStringKeepSize)
+
 
 local function _PUI_ForEachFontString(root, fn)
   local regions = { root:GetRegions() }
@@ -1433,11 +1587,15 @@ local function _PUI_ForEachFontString(root, fn)
     end
   end
 end
+_PUI_ForEachFontString = PUI_OptionsProfiler:Def("_PUI_ForEachFontString", _PUI_ForEachFontString)
+
 
 local function _PUI_ApplyFrameFontsKeepSize(frame, fontPath, sizeDelta, forcedFlags)
   local function ApplyFS(fs)
     _PUI_ApplyToFontStringKeepSize(fs, fontPath, sizeDelta, forcedFlags)
   end
+  ApplyFS = PUI_OptionsProfiler:DefCallback("_PUI_ApplyFrameFontsKeepSize > ApplyFS", ApplyFS)
+
 
   _PUI_ForEachFontString(frame, ApplyFS)
 
@@ -1446,6 +1604,8 @@ local function _PUI_ApplyFrameFontsKeepSize(frame, fontPath, sizeDelta, forcedFl
     _PUI_ForEachFontString(select(i, frame:GetChildren()), ApplyFS)
   end
 end
+_PUI_ApplyFrameFontsKeepSize = PUI_OptionsProfiler:Def("_PUI_ApplyFrameFontsKeepSize", _PUI_ApplyFrameFontsKeepSize)
+
 
 function Theme.SeedBlizzardFontsDB(db)
   if not db then
@@ -1472,6 +1632,8 @@ function Theme.SeedBlizzardFontsDB(db)
       a.sizeOffset = 0
     end
   end
+  Seed = PUI_OptionsProfiler:DefCallback("Theme.SeedBlizzardFontsDB > Seed", Seed)
+
 
   Seed("tooltips",         14)
   Seed("friendsList",      14)
@@ -1495,11 +1657,15 @@ function Theme.SeedBlizzardFontsDB(db)
   Seed("combatTextFont",       18)
   Seed("gameNormalNumberFont", 14)
 end
+Theme.SeedBlizzardFontsDB = PUI_OptionsProfiler:Def("Theme.SeedBlizzardFontsDB", Theme.SeedBlizzardFontsDB)
+
 
 local function _PUI_GetAreaDelta(db, area)
   local areaOff = tonumber(area and area.sizeOffset) or 0
   return areaOff
 end
+_PUI_GetAreaDelta = PUI_OptionsProfiler:Def("_PUI_GetAreaDelta", _PUI_GetAreaDelta)
+
 
 local function ApplyTooltips(db, area)
   local fontKey  = ns.OptionsUtil.ResolveFontKey(area.font, area.useGlobalFont)
@@ -1519,6 +1685,8 @@ local function ApplyTooltips(db, area)
     _PUI_ApplyToFontObjectKeepSize(Tooltip_Med, fontPath, delta, flags)
   end
 end
+ApplyTooltips = PUI_OptionsProfiler:Def("ApplyTooltips", ApplyTooltips)
+
 
 local function ApplyFriendsList(db, area)
   local fontKey  = ns.OptionsUtil.ResolveFontKey(area.font, area.useGlobalFont)
@@ -1539,6 +1707,8 @@ local function ApplyFriendsList(db, area)
     _PUI_ApplyFrameFontsKeepSize(FriendsFrame, fontPath, delta, flags)
   end
 end
+ApplyFriendsList = PUI_OptionsProfiler:Def("ApplyFriendsList", ApplyFriendsList)
+
 
 local function ApplyChat(db, area)
   local fontKey  = ns.OptionsUtil.ResolveFontKey(area.font, area.useGlobalFont)
@@ -1555,6 +1725,8 @@ local function ApplyChat(db, area)
     end
     return f
   end
+  NormalizeFlags = PUI_OptionsProfiler:DefCallback("ApplyChat > NormalizeFlags", NormalizeFlags)
+
 
   local forcedFlags = NormalizeFlags(area.flags)
 
@@ -1588,6 +1760,8 @@ local function ApplyChat(db, area)
 
   end
 end
+ApplyChat = PUI_OptionsProfiler:Def("ApplyChat", ApplyChat)
+
 
 local function ApplyChatBubbles(db, area)
   local fontKey  = ns.OptionsUtil.ResolveFontKey(area.font, area.useGlobalFont)
@@ -1600,6 +1774,8 @@ local function ApplyChatBubbles(db, area)
     _PUI_ApplyToFontObjectKeepSize(ChatBubbleFont, fontPath, delta, flags)
   end
 end
+ApplyChatBubbles = PUI_OptionsProfiler:Def("ApplyChatBubbles", ApplyChatBubbles)
+
 
 local function ApplyRaidWarnings(db, area)
   local fontKey  = ns.OptionsUtil.ResolveFontKey(area.font, area.useGlobalFont)
@@ -1611,6 +1787,8 @@ local function ApplyRaidWarnings(db, area)
   if _G.RaidWarningFrameSlot1 then _PUI_ApplyToFontStringKeepSize(_G.RaidWarningFrameSlot1, fontPath, delta, flags) end
   if _G.RaidWarningFrameSlot2 then _PUI_ApplyToFontStringKeepSize(_G.RaidWarningFrameSlot2, fontPath, delta, flags) end
 end
+ApplyRaidWarnings = PUI_OptionsProfiler:Def("ApplyRaidWarnings", ApplyRaidWarnings)
+
 
 local function ApplyQuestText(db, area)
   local fontKey  = ns.OptionsUtil.ResolveFontKey(area.font, area.useGlobalFont)
@@ -1623,6 +1801,8 @@ local function ApplyQuestText(db, area)
   _PUI_ApplyToFontObjectKeepSize(QuestFont,            fontPath, delta,     flags)
   _PUI_ApplyToFontObjectKeepSize(QuestFontNormalSmall, fontPath, delta - 3, flags)
 end
+ApplyQuestText = PUI_OptionsProfiler:Def("ApplyQuestText", ApplyQuestText)
+
 
 local function ApplyObjectiveTracker(db, area)
   local fontKey  = ns.OptionsUtil.ResolveFontKey(area.font, area.useGlobalFont)
@@ -1638,6 +1818,8 @@ local function ApplyObjectiveTracker(db, area)
     end
   end
 end
+ApplyObjectiveTracker = PUI_OptionsProfiler:Def("ApplyObjectiveTracker", ApplyObjectiveTracker)
+
 
 local function ApplyAdventureGuide(db, area)
   local fontKey  = ns.OptionsUtil.ResolveFontKey(area.font, area.useGlobalFont)
@@ -1651,6 +1833,8 @@ local function ApplyAdventureGuide(db, area)
       _PUI_ApplyFrameFontsKeepSize(_G.EncounterJournal, fontPath, delta, flags)
     end
   end
+  ApplyNow = PUI_OptionsProfiler:DefCallback("ApplyAdventureGuide > ApplyNow", ApplyNow)
+
 
   ApplyNow()
 
@@ -1659,6 +1843,8 @@ local function ApplyAdventureGuide(db, area)
     _G.EncounterJournal:HookScript("OnShow", ApplyNow)
   end
 end
+ApplyAdventureGuide = PUI_OptionsProfiler:Def("ApplyAdventureGuide", ApplyAdventureGuide)
+
 
 local function ApplyCharacterPanel(db, area)
   local fontKey  = ns.OptionsUtil.ResolveFontKey(area.font, area.useGlobalFont)
@@ -1672,6 +1858,8 @@ local function ApplyCharacterPanel(db, area)
       _PUI_ApplyFrameFontsKeepSize(_G.CharacterFrame, fontPath, delta, flags)
     end
   end
+  ApplyNow = PUI_OptionsProfiler:DefCallback("ApplyCharacterPanel > ApplyNow", ApplyNow)
+
 
   ApplyNow()
 
@@ -1680,6 +1868,8 @@ local function ApplyCharacterPanel(db, area)
     _G.CharacterFrame:HookScript("OnShow", ApplyNow)
   end
 end
+ApplyCharacterPanel = PUI_OptionsProfiler:Def("ApplyCharacterPanel", ApplyCharacterPanel)
+
 
 local function ApplyReputation(db, area)
   local fontKey  = ns.OptionsUtil.ResolveFontKey(area.font, area.useGlobalFont)
@@ -1695,9 +1885,13 @@ local function ApplyReputation(db, area)
       _PUI_ApplyFrameFontsKeepSize(_G.CharacterFrame, fontPath, delta, flags)
     end
   end
+  ApplyNow = PUI_OptionsProfiler:DefCallback("ApplyReputation > ApplyNow", ApplyNow)
+
 
   ApplyNow()
 end
+ApplyReputation = PUI_OptionsProfiler:Def("ApplyReputation", ApplyReputation)
+
 
 local function ApplySpellbook(db, area)
   local fontKey  = ns.OptionsUtil.ResolveFontKey(area.font, area.useGlobalFont)
@@ -1711,6 +1905,8 @@ local function ApplySpellbook(db, area)
       _PUI_ApplyFrameFontsKeepSize(_G.SpellBookFrame, fontPath, delta, flags)
     end
   end
+  ApplyNow = PUI_OptionsProfiler:DefCallback("ApplySpellbook > ApplyNow", ApplyNow)
+
 
   ApplyNow()
 
@@ -1719,6 +1915,8 @@ local function ApplySpellbook(db, area)
     _G.SpellBookFrame:HookScript("OnShow", ApplyNow)
   end
 end
+ApplySpellbook = PUI_OptionsProfiler:Def("ApplySpellbook", ApplySpellbook)
+
 
 
 
@@ -1734,6 +1932,8 @@ local function ApplyAchievements(db, area)
       _PUI_ApplyFrameFontsKeepSize(_G.AchievementFrame, fontPath, delta, flags)
     end
   end
+  ApplyNow = PUI_OptionsProfiler:DefCallback("ApplyAchievements > ApplyNow", ApplyNow)
+
 
   ApplyNow()
 
@@ -1742,6 +1942,8 @@ local function ApplyAchievements(db, area)
     _G.AchievementFrame:HookScript("OnShow", ApplyNow)
   end
 end
+ApplyAchievements = PUI_OptionsProfiler:Def("ApplyAchievements", ApplyAchievements)
+
 
 local function ApplyTalentTree(db, area)
   local fontKey  = ns.OptionsUtil.ResolveFontKey(area.font, area.useGlobalFont)
@@ -1758,6 +1960,8 @@ local function ApplyTalentTree(db, area)
       _PUI_ApplyFrameFontsKeepSize(_G.ClassTalentFrame, fontPath, delta, flags)
     end
   end
+  ApplyNow = PUI_OptionsProfiler:DefCallback("ApplyTalentTree > ApplyNow", ApplyNow)
+
 
   ApplyNow()
 
@@ -1770,6 +1974,8 @@ local function ApplyTalentTree(db, area)
     _G.ClassTalentFrame:HookScript("OnShow", ApplyNow)
   end
 end
+ApplyTalentTree = PUI_OptionsProfiler:Def("ApplyTalentTree", ApplyTalentTree)
+
 
 local function _PUI_ApplyFontObjectsByPrefixKeepSize(prefix, fontPath, sizeDelta, forcedFlags)
   if not prefix or prefix == "" then return end
@@ -1781,6 +1987,8 @@ local function _PUI_ApplyFontObjectsByPrefixKeepSize(prefix, fontPath, sizeDelta
     end
   end
 end
+_PUI_ApplyFontObjectsByPrefixKeepSize = PUI_OptionsProfiler:Def("_PUI_ApplyFontObjectsByPrefixKeepSize", _PUI_ApplyFontObjectsByPrefixKeepSize)
+
 
 local function ApplySystemFont(db, area)
   local fontKey  = ns.OptionsUtil.ResolveFontKey(area.font, area.useGlobalFont)
@@ -1791,6 +1999,8 @@ local function ApplySystemFont(db, area)
 
   _PUI_ApplyFontObjectsByPrefixKeepSize("SystemFont_", fontPath, delta, flags)
 end
+ApplySystemFont = PUI_OptionsProfiler:Def("ApplySystemFont", ApplySystemFont)
+
 
 local function ApplyGameFont(db, area)
   local fontKey  = ns.OptionsUtil.ResolveFontKey(area.font, area.useGlobalFont)
@@ -1801,6 +2011,8 @@ local function ApplyGameFont(db, area)
 
   _PUI_ApplyFontObjectsByPrefixKeepSize("GameFont", fontPath, delta, flags)
 end
+ApplyGameFont = PUI_OptionsProfiler:Def("ApplyGameFont", ApplyGameFont)
+
 
 local function ApplyCombatTextFont(db, area)
   local fontKey  = ns.OptionsUtil.ResolveFontKey(area.font, area.useGlobalFont)
@@ -1812,6 +2024,8 @@ local function ApplyCombatTextFont(db, area)
   _PUI_ApplyToFontObjectKeepSize(_G.CombatTextFont, fontPath, delta, flags)
   _PUI_ApplyToFontObjectKeepSize(_G.CombatTextFontOutline, fontPath, delta, flags)
 end
+ApplyCombatTextFont = PUI_OptionsProfiler:Def("ApplyCombatTextFont", ApplyCombatTextFont)
+
 
 local function ApplyGameNormalNumberFont(db, area)
   local fontKey  = ns.OptionsUtil.ResolveFontKey(area.font, area.useGlobalFont)
@@ -1822,6 +2036,8 @@ local function ApplyGameNormalNumberFont(db, area)
 
   _PUI_ApplyToFontObjectKeepSize(_G.GameNormalNumberFont, fontPath, delta, flags)
 end
+ApplyGameNormalNumberFont = PUI_OptionsProfiler:Def("ApplyGameNormalNumberFont", ApplyGameNormalNumberFont)
+
 
 function Theme.ApplyBlizzardFonts(db)
   if InCombatLockdown() then
@@ -1854,6 +2070,8 @@ function Theme.ApplyBlizzardFonts(db)
   if bf.combatTextFont.enabled then ApplyCombatTextFont(db, bf.combatTextFont) end
   if bf.gameNormalNumberFont.enabled then ApplyGameNormalNumberFont(db, bf.gameNormalNumberFont) end
 end
+Theme.ApplyBlizzardFonts = PUI_OptionsProfiler:Def("Theme.ApplyBlizzardFonts", Theme.ApplyBlizzardFonts)
+
 
 do
   if not Theme.__puiBlizzFontsEventFrame then
@@ -1863,7 +2081,7 @@ do
     f:RegisterEvent("PLAYER_ENTERING_WORLD")
     f:RegisterEvent("ADDON_LOADED")
 
-    f:SetScript("OnEvent", function(_, event, arg1)
+    f:SetScript("OnEvent", PUI_OptionsProfiler:Def("f.SetScript OnEvent", function(_, event, arg1)
       if event == "PLAYER_ENTERING_WORLD" then
         Theme.ApplyBlizzardFonts()
         return
@@ -1879,7 +2097,7 @@ do
           Theme.ApplyBlizzardFonts()
         end
       end
-    end)
+    end))
   end
 end
 
@@ -1889,6 +2107,8 @@ function Theme:ApplyButton(button, kind)
   button.__puiKind = kind or button.__puiKind or "primary"
   return ns.Theme.WidgetSkins.UIButton(button)
 end
+Theme.ApplyButton = PUI_OptionsProfiler:Def("Theme.ApplyButton", Theme.ApplyButton)
+
 
 local WHITE8 = "Interface\\Buttons\\WHITE8x8"
 
@@ -1930,6 +2150,8 @@ local function IsCompactWidget(widget)
     and widget.GetUserData
     and widget:GetUserData("puiDensity") == "compact"
 end
+IsCompactWidget = PUI_OptionsProfiler:Def("IsCompactWidget", IsCompactWidget)
+
 
 local function IsCompactInlineWidget(widget)
   local widgetType = widget and widget.type
@@ -1937,6 +2159,8 @@ local function IsCompactInlineWidget(widget)
     or widgetType == "PUI_Checkbox"
     or widgetType == "ColorPicker"
 end
+IsCompactInlineWidget = PUI_OptionsProfiler:Def("IsCompactInlineWidget", IsCompactInlineWidget)
+
 
 local PUI_WIDGET_ROW_GEOMETRY = {
   rowHeight = PUI_CONTROL_METRICS.widgetBoxHeight,
@@ -1996,16 +2220,19 @@ function Theme.GetOptionsPointerTargetSize(baseSize)
   if Addon:GetOptionsDB().largerPointerTargets ~= true then return baseSize end
   return math.max(baseSize, math.ceil(32 / Theme.GetOptionsUIScale()))
 end
+Theme.GetOptionsPointerTargetSize = PUI_OptionsProfiler:Def("Theme.GetOptionsPointerTargetSize", Theme.GetOptionsPointerTargetSize)
 
-local optionsWidgetGeometrySignature
+
+local optionsWidgetGeometryFontHeight
+local optionsWidgetGeometryPointerSize
 local optionsWidgetGeometry = {}
 
 local function GetOptionsWidgetGeometry(widget)
   local fontHeight = math.max(Theme.GetOptionsFontHeight("body"), Theme.GetOptionsFontHeight("button"))
   local pointerSize = Theme.GetOptionsPointerTargetSize(0)
-  local signature = fontHeight .. "|" .. pointerSize
-  if optionsWidgetGeometrySignature ~= signature then
-    optionsWidgetGeometrySignature = signature
+  if optionsWidgetGeometryFontHeight ~= fontHeight or optionsWidgetGeometryPointerSize ~= pointerSize then
+    optionsWidgetGeometryFontHeight = fontHeight
+    optionsWidgetGeometryPointerSize = pointerSize
     wipe(optionsWidgetGeometry)
   end
 
@@ -2039,21 +2266,29 @@ local function GetOptionsWidgetGeometry(widget)
   optionsWidgetGeometry[density] = { metrics = metrics, geometry = geometry }
   return metrics, geometry
 end
+GetOptionsWidgetGeometry = PUI_OptionsProfiler:Def("GetOptionsWidgetGeometry", GetOptionsWidgetGeometry)
+
 
 function Theme.GetControlMetrics(widget)
   local metrics = GetOptionsWidgetGeometry(widget)
   return metrics
 end
+Theme.GetControlMetrics = PUI_OptionsProfiler:Def("Theme.GetControlMetrics", Theme.GetControlMetrics)
+
 
 function Theme.GetWidgetRowGeometry(widget)
   local _, geometry = GetOptionsWidgetGeometry(widget)
   return geometry
 end
+Theme.GetWidgetRowGeometry = PUI_OptionsProfiler:Def("Theme.GetWidgetRowGeometry", Theme.GetWidgetRowGeometry)
+
 
 function Theme.GetConfiguredOptionsWidgetColumns()
   local columns = Addon:GetOptionsDB().optionsWidgetColumns
   return columns == nil and "auto" or columns
 end
+Theme.GetConfiguredOptionsWidgetColumns = PUI_OptionsProfiler:Def("Theme.GetConfiguredOptionsWidgetColumns", Theme.GetConfiguredOptionsWidgetColumns)
+
 
 function Theme.GetOptionsWidgetColumns(availableWidth)
   local configured = Theme.GetConfiguredOptionsWidgetColumns()
@@ -2070,6 +2305,8 @@ function Theme.GetOptionsWidgetColumns(availableWidth)
 
   return math.max(1, math.min(maxColumns, fittingColumns))
 end
+Theme.GetOptionsWidgetColumns = PUI_OptionsProfiler:Def("Theme.GetOptionsWidgetColumns", Theme.GetOptionsWidgetColumns)
+
 
 function Theme.SetOptionsWidgetColumns(columns)
   local optionsDB = Addon:GetOptionsDB()
@@ -2082,6 +2319,8 @@ function Theme.SetOptionsWidgetColumns(columns)
   columns = math.floor(tonumber(columns) or 4)
   optionsDB.optionsWidgetColumns = math.max(1, math.min(5, columns))
 end
+Theme.SetOptionsWidgetColumns = PUI_OptionsProfiler:Def("Theme.SetOptionsWidgetColumns", Theme.SetOptionsWidgetColumns)
+
 
 local function StripIconFrameArt(frame)
   if not frame then return end
@@ -2107,6 +2346,8 @@ local function StripIconFrameArt(frame)
   if frame.IconBorder and frame.IconBorder.SetTexture then frame.IconBorder:SetTexture(nil) end
   if frame.Shine      and frame.Shine.SetTexture      then frame.Shine:SetTexture(nil)      end
 end
+StripIconFrameArt = PUI_OptionsProfiler:Def("StripIconFrameArt", StripIconFrameArt)
+
 
 local function StripStatusBarMasks(bar)
   if not bar or bar:IsForbidden() then return end
@@ -2128,6 +2369,8 @@ local function StripStatusBarMasks(bar)
     end
   end
 end
+StripStatusBarMasks = PUI_OptionsProfiler:Def("StripStatusBarMasks", StripStatusBarMasks)
+
 
 Theme.statusBarRoles = Theme.statusBarRoles or {
   health = {
@@ -2159,6 +2402,8 @@ local function EnsureStatusBarBorder(bar)
     t:Hide()
     return t
   end
+  NewEdge = PUI_OptionsProfiler:DefCallback("EnsureStatusBarBorder > NewEdge", NewEdge)
+
 
   bar._puiStatusBorder = {
     top    = NewEdge(),
@@ -2168,6 +2413,8 @@ local function EnsureStatusBarBorder(bar)
   }
   return bar._puiStatusBorder
 end
+EnsureStatusBarBorder = PUI_OptionsProfiler:Def("EnsureStatusBarBorder", EnsureStatusBarBorder)
+
 
 function Theme.ApplyStatusBarBorder(bar, opts)
   if not bar then return end
@@ -2226,6 +2473,8 @@ function Theme.ApplyStatusBarBorder(bar, opts)
   border.left:Show()
   border.right:Show()
 end
+Theme.ApplyStatusBarBorder = PUI_OptionsProfiler:Def("Theme.ApplyStatusBarBorder", Theme.ApplyStatusBarBorder)
+
 
 function Theme.SkinStatusBar(bar, opts)
   if not bar then return end
@@ -2257,6 +2506,8 @@ function Theme.SkinStatusBar(bar, opts)
     Theme.ApplyStatusBarBorder(bar, { enabled = false })
   end
 end
+Theme.SkinStatusBar = PUI_OptionsProfiler:Def("Theme.SkinStatusBar", Theme.SkinStatusBar)
+
 
 Theme.StripIcon = StripIconFrameArt
 
@@ -2272,6 +2523,8 @@ local function _PUI_EnsureTextureBackdrop(frame)
     Theme.MarkCreatedWidgetChrome(texture)
     return texture
   end
+  CreateTexture = PUI_OptionsProfiler:DefCallback("_PUI_EnsureTextureBackdrop > CreateTexture", CreateTexture)
+
 
   backdrop = {
     background = CreateTexture(-8),
@@ -2283,6 +2536,8 @@ local function _PUI_EnsureTextureBackdrop(frame)
   frame.__puiTextureBackdrop = backdrop
   return backdrop
 end
+_PUI_EnsureTextureBackdrop = PUI_OptionsProfiler:Def("_PUI_EnsureTextureBackdrop", _PUI_EnsureTextureBackdrop)
+
 
 local function _PUI_SetTextureBackdrop(frame, preset, edgeSize)
   local backdrop = _PUI_EnsureTextureBackdrop(frame)
@@ -2336,6 +2591,8 @@ local function _PUI_SetTextureBackdrop(frame, preset, edgeSize)
   Pixel.SetVertexColor(backdrop.left, border[1], border[2], border[3], border[4])
   Pixel.SetVertexColor(backdrop.right, border[1], border[2], border[3], border[4])
 end
+_PUI_SetTextureBackdrop = PUI_OptionsProfiler:Def("_PUI_SetTextureBackdrop", _PUI_SetTextureBackdrop)
+
 
 function Theme.SetSquareBackdrop(frame, preset, edgeSize)
   if not frame then return end
@@ -2389,6 +2646,8 @@ function Theme.SetSquareBackdrop(frame, preset, edgeSize)
     bgFrame:SetBackdropBorderColor(border[1], border[2], border[3], border[4])
   end
 end
+Theme.SetSquareBackdrop = PUI_OptionsProfiler:Def("Theme.SetSquareBackdrop", Theme.SetSquareBackdrop)
+
 
 function Theme.SetOptionsTooltipSkin(tooltip, enabled)
   if tooltip:IsForbidden() then return end
@@ -2418,6 +2677,8 @@ function Theme.SetOptionsTooltipSkin(tooltip, enabled)
     border = colors.border,
   }, Theme.GetEdgeSize())
 end
+Theme.SetOptionsTooltipSkin = PUI_OptionsProfiler:Def("Theme.SetOptionsTooltipSkin", Theme.SetOptionsTooltipSkin)
+
 
 
 local PUI_SELF_SKINNING_WIDGET_TYPES = {
@@ -2501,6 +2762,8 @@ local function _PUI_ApplyAce3Skin(widget)
     end
   end
 end
+_PUI_ApplyAce3Skin = PUI_OptionsProfiler:Def("_PUI_ApplyAce3Skin", _PUI_ApplyAce3Skin)
+
 
 
   Theme.ApplyCreatedWidgetSizing = _PUI_ApplyCreatedWidgetSizing
@@ -2517,6 +2780,8 @@ end
     Theme.ApplyCreatedWidgetFonts(widget)
     Theme.ApplyWidgetRowBackground(widget)
   end
+  _PUI_InitializeCreatedWidget = PUI_OptionsProfiler:Def("_PUI_InitializeCreatedWidget", _PUI_InitializeCreatedWidget)
+
 
 Theme.InitializeCreatedWidget = _PUI_InitializeCreatedWidget
 
@@ -2536,10 +2801,14 @@ local function _PUI_ThemeRegistry_NotifyChange(refreshPlayerBuffs, refreshFonts)
     ns.Modules.PlayerBuffs:ApplySettings({ playerBuffsStyle = true })
   end
 end
+_PUI_ThemeRegistry_NotifyChange = PUI_OptionsProfiler:Def("_PUI_ThemeRegistry_NotifyChange", _PUI_ThemeRegistry_NotifyChange)
+
 
 function Theme.GetFontSizeOffset()
   return tonumber(Addon:GetMediaDB().fontSizeOffset) or 0
 end
+Theme.GetFontSizeOffset = PUI_OptionsProfiler:Def("Theme.GetFontSizeOffset", Theme.GetFontSizeOffset)
+
 
 function Theme.SetFontSizeOffset(value)
   local range = Theme.FontSizeOffsetRange
@@ -2552,10 +2821,14 @@ function Theme.SetFontSizeOffset(value)
   Addon:RefreshOptionsTheme()
   ns.OptionsLifecycle.RefreshModel()
 end
+Theme.SetFontSizeOffset = PUI_OptionsProfiler:Def("Theme.SetFontSizeOffset", Theme.SetFontSizeOffset)
+
 
 function Theme.GetFontSizeScope(scope)
   return Addon:GetMediaDB().fontSizeScopes[scope] ~= false
 end
+Theme.GetFontSizeScope = PUI_OptionsProfiler:Def("Theme.GetFontSizeScope", Theme.GetFontSizeScope)
+
 
 function Theme.SetFontSizeScope(scope, enabled)
   Addon:GetMediaDB().fontSizeScopes[scope] = enabled == true
@@ -2563,6 +2836,8 @@ function Theme.SetFontSizeScope(scope, enabled)
   Addon:RefreshOptionsTheme()
   ns.OptionsLifecycle.RefreshModel()
 end
+Theme.SetFontSizeScope = PUI_OptionsProfiler:Def("Theme.SetFontSizeScope", Theme.SetFontSizeScope)
+
 
 function Theme.GetAllFontSizeScopes()
   local scopes = Addon:GetMediaDB().fontSizeScopes
@@ -2573,6 +2848,8 @@ function Theme.GetAllFontSizeScopes()
   end
   return true
 end
+Theme.GetAllFontSizeScopes = PUI_OptionsProfiler:Def("Theme.GetAllFontSizeScopes", Theme.GetAllFontSizeScopes)
+
 
 function Theme.SetAllFontSizeScopes(enabled)
   local scopes = Addon:GetMediaDB().fontSizeScopes
@@ -2586,6 +2863,8 @@ function Theme.SetAllFontSizeScopes(enabled)
   Addon:RefreshOptionsTheme()
   ns.OptionsLifecycle.RefreshModel()
 end
+Theme.SetAllFontSizeScopes = PUI_OptionsProfiler:Def("Theme.SetAllFontSizeScopes", Theme.SetAllFontSizeScopes)
+
 
 Theme.OptionsFontSizeRange = Theme.OptionsFontSizeRange or {
   min = 10,
@@ -2602,6 +2881,8 @@ Theme.OptionsUIScaleRange = Theme.OptionsUIScaleRange or {
 function Theme.GetGlobalUIFont()
   return Addon:GetMediaDB().iconTextGlobalFont
 end
+Theme.GetGlobalUIFont = PUI_OptionsProfiler:Def("Theme.GetGlobalUIFont", Theme.GetGlobalUIFont)
+
 
 function Theme.SetGlobalUIFont(value)
   local mediaDB = Addon:GetMediaDB()
@@ -2610,10 +2891,14 @@ function Theme.SetGlobalUIFont(value)
   Addon:RefreshIconFonts()
   _PUI_ThemeRegistry_NotifyChange(true)
 end
+Theme.SetGlobalUIFont = PUI_OptionsProfiler:Def("Theme.SetGlobalUIFont", Theme.SetGlobalUIFont)
+
 
 function Theme.GetGlobalUIOutline()
   return Addon:GetMediaDB().iconTextGlobalFlags
 end
+Theme.GetGlobalUIOutline = PUI_OptionsProfiler:Def("Theme.GetGlobalUIOutline", Theme.GetGlobalUIOutline)
+
 
 function Theme.SetGlobalUIOutline(value)
   local mediaDB = Addon:GetMediaDB()
@@ -2627,10 +2912,14 @@ function Theme.SetGlobalUIOutline(value)
   Addon:RefreshIconFonts()
   _PUI_ThemeRegistry_NotifyChange(true)
 end
+Theme.SetGlobalUIOutline = PUI_OptionsProfiler:Def("Theme.SetGlobalUIOutline", Theme.SetGlobalUIOutline)
+
 
 function Theme.GetOptionsFontSize()
   return tonumber(Addon:GetOptionsDB().puiOptionsFontSize) or 14
 end
+Theme.GetOptionsFontSize = PUI_OptionsProfiler:Def("Theme.GetOptionsFontSize", Theme.GetOptionsFontSize)
+
 
 function Theme.SetOptionsFontSize(value)
   local range = Theme.OptionsFontSizeRange
@@ -2643,12 +2932,16 @@ function Theme.SetOptionsFontSize(value)
   _PUI_ThemeRegistry_NotifyChange()
   ns.OptionsLifecycle.RefreshModel()
 end
+Theme.SetOptionsFontSize = PUI_OptionsProfiler:Def("Theme.SetOptionsFontSize", Theme.SetOptionsFontSize)
+
 
 local function RefreshOptionsTypography()
   Theme.RefreshAppliedFonts()
   Addon:RefreshOptionsTheme()
   ns.OptionsLifecycle.RefreshModel()
 end
+RefreshOptionsTypography = PUI_OptionsProfiler:Def("RefreshOptionsTypography", RefreshOptionsTypography)
+
 
 function Theme.SetOptionsFontDefaults(role, enabled)
   local options = Addon:GetOptionsDB()
@@ -2663,6 +2956,8 @@ function Theme.SetOptionsFontDefaults(role, enabled)
   end
   RefreshOptionsTypography()
 end
+Theme.SetOptionsFontDefaults = PUI_OptionsProfiler:Def("Theme.SetOptionsFontDefaults", Theme.SetOptionsFontDefaults)
+
 
 function Theme.SetOptionsFontSetting(role, key, value)
   local options = Addon:GetOptionsDB()
@@ -2676,6 +2971,8 @@ function Theme.SetOptionsFontSetting(role, key, value)
   options.optionsFonts[role][key] = value
   RefreshOptionsTypography()
 end
+Theme.SetOptionsFontSetting = PUI_OptionsProfiler:Def("Theme.SetOptionsFontSetting", Theme.SetOptionsFontSetting)
+
 
 local function OptionsFontGroup(role, order)
   local defaults = Theme.OptionsFontRoles[role]
@@ -2686,47 +2983,49 @@ local function OptionsFontGroup(role, order)
       defaults = {
         type = "toggle", name = "Use defaults", order = 1,
         desc = "Restore the curated font, base size, outline, shadow, and rendering for this category. Editing a setting turns this off.",
-        get = function()
+        get = PUI_OptionsProfiler:DefCallback("OptionsFontGroup > get", function()
           local fonts = Addon:GetOptionsDB().optionsFonts
           return not (fonts and fonts[role])
-        end,
-        set = function(_, value) Theme.SetOptionsFontDefaults(role, value) end,
+        end),
+        set = PUI_OptionsProfiler:DefCallback("OptionsFontGroup > set", function(_, value) Theme.SetOptionsFontDefaults(role, value) end),
       },
       font = {
         type = "select", name = "Font", order = 2, dialogControl = "LSM30_Font",
         values = Theme.BuildGlobalFontList,
-        get = function() return Theme.GetOptionsFontSettings(role).font end,
-        set = function(_, value) Theme.SetOptionsFontSetting(role, "font", value) end,
+        get = PUI_OptionsProfiler:DefCallback("OptionsFontGroup > get #2", function() return Theme.GetOptionsFontSettings(role).font end),
+        set = PUI_OptionsProfiler:DefCallback("OptionsFontGroup > set #2", function(_, value) Theme.SetOptionsFontSetting(role, "font", value) end),
       },
       size = {
         type = "range", name = "Base size", order = 3, min = 8, max = 32, step = 1,
         desc = "The overall text size adjustment and any enabled global font size adjustment also apply.",
         arg = { puiRefreshOnRelease = true },
-        get = function() return Theme.GetOptionsFontSettings(role).size end,
-        set = function(_, value) Theme.SetOptionsFontSetting(role, "size", value) end,
+        get = PUI_OptionsProfiler:DefCallback("OptionsFontGroup > get #3", function() return Theme.GetOptionsFontSettings(role).size end),
+        set = PUI_OptionsProfiler:DefCallback("OptionsFontGroup > set #3", function(_, value) Theme.SetOptionsFontSetting(role, "size", value) end),
       },
       outline = {
         type = "select", name = "Outline", order = 4,
         values = { [""] = "None", OUTLINE = "Outline", THICKOUTLINE = "Thick outline" },
-        get = function() return Theme.GetOptionsFontSettings(role).outline end,
-        set = function(_, value) Theme.SetOptionsFontSetting(role, "outline", value) end,
+        get = PUI_OptionsProfiler:DefCallback("OptionsFontGroup > get #4", function() return Theme.GetOptionsFontSettings(role).outline end),
+        set = PUI_OptionsProfiler:DefCallback("OptionsFontGroup > set #4", function(_, value) Theme.SetOptionsFontSetting(role, "outline", value) end),
       },
       fontSlug = {
         type = "toggle", name = "SLUG rendering", order = 5,
         desc = "Use SLUG rendering for this text category. The all-options toggle takes precedence while enabled.",
-        disabled = function() return Addon:GetOptionsDB().optionsFontSlug == true end,
+        disabled = PUI_OptionsProfiler:DefCallback("OptionsFontGroup > disabled", function() return Addon:GetOptionsDB().optionsFontSlug == true end),
         arg = { puiDisabledReason = "SLUG is enabled for all options text." },
-        get = function() return Addon:GetOptionsDB().optionsFontSlug == true or Theme.GetOptionsFontSettings(role).fontSlug == true end,
-        set = function(_, value) Theme.SetOptionsFontSetting(role, "fontSlug", value == true) end,
+        get = PUI_OptionsProfiler:DefCallback("OptionsFontGroup > get #5", function() return Addon:GetOptionsDB().optionsFontSlug == true or Theme.GetOptionsFontSettings(role).fontSlug == true end),
+        set = PUI_OptionsProfiler:DefCallback("OptionsFontGroup > set #5", function(_, value) Theme.SetOptionsFontSetting(role, "fontSlug", value == true) end),
       },
       shadow = {
         type = "toggle", name = "Shadow", order = 6,
-        get = function() return Theme.GetOptionsFontSettings(role).shadow end,
-        set = function(_, value) Theme.SetOptionsFontSetting(role, "shadow", value) end,
+        get = PUI_OptionsProfiler:DefCallback("OptionsFontGroup > get #6", function() return Theme.GetOptionsFontSettings(role).shadow end),
+        set = PUI_OptionsProfiler:DefCallback("OptionsFontGroup > set #6", function(_, value) Theme.SetOptionsFontSetting(role, "shadow", value) end),
       },
     },
   }
 end
+OptionsFontGroup = PUI_OptionsProfiler:Def("OptionsFontGroup", OptionsFontGroup)
+
 
 function Theme.GetOptionsUIScale()
   local range = Theme.OptionsUIScaleRange
@@ -2742,6 +3041,8 @@ function Theme.GetOptionsUIScale()
 
   return value
 end
+Theme.GetOptionsUIScale = PUI_OptionsProfiler:Def("Theme.GetOptionsUIScale", Theme.GetOptionsUIScale)
+
 
 function Theme.SetOptionsUIScale(value)
   local range = Theme.OptionsUIScaleRange
@@ -2761,6 +3062,8 @@ function Theme.SetOptionsUIScale(value)
   end
   Addon:NotifyOptionsTreeChanged("UITheme", ns._PUIActiveOptionsPath)
 end
+Theme.SetOptionsUIScale = PUI_OptionsProfiler:Def("Theme.SetOptionsUIScale", Theme.SetOptionsUIScale)
+
 
 Theme.ColorPresets = {
   default = {
@@ -2851,10 +3154,14 @@ function Theme.GetColorPresetLabel(key)
   local preset = Theme.ColorPresets[key]
   return preset and preset.label or nil
 end
+Theme.GetColorPresetLabel = PUI_OptionsProfiler:Def("Theme.GetColorPresetLabel", Theme.GetColorPresetLabel)
+
 
 function Theme.GetColorPresetDefinition(key)
   return Theme.ColorPresets[key]
 end
+Theme.GetColorPresetDefinition = PUI_OptionsProfiler:Def("Theme.GetColorPresetDefinition", Theme.GetColorPresetDefinition)
+
 
 local COLOR_PRESET_PREVIEW_KEYS = {
   controlBorderColor = "controlBorder",
@@ -2881,6 +3188,8 @@ function Theme.GetColorPresetPreviewColors(key)
 
   return colors
 end
+Theme.GetColorPresetPreviewColors = PUI_OptionsProfiler:Def("Theme.GetColorPresetPreviewColors", Theme.GetColorPresetPreviewColors)
+
 
 function Theme.ApplyColorPreset(key)
   local preset = Theme.ColorPresets[key]
@@ -2903,6 +3212,8 @@ function Theme.ApplyColorPreset(key)
   _PUI_ThemeRegistry_NotifyChange(true, false)
   return true
 end
+Theme.ApplyColorPreset = PUI_OptionsProfiler:Def("Theme.ApplyColorPreset", Theme.ApplyColorPreset)
+
 
 local function _PUI_ThemeRegistry_GetColorFallback(key)
   local colors = Theme.GetColors()
@@ -2924,6 +3235,8 @@ local function _PUI_ThemeRegistry_GetColorFallback(key)
 
   return color[1] or 1, color[2] or 1, color[3] or 1, color[4] or 1
 end
+_PUI_ThemeRegistry_GetColorFallback = PUI_OptionsProfiler:Def("_PUI_ThemeRegistry_GetColorFallback", _PUI_ThemeRegistry_GetColorFallback)
+
 
 local function _PUI_ThemeRegistry_GetColorOverride(key)
   local color = Addon:GetOptionsDB().skin[key]
@@ -2933,6 +3246,8 @@ local function _PUI_ThemeRegistry_GetColorOverride(key)
 
   return _PUI_ThemeRegistry_GetColorFallback(key)
 end
+_PUI_ThemeRegistry_GetColorOverride = PUI_OptionsProfiler:Def("_PUI_ThemeRegistry_GetColorOverride", _PUI_ThemeRegistry_GetColorOverride)
+
 
 local function _PUI_ThemeRegistry_SetColorOverride(key, r, g, b, a)
   Addon:GetOptionsDB().skin[key] = { r, g, b, a }
@@ -2940,6 +3255,8 @@ local function _PUI_ThemeRegistry_SetColorOverride(key, r, g, b, a)
   _PUI_ThemeColorsCacheSignature = nil
   _PUI_ThemeRegistry_NotifyChange(true, false)
 end
+_PUI_ThemeRegistry_SetColorOverride = PUI_OptionsProfiler:Def("_PUI_ThemeRegistry_SetColorOverride", _PUI_ThemeRegistry_SetColorOverride)
+
 
 local _PUI_ThemeRegistry_ResolutionScalePresets = {
   { key = "1080p", value = Addon.FrameScale:GetResolutionScalePreset("1080p"), label = "1080p" },
@@ -2950,6 +3267,8 @@ local _PUI_ThemeRegistry_ResolutionScalePresets = {
 local function _PUI_ThemeRegistry_GetUIScaleValue()
   return tonumber(Addon.FrameScale:GetUIScale()) or 0.533333333333333
 end
+_PUI_ThemeRegistry_GetUIScaleValue = PUI_OptionsProfiler:Def("_PUI_ThemeRegistry_GetUIScaleValue", _PUI_ThemeRegistry_GetUIScaleValue)
+
 
 local function _PUI_ThemeRegistry_FindResolutionScalePresetKey(targetScale)
   targetScale = tonumber(targetScale)
@@ -2971,6 +3290,8 @@ local function _PUI_ThemeRegistry_FindResolutionScalePresetKey(targetScale)
 
   return nil, nil
 end
+_PUI_ThemeRegistry_FindResolutionScalePresetKey = PUI_OptionsProfiler:Def("_PUI_ThemeRegistry_FindResolutionScalePresetKey", _PUI_ThemeRegistry_FindResolutionScalePresetKey)
+
 
 local function _PUI_ThemeRegistry_GetUIScaleStatusText()
   local current = _PUI_ThemeRegistry_GetUIScaleValue()
@@ -2983,6 +3304,8 @@ local function _PUI_ThemeRegistry_GetUIScaleStatusText()
 
   return string.format("UI scale: %.3f (custom)\nRecommended: %.3f", current, recommended)
 end
+_PUI_ThemeRegistry_GetUIScaleStatusText = PUI_OptionsProfiler:Def("_PUI_ThemeRegistry_GetUIScaleStatusText", _PUI_ThemeRegistry_GetUIScaleStatusText)
+
 
 local ThemeColorsProvider
 local ThemeFontsProvider
@@ -2999,14 +3322,16 @@ local function OptionsWindowScaleOption()
     step = Theme.OptionsUIScaleRange.step,
     isPercent = true,
     arg = { puiRefreshOnRelease = true },
-    get = function()
+    get = PUI_OptionsProfiler:DefCallback("OptionsWindowScaleOption > get", function()
       return Theme.GetOptionsUIScale()
-    end,
-    set = function(_, value)
+    end),
+    set = PUI_OptionsProfiler:DefCallback("OptionsWindowScaleOption > set", function(_, value)
       Theme.SetOptionsUIScale(value)
-    end,
+    end),
   }
 end
+OptionsWindowScaleOption = PUI_OptionsProfiler:Def("OptionsWindowScaleOption", OptionsWindowScaleOption)
+
 
 local function _PUI_ThemeRegistry_CopyArgsWithoutHeader(args)
   local out = {}
@@ -3019,6 +3344,8 @@ local function _PUI_ThemeRegistry_CopyArgsWithoutHeader(args)
 
   return out
 end
+_PUI_ThemeRegistry_CopyArgsWithoutHeader = PUI_OptionsProfiler:Def("_PUI_ThemeRegistry_CopyArgsWithoutHeader", _PUI_ThemeRegistry_CopyArgsWithoutHeader)
+
 
 local selectedAccessibilityPreset = "default"
 
@@ -3030,11 +3357,15 @@ local function PresetLuminance(color)
 
     return ((value + 0.055) / 1.055) ^ 2.4
   end
+  LinearChannel = PUI_OptionsProfiler:DefCallback("PresetLuminance > LinearChannel", LinearChannel)
+
 
   return 0.2126 * LinearChannel(color[1])
     + 0.7152 * LinearChannel(color[2])
     + 0.0722 * LinearChannel(color[3])
 end
+PresetLuminance = PUI_OptionsProfiler:Def("PresetLuminance", PresetLuminance)
+
 
 local function PresetTextContrast(preview)
   local text = PresetLuminance(preview.text)
@@ -3043,6 +3374,8 @@ local function PresetTextContrast(preview)
   return (math.max(text, background) + 0.05)
     / (math.min(text, background) + 0.05)
 end
+PresetTextContrast = PUI_OptionsProfiler:Def("PresetTextContrast", PresetTextContrast)
+
 
 local function AccessibilityOptionsProvider()
   local provider = {}
@@ -3123,25 +3456,25 @@ local function AccessibilityOptionsProvider()
               type = "execute",
               name = "Apply combat readability",
               order = 2,
-              disabled = function()
+              disabled = PUI_OptionsProfiler:DefCallback("AccessibilityOptionsProvider > provider.GetOptions > disabled", function()
                 return _G.InCombatLockdown()
-              end,
-              func = function()
+              end),
+              func = PUI_OptionsProfiler:DefCallback("AccessibilityOptionsProvider > provider.GetOptions > func", function()
                 Addon:ApplyCombatReadabilityPreset()
                 ns.OptionsLifecycle.RefreshModel({ "Accessibility" })
-              end,
+              end),
             },
             undo = {
               type = "execute",
               name = "Undo combat readability",
               order = 3,
-              disabled = function()
+              disabled = PUI_OptionsProfiler:DefCallback("AccessibilityOptionsProvider > provider.GetOptions > disabled #2", function()
                 return _G.InCombatLockdown()
                   or not Addon:CanUndoCombatReadabilityPreset()
-              end,
-              func = function()
+              end),
+              func = PUI_OptionsProfiler:DefCallback("AccessibilityOptionsProvider > provider.GetOptions > func #2", function()
                 Addon:UndoCombatReadabilityPreset()
-              end,
+              end),
             },
           },
         },
@@ -3152,23 +3485,23 @@ local function AccessibilityOptionsProvider()
               type = "toggle", name = "Keyboard navigation", order = 1,
               desc = "Use Tab, arrow keys, and Enter to navigate options and dialogs. Mouse clicks clear navigation focus. Keyboard Edit Mode keeps its own preference.",
               get = ns.KeyboardNavigation.IsEnabled,
-              set = function(_, enabled) ns.KeyboardNavigation.SetEnabled(enabled) end,
+              set = PUI_OptionsProfiler:DefCallback("AccessibilityOptionsProvider > provider.GetOptions > set", function(_, enabled) ns.KeyboardNavigation.SetEnabled(enabled) end),
             },
             keyboardMovement = {
               type = "toggle", name = "Keyboard movement in Edit Mode", order = 2,
               desc = "Prefer keyboard movement when opening Edit Mode with /pe. Use /pek to open keyboard Edit Mode for one session.",
-              get = function() return ns.FrameUtil._GetEditModeDB().keyboardMoveEnabled == true end,
-              set = function(_, enabled) ns.FrameUtil.SetKeyboardMovementEnabled(enabled) end,
+              get = PUI_OptionsProfiler:DefCallback("AccessibilityOptionsProvider > provider.GetOptions > get", function() return ns.FrameUtil._GetEditModeDB().keyboardMoveEnabled == true end),
+              set = PUI_OptionsProfiler:DefCallback("AccessibilityOptionsProvider > provider.GetOptions > set #2", function(_, enabled) ns.FrameUtil.SetKeyboardMovementEnabled(enabled) end),
             },
             help = {
               type = "execute", name = "Keyboard help", order = 3,
-              func = function() ns.KeyboardNavigation.ToggleHelp(Addon._OptionsWindow) end,
+              func = PUI_OptionsProfiler:DefCallback("AccessibilityOptionsProvider > provider.GetOptions > func #3", function() ns.KeyboardNavigation.ToggleHelp(Addon._OptionsWindow) end),
             },
             editModeGuide = {
               type = "execute", name = "Edit Mode guide", order = 4,
               desc = "Learn mouse or keyboard controls for /pui and /pe.",
               disabled = InCombatLockdown,
-              func = function() Addon:ShowEditModeGuide() end,
+              func = PUI_OptionsProfiler:DefCallback("AccessibilityOptionsProvider > provider.GetOptions > func #4", function() Addon:ShowEditModeGuide() end),
             },
           },
         },
@@ -3190,29 +3523,29 @@ local function AccessibilityOptionsProvider()
           name = "Color preset",
           order = 2,
           values = presetValues,
-          get = function()
+          get = PUI_OptionsProfiler:DefCallback("AccessibilityOptionsProvider > provider.GetOptions > get #2", function()
             return selectedAccessibilityPreset
-          end,
-          set = function(_, key)
+          end),
+          set = PUI_OptionsProfiler:DefCallback("AccessibilityOptionsProvider > provider.GetOptions > set #3", function(_, key)
             selectedAccessibilityPreset = key
             ns.OptionsLifecycle.RefreshModel({ "Accessibility" })
-          end,
+          end),
         },
         sample = {
           type = "description",
           dialogControl = "PUI_PalettePreview",
-          name = function() return selectedAccessibilityPreset end,
+          name = PUI_OptionsProfiler:DefCallback("AccessibilityOptionsProvider > provider.GetOptions > name", function() return selectedAccessibilityPreset end),
           order = 3,
           width = "full",
         },
         contrast = {
           type = "description",
-          name = function()
+          name = PUI_OptionsProfiler:DefCallback("AccessibilityOptionsProvider > provider.GetOptions > name #2", function()
             local definition = Theme.GetColorPresetDefinition(selectedAccessibilityPreset)
             local preview = Theme.GetColorPresetPreviewColors(selectedAccessibilityPreset)
             return string.format("%s. Text/background contrast: %.2f:1",
               definition.description, PresetTextContrast(preview))
-          end,
+          end),
           order = 4,
           width = "full",
         },
@@ -3220,9 +3553,9 @@ local function AccessibilityOptionsProvider()
           type = "execute",
           name = "Apply selected preset",
           order = 7,
-          func = function()
+          func = PUI_OptionsProfiler:DefCallback("AccessibilityOptionsProvider > provider.GetOptions > func #5", function()
             Theme.ApplyColorPreset(selectedAccessibilityPreset)
-          end,
+          end),
         },
         guidance = {
           type = "description",
@@ -3237,26 +3570,30 @@ local function AccessibilityOptionsProvider()
     controls.largerPointerTargets = {
       type = "toggle", name = "Larger pointer targets", order = 5,
       desc = "Make small options controls easier to click. Expands controls and spacing while keeping small icons compact.",
-      get = function() return Addon:GetOptionsDB().largerPointerTargets == true end,
-      set = function(_, enabled)
+      get = PUI_OptionsProfiler:DefCallback("AccessibilityOptionsProvider > provider.GetOptions > get #3", function() return Addon:GetOptionsDB().largerPointerTargets == true end),
+      set = PUI_OptionsProfiler:DefCallback("AccessibilityOptionsProvider > provider.GetOptions > set #4", function(_, enabled)
         Addon:GetOptionsDB().largerPointerTargets = enabled == true
         Addon:RefreshOptionsTheme()
         ns.OptionsLifecycle.RefreshModel()
-      end,
+      end),
     }
 
     controls.animateOptions = {
       type = "toggle", name = "Animate options", order = 6,
       desc = "Fade in pages and categories, and soften navigation highlights. Turn off for instant transitions.",
       get = ns.OptionsMotion.IsEnabled,
-      set = function(_, enabled) ns.OptionsMotion.SetEnabled(enabled) end,
+      set = PUI_OptionsProfiler:DefCallback("AccessibilityOptionsProvider > provider.GetOptions > set #5", function(_, enabled) ns.OptionsMotion.SetEnabled(enabled) end),
     }
 
     return options
   end
+  provider.GetOptions = PUI_OptionsProfiler:DefCallback("AccessibilityOptionsProvider > provider.GetOptions", provider.GetOptions)
+
 
   return provider
 end
+AccessibilityOptionsProvider = PUI_OptionsProfiler:Def("AccessibilityOptionsProvider", AccessibilityOptionsProvider)
+
 
 local function UIThemeOptionsProvider()
   local provider = {}
@@ -3301,28 +3638,28 @@ local function UIThemeOptionsProvider()
                 [4] = "4 columns",
                 [5] = "5 columns",
               },
-              get = function()
+              get = PUI_OptionsProfiler:DefCallback("UIThemeOptionsProvider > provider.GetOptions > get", function()
                 return Theme.GetOptionsWidgetColumns()
-              end,
-              set = function(_, value)
+              end),
+              set = PUI_OptionsProfiler:DefCallback("UIThemeOptionsProvider > provider.GetOptions > set", function(_, value)
                 Theme.SetOptionsWidgetColumns(value)
 
                 local activePath = ns._PUIActiveOptionsPath
                 local activeRoot = type(activePath) == "table" and activePath[1] or nil
                 Addon:NotifyOptionsTreeChanged(activeRoot, activePath)
-              end,
+              end),
             },
             widgetRowBackgrounds = {
               type = "toggle",
               name = "Show widget backgrounds",
               desc = "Show alternating shaded boxes behind option controls.",
               order = 3,
-              get = function()
+              get = PUI_OptionsProfiler:DefCallback("UIThemeOptionsProvider > provider.GetOptions > get #2", function()
                 return Theme.GetWidgetRowBackgroundsEnabled()
-              end,
-              set = function(_, value)
+              end),
+              set = PUI_OptionsProfiler:DefCallback("UIThemeOptionsProvider > provider.GetOptions > set #2", function(_, value)
                 Theme.SetWidgetRowBackgroundsEnabled(value)
-              end,
+              end),
             },
           },
         },
@@ -3356,9 +3693,9 @@ local function UIThemeOptionsProvider()
       [4] = "4 columns",
       [5] = "5 columns",
     }
-    layoutArgs.optionsWidgetColumns.get = function()
+    layoutArgs.optionsWidgetColumns.get = PUI_OptionsProfiler:DefCallback("UIThemeOptionsProvider > provider.GetOptions > layoutArgs.optionsWidgetColumns.get", function()
       return Theme.GetConfiguredOptionsWidgetColumns()
-    end
+    end)
 
     layoutArgs.widgetRowBackgrounds.name = "Shaded backgrounds"
     layoutArgs.widgetRowBackgrounds.order = 4
@@ -3377,11 +3714,11 @@ local function UIThemeOptionsProvider()
       fontSlug = {
         type = "toggle", name = "SLUG rendering: runtime text", order = 30,
         desc = "Use SLUG for all text styled by PleebUI outside options, including custom fonts. Turning this off preserves individual SLUG settings.",
-        get = function() return Addon:GetMediaDB().runtimeFontSlug == true end,
-        set = function(_, enabled)
+        get = PUI_OptionsProfiler:DefCallback("UIThemeOptionsProvider > provider.GetOptions > get #3", function() return Addon:GetMediaDB().runtimeFontSlug == true end),
+        set = PUI_OptionsProfiler:DefCallback("UIThemeOptionsProvider > provider.GetOptions > set #3", function(_, enabled)
           Addon:GetMediaDB().runtimeFontSlug = enabled == true
           Addon:RefreshIconFonts()
-        end,
+        end),
       },
       fontSizeOffset = fonts.fontSizeOffset,
       applyTo = fonts.fontSizeScopes,
@@ -3415,9 +3752,9 @@ local function UIThemeOptionsProvider()
             type = "execute",
             name = "Run setup wizard",
             order = 2,
-            func = function()
+            func = PUI_OptionsProfiler:DefCallback("UIThemeOptionsProvider > provider.GetOptions > func", function()
               Addon:ShowInstallWizard(true)
-            end,
+            end),
           },
         },
       },
@@ -3432,37 +3769,37 @@ local function UIThemeOptionsProvider()
       args = {
         width = {
           type = "range", name = "Width", order = 1, min = minWidth, max = maxWidth, step = 1,
-          arg = { puiRefreshOnRelease = true, puiStableDrag = true, puiLivePreview = function(value)
+          arg = { puiRefreshOnRelease = true, puiStableDrag = true, puiLivePreview = PUI_OptionsProfiler:DefCallback("UIThemeOptionsProvider > provider.GetOptions > puiLivePreview", function(value)
             if value ~= nil then Addon:PreviewOptionsWindowSize(value) end
-          end },
-          get = function() local width = Addon:GetOptionsWindowGeometry(); return width end,
-          set = function(_, value) Addon:SetOptionsWindowGeometry(value) end,
+          end) },
+          get = PUI_OptionsProfiler:DefCallback("UIThemeOptionsProvider > provider.GetOptions > get #4", function() local width = Addon:GetOptionsWindowGeometry(); return width end),
+          set = PUI_OptionsProfiler:DefCallback("UIThemeOptionsProvider > provider.GetOptions > set #4", function(_, value) Addon:SetOptionsWindowGeometry(value) end),
         },
         height = {
           type = "range", name = "Height", order = 2, min = minHeight, max = maxHeight, step = 1,
-          arg = { puiRefreshOnRelease = true, puiStableDrag = true, puiLivePreview = function(value)
+          arg = { puiRefreshOnRelease = true, puiStableDrag = true, puiLivePreview = PUI_OptionsProfiler:DefCallback("UIThemeOptionsProvider > provider.GetOptions > puiLivePreview #2", function(value)
             if value ~= nil then Addon:PreviewOptionsWindowSize(nil, value) end
-          end },
-          get = function() local _, height = Addon:GetOptionsWindowGeometry(); return height end,
-          set = function(_, value) Addon:SetOptionsWindowGeometry(nil, value) end,
+          end) },
+          get = PUI_OptionsProfiler:DefCallback("UIThemeOptionsProvider > provider.GetOptions > get #5", function() local _, height = Addon:GetOptionsWindowGeometry(); return height end),
+          set = PUI_OptionsProfiler:DefCallback("UIThemeOptionsProvider > provider.GetOptions > set #5", function(_, value) Addon:SetOptionsWindowGeometry(nil, value) end),
         },
         x = {
           type = "range", name = "Horizontal position", order = 3, min = -maxX, max = maxX, step = 1,
           desc = "Offset from the screen center. Positive values move right.",
           arg = { puiRefreshOnRelease = true },
-          get = function() local _, _, x = Addon:GetOptionsWindowGeometry(); return x end,
-          set = function(_, value) Addon:SetOptionsWindowGeometry(nil, nil, value) end,
+          get = PUI_OptionsProfiler:DefCallback("UIThemeOptionsProvider > provider.GetOptions > get #6", function() local _, _, x = Addon:GetOptionsWindowGeometry(); return x end),
+          set = PUI_OptionsProfiler:DefCallback("UIThemeOptionsProvider > provider.GetOptions > set #6", function(_, value) Addon:SetOptionsWindowGeometry(nil, nil, value) end),
         },
         y = {
           type = "range", name = "Vertical position", order = 4, min = -maxY, max = maxY, step = 1,
           desc = "Offset from the screen center. Positive values move up.",
           arg = { puiRefreshOnRelease = true },
-          get = function() local _, _, _, y = Addon:GetOptionsWindowGeometry(); return y end,
-          set = function(_, value) Addon:SetOptionsWindowGeometry(nil, nil, nil, value) end,
+          get = PUI_OptionsProfiler:DefCallback("UIThemeOptionsProvider > provider.GetOptions > get #7", function() local _, _, _, y = Addon:GetOptionsWindowGeometry(); return y end),
+          set = PUI_OptionsProfiler:DefCallback("UIThemeOptionsProvider > provider.GetOptions > set #7", function(_, value) Addon:SetOptionsWindowGeometry(nil, nil, nil, value) end),
         },
         center = {
           type = "execute", name = "Center window", order = 5,
-          func = function() Addon:SetOptionsWindowGeometry(nil, nil, 0, 0) end,
+          func = PUI_OptionsProfiler:DefCallback("UIThemeOptionsProvider > provider.GetOptions > func #2", function() Addon:SetOptionsWindowGeometry(nil, nil, 0, 0) end),
         },
       },
     }
@@ -3482,11 +3819,11 @@ local function UIThemeOptionsProvider()
             fontSlug = {
               type = "toggle", name = "SLUG rendering: all options text", order = 20,
               desc = "Use SLUG for every options text category. Turning this off restores each category's rendering setting.",
-              get = function() return Addon:GetOptionsDB().optionsFontSlug == true end,
-              set = function(_, enabled)
+              get = PUI_OptionsProfiler:DefCallback("UIThemeOptionsProvider > provider.GetOptions > get #8", function() return Addon:GetOptionsDB().optionsFontSlug == true end),
+              set = PUI_OptionsProfiler:DefCallback("UIThemeOptionsProvider > provider.GetOptions > set #8", function(_, enabled)
                 Addon:GetOptionsDB().optionsFontSlug = enabled == true
                 RefreshOptionsTypography()
-              end,
+              end),
             },
           },
         },
@@ -3498,19 +3835,23 @@ local function UIThemeOptionsProvider()
     end
     options.args.text.args.resetOptionsFonts = {
       type = "execute", name = "Reset all options text", order = 50,
-      func = function()
+      func = PUI_OptionsProfiler:DefCallback("UIThemeOptionsProvider > provider.GetOptions > func #3", function()
         local optionsDB = Addon:GetOptionsDB()
         optionsDB.optionsFonts = nil
         optionsDB.optionsFontSlug = false
         optionsDB.puiOptionsFontSize = 14
         RefreshOptionsTypography()
-      end,
+      end),
     }
     return options
   end
+  provider.GetOptions = PUI_OptionsProfiler:DefCallback("UIThemeOptionsProvider > provider.GetOptions", provider.GetOptions)
+
 
   return provider
 end
+UIThemeOptionsProvider = PUI_OptionsProfiler:Def("UIThemeOptionsProvider", UIThemeOptionsProvider)
+
 
 local PUI_THEME_COLOR_OPTIONS = {
   {
@@ -3553,16 +3894,18 @@ local function PUI_ThemeColorOption(key, name, description, order)
     descStyle = "tooltip",
     order = order,
     hasAlpha = true,
-    get = function()
+    get = PUI_OptionsProfiler:DefCallback("PUI_ThemeColorOption > get", function()
       return _PUI_ThemeRegistry_GetColorOverride(key)
-    end,
-    set = function(_, r, g, b, a)
+    end),
+    set = PUI_OptionsProfiler:DefCallback("PUI_ThemeColorOption > set", function(_, r, g, b, a)
       _PUI_ThemeRegistry_SetColorOverride(key, r, g, b, a)
-    end,
+    end),
   }
 end
+PUI_ThemeColorOption = PUI_OptionsProfiler:Def("PUI_ThemeColorOption", PUI_ThemeColorOption)
 
-ThemeColorsProvider = function()
+
+ThemeColorsProvider = PUI_OptionsProfiler:Def("ThemeColorsProvider", function()
   local provider = {}
 
   function provider:GetOptions()
@@ -3588,10 +3931,10 @@ ThemeColorsProvider = function()
       type = "execute",
       name = "Reset colors",
       order = #PUI_THEME_COLOR_OPTIONS + 2,
-      confirm = function()
+      confirm = PUI_OptionsProfiler:DefCallback("ThemeColorsProvider > provider.GetOptions > confirm", function()
         return "Reset all color overrides to default skin colors?"
-      end,
-      func = function()
+      end),
+      func = PUI_OptionsProfiler:DefCallback("ThemeColorsProvider > provider.GetOptions > func", function()
         local skinDB = Addon:GetOptionsDB().skin
 
         for i = 1, #PUI_THEME_COLOR_OPTIONS do
@@ -3601,7 +3944,7 @@ ThemeColorsProvider = function()
         _PUI_ThemeColorsCache = nil
         _PUI_ThemeColorsCacheSignature = nil
         _PUI_ThemeRegistry_NotifyChange(true, false)
-      end,
+      end),
     }
 
     return {
@@ -3611,11 +3954,13 @@ ThemeColorsProvider = function()
       args = args,
     }
   end
+  provider.GetOptions = PUI_OptionsProfiler:DefCallback("ThemeColorsProvider > provider.GetOptions", provider.GetOptions)
+
 
   return provider
-end
+end)
 
-ThemeFontsProvider = function()
+ThemeFontsProvider = PUI_OptionsProfiler:Def("ThemeFontsProvider", function()
   local provider = {}
 
   function provider:GetOptions()
@@ -3634,29 +3979,29 @@ ThemeFontsProvider = function()
           dialogControl = "LSM30_Font",
           name = "Global font",
           order = 2,
-          values = function()
+          values = PUI_OptionsProfiler:DefCallback("ThemeFontsProvider > provider.GetOptions > values", function()
             return Theme.BuildGlobalFontList()
-          end,
-          get = function()
+          end),
+          get = PUI_OptionsProfiler:DefCallback("ThemeFontsProvider > provider.GetOptions > get", function()
             return Theme.GetGlobalUIFont()
-          end,
-          set = function(_, value)
+          end),
+          set = PUI_OptionsProfiler:DefCallback("ThemeFontsProvider > provider.GetOptions > set", function(_, value)
             Theme.SetGlobalUIFont(value)
-          end,
+          end),
         },
         iconTextGlobalFlags = {
           type = "select",
           name = "Global outline",
           order = 3,
-          values = function()
+          values = PUI_OptionsProfiler:DefCallback("ThemeFontsProvider > provider.GetOptions > values #2", function()
             return Theme.GetOutlineList()
-          end,
-          get = function()
+          end),
+          get = PUI_OptionsProfiler:DefCallback("ThemeFontsProvider > provider.GetOptions > get #2", function()
             return Theme.GetGlobalUIOutline()
-          end,
-          set = function(_, value)
+          end),
+          set = PUI_OptionsProfiler:DefCallback("ThemeFontsProvider > provider.GetOptions > set #2", function(_, value)
             Theme.SetGlobalUIOutline(value)
-          end,
+          end),
         },
         fontSizeOffset = {
           type = "range",
@@ -3667,12 +4012,12 @@ ThemeFontsProvider = function()
           max = Theme.FontSizeOffsetRange.max,
           step = Theme.FontSizeOffsetRange.step,
           arg = { puiRefreshOnRelease = true },
-          get = function()
+          get = PUI_OptionsProfiler:DefCallback("ThemeFontsProvider > provider.GetOptions > get #3", function()
             return Theme.GetFontSizeOffset()
-          end,
-          set = function(_, value)
+          end),
+          set = PUI_OptionsProfiler:DefCallback("ThemeFontsProvider > provider.GetOptions > set #3", function(_, value)
             Theme.SetFontSizeOffset(value)
-          end,
+          end),
         },
         fontSizeScopes = {
           type = "group",
@@ -3685,84 +4030,84 @@ ThemeFontsProvider = function()
               name = "All PleebUI",
               order = 1,
               width = "full",
-              get = function()
+              get = PUI_OptionsProfiler:DefCallback("ThemeFontsProvider > provider.GetOptions > get #4", function()
                 return Theme.GetAllFontSizeScopes()
-              end,
-              set = function(_, value)
+              end),
+              set = PUI_OptionsProfiler:DefCallback("ThemeFontsProvider > provider.GetOptions > set #4", function(_, value)
                 Theme.SetAllFontSizeScopes(value)
-              end,
+              end),
             },
             general = {
               type = "toggle",
               name = "General UI",
               order = 2,
               width = 0.5,
-              get = function() return Theme.GetFontSizeScope("general") end,
-              set = function(_, value) Theme.SetFontSizeScope("general", value) end,
+              get = PUI_OptionsProfiler:DefCallback("ThemeFontsProvider > provider.GetOptions > get #5", function() return Theme.GetFontSizeScope("general") end),
+              set = PUI_OptionsProfiler:DefCallback("ThemeFontsProvider > provider.GetOptions > set #5", function(_, value) Theme.SetFontSizeScope("general", value) end),
             },
             options = {
               type = "toggle",
               name = "Options",
               order = 3,
               width = 0.5,
-              get = function() return Theme.GetFontSizeScope("options") end,
-              set = function(_, value) Theme.SetFontSizeScope("options", value) end,
+              get = PUI_OptionsProfiler:DefCallback("ThemeFontsProvider > provider.GetOptions > get #6", function() return Theme.GetFontSizeScope("options") end),
+              set = PUI_OptionsProfiler:DefCallback("ThemeFontsProvider > provider.GetOptions > set #6", function(_, value) Theme.SetFontSizeScope("options", value) end),
             },
             unitFrames = {
               type = "toggle",
               name = "Unit Frames",
               order = 4,
               width = 0.5,
-              get = function() return Theme.GetFontSizeScope("unitFrames") end,
-              set = function(_, value) Theme.SetFontSizeScope("unitFrames", value) end,
+              get = PUI_OptionsProfiler:DefCallback("ThemeFontsProvider > provider.GetOptions > get #7", function() return Theme.GetFontSizeScope("unitFrames") end),
+              set = PUI_OptionsProfiler:DefCallback("ThemeFontsProvider > provider.GetOptions > set #7", function(_, value) Theme.SetFontSizeScope("unitFrames", value) end),
             },
             actionBars = {
               type = "toggle",
               name = "Action Bars",
               order = 5,
               width = 0.5,
-              get = function() return Theme.GetFontSizeScope("actionBars") end,
-              set = function(_, value) Theme.SetFontSizeScope("actionBars", value) end,
+              get = PUI_OptionsProfiler:DefCallback("ThemeFontsProvider > provider.GetOptions > get #8", function() return Theme.GetFontSizeScope("actionBars") end),
+              set = PUI_OptionsProfiler:DefCallback("ThemeFontsProvider > provider.GetOptions > set #8", function(_, value) Theme.SetFontSizeScope("actionBars", value) end),
             },
             cooldownManager = {
               type = "toggle",
               name = "Cooldown Manager",
               order = 6,
               width = 0.5,
-              get = function() return Theme.GetFontSizeScope("cooldownManager") end,
-              set = function(_, value) Theme.SetFontSizeScope("cooldownManager", value) end,
+              get = PUI_OptionsProfiler:DefCallback("ThemeFontsProvider > provider.GetOptions > get #9", function() return Theme.GetFontSizeScope("cooldownManager") end),
+              set = PUI_OptionsProfiler:DefCallback("ThemeFontsProvider > provider.GetOptions > set #9", function(_, value) Theme.SetFontSizeScope("cooldownManager", value) end),
             },
             resourceDisplay = {
               type = "toggle",
               name = "Resource Display",
               order = 7,
               width = 0.5,
-              get = function() return Theme.GetFontSizeScope("resourceDisplay") end,
-              set = function(_, value) Theme.SetFontSizeScope("resourceDisplay", value) end,
+              get = PUI_OptionsProfiler:DefCallback("ThemeFontsProvider > provider.GetOptions > get #10", function() return Theme.GetFontSizeScope("resourceDisplay") end),
+              set = PUI_OptionsProfiler:DefCallback("ThemeFontsProvider > provider.GetOptions > set #10", function(_, value) Theme.SetFontSizeScope("resourceDisplay", value) end),
             },
             playerBuffs = {
               type = "toggle",
               name = "Player Buffs",
               order = 8,
               width = 0.5,
-              get = function() return Theme.GetFontSizeScope("playerBuffs") end,
-              set = function(_, value) Theme.SetFontSizeScope("playerBuffs", value) end,
+              get = PUI_OptionsProfiler:DefCallback("ThemeFontsProvider > provider.GetOptions > get #11", function() return Theme.GetFontSizeScope("playerBuffs") end),
+              set = PUI_OptionsProfiler:DefCallback("ThemeFontsProvider > provider.GetOptions > set #11", function(_, value) Theme.SetFontSizeScope("playerBuffs", value) end),
             },
             minimap = {
               type = "toggle",
               name = "Minimap",
               order = 9,
               width = 0.5,
-              get = function() return Theme.GetFontSizeScope("minimap") end,
-              set = function(_, value) Theme.SetFontSizeScope("minimap", value) end,
+              get = PUI_OptionsProfiler:DefCallback("ThemeFontsProvider > provider.GetOptions > get #12", function() return Theme.GetFontSizeScope("minimap") end),
+              set = PUI_OptionsProfiler:DefCallback("ThemeFontsProvider > provider.GetOptions > set #12", function(_, value) Theme.SetFontSizeScope("minimap", value) end),
             },
             qualityOfLife = {
               type = "toggle",
               name = "Quality of Life",
               order = 10,
               width = 0.5,
-              get = function() return Theme.GetFontSizeScope("qualityOfLife") end,
-              set = function(_, value) Theme.SetFontSizeScope("qualityOfLife", value) end,
+              get = PUI_OptionsProfiler:DefCallback("ThemeFontsProvider > provider.GetOptions > get #13", function() return Theme.GetFontSizeScope("qualityOfLife") end),
+              set = PUI_OptionsProfiler:DefCallback("ThemeFontsProvider > provider.GetOptions > set #13", function(_, value) Theme.SetFontSizeScope("qualityOfLife", value) end),
             },
           },
         },
@@ -3773,21 +4118,23 @@ ThemeFontsProvider = function()
           min = Theme.OptionsFontSizeRange.min,
           max = Theme.OptionsFontSizeRange.max,
           step = Theme.OptionsFontSizeRange.step,
-          get = function()
+          get = PUI_OptionsProfiler:DefCallback("ThemeFontsProvider > provider.GetOptions > get #14", function()
             return Theme.GetOptionsFontSize()
-          end,
-          set = function(_, value)
+          end),
+          set = PUI_OptionsProfiler:DefCallback("ThemeFontsProvider > provider.GetOptions > set #14", function(_, value)
             Theme.SetOptionsFontSize(value)
-          end,
+          end),
         },
       },
     }
   end
+  provider.GetOptions = PUI_OptionsProfiler:DefCallback("ThemeFontsProvider > provider.GetOptions", provider.GetOptions)
+
 
   return provider
-end
+end)
 
-UIScaleProvider = function()
+UIScaleProvider = PUI_OptionsProfiler:Def("UIScaleProvider", function()
   local provider = {}
 
   function provider:GetOptions()
@@ -3803,9 +4150,9 @@ UIScaleProvider = function()
         },
         scaleInfo = {
           type = "description",
-          name = function()
+          name = PUI_OptionsProfiler:DefCallback("UIScaleProvider > provider.GetOptions > name", function()
             return _PUI_ThemeRegistry_GetUIScaleStatusText()
-          end,
+          end),
           order = 2,
           fontSize = "medium",
         },
@@ -3822,55 +4169,57 @@ UIScaleProvider = function()
           step = 0.000000000000001,
           isPercent = false,
           arg = { puiRefreshOnRelease = true },
-          get = function()
+          get = PUI_OptionsProfiler:DefCallback("UIScaleProvider > provider.GetOptions > get", function()
             return _PUI_ThemeRegistry_GetUIScaleValue()
-          end,
-          set = function(_, value)
+          end),
+          set = PUI_OptionsProfiler:DefCallback("UIScaleProvider > provider.GetOptions > set", function(_, value)
             Addon.FrameScale:SetUIScale(value, false)
-          end,
+          end),
         },
         Scale1080p = {
           type = "execute",
           name = "1080p",
           order = 4,
-          
-          func = function()
+
+          func = PUI_OptionsProfiler:DefCallback("UIScaleProvider > provider.GetOptions > func", function()
             Addon.FrameScale:SetUIScale(Addon.FrameScale:GetResolutionScalePreset("1080p"), false)
-          end,
+          end),
         },
         Scale1440p = {
           type = "execute",
           name = "1440p",
           order = 5,
-          
-          func = function()
+
+          func = PUI_OptionsProfiler:DefCallback("UIScaleProvider > provider.GetOptions > func #2", function()
             Addon.FrameScale:SetUIScale(Addon.FrameScale:GetResolutionScalePreset("1440p"), false)
-          end,
+          end),
         },
         Scale4K = {
           type = "execute",
           name = "4K",
           order = 6,
-          
-          func = function()
+
+          func = PUI_OptionsProfiler:DefCallback("UIScaleProvider > provider.GetOptions > func #3", function()
             Addon.FrameScale:SetUIScale(Addon.FrameScale:GetResolutionScalePreset("4K"), false)
-          end,
+          end),
         },
         ScaleAuto = {
           type = "execute",
           name = "Automatic",
           order = 7,
-          
-          func = function()
+
+          func = PUI_OptionsProfiler:DefCallback("UIScaleProvider > provider.GetOptions > func #4", function()
             Addon.FrameScale:SetUIScale(Addon.FrameScale:PixelBestSize(), false)
-          end,
+          end),
         },
       },
     }
   end
+  provider.GetOptions = PUI_OptionsProfiler:DefCallback("UIScaleProvider > provider.GetOptions", provider.GetOptions)
+
 
   return provider
-end
+end)
 
 Addon:RegisterOptionsSection("UITheme", UIThemeOptionsProvider, 15, "UI Settings", nil, {
   preview = false,

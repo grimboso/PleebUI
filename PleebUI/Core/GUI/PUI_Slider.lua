@@ -1,4 +1,5 @@
 local _, ns = ...
+local PUI_OptionsProfiler = select(1, ns.Pleebug:DropIn({}))
 
 local Theme = ns.Theme
 local Pixel = ns.Pixel
@@ -23,6 +24,8 @@ local function SetTextureColor(texture, color, alphaMultiplier)
     (color[4] or 1) * (alphaMultiplier or 1)
   )
 end
+SetTextureColor = PUI_OptionsProfiler:Def("SetTextureColor", SetTextureColor)
+
 
 local function CreateControlChrome(parent)
   local background = parent:CreateTexture(nil, "BACKGROUND")
@@ -44,6 +47,8 @@ local function CreateControlChrome(parent)
     border = border,
   }
 end
+CreateControlChrome = PUI_OptionsProfiler:Def("CreateControlChrome", CreateControlChrome)
+
 
 local function LayoutControlChrome(parent, chrome)
   local edge = Theme.ControlBorderSize
@@ -73,6 +78,8 @@ local function LayoutControlChrome(parent, chrome)
   Pixel.Point(border.right, "BOTTOMRIGHT", parent, "BOTTOMRIGHT", 0, edge)
   Pixel.Width(border.right, edge)
 end
+LayoutControlChrome = PUI_OptionsProfiler:Def("LayoutControlChrome", LayoutControlChrome)
+
 
 local function SetControlChromeColors(chrome, backgroundColor, borderColor, alphaMultiplier)
   SetTextureColor(chrome.background, backgroundColor, alphaMultiplier)
@@ -81,12 +88,16 @@ local function SetControlChromeColors(chrome, backgroundColor, borderColor, alph
     SetTextureColor(texture, borderColor, alphaMultiplier)
   end
 end
+SetControlChromeColors = PUI_OptionsProfiler:Def("SetControlChromeColors", SetControlChromeColors)
+
 
 local function FormatValue(self, value)
   local text = ("%.2f"):format(self.ispercent and value * 100 or value)
   text = text:gsub("(%..-)0+$", "%1"):gsub("%.$", "")
   return self.ispercent and text .. "%" or text
 end
+FormatValue = PUI_OptionsProfiler:Def("FormatValue", FormatValue)
+
 
 local function RefreshValidationMessage(self)
   local geom = Theme.GetWidgetRowGeometry(self)
@@ -106,23 +117,31 @@ local function RefreshValidationMessage(self)
     if self.parent then self.parent:DoLayout() end
   end
 end
+RefreshValidationMessage = PUI_OptionsProfiler:Def("RefreshValidationMessage", RefreshValidationMessage)
+
 
 local function UpdateText(self)
   self.inputError = nil
   self.editbox:SetText(FormatValue(self, self.value or 0))
   RefreshValidationMessage(self)
 end
+UpdateText = PUI_OptionsProfiler:Def("UpdateText", UpdateText)
+
 
 local function GetAdjustmentStep(self)
   if self.step and self.step > 0 then return self.step end
   return self.ispercent and 0.01 or 1
 end
+GetAdjustmentStep = PUI_OptionsProfiler:Def("GetAdjustmentStep", GetAdjustmentStep)
+
 
 local function HideSliderTooltip(self)
   local tooltip = self.hintTooltip
   if tooltip and tooltip:GetOwner() == self.frame then tooltip:Hide() end
   self.hintTooltip = nil
 end
+HideSliderTooltip = PUI_OptionsProfiler:Def("HideSliderTooltip", HideSliderTooltip)
+
 
 local function ShowSliderTooltip(self)
   HideSliderTooltip(self)
@@ -142,6 +161,8 @@ local function ShowSliderTooltip(self)
   tooltip:Show()
   self.hintTooltip = tooltip
 end
+ShowSliderTooltip = PUI_OptionsProfiler:Def("ShowSliderTooltip", ShowSliderTooltip)
+
 
 local function RefreshStepButtonVisualState(button)
   local background, border, text = Theme.GetControlStateColors(
@@ -150,6 +171,8 @@ local function RefreshStepButtonVisualState(button)
   SetControlChromeColors(button.chrome, background, border, 1)
   button.text:SetTextColor(text[1], text[2], text[3], text[4])
 end
+RefreshStepButtonVisualState = PUI_OptionsProfiler:Def("RefreshStepButtonVisualState", RefreshStepButtonVisualState)
+
 
 local function RefreshVisualState(self)
   local colors = Theme.GetColors()
@@ -193,6 +216,8 @@ local function RefreshVisualState(self)
     textColor[4]
   )
 end
+RefreshVisualState = PUI_OptionsProfiler:Def("RefreshVisualState", RefreshVisualState)
+
 
 local function GetValueGeometry(frameWidth, geom)
   local availableWidth = math_max(4, frameWidth - geom.controlLeft - geom.controlRight)
@@ -206,6 +231,8 @@ local function GetValueGeometry(frameWidth, geom)
   local valueWidth = math_min(geom.valueWidth, math_max(1, remainingWidth - math_min(36, remainingWidth * 0.4)))
   return valueWidth, gap, buttonWidth
 end
+GetValueGeometry = PUI_OptionsProfiler:Def("GetValueGeometry", GetValueGeometry)
+
 
 local function LayoutWidget(self, width)
   local geom = Theme.GetWidgetRowGeometry(self)
@@ -249,10 +276,14 @@ local function LayoutWidget(self, width)
   LayoutControlChrome(self.editbox, self.editboxChrome)
   RefreshValidationMessage(self)
 end
+LayoutWidget = PUI_OptionsProfiler:Def("LayoutWidget", LayoutWidget)
+
 
 local function SliderModifierChanged(frame)
   frame:EnableMouseWheel(not frame.obj.disabled and frame.__puiHovered == true and IsShiftKeyDown())
 end
+SliderModifierChanged = PUI_OptionsProfiler:Def("SliderModifierChanged", SliderModifierChanged)
+
 
 local function ControlOnEnter(frame)
   frame.__puiHovered = true
@@ -260,6 +291,8 @@ local function ControlOnEnter(frame)
   SliderModifierChanged(frame)
   ShowSliderTooltip(frame.obj)
 end
+ControlOnEnter = PUI_OptionsProfiler:Def("ControlOnEnter", ControlOnEnter)
+
 
 local function ControlOnLeave(frame)
   frame.__puiHovered = nil
@@ -268,10 +301,14 @@ local function ControlOnLeave(frame)
   HideSliderTooltip(frame.obj)
   frame.obj:Fire("OnLeave")
 end
+ControlOnLeave = PUI_OptionsProfiler:Def("ControlOnLeave", ControlOnLeave)
+
 
 local function FrameOnMouseDown()
   AceGUI:ClearFocus()
 end
+FrameOnMouseDown = PUI_OptionsProfiler:Def("FrameOnMouseDown", FrameOnMouseDown)
+
 
 local function ShouldCommitOnRelease(self)
   if self.commitOnRelease == true then
@@ -285,6 +322,8 @@ local function ShouldCommitOnRelease(self)
     and type(optionArg) == "table"
     and optionArg.puiRefreshOnRelease == true
 end
+ShouldCommitOnRelease = PUI_OptionsProfiler:Def("ShouldCommitOnRelease", ShouldCommitOnRelease)
+
 
 local function SliderOnValueChanged(frame, newValue)
   local self = frame.obj
@@ -324,6 +363,8 @@ local function SliderOnValueChanged(frame, newValue)
   UpdateText(self)
   RefreshVisualState(self)
 end
+SliderOnValueChanged = PUI_OptionsProfiler:Def("SliderOnValueChanged", SliderOnValueChanged)
+
 
 local function FireSliderCommit(self)
   if self:GetUserData("appName") == "PleebUI"
@@ -334,6 +375,8 @@ local function FireSliderCommit(self)
 
   self:Fire("OnMouseUp", self.value)
 end
+FireSliderCommit = PUI_OptionsProfiler:Def("FireSliderCommit", FireSliderCommit)
+
 
 local function SliderOnMouseDown(frame, button)
   if button ~= "LeftButton" or frame.obj.disabled then return end
@@ -349,6 +392,8 @@ local function SliderOnMouseDown(frame, button)
   frame:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", left, bottom)
   frame:SetSize(width, height)
 end
+SliderOnMouseDown = PUI_OptionsProfiler:Def("SliderOnMouseDown", SliderOnMouseDown)
+
 
 local function RestoreSliderDragLayout(frame)
   if not frame.__puiDragGeometry then return end
@@ -358,12 +403,16 @@ local function RestoreSliderDragLayout(frame)
   frame:SetValue(frame.obj.value)
   frame.setup = nil
 end
+RestoreSliderDragLayout = PUI_OptionsProfiler:Def("RestoreSliderDragLayout", RestoreSliderDragLayout)
+
 
 local function SliderOnMouseUp(frame, button)
   if button ~= "LeftButton" then return end
   RestoreSliderDragLayout(frame)
   FireSliderCommit(frame.obj)
 end
+SliderOnMouseUp = PUI_OptionsProfiler:Def("SliderOnMouseUp", SliderOnMouseUp)
+
 
 local function AdjustValue(self, direction)
   if self.disabled then return end
@@ -374,21 +423,29 @@ local function AdjustValue(self, direction)
   self.slider:SetValue(value)
   FireSliderCommit(self)
 end
+AdjustValue = PUI_OptionsProfiler:Def("AdjustValue", AdjustValue)
+
 
 local function SliderOnMouseWheel(frame, delta)
   if not IsShiftKeyDown() or frame.__puiHovered ~= true then return end
   AdjustValue(frame.obj, delta > 0 and 1 or -1)
 end
+SliderOnMouseWheel = PUI_OptionsProfiler:Def("SliderOnMouseWheel", SliderOnMouseWheel)
+
 
 local function StepButtonOnClick(button)
   AdjustValue(button.obj, button.direction)
 end
+StepButtonOnClick = PUI_OptionsProfiler:Def("StepButtonOnClick", StepButtonOnClick)
+
 
 local function StepButtonOnEnter(button)
   button.__puiHovered = true
   RefreshStepButtonVisualState(button)
   ShowSliderTooltip(button.obj)
 end
+StepButtonOnEnter = PUI_OptionsProfiler:Def("StepButtonOnEnter", StepButtonOnEnter)
+
 
 local function StepButtonOnLeave(button)
   button.__puiHovered = nil
@@ -397,18 +454,24 @@ local function StepButtonOnLeave(button)
   HideSliderTooltip(button.obj)
   button.obj:Fire("OnLeave")
 end
+StepButtonOnLeave = PUI_OptionsProfiler:Def("StepButtonOnLeave", StepButtonOnLeave)
+
 
 local function StepButtonOnMouseDown(button, mouseButton)
   if mouseButton ~= "LeftButton" then return end
   button.__puiPressed = true
   RefreshStepButtonVisualState(button)
 end
+StepButtonOnMouseDown = PUI_OptionsProfiler:Def("StepButtonOnMouseDown", StepButtonOnMouseDown)
+
 
 local function StepButtonOnMouseUp(button, mouseButton)
   if mouseButton ~= "LeftButton" then return end
   button.__puiPressed = nil
   RefreshStepButtonVisualState(button)
 end
+StepButtonOnMouseUp = PUI_OptionsProfiler:Def("StepButtonOnMouseUp", StepButtonOnMouseUp)
+
 
 local function SliderOnHide(frame)
   local self = frame.obj
@@ -424,11 +487,15 @@ local function SliderOnHide(frame)
   end
   HideSliderTooltip(self)
 end
+SliderOnHide = PUI_OptionsProfiler:Def("SliderOnHide", SliderOnHide)
+
 
 local function EditBoxOnEscapePressed(editbox)
   UpdateText(editbox.obj)
   editbox:ClearFocus()
 end
+EditBoxOnEscapePressed = PUI_OptionsProfiler:Def("EditBoxOnEscapePressed", EditBoxOnEscapePressed)
+
 
 local function EditBoxOnEnterPressed(editbox)
   local self = editbox.obj
@@ -463,12 +530,16 @@ local function EditBoxOnEnterPressed(editbox)
   FireSliderCommit(self)
   editbox:ClearFocus()
 end
+EditBoxOnEnterPressed = PUI_OptionsProfiler:Def("EditBoxOnEnterPressed", EditBoxOnEnterPressed)
+
 
 local function EditBoxOnEnter(editbox)
   editbox.__puiHovered = true
   RefreshVisualState(editbox.obj)
   ShowSliderTooltip(editbox.obj)
 end
+EditBoxOnEnter = PUI_OptionsProfiler:Def("EditBoxOnEnter", EditBoxOnEnter)
+
 
 local function EditBoxOnLeave(editbox)
   editbox.__puiHovered = nil
@@ -476,20 +547,26 @@ local function EditBoxOnLeave(editbox)
   HideSliderTooltip(editbox.obj)
   editbox.obj:Fire("OnLeave")
 end
+EditBoxOnLeave = PUI_OptionsProfiler:Def("EditBoxOnLeave", EditBoxOnLeave)
+
 
 local function EditBoxOnFocusGained(editbox)
   AceGUI:SetFocus(editbox.obj)
   RefreshVisualState(editbox.obj)
 end
+EditBoxOnFocusGained = PUI_OptionsProfiler:Def("EditBoxOnFocusGained", EditBoxOnFocusGained)
+
 
 local function EditBoxOnFocusLost(editbox)
   if not editbox.obj.inputError then UpdateText(editbox.obj) end
   HideSliderTooltip(editbox.obj)
   RefreshVisualState(editbox.obj)
 end
+EditBoxOnFocusLost = PUI_OptionsProfiler:Def("EditBoxOnFocusLost", EditBoxOnFocusLost)
+
 
 local methods = {
-  OnAcquire = function(self)
+  OnAcquire = PUI_OptionsProfiler:Def("OnAcquire", function(self)
     local metrics = Theme.GetControlMetrics()
 
     self:SetWidth(200)
@@ -504,9 +581,9 @@ local methods = {
     self.slider.__puiHovered = nil
     LayoutWidget(self, self.frame:GetWidth())
     RefreshVisualState(self)
-  end,
+  end),
 
-  OnRelease = function(self)
+  OnRelease = PUI_OptionsProfiler:Def("OnRelease", function(self)
     if self.livePreview then
       self.livePreview(nil)
       self.livePreview = nil
@@ -515,21 +592,21 @@ local methods = {
     self.inputError = nil
     self.inputErrorText:Hide()
     self.commitOnRelease = nil
-  end,
+  end),
 
-  ClearFocus = function(self)
+  ClearFocus = PUI_OptionsProfiler:Def("ClearFocus", function(self)
     self.editbox:ClearFocus()
-  end,
+  end),
 
-  OnWidthSet = function(self, width)
+  OnWidthSet = PUI_OptionsProfiler:Def("OnWidthSet", function(self, width)
     LayoutWidget(self, width)
-  end,
+  end),
 
-  SetCommitOnRelease = function(self, enabled)
+  SetCommitOnRelease = PUI_OptionsProfiler:Def("SetCommitOnRelease", function(self, enabled)
     self.commitOnRelease = enabled == true
-  end,
+  end),
 
-  SetDisabled = function(self, disabled)
+  SetDisabled = PUI_OptionsProfiler:Def("SetDisabled", function(self, disabled)
     disabled = disabled == true
     self.disabled = disabled
     self.slider:EnableMouse(not disabled)
@@ -543,9 +620,9 @@ local methods = {
 
     RefreshValidationMessage(self)
     RefreshVisualState(self)
-  end,
+  end),
 
-  SetValue = function(self, value)
+  SetValue = PUI_OptionsProfiler:Def("SetValue", function(self, value)
     value = tonumber(value) or 0
     self.slider.setup = true
     self.slider:SetValue(value)
@@ -553,17 +630,17 @@ local methods = {
     UpdateText(self)
     self.slider.setup = nil
     RefreshVisualState(self)
-  end,
+  end),
 
-  GetValue = function(self)
+  GetValue = PUI_OptionsProfiler:Def("GetValue", function(self)
     return self.value
-  end,
+  end),
 
-  SetLabel = function(self, text)
+  SetLabel = PUI_OptionsProfiler:Def("SetLabel", function(self, text)
     self.label:SetText(text)
-  end,
+  end),
 
-  SetSliderValues = function(self, minValue, maxValue, step)
+  SetSliderValues = PUI_OptionsProfiler:Def("SetSliderValues", function(self, minValue, maxValue, step)
     local slider = self.slider
 
     minValue = tonumber(minValue) or 0
@@ -584,21 +661,21 @@ local methods = {
 
     slider.setup = nil
     RefreshVisualState(self)
-  end,
+  end),
 
-  SetIsPercent = function(self, isPercent)
+  SetIsPercent = PUI_OptionsProfiler:Def("SetIsPercent", function(self, isPercent)
     self.ispercent = isPercent == true
     UpdateText(self)
-  end,
+  end),
 
-  RefreshTheme = function(self)
+  RefreshTheme = PUI_OptionsProfiler:Def("RefreshTheme", function(self)
     Theme.ApplyFont(self.label, "body")
     Theme.ApplyFont(self.minusButton.text, "body")
     Theme.ApplyFont(self.plusButton.text, "body")
     Theme.ApplyFont(self.editbox, "body")
     LayoutWidget(self, self.frame:GetWidth())
     RefreshVisualState(self)
-  end,
+  end),
 }
 
 local function Constructor()
@@ -700,5 +777,7 @@ local function Constructor()
 
   return widget
 end
+Constructor = PUI_OptionsProfiler:Def("Constructor", Constructor)
+
 
 AceGUI:RegisterWidgetType(TYPE, Constructor, VERSION)

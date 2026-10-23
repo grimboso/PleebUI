@@ -1,4 +1,5 @@
 local _, ns = ...
+local PUI_OptionsProfiler = select(1, ns.Pleebug:DropIn({}))
 
 ns.PreviewBox = {}
 local PreviewBox = ns.PreviewBox
@@ -29,6 +30,8 @@ local function PUI_PreviewBox_ApplyBackdrop(frame, bgColor, borderColor, edge)
     border = borderColor,
   }, edge)
 end
+PUI_PreviewBox_ApplyBackdrop = PUI_OptionsProfiler:Def("PUI_PreviewBox_ApplyBackdrop", PUI_PreviewBox_ApplyBackdrop)
+
 
 local function PUI_PreviewBox_ResolveInteractionValue(value, button)
   if type(value) == "function" then
@@ -37,6 +40,8 @@ local function PUI_PreviewBox_ResolveInteractionValue(value, button)
 
   return value
 end
+PUI_PreviewBox_ResolveInteractionValue = PUI_OptionsProfiler:Def("PUI_PreviewBox_ResolveInteractionValue", PUI_PreviewBox_ResolveInteractionValue)
+
 
 local function PUI_PreviewBox_SetInteractionHighlight(button, shown)
   button.__puiPreviewInteractionFill:SetShown(shown)
@@ -45,6 +50,8 @@ local function PUI_PreviewBox_SetInteractionHighlight(button, shown)
     button.__puiPreviewInteractionEdges[index]:SetShown(shown)
   end
 end
+PUI_PreviewBox_SetInteractionHighlight = PUI_OptionsProfiler:Def("PUI_PreviewBox_SetInteractionHighlight", PUI_PreviewBox_SetInteractionHighlight)
+
 
 local function PUI_PreviewBox_ShowInteractionTooltip(button)
   local options = button.__puiPreviewInteractionOptions or {}
@@ -67,12 +74,16 @@ local function PUI_PreviewBox_ShowInteractionTooltip(button)
   end
   OptionsTooltip:Show()
 end
+PUI_PreviewBox_ShowInteractionTooltip = PUI_OptionsProfiler:Def("PUI_PreviewBox_ShowInteractionTooltip", PUI_PreviewBox_ShowInteractionTooltip)
+
 
 local function PUI_PreviewBox_HideInteractionTooltip(button)
   if OptionsTooltip:IsOwned(button) then
     OptionsTooltip:Hide()
   end
 end
+PUI_PreviewBox_HideInteractionTooltip = PUI_OptionsProfiler:Def("PUI_PreviewBox_HideInteractionTooltip", PUI_PreviewBox_HideInteractionTooltip)
+
 
 local function PUI_PreviewBox_ActivateInteraction(button, mouseButton)
   local interaction = button.__puiPreviewInteractionOptions
@@ -80,17 +91,19 @@ local function PUI_PreviewBox_ActivateInteraction(button, mouseButton)
     interaction.onClick(button, mouseButton or "LeftButton")
   end
 end
+PUI_PreviewBox_ActivateInteraction = PUI_OptionsProfiler:Def("PUI_PreviewBox_ActivateInteraction", PUI_PreviewBox_ActivateInteraction)
+
 
 local INTERACTION_FOCUS_ACTIONS = {
   activate = PUI_PreviewBox_ActivateInteraction,
-  focus = function(button)
+  focus = PUI_OptionsProfiler:Def("focus", function(button)
     button.__puiPreviewInteractionFocused = true
     PUI_PreviewBox_ShowInteractionTooltip(button)
-  end,
-  blur = function(button)
+  end),
+  blur = PUI_OptionsProfiler:Def("blur", function(button)
     button.__puiPreviewInteractionFocused = nil
     PUI_PreviewBox_HideInteractionTooltip(button)
-  end,
+  end),
 }
 
 function PreviewBox.CreateInteraction(parent, anchor, options)
@@ -165,8 +178,10 @@ function PreviewBox.CreateInteraction(parent, anchor, options)
       ns.KeyboardNavigation.UnregisterFrame(self)
     end
   end
+  button.SetPreviewInteractionOptions = PUI_OptionsProfiler:DefCallback("PreviewBox.CreateInteraction > button.SetPreviewInteractionOptions", button.SetPreviewInteractionOptions)
 
-  button:SetScript("OnEnter", function(self)
+
+  button:SetScript("OnEnter", PUI_OptionsProfiler:DefCallback("PreviewBox.CreateInteraction > button.SetScript OnEnter", function(self)
     local interaction = self.__puiPreviewInteractionOptions or {}
 
     self.__puiPreviewInteractionHovered = true
@@ -179,9 +194,9 @@ function PreviewBox.CreateInteraction(parent, anchor, options)
     end
 
     PUI_PreviewBox_ShowInteractionTooltip(self)
-  end)
+  end))
 
-  button:SetScript("OnLeave", function(self)
+  button:SetScript("OnLeave", PUI_OptionsProfiler:DefCallback("PreviewBox.CreateInteraction > button.SetScript OnLeave", function(self)
     local interaction = self.__puiPreviewInteractionOptions or {}
 
     self.__puiPreviewInteractionHovered = nil
@@ -194,9 +209,9 @@ function PreviewBox.CreateInteraction(parent, anchor, options)
     end
 
     if not self.__puiPreviewInteractionFocused then PUI_PreviewBox_HideInteractionTooltip(self) end
-  end)
+  end))
 
-  button:SetScript("OnMouseDown", function(self, mouseButton)
+  button:SetScript("OnMouseDown", PUI_OptionsProfiler:DefCallback("PreviewBox.CreateInteraction > button.SetScript OnMouseDown", function(self, mouseButton)
     if mouseButton ~= "LeftButton" then
       return
     end
@@ -206,9 +221,9 @@ function PreviewBox.CreateInteraction(parent, anchor, options)
     self.__puiPreviewInteractionMouseX = cursorX
     self.__puiPreviewInteractionMouseY = cursorY
     self.__puiPreviewInteractionDragged = nil
-  end)
+  end))
 
-  button:SetScript("OnMouseUp", function(self, mouseButton)
+  button:SetScript("OnMouseUp", PUI_OptionsProfiler:DefCallback("PreviewBox.CreateInteraction > button.SetScript OnMouseUp", function(self, mouseButton)
     if mouseButton ~= "LeftButton" then
       return
     end
@@ -231,9 +246,9 @@ function PreviewBox.CreateInteraction(parent, anchor, options)
     if deltaX > 4 or deltaY > 4 then
       self.__puiPreviewInteractionDragged = true
     end
-  end)
+  end))
 
-  button:SetScript("OnDragStart", function(self)
+  button:SetScript("OnDragStart", PUI_OptionsProfiler:DefCallback("PreviewBox.CreateInteraction > button.SetScript OnDragStart", function(self)
     local interaction = self.__puiPreviewInteractionOptions or {}
 
     self.__puiPreviewInteractionDragged = true
@@ -241,37 +256,39 @@ function PreviewBox.CreateInteraction(parent, anchor, options)
     if type(interaction.onDragStart) == "function" then
       interaction.onDragStart(self)
     end
-  end)
+  end))
 
-  button:SetScript("OnDragStop", function(self)
+  button:SetScript("OnDragStop", PUI_OptionsProfiler:DefCallback("PreviewBox.CreateInteraction > button.SetScript OnDragStop", function(self)
     local interaction = self.__puiPreviewInteractionOptions or {}
 
     if type(interaction.onDragStop) == "function" then
       interaction.onDragStop(self)
     end
-  end)
+  end))
 
-  button:SetScript("OnClick", function(self, mouseButton)
+  button:SetScript("OnClick", PUI_OptionsProfiler:DefCallback("PreviewBox.CreateInteraction > button.SetScript OnClick", function(self, mouseButton)
     if self.__puiPreviewInteractionDragged then
       self.__puiPreviewInteractionDragged = nil
       return
     end
 
     PUI_PreviewBox_ActivateInteraction(self, mouseButton)
-  end)
+  end))
 
-  button:SetScript("OnHide", function(self)
+  button:SetScript("OnHide", PUI_OptionsProfiler:DefCallback("PreviewBox.CreateInteraction > button.SetScript OnHide", function(self)
     if self.__puiPreviewInteractionHovered then
       self.__puiPreviewInteractionHovered = nil
       PUI_PreviewBox_SetInteractionHighlight(self, false)
       ResetCursor()
     end
     PUI_PreviewBox_HideInteractionTooltip(self)
-  end)
+  end))
 
   button:SetPreviewInteractionOptions(options)
   return button
 end
+PreviewBox.CreateInteraction = PUI_OptionsProfiler:Def("PreviewBox.CreateInteraction", PreviewBox.CreateInteraction)
+
 
 function PreviewBox.CreateZoomControl(parent, options)
   options = options or {}
@@ -348,8 +365,10 @@ function PreviewBox.CreateZoomControl(parent, options)
     slider.__puiSyncingValue = nil
     valueText:SetText(tostring(percent) .. "%")
   end
+  control.SetZoom = PUI_OptionsProfiler:DefCallback("PreviewBox.CreateZoomControl > control.SetZoom", control.SetZoom)
 
-  slider:SetScript("OnValueChanged", function(self, value)
+
+  slider:SetScript("OnValueChanged", PUI_OptionsProfiler:DefCallback("PreviewBox.CreateZoomControl > slider.SetScript OnValueChanged", function(self, value)
     local percent = math_floor(value + 0.5)
     valueText:SetText(tostring(percent) .. "%")
 
@@ -360,9 +379,9 @@ function PreviewBox.CreateZoomControl(parent, options)
     if type(options.onValueChanged) == "function" then
       options.onValueChanged(control, percent / 100)
     end
-  end)
+  end))
 
-  slider:SetScript("OnMouseUp", function(self, mouseButton)
+  slider:SetScript("OnMouseUp", PUI_OptionsProfiler:DefCallback("PreviewBox.CreateZoomControl > slider.SetScript OnMouseUp", function(self, mouseButton)
     if mouseButton ~= "LeftButton" or self.__puiSyncingValue then
       return
     end
@@ -371,14 +390,14 @@ function PreviewBox.CreateZoomControl(parent, options)
       local percent = math_floor((tonumber(self:GetValue()) or 100) + 0.5)
       options.onValueCommitted(control, percent / 100)
     end
-  end)
+  end))
 
   control.slider = slider
   control.label = label
   control.valueText = valueText
   control:SetZoom(options.value or 1)
   ns.KeyboardNavigation.RegisterFrame(slider, "slider", "previewZoom", nil, nil, nil, {
-    adjust = function(direction)
+    adjust = PUI_OptionsProfiler:DefCallback("PreviewBox.CreateZoomControl > adjust", function(direction)
       local previous = slider:GetValue()
       local value = math_min(maximum, math_max(minimum, previous + direction * step))
       if value == previous then return end
@@ -386,11 +405,13 @@ function PreviewBox.CreateZoomControl(parent, options)
       if type(options.onValueCommitted) == "function" then
         options.onValueCommitted(control, math_floor(slider:GetValue() + 0.5) / 100)
       end
-    end,
+    end),
   })
 
   return control
 end
+PreviewBox.CreateZoomControl = PUI_OptionsProfiler:Def("PreviewBox.CreateZoomControl", PreviewBox.CreateZoomControl)
+
 
 local function PUI_PreviewBox_OptionsPathMatches(path, targetPath)
   if type(path) ~= "table" or type(targetPath) ~= "table" then
@@ -409,6 +430,8 @@ local function PUI_PreviewBox_OptionsPathMatches(path, targetPath)
 
   return true
 end
+PUI_PreviewBox_OptionsPathMatches = PUI_OptionsProfiler:Def("PUI_PreviewBox_OptionsPathMatches", PUI_PreviewBox_OptionsPathMatches)
+
 
 local function PUI_PreviewBox_OptionPathMatches(
   path,
@@ -436,6 +459,8 @@ local function PUI_PreviewBox_OptionPathMatches(
 
   return false
 end
+PUI_PreviewBox_OptionPathMatches = PUI_OptionsProfiler:Def("PUI_PreviewBox_OptionPathMatches", PUI_PreviewBox_OptionPathMatches)
+
 
 local function PUI_PreviewBox_FindOptionWidget(
   root,
@@ -474,10 +499,14 @@ local function PUI_PreviewBox_FindOptionWidget(
 
     return false
   end
+  Walk = PUI_OptionsProfiler:DefCallback("PUI_PreviewBox_FindOptionWidget > Walk", Walk)
+
 
   Walk(root)
   return targetWidget, targetScroll
 end
+PUI_PreviewBox_FindOptionWidget = PUI_OptionsProfiler:Def("PUI_PreviewBox_FindOptionWidget", PUI_PreviewBox_FindOptionWidget)
+
 
 local function PUI_PreviewBox_ShowOptionGlow(targetFrame)
   local glow = PreviewBox.__puiOptionGlow
@@ -490,6 +519,8 @@ local function PUI_PreviewBox_ShowOptionGlow(targetFrame)
       Pixel.SetColorTexture(edge, 1, 1, 1, 1)
       return edge
     end
+    CreateEdge = PUI_OptionsProfiler:DefCallback("PUI_PreviewBox_ShowOptionGlow > CreateEdge", CreateEdge)
+
 
     glow.top = CreateEdge()
     glow.bottom = CreateEdge()
@@ -525,7 +556,7 @@ local function PUI_PreviewBox_ShowOptionGlow(targetFrame)
   glow.elapsed = 0
   glow:SetAlpha(1)
   glow:Show()
-  glow:SetScript("OnUpdate", function(self, elapsed)
+  glow:SetScript("OnUpdate", PUI_OptionsProfiler:DefCallback("PUI_PreviewBox_ShowOptionGlow > glow.SetScript OnUpdate", function(self, elapsed)
     self.elapsed = self.elapsed + elapsed
 
     if self.elapsed >= 0.8 then
@@ -535,15 +566,17 @@ local function PUI_PreviewBox_ShowOptionGlow(targetFrame)
     end
 
     self:SetAlpha(1 - self.elapsed / 0.8)
-  end)
+  end))
 end
+PUI_PreviewBox_ShowOptionGlow = PUI_OptionsProfiler:Def("PUI_PreviewBox_ShowOptionGlow", PUI_PreviewBox_ShowOptionGlow)
+
 
 function PreviewBox.FocusOption(path, sectionKey, optionKey)
   if type(path) ~= "table" or optionKey == nil then
     return
   end
 
-  C_Timer.After(0, function()
+  C_Timer.After(0, PUI_OptionsProfiler:DefCallback("PreviewBox.FocusOption > C_Timer.After", function()
     local optionsFrame = ns.Addon._OptionsWindow
     local shell = optionsFrame and optionsFrame.__puiPageShell
     local root = shell and shell.acdContainer
@@ -589,8 +622,10 @@ function PreviewBox.FocusOption(path, sectionKey, optionKey)
       PUI_PreviewBox_ShowOptionGlow(targetFrame)
       ns.KeyboardNavigation.FocusWidget(targetWidget)
     end
-  end)
+  end))
 end
+PreviewBox.FocusOption = PUI_OptionsProfiler:Def("PreviewBox.FocusOption", PreviewBox.FocusOption)
+
 
 function PreviewBox.NavigateToOption(addon, path, sectionKey, optionKey)
   if not addon or type(path) ~= "table" then
@@ -602,6 +637,8 @@ function PreviewBox.NavigateToOption(addon, path, sectionKey, optionKey)
   end
   PreviewBox.FocusOption(path, sectionKey, optionKey)
 end
+PreviewBox.NavigateToOption = PUI_OptionsProfiler:Def("PreviewBox.NavigateToOption", PreviewBox.NavigateToOption)
+
 
 function PreviewBox.Create(parent)
   local colors = Theme.GetColors()
@@ -641,15 +678,22 @@ function PreviewBox.Create(parent)
     self.title:SetText(text or "")
     self.title:SetShown(text ~= nil and text ~= "")
   end
+  box.SetTitle = PUI_OptionsProfiler:DefCallback("PreviewBox.Create > box.SetTitle", box.SetTitle)
+
 
   function box:SetDescription(text)
     self.description:SetText(text or "")
     self.description:SetShown(text ~= nil and text ~= "")
   end
+  box.SetDescription = PUI_OptionsProfiler:DefCallback("PreviewBox.Create > box.SetDescription", box.SetDescription)
+
 
   function box:GetCanvas()
     return self.canvas
   end
+  box.GetCanvas = PUI_OptionsProfiler:DefCallback("PreviewBox.Create > box.GetCanvas", box.GetCanvas)
+
 
   return box
 end
+PreviewBox.Create = PUI_OptionsProfiler:Def("PreviewBox.Create", PreviewBox.Create)

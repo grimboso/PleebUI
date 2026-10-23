@@ -1,4 +1,5 @@
 local _, ns = ...
+local PUI_OptionsProfiler = select(1, ns.Pleebug:DropIn({}))
 
 local Theme = ns.Theme
 local Pixel = ns.Pixel
@@ -26,6 +27,8 @@ local function HideEditBoxTexture(texture)
     texture:Hide()
   end
 end
+HideEditBoxTexture = PUI_OptionsProfiler:Def("HideEditBoxTexture", HideEditBoxTexture)
+
 
 function WidgetSkins.UIEditBox(edit)
   HideEditBoxTexture(edit.Left)
@@ -73,11 +76,13 @@ function WidgetSkins.UIEditBox(edit)
       if hovered ~= nil then self.__puiHovered = hovered end
       WidgetSkins.UIEditBox(self)
     end
-    edit:HookScript("OnEnter", function(self) Refresh(self, true) end)
-    edit:HookScript("OnLeave", function(self) Refresh(self, false) end)
-    edit:HookScript("OnHide", function(self) Refresh(self, false) end)
-    edit:HookScript("OnEditFocusGained", function(self) Refresh(self) end)
-    edit:HookScript("OnEditFocusLost", function(self) Refresh(self) end)
+    Refresh = PUI_OptionsProfiler:DefCallback("WidgetSkins.UIEditBox > Refresh", Refresh)
+
+    edit:HookScript("OnEnter", PUI_OptionsProfiler:DefCallback("WidgetSkins.UIEditBox > edit.HookScript OnEnter", function(self) Refresh(self, true) end))
+    edit:HookScript("OnLeave", PUI_OptionsProfiler:DefCallback("WidgetSkins.UIEditBox > edit.HookScript OnLeave", function(self) Refresh(self, false) end))
+    edit:HookScript("OnHide", PUI_OptionsProfiler:DefCallback("WidgetSkins.UIEditBox > edit.HookScript OnHide", function(self) Refresh(self, false) end))
+    edit:HookScript("OnEditFocusGained", PUI_OptionsProfiler:DefCallback("WidgetSkins.UIEditBox > edit.HookScript OnEditFocusGained", function(self) Refresh(self) end))
+    edit:HookScript("OnEditFocusLost", PUI_OptionsProfiler:DefCallback("WidgetSkins.UIEditBox > edit.HookScript OnEditFocusLost", function(self) Refresh(self) end))
   end
 
   if edit.Instructions then
@@ -85,6 +90,8 @@ function WidgetSkins.UIEditBox(edit)
     edit.Instructions:SetTextColor(colors.text[1], colors.text[2], colors.text[3], 0.55)
   end
 end
+WidgetSkins.UIEditBox = PUI_OptionsProfiler:Def("WidgetSkins.UIEditBox", WidgetSkins.UIEditBox)
+
 
 function WidgetSkins.EditBox(widget)
   local isMultiLine = widget.type == "MultiLineEditBox"
@@ -168,7 +175,7 @@ function WidgetSkins.EditBox(widget)
 
     if not edit.__puiTextInsetsHooked then
       edit.__puiTextInsetsHooked = true
-      hooksecurefunc(edit, "SetTextInsets", function(self, left, right, top, bottom)
+      hooksecurefunc(edit, "SetTextInsets", PUI_OptionsProfiler:DefCallback("WidgetSkins.EditBox > hooksecurefunc SetTextInsets", function(self, left, right, top, bottom)
         if self.obj and self.obj.__puiAceGUIOwnedByPleebUI ~= true then
           return
         end
@@ -176,7 +183,7 @@ function WidgetSkins.EditBox(widget)
         if (tonumber(left) or 0) == 0 then
           self:SetTextInsets(3, right, top, bottom)
         end
-      end)
+      end))
     end
 
     edit:SetTextInsets(3, buttonWidth + 6, 0, 0)
@@ -195,13 +202,15 @@ function WidgetSkins.EditBox(widget)
 
   if not widget.__puiEditBoxGeometrySetLabelHooked then
     widget.__puiEditBoxGeometrySetLabelHooked = true
-    hooksecurefunc(widget, "SetLabel", function(self)
+    hooksecurefunc(widget, "SetLabel", PUI_OptionsProfiler:DefCallback("WidgetSkins.EditBox > hooksecurefunc SetLabel", function(self)
       if self.__puiAceGUIOwnedByPleebUI == true then
         WidgetSkins.EditBox(self)
       end
-    end)
+    end))
   end
 end
+WidgetSkins.EditBox = PUI_OptionsProfiler:Def("WidgetSkins.EditBox", WidgetSkins.EditBox)
+
 local PUI_EDITBOX_TYPE = "PUI_EditBox"
 local PUI_EDITBOX_VERSION = 1
 local PUI_MULTILINE_EDITBOX_TYPE = "PUI_MultiLineEditBox"
@@ -215,40 +224,44 @@ local function PUI_EditBox_SetTextureColor(texture, color, alphaMultiplier)
     (color[4] or 1) * (alphaMultiplier or 1)
   )
 end
+PUI_EditBox_SetTextureColor = PUI_OptionsProfiler:Def("PUI_EditBox_SetTextureColor", PUI_EditBox_SetTextureColor)
+
 
 local function PUI_EditBox_InstallButtonStateHooks(widget, refresh)
   local button = widget.button
-  button:HookScript("OnEnter", function(self)
+  button:HookScript("OnEnter", PUI_OptionsProfiler:DefCallback("PUI_EditBox_InstallButtonStateHooks > button.HookScript OnEnter", function(self)
     self.__puiHovered = true
     refresh(widget)
-  end)
-  button:HookScript("OnLeave", function(self)
+  end))
+  button:HookScript("OnLeave", PUI_OptionsProfiler:DefCallback("PUI_EditBox_InstallButtonStateHooks > button.HookScript OnLeave", function(self)
     self.__puiHovered = nil
     self.__puiPressed = nil
     refresh(widget)
-  end)
-  button:HookScript("OnMouseDown", function(self, mouseButton)
+  end))
+  button:HookScript("OnMouseDown", PUI_OptionsProfiler:DefCallback("PUI_EditBox_InstallButtonStateHooks > button.HookScript OnMouseDown", function(self, mouseButton)
     if mouseButton ~= "LeftButton" then return end
     self.__puiPressed = true
     refresh(widget)
-  end)
-  button:HookScript("OnMouseUp", function(self, mouseButton)
+  end))
+  button:HookScript("OnMouseUp", PUI_OptionsProfiler:DefCallback("PUI_EditBox_InstallButtonStateHooks > button.HookScript OnMouseUp", function(self, mouseButton)
     if mouseButton ~= "LeftButton" then return end
     self.__puiPressed = nil
     refresh(widget)
-  end)
-  button:HookScript("OnHide", function(self)
+  end))
+  button:HookScript("OnHide", PUI_OptionsProfiler:DefCallback("PUI_EditBox_InstallButtonStateHooks > button.HookScript OnHide", function(self)
     self.__puiHovered = nil
     self.__puiPressed = nil
     refresh(widget)
-  end)
-  button:HookScript("OnEnable", function() refresh(widget) end)
-  button:HookScript("OnDisable", function(self)
+  end))
+  button:HookScript("OnEnable", PUI_OptionsProfiler:DefCallback("PUI_EditBox_InstallButtonStateHooks > button.HookScript OnEnable", function() refresh(widget) end))
+  button:HookScript("OnDisable", PUI_OptionsProfiler:DefCallback("PUI_EditBox_InstallButtonStateHooks > button.HookScript OnDisable", function(self)
     self.__puiHovered = nil
     self.__puiPressed = nil
     refresh(widget)
-  end)
+  end))
 end
+PUI_EditBox_InstallButtonStateHooks = PUI_OptionsProfiler:Def("PUI_EditBox_InstallButtonStateHooks", PUI_EditBox_InstallButtonStateHooks)
+
 
 local function PUI_EditBox_CreateChrome(parent)
   local background = parent:CreateTexture(nil, "BACKGROUND")
@@ -270,6 +283,8 @@ local function PUI_EditBox_CreateChrome(parent)
     border = border,
   }
 end
+PUI_EditBox_CreateChrome = PUI_OptionsProfiler:Def("PUI_EditBox_CreateChrome", PUI_EditBox_CreateChrome)
+
 
 local function PUI_EditBox_LayoutChrome(parent, chrome)
   local edge = Theme.ControlBorderSize
@@ -299,6 +314,8 @@ local function PUI_EditBox_LayoutChrome(parent, chrome)
   Pixel.Point(border.right, "BOTTOMRIGHT", parent, "BOTTOMRIGHT", 0, edge)
   Pixel.Width(border.right, edge)
 end
+PUI_EditBox_LayoutChrome = PUI_OptionsProfiler:Def("PUI_EditBox_LayoutChrome", PUI_EditBox_LayoutChrome)
+
 
 local function PUI_EditBox_SetChromeColors(chrome, backgroundColor, borderColor, alphaMultiplier)
   PUI_EditBox_SetTextureColor(chrome.background, backgroundColor, alphaMultiplier)
@@ -307,6 +324,8 @@ local function PUI_EditBox_SetChromeColors(chrome, backgroundColor, borderColor,
     PUI_EditBox_SetTextureColor(texture, borderColor, alphaMultiplier)
   end
 end
+PUI_EditBox_SetChromeColors = PUI_OptionsProfiler:Def("PUI_EditBox_SetChromeColors", PUI_EditBox_SetChromeColors)
+
 
 local function PUI_EditBox_InsertLink(text)
   for index = 1, AceGUI:GetWidgetCount(PUI_EDITBOX_TYPE) do
@@ -327,6 +346,8 @@ local function PUI_EditBox_InsertLink(text)
     end
   end
 end
+PUI_EditBox_InsertLink = PUI_OptionsProfiler:Def("PUI_EditBox_InsertLink", PUI_EditBox_InsertLink)
+
 
 if not _G.__puiAceGUIEditBoxInsertLinkHooked then
   _G.__puiAceGUIEditBoxInsertLinkHooked = true
@@ -343,12 +364,16 @@ local function PUI_EditBox_ShowButton(widget)
   widget.button:Enable()
   widget.editbox:SetTextInsets(4, Theme.GetWidgetRowGeometry().buttonWidth + 6, 0, 0)
 end
+PUI_EditBox_ShowButton = PUI_OptionsProfiler:Def("PUI_EditBox_ShowButton", PUI_EditBox_ShowButton)
+
 
 local function PUI_EditBox_HideButton(widget)
   widget.buttonPending = nil
   widget.button:Hide()
   widget.editbox:SetTextInsets(4, 4, 0, 0)
 end
+PUI_EditBox_HideButton = PUI_OptionsProfiler:Def("PUI_EditBox_HideButton", PUI_EditBox_HideButton)
+
 
 local function PUI_EditBox_Layout(widget, width)
   local geom = Theme.GetWidgetRowGeometry()
@@ -377,6 +402,8 @@ local function PUI_EditBox_Layout(widget, width)
   widget.editbox:SetTextInsets(4, widget.buttonPending and geom.buttonWidth + 6 or 4, 0, 0)
   Pixel.Width(widget.frame, frameWidth)
 end
+PUI_EditBox_Layout = PUI_OptionsProfiler:Def("PUI_EditBox_Layout", PUI_EditBox_Layout)
+
 
 local function PUI_EditBox_RefreshVisualState(widget)
   local controlColor, borderColor, textColor = Theme.GetControlStateColors(
@@ -398,6 +425,8 @@ local function PUI_EditBox_RefreshVisualState(widget)
   widget.editbox:SetTextColor(textColor[1], textColor[2], textColor[3], textColor[4])
   widget.buttonText:SetTextColor(buttonTextColor[1], buttonTextColor[2], buttonTextColor[3], buttonTextColor[4])
 end
+PUI_EditBox_RefreshVisualState = PUI_OptionsProfiler:Def("PUI_EditBox_RefreshVisualState", PUI_EditBox_RefreshVisualState)
+
 
 local function PUI_EditBox_OnEnter(editbox)
   local widget = editbox.obj
@@ -405,6 +434,8 @@ local function PUI_EditBox_OnEnter(editbox)
   PUI_EditBox_RefreshVisualState(widget)
   widget:Fire("OnEnter")
 end
+PUI_EditBox_OnEnter = PUI_OptionsProfiler:Def("PUI_EditBox_OnEnter", PUI_EditBox_OnEnter)
+
 
 local function PUI_EditBox_OnLeave(editbox)
   local widget = editbox.obj
@@ -412,10 +443,14 @@ local function PUI_EditBox_OnLeave(editbox)
   PUI_EditBox_RefreshVisualState(widget)
   widget:Fire("OnLeave")
 end
+PUI_EditBox_OnLeave = PUI_OptionsProfiler:Def("PUI_EditBox_OnLeave", PUI_EditBox_OnLeave)
+
 
 local function PUI_EditBox_OnEscapePressed()
   AceGUI:ClearFocus()
 end
+PUI_EditBox_OnEscapePressed = PUI_OptionsProfiler:Def("PUI_EditBox_OnEscapePressed", PUI_EditBox_OnEscapePressed)
+
 
 local function PUI_EditBox_OnEnterPressed(editbox)
   local widget = editbox.obj
@@ -427,6 +462,8 @@ local function PUI_EditBox_OnEnterPressed(editbox)
     PUI_EditBox_HideButton(widget)
   end
 end
+PUI_EditBox_OnEnterPressed = PUI_OptionsProfiler:Def("PUI_EditBox_OnEnterPressed", PUI_EditBox_OnEnterPressed)
+
 
 local function PUI_EditBox_OnTextChanged(editbox)
   local widget = editbox.obj
@@ -438,15 +475,21 @@ local function PUI_EditBox_OnTextChanged(editbox)
     PUI_EditBox_ShowButton(widget)
   end
 end
+PUI_EditBox_OnTextChanged = PUI_OptionsProfiler:Def("PUI_EditBox_OnTextChanged", PUI_EditBox_OnTextChanged)
+
 
 local function PUI_EditBox_OnFocusGained(editbox)
   AceGUI:SetFocus(editbox.obj)
   PUI_EditBox_RefreshVisualState(editbox.obj)
 end
+PUI_EditBox_OnFocusGained = PUI_OptionsProfiler:Def("PUI_EditBox_OnFocusGained", PUI_EditBox_OnFocusGained)
+
 
 local function PUI_EditBox_OnFocusLost(editbox)
   PUI_EditBox_RefreshVisualState(editbox.obj)
 end
+PUI_EditBox_OnFocusLost = PUI_OptionsProfiler:Def("PUI_EditBox_OnFocusLost", PUI_EditBox_OnFocusLost)
+
 
 local function PUI_EditBox_OnReceiveDrag(editbox)
   local widget = editbox.obj
@@ -471,20 +514,26 @@ local function PUI_EditBox_OnReceiveDrag(editbox)
   PUI_EditBox_HideButton(widget)
   AceGUI:ClearFocus()
 end
+PUI_EditBox_OnReceiveDrag = PUI_OptionsProfiler:Def("PUI_EditBox_OnReceiveDrag", PUI_EditBox_OnReceiveDrag)
+
 
 local function PUI_EditBox_ButtonOnClick(button)
   local editbox = button.obj.editbox
   editbox:ClearFocus()
   PUI_EditBox_OnEnterPressed(editbox)
 end
+PUI_EditBox_ButtonOnClick = PUI_OptionsProfiler:Def("PUI_EditBox_ButtonOnClick", PUI_EditBox_ButtonOnClick)
+
 
 local function PUI_EditBox_OnShowFocus(frame)
   frame.obj.editbox:SetFocus()
   frame:SetScript("OnShow", nil)
 end
+PUI_EditBox_OnShowFocus = PUI_OptionsProfiler:Def("PUI_EditBox_OnShowFocus", PUI_EditBox_OnShowFocus)
+
 
 local PUI_EditBox_Methods = {
-  OnAcquire = function(self)
+  OnAcquire = PUI_OptionsProfiler:Def("OnAcquire", function(self)
     self:SetHeight(Theme.GetControlMetrics().widgetBoxHeight)
     self:SetWidth(200)
     self:SetDisabled(false)
@@ -494,25 +543,25 @@ local PUI_EditBox_Methods = {
     self:SetMaxLetters(0)
     self.editbox.__puiHovered = nil
     self:RefreshTheme()
-  end,
+  end),
 
-  OnRelease = function(self)
+  OnRelease = PUI_OptionsProfiler:Def("OnRelease", function(self)
     self:ClearFocus()
     self.editbox.__puiHovered = nil
     self.buttonPending = nil
     self.button.__puiHovered = nil
     self.button.__puiPressed = nil
-  end,
+  end),
 
-  OnWidthSet = function(self, width)
+  OnWidthSet = PUI_OptionsProfiler:Def("OnWidthSet", function(self, width)
     PUI_EditBox_Layout(self, width)
-  end,
+  end),
 
-  OnHeightSet = function(self)
+  OnHeightSet = PUI_OptionsProfiler:Def("OnHeightSet", function(self)
     PUI_EditBox_Layout(self, self.frame:GetWidth())
-  end,
+  end),
 
-  SetDisabled = function(self, disabled)
+  SetDisabled = PUI_OptionsProfiler:Def("SetDisabled", function(self, disabled)
     disabled = disabled == true
     self.disabled = disabled
     self.editbox:EnableMouse(not disabled)
@@ -526,20 +575,20 @@ local PUI_EditBox_Methods = {
     end
 
     PUI_EditBox_RefreshVisualState(self)
-  end,
+  end),
 
-  SetText = function(self, text)
+  SetText = PUI_OptionsProfiler:Def("SetText", function(self, text)
     self.lasttext = text or ""
     self.editbox:SetText(self.lasttext)
     self.editbox:SetCursorPosition(0)
     PUI_EditBox_HideButton(self)
-  end,
+  end),
 
-  GetText = function(self)
+  GetText = PUI_OptionsProfiler:Def("GetText", function(self)
     return self.editbox:GetText()
-  end,
+  end),
 
-  SetLabel = function(self, text)
+  SetLabel = PUI_OptionsProfiler:Def("SetLabel", function(self, text)
     if text and text ~= "" then
       self.label:SetText(text)
       self.label:Show()
@@ -549,9 +598,9 @@ local PUI_EditBox_Methods = {
     end
 
     PUI_EditBox_Layout(self, self.frame:GetWidth())
-  end,
+  end),
 
-  DisableButton = function(self, disabled)
+  DisableButton = PUI_OptionsProfiler:Def("DisableButton", function(self, disabled)
     self.disablebutton = disabled == true
 
     if self.disablebutton then
@@ -559,36 +608,36 @@ local PUI_EditBox_Methods = {
     elseif self.buttonPending and not self.disabled then
       PUI_EditBox_ShowButton(self)
     end
-  end,
+  end),
 
-  SetMaxLetters = function(self, count)
+  SetMaxLetters = PUI_OptionsProfiler:Def("SetMaxLetters", function(self, count)
     self.editbox:SetMaxLetters(count or 0)
-  end,
+  end),
 
-  ClearFocus = function(self)
+  ClearFocus = PUI_OptionsProfiler:Def("ClearFocus", function(self)
     self.editbox:ClearFocus()
     self.frame:SetScript("OnShow", nil)
-  end,
+  end),
 
-  SetFocus = function(self)
+  SetFocus = PUI_OptionsProfiler:Def("SetFocus", function(self)
     self.editbox:SetFocus()
 
     if not self.frame:IsShown() then
       self.frame:SetScript("OnShow", PUI_EditBox_OnShowFocus)
     end
-  end,
+  end),
 
-  HighlightText = function(self, from, to)
+  HighlightText = PUI_OptionsProfiler:Def("HighlightText", function(self, from, to)
     self.editbox:HighlightText(from, to)
-  end,
+  end),
 
-  RefreshTheme = function(self)
+  RefreshTheme = PUI_OptionsProfiler:Def("RefreshTheme", function(self)
     Theme.ApplyFont(self.label, "body")
     Theme.ApplyFont(self.editbox, "body")
     Theme.ApplyFont(self.buttonText, "body")
     PUI_EditBox_Layout(self, self.frame:GetWidth())
     PUI_EditBox_RefreshVisualState(self)
-  end,
+  end),
 }
 
 local function PUI_EditBox_Constructor()
@@ -658,6 +707,8 @@ local function PUI_EditBox_Constructor()
 
   return AceGUI:RegisterAsWidget(widget)
 end
+PUI_EditBox_Constructor = PUI_OptionsProfiler:Def("PUI_EditBox_Constructor", PUI_EditBox_Constructor)
+
 
 local function PUI_MultiLine_Layout(widget)
   local geom = Theme.GetWidgetRowGeometry()
@@ -692,6 +743,8 @@ local function PUI_MultiLine_Layout(widget)
   PUI_EditBox_LayoutChrome(widget.scrollBG, widget.scrollChrome)
   PUI_EditBox_LayoutChrome(widget.button, widget.buttonChrome)
 end
+PUI_MultiLine_Layout = PUI_OptionsProfiler:Def("PUI_MultiLine_Layout", PUI_MultiLine_Layout)
+
 
 local function PUI_MultiLine_UpdateHeight(widget)
   local geom = Theme.GetWidgetRowGeometry()
@@ -701,6 +754,8 @@ local function PUI_MultiLine_UpdateHeight(widget)
 
   widget:SetHeight(height)
 end
+PUI_MultiLine_UpdateHeight = PUI_OptionsProfiler:Def("PUI_MultiLine_UpdateHeight", PUI_MultiLine_UpdateHeight)
+
 
 local function PUI_MultiLine_RefreshVisualState(widget)
   local controlColor, borderColor, textColor = Theme.GetControlStateColors(
@@ -717,6 +772,8 @@ local function PUI_MultiLine_RefreshVisualState(widget)
   widget.editBox:SetTextColor(textColor[1], textColor[2], textColor[3], textColor[4])
   widget.buttonText:SetTextColor(buttonTextColor[1], buttonTextColor[2], buttonTextColor[3], buttonTextColor[4])
 end
+PUI_MultiLine_RefreshVisualState = PUI_OptionsProfiler:Def("PUI_MultiLine_RefreshVisualState", PUI_MultiLine_RefreshVisualState)
+
 
 local function PUI_MultiLine_OnButtonClick(button)
   local widget = button.obj
@@ -727,6 +784,8 @@ local function PUI_MultiLine_OnButtonClick(button)
     widget.button:Disable()
   end
 end
+PUI_MultiLine_OnButtonClick = PUI_OptionsProfiler:Def("PUI_MultiLine_OnButtonClick", PUI_MultiLine_OnButtonClick)
+
 
 local function PUI_MultiLine_OnCursorChanged(editbox, _, y, _, cursorHeight)
   local scrollFrame = editbox.obj.scrollFrame
@@ -743,18 +802,24 @@ local function PUI_MultiLine_OnCursorChanged(editbox, _, y, _, cursorHeight)
     scrollFrame:SetVerticalScroll(bottom)
   end
 end
+PUI_MultiLine_OnCursorChanged = PUI_OptionsProfiler:Def("PUI_MultiLine_OnCursorChanged", PUI_MultiLine_OnCursorChanged)
+
 
 local function PUI_MultiLine_OnEditFocusLost(editbox)
   editbox:HighlightText(0, 0)
   PUI_MultiLine_RefreshVisualState(editbox.obj)
   editbox.obj:Fire("OnEditFocusLost")
 end
+PUI_MultiLine_OnEditFocusLost = PUI_OptionsProfiler:Def("PUI_MultiLine_OnEditFocusLost", PUI_MultiLine_OnEditFocusLost)
+
 
 local function PUI_MultiLine_OnEditFocusGained(editbox)
   AceGUI:SetFocus(editbox.obj)
   PUI_MultiLine_RefreshVisualState(editbox.obj)
   editbox.obj:Fire("OnEditFocusGained")
 end
+PUI_MultiLine_OnEditFocusGained = PUI_OptionsProfiler:Def("PUI_MultiLine_OnEditFocusGained", PUI_MultiLine_OnEditFocusGained)
+
 
 local function PUI_MultiLine_OnEnter(frame)
   local widget = frame.obj
@@ -765,6 +830,8 @@ local function PUI_MultiLine_OnEnter(frame)
     widget:Fire("OnEnter")
   end
 end
+PUI_MultiLine_OnEnter = PUI_OptionsProfiler:Def("PUI_MultiLine_OnEnter", PUI_MultiLine_OnEnter)
+
 
 local function PUI_MultiLine_OnLeave(frame)
   local widget = frame.obj
@@ -775,12 +842,16 @@ local function PUI_MultiLine_OnLeave(frame)
     widget:Fire("OnLeave")
   end
 end
+PUI_MultiLine_OnLeave = PUI_OptionsProfiler:Def("PUI_MultiLine_OnLeave", PUI_MultiLine_OnLeave)
+
 
 local function PUI_MultiLine_OnMouseUp(scrollFrame)
   local editBox = scrollFrame.obj.editBox
   editBox:SetFocus()
   editBox:SetCursorPosition(editBox:GetNumLetters())
 end
+PUI_MultiLine_OnMouseUp = PUI_OptionsProfiler:Def("PUI_MultiLine_OnMouseUp", PUI_MultiLine_OnMouseUp)
+
 
 local function PUI_MultiLine_OnReceiveDrag(frame)
   local widget = frame.obj
@@ -811,10 +882,14 @@ local function PUI_MultiLine_OnReceiveDrag(frame)
     widget.button:Enable()
   end
 end
+PUI_MultiLine_OnReceiveDrag = PUI_OptionsProfiler:Def("PUI_MultiLine_OnReceiveDrag", PUI_MultiLine_OnReceiveDrag)
+
 
 local function PUI_MultiLine_OnSizeChanged(scrollFrame, width)
   Pixel.Width(scrollFrame.obj.editBox, width)
 end
+PUI_MultiLine_OnSizeChanged = PUI_OptionsProfiler:Def("PUI_MultiLine_OnSizeChanged", PUI_MultiLine_OnSizeChanged)
+
 
 local function PUI_MultiLine_OnTextChanged(editbox, userInput)
   if not userInput then
@@ -829,6 +904,8 @@ local function PUI_MultiLine_OnTextChanged(editbox, userInput)
     widget.button:Enable()
   end
 end
+PUI_MultiLine_OnTextChanged = PUI_OptionsProfiler:Def("PUI_MultiLine_OnTextChanged", PUI_MultiLine_OnTextChanged)
+
 
 local function PUI_MultiLine_OnTextSet(editbox)
   editbox:HighlightText(0, 0)
@@ -837,11 +914,15 @@ local function PUI_MultiLine_OnTextSet(editbox)
   editbox.obj.buttonPending = nil
   editbox.obj.button:Disable()
 end
+PUI_MultiLine_OnTextSet = PUI_OptionsProfiler:Def("PUI_MultiLine_OnTextSet", PUI_MultiLine_OnTextSet)
+
 
 local function PUI_MultiLine_OnVerticalScroll(scrollFrame, offset)
   local editBox = scrollFrame.obj.editBox
   editBox:SetHitRectInsets(0, 0, offset, editBox:GetHeight() - offset - scrollFrame:GetHeight())
 end
+PUI_MultiLine_OnVerticalScroll = PUI_OptionsProfiler:Def("PUI_MultiLine_OnVerticalScroll", PUI_MultiLine_OnVerticalScroll)
+
 
 local function PUI_MultiLine_OnScrollRangeChanged(scrollFrame, _, verticalRange)
   if verticalRange == 0 then
@@ -850,14 +931,18 @@ local function PUI_MultiLine_OnScrollRangeChanged(scrollFrame, _, verticalRange)
     PUI_MultiLine_OnVerticalScroll(scrollFrame, scrollFrame:GetVerticalScroll())
   end
 end
+PUI_MultiLine_OnScrollRangeChanged = PUI_OptionsProfiler:Def("PUI_MultiLine_OnScrollRangeChanged", PUI_MultiLine_OnScrollRangeChanged)
+
 
 local function PUI_MultiLine_OnShowFocus(frame)
   frame.obj.editBox:SetFocus()
   frame:SetScript("OnShow", nil)
 end
+PUI_MultiLine_OnShowFocus = PUI_OptionsProfiler:Def("PUI_MultiLine_OnShowFocus", PUI_MultiLine_OnShowFocus)
+
 
 local PUI_MultiLine_Methods = {
-  OnAcquire = function(self)
+  OnAcquire = PUI_OptionsProfiler:Def("OnAcquire #2", function(self)
     self:SetWidth(200)
     self:SetDisabled(false)
     self:SetLabel(nil)
@@ -867,25 +952,25 @@ local PUI_MultiLine_Methods = {
     self:SetText("")
     self.entered = nil
     self:RefreshTheme()
-  end,
+  end),
 
-  OnRelease = function(self)
+  OnRelease = PUI_OptionsProfiler:Def("OnRelease #2", function(self)
     self:ClearFocus()
     self.entered = nil
     self.buttonPending = nil
     self.button.__puiHovered = nil
     self.button.__puiPressed = nil
-  end,
+  end),
 
-  OnWidthSet = function(self)
+  OnWidthSet = PUI_OptionsProfiler:Def("OnWidthSet #2", function(self)
     PUI_MultiLine_Layout(self)
-  end,
+  end),
 
-  OnHeightSet = function(self)
+  OnHeightSet = PUI_OptionsProfiler:Def("OnHeightSet #2", function(self)
     PUI_MultiLine_Layout(self)
-  end,
+  end),
 
-  SetDisabled = function(self, disabled)
+  SetDisabled = PUI_OptionsProfiler:Def("SetDisabled #2", function(self, disabled)
     disabled = disabled == true
     self.disabled = disabled
     self.editBox:EnableMouse(not disabled)
@@ -899,9 +984,9 @@ local PUI_MultiLine_Methods = {
     end
 
     PUI_MultiLine_RefreshVisualState(self)
-  end,
+  end),
 
-  SetLabel = function(self, text)
+  SetLabel = PUI_OptionsProfiler:Def("SetLabel #2", function(self, text)
     if text and text ~= "" then
       self.label:SetText(text)
       self.label:Show()
@@ -911,26 +996,26 @@ local PUI_MultiLine_Methods = {
     end
 
     PUI_MultiLine_UpdateHeight(self)
-  end,
+  end),
 
-  SetNumLines = function(self, count)
+  SetNumLines = PUI_OptionsProfiler:Def("SetNumLines", function(self, count)
     self.numlines = math_max(4, tonumber(count) or 4)
     PUI_MultiLine_UpdateHeight(self)
-  end,
+  end),
 
-  SetText = function(self, text)
+  SetText = PUI_OptionsProfiler:Def("SetText #2", function(self, text)
     self.editBox:SetText(text or "")
-  end,
+  end),
 
-  GetText = function(self)
+  GetText = PUI_OptionsProfiler:Def("GetText #2", function(self)
     return self.editBox:GetText()
-  end,
+  end),
 
-  SetMaxLetters = function(self, count)
+  SetMaxLetters = PUI_OptionsProfiler:Def("SetMaxLetters #2", function(self, count)
     self.editBox:SetMaxLetters(count or 0)
-  end,
+  end),
 
-  DisableButton = function(self, disabled)
+  DisableButton = PUI_OptionsProfiler:Def("DisableButton #2", function(self, disabled)
     self.disablebutton = disabled == true
 
     if self.disablebutton then
@@ -946,34 +1031,34 @@ local PUI_MultiLine_Methods = {
     end
 
     PUI_MultiLine_UpdateHeight(self)
-  end,
+  end),
 
-  ClearFocus = function(self)
+  ClearFocus = PUI_OptionsProfiler:Def("ClearFocus #2", function(self)
     self.editBox:ClearFocus()
     self.frame:SetScript("OnShow", nil)
-  end,
+  end),
 
-  SetFocus = function(self)
+  SetFocus = PUI_OptionsProfiler:Def("SetFocus #2", function(self)
     self.editBox:SetFocus()
 
     if not self.frame:IsShown() then
       self.frame:SetScript("OnShow", PUI_MultiLine_OnShowFocus)
     end
-  end,
+  end),
 
-  HighlightText = function(self, from, to)
+  HighlightText = PUI_OptionsProfiler:Def("HighlightText #2", function(self, from, to)
     self.editBox:HighlightText(from, to)
-  end,
+  end),
 
-  GetCursorPosition = function(self)
+  GetCursorPosition = PUI_OptionsProfiler:Def("GetCursorPosition", function(self)
     return self.editBox:GetCursorPosition()
-  end,
+  end),
 
-  SetCursorPosition = function(self, ...)
+  SetCursorPosition = PUI_OptionsProfiler:Def("SetCursorPosition", function(self, ...)
     return self.editBox:SetCursorPosition(...)
-  end,
+  end),
 
-  RefreshTheme = function(self)
+  RefreshTheme = PUI_OptionsProfiler:Def("RefreshTheme #2", function(self)
     Theme.ApplyFont(self.label, "body")
     Theme.ApplyFont(self.editBox, "body")
     Theme.ApplyFont(self.buttonText, "body")
@@ -981,7 +1066,7 @@ local PUI_MultiLine_Methods = {
     PUI_MultiLine_UpdateHeight(self)
     PUI_MultiLine_Layout(self)
     PUI_MultiLine_RefreshVisualState(self)
-  end,
+  end),
 }
 
 local function PUI_MultiLine_Constructor()
@@ -1080,6 +1165,8 @@ local function PUI_MultiLine_Constructor()
 
   return widget
 end
+PUI_MultiLine_Constructor = PUI_OptionsProfiler:Def("PUI_MultiLine_Constructor", PUI_MultiLine_Constructor)
+
 
 AceGUI:RegisterWidgetType(PUI_EDITBOX_TYPE, PUI_EditBox_Constructor, PUI_EDITBOX_VERSION)
 AceGUI:RegisterWidgetType(

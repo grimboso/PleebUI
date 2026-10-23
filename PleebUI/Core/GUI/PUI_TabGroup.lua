@@ -1,4 +1,5 @@
 local _, ns = ...
+local PUI_OptionsProfiler = select(1, ns.Pleebug:DropIn({}))
 
 local Addon = ns.Addon
 local Theme = ns.Theme
@@ -13,6 +14,8 @@ local _PUI_UpdateTabGroupSelection
 local function _PUI_GetSelectedTabValue(widget)
   return (widget.status or widget.localstatus).selected
 end
+_PUI_GetSelectedTabValue = PUI_OptionsProfiler:Def("_PUI_GetSelectedTabValue", _PUI_GetSelectedTabValue)
+
 
 local function _PUI_SetNativeTabTextureAlpha(tab, alpha)
   for _, texture in ipairs({
@@ -29,6 +32,8 @@ local function _PUI_SetNativeTabTextureAlpha(tab, alpha)
     end
   end
 end
+_PUI_SetNativeTabTextureAlpha = PUI_OptionsProfiler:Def("_PUI_SetNativeTabTextureAlpha", _PUI_SetNativeTabTextureAlpha)
+
 
 local function _PUI_HideNativeTab(tab)
   tab.__puiNativeTabHidden = true
@@ -38,6 +43,8 @@ local function _PUI_HideNativeTab(tab)
   Pixel.Size(tab, 1, 1)
   tab:Hide()
 end
+_PUI_HideNativeTab = PUI_OptionsProfiler:Def("_PUI_HideNativeTab", _PUI_HideNativeTab)
+
 
 local function _PUI_EnsureCustomTabHost(widget)
   local host = widget.__puiCustomTabHost
@@ -54,6 +61,8 @@ local function _PUI_EnsureCustomTabHost(widget)
   widget.__puiCustomTabHost = host
   return host
 end
+_PUI_EnsureCustomTabHost = PUI_OptionsProfiler:Def("_PUI_EnsureCustomTabHost", _PUI_EnsureCustomTabHost)
+
 
 local function _PUI_EnsureCustomTabButton(host, index)
   local btn = host.__puiButtons[index]
@@ -87,7 +96,7 @@ local function _PUI_EnsureCustomTabButton(host, index)
   btn.__puiLabel:SetWordWrap(false)
   Theme.ApplyFont(btn.__puiLabel, "tab", 12)
 
-  btn:SetScript("OnEnter", function(self)
+  btn:SetScript("OnEnter", PUI_OptionsProfiler:DefCallback("_PUI_EnsureCustomTabButton > btn.SetScript OnEnter", function(self)
     self.__puiHovered = true
     _PUI_StyleCustomTabButton(self, self.__puiValue == _PUI_GetSelectedTabValue(self.__puiWidget))
     if self.__puiLabel:GetUnboundedStringWidth() > math.max(1, self:GetWidth() - 24) then
@@ -95,20 +104,20 @@ local function _PUI_EnsureCustomTabButton(host, index)
       OptionsTooltip:SetText(self.__puiLabel:GetText(), 1, 1, 1, 1, true)
       OptionsTooltip:Show()
     end
-  end)
+  end))
 
-  btn:SetScript("OnLeave", function(self)
+  btn:SetScript("OnLeave", PUI_OptionsProfiler:DefCallback("_PUI_EnsureCustomTabButton > btn.SetScript OnLeave", function(self)
     self.__puiHovered = false
     if OptionsTooltip:IsOwned(self) then OptionsTooltip:Hide() end
     _PUI_StyleCustomTabButton(self, self.__puiValue == _PUI_GetSelectedTabValue(self.__puiWidget))
-  end)
+  end))
 
-  btn:SetScript("OnHide", function(self)
+  btn:SetScript("OnHide", PUI_OptionsProfiler:DefCallback("_PUI_EnsureCustomTabButton > btn.SetScript OnHide", function(self)
     self.__puiHovered = nil
     if OptionsTooltip:IsOwned(self) then OptionsTooltip:Hide() end
-  end)
+  end))
 
-  btn:SetScript("OnClick", function(self)
+  btn:SetScript("OnClick", PUI_OptionsProfiler:DefCallback("_PUI_EnsureCustomTabButton > btn.SetScript OnClick", function(self)
     if self.__puiDisabled then
       return
     end
@@ -129,13 +138,15 @@ local function _PUI_EnsureCustomTabButton(host, index)
 
     owner:SelectTab(value)
     _PUI_UpdateTabGroupSelection(owner)
-  end)
+  end))
 
   host.__puiButtons[index] = btn
   return btn
 end
+_PUI_EnsureCustomTabButton = PUI_OptionsProfiler:Def("_PUI_EnsureCustomTabButton", _PUI_EnsureCustomTabButton)
 
-_PUI_StyleCustomTabButton = function(btn, isSelected)
+
+_PUI_StyleCustomTabButton = PUI_OptionsProfiler:Def("_PUI_StyleCustomTabButton", function(btn, isSelected)
   local colors = Theme.GetColors()
   local hovered = btn.__puiHovered == true
   local bg = colors.control
@@ -164,9 +175,9 @@ _PUI_StyleCustomTabButton = function(btn, isSelected)
     colors.text[3],
     isSelected and colors.text[4] or colors.text[4] * 0.86
   )
-end
+end)
 
-_PUI_UpdateTabGroupSelection = function(widget)
+_PUI_UpdateTabGroupSelection = PUI_OptionsProfiler:Def("_PUI_UpdateTabGroupSelection", function(widget)
   local host = widget.__puiCustomTabHost
   local tablist = widget.tablist or widget.tabs
 
@@ -182,7 +193,7 @@ _PUI_UpdateTabGroupSelection = function(widget)
       _PUI_StyleCustomTabButton(btn, btn.__puiValue == selectedValue)
     end
   end
-end
+end)
 
 local function _PUI_LayoutCustomTabStrip(widget, geometryOnly)
   if widget.__puiAceGUIOwnedByPleebUI ~= true
@@ -346,6 +357,8 @@ local function _PUI_LayoutCustomTabStrip(widget, geometryOnly)
   end
   widget.__puiTabLayoutInProgress = nil
 end
+_PUI_LayoutCustomTabStrip = PUI_OptionsProfiler:Def("_PUI_LayoutCustomTabStrip", _PUI_LayoutCustomTabStrip)
+
 
 function WidgetSkins.TabGroup(widget, forceLayout)
   if widget.__puiAceGUIOwnedByPleebUI ~= true or AceGUI:IsReleasing(widget) then
@@ -356,7 +369,7 @@ function WidgetSkins.TabGroup(widget, forceLayout)
     widget.__puiTabLayoutHooksInstalled = true
 
     local nativeOnWidthSet = widget.OnWidthSet
-    widget.OnWidthSet = function(self, width)
+    widget.OnWidthSet = PUI_OptionsProfiler:DefCallback("WidgetSkins.TabGroup > widget.OnWidthSet", function(self, width)
       local user = self:GetUserDataTable()
       if self.__puiAceGUIOwnedByPleebUI == true
         and user.appName == "PleebUI"
@@ -369,15 +382,15 @@ function WidgetSkins.TabGroup(widget, forceLayout)
       else
         nativeOnWidthSet(self, width)
       end
-    end
+    end)
 
-    hooksecurefunc(widget, "BuildTabs", function(self)
+    hooksecurefunc(widget, "BuildTabs", PUI_OptionsProfiler:DefCallback("WidgetSkins.TabGroup > hooksecurefunc BuildTabs", function(self)
       if not self.__puiTabLayoutInProgress then
         _PUI_LayoutCustomTabStrip(self)
       end
-    end)
+    end))
 
-    widget.frame:HookScript("OnSizeChanged", function(_, width)
+    widget.frame:HookScript("OnSizeChanged", PUI_OptionsProfiler:DefCallback("WidgetSkins.TabGroup > widget.frame.HookScript OnSizeChanged", function(_, width)
       if widget.__puiAceGUIOwnedByPleebUI ~= true
         or AceGUI:IsReleasing(widget)
         or widget.__puiTabLayoutInProgress
@@ -392,7 +405,7 @@ function WidgetSkins.TabGroup(widget, forceLayout)
 
       widget.__puiLastTabLayoutWidth = roundedWidth
       _PUI_LayoutCustomTabStrip(widget, true)
-    end)
+    end))
   end
 
   widget.border:SetBackdrop(nil)
@@ -410,3 +423,4 @@ function WidgetSkins.TabGroup(widget, forceLayout)
   _PUI_UpdateTabGroupSelection(widget)
   widget.__puiTabLayoutInProgress = nil
 end
+WidgetSkins.TabGroup = PUI_OptionsProfiler:Def("WidgetSkins.TabGroup", WidgetSkins.TabGroup)

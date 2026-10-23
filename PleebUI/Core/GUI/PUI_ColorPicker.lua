@@ -1,4 +1,5 @@
 local ADDON_NAME, ns = ...
+local PUI_OptionsProfiler = select(1, ns.Pleebug:DropIn({}))
 
 local Theme = ns.Theme
 local Pixel = ns.Pixel
@@ -17,34 +18,46 @@ local function SameColor(first, second)
   end
   return true
 end
+SameColor = PUI_OptionsProfiler:Def("SameColor", SameColor)
+
 
 local function GetPaletteDB()
   local options = ns.Addon:GetGlobalOptionsDB()
   options.colorPalette = options.colorPalette or { recent = {}, favorites = {} }
   return options.colorPalette
 end
+GetPaletteDB = PUI_OptionsProfiler:Def("GetPaletteDB", GetPaletteDB)
+
 
 local function CurrentColor()
   local r, g, b = ColorPickerFrame:GetColorRGB()
   return { r, g, b, session.widget.HasAlpha and ColorPickerFrame:GetColorAlpha() or 1 }
 end
+CurrentColor = PUI_OptionsProfiler:Def("CurrentColor", CurrentColor)
+
 
 local function ColorDescription(color)
   local r, g, b = math.floor(color[1] * 255 + 0.5), math.floor(color[2] * 255 + 0.5), math.floor(color[3] * 255 + 0.5)
   return string.format("#%02X%02X%02X  RGB %d, %d, %d\nOpacity: %.0f%%", r, g, b, r, g, b, color[4] * 100)
 end
+ColorDescription = PUI_OptionsProfiler:Def("ColorDescription", ColorDescription)
+
 
 function ColorControls.AppendTooltip(widget, tooltip)
   local colors = Theme.GetColors()
   tooltip:AddLine(ColorDescription({ widget.r, widget.g, widget.b, widget.HasAlpha and widget.a or 1 }),
     colors.text[1], colors.text[2], colors.text[3], true)
 end
+ColorControls.AppendTooltip = PUI_OptionsProfiler:Def("ColorControls.AppendTooltip", ColorControls.AppendTooltip)
+
 
 local function HideColorTooltip(widget)
   local tooltip = widget.__puiColorTooltip
   if tooltip and tooltip:GetOwner() == widget.frame then tooltip:Hide() end
   widget.__puiColorTooltip = nil
 end
+HideColorTooltip = PUI_OptionsProfiler:Def("HideColorTooltip", HideColorTooltip)
+
 
 local function ShowColorTooltip(widget)
   local tooltip = OptionsTooltip
@@ -56,6 +69,8 @@ local function ShowColorTooltip(widget)
   tooltip:Show()
   widget.__puiColorTooltip = tooltip
 end
+ShowColorTooltip = PUI_OptionsProfiler:Def("ShowColorTooltip", ShowColorTooltip)
+
 
 local function RefreshColorState(widget)
   local chrome = widget.frame.__puiColorSwatchBg
@@ -65,6 +80,8 @@ local function RefreshColorState(widget)
   chrome:SetBackdropBorderColor(unpack(border))
   widget.text:SetTextColor(unpack(text))
 end
+RefreshColorState = PUI_OptionsProfiler:Def("RefreshColorState", RefreshColorState)
+
 
 local function RememberColor(color)
   local recent = GetPaletteDB().recent
@@ -74,6 +91,8 @@ local function RememberColor(color)
   table.insert(recent, 1, color)
   if #recent > COLOR_LIMIT then table.remove(recent) end
 end
+RememberColor = PUI_OptionsProfiler:Def("RememberColor", RememberColor)
+
 
 local function ApplyPaletteColor(color)
   if not session or session.widget.disabled then return end
@@ -81,6 +100,8 @@ local function ApplyPaletteColor(color)
   if session.widget.HasAlpha then picker:SetColorAlpha(color[4]) end
   picker:SetColorRGB(color[1], color[2], color[3])
 end
+ApplyPaletteColor = PUI_OptionsProfiler:Def("ApplyPaletteColor", ApplyPaletteColor)
+
 
 local function RefreshFavoriteState()
   local favorites, current = GetPaletteDB().favorites, CurrentColor()
@@ -91,6 +112,8 @@ local function RefreshFavoriteState()
   if palette.favorite:GetText() ~= text then palette.favorite:SetText(text) end
   if palette.favorite:IsEnabled() ~= enabled then palette.favorite:SetEnabled(enabled) end
 end
+RefreshFavoriteState = PUI_OptionsProfiler:Def("RefreshFavoriteState", RefreshFavoriteState)
+
 
 local function ShowSwatchTooltip(button)
   palette.tooltipOwner = button
@@ -98,20 +121,24 @@ local function ShowSwatchTooltip(button)
   OptionsTooltip:SetText(ColorDescription(button.color))
   OptionsTooltip:Show()
 end
+ShowSwatchTooltip = PUI_OptionsProfiler:Def("ShowSwatchTooltip", ShowSwatchTooltip)
+
 
 local function HideSwatchTooltip(button)
   if OptionsTooltip:GetOwner() == button then OptionsTooltip:Hide() end
 end
+HideSwatchTooltip = PUI_OptionsProfiler:Def("HideSwatchTooltip", HideSwatchTooltip)
+
 
 local SWATCH_FOCUS_ACTIONS = {
-  focus = function(button)
+  focus = PUI_OptionsProfiler:Def("focus", function(button)
     button.__puiKeyboardFocused = true
     ShowSwatchTooltip(button)
-  end,
-  blur = function(button)
+  end),
+  blur = PUI_OptionsProfiler:Def("blur", function(button)
     button.__puiKeyboardFocused = nil
     HideSwatchTooltip(button)
-  end,
+  end),
 }
 
 local function RefreshPalette()
@@ -170,6 +197,8 @@ local function RefreshPalette()
     end
   end
 end
+RefreshPalette = PUI_OptionsProfiler:Def("RefreshPalette", RefreshPalette)
+
 
 local function EnsurePalette()
   if palette then return end
@@ -185,9 +214,9 @@ local function EnsurePalette()
   palette.opacity:SetLabel("Opacity")
   palette.opacity:SetSliderValues(0, 1, 0.01)
   palette.opacity:SetIsPercent(true)
-  palette.opacity:SetCallback("OnValueChanged", function(_, _, value)
+  palette.opacity:SetCallback("OnValueChanged", PUI_OptionsProfiler:DefCallback("EnsurePalette > palette.opacity.SetCallback OnValueChanged", function(_, _, value)
     if session then ColorPickerFrame.Content.ColorPicker:SetColorAlpha(value) end
-  end)
+  end))
   palette.opacity.frame:SetParent(palette)
   ns.AceHooks.TakeOwnership(palette.opacity)
   palette.actions = {}
@@ -198,18 +227,18 @@ local function EnsurePalette()
     palette.actions[index] = button
   end
   palette.paste = palette.actions[2]
-  palette.actions[1]:SetScript("OnClick", function() copiedColor = CurrentColor(); RefreshPalette() end)
-  palette.paste:SetScript("OnClick", function() ApplyPaletteColor(copiedColor); RefreshPalette() end)
+  palette.actions[1]:SetScript("OnClick", PUI_OptionsProfiler:DefCallback("EnsurePalette > null.SetScript OnClick", function() copiedColor = CurrentColor(); RefreshPalette() end))
+  palette.paste:SetScript("OnClick", PUI_OptionsProfiler:DefCallback("EnsurePalette > palette.paste.SetScript OnClick", function() ApplyPaletteColor(copiedColor); RefreshPalette() end))
   palette.favorite = CreateFrame("Button", nil, palette, "UIPanelButtonTemplate")
   palette.favorite:GetFontString().__puiOptionsFontOwned = true
-  palette.favorite:SetScript("OnClick", function()
+  palette.favorite:SetScript("OnClick", PUI_OptionsProfiler:DefCallback("EnsurePalette > palette.favorite.SetScript OnClick", function()
     local favorites, color = GetPaletteDB().favorites, CurrentColor()
     for index, favorite in ipairs(favorites) do
       if SameColor(favorite, color) then table.remove(favorites, index); RefreshPalette(); return end
     end
     if #favorites < COLOR_LIMIT then favorites[#favorites + 1] = color end
     RefreshPalette()
-  end)
+  end))
   for _, key in ipairs({ "recent", "favorites" }) do
     palette[key .. "Title"] = palette:CreateFontString(nil, "OVERLAY")
     palette[key .. "Title"].__puiOptionsFontOwned = true
@@ -223,24 +252,26 @@ local function EnsurePalette()
       button.swatch = button:CreateTexture(nil, "ARTWORK")
       button.swatch:SetPoint("TOPLEFT", 2, -2)
       button.swatch:SetPoint("BOTTOMRIGHT", -2, 2)
-      button:SetScript("OnClick", function(self) ApplyPaletteColor(self.color); RefreshPalette() end)
+      button:SetScript("OnClick", PUI_OptionsProfiler:DefCallback("EnsurePalette > button.SetScript OnClick", function(self) ApplyPaletteColor(self.color); RefreshPalette() end))
       button:SetScript("OnEnter", ShowSwatchTooltip)
-      button:SetScript("OnLeave", function(self)
+      button:SetScript("OnLeave", PUI_OptionsProfiler:DefCallback("EnsurePalette > button.SetScript OnLeave", function(self)
         if not self.__puiKeyboardFocused then HideSwatchTooltip(self) end
-      end)
-      button:HookScript("OnHide", function(self)
+      end))
+      button:HookScript("OnHide", PUI_OptionsProfiler:DefCallback("EnsurePalette > button.HookScript OnHide", function(self)
         self.__puiKeyboardFocused = nil
         HideSwatchTooltip(self)
-      end)
+      end))
       palette[key][index] = button
     end
   end
-  palette:HookScript("OnHide", function()
+  palette:HookScript("OnHide", PUI_OptionsProfiler:DefCallback("EnsurePalette > palette.HookScript OnHide", function()
     if palette.tooltipOwner and OptionsTooltip:GetOwner() == palette.tooltipOwner then OptionsTooltip:Hide() end
     palette.tooltipOwner = nil
-  end)
+  end))
   palette:Hide()
 end
+EnsurePalette = PUI_OptionsProfiler:Def("EnsurePalette", EnsurePalette)
+
 
 local function FinishColorSession()
   local finished = session
@@ -258,6 +289,8 @@ local function FinishColorSession()
     end
   end
 end
+FinishColorSession = PUI_OptionsProfiler:Def("FinishColorSession", FinishColorSession)
+
 
 function ColorControls.Release(widget)
   HideColorTooltip(widget)
@@ -270,16 +303,18 @@ function ColorControls.Release(widget)
   end
   widget.__puiColorHovered, widget.__puiColorOpen = nil, nil
 end
+ColorControls.Release = PUI_OptionsProfiler:Def("ColorControls.Release", ColorControls.Release)
+
 
 local function OpenColorSession(widget)
   if widget.disabled or not ColorPickerFrame:IsShown() then return end
   EnsurePalette()
   local active = { widget = widget, cancel = ColorPickerFrame.cancelFunc, swatch = ColorPickerFrame.swatchFunc }
   session = active
-  ColorPickerFrame.cancelFunc = function(...)
+  ColorPickerFrame.cancelFunc = PUI_OptionsProfiler:DefCallback("OpenColorSession > ColorPickerFrame.cancelFunc", function(...)
     active.cancelled = true
     return active.cancel(...)
-  end
+  end)
   widget.__puiColorOpen = true
   RefreshColorState(widget)
   RefreshPalette()
@@ -288,58 +323,62 @@ local function OpenColorSession(widget)
   ns.KeyboardNavigation.RegisterFrame(ColorPickerFrame.Content.HexBox, "text", "colorHex")
   ns.KeyboardNavigation.RegisterFrame(ColorPickerFrame.Footer.OkayButton, "button", "colorAccept")
   ns.KeyboardNavigation.RegisterFrame(ColorPickerFrame.Footer.CancelButton, "button", "colorCancel")
-  ns.KeyboardNavigation.BindWindow(ColorPickerFrame, false, function()
+  ns.KeyboardNavigation.BindWindow(ColorPickerFrame, false, PUI_OptionsProfiler:DefCallback("OpenColorSession > ns.KeyboardNavigation.BindWindow", function()
     ColorPickerFrame.Footer.CancelButton:Click("LeftButton")
-  end, function() return session ~= nil end)
+  end), PUI_OptionsProfiler:DefCallback("OpenColorSession > ns.KeyboardNavigation.BindWindow #2", function() return session ~= nil end))
   ns.KeyboardNavigation.ActivateWindow(ColorPickerFrame)
   ns.KeyboardNavigation.HandleKey("TAB", true)
   if not palette.pickerHooked then
     palette.pickerHooked = true
     ColorPickerFrame:HookScript("OnHide", FinishColorSession)
-    ColorPickerFrame.Content.ColorPicker:HookScript("OnColorSelect", function()
+    ColorPickerFrame.Content.ColorPicker:HookScript("OnColorSelect", PUI_OptionsProfiler:DefCallback("OpenColorSession > ColorPickerFrame.Content.ColorPicker.HookScript OnColorSelect", function()
       if session then
         palette.opacity:SetValue(ColorPickerFrame:GetColorAlpha())
         RefreshFavoriteState()
       end
-    end)
-    hooksecurefunc(ColorPickerFrame, "SetupColorPickerAndShow", function()
+    end))
+    hooksecurefunc(ColorPickerFrame, "SetupColorPickerAndShow", PUI_OptionsProfiler:DefCallback("OpenColorSession > hooksecurefunc SetupColorPickerAndShow", function()
       if session and ColorPickerFrame.swatchFunc ~= session.swatch then
         local active = session
         active.cancelled = true
         FinishColorSession()
         active.cancel()
       end
-    end)
+    end))
   end
 end
+OpenColorSession = PUI_OptionsProfiler:Def("OpenColorSession", OpenColorSession)
+
 
 local function InstallColorControl(widget)
   if widget.__puiColorControlHooked then return end
   widget.__puiColorControlHooked = true
-  widget.frame:HookScript("OnEnter", function()
+  widget.frame:HookScript("OnEnter", PUI_OptionsProfiler:DefCallback("InstallColorControl > widget.frame.HookScript OnEnter", function()
     if not widget.__puiAceGUIOwnedByPleebUI then return end
     widget.__puiColorHovered = true
     RefreshColorState(widget)
     ShowColorTooltip(widget)
-  end)
-  widget.frame:HookScript("OnLeave", function()
+  end))
+  widget.frame:HookScript("OnLeave", PUI_OptionsProfiler:DefCallback("InstallColorControl > widget.frame.HookScript OnLeave", function()
     if not widget.__puiAceGUIOwnedByPleebUI then return end
     widget.__puiColorHovered = nil
     RefreshColorState(widget)
     HideColorTooltip(widget)
-  end)
-  widget.frame:HookScript("OnClick", function()
+  end))
+  widget.frame:HookScript("OnClick", PUI_OptionsProfiler:DefCallback("InstallColorControl > widget.frame.HookScript OnClick", function()
     if widget.__puiAceGUIOwnedByPleebUI then OpenColorSession(widget) end
-  end)
-  widget.frame:HookScript("OnHide", function()
+  end))
+  widget.frame:HookScript("OnHide", PUI_OptionsProfiler:DefCallback("InstallColorControl > widget.frame.HookScript OnHide", function()
     if widget.__puiAceGUIOwnedByPleebUI then ColorControls.Release(widget) end
-  end)
-  hooksecurefunc(widget, "SetDisabled", function(self)
+  end))
+  hooksecurefunc(widget, "SetDisabled", PUI_OptionsProfiler:DefCallback("InstallColorControl > hooksecurefunc SetDisabled", function(self)
     if not self.__puiAceGUIOwnedByPleebUI then return end
     if self.disabled then ColorControls.Release(self) end
     RefreshColorState(self)
-  end)
+  end))
 end
+InstallColorControl = PUI_OptionsProfiler:Def("InstallColorControl", InstallColorControl)
+
 
 function WidgetSkins.ColorPicker(widget)
   local frame = widget.frame
@@ -403,3 +442,4 @@ function WidgetSkins.ColorPicker(widget)
   RefreshColorState(widget)
   if session and session.widget == widget then RefreshPalette() end
 end
+WidgetSkins.ColorPicker = PUI_OptionsProfiler:Def("WidgetSkins.ColorPicker", WidgetSkins.ColorPicker)

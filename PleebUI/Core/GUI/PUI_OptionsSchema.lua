@@ -1,4 +1,5 @@
 local _, ns = ...
+local PUI_OptionsProfiler = select(1, ns.Pleebug:DropIn({}))
 
 local Schema = {}
 ns.OptionsSchema = Schema
@@ -9,6 +10,8 @@ local GROUPS = {}
 local function DefineGroup(key, name, order)
   GROUPS[key] = { name = name, order = order }
 end
+DefineGroup = PUI_OptionsProfiler:Def("DefineGroup", DefineGroup)
+
 
 DefineGroup("text", "Text", 40)
 DefineGroup("name", "Name", 10)
@@ -77,6 +80,8 @@ local function DefineControl(group, label, order, names)
     RULES[names[index]] = { group = group, label = label, order = order }
   end
 end
+DefineControl = PUI_OptionsProfiler:Def("DefineControl", DefineControl)
+
 
 DefineControl("text", "Font", 40, { "Font", "Font type" })
 DefineControl("text", "Font size", 50, { "Font size", "Text size" })
@@ -320,6 +325,8 @@ local function HasContext(context, name)
     or name == "Countdown" and context["Duration countdown"] == true
     or name == "Keybinds" and context["Keybind text"] == true
 end
+HasContext = PUI_OptionsProfiler:Def("HasContext", HasContext)
+
 
 local INLINE_NAMES = {
   core = "General", frameLayout = "Size and layout", indicators = "Indicators",
@@ -336,11 +343,15 @@ local function EvaluateCondition(condition, info)
   if type(value) == "string" then return condition.handler[value](condition.handler, info) end
   return value
 end
+EvaluateCondition = PUI_OptionsProfiler:Def("EvaluateCondition", EvaluateCondition)
+
 
 local function EvaluateDisabledReason(reason, info)
   if type(reason) == "function" then return reason(info) end
   return reason
 end
+EvaluateDisabledReason = PUI_OptionsProfiler:Def("EvaluateDisabledReason", EvaluateDisabledReason)
+
 
 function Schema.GetDisabledReason(user)
   if user.appName ~= "PleebUI" or not user.options or not user.path then return end
@@ -370,6 +381,8 @@ function Schema.GetDisabledReason(user)
   info.type, info.uiType, info.uiName = user.option.type, "dialog", "AceConfigDialog-3.0"
   return EvaluateDisabledReason(reason, info)
 end
+Schema.GetDisabledReason = PUI_OptionsProfiler:Def("Schema.GetDisabledReason", Schema.GetDisabledReason)
+
 
 -- Shortcuts are selected by the owning builder, never inferred from labels.
 function Schema.BuildCommonSettings(source, definitions)
@@ -400,12 +413,12 @@ function Schema.BuildCommonSettings(source, definitions)
           reason = type(node.arg) == "table" and node.arg.puiDisabledReason or nil }
       end
       if #parents > 0 then
-        shortcut[field] = function(info)
+        shortcut[field] = PUI_OptionsProfiler:DefCallback("Schema.BuildCommonSettings > ", function(info)
           for _, condition in ipairs(parents) do
             if EvaluateCondition(condition, info) then return true end
           end
           return false
-        end
+        end)
       end
     end
     if #conditions.disabled > 0 then
@@ -417,11 +430,11 @@ function Schema.BuildCommonSettings(source, definitions)
         arg = nil
       end
       if arg then
-        arg.puiDisabledReason = function(info)
+        arg.puiDisabledReason = PUI_OptionsProfiler:DefCallback("Schema.BuildCommonSettings > arg.puiDisabledReason", function(info)
           for _, condition in ipairs(conditions.disabled) do
             if EvaluateCondition(condition, info) then return EvaluateDisabledReason(condition.reason, info) end
           end
-        end
+        end)
         shortcut.arg = arg
       end
     end
@@ -431,6 +444,8 @@ function Schema.BuildCommonSettings(source, definitions)
   return { type = "group", name = "Common settings", inline = true, order = 80,
     arg = { puiExplicit = true }, args = args }
 end
+Schema.BuildCommonSettings = PUI_OptionsProfiler:Def("Schema.BuildCommonSettings", Schema.BuildCommonSettings)
+
 
 -- Providers can return the same table after their GUI cache is invalidated.
 local APPLIED_GROUPS = setmetatable({}, { __mode = "k" })
@@ -445,6 +460,8 @@ local function FormatValues(values, isOutline)
   end
   return values
 end
+FormatValues = PUI_OptionsProfiler:Def("FormatValues", FormatValues)
+
 
 local function ArrangeGroup(group, context, groupKey)
   if APPLIED_GROUPS[group] then return end
@@ -542,8 +559,8 @@ local function ArrangeGroup(group, context, groupKey)
           option.min, option.max, option.step, option.isPercent = 0, 1, (option.step or 1) / 100, true
           if option.softMin then option.softMin = option.softMin / 100 end
           if option.softMax then option.softMax = option.softMax / 100 end
-          option.get = function(info) return getter(info) / 100 end
-          option.set = function(info, value) setter(info, value * 100) end
+          option.get = PUI_OptionsProfiler:DefCallback("ArrangeGroup > option.get", function(info) return getter(info) / 100 end)
+          option.set = PUI_OptionsProfiler:DefCallback("ArrangeGroup > option.set", function(info, value) setter(info, value * 100) end)
         end
       end
       if type(option.values) == "table" then
@@ -551,9 +568,9 @@ local function ArrangeGroup(group, context, groupKey)
       elseif type(option.values) == "function" then
         local valueProvider = option.values
         local isOutline = option.name == "Outline"
-        option.values = function(...)
+        option.values = PUI_OptionsProfiler:DefCallback("ArrangeGroup > option.values", function(...)
           return FormatValues(valueProvider(...), isOutline)
-        end
+        end)
       end
     end
   end
@@ -575,6 +592,8 @@ local function ArrangeGroup(group, context, groupKey)
     end
   end
 end
+ArrangeGroup = PUI_OptionsProfiler:Def("ArrangeGroup", ArrangeGroup)
+
 
 local function EnsureInlineGroups(group)
   if type(group.args) ~= "table" then return end
@@ -614,6 +633,8 @@ local function EnsureInlineGroups(group)
     }
   end
 end
+EnsureInlineGroups = PUI_OptionsProfiler:Def("EnsureInlineGroups", EnsureInlineGroups)
+
 
 local ORDERED_GROUPS = setmetatable({}, { __mode = "k" })
 
@@ -643,21 +664,27 @@ local function OrderInlineControls(group)
     if option.type == "execute" and (name:match("^Reset") or name:match("^Delete")) then return 3 end
     return 2
   end
-  table.sort(controls, function(a, b)
+  Phase = PUI_OptionsProfiler:DefCallback("OrderInlineControls > Phase", Phase)
+
+  table.sort(controls, PUI_OptionsProfiler:DefCallback("OrderInlineControls > table.sort", function(a, b)
     local ap, bp = Phase(a.option), Phase(b.option)
     if ap ~= bp then return ap < bp end
     local ao, bo = tonumber(a.option.order) or 50, tonumber(b.option.order) or 50
     if ao ~= bo then return ao < bo end
     return a.key < b.key
-  end)
+  end))
   for index, item in ipairs(controls) do item.option.order = index * 10 end
 end
+OrderInlineControls = PUI_OptionsProfiler:Def("OrderInlineControls", OrderInlineControls)
+
 
 function Schema.Apply(options, moduleKey)
   ArrangeGroup(options, { moduleKey = moduleKey })
   EnsureInlineGroups(options)
   OrderInlineControls(options)
 end
+Schema.Apply = PUI_OptionsProfiler:Def("Schema.Apply", Schema.Apply)
+
 
 function Schema.GetCompactLabel(label)
   if label == "Border size" then return "Border thickness" end
@@ -677,6 +704,8 @@ function Schema.GetCompactLabel(label)
   if label == "Font color" then return "Text color" end
   return LABELS[label] or label
 end
+Schema.GetCompactLabel = PUI_OptionsProfiler:Def("Schema.GetCompactLabel", Schema.GetCompactLabel)
+
 
 -- Builders supply the text role and its controls; this template only names and orders properties.
 function Schema.BuildTextGroup(name, order, args)
@@ -698,3 +727,4 @@ function Schema.BuildTextGroup(name, order, args)
   end
   return { type = "group", name = name, order = order, inline = true, arg = { puiExplicit = true }, args = args }
 end
+Schema.BuildTextGroup = PUI_OptionsProfiler:Def("Schema.BuildTextGroup", Schema.BuildTextGroup)

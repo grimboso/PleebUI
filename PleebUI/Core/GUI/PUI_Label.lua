@@ -1,4 +1,5 @@
 local _, ns = ...
+local PUI_OptionsProfiler = select(1, ns.Pleebug:DropIn({}))
 
 local Theme = ns.Theme
 local Pixel = ns.Pixel
@@ -22,6 +23,8 @@ function WidgetSkins.Label(widget)
   Theme.ApplyFont(text, "body")
   text:SetTextColor(color[1], color[2], color[3], color[4])
 end
+WidgetSkins.Label = PUI_OptionsProfiler:Def("WidgetSkins.Label", WidgetSkins.Label)
+
 
 function WidgetSkins.Heading(widget)
   local text = widget.label
@@ -31,6 +34,8 @@ function WidgetSkins.Heading(widget)
   text:SetTextColor(color[1], color[2], color[3], color[4])
   widget:SetHeight(math_max(18, Theme.GetOptionsFontHeight("header")))
 end
+WidgetSkins.Heading = PUI_OptionsProfiler:Def("WidgetSkins.Heading", WidgetSkins.Heading)
+
 
 local function PUI_Label_UpdateLayout(widget)
   if widget.resizing then
@@ -82,9 +87,11 @@ local function PUI_Label_UpdateLayout(widget)
   frame.height = height
   widget.resizing = nil
 end
+PUI_Label_UpdateLayout = PUI_OptionsProfiler:Def("PUI_Label_UpdateLayout", PUI_Label_UpdateLayout)
+
 
 local PUI_Label_Methods = {
-  OnAcquire = function(self)
+  OnAcquire = PUI_OptionsProfiler:Def("OnAcquire", function(self)
     self.resizing = true
     self:SetWidth(200)
     self:SetText(nil)
@@ -96,22 +103,22 @@ local PUI_Label_Methods = {
     self:SetJustifyV("TOP")
     self.resizing = nil
     PUI_Label_UpdateLayout(self)
-  end,
+  end),
 
-  OnWidthSet = function(self)
+  OnWidthSet = PUI_OptionsProfiler:Def("OnWidthSet", function(self)
     PUI_Label_UpdateLayout(self)
-  end,
+  end),
 
-  SetText = function(self, text)
+  SetText = PUI_OptionsProfiler:Def("SetText", function(self, text)
     self.label:SetText(text or "")
     PUI_Label_UpdateLayout(self)
-  end,
+  end),
 
-  SetColor = function(self, r, g, b)
+  SetColor = PUI_OptionsProfiler:Def("SetColor", function(self, r, g, b)
     self.label:SetVertexColor(r or 1, g or 1, b or 1)
-  end,
+  end),
 
-  SetImage = function(self, path, ...)
+  SetImage = PUI_OptionsProfiler:Def("SetImage", function(self, path, ...)
     Pixel.SetTexture(self.image, path)
 
     if self.image:GetTexture() then
@@ -128,39 +135,39 @@ local PUI_Label_Methods = {
     end
 
     PUI_Label_UpdateLayout(self)
-  end,
+  end),
 
-  SetFont = function(self, font, height, flags)
+  SetFont = PUI_OptionsProfiler:Def("SetFont", function(self, font, height, flags)
     if not self.fontObject then
       self.fontObject = CreateFont("PUIAceGUILabelFont" .. AceGUI:GetNextWidgetNum(PUI_LABEL_TYPE))
     end
 
     self.fontObject:SetFont(font, height, flags)
     self:SetFontObject(self.fontObject)
-  end,
+  end),
 
-  SetFontObject = function(self, fontObject)
+  SetFontObject = PUI_OptionsProfiler:Def("SetFontObject", function(self, fontObject)
     self.label:SetFontObject(fontObject or GameFontHighlightSmall)
     PUI_Label_UpdateLayout(self)
-  end,
+  end),
 
-  SetImageSize = function(self, width, height)
+  SetImageSize = PUI_OptionsProfiler:Def("SetImageSize", function(self, width, height)
     Pixel.Size(self.image, width, height)
     PUI_Label_UpdateLayout(self)
-  end,
+  end),
 
-  SetJustifyH = function(self, justify)
+  SetJustifyH = PUI_OptionsProfiler:Def("SetJustifyH", function(self, justify)
     self.label:SetJustifyH(justify)
-  end,
+  end),
 
-  SetJustifyV = function(self, justify)
+  SetJustifyV = PUI_OptionsProfiler:Def("SetJustifyV", function(self, justify)
     self.label:SetJustifyV(justify)
-  end,
+  end),
 
-  RefreshTheme = function(self)
+  RefreshTheme = PUI_OptionsProfiler:Def("RefreshTheme", function(self)
     WidgetSkins.Label(self)
     PUI_Label_UpdateLayout(self)
-  end,
+  end),
 }
 
 local function PUI_Label_Constructor()
@@ -187,15 +194,17 @@ local function PUI_Label_Constructor()
 
   return AceGUI:RegisterAsWidget(widget)
 end
+PUI_Label_Constructor = PUI_OptionsProfiler:Def("PUI_Label_Constructor", PUI_Label_Constructor)
+
 
 local PUI_Heading_Methods = {
-  OnAcquire = function(self)
+  OnAcquire = PUI_OptionsProfiler:Def("OnAcquire #2", function(self)
     self:SetText(nil)
     self:SetFullWidth(true)
     self:SetHeight(18)
-  end,
+  end),
 
-  SetText = function(self, text)
+  SetText = PUI_OptionsProfiler:Def("SetText #2", function(self, text)
     self.label:SetText(text or "")
 
     if text and text ~= "" then
@@ -205,11 +214,11 @@ local PUI_Heading_Methods = {
       Pixel.Point(self.left, "RIGHT", nil, nil, -3, 0)
       self.right:Hide()
     end
-  end,
+  end),
 
-  RefreshTheme = function(self)
+  RefreshTheme = PUI_OptionsProfiler:Def("RefreshTheme #2", function(self)
     WidgetSkins.Heading(self)
-  end,
+  end),
 }
 
 local function PUI_Heading_Constructor()
@@ -252,6 +261,8 @@ local function PUI_Heading_Constructor()
 
   return AceGUI:RegisterAsWidget(widget)
 end
+PUI_Heading_Constructor = PUI_OptionsProfiler:Def("PUI_Heading_Constructor", PUI_Heading_Constructor)
+
 
 AceGUI:RegisterWidgetType(PUI_LABEL_TYPE, PUI_Label_Constructor, PUI_LABEL_VERSION)
 AceGUI:RegisterWidgetType(PUI_HEADING_TYPE, PUI_Heading_Constructor, PUI_HEADING_VERSION)

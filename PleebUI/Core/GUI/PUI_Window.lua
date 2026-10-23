@@ -1,4 +1,5 @@
 local _, ns = ...
+local PUI_OptionsProfiler = select(1, ns.Pleebug:DropIn({}))
 
 local Theme = ns.Theme
 local WHITE8 = "Interface\\Buttons\\WHITE8x8"
@@ -14,6 +15,8 @@ function Theme.ApplyArrowTexture(texture, direction, state)
   local color = state == "disabled" and colors.disabledText or colors.accent
   texture:SetVertexColor(color[1], color[2], color[3], color[4])
 end
+Theme.ApplyArrowTexture = PUI_OptionsProfiler:Def("Theme.ApplyArrowTexture", Theme.ApplyArrowTexture)
+
 
 function Theme.ApplyScrollArrow(button, direction)
   local textures = scrollArrows[button]
@@ -35,6 +38,8 @@ function Theme.ApplyScrollArrow(button, direction)
   button:SetPushedTexture(textures.pushed)
   button:SetDisabledTexture(textures.disabled)
 end
+Theme.ApplyScrollArrow = PUI_OptionsProfiler:Def("Theme.ApplyScrollArrow", Theme.ApplyScrollArrow)
+
 
 function Theme.StripACDFrameTextures(frame)
   ns.IconSkin.StripNineSliceAndBackdrop(frame)
@@ -51,6 +56,8 @@ function Theme.StripACDFrameTextures(frame)
     end
   end
 end
+Theme.StripACDFrameTextures = PUI_OptionsProfiler:Def("Theme.StripACDFrameTextures", Theme.StripACDFrameTextures)
+
 
 
 
@@ -72,10 +79,14 @@ local function RefreshScrollbarState(scrollbar)
     (hovered or pressed) and 1 or 0.90
   )
 end
+RefreshScrollbarState = PUI_OptionsProfiler:Def("RefreshScrollbarState", RefreshScrollbarState)
+
 
 local function RefreshScrollFrameScrollbar(scrollFrame)
   scrollFrame.ScrollBar:SetShown(scrollFrame:GetVerticalScrollRange() > 1)
 end
+RefreshScrollFrameScrollbar = PUI_OptionsProfiler:Def("RefreshScrollFrameScrollbar", RefreshScrollFrameScrollbar)
+
 
 function WidgetSkins.Scrollbar(widget, visibleHeight, contentHeight, minimumThumbHeight)
   local scrollbar = widget.ScrollBar or widget
@@ -115,6 +126,8 @@ function WidgetSkins.Scrollbar(widget, visibleHeight, contentHeight, minimumThum
       end
     end
   end
+  StripTextures = PUI_OptionsProfiler:DefCallback("WidgetSkins.Scrollbar > StripTextures", StripTextures)
+
 
   local function SkinArrowButton(button, direction)
     StripTextures(button)
@@ -125,6 +138,8 @@ function WidgetSkins.Scrollbar(widget, visibleHeight, contentHeight, minimumThum
 
     Theme.ApplyScrollArrow(button, direction)
   end
+  SkinArrowButton = PUI_OptionsProfiler:DefCallback("WidgetSkins.Scrollbar > SkinArrowButton", SkinArrowButton)
+
 
   StripTextures(scrollbar, thumb)
 
@@ -157,30 +172,30 @@ function WidgetSkins.Scrollbar(widget, visibleHeight, contentHeight, minimumThum
 
   if not scrollbar.__puiScrollbarStateHooked then
     scrollbar.__puiScrollbarStateHooked = true
-    scrollbar:HookScript("OnEnter", function(self)
+    scrollbar:HookScript("OnEnter", PUI_OptionsProfiler:DefCallback("WidgetSkins.Scrollbar > scrollbar.HookScript OnEnter", function(self)
       self.__puiScrollbarHovered = true
       RefreshScrollbarState(self)
-    end)
-    scrollbar:HookScript("OnLeave", function(self)
+    end))
+    scrollbar:HookScript("OnLeave", PUI_OptionsProfiler:DefCallback("WidgetSkins.Scrollbar > scrollbar.HookScript OnLeave", function(self)
       self.__puiScrollbarHovered = nil
       RefreshScrollbarState(self)
-    end)
-    scrollbar:HookScript("OnMouseDown", function(self, mouseButton)
+    end))
+    scrollbar:HookScript("OnMouseDown", PUI_OptionsProfiler:DefCallback("WidgetSkins.Scrollbar > scrollbar.HookScript OnMouseDown", function(self, mouseButton)
       if mouseButton == "LeftButton" then
         self.__puiScrollbarPressed = true
         RefreshScrollbarState(self)
       end
-    end)
-    scrollbar:HookScript("OnMouseUp", function(self, mouseButton)
+    end))
+    scrollbar:HookScript("OnMouseUp", PUI_OptionsProfiler:DefCallback("WidgetSkins.Scrollbar > scrollbar.HookScript OnMouseUp", function(self, mouseButton)
       if mouseButton == "LeftButton" then
         self.__puiScrollbarPressed = nil
         RefreshScrollbarState(self)
       end
-    end)
-    scrollbar:HookScript("OnHide", function(self)
+    end))
+    scrollbar:HookScript("OnHide", PUI_OptionsProfiler:DefCallback("WidgetSkins.Scrollbar > scrollbar.HookScript OnHide", function(self)
       self.__puiScrollbarHovered = nil
       self.__puiScrollbarPressed = nil
-    end)
+    end))
     scrollbar:HookScript("OnShow", RefreshScrollbarState)
   end
   RefreshScrollbarState(scrollbar)
@@ -196,6 +211,8 @@ function WidgetSkins.Scrollbar(widget, visibleHeight, contentHeight, minimumThum
     RefreshScrollFrameScrollbar(scrollFrame)
   end
 end
+WidgetSkins.Scrollbar = PUI_OptionsProfiler:Def("WidgetSkins.Scrollbar", WidgetSkins.Scrollbar)
+
 
 local function LayoutScrollFrameTargets(widget)
   local margin = Theme.GetOptionsPointerTargetSize(20) + 6
@@ -211,6 +228,8 @@ local function LayoutScrollFrameTargets(widget)
   widget.scrollbar:SetPoint("BOTTOMLEFT", widget.scrollframe, "BOTTOMRIGHT", 4, inset)
   return changed
 end
+LayoutScrollFrameTargets = PUI_OptionsProfiler:Def("LayoutScrollFrameTargets", LayoutScrollFrameTargets)
+
 
 local function FixScrollFrameWithReservedLane(widget)
   if widget.updateLock then return end
@@ -232,37 +251,41 @@ local function FixScrollFrameWithReservedLane(widget)
   widget:SetScroll(value)
   widget.updateLock = nil
 end
+FixScrollFrameWithReservedLane = PUI_OptionsProfiler:Def("FixScrollFrameWithReservedLane", FixScrollFrameWithReservedLane)
+
 
 function WidgetSkins.ScrollFrame(widget)
   WidgetSkins.Scrollbar(widget.scrollbar)
   if not widget.__puiScrollTargetLayoutHooked then
     widget.__puiScrollTargetLayoutHooked = true
     local originalDoLayout = widget.DoLayout
-    widget.DoLayout = function(self, ...)
+    widget.DoLayout = PUI_OptionsProfiler:DefCallback("WidgetSkins.ScrollFrame > widget.DoLayout", function(self, ...)
       if self.__puiAceGUIOwnedByPleebUI == true then
         LayoutScrollFrameTargets(self)
       end
       return originalDoLayout(self, ...)
-    end
+    end)
     local originalOnWidthSet = widget.OnWidthSet
-    widget.OnWidthSet = function(self, width)
+    widget.OnWidthSet = PUI_OptionsProfiler:DefCallback("WidgetSkins.ScrollFrame > widget.OnWidthSet", function(self, width)
       originalOnWidthSet(self, width)
       if self.__puiAceGUIOwnedByPleebUI == true then
         LayoutScrollFrameTargets(self)
       end
-    end
+    end)
     local originalFixScroll = widget.FixScroll
-    widget.FixScroll = function(self)
+    widget.FixScroll = PUI_OptionsProfiler:DefCallback("WidgetSkins.ScrollFrame > widget.FixScroll", function(self)
       if self.__puiAceGUIOwnedByPleebUI == true then
         return FixScrollFrameWithReservedLane(self)
       end
       return originalFixScroll(self)
-    end
+    end)
   end
   if LayoutScrollFrameTargets(widget) then
     widget:DoLayout()
   end
 end
+WidgetSkins.ScrollFrame = PUI_OptionsProfiler:Def("WidgetSkins.ScrollFrame", WidgetSkins.ScrollFrame)
+
 
 function WidgetSkins.Frame(frame)
   Theme.StripACDFrameTextures(frame)
@@ -273,6 +296,8 @@ function WidgetSkins.Frame(frame)
     border = colors.border,
   })
 end
+WidgetSkins.Frame = PUI_OptionsProfiler:Def("WidgetSkins.Frame", WidgetSkins.Frame)
+
 
 function WidgetSkins.CloseButton(button)
   ns.KeyboardNavigation.RegisterFrame(button, "button", "close")
@@ -299,3 +324,4 @@ function WidgetSkins.CloseButton(button)
 
   Theme.StripIcon(button)
 end
+WidgetSkins.CloseButton = PUI_OptionsProfiler:Def("WidgetSkins.CloseButton", WidgetSkins.CloseButton)

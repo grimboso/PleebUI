@@ -1,4 +1,5 @@
 local _, ns = ...
+local PUI_OptionsProfiler = select(1, ns.Pleebug:DropIn({}))
 
 local PageShell = {}
 ns.PageShell = PageShell
@@ -34,17 +35,25 @@ local function CreateOptionsGroup()
     self:SetWidth(300)
     self:SetHeight(100)
   end
+  widget.OnAcquire = PUI_OptionsProfiler:DefCallback("CreateOptionsGroup > widget.OnAcquire", widget.OnAcquire)
+
 
   function widget:OnWidthSet(width)
     self.content.width = width
   end
+  widget.OnWidthSet = PUI_OptionsProfiler:DefCallback("CreateOptionsGroup > widget.OnWidthSet", widget.OnWidthSet)
+
 
   function widget:OnHeightSet(height)
     self.content.height = height
   end
+  widget.OnHeightSet = PUI_OptionsProfiler:DefCallback("CreateOptionsGroup > widget.OnHeightSet", widget.OnHeightSet)
+
 
   return AceGUI:RegisterAsContainer(widget)
 end
+CreateOptionsGroup = PUI_OptionsProfiler:Def("CreateOptionsGroup", CreateOptionsGroup)
+
 
 -- SimpleGroup deliberately opts out of AceConfig's automatic scroll container.
 AceGUI:RegisterWidgetType("PUI_OptionsGroup", CreateOptionsGroup, 1)
@@ -55,6 +64,8 @@ local function PUI_PageShell_ApplyBackdrop(frame, bgColor, borderColor, edge)
     border = borderColor,
   }, edge)
 end
+PUI_PageShell_ApplyBackdrop = PUI_OptionsProfiler:Def("PUI_PageShell_ApplyBackdrop", PUI_PageShell_ApplyBackdrop)
+
 
 local function PUI_PageShell_ClearHostChildren(host, preserve)
   for _, child in ipairs({ host:GetChildren() }) do
@@ -73,6 +84,8 @@ local function PUI_PageShell_ClearHostChildren(host, preserve)
     end
   end
 end
+PUI_PageShell_ClearHostChildren = PUI_OptionsProfiler:Def("PUI_PageShell_ClearHostChildren", PUI_PageShell_ClearHostChildren)
+
 
 local function PUI_PageShell_GetBodyHeight(self)
   local height = tonumber(self.body:GetHeight()) or 0
@@ -87,6 +100,8 @@ local function PUI_PageShell_GetBodyHeight(self)
 
   return height
 end
+PUI_PageShell_GetBodyHeight = PUI_OptionsProfiler:Def("PUI_PageShell_GetBodyHeight", PUI_PageShell_GetBodyHeight)
+
 
 local function PUI_PageShell_GetPreviewHeightBounds(self)
   local reservedHeight = PUI_PREVIEW_CONTENT_MIN_HEIGHT
@@ -113,6 +128,8 @@ local function PUI_PageShell_GetPreviewHeightBounds(self)
       math_floor(PUI_PageShell_GetBodyHeight(self) - reservedHeight + 0.5)
     )
 end
+PUI_PageShell_GetPreviewHeightBounds = PUI_OptionsProfiler:Def("PUI_PageShell_GetPreviewHeightBounds", PUI_PageShell_GetPreviewHeightBounds)
+
 
 local function PUI_PageShell_SyncACDContainer(self)
   local parent = self.acdHost
@@ -131,6 +148,8 @@ local function PUI_PageShell_SyncACDContainer(self)
 
   container.frame:SetClipsChildren(true)
 end
+PUI_PageShell_SyncACDContainer = PUI_OptionsProfiler:Def("PUI_PageShell_SyncACDContainer", PUI_PageShell_SyncACDContainer)
+
 
 local function PUI_PageShell_RebuildLayout(self)
   if self.__puiLayoutBuilding then
@@ -292,6 +311,8 @@ local function PUI_PageShell_RebuildLayout(self)
   self.__puiACDContainerLayoutReady = true
   self.__puiLayoutBuilding = nil
 end
+PUI_PageShell_RebuildLayout = PUI_OptionsProfiler:Def("PUI_PageShell_RebuildLayout", PUI_PageShell_RebuildLayout)
+
 
 local function PUI_PageShell_RequestLayout(self)
   if self.__puiLayoutSuspended then
@@ -302,6 +323,8 @@ local function PUI_PageShell_RequestLayout(self)
   self.__puiLayoutDirty = nil
   PUI_PageShell_RebuildLayout(self)
 end
+PUI_PageShell_RequestLayout = PUI_OptionsProfiler:Def("PUI_PageShell_RequestLayout", PUI_PageShell_RequestLayout)
+
 
 
 local function PUI_PageShell_RefreshTheme(self)
@@ -323,6 +346,8 @@ local function PUI_PageShell_RefreshTheme(self)
   self.description:SetTextColor(textColor[1], textColor[2], textColor[3], textColor[4] * 0.90)
   self.helpLine:SetTextColor(textColor[1], textColor[2], textColor[3], textColor[4] * 0.85)
 end
+PUI_PageShell_RefreshTheme = PUI_OptionsProfiler:Def("PUI_PageShell_RefreshTheme", PUI_PageShell_RefreshTheme)
+
 
 function PageShell.Create(parent)
   local shell = CreateFrame("Frame", nil, parent)
@@ -403,6 +428,8 @@ function PageShell.Create(parent)
     PUI_PageShell_RefreshTheme(self)
     PUI_PageShell_RequestLayout(self)
   end
+  shell.RefreshTheme = PUI_OptionsProfiler:DefCallback("PageShell.Create > shell.RefreshTheme", shell.RefreshTheme)
+
 
   function shell:SetTitle(text)
     local shown = text ~= ""
@@ -415,6 +442,8 @@ function PageShell.Create(parent)
     self.title:SetShown(shown)
     PUI_PageShell_RequestLayout(self)
   end
+  shell.SetTitle = PUI_OptionsProfiler:DefCallback("PageShell.Create > shell.SetTitle", shell.SetTitle)
+
 
   function shell:SetDescription(text)
     local shown = text ~= ""
@@ -427,6 +456,8 @@ function PageShell.Create(parent)
     self.description:SetShown(shown)
     PUI_PageShell_RequestLayout(self)
   end
+  shell.SetDescription = PUI_OptionsProfiler:DefCallback("PageShell.Create > shell.SetDescription", shell.SetDescription)
+
 
   function shell:SetHelpText(text)
     local shown = text ~= ""
@@ -439,12 +470,16 @@ function PageShell.Create(parent)
     self.helpLine:SetShown(shown)
     PUI_PageShell_RequestLayout(self)
   end
+  shell.SetHelpText = PUI_OptionsProfiler:DefCallback("PageShell.Create > shell.SetHelpText", shell.SetHelpText)
+
 
 
   function shell:BeginLayoutBatch()
     self.__puiLayoutBatchDepth = (self.__puiLayoutBatchDepth or 0) + 1
     self.__puiLayoutSuspended = true
   end
+  shell.BeginLayoutBatch = PUI_OptionsProfiler:DefCallback("PageShell.Create > shell.BeginLayoutBatch", shell.BeginLayoutBatch)
+
 
   function shell:EndLayoutBatch()
     local depth = (self.__puiLayoutBatchDepth or 1) - 1
@@ -461,6 +496,8 @@ function PageShell.Create(parent)
       PUI_PageShell_RebuildLayout(self)
     end
   end
+  shell.EndLayoutBatch = PUI_OptionsProfiler:DefCallback("PageShell.Create > shell.EndLayoutBatch", shell.EndLayoutBatch)
+
 
   function shell:GetACDContainer()
     if self.__puiLayoutDirty == true or self.__puiACDContainerLayoutReady ~= true then
@@ -503,6 +540,8 @@ function PageShell.Create(parent)
 
     return container
   end
+  shell.GetACDContainer = PUI_OptionsProfiler:DefCallback("PageShell.Create > shell.GetACDContainer", shell.GetACDContainer)
+
 
   function shell:GetNativeContentHost()
     if self.__puiLayoutDirty == true or self.__puiACDContainerLayoutReady ~= true then
@@ -519,6 +558,8 @@ function PageShell.Create(parent)
     self.nativeHost:Show()
     return self.nativeHost
   end
+  shell.GetNativeContentHost = PUI_OptionsProfiler:DefCallback("PageShell.Create > shell.GetNativeContentHost", shell.GetNativeContentHost)
+
 
   function shell:SetHeaderActionsShown(enabled)
     enabled = enabled == true
@@ -530,6 +571,8 @@ function PageShell.Create(parent)
     self.headerActions:SetShown(enabled)
     PUI_PageShell_RequestLayout(self)
   end
+  shell.SetHeaderActionsShown = PUI_OptionsProfiler:DefCallback("PageShell.Create > shell.SetHeaderActionsShown", shell.SetHeaderActionsShown)
+
 
   function shell:SetStickyShown(enabled)
     enabled = enabled == true
@@ -541,14 +584,20 @@ function PageShell.Create(parent)
     self.stickyStrip:SetShown(enabled)
     PUI_PageShell_RequestLayout(self)
   end
+  shell.SetStickyShown = PUI_OptionsProfiler:DefCallback("PageShell.Create > shell.SetStickyShown", shell.SetStickyShown)
+
 
   function shell:SetPreviewState(state)
     self.__puiPreviewState = type(state) == "table" and state or nil
   end
+  shell.SetPreviewState = PUI_OptionsProfiler:DefCallback("PageShell.Create > shell.SetPreviewState", shell.SetPreviewState)
+
 
   function shell:GetPreviewState()
     return self.__puiPreviewState
   end
+  shell.GetPreviewState = PUI_OptionsProfiler:DefCallback("PageShell.Create > shell.GetPreviewState", shell.GetPreviewState)
+
 
   function shell:SetPreviewShown(enabled, width, height)
     enabled = enabled == true
@@ -580,6 +629,8 @@ function PageShell.Create(parent)
     self.previewDock:SetShown(enabled)
     PUI_PageShell_RequestLayout(self)
   end
+  shell.SetPreviewShown = PUI_OptionsProfiler:DefCallback("PageShell.Create > shell.SetPreviewShown", shell.SetPreviewShown)
+
 
   function shell:Reset()
     local wasSuspended = self.__puiLayoutSuspended
@@ -602,6 +653,8 @@ function PageShell.Create(parent)
     self.__puiLayoutSuspended = wasSuspended or nil
     PUI_PageShell_RequestLayout(self)
   end
+  shell.Reset = PUI_OptionsProfiler:DefCallback("PageShell.Create > shell.Reset", shell.Reset)
+
 
   function shell:ResetPageContent(preserveSticky)
     local wasSuspended = self.__puiLayoutSuspended
@@ -624,6 +677,8 @@ function PageShell.Create(parent)
     self.__puiLayoutSuspended = wasSuspended or nil
     PUI_PageShell_RequestLayout(self)
   end
+  shell.ResetPageContent = PUI_OptionsProfiler:DefCallback("PageShell.Create > shell.ResetPageContent", shell.ResetPageContent)
+
 
 
   shell.headerActions:Hide()
@@ -637,6 +692,8 @@ function PageShell.Create(parent)
 
   return shell
 end
+PageShell.Create = PUI_OptionsProfiler:Def("PageShell.Create", PageShell.Create)
+
 
 function PageShell.Ensure(parent)
   local shell = parent.__puiPageShell
@@ -651,3 +708,4 @@ function PageShell.Ensure(parent)
   parent.__puiPageShell = shell
   return shell
 end
+PageShell.Ensure = PUI_OptionsProfiler:Def("PageShell.Ensure", PageShell.Ensure)

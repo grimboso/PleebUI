@@ -1,4 +1,5 @@
 local _, ns = ...
+local PUI_OptionsProfiler = select(1, ns.Pleebug:DropIn({}))
 
 local Theme = ns.Theme
 local AceGUI = LibStub("AceGUI-3.0")
@@ -13,6 +14,8 @@ local function SampleText(parent, text, role)
   label:SetText(text)
   return label
 end
+SampleText = PUI_OptionsProfiler:Def("SampleText", SampleText)
+
 
 local function StyleSampleControl(control)
   local widget = control.preview
@@ -30,29 +33,33 @@ local function StyleSampleControl(control)
   end
   if control.arrow then control.arrow:SetVertexColor(unpack(widget.palette.accent)) end
 end
+StyleSampleControl = PUI_OptionsProfiler:Def("StyleSampleControl", StyleSampleControl)
+
 
 local function SampleControl(widget, kind)
   local control = CreateFrame(kind, nil, widget.panel)
   control.__puiUseTextureBackdrop = true
   control.preview = widget
   widget.controls[#widget.controls + 1] = control
-  control:SetScript("OnEnter", function(self)
+  control:SetScript("OnEnter", PUI_OptionsProfiler:DefCallback("SampleControl > control.SetScript OnEnter", function(self)
     self.hovered = true
     StyleSampleControl(self)
-  end)
-  control:SetScript("OnLeave", function(self)
+  end))
+  control:SetScript("OnLeave", PUI_OptionsProfiler:DefCallback("SampleControl > control.SetScript OnLeave", function(self)
     self.hovered, self.pressed = nil, nil
     StyleSampleControl(self)
-  end)
-  control:SetScript("OnMouseDown", function(self, button)
+  end))
+  control:SetScript("OnMouseDown", PUI_OptionsProfiler:DefCallback("SampleControl > control.SetScript OnMouseDown", function(self, button)
     if button == "LeftButton" then self.pressed = true; StyleSampleControl(self) end
-  end)
-  control:SetScript("OnMouseUp", function(self)
+  end))
+  control:SetScript("OnMouseUp", PUI_OptionsProfiler:DefCallback("SampleControl > control.SetScript OnMouseUp", function(self)
     self.pressed = nil
     StyleSampleControl(self)
-  end)
+  end))
   return control
 end
+SampleControl = PUI_OptionsProfiler:Def("SampleControl", SampleControl)
+
 
 local function LayoutSample(widget)
   local width = math.max(1, widget.frame:GetWidth() - 24)
@@ -71,6 +78,8 @@ local function LayoutSample(widget)
     label:SetHeight(textHeight)
     y = y + textHeight + gap
   end
+  TextRow = PUI_OptionsProfiler:DefCallback("LayoutSample > TextRow", TextRow)
+
   TextRow(widget.title, "header")
   TextRow(widget.secondary, "tiny")
   local function Row(controls)
@@ -84,6 +93,8 @@ local function LayoutSample(widget)
     end
     y = y + math.ceil(#controls / columns) * (height + gap)
   end
+  Row = PUI_OptionsProfiler:DefCallback("LayoutSample > Row", Row)
+
   Row({ widget.checked, widget.unchecked })
   Row({ widget.dropdown, widget.focusInput })
   widget.slider:ClearAllPoints()
@@ -107,9 +118,11 @@ local function LayoutSample(widget)
   end
   widget:SetHeight(y)
 end
+LayoutSample = PUI_OptionsProfiler:Def("LayoutSample", LayoutSample)
+
 
 local methods = {
-  OnAcquire = function(self)
+  OnAcquire = PUI_OptionsProfiler:Def("OnAcquire", function(self)
     self.preset = "default"
     self.palette = Theme.GetColorPresetPreviewColors(self.preset)
     self.checked:SetChecked(true)
@@ -121,31 +134,31 @@ local methods = {
     self:SetFullWidth(true)
     self.panel:Show()
     self:RefreshTheme()
-  end,
-  ClearFocus = function(self)
+  end),
+  ClearFocus = PUI_OptionsProfiler:Def("ClearFocus", function(self)
     self.number:ClearFocus()
     self.focusInput:ClearFocus()
     self.menu:Hide()
     self.dropdown.open = nil
     StyleSampleControl(self.dropdown)
-  end,
-  OnRelease = function(self)
+  end),
+  OnRelease = PUI_OptionsProfiler:Def("OnRelease", function(self)
     self:ClearFocus()
     for _, control in ipairs(self.controls) do
       control.hovered, control.pressed, control.focused = nil, nil, nil
     end
-  end,
+  end),
   OnWidthSet = LayoutSample,
-  SetText = function(self, key)
+  SetText = PUI_OptionsProfiler:Def("SetText", function(self, key)
     self.preset = key
     self.palette = Theme.GetColorPresetPreviewColors(key)
     self:RefreshTheme()
-  end,
-  SetFontObject = function(self, fontObject)
+  end),
+  SetFontObject = PUI_OptionsProfiler:Def("SetFontObject", function(self, fontObject)
     self.title:SetFontObject(fontObject)
     self:RefreshTheme()
-  end,
-  RefreshTheme = function(self)
+  end),
+  RefreshTheme = PUI_OptionsProfiler:Def("RefreshTheme", function(self)
     local colors = self.palette
     -- An opaque matte keeps the unapplied palette independent of the current window colors.
     Theme.SetSquareBackdrop(self.panel, {
@@ -162,7 +175,7 @@ local methods = {
     end
     self.slider:GetThumbTexture():SetVertexColor(unpack(colors.accent))
     LayoutSample(self)
-  end,
+  end),
 }
 
 local function Constructor()
@@ -194,6 +207,8 @@ local function Constructor()
     control:SetScript("OnClick", StyleSampleControl)
     return control
   end
+  Checkbox = PUI_OptionsProfiler:DefCallback("Constructor > Checkbox", Checkbox)
+
   widget.checked = Checkbox("Checked", true)
   widget.unchecked = Checkbox("Unchecked", false)
 
@@ -206,6 +221,8 @@ local function Constructor()
     control.label:SetJustifyH("CENTER")
     return control
   end
+  Button = PUI_OptionsProfiler:DefCallback("Constructor > Button", Button)
+
   widget.dropdown = Button("Sample option 1", "body")
   widget.dropdown.label:SetJustifyH("LEFT")
   widget.dropdown.label:ClearAllPoints()
@@ -222,37 +239,39 @@ local function Constructor()
     local item = Button("Sample option " .. index, "body")
     item:SetParent(widget.menu)
     item:SetFrameLevel(widget.menu:GetFrameLevel() + 1)
-    item:SetScript("OnClick", function(self)
+    item:SetScript("OnClick", PUI_OptionsProfiler:DefCallback("Constructor > item.SetScript OnClick", function(self)
       widget.dropdown.label:SetText(self.label:GetText())
       widget.menu:Hide()
       widget.dropdown.open = nil
       StyleSampleControl(widget.dropdown)
-    end)
+    end))
     widget.menuItems[index] = item
   end
-  widget.dropdown:SetScript("OnClick", function(self)
+  widget.dropdown:SetScript("OnClick", PUI_OptionsProfiler:DefCallback("Constructor > widget.dropdown.SetScript OnClick", function(self)
     self.open = not self.open
     widget.menu:SetShown(self.open)
     StyleSampleControl(self)
-  end)
-  panel:SetScript("OnHide", function()
+  end))
+  panel:SetScript("OnHide", PUI_OptionsProfiler:DefCallback("Constructor > panel.SetScript OnHide", function()
     widget.menu:Hide()
     widget.dropdown.open = nil
-  end)
+  end))
 
   local function Input()
     local control = SampleControl(widget, "EditBox")
     control:SetAutoFocus(false)
     Theme.ApplyFont(control, "body")
     control:SetTextInsets(8, 8, 0, 0)
-    control:SetScript("OnEditFocusGained", function(self) self.focused = true; StyleSampleControl(self) end)
-    control:SetScript("OnEditFocusLost", function(self) self.focused = nil; StyleSampleControl(self) end)
-    control:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
+    control:SetScript("OnEditFocusGained", PUI_OptionsProfiler:DefCallback("Constructor > Input > control.SetScript OnEditFocusGained", function(self) self.focused = true; StyleSampleControl(self) end))
+    control:SetScript("OnEditFocusLost", PUI_OptionsProfiler:DefCallback("Constructor > Input > control.SetScript OnEditFocusLost", function(self) self.focused = nil; StyleSampleControl(self) end))
+    control:SetScript("OnEscapePressed", PUI_OptionsProfiler:DefCallback("Constructor > Input > control.SetScript OnEscapePressed", function(self) self:ClearFocus() end))
     return control
   end
+  Input = PUI_OptionsProfiler:DefCallback("Constructor > Input", Input)
+
   widget.focusInput = Input()
   widget.focusInput.focusExample = true
-  widget.focusInput:SetScript("OnEnterPressed", function(self) self:ClearFocus() end)
+  widget.focusInput:SetScript("OnEnterPressed", PUI_OptionsProfiler:DefCallback("Constructor > widget.focusInput.SetScript OnEnterPressed", function(self) self:ClearFocus() end))
   widget.number = Input()
   widget.number:SetJustifyH("CENTER")
   widget.number:SetMaxLetters(6)
@@ -261,25 +280,27 @@ local function Constructor()
   widget.slider:SetMinMaxValues(0, 100)
   widget.slider:SetValueStep(1)
   widget.slider:SetThumbTexture(WHITE8)
-  widget.slider:SetScript("OnValueChanged", function(_, value)
+  widget.slider:SetScript("OnValueChanged", PUI_OptionsProfiler:DefCallback("Constructor > widget.slider.SetScript OnValueChanged", function(_, value)
     widget.number:SetText(string.format("%.0f", value))
-  end)
-  widget.number:SetScript("OnEnterPressed", function(self)
+  end))
+  widget.number:SetScript("OnEnterPressed", PUI_OptionsProfiler:DefCallback("Constructor > widget.number.SetScript OnEnterPressed", function(self)
     local value = tonumber(self:GetText())
     if value and value >= 0 and value <= 100 then widget.slider:SetValue(value) end
     self:SetText(string.format("%.0f", widget.slider:GetValue()))
     self:ClearFocus()
-  end)
-  widget.number:SetScript("OnEscapePressed", function(self)
+  end))
+  widget.number:SetScript("OnEscapePressed", PUI_OptionsProfiler:DefCallback("Constructor > widget.number.SetScript OnEscapePressed", function(self)
     self:SetText(string.format("%.0f", widget.slider:GetValue()))
     self:ClearFocus()
-  end)
+  end))
   widget.enabled = Button("Reset sample")
-  widget.enabled:SetScript("OnClick", function() widget.slider:SetValue(50) end)
+  widget.enabled:SetScript("OnClick", PUI_OptionsProfiler:DefCallback("Constructor > widget.enabled.SetScript OnClick", function() widget.slider:SetValue(50) end))
   widget.disabled = Button("Disabled button")
   widget.disabled.sampleDisabled = true
   widget.disabled:Disable()
   return AceGUI:RegisterAsWidget(widget)
 end
+Constructor = PUI_OptionsProfiler:Def("Constructor", Constructor)
+
 
 AceGUI:RegisterWidgetType(TYPE, Constructor, 1)

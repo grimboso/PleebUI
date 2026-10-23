@@ -1,4 +1,5 @@
 local _, ns = ...
+local PUI_OptionsProfiler = select(1, ns.Pleebug:DropIn({}))
 
 local Theme = ns.Theme
 local LSM = ns.LSM
@@ -25,12 +26,12 @@ local SEPARATOR_VALUE_PREFIX = "__PUI_SEPARATOR_BEFORE__"
 local function WatchDropdownOutsideClicks(widget, popup, button)
   if not popup.__puiOutsideClickHooked then
     popup.__puiOutsideClickHooked = true
-    popup:HookScript("OnHide", function(self)
+    popup:HookScript("OnHide", PUI_OptionsProfiler:DefCallback("WatchDropdownOutsideClicks > popup.HookScript OnHide", function(self)
       self:UnregisterEvent("GLOBAL_MOUSE_DOWN")
       self.__puiDropdownDismissOwner = nil
       self.__puiDropdownDismissButton = nil
-    end)
-    popup:HookScript("OnEvent", function(self, event)
+    end))
+    popup:HookScript("OnEvent", PUI_OptionsProfiler:DefCallback("WatchDropdownOutsideClicks > popup.HookScript OnEvent", function(self, event)
       local owner = self.__puiDropdownDismissOwner
       if event == "GLOBAL_MOUSE_DOWN" and owner
         and not self:IsMouseOver() and not self.__puiDropdownDismissButton:IsMouseOver()
@@ -41,7 +42,7 @@ local function WatchDropdownOutsideClicks(widget, popup, button)
           owner:ClearFocus()
         end
       end
-    end)
+    end))
   end
 
   if popup:IsShown() then
@@ -50,6 +51,8 @@ local function WatchDropdownOutsideClicks(widget, popup, button)
     popup:RegisterEvent("GLOBAL_MOUSE_DOWN")
   end
 end
+WatchDropdownOutsideClicks = PUI_OptionsProfiler:Def("WatchDropdownOutsideClicks", WatchDropdownOutsideClicks)
+
 
 
 local function IsLSMDropdown(widgetType)
@@ -59,6 +62,8 @@ local function IsLSMDropdown(widgetType)
     or widgetType == "LSM30_Background"
     or widgetType == "LSM30_Statusbar"
 end
+IsLSMDropdown = PUI_OptionsProfiler:Def("IsLSMDropdown", IsLSMDropdown)
+
 
 local function SanitizeLSMFontList(widget)
   if widget.type ~= "LSM30_Font" or widget.__puiResolvedLSMFontList == widget.list then
@@ -73,6 +78,8 @@ local function SanitizeLSMFontList(widget)
   widget.list = resolved
   widget.__puiResolvedLSMFontList = resolved
 end
+SanitizeLSMFontList = PUI_OptionsProfiler:Def("SanitizeLSMFontList", SanitizeLSMFontList)
+
 
 
 local function StripRegion(region, keep)
@@ -82,6 +89,8 @@ local function StripRegion(region, keep)
     region:Hide()
   end
 end
+StripRegion = PUI_OptionsProfiler:Def("StripRegion", StripRegion)
+
 
 local function StripFrame(frame, keep)
   local rowBackground = frame.__puiWidgetRowBackground
@@ -100,6 +109,8 @@ local function StripFrame(frame, keep)
     frame._puiBg:Hide()
   end
 end
+StripFrame = PUI_OptionsProfiler:Def("StripFrame", StripFrame)
+
 
 local function ApplyRowSize(widget, frame, geom)
   Theme.ApplyCreatedWidgetSizing(widget)
@@ -114,6 +125,8 @@ local function ApplyRowSize(widget, frame, geom)
   widget.__puiRegularDropdownGeometryApplied = true
   widget.__puiLSMDropdownGeometryApplied = true
 end
+ApplyRowSize = PUI_OptionsProfiler:Def("ApplyRowSize", ApplyRowSize)
+
 
 local function CreateBox(widget, frame, geom)
   local colors = Theme.GetColors()
@@ -147,6 +160,8 @@ local function CreateBox(widget, frame, geom)
 
   return box, colors, edge
 end
+CreateBox = PUI_OptionsProfiler:Def("CreateBox", CreateBox)
+
 
 local function CollapseLegacyFrame(frame, box, keepMouse)
   frame:ClearAllPoints()
@@ -164,6 +179,8 @@ local function CollapseLegacyFrame(frame, box, keepMouse)
 
   frame:Show()
 end
+CollapseLegacyFrame = PUI_OptionsProfiler:Def("CollapseLegacyFrame", CollapseLegacyFrame)
+
 
 local function SkinLabel(label, box)
   label:ClearAllPoints()
@@ -177,6 +194,8 @@ local function SkinLabel(label, box)
   local colors = Theme.GetColors()
   label:SetTextColor(colors.text[1], colors.text[2], colors.text[3], colors.text[4])
 end
+SkinLabel = PUI_OptionsProfiler:Def("SkinLabel", SkinLabel)
+
 
 local function SkinArrowBox(widget, box)
   local geom = Theme.GetWidgetRowGeometry(widget)
@@ -212,6 +231,8 @@ local function SkinArrowBox(widget, box)
   arrowBox:Show()
   return arrowBox
 end
+SkinArrowBox = PUI_OptionsProfiler:Def("SkinArrowBox", SkinArrowBox)
+
 
 local function ApplyValueFont(widget, widgetType, text)
   if widgetType == "LSM30_Font" then
@@ -240,6 +261,8 @@ local function ApplyValueFont(widget, widgetType, text)
   local colors = Theme.GetColors()
   text:SetTextColor(colors.text[1], colors.text[2], colors.text[3], colors.text[4])
 end
+ApplyValueFont = PUI_OptionsProfiler:Def("ApplyValueFont", ApplyValueFont)
+
 
 local function SkinValueText(widget, widgetType, text, box, button)
   widget.__puiDropdownValueText = text
@@ -279,6 +302,8 @@ local function SkinValueText(widget, widgetType, text, box, button)
 
   ApplyValueFont(widget, widgetType, text)
 end
+SkinValueText = PUI_OptionsProfiler:Def("SkinValueText", SkinValueText)
+
 
 local function SkinStatusbarPreview(widget, box, button)
   local preview = widget.__puiDropdownStatusbarPreview
@@ -325,15 +350,17 @@ local function SkinStatusbarPreview(widget, box, button)
 
     widget.bar:Hide()
   end
+  Refresh = PUI_OptionsProfiler:DefCallback("SkinStatusbarPreview > Refresh", Refresh)
+
 
   widget.__puiDropdownRefreshStatusbar = Refresh
 
   if not widget.__puiDropdownStatusbarValueHooked then
-    hooksecurefunc(widget, "SetValue", function(self)
+    hooksecurefunc(widget, "SetValue", PUI_OptionsProfiler:DefCallback("SkinStatusbarPreview > hooksecurefunc SetValue", function(self)
       if self.__puiAceGUIOwnedByPleebUI == true and self.__puiDropdownRefreshStatusbar then
         self.__puiDropdownRefreshStatusbar()
       end
-    end)
+    end))
     widget.__puiDropdownStatusbarValueHooked = true
   end
 
@@ -342,6 +369,8 @@ local function SkinStatusbarPreview(widget, box, button)
 
   return preview
 end
+SkinStatusbarPreview = PUI_OptionsProfiler:Def("SkinStatusbarPreview", SkinStatusbarPreview)
+
 
 local function SkinSoundButton(widget, box)
   local button = widget.soundbutton
@@ -351,6 +380,8 @@ local function SkinSoundButton(widget, box)
   button:SetPoint("LEFT", box, "LEFT", 2, 0)
   WidgetSkins.Button(button, widget)
 end
+SkinSoundButton = PUI_OptionsProfiler:Def("SkinSoundButton", SkinSoundButton)
+
 
 local function EnsurePulloutBackground(frame, colors, edge)
   Theme.SetSquareBackdrop(frame, {
@@ -361,6 +392,8 @@ local function EnsurePulloutBackground(frame, colors, edge)
   frame._puiBg:Show()
   return frame._puiBg
 end
+EnsurePulloutBackground = PUI_OptionsProfiler:Def("EnsurePulloutBackground", EnsurePulloutBackground)
+
 
 local PUI_DROPDOWN_PULL_OUT_VISIBLE_ROWS = 12
 local PUI_DROPDOWN_PULL_OUT_ROW_GAP = 3
@@ -385,10 +418,14 @@ local function NormalizeDropdownDisplayText(text)
       .. PUI_DROPDOWN_INLINE_ICON_Y_OFFSET
   ))
 end
+NormalizeDropdownDisplayText = PUI_OptionsProfiler:Def("NormalizeDropdownDisplayText", NormalizeDropdownDisplayText)
+
 
 local function GetDropdownPulloutItemHeight()
   return math_max(20, Theme.GetOptionsFontHeight("body") + 6, Theme.GetOptionsPointerTargetSize(0))
 end
+GetDropdownPulloutItemHeight = PUI_OptionsProfiler:Def("GetDropdownPulloutItemHeight", GetDropdownPulloutItemHeight)
+
 
 local function GetDropdownPulloutMetrics(pullout)
   local rowHeight = GetDropdownPulloutItemHeight()
@@ -398,6 +435,8 @@ local function GetDropdownPulloutMetrics(pullout)
   local maxHeight = itemStep * PUI_DROPDOWN_PULL_OUT_VISIBLE_ROWS + 34 + searchHeaderHeight
   return rowHeight, rowGap, itemStep, maxHeight, searchHeaderHeight
 end
+GetDropdownPulloutMetrics = PUI_OptionsProfiler:Def("GetDropdownPulloutMetrics", GetDropdownPulloutMetrics)
+
 
 local function ApplyDropdownPulloutLayering(pullout)
   local frame = pullout.frame
@@ -468,6 +507,8 @@ local function ApplyDropdownPulloutLayering(pullout)
   pullout.__puiDropdownLayerItemCount = itemCount
   pullout.__puiDropdownLayerSearchBox = searchBox
 end
+ApplyDropdownPulloutLayering = PUI_OptionsProfiler:Def("ApplyDropdownPulloutLayering", ApplyDropdownPulloutLayering)
+
 
 local function RefreshDropdownPulloutLayout(pullout)
   if not pullout or not pullout.items or not pullout.itemFrame or not pullout.frame then
@@ -520,6 +561,8 @@ local function RefreshDropdownPulloutLayout(pullout)
     pullout:FixScroll()
   end
 end
+RefreshDropdownPulloutLayout = PUI_OptionsProfiler:Def("RefreshDropdownPulloutLayout", RefreshDropdownPulloutLayout)
+
 
 local function LayoutDropdownScrollLane(pullout)
   if pullout.__puiAceGUIOwnedByPleebUI ~= true then return end
@@ -533,6 +576,8 @@ local function LayoutDropdownScrollLane(pullout)
   pullout.slider:SetWidth(width)
   pullout.slider:SetHitRectInsets(0, 0, 0, 0)
 end
+LayoutDropdownScrollLane = PUI_OptionsProfiler:Def("LayoutDropdownScrollLane", LayoutDropdownScrollLane)
+
 
 local function EnsureDropdownPulloutLayout(pullout)
   if not pullout then
@@ -545,24 +590,26 @@ local function EnsureDropdownPulloutLayout(pullout)
     hooksecurefunc(pullout, "SetScroll", LayoutDropdownScrollLane)
     hooksecurefunc(pullout, "FixScroll", LayoutDropdownScrollLane)
     local originalAddItem = pullout.AddItem
-    pullout.AddItem = function(self, item)
+    pullout.AddItem = PUI_OptionsProfiler:DefCallback("EnsureDropdownPulloutLayout > pullout.AddItem", function(self, item)
       local result = originalAddItem(self, item)
       RefreshDropdownPulloutLayout(self)
       return result
-    end
+    end)
 
     local originalOpen = pullout.Open
-    pullout.Open = function(self, ...)
+    pullout.Open = PUI_OptionsProfiler:DefCallback("EnsureDropdownPulloutLayout > pullout.Open", function(self, ...)
       local owner = self.userdata.obj
       if owner and owner.type == "PUI_FontDropdown" then owner:PopulateFontList() end
       local result = originalOpen(self, ...)
       RefreshDropdownPulloutLayout(self)
       return result
-    end
+    end)
   end
 
   RefreshDropdownPulloutLayout(pullout)
 end
+EnsureDropdownPulloutLayout = PUI_OptionsProfiler:Def("EnsureDropdownPulloutLayout", EnsureDropdownPulloutLayout)
+
 
 local function SkinPulloutFrame(frame, slider, colors, edge)
   if not frame then
@@ -596,6 +643,8 @@ local function SkinPulloutFrame(frame, slider, colors, edge)
   thumb:SetVertexColor(colors.accent[1], colors.accent[2], colors.accent[3], 0.90)
   thumb:Show()
 end
+SkinPulloutFrame = PUI_OptionsProfiler:Def("SkinPulloutFrame", SkinPulloutFrame)
+
 
 local function ResetLSMFontDropdownSearchFrame(dropdown)
   local searchBox = dropdown and dropdown.__puiLSMFontSearchBox
@@ -614,6 +663,8 @@ local function ResetLSMFontDropdownSearchFrame(dropdown)
   dropdown.scrollframe:SetPoint("TOPLEFT", dropdown, "TOPLEFT", 14, -13)
   dropdown.scrollframe:SetPoint("BOTTOMRIGHT", dropdown, "BOTTOMRIGHT", -14, 12)
 end
+ResetLSMFontDropdownSearchFrame = PUI_OptionsProfiler:Def("ResetLSMFontDropdownSearchFrame", ResetLSMFontDropdownSearchFrame)
+
 
 local function RefreshLSMDropdownLayout(dropdown)
   local searchBox = dropdown and dropdown.__puiLSMFontSearchBox
@@ -695,6 +746,8 @@ local function RefreshLSMDropdownLayout(dropdown)
     slider:Hide()
   end
 end
+RefreshLSMDropdownLayout = PUI_OptionsProfiler:Def("RefreshLSMDropdownLayout", RefreshLSMDropdownLayout)
+
 
 local function LSMFontDropdownSearchTextChanged(searchBox)
   local widget = searchBox.obj
@@ -708,6 +761,8 @@ local function LSMFontDropdownSearchTextChanged(searchBox)
 
   RefreshLSMDropdownLayout(widget.dropdown)
 end
+LSMFontDropdownSearchTextChanged = PUI_OptionsProfiler:Def("LSMFontDropdownSearchTextChanged", LSMFontDropdownSearchTextChanged)
+
 
 local function LSMFontDropdownSearchFocusGained(searchBox)
   local widget = searchBox.obj
@@ -719,12 +774,16 @@ local function LSMFontDropdownSearchFocusGained(searchBox)
     searchBox.Instructions:Hide()
   end
 end
+LSMFontDropdownSearchFocusGained = PUI_OptionsProfiler:Def("LSMFontDropdownSearchFocusGained", LSMFontDropdownSearchFocusGained)
+
 
 local function LSMFontDropdownSearchFocusLost(searchBox)
   if searchBox.Instructions then
     searchBox.Instructions:SetShown(searchBox:GetText() == "")
   end
 end
+LSMFontDropdownSearchFocusLost = PUI_OptionsProfiler:Def("LSMFontDropdownSearchFocusLost", LSMFontDropdownSearchFocusLost)
+
 
 local function LSMFontDropdownSearchEscapePressed(searchBox)
   local widget = searchBox.obj
@@ -736,6 +795,8 @@ local function LSMFontDropdownSearchEscapePressed(searchBox)
 
   AceGUI:ClearFocus()
 end
+LSMFontDropdownSearchEscapePressed = PUI_OptionsProfiler:Def("LSMFontDropdownSearchEscapePressed", LSMFontDropdownSearchEscapePressed)
+
 
 local function EnsureLSMFontDropdownSearch(widget)
   local dropdown = widget and widget.dropdown
@@ -810,6 +871,8 @@ local function EnsureLSMFontDropdownSearch(widget)
   searchBox:SetHeight(GetDropdownPulloutItemHeight())
   searchBox:Show()
 end
+EnsureLSMFontDropdownSearch = PUI_OptionsProfiler:Def("EnsureLSMFontDropdownSearch", EnsureLSMFontDropdownSearch)
+
 
 local function OwnStandardDropdownChildren(widget)
   local pullout = widget.pullout
@@ -824,17 +887,19 @@ local function OwnStandardDropdownChildren(widget)
   if not pullout.__puiDropdownAddItemHooked then
     pullout.__puiDropdownAddItemHooked = true
 
-    hooksecurefunc(pullout, "AddItem", function(self, item)
+    hooksecurefunc(pullout, "AddItem", PUI_OptionsProfiler:DefCallback("OwnStandardDropdownChildren > hooksecurefunc AddItem", function(self, item)
       if self.__puiAceGUIOwnedByPleebUI == true and item then
         AceHooks.TakeOwnership(item)
       end
-    end)
+    end))
   end
 
   for _, item in pullout:IterateItems() do
     AceHooks.TakeOwnership(item)
   end
 end
+OwnStandardDropdownChildren = PUI_OptionsProfiler:Def("OwnStandardDropdownChildren", OwnStandardDropdownChildren)
+
 
 local function SkinDropdownPullout(widget, isLSM, colors, edge)
   if isLSM then
@@ -855,6 +920,8 @@ local function SkinDropdownPullout(widget, isLSM, colors, edge)
     WatchDropdownOutsideClicks(widget, pullout.frame, widget.button_cover)
   end
 end
+SkinDropdownPullout = PUI_OptionsProfiler:Def("SkinDropdownPullout", SkinDropdownPullout)
+
 
 local function SkinDropdown(widget, isLSM)
   local frame = widget.frame
@@ -907,7 +974,7 @@ local function SkinDropdown(widget, isLSM)
 
   if not clickTarget.__puiDropdownPulloutClickHooked then
     clickTarget.__puiDropdownPulloutClickHooked = true
-    clickTarget:HookScript("OnClick", function()
+    clickTarget:HookScript("OnClick", PUI_OptionsProfiler:DefCallback("SkinDropdown > clickTarget.HookScript OnClick", function()
       if widget.__puiAceGUIOwnedByPleebUI ~= true or AceGUI:IsReleasing(widget) then
         return
       end
@@ -924,10 +991,12 @@ local function SkinDropdown(widget, isLSM)
 
         SkinDropdownPullout(widget, isLSM, Theme.GetColors(), Theme.ControlBorderSize)
       end
+      RefreshPullout = PUI_OptionsProfiler:DefCallback("SkinDropdown > clickTarget.HookScript OnClick > RefreshPullout", RefreshPullout)
+
 
       RefreshPullout()
       C_Timer.After(0, RefreshPullout)
-    end)
+    end))
   end
 
   if isLSM then
@@ -943,21 +1012,29 @@ local function SkinDropdown(widget, isLSM)
     SkinDropdownPullout(widget, isLSM, colors, edge)
   end
 end
+SkinDropdown = PUI_OptionsProfiler:Def("SkinDropdown", SkinDropdown)
+
 
 function WidgetSkins.DropdownPullout(widget)
   EnsureDropdownPulloutLayout(widget)
   SkinPulloutFrame(widget.frame, widget.slider, Theme.GetColors(), Theme.ControlBorderSize)
 end
+WidgetSkins.DropdownPullout = PUI_OptionsProfiler:Def("WidgetSkins.DropdownPullout", WidgetSkins.DropdownPullout)
+
 
 function WidgetSkins.Dropdown(widget)
   SkinDropdown(widget, IsLSMDropdown(widget.type))
 end
+WidgetSkins.Dropdown = PUI_OptionsProfiler:Def("WidgetSkins.Dropdown", WidgetSkins.Dropdown)
+
 
 local function ApplyFontDropdownPreview(text, value)
   local _, size, outline = text:GetFont()
   text.__puiSkipOptionsGlobalFont = true
   text:SetFont(ns.OptionsUtil.FetchFontPath(value), size, outline)
 end
+ApplyFontDropdownPreview = PUI_OptionsProfiler:Def("ApplyFontDropdownPreview", ApplyFontDropdownPreview)
+
 
 function WidgetSkins.DropdownItem(widget)
   local colors = Theme.GetColors()
@@ -1038,6 +1115,8 @@ function WidgetSkins.DropdownItem(widget)
     separator:Hide()
   end
 end
+WidgetSkins.DropdownItem = PUI_OptionsProfiler:Def("WidgetSkins.DropdownItem", WidgetSkins.DropdownItem)
+
 local PUI_DROPDOWN_TYPE = "PUI_Dropdown"
 local PUI_DROPDOWN_VERSION = 1
 
@@ -1049,6 +1128,8 @@ local function PUI_Dropdown_SetTextureColor(texture, color, alphaMultiplier)
     (color[4] or 1) * (alphaMultiplier or 1)
   )
 end
+PUI_Dropdown_SetTextureColor = PUI_OptionsProfiler:Def("PUI_Dropdown_SetTextureColor", PUI_Dropdown_SetTextureColor)
+
 
 local function PUI_Dropdown_CreateChrome(parent)
   local background = parent:CreateTexture(nil, "BACKGROUND")
@@ -1070,6 +1151,8 @@ local function PUI_Dropdown_CreateChrome(parent)
     border = border,
   }
 end
+PUI_Dropdown_CreateChrome = PUI_OptionsProfiler:Def("PUI_Dropdown_CreateChrome", PUI_Dropdown_CreateChrome)
+
 
 local function PUI_Dropdown_LayoutChrome(parent, chrome)
   local edge = Theme.ControlBorderSize
@@ -1099,6 +1182,8 @@ local function PUI_Dropdown_LayoutChrome(parent, chrome)
   border.right:SetPoint("BOTTOMRIGHT", parent, "BOTTOMRIGHT", 0, edge)
   border.right:SetWidth(edge)
 end
+PUI_Dropdown_LayoutChrome = PUI_OptionsProfiler:Def("PUI_Dropdown_LayoutChrome", PUI_Dropdown_LayoutChrome)
+
 
 local function PUI_Dropdown_SetChromeColors(chrome, backgroundColor, borderColor, alphaMultiplier)
   PUI_Dropdown_SetTextureColor(chrome.background, backgroundColor, alphaMultiplier)
@@ -1107,6 +1192,8 @@ local function PUI_Dropdown_SetChromeColors(chrome, backgroundColor, borderColor
     PUI_Dropdown_SetTextureColor(texture, borderColor, alphaMultiplier)
   end
 end
+PUI_Dropdown_SetChromeColors = PUI_OptionsProfiler:Def("PUI_Dropdown_SetChromeColors", PUI_Dropdown_SetChromeColors)
+
 
 local function PUI_Dropdown_Layout(widget, width)
   local geom = Theme.GetWidgetRowGeometry(widget)
@@ -1136,6 +1223,8 @@ local function PUI_Dropdown_Layout(widget, width)
   PUI_Dropdown_LayoutChrome(widget.button, widget.chrome)
   widget.frame:SetWidth(frameWidth)
 end
+PUI_Dropdown_Layout = PUI_OptionsProfiler:Def("PUI_Dropdown_Layout", PUI_Dropdown_Layout)
+
 
 local function PUI_Dropdown_RefreshVisualState(widget)
   local colors = Theme.GetColors()
@@ -1157,6 +1246,8 @@ local function PUI_Dropdown_RefreshVisualState(widget)
     arrowColor[4]
   )
 end
+PUI_Dropdown_RefreshVisualState = PUI_OptionsProfiler:Def("PUI_Dropdown_RefreshVisualState", PUI_Dropdown_RefreshVisualState)
+
 
 local function PUI_Dropdown_ShowMultiselectText(widget)
   local text
@@ -1170,6 +1261,8 @@ local function PUI_Dropdown_ShowMultiselectText(widget)
 
   widget:SetText(text)
 end
+PUI_Dropdown_ShowMultiselectText = PUI_OptionsProfiler:Def("PUI_Dropdown_ShowMultiselectText", PUI_Dropdown_ShowMultiselectText)
+
 
 local function PUI_Dropdown_ItemMatchesSearch(item, query)
   if query == "" then
@@ -1179,6 +1272,8 @@ local function PUI_Dropdown_ItemMatchesSearch(item, query)
   local searchText = item.userdata and item.userdata.__puiDropdownSearchText or ""
   return string_find(searchText, query, 1, true) ~= nil
 end
+PUI_Dropdown_ItemMatchesSearch = PUI_OptionsProfiler:Def("PUI_Dropdown_ItemMatchesSearch", PUI_Dropdown_ItemMatchesSearch)
+
 
 local function PUI_Dropdown_ApplySearch(widget)
   local pullout = widget and widget.pullout
@@ -1199,6 +1294,8 @@ local function PUI_Dropdown_ApplySearch(widget)
 
   RefreshDropdownPulloutLayout(pullout)
 end
+PUI_Dropdown_ApplySearch = PUI_OptionsProfiler:Def("PUI_Dropdown_ApplySearch", PUI_Dropdown_ApplySearch)
+
 
 local function PUI_Dropdown_OnSearchTextChanged(editbox)
   local widget = editbox.obj
@@ -1216,6 +1313,8 @@ local function PUI_Dropdown_OnSearchTextChanged(editbox)
 
   PUI_Dropdown_ApplySearch(widget)
 end
+PUI_Dropdown_OnSearchTextChanged = PUI_OptionsProfiler:Def("PUI_Dropdown_OnSearchTextChanged", PUI_Dropdown_OnSearchTextChanged)
+
 
 local function PUI_Dropdown_OnSearchFocusGained(editbox)
   local widget = editbox.obj
@@ -1227,6 +1326,8 @@ local function PUI_Dropdown_OnSearchFocusGained(editbox)
     editbox.Instructions:Hide()
   end
 end
+PUI_Dropdown_OnSearchFocusGained = PUI_OptionsProfiler:Def("PUI_Dropdown_OnSearchFocusGained", PUI_Dropdown_OnSearchFocusGained)
+
 
 local function PUI_Dropdown_OnSearchFocusLost(editbox)
   if editbox.Instructions then
@@ -1237,6 +1338,8 @@ local function PUI_Dropdown_OnSearchFocusLost(editbox)
     end
   end
 end
+PUI_Dropdown_OnSearchFocusLost = PUI_OptionsProfiler:Def("PUI_Dropdown_OnSearchFocusLost", PUI_Dropdown_OnSearchFocusLost)
+
 
 local function PUI_Dropdown_OnSearchEscapePressed(editbox)
   local widget = editbox.obj
@@ -1248,6 +1351,8 @@ local function PUI_Dropdown_OnSearchEscapePressed(editbox)
 
   AceGUI:ClearFocus()
 end
+PUI_Dropdown_OnSearchEscapePressed = PUI_OptionsProfiler:Def("PUI_Dropdown_OnSearchEscapePressed", PUI_Dropdown_OnSearchEscapePressed)
+
 
 local function PUI_Dropdown_EnsureSearchBox(widget)
   local pullout = widget.pullout
@@ -1282,6 +1387,8 @@ local function PUI_Dropdown_EnsureSearchBox(widget)
   WidgetSkins.UIEditBox(searchBox)
   return searchBox
 end
+PUI_Dropdown_EnsureSearchBox = PUI_OptionsProfiler:Def("PUI_Dropdown_EnsureSearchBox", PUI_Dropdown_EnsureSearchBox)
+
 
 local function PUI_Dropdown_UpdateSearchAvailability(widget)
   local pullout = widget.pullout
@@ -1329,6 +1436,8 @@ local function PUI_Dropdown_UpdateSearchAvailability(widget)
   pullout.__puiDropdownSearchHeaderHeight = searchHeight + PUI_DROPDOWN_SEARCH_HEADER_GAP
   PUI_Dropdown_ApplySearch(widget)
 end
+PUI_Dropdown_UpdateSearchAvailability = PUI_OptionsProfiler:Def("PUI_Dropdown_UpdateSearchAvailability", PUI_Dropdown_UpdateSearchAvailability)
+
 
 local function PUI_Dropdown_ResetSearch(widget)
   local pullout = widget.pullout
@@ -1341,6 +1450,8 @@ local function PUI_Dropdown_ResetSearch(widget)
 
   PUI_Dropdown_ApplySearch(widget)
 end
+PUI_Dropdown_ResetSearch = PUI_OptionsProfiler:Def("PUI_Dropdown_ResetSearch", PUI_Dropdown_ResetSearch)
+
 
 local function PUI_Dropdown_OnPulloutOpen(pullout)
   local widget = pullout.userdata.obj
@@ -1357,6 +1468,8 @@ local function PUI_Dropdown_OnPulloutOpen(pullout)
   WatchDropdownOutsideClicks(widget, pullout.frame, widget.button)
   widget:Fire("OnOpened")
 end
+PUI_Dropdown_OnPulloutOpen = PUI_OptionsProfiler:Def("PUI_Dropdown_OnPulloutOpen", PUI_Dropdown_OnPulloutOpen)
+
 
 local function PUI_Dropdown_OnPulloutClose(pullout)
   local widget = pullout.userdata.obj
@@ -1365,6 +1478,8 @@ local function PUI_Dropdown_OnPulloutClose(pullout)
   PUI_Dropdown_ResetSearch(widget)
   widget:Fire("OnClosed")
 end
+PUI_Dropdown_OnPulloutClose = PUI_OptionsProfiler:Def("PUI_Dropdown_OnPulloutClose", PUI_Dropdown_OnPulloutClose)
+
 
 local function PUI_Dropdown_OnItemValueChanged(item, _, checked)
   local widget = item.userdata.obj
@@ -1386,6 +1501,8 @@ local function PUI_Dropdown_OnItemValueChanged(item, _, checked)
     end
   end
 end
+PUI_Dropdown_OnItemValueChanged = PUI_OptionsProfiler:Def("PUI_Dropdown_OnItemValueChanged", PUI_Dropdown_OnItemValueChanged)
+
 
 local function PUI_Dropdown_Toggle(button)
   local widget = button.obj
@@ -1405,6 +1522,8 @@ local function PUI_Dropdown_Toggle(button)
     AceGUI:SetFocus(widget)
   end
 end
+PUI_Dropdown_Toggle = PUI_OptionsProfiler:Def("PUI_Dropdown_Toggle", PUI_Dropdown_Toggle)
+
 
 local function PUI_Dropdown_OnEnter(button)
   local widget = button.obj
@@ -1412,6 +1531,8 @@ local function PUI_Dropdown_OnEnter(button)
   PUI_Dropdown_RefreshVisualState(widget)
   widget:Fire("OnEnter")
 end
+PUI_Dropdown_OnEnter = PUI_OptionsProfiler:Def("PUI_Dropdown_OnEnter", PUI_Dropdown_OnEnter)
+
 
 local function PUI_Dropdown_OnLeave(button)
   local widget = button.obj
@@ -1419,6 +1540,8 @@ local function PUI_Dropdown_OnLeave(button)
   PUI_Dropdown_RefreshVisualState(widget)
   widget:Fire("OnLeave")
 end
+PUI_Dropdown_OnLeave = PUI_OptionsProfiler:Def("PUI_Dropdown_OnLeave", PUI_Dropdown_OnLeave)
+
 
 local function PUI_Dropdown_OnHide(frame)
   local widget = frame.obj
@@ -1427,6 +1550,8 @@ local function PUI_Dropdown_OnHide(frame)
     widget.pullout:Close()
   end
 end
+PUI_Dropdown_OnHide = PUI_OptionsProfiler:Def("PUI_Dropdown_OnHide", PUI_Dropdown_OnHide)
+
 
 local function PUI_Dropdown_SortKeys(left, right)
   local leftNumber = tonumber(left)
@@ -1438,6 +1563,8 @@ local function PUI_Dropdown_SortKeys(left, right)
 
   return tostring(left) < tostring(right)
 end
+PUI_Dropdown_SortKeys = PUI_OptionsProfiler:Def("PUI_Dropdown_SortKeys", PUI_Dropdown_SortKeys)
+
 
 local function PUI_Dropdown_AddListItem(widget, value, text, itemType)
   local item = AceGUI:Create(itemType or "Dropdown-Item-Toggle")
@@ -1452,6 +1579,8 @@ local function PUI_Dropdown_AddListItem(widget, value, text, itemType)
   widget.pullout:AddItem(item)
   ns.AceHooks.TakeOwnership(item)
 end
+PUI_Dropdown_AddListItem = PUI_OptionsProfiler:Def("PUI_Dropdown_AddListItem", PUI_Dropdown_AddListItem)
+
 
 local function PUI_Dropdown_AddCloseButton(widget)
   if widget.hasClose then
@@ -1466,9 +1595,11 @@ local function PUI_Dropdown_AddCloseButton(widget)
   ns.AceHooks.TakeOwnership(close)
   widget.hasClose = true
 end
+PUI_Dropdown_AddCloseButton = PUI_OptionsProfiler:Def("PUI_Dropdown_AddCloseButton", PUI_Dropdown_AddCloseButton)
+
 
 local PUI_Dropdown_Methods = {
-  OnAcquire = function(self)
+  OnAcquire = PUI_OptionsProfiler:Def("OnAcquire", function(self)
     local pullout = AceGUI:Create("Dropdown-Pullout")
 
     self.pullout = pullout
@@ -1494,9 +1625,9 @@ local PUI_Dropdown_Methods = {
     self.button.__puiHovered = nil
     self:SetText("")
     self:RefreshTheme()
-  end,
+  end),
 
-  OnRelease = function(self)
+  OnRelease = PUI_OptionsProfiler:Def("OnRelease", function(self)
     if self.open then
       self.pullout:Close()
     end
@@ -1537,17 +1668,17 @@ local PUI_Dropdown_Methods = {
     self.searchEnabled = nil
     self.multiselect = nil
     self.pulloutWidth = nil
-  end,
+  end),
 
-  OnWidthSet = function(self, width)
+  OnWidthSet = PUI_OptionsProfiler:Def("OnWidthSet", function(self, width)
     PUI_Dropdown_Layout(self, width)
-  end,
+  end),
 
-  OnHeightSet = function(self)
+  OnHeightSet = PUI_OptionsProfiler:Def("OnHeightSet", function(self)
     PUI_Dropdown_Layout(self, self.frame:GetWidth())
-  end,
+  end),
 
-  SetDisabled = function(self, disabled)
+  SetDisabled = PUI_OptionsProfiler:Def("SetDisabled", function(self, disabled)
     disabled = disabled == true
     self.disabled = disabled
 
@@ -1560,22 +1691,22 @@ local PUI_Dropdown_Methods = {
     end
 
     PUI_Dropdown_RefreshVisualState(self)
-  end,
+  end),
 
-  ClearFocus = function(self)
+  ClearFocus = PUI_OptionsProfiler:Def("ClearFocus", function(self)
     if self.open then
       self.pullout:Close()
     end
-  end,
+  end),
 
-  SetText = function(self, text)
+  SetText = PUI_OptionsProfiler:Def("SetText", function(self, text)
     self.text:SetText(NormalizeDropdownDisplayText(text))
     if self.type == "PUI_FontDropdown" then
       ApplyFontDropdownPreview(self.text, self.value)
     end
-  end,
+  end),
 
-  SetLabel = function(self, text)
+  SetLabel = PUI_OptionsProfiler:Def("SetLabel", function(self, text)
     if text and text ~= "" then
       self.label:SetText(text)
       self.label:Show()
@@ -1585,18 +1716,18 @@ local PUI_Dropdown_Methods = {
     end
 
     PUI_Dropdown_Layout(self, self.frame:GetWidth())
-  end,
+  end),
 
-  SetValue = function(self, value)
+  SetValue = PUI_OptionsProfiler:Def("SetValue", function(self, value)
     self.value = value
     self:SetText(self.list and self.list[value] or "")
-  end,
+  end),
 
-  GetValue = function(self)
+  GetValue = PUI_OptionsProfiler:Def("GetValue", function(self)
     return self.value
-  end,
+  end),
 
-  SetItemValue = function(self, value, checked)
+  SetItemValue = PUI_OptionsProfiler:Def("SetItemValue", function(self, value, checked)
     if not self.multiselect then
       return
     end
@@ -1609,9 +1740,9 @@ local PUI_Dropdown_Methods = {
     end
 
     PUI_Dropdown_ShowMultiselectText(self)
-  end,
+  end),
 
-  SetItemDisabled = function(self, value, disabled)
+  SetItemDisabled = PUI_OptionsProfiler:Def("SetItemDisabled", function(self, value, disabled)
     self:PopulateFontList()
     for _, item in self.pullout:IterateItems() do
       if item.userdata.value == value then
@@ -1619,9 +1750,9 @@ local PUI_Dropdown_Methods = {
         break
       end
     end
-  end,
+  end),
 
-  SetList = function(self, list, order, itemType, sortByValue)
+  SetList = PUI_OptionsProfiler:Def("SetList", function(self, list, order, itemType, sortByValue)
     self.list = list or {}
     self.listItemCount = 0
     self.pullout:Clear()
@@ -1646,7 +1777,7 @@ local PUI_Dropdown_Methods = {
       end
 
       if sortByValue then
-        table_sort(keys, function(left, right)
+        table_sort(keys, PUI_OptionsProfiler:DefCallback("SetList > SetList", function(left, right)
           local leftText = tostring(list[left] or "")
           local rightText = tostring(list[right] or "")
 
@@ -1655,7 +1786,7 @@ local PUI_Dropdown_Methods = {
           end
 
           return leftText < rightText
-        end)
+        end))
       else
         table_sort(keys, PUI_Dropdown_SortKeys)
       end
@@ -1681,9 +1812,9 @@ local PUI_Dropdown_Methods = {
     self.pullout.__puiDropdownBuildingList = nil
 
     PUI_Dropdown_UpdateSearchAvailability(self)
-  end,
+  end),
 
-  PopulateFontList = function(self)
+  PopulateFontList = PUI_OptionsProfiler:Def("PopulateFontList", function(self)
     local pending = self.pendingFontList
     if not pending then return end
     self.pendingFontList = nil
@@ -1693,9 +1824,9 @@ local PUI_Dropdown_Methods = {
     end
     self.pullout.__puiDropdownBuildingList = nil
     PUI_Dropdown_UpdateSearchAvailability(self)
-  end,
+  end),
 
-  AddItem = function(self, value, text, itemType)
+  AddItem = PUI_OptionsProfiler:Def("AddItem", function(self, value, text, itemType)
     self:PopulateFontList()
     local isNewValue = self.list[value] == nil
     self.list[value] = text
@@ -1706,9 +1837,9 @@ local PUI_Dropdown_Methods = {
     end
 
     PUI_Dropdown_UpdateSearchAvailability(self)
-  end,
+  end),
 
-  SetMultiselect = function(self, multiselect)
+  SetMultiselect = PUI_OptionsProfiler:Def("SetMultiselect", function(self, multiselect)
     if multiselect then self:PopulateFontList() end
     self.multiselect = multiselect == true
 
@@ -1716,17 +1847,17 @@ local PUI_Dropdown_Methods = {
       PUI_Dropdown_ShowMultiselectText(self)
       PUI_Dropdown_AddCloseButton(self)
     end
-  end,
+  end),
 
-  GetMultiselect = function(self)
+  GetMultiselect = PUI_OptionsProfiler:Def("GetMultiselect", function(self)
     return self.multiselect == true
-  end,
+  end),
 
-  SetPulloutWidth = function(self, width)
+  SetPulloutWidth = PUI_OptionsProfiler:Def("SetPulloutWidth", function(self, width)
     self.pulloutWidth = width
-  end,
+  end),
 
-  RefreshTheme = function(self)
+  RefreshTheme = PUI_OptionsProfiler:Def("RefreshTheme", function(self)
     Theme.ApplyFont(self.label, "body")
     Theme.ApplyFont(self.text, "body")
     if self.type == "PUI_FontDropdown" then
@@ -1742,7 +1873,7 @@ local PUI_Dropdown_Methods = {
 
     PUI_Dropdown_Layout(self, self.frame:GetWidth())
     PUI_Dropdown_RefreshVisualState(self)
-  end,
+  end),
 }
 
 local function PUI_Dropdown_Constructor(widgetType)
@@ -1793,8 +1924,10 @@ local function PUI_Dropdown_Constructor(widgetType)
 
   return AceGUI:RegisterAsWidget(widget)
 end
+PUI_Dropdown_Constructor = PUI_OptionsProfiler:Def("PUI_Dropdown_Constructor", PUI_Dropdown_Constructor)
+
 
 AceGUI:RegisterWidgetType(PUI_DROPDOWN_TYPE, PUI_Dropdown_Constructor, PUI_DROPDOWN_VERSION)
-AceGUI:RegisterWidgetType("PUI_FontDropdown", function()
+AceGUI:RegisterWidgetType("PUI_FontDropdown", PUI_OptionsProfiler:Def("AceGUI.RegisterWidgetType PUI_FontDropdown", function()
   return PUI_Dropdown_Constructor("PUI_FontDropdown")
-end, PUI_DROPDOWN_VERSION)
+end), PUI_DROPDOWN_VERSION)

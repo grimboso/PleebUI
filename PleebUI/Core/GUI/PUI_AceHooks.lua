@@ -1,4 +1,5 @@
 local _, ns = ...
+local PUI_OptionsProfiler = select(1, ns.Pleebug:DropIn({}))
 
 local AceHooks = {}
 ns.AceHooks = AceHooks
@@ -25,12 +26,16 @@ local function PauseOptionsFeedLayout(widget)
     widget:PauseLayout()
   end
 end
+PauseOptionsFeedLayout = PUI_OptionsProfiler:Def("PauseOptionsFeedLayout", PauseOptionsFeedLayout)
+
 
 function AceHooks.HideDisabledTooltip(widget)
   local tooltip = widget.__puiDisabledTooltip
   if tooltip and tooltip:GetOwner() == widget.frame then tooltip:Hide() end
   widget.__puiDisabledTooltip = nil
 end
+AceHooks.HideDisabledTooltip = PUI_OptionsProfiler:Def("AceHooks.HideDisabledTooltip", AceHooks.HideDisabledTooltip)
+
 
 function AceHooks.ShowDisabledTooltip(widget)
   AceHooks.HideDisabledTooltip(widget)
@@ -52,6 +57,8 @@ function AceHooks.ShowDisabledTooltip(widget)
   tooltip:Show()
   widget.__puiDisabledTooltip = tooltip
 end
+AceHooks.ShowDisabledTooltip = PUI_OptionsProfiler:Def("AceHooks.ShowDisabledTooltip", AceHooks.ShowDisabledTooltip)
+
 
 local function RefreshDisabledHover(widget)
   local hover = widget.__puiDisabledHover
@@ -65,30 +72,34 @@ local function RefreshDisabledHover(widget)
     hover:SetAllPoints(widget.frame)
     hover:EnableMouse(true)
     hover:EnableMouseWheel(false)
-    hover:SetScript("OnEnter", function() AceHooks.ShowDisabledTooltip(widget) end)
-    hover:SetScript("OnLeave", function()
+    hover:SetScript("OnEnter", PUI_OptionsProfiler:DefCallback("RefreshDisabledHover > hover.SetScript OnEnter", function() AceHooks.ShowDisabledTooltip(widget) end))
+    hover:SetScript("OnLeave", PUI_OptionsProfiler:DefCallback("RefreshDisabledHover > hover.SetScript OnLeave", function()
       AceHooks.HideDisabledTooltip(widget)
       widget:Fire("OnLeave")
-    end)
-    hover:SetScript("OnHide", function() AceHooks.HideDisabledTooltip(widget) end)
+    end))
+    hover:SetScript("OnHide", PUI_OptionsProfiler:DefCallback("RefreshDisabledHover > hover.SetScript OnHide", function() AceHooks.HideDisabledTooltip(widget) end))
     widget.__puiDisabledHover = hover
   end
   hover:SetFrameLevel(widget.frame:GetFrameLevel() + 20)
   hover:Show()
 end
+RefreshDisabledHover = PUI_OptionsProfiler:Def("RefreshDisabledHover", RefreshDisabledHover)
+
 
 local function InstallDisabledHover(widget)
   if not widget.SetDisabled then return end
   if not widget.__puiDisabledHoverHooked then
     widget.__puiDisabledHoverHooked = true
-    hooksecurefunc(widget, "SetDisabled", function(self)
+    hooksecurefunc(widget, "SetDisabled", PUI_OptionsProfiler:DefCallback("InstallDisabledHover > hooksecurefunc SetDisabled", function(self)
       if self.__puiAceGUIOwnedByPleebUI then
         RefreshDisabledHover(self)
       end
-    end)
+    end))
   end
   RefreshDisabledHover(widget)
 end
+InstallDisabledHover = PUI_OptionsProfiler:Def("InstallDisabledHover", InstallDisabledHover)
+
 
 local function _PUI_IsPleebUIOptionsTooltipOwner(owner)
   while owner and not owner:IsForbidden() do
@@ -107,6 +118,8 @@ local function _PUI_IsPleebUIOptionsTooltipOwner(owner)
   end
   return false
 end
+_PUI_IsPleebUIOptionsTooltipOwner = PUI_OptionsProfiler:Def("_PUI_IsPleebUIOptionsTooltipOwner", _PUI_IsPleebUIOptionsTooltipOwner)
+
 
 local function _PUI_RefreshOptionsTooltip(tooltip)
   if tooltip:IsForbidden() then return end
@@ -115,10 +128,14 @@ local function _PUI_RefreshOptionsTooltip(tooltip)
     _PUI_IsPleebUIOptionsTooltipOwner(tooltip:GetOwner())
   )
 end
+_PUI_RefreshOptionsTooltip = PUI_OptionsProfiler:Def("_PUI_RefreshOptionsTooltip", _PUI_RefreshOptionsTooltip)
+
 
 local function _PUI_RestoreOptionsTooltip(tooltip)
   ns.Theme.SetOptionsTooltipSkin(tooltip, false)
 end
+_PUI_RestoreOptionsTooltip = PUI_OptionsProfiler:Def("_PUI_RestoreOptionsTooltip", _PUI_RestoreOptionsTooltip)
+
 
 local function _PUI_InstallOptionsTooltipHook(tooltip)
   if tooltip.__puiOptionsTooltipHooked == true then
@@ -130,6 +147,8 @@ local function _PUI_InstallOptionsTooltipHook(tooltip)
   tooltip:HookScript("OnShow", _PUI_RefreshOptionsTooltip)
   tooltip:HookScript("OnHide", _PUI_RestoreOptionsTooltip)
 end
+_PUI_InstallOptionsTooltipHook = PUI_OptionsProfiler:Def("_PUI_InstallOptionsTooltipHook", _PUI_InstallOptionsTooltipHook)
+
 
 local function _PUI_InstallAceGUIHooks()
   local AceGUI = LibStub("AceGUI-3.0")
@@ -214,6 +233,8 @@ local function _PUI_InstallAceGUIHooks()
       widget.scrollbar:GetThumbTexture():SetHeight(ns.Theme.GetOptionsPointerTargetSize(24))
     end
   end
+  ClearOwnership = PUI_OptionsProfiler:DefCallback("_PUI_InstallAceGUIHooks > ClearOwnership", ClearOwnership)
+
 
   local function IsPleebUIOwner(owner)
     if not owner then
@@ -227,6 +248,8 @@ local function _PUI_InstallAceGUIHooks()
       or owner.frame.__puiAceGUIOwnedByPleebUI == true
       or (owner.content and owner.content.__puiAceGUIOwnedByPleebUI == true)
   end
+  IsPleebUIOwner = PUI_OptionsProfiler:DefCallback("_PUI_InstallAceGUIHooks > IsPleebUIOwner", IsPleebUIOwner)
+
 
   local function InitializeCreatedWidget(widget)
     if not widget.__puiCreatedWidgetLease then
@@ -257,7 +280,7 @@ local function _PUI_InstallAceGUIHooks()
       local originalOnHeightSet = widget.OnHeightSet
       local originalLayoutFinished = widget.LayoutFinished
       local originalSetTitle = widget.SetTitle
-      widget.OnWidthSet = function(self, width)
+      widget.OnWidthSet = PUI_OptionsProfiler:DefCallback("_PUI_InstallAceGUIHooks > InitializeCreatedWidget > widget.OnWidthSet", function(self, width)
         originalOnWidthSet(self, width)
         local user = self:GetUserDataTable()
         local headerHeight = 26
@@ -277,20 +300,20 @@ local function _PUI_InstallAceGUIHooks()
         self.border:SetPoint("TOPLEFT", self.frame, "TOPLEFT", 0, -headerHeight)
         self.border:SetPoint("BOTTOMRIGHT", self.frame, "BOTTOMRIGHT", 0, 3)
         self:OnHeightSet(self.frame:GetHeight())
-      end
-      widget.OnHeightSet = function(self, height)
+      end)
+      widget.OnHeightSet = PUI_OptionsProfiler:DefCallback("_PUI_InstallAceGUIHooks > InitializeCreatedWidget > widget.OnHeightSet", function(self, height)
         originalOnHeightSet(self, height - (self.__puiGroupHeaderOffset or 0))
-      end
-      widget.LayoutFinished = function(self, width, height)
+      end)
+      widget.LayoutFinished = PUI_OptionsProfiler:DefCallback("_PUI_InstallAceGUIHooks > InitializeCreatedWidget > widget.LayoutFinished", function(self, width, height)
         originalLayoutFinished(self, width, (height or 0) + (self.__puiGroupHeaderOffset or 0))
-      end
-      widget.SetTitle = function(self, title)
+      end)
+      widget.SetTitle = PUI_OptionsProfiler:DefCallback("_PUI_InstallAceGUIHooks > InitializeCreatedWidget > widget.SetTitle", function(self, title)
         originalSetTitle(self, title)
         self:OnWidthSet(self.frame:GetWidth())
-      end
+      end)
       local dropdown = widget.dropdown
       local selectedGroup = dropdown.events.OnValueChanged
-      dropdown:SetCallback("OnValueChanged", function(control, event, value)
+      dropdown:SetCallback("OnValueChanged", PUI_OptionsProfiler:DefCallback("_PUI_InstallAceGUIHooks > InitializeCreatedWidget > dropdown.SetCallback OnValueChanged", function(control, event, value)
         local owner = control.parentgroup
         local user = owner:GetUserDataTable()
         if owner.__puiAceGUIOwnedByPleebUI == true
@@ -300,9 +323,11 @@ local function _PUI_InstallAceGUIHooks()
           return
         end
         selectedGroup(control, event, value)
-      end)
+      end))
     end
   end
+  InitializeCreatedWidget = PUI_OptionsProfiler:DefCallback("_PUI_InstallAceGUIHooks > InitializeCreatedWidget", InitializeCreatedWidget)
+
 
   function AceHooks.TakeOwnership(widget)
     if not widget then
@@ -312,9 +337,11 @@ local function _PUI_InstallAceGUIHooks()
     InitializeCreatedWidget(widget)
     return true
   end
+  AceHooks.TakeOwnership = PUI_OptionsProfiler:DefCallback("_PUI_InstallAceGUIHooks > AceHooks.TakeOwnership", AceHooks.TakeOwnership)
+
 
   local originalRelease = AceGUI.Release
-  AceGUI.Release = function(gui, widget)
+  AceGUI.Release = PUI_OptionsProfiler:DefCallback("_PUI_InstallAceGUIHooks > AceGUI.Release", function(gui, widget)
     local wasQueuedForRelease = widget and widget.isQueuedForRelease
 
     if widget
@@ -336,7 +363,7 @@ local function _PUI_InstallAceGUIHooks()
       widget.parent = nil
     end
     return result
-  end
+  end)
 
   local function PrepareChildOwnership(parent, child)
     local ownedByPleebUI = IsPleebUIOwner(parent)
@@ -353,10 +380,12 @@ local function _PUI_InstallAceGUIHooks()
       ClearOwnership(child)
     end
   end
+  PrepareChildOwnership = PUI_OptionsProfiler:DefCallback("_PUI_InstallAceGUIHooks > PrepareChildOwnership", PrepareChildOwnership)
+
 
   local widgetContainerBase = AceGUI.WidgetContainerBase
   local originalReleaseChildren = widgetContainerBase.ReleaseChildren
-  widgetContainerBase.ReleaseChildren = function(self)
+  widgetContainerBase.ReleaseChildren = PUI_OptionsProfiler:DefCallback("_PUI_InstallAceGUIHooks > widgetContainerBase.ReleaseChildren", function(self)
     local ownedByPleebUI = IsPleebUIOwner(self)
     if ownedByPleebUI then ns.OptionsLifecycle.ReleaseWidget(self) end
     if not ownedByPleebUI or self.LayoutPaused then
@@ -367,29 +396,31 @@ local function _PUI_InstallAceGUIHooks()
     self:PauseLayout()
     originalReleaseChildren(self)
     self:ResumeLayout()
-  end
+  end)
   local originalAddChild = widgetContainerBase.AddChild
-  widgetContainerBase.AddChild = function(self, child, beforeWidget)
+  widgetContainerBase.AddChild = PUI_OptionsProfiler:DefCallback("_PUI_InstallAceGUIHooks > widgetContainerBase.AddChild", function(self, child, beforeWidget)
     PrepareChildOwnership(self, child)
     return originalAddChild(self, child, beforeWidget)
-  end
+  end)
 
   local originalAddChildren = widgetContainerBase.AddChildren
-  widgetContainerBase.AddChildren = function(self, ...)
+  widgetContainerBase.AddChildren = PUI_OptionsProfiler:DefCallback("_PUI_InstallAceGUIHooks > widgetContainerBase.AddChildren", function(self, ...)
     for i = 1, select("#", ...) do
       PrepareChildOwnership(self, select(i, ...))
     end
 
     return originalAddChildren(self, ...)
-  end
+  end)
 end
+_PUI_InstallAceGUIHooks = PUI_OptionsProfiler:Def("_PUI_InstallAceGUIHooks", _PUI_InstallAceGUIHooks)
+
 
 local function _PUI_InstallAceConfigDialogHooks()
   local AceConfigDialog = LibStub("AceConfigDialog-3.0")
   _PUI_InstallOptionsTooltipHook(AceConfigDialog.tooltip)
 
   local originalFeedGroup = AceConfigDialog.FeedGroup
-  AceConfigDialog.FeedGroup = function(dialog, appName, options, container, rootframe, path, ...)
+  AceConfigDialog.FeedGroup = PUI_OptionsProfiler:DefCallback("_PUI_InstallAceConfigDialogHooks > AceConfigDialog.FeedGroup", function(dialog, appName, options, container, rootframe, path, ...)
     if appName ~= "PleebUI" then
       return originalFeedGroup(dialog, appName, options, container, rootframe, path, ...)
     end
@@ -413,21 +444,21 @@ local function _PUI_InstallAceConfigDialogHooks()
       ns.OptionsLifecycle.Bind(rootframe)
     end
     return result
-  end
+  end)
 
-  hooksecurefunc("StaticPopup_Show", function(which, _, _, data)
+  hooksecurefunc("StaticPopup_Show", PUI_OptionsProfiler:DefCallback("_PUI_InstallAceConfigDialogHooks > hooksecurefunc StaticPopup_Show", function(which, _, _, data)
     local popup = StaticPopup_FindVisible(which, data)
     if popup then
       ns.Addon:Theme_SkinStaticPopup(popup)
     end
-  end)
+  end))
 
-  hooksecurefunc(AceConfigDialog, "ConfigTableChanged", function(_, _, appName)
+  hooksecurefunc(AceConfigDialog, "ConfigTableChanged", PUI_OptionsProfiler:DefCallback("_PUI_InstallAceConfigDialogHooks > hooksecurefunc ConfigTableChanged", function(_, _, appName)
     if appName == "PleebUI" then ns.OptionsLifecycle.RefreshModel() end
-  end)
+  end))
 
   local originalOpen = AceConfigDialog.Open
-  AceConfigDialog.Open = function(dialog, appName, container, ...)
+  AceConfigDialog.Open = PUI_OptionsProfiler:DefCallback("_PUI_InstallAceConfigDialogHooks > AceConfigDialog.Open", function(dialog, appName, container, ...)
     if ns.OptionsLifecycle.RequestRefresh(dialog, appName, container, ...) then
       return
     end
@@ -436,8 +467,10 @@ local function _PUI_InstallAceConfigDialogHooks()
     end
 
     return originalOpen(dialog, appName, container, ...)
-  end
+  end)
 end
+_PUI_InstallAceConfigDialogHooks = PUI_OptionsProfiler:Def("_PUI_InstallAceConfigDialogHooks", _PUI_InstallAceConfigDialogHooks)
+
 
 function AceHooks.RefreshOwnedWidgets()
   ns.KeyboardNavigation.QueueRestore()
@@ -460,8 +493,11 @@ function AceHooks.RefreshOwnedWidgets()
     end
   end
 end
+AceHooks.RefreshOwnedWidgets = PUI_OptionsProfiler:Def("AceHooks.RefreshOwnedWidgets", AceHooks.RefreshOwnedWidgets)
+
 
 function AceHooks.Install()
   _PUI_InstallAceGUIHooks()
   _PUI_InstallAceConfigDialogHooks()
 end
+AceHooks.Install = PUI_OptionsProfiler:Def("AceHooks.Install", AceHooks.Install)

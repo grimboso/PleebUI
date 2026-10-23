@@ -1,4 +1,5 @@
 local _, ns = ...
+local PUI_OptionsProfiler = select(1, ns.Pleebug:DropIn({}))
 
 local OptionsUtil = {
   _cache = {
@@ -20,6 +21,8 @@ local function CacheKey(includeDefault, defaultLabel, defaultKey)
     tostring(defaultKey or ""),
   }, "\031")
 end
+CacheKey = PUI_OptionsProfiler:Def("CacheKey", CacheKey)
+
 
 
 function OptionsUtil.BuildStatusbarValues(includeDefault, defaultLabel, defaultKey)
@@ -41,6 +44,8 @@ function OptionsUtil.BuildStatusbarValues(includeDefault, defaultLabel, defaultK
   OptionsUtil._cache.statusbars[key] = list
   return list
 end
+OptionsUtil.BuildStatusbarValues = PUI_OptionsProfiler:Def("OptionsUtil.BuildStatusbarValues", OptionsUtil.BuildStatusbarValues)
+
 
 local function HasLSMFontKey(fontKey)
   return type(fontKey) == "string"
@@ -48,6 +53,8 @@ local function HasLSMFontKey(fontKey)
     and fontKey ~= STANDARD_FONT_KEY
     and LSM:HashTable("font")[fontKey] ~= nil
 end
+HasLSMFontKey = PUI_OptionsProfiler:Def("HasLSMFontKey", HasLSMFontKey)
+
 
 function OptionsUtil.BuildFontValues(includeDefault, defaultLabel, defaultKey)
   local key = CacheKey(includeDefault, defaultLabel, defaultKey)
@@ -68,6 +75,8 @@ function OptionsUtil.BuildFontValues(includeDefault, defaultLabel, defaultKey)
   OptionsUtil._cache.fonts[key] = list
   return list
 end
+OptionsUtil.BuildFontValues = PUI_OptionsProfiler:Def("OptionsUtil.BuildFontValues", OptionsUtil.BuildFontValues)
+
 
 function OptionsUtil.ResolveFontKey(value, useGlobalFont)
   if useGlobalFont ~= true and HasLSMFontKey(value) then
@@ -77,11 +86,15 @@ function OptionsUtil.ResolveFontKey(value, useGlobalFont)
   local fontKey = ns.Theme.GetIconTextGlobal()
   return HasLSMFontKey(fontKey) and fontKey or "FiraSans Heavy"
 end
+OptionsUtil.ResolveFontKey = PUI_OptionsProfiler:Def("OptionsUtil.ResolveFontKey", OptionsUtil.ResolveFontKey)
+
 
 
 function OptionsUtil.FetchFontPath(value, useGlobalFont)
   return LSM:Fetch("font", OptionsUtil.ResolveFontKey(value, useGlobalFont), true)
 end
+OptionsUtil.FetchFontPath = PUI_OptionsProfiler:Def("OptionsUtil.FetchFontPath", OptionsUtil.FetchFontPath)
+
 
 function OptionsUtil.BuildOutlineValues(includeDefault, defaultLabel, defaultKey)
   local key = CacheKey(includeDefault, defaultLabel, defaultKey)
@@ -102,10 +115,14 @@ function OptionsUtil.BuildOutlineValues(includeDefault, defaultLabel, defaultKey
   OptionsUtil._cache.outlines[key] = list
   return list
 end
+OptionsUtil.BuildOutlineValues = PUI_OptionsProfiler:Def("OptionsUtil.BuildOutlineValues", OptionsUtil.BuildOutlineValues)
+
 
 function OptionsUtil.GetStoredOutlineValue(value, defaultKey)
   return value == nil and (defaultKey or STANDARD_OUTLINE_KEY) or value
 end
+OptionsUtil.GetStoredOutlineValue = PUI_OptionsProfiler:Def("OptionsUtil.GetStoredOutlineValue", OptionsUtil.GetStoredOutlineValue)
+
 
 function OptionsUtil.SetStoredOutlineValue(value, defaultKey)
   if value == nil or value == (defaultKey or STANDARD_OUTLINE_KEY) then
@@ -114,3 +131,4 @@ function OptionsUtil.SetStoredOutlineValue(value, defaultKey)
 
   return value == "NONE" and "" or value
 end
+OptionsUtil.SetStoredOutlineValue = PUI_OptionsProfiler:Def("OptionsUtil.SetStoredOutlineValue", OptionsUtil.SetStoredOutlineValue)

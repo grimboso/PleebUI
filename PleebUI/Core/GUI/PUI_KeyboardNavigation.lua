@@ -1,4 +1,5 @@
 local _, ns = ...
+local PUI_OptionsProfiler = select(1, ns.Pleebug:DropIn({}))
 
 local Navigation = {}
 ns.KeyboardNavigation = Navigation
@@ -16,10 +17,14 @@ local MoveFocus, FocusControl, AdoptPopup
 function Navigation.IsEnabled()
   return ns.Addon:GetOptionsDB().keyboardNavigation ~= false
 end
+Navigation.IsEnabled = PUI_OptionsProfiler:Def("Navigation.IsEnabled", Navigation.IsEnabled)
+
 
 local function WindowNavigationEnabled(state)
   return (state.movers or Navigation.IsEnabled()) and (not state.enabled or state.enabled())
 end
+WindowNavigationEnabled = PUI_OptionsProfiler:Def("WindowNavigationEnabled", WindowNavigationEnabled)
+
 
 local function BelongsTo(frame, root)
   while frame do
@@ -28,6 +33,8 @@ local function BelongsTo(frame, root)
   end
   return false
 end
+BelongsTo = PUI_OptionsProfiler:Def("BelongsTo", BelongsTo)
+
 
 local function ControlKey(control)
   local widget = control.widget
@@ -44,6 +51,8 @@ local function ControlKey(control)
   local frame = control.frame
   return control.part .. "\002" .. tostring(frame.uniquevalue or frame.__puiValue or frame.__puiSectionKey or frame:GetName() or control.serial)
 end
+ControlKey = PUI_OptionsProfiler:Def("ControlKey", ControlKey)
+
 
 local function IsDisabled(control)
   local frame, widget = control.frame, control.widget
@@ -52,11 +61,15 @@ local function IsDisabled(control)
     or ((kind == "Button" or kind == "CheckButton" or kind == "Slider") and not frame:IsEnabled())
     or (frame.treeline and frame.treeline.disabled == true)
 end
+IsDisabled = PUI_OptionsProfiler:Def("IsDisabled", IsDisabled)
+
 
 local function RunControlScript(frame, script, ...)
   local callback = frame:GetScript(script)
   if callback then callback(frame, ...) end
 end
+RunControlScript = PUI_OptionsProfiler:Def("RunControlScript", RunControlScript)
+
 
 local function Activate(control)
   if IsDisabled(control) then return end
@@ -70,6 +83,8 @@ local function Activate(control)
   end
   Navigation.RefreshWindows()
 end
+Activate = PUI_OptionsProfiler:Def("Activate", Activate)
+
 
 local function ScrollIntoView(frame)
   local parent = frame:GetParent()
@@ -89,6 +104,8 @@ local function ScrollIntoView(frame)
     parent = parent:GetParent()
   end
 end
+ScrollIntoView = PUI_OptionsProfiler:Def("ScrollIntoView", ScrollIntoView)
+
 
 local function HideFocus()
   if not current then return end
@@ -97,6 +114,8 @@ local function HideFocus()
   if frame.__puiKeyboardOutline then frame.__puiKeyboardOutline:Hide() end
   if current.widget then ns.AceHooks.HideDisabledTooltip(current.widget) end
 end
+HideFocus = PUI_OptionsProfiler:Def("HideFocus", HideFocus)
+
 
 function Navigation.ClearKeyboardFocus()
   HideFocus()
@@ -110,6 +129,8 @@ function Navigation.ClearKeyboardFocus()
   if state and state.keyHandler then state.keyHandler("GLOBAL_MOUSE_DOWN", false) end
   Navigation.RefreshWindows()
 end
+Navigation.ClearKeyboardFocus = PUI_OptionsProfiler:Def("Navigation.ClearKeyboardFocus", Navigation.ClearKeyboardFocus)
+
 
 function Navigation.SetEnabled(enabled)
   ns.Addon:GetOptionsDB().keyboardNavigation = enabled == true
@@ -120,6 +141,8 @@ function Navigation.SetEnabled(enabled)
   end
   Navigation.ClearKeyboardFocus()
 end
+Navigation.SetEnabled = PUI_OptionsProfiler:Def("Navigation.SetEnabled", Navigation.SetEnabled)
+
 
 local function DrawFocus(control)
   local frame = control.frame
@@ -138,6 +161,8 @@ local function DrawFocus(control)
   outline:SetFrameLevel(frame:GetFrameLevel() + 30)
   outline:Show()
 end
+DrawFocus = PUI_OptionsProfiler:Def("DrawFocus", DrawFocus)
+
 
 local GUIDE_TEXT = {
   movers = "Tab Select mover · Arrows Move · 1-9 Step · F6 Controls",
@@ -182,6 +207,8 @@ local function GuideContext(state)
   if state.movers and not state.active then return "movers" end
   return "options"
 end
+GuideContext = PUI_OptionsProfiler:Def("GuideContext", GuideContext)
+
 
 local function RefreshGuide(root, state)
   local guide = state.guide
@@ -253,11 +280,15 @@ local function RefreshGuide(root, state)
   guide.overlay:Show()
   if keyboardInput then DrawFocus(guide.helpControls[state.helpIndex]) end
 end
+RefreshGuide = PUI_OptionsProfiler:Def("RefreshGuide", RefreshGuide)
+
 
 function Navigation.GetGuideHeight(root)
   local state = windows[root]
   return state and state.guide and state.guide.height or 0
 end
+Navigation.GetGuideHeight = PUI_OptionsProfiler:Def("Navigation.GetGuideHeight", Navigation.GetGuideHeight)
+
 
 function Navigation.AttachGuide(root, settings)
   local state = windows[root] or pendingWindows[root]
@@ -271,7 +302,7 @@ function Navigation.AttachGuide(root, settings)
   label:ClearAllPoints()
   label:SetPoint("LEFT", button, "LEFT", 8, 0)
   label:SetPoint("RIGHT", button, "RIGHT", -8, 0)
-  button:SetScript("OnClick", function() Navigation.ToggleHelp(root) end)
+  button:SetScript("OnClick", PUI_OptionsProfiler:DefCallback("Navigation.AttachGuide > button.SetScript OnClick", function() Navigation.ToggleHelp(root) end))
   local overlay = CreateFrame("Frame", nil, root)
   overlay:Hide()
   overlay:SetAllPoints(UIParent)
@@ -290,12 +321,12 @@ function Navigation.AttachGuide(root, settings)
   help.close.__puiKeyboardHelpAccessory = true
   help.close:SetText("Close help · F1 / Escape")
   help.close:SetPoint("BOTTOMLEFT", 12, 12)
-  help.close:SetScript("OnClick", function() Navigation.ToggleHelp(root) end)
+  help.close:SetScript("OnClick", PUI_OptionsProfiler:DefCallback("Navigation.AttachGuide > help.close.SetScript OnClick", function() Navigation.ToggleHelp(root) end))
   help.scroll = CreateFrame("ScrollFrame", nil, help, "UIPanelScrollFrameTemplate")
   help.scroll:EnableMouseWheel(true)
-  help.scroll:SetScript("OnMouseWheel", function(self, delta)
+  help.scroll:SetScript("OnMouseWheel", PUI_OptionsProfiler:DefCallback("Navigation.AttachGuide > help.scroll.SetScript OnMouseWheel", function(self, delta)
     self:SetVerticalScroll(math.max(0, math.min(self:GetVerticalScrollRange(), self:GetVerticalScroll() - delta * 32)))
-  end)
+  end))
   help.content = CreateFrame("Frame", nil, help.scroll)
   help.scroll:SetScrollChild(help.content)
   help.text = help.content:CreateFontString(nil, "OVERLAY")
@@ -306,9 +337,11 @@ function Navigation.AttachGuide(root, settings)
   help.text:SetText(HELP_TEXT)
   state.guide = { button = button, label = label, overlay = overlay, help = help,
     helpControls = { { frame = help.scroll }, { frame = help.close } }, height = 0, settings = settings }
-  root:HookScript("OnSizeChanged", function() Navigation.RefreshWindows() end)
+  root:HookScript("OnSizeChanged", PUI_OptionsProfiler:DefCallback("Navigation.AttachGuide > root.HookScript OnSizeChanged", function() Navigation.RefreshWindows() end))
   Navigation.RefreshWindows()
 end
+Navigation.AttachGuide = PUI_OptionsProfiler:Def("Navigation.AttachGuide", Navigation.AttachGuide)
+
 
 function Navigation.ToggleHelp(root)
   if InCombatLockdown() or root ~= activeWindow then return end
@@ -326,12 +359,14 @@ function Navigation.ToggleHelp(root)
   Navigation.RefreshWindows()
   if not state.helpShown then Navigation.QueueRestore() end
 end
+Navigation.ToggleHelp = PUI_OptionsProfiler:Def("Navigation.ToggleHelp", Navigation.ToggleHelp)
+
 
 local function HookTextInput(frame)
   if frame.__puiKeyboardTextHooked then return end
   frame.__puiKeyboardTextHooked = true
   local tab = frame:GetScript("OnTabPressed")
-  frame:SetScript("OnTabPressed", function(self)
+  frame:SetScript("OnTabPressed", PUI_OptionsProfiler:DefCallback("HookTextInput > frame.SetScript OnTabPressed", function(self)
     local control = controls[self]
     local state = activeWindow and windows[activeWindow]
     if control and state and (BelongsTo(self, activeWindow) or (popup and BelongsTo(self, popup.frame)))
@@ -341,8 +376,8 @@ local function HookTextInput(frame)
     elseif tab then
       tab(self)
     end
-  end)
-  frame:HookScript("OnEditFocusGained", function(self)
+  end))
+  frame:HookScript("OnEditFocusGained", PUI_OptionsProfiler:DefCallback("HookTextInput > frame.HookScript OnEditFocusGained", function(self)
     local control = controls[self]
     local state = activeWindow and windows[activeWindow]
     if not control or not state or not (BelongsTo(self, activeWindow) or (popup and BelongsTo(self, popup.frame)))
@@ -353,20 +388,22 @@ local function HookTextInput(frame)
     windows[activeWindow].active = true
     DrawFocus(control)
     Navigation.RefreshWindows()
-  end)
-  frame:HookScript("OnEscapePressed", function(self)
+  end))
+  frame:HookScript("OnEscapePressed", PUI_OptionsProfiler:DefCallback("HookTextInput > frame.HookScript OnEscapePressed", function(self)
     if controls[self] and self:HasFocus() then self:ClearFocus() end
-  end)
-  frame:HookScript("OnKeyDown", function(self, key)
+  end))
+  frame:HookScript("OnKeyDown", PUI_OptionsProfiler:DefCallback("HookTextInput > frame.HookScript OnKeyDown", function(self, key)
     local popupSearch = popup and current and current.frame == self and BelongsTo(self, popup.frame)
     if (key == "F6" or key == "F1" or (popupSearch and (key == "UP" or key == "DOWN" or key == "PAGEUP" or key == "PAGEDOWN")))
       and controls[self] and activeWindow
       and (BelongsTo(self, activeWindow) or popupSearch) then
       Navigation.HandleKey(key)
     end
-  end)
-  frame:HookScript("OnEditFocusLost", function() Navigation.RefreshWindows() end)
+  end))
+  frame:HookScript("OnEditFocusLost", PUI_OptionsProfiler:DefCallback("HookTextInput > frame.HookScript OnEditFocusLost", function() Navigation.RefreshWindows() end))
 end
+HookTextInput = PUI_OptionsProfiler:Def("HookTextInput", HookTextInput)
+
 
 function Navigation.RegisterFrame(frame, kind, part, group, widget, mouseUp, actions)
   local control = controls[frame]
@@ -388,20 +425,20 @@ function Navigation.RegisterFrame(frame, kind, part, group, widget, mouseUp, act
   end
   if not frame.__puiKeyboardHideHooked then
     frame.__puiKeyboardHideHooked = true
-    frame:HookScript("OnHide", function(self)
+    frame:HookScript("OnHide", PUI_OptionsProfiler:DefCallback("Navigation.RegisterFrame > frame.HookScript OnHide", function(self)
       if current and current.frame == self then
         local state = activeWindow and windows[activeWindow]
         if state and state.active then state.restoreKey = ControlKey(current) end
         HideFocus()
         current = nil
       end
-    end)
+    end))
   end
   control.kind, control.part, control.group, control.widget, control.mouseUp, control.actions = kind, part, group, widget, mouseUp, actions
   if kind == "text" then HookTextInput(frame) end
   if kind == "dropdown" and not frame.__puiKeyboardDropdownHooked then
     frame.__puiKeyboardDropdownHooked = true
-    frame:HookScript("OnClick", function(self)
+    frame:HookScript("OnClick", PUI_OptionsProfiler:DefCallback("Navigation.RegisterFrame > frame.HookScript OnClick", function(self)
       local entry = controls[self]
       local state = activeWindow and windows[activeWindow]
       if entry and entry.kind == "dropdown" and state and state.active and not state.helpShown
@@ -410,10 +447,12 @@ function Navigation.RegisterFrame(frame, kind, part, group, widget, mouseUp, act
         and WindowNavigationEnabled(state) then
         AdoptPopup(entry)
       end
-    end)
+    end))
   end
   return control
 end
+Navigation.RegisterFrame = PUI_OptionsProfiler:Def("Navigation.RegisterFrame", Navigation.RegisterFrame)
+
 
 function Navigation.UnregisterFrame(frame)
   local control = controls[frame]
@@ -429,6 +468,8 @@ function Navigation.UnregisterFrame(frame)
   controls[frame] = nil
   Navigation.QueueRestore()
 end
+Navigation.UnregisterFrame = PUI_OptionsProfiler:Def("Navigation.UnregisterFrame", Navigation.UnregisterFrame)
+
 
 function Navigation.RegisterWidget(widget)
   widgets[widget] = true
@@ -458,9 +499,9 @@ function Navigation.RegisterWidget(widget)
     Navigation.RegisterFrame(widget.focusInput, "text", "sampleInput", nil, widget)
     Navigation.RegisterFrame(widget.number, "text", "sampleNumber", nil, widget)
     Navigation.RegisterFrame(widget.slider, "slider", "sampleSlider", nil, widget, nil, {
-      adjust = function(direction)
+      adjust = PUI_OptionsProfiler:DefCallback("Navigation.RegisterWidget > adjust", function(direction)
         widget.slider:SetValue(math.max(0, math.min(100, widget.slider:GetValue() + direction)))
-      end,
+      end),
     })
     Navigation.RegisterFrame(widget.enabled, "button", "sampleReset", nil, widget)
     Navigation.RegisterFrame(widget.disabled, "button", "sampleDisabled", nil, widget)
@@ -471,16 +512,18 @@ function Navigation.RegisterWidget(widget)
     local button = widget.button
     button.__puiKeyboardBindingHooked = true
     for _, script in ipairs({ "OnKeyDown", "OnClick", "OnMouseDown", "OnMouseWheel", "OnGamePadButtonDown" }) do
-      button:HookScript(script, function() Navigation.RefreshWindows() end)
+      button:HookScript(script, PUI_OptionsProfiler:DefCallback("Navigation.RegisterWidget > button.HookScript", function() Navigation.RefreshWindows() end))
     end
-    button:HookScript("OnHide", function()
+    button:HookScript("OnHide", PUI_OptionsProfiler:DefCallback("Navigation.RegisterWidget > button.HookScript OnHide", function()
       if widget.waitingForKey then
         RunControlScript(button, "OnClick", "LeftButton")
         Navigation.RefreshWindows()
       end
-    end)
+    end))
   end
 end
+Navigation.RegisterWidget = PUI_OptionsProfiler:Def("Navigation.RegisterWidget", Navigation.RegisterWidget)
+
 
 function Navigation.ReleaseWidget(widget)
   widgets[widget] = nil
@@ -494,6 +537,8 @@ function Navigation.ReleaseWidget(widget)
   if popup and popup.widget == widget then popup = nil end
   Navigation.QueueRestore()
 end
+Navigation.ReleaseWidget = PUI_OptionsProfiler:Def("Navigation.ReleaseWidget", Navigation.ReleaseWidget)
+
 
 local function ControlRegion(control, regions)
   local frame = control.frame
@@ -505,6 +550,8 @@ local function ControlRegion(control, regions)
   end
   return #regions + 1
 end
+ControlRegion = PUI_OptionsProfiler:Def("ControlRegion", ControlRegion)
+
 
 local function Collect(root)
   for widget in pairs(widgets) do
@@ -539,14 +586,16 @@ local function Collect(root)
       end
     end
   end
-  table.sort(result, function(a, b)
+  table.sort(result, PUI_OptionsProfiler:DefCallback("Collect > table.sort", function(a, b)
     if a.region ~= b.region then return a.region < b.region end
     if a.top ~= b.top then return a.top > b.top end
     if a.left ~= b.left then return a.left < b.left end
     return a.serial < b.serial
-  end)
+  end))
   return result
 end
+Collect = PUI_OptionsProfiler:Def("Collect", Collect)
+
 
 function Navigation.FocusWidget(widget)
   local state = activeWindow and windows[activeWindow]
@@ -560,8 +609,10 @@ function Navigation.FocusWidget(widget)
     end
   end
 end
+Navigation.FocusWidget = PUI_OptionsProfiler:Def("Navigation.FocusWidget", Navigation.FocusWidget)
 
-FocusControl = function(control)
+
+FocusControl = PUI_OptionsProfiler:Def("FocusControl", function(control)
   local old = current
   HideFocus()
   current = nil
@@ -588,11 +639,13 @@ FocusControl = function(control)
   if current == control and windows[activeWindow].active and not windows[activeWindow].helpShown then
     ScrollIntoView(control.frame)
   end
-end
+end)
 
 function Navigation.SetRegions(root, regions)
   (windows[root] or pendingWindows[root]).regions = regions
 end
+Navigation.SetRegions = PUI_OptionsProfiler:Def("Navigation.SetRegions", Navigation.SetRegions)
+
 
 function Navigation.FocusRegion(root, index)
   local state = windows[root]
@@ -608,6 +661,8 @@ function Navigation.FocusRegion(root, index)
   end
   return false
 end
+Navigation.FocusRegion = PUI_OptionsProfiler:Def("Navigation.FocusRegion", Navigation.FocusRegion)
+
 
 function Navigation.QueueFocusRegion(root, index)
   local state = windows[root]
@@ -616,15 +671,17 @@ function Navigation.QueueFocusRegion(root, index)
   local request = {}
   local generation = restoreGeneration
   state.pendingRegionFocus = request
-  C_Timer.After(0, function()
+  C_Timer.After(0, PUI_OptionsProfiler:DefCallback("Navigation.QueueFocusRegion > C_Timer.After", function()
     if state.pendingRegionFocus ~= request then return end
     state.pendingRegionFocus = nil
     if generation ~= restoreGeneration then return end
     Navigation.FocusRegion(root, index)
-  end)
+  end))
 end
+Navigation.QueueFocusRegion = PUI_OptionsProfiler:Def("Navigation.QueueFocusRegion", Navigation.QueueFocusRegion)
 
-MoveFocus = function(direction)
+
+MoveFocus = PUI_OptionsProfiler:Def("MoveFocus", function(direction)
   local list = Collect(activeWindow)
   local groups, stops = {}, {}
   for _, control in ipairs(list) do
@@ -647,7 +704,7 @@ MoveFocus = function(direction)
   local index = direction > 0 and 0 or 1
   for i, control in ipairs(stops) do if control == current then index = i; break end end
   FocusControl(stops[(index - 1 + direction) % #stops + 1])
-end
+end)
 
 local function FocusTreeLine(widget, index)
   local line = widget.lines[index]
@@ -682,6 +739,8 @@ local function FocusTreeLine(widget, index)
     end
   end
 end
+FocusTreeLine = PUI_OptionsProfiler:Def("FocusTreeLine", FocusTreeLine)
+
 
 local function MoveInGroup(direction)
   if current.kind == "tree" and current.widget then
@@ -705,6 +764,8 @@ local function MoveInGroup(direction)
     end
   end
 end
+MoveInGroup = PUI_OptionsProfiler:Def("MoveInGroup", MoveInGroup)
+
 
 local function ClosePopup()
   if not popup then return false end
@@ -714,6 +775,8 @@ local function ClosePopup()
   FocusControl(owner)
   return true
 end
+ClosePopup = PUI_OptionsProfiler:Def("ClosePopup", ClosePopup)
+
 
 local function PopupRows()
   local rows = {}
@@ -733,6 +796,8 @@ local function PopupRows()
   end
   return rows
 end
+PopupRows = PUI_OptionsProfiler:Def("PopupRows", PopupRows)
+
 
 local function MoveInPopup(direction)
   local rows = PopupRows()
@@ -743,8 +808,10 @@ local function MoveInPopup(direction)
   local control = Navigation.RegisterFrame(row, "popup", "popup", nil, popup.widget)
   FocusControl(control)
 end
+MoveInPopup = PUI_OptionsProfiler:Def("MoveInPopup", MoveInPopup)
 
-AdoptPopup = function(control)
+
+AdoptPopup = PUI_OptionsProfiler:Def("AdoptPopup", function(control)
   local widget = control.widget
   local custom = control.actions and control.actions.popup
   local frame = custom and custom.frame or (widget.pullout and widget.pullout.frame or widget.dropdown)
@@ -752,13 +819,13 @@ AdoptPopup = function(control)
   popup = { widget = widget, owner = control, frame = frame, rows = custom and custom.rows }
   if not frame.__puiKeyboardPopupHooked then
     frame.__puiKeyboardPopupHooked = true
-    frame:HookScript("OnHide", function(self)
+    frame:HookScript("OnHide", PUI_OptionsProfiler:DefCallback("AdoptPopup > frame.HookScript OnHide", function(self)
       if popup and popup.frame == self then
         local owner = popup.owner
         popup = nil
         FocusControl(owner)
       end
-    end)
+    end))
   end
   local search = widget.pullout and widget.pullout.__puiDropdownSearchBox or frame.__puiLSMFontSearchBox
   if search and search:IsShown() then
@@ -767,7 +834,7 @@ AdoptPopup = function(control)
   else
     MoveInPopup(1)
   end
-end
+end)
 
 local function ScrollPage(direction)
   local frame = current and current.frame
@@ -780,6 +847,8 @@ local function ScrollPage(direction)
   end
   return false
 end
+ScrollPage = PUI_OptionsProfiler:Def("ScrollPage", ScrollPage)
+
 
 function Navigation.HandleKey(key, autoFocus)
   if not activeWindow or InCombatLockdown() then return false end
@@ -903,6 +972,8 @@ function Navigation.HandleKey(key, autoFocus)
   end
   return false
 end
+Navigation.HandleKey = PUI_OptionsProfiler:Def("Navigation.HandleKey", Navigation.HandleKey)
+
 
 function Navigation.RefreshWindows()
   local activeState = activeWindow and windows[activeWindow]
@@ -930,6 +1001,8 @@ function Navigation.RefreshWindows()
       and (state.helpShown or WindowNavigationEnabled(state)))
   end
 end
+Navigation.RefreshWindows = PUI_OptionsProfiler:Def("Navigation.RefreshWindows", Navigation.RefreshWindows)
+
 
 function Navigation.ActivateWindow(root)
   local state = windows[root]
@@ -944,6 +1017,8 @@ function Navigation.ActivateWindow(root)
   activeWindow = root
   Navigation.RefreshWindows()
 end
+Navigation.ActivateWindow = PUI_OptionsProfiler:Def("Navigation.ActivateWindow", Navigation.ActivateWindow)
+
 
 function Navigation.BindWindow(root, movers, cancel, enabled, keyHandler)
   if windows[root] then return end
@@ -964,16 +1039,16 @@ function Navigation.BindWindow(root, movers, cancel, enabled, keyHandler)
   local state = { receiver = receiver, movers = movers, cancel = cancel, enabled = enabled,
     keyHandler = keyHandler, guide = pending and pending.guide, regions = pending and pending.regions }
   windows[root] = state
-  receiver:SetScript("OnKeyDown", function(self, key)
+  receiver:SetScript("OnKeyDown", PUI_OptionsProfiler:DefCallback("Navigation.BindWindow > receiver.SetScript OnKeyDown", function(self, key)
     if InCombatLockdown() then self:Hide(); return end
     if state.helpShown then self:SetPropagateKeyboardInput(false) end
     self:SetPropagateKeyboardInput(not Navigation.HandleKey(key))
-  end)
-  receiver:SetScript("OnKeyUp", function(self)
+  end))
+  receiver:SetScript("OnKeyUp", PUI_OptionsProfiler:DefCallback("Navigation.BindWindow > receiver.SetScript OnKeyUp", function(self)
     if not InCombatLockdown() then self:SetPropagateKeyboardInput(true) end
-  end)
-  root:HookScript("OnShow", function() Navigation.ActivateWindow(root) end)
-  root:HookScript("OnHide", function()
+  end))
+  root:HookScript("OnShow", PUI_OptionsProfiler:DefCallback("Navigation.BindWindow > root.HookScript OnShow", function() Navigation.ActivateWindow(root) end))
+  root:HookScript("OnHide", PUI_OptionsProfiler:DefCallback("Navigation.BindWindow > root.HookScript OnHide", function()
     state.pendingRegionFocus = nil
     if activeWindow == root then
       HideFocus()
@@ -986,9 +1061,11 @@ function Navigation.BindWindow(root, movers, cancel, enabled, keyHandler)
     state.helpShown = false
     state.receiver:Hide()
     Navigation.RefreshWindows()
-  end)
+  end))
   Navigation.ActivateWindow(root)
 end
+Navigation.BindWindow = PUI_OptionsProfiler:Def("Navigation.BindWindow", Navigation.BindWindow)
+
 
 function Navigation.QueueRestore()
   local state = activeWindow and windows[activeWindow]
@@ -996,7 +1073,7 @@ function Navigation.QueueRestore()
   if restorePending then return end
   restorePending = true
   local generation = restoreGeneration
-  C_Timer.After(0, function()
+  C_Timer.After(0, PUI_OptionsProfiler:DefCallback("Navigation.QueueRestore > C_Timer.After", function()
     restorePending = nil
     if generation ~= restoreGeneration then return end
     local state = activeWindow and windows[activeWindow]
@@ -1015,12 +1092,14 @@ function Navigation.QueueRestore()
       state.restoreKey = nil
       FocusControl(list[1])
     elseif current then DrawFocus(current) end
-  end)
+  end))
 end
+Navigation.QueueRestore = PUI_OptionsProfiler:Def("Navigation.QueueRestore", Navigation.QueueRestore)
+
 
 events:RegisterEvent("PLAYER_REGEN_DISABLED")
 events:RegisterEvent("PLAYER_REGEN_ENABLED")
-events:SetScript("OnEvent", function(_, event)
+events:SetScript("OnEvent", PUI_OptionsProfiler:Def("events.SetScript OnEvent", function(_, event)
   if event == "GLOBAL_MOUSE_DOWN" then
     Navigation.ClearKeyboardFocus()
   elseif event == "PLAYER_REGEN_DISABLED" then
@@ -1038,4 +1117,4 @@ events:SetScript("OnEvent", function(_, event)
     for root, state in pairs(pendingWindows) do Navigation.BindWindow(root, state.movers, state.cancel, state.enabled, state.keyHandler) end
     Navigation.RefreshWindows()
   end
-end)
+end))

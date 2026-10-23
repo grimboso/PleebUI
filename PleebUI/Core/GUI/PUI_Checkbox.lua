@@ -1,4 +1,5 @@
 local _, ns = ...
+local PUI_OptionsProfiler = select(1, ns.Pleebug:DropIn({}))
 
 local Theme = ns.Theme
 local Pixel = ns.Pixel
@@ -19,10 +20,14 @@ local function ClearTexture(texture)
   texture:SetAlpha(0)
   texture:Hide()
 end
+ClearTexture = PUI_OptionsProfiler:Def("ClearTexture", ClearTexture)
+
 
 local function ResolveCheckbox(widget)
   return widget.frame, widget.check, widget.checkbg, widget.text
 end
+ResolveCheckbox = PUI_OptionsProfiler:Def("ResolveCheckbox", ResolveCheckbox)
+
 
 local function ResolveControlType(widget, anchor)
   local controlType = widget.__puiCheckboxControlType
@@ -40,6 +45,8 @@ local function ResolveControlType(widget, anchor)
   widget.__puiCheckboxControlType = controlType
   return controlType
 end
+ResolveControlType = PUI_OptionsProfiler:Def("ResolveControlType", ResolveControlType)
+
 
 local function EnsureCheckboxChrome(widget, frame)
   local chrome = widget.__puiCheckboxChrome
@@ -73,6 +80,8 @@ local function EnsureCheckboxChrome(widget, frame)
   widget.__puiCheckboxChrome = chrome
   return chrome
 end
+EnsureCheckboxChrome = PUI_OptionsProfiler:Def("EnsureCheckboxChrome", EnsureCheckboxChrome)
+
 
 local function SetCheckboxChromeShown(chrome, shown)
   if shown then
@@ -91,6 +100,8 @@ local function SetCheckboxChromeShown(chrome, shown)
     end
   end
 end
+SetCheckboxChromeShown = PUI_OptionsProfiler:Def("SetCheckboxChromeShown", SetCheckboxChromeShown)
+
 
 local function LayoutCheckboxChrome(frame, chrome, left, yOffset, size)
   local edge = Theme.ControlBorderSize
@@ -116,6 +127,8 @@ local function LayoutCheckboxChrome(frame, chrome, left, yOffset, size)
   Pixel.Point(border.right, "RIGHT", frame, "LEFT", left + size, yOffset)
   Pixel.Size(border.right, edge, size - edge * 2)
 end
+LayoutCheckboxChrome = PUI_OptionsProfiler:Def("LayoutCheckboxChrome", LayoutCheckboxChrome)
+
 
 local function SetCheckboxChromeColors(chrome, backgroundColor, borderColor)
   Pixel.SetColorTexture(chrome.background,
@@ -134,10 +147,11 @@ local function SetCheckboxChromeColors(chrome, backgroundColor, borderColor)
     )
   end
 end
+SetCheckboxChromeColors = PUI_OptionsProfiler:Def("SetCheckboxChromeColors", SetCheckboxChromeColors)
 
-local function LayoutCheckboxText(widget, visual, visualSize, text, yOffset)
+
+local function LayoutCheckboxText(widget, visual, visualSize, text, yOffset, geom)
   local frame = widget.frame
-  local geom = Theme.GetWidgetRowGeometry(widget)
   local controlLeft = geom.controlLeft
   local controlRight = geom.controlRight
   local controlGap = geom.controlGap
@@ -171,6 +185,8 @@ local function LayoutCheckboxText(widget, visual, visualSize, text, yOffset)
     text:SetNonSpaceWrap(false)
   end
 end
+LayoutCheckboxText = PUI_OptionsProfiler:Def("LayoutCheckboxText", LayoutCheckboxText)
+
 
 local function RefreshCheckbox(widget)
   if widget.__puiAceGUIOwnedByPleebUI ~= true then
@@ -273,7 +289,7 @@ local function RefreshCheckbox(widget)
     ClearTexture(widget.highlight)
   end
 
-  LayoutCheckboxText(widget, anchor, visualSize, text, yOffset)
+  LayoutCheckboxText(widget, anchor, visualSize, text, yOffset, geom)
 
   Theme.ApplyFont(text, "body")
   if widget.desc then
@@ -286,6 +302,8 @@ local function RefreshCheckbox(widget)
     widget.desc:SetTextColor(textColor[1], textColor[2], textColor[3], textColor[4])
   end
 end
+RefreshCheckbox = PUI_OptionsProfiler:Def("RefreshCheckbox", RefreshCheckbox)
+
 
 function WidgetSkins.Checkbox(widget)
   local _, _, anchor = ResolveCheckbox(widget)
@@ -297,28 +315,30 @@ function WidgetSkins.Checkbox(widget)
     hooksecurefunc(widget, "SetValue", RefreshCheckbox)
     hooksecurefunc(widget, "SetDisabled", RefreshCheckbox)
     hooksecurefunc(widget, "SetLabel", RefreshCheckbox)
-    hooksecurefunc(widget, "SetType", function(self, controlType)
+    hooksecurefunc(widget, "SetType", PUI_OptionsProfiler:DefCallback("WidgetSkins.Checkbox > hooksecurefunc SetType", function(self, controlType)
       self.__puiCheckboxControlType = controlType == "radio" and "radio" or "checkbox"
       RefreshCheckbox(self)
-    end)
+    end))
     hooksecurefunc(widget, "SetImage", RefreshCheckbox)
     hooksecurefunc(widget, "SetDescription", RefreshCheckbox)
-    widget.frame:HookScript("OnEnter", function()
+    widget.frame:HookScript("OnEnter", PUI_OptionsProfiler:DefCallback("WidgetSkins.Checkbox > widget.frame.HookScript OnEnter", function()
       widget.__puiCheckboxHovered = true
       RefreshCheckbox(widget)
-    end)
-    widget.frame:HookScript("OnLeave", function()
+    end))
+    widget.frame:HookScript("OnLeave", PUI_OptionsProfiler:DefCallback("WidgetSkins.Checkbox > widget.frame.HookScript OnLeave", function()
       widget.__puiCheckboxHovered = nil
       RefreshCheckbox(widget)
-    end)
-    widget.frame:HookScript("OnHide", function()
+    end))
+    widget.frame:HookScript("OnHide", PUI_OptionsProfiler:DefCallback("WidgetSkins.Checkbox > widget.frame.HookScript OnHide", function()
       widget.__puiCheckboxHovered = nil
       RefreshCheckbox(widget)
-    end)
+    end))
   end
 
   RefreshCheckbox(widget)
 end
+WidgetSkins.Checkbox = PUI_OptionsProfiler:Def("WidgetSkins.Checkbox", WidgetSkins.Checkbox)
+
 
 local function PUI_Checkbox_OnEnter(frame)
   local widget = frame.obj
@@ -330,6 +350,8 @@ local function PUI_Checkbox_OnEnter(frame)
 
   widget:Fire("OnEnter")
 end
+PUI_Checkbox_OnEnter = PUI_OptionsProfiler:Def("PUI_Checkbox_OnEnter", PUI_Checkbox_OnEnter)
+
 
 local function PUI_Checkbox_OnLeave(frame)
   local widget = frame.obj
@@ -338,17 +360,26 @@ local function PUI_Checkbox_OnLeave(frame)
   RefreshCheckbox(widget)
   widget:Fire("OnLeave")
 end
+PUI_Checkbox_OnLeave = PUI_OptionsProfiler:Def("PUI_Checkbox_OnLeave", PUI_Checkbox_OnLeave)
+
 
 local function PUI_Checkbox_OnHide(frame)
   local widget = frame.obj
+  local wasHovered = widget.__puiCheckboxHovered
 
   widget.__puiCheckboxHovered = nil
-  RefreshCheckbox(widget)
+  if wasHovered then
+    RefreshCheckbox(widget)
+  end
 end
+PUI_Checkbox_OnHide = PUI_OptionsProfiler:Def("PUI_Checkbox_OnHide", PUI_Checkbox_OnHide)
+
 
 local function PUI_Checkbox_OnMouseDown()
   AceGUI:ClearFocus()
 end
+PUI_Checkbox_OnMouseDown = PUI_OptionsProfiler:Def("PUI_Checkbox_OnMouseDown", PUI_Checkbox_OnMouseDown)
+
 
 local function PUI_Checkbox_OnMouseUp(frame, button)
   local widget = frame.obj
@@ -368,9 +399,11 @@ local function PUI_Checkbox_OnMouseUp(frame, button)
   widget:Fire("OnValueChanged", widget.checked)
   RefreshCheckbox(widget)
 end
+PUI_Checkbox_OnMouseUp = PUI_OptionsProfiler:Def("PUI_Checkbox_OnMouseUp", PUI_Checkbox_OnMouseUp)
+
 
 local PUI_Checkbox_Methods = {
-  OnAcquire = function(self)
+  OnAcquire = PUI_OptionsProfiler:Def("OnAcquire", function(self)
     self.__puiCheckboxHovered = nil
     self:SetType("checkbox")
     self:SetValue(false)
@@ -379,21 +412,20 @@ local PUI_Checkbox_Methods = {
     self:SetImage(nil)
     self:SetDisabled(false)
     self:SetDescription(nil)
-  end,
+  end),
 
-  OnRelease = function(self)
+  OnRelease = PUI_OptionsProfiler:Def("OnRelease", function(self)
     self.__puiCheckboxHovered = nil
     self.__puiCheckboxControlType = nil
-  end,
+  end),
 
-  OnWidthSet = function(self, width)
+  OnWidthSet = PUI_OptionsProfiler:Def("OnWidthSet", function(self, width)
     if self.desc then
       Pixel.Width(self.desc, math.max(1, width - 30))
     end
-    RefreshCheckbox(self)
-  end,
+  end),
 
-  SetDisabled = function(self, disabled)
+  SetDisabled = PUI_OptionsProfiler:Def("SetDisabled", function(self, disabled)
     self.disabled = disabled == true
 
     if self.disabled then
@@ -405,9 +437,9 @@ local PUI_Checkbox_Methods = {
     end
 
     RefreshCheckbox(self)
-  end,
+  end),
 
-  SetValue = function(self, value)
+  SetValue = PUI_OptionsProfiler:Def("SetValue", function(self, value)
     self.checked = value
 
     if value then
@@ -422,18 +454,18 @@ local PUI_Checkbox_Methods = {
     end
 
     RefreshCheckbox(self)
-  end,
+  end),
 
-  GetValue = function(self)
+  GetValue = PUI_OptionsProfiler:Def("GetValue", function(self)
     return self.checked
-  end,
+  end),
 
-  SetTriState = function(self, enabled)
+  SetTriState = PUI_OptionsProfiler:Def("SetTriState", function(self, enabled)
     self.tristate = enabled == true
     self:SetValue(self.checked)
-  end,
+  end),
 
-  SetType = function(self, controlType)
+  SetType = PUI_OptionsProfiler:Def("SetType", function(self, controlType)
     local isRadio = controlType == "radio"
     local size = isRadio and 16 or 24
 
@@ -461,9 +493,9 @@ local PUI_Checkbox_Methods = {
     end
 
     RefreshCheckbox(self)
-  end,
+  end),
 
-  ToggleChecked = function(self)
+  ToggleChecked = PUI_OptionsProfiler:Def("ToggleChecked", function(self)
     local value = self.checked
 
     if self.tristate then
@@ -477,14 +509,14 @@ local PUI_Checkbox_Methods = {
     else
       self:SetValue(not value)
     end
-  end,
+  end),
 
-  SetLabel = function(self, label)
+  SetLabel = PUI_OptionsProfiler:Def("SetLabel", function(self, label)
     self.text:SetText(label or "")
     RefreshCheckbox(self)
-  end,
+  end),
 
-  SetDescription = function(self, description)
+  SetDescription = PUI_OptionsProfiler:Def("SetDescription", function(self, description)
     if description and description ~= "" then
       if not self.desc then
         local desc = self.frame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
@@ -504,9 +536,9 @@ local PUI_Checkbox_Methods = {
     end
 
     RefreshCheckbox(self)
-  end,
+  end),
 
-  SetImage = function(self, path, ...)
+  SetImage = PUI_OptionsProfiler:Def("SetImage", function(self, path, ...)
     Pixel.SetTexture(self.image, path)
 
     if self.image:GetTexture() then
@@ -519,7 +551,7 @@ local PUI_Checkbox_Methods = {
     end
 
     RefreshCheckbox(self)
-  end,
+  end),
 
   RefreshTheme = RefreshCheckbox,
 }
@@ -579,5 +611,7 @@ local function PUI_Checkbox_Constructor()
 
   return AceGUI:RegisterAsWidget(widget)
 end
+PUI_Checkbox_Constructor = PUI_OptionsProfiler:Def("PUI_Checkbox_Constructor", PUI_Checkbox_Constructor)
+
 
 AceGUI:RegisterWidgetType(PUI_CHECKBOX_TYPE, PUI_Checkbox_Constructor, PUI_CHECKBOX_VERSION)
