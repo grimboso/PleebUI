@@ -28,7 +28,7 @@
 
 
 
-local MAJOR, MINOR = "LibPleebug-1", 9
+local MAJOR, MINOR = "LibPleebug-1", 11
 local LibStub = _G.LibStub
 if not LibStub then return end
 
@@ -448,6 +448,7 @@ function MemDebug:_RegisterKnownModule(moduleName)
 
   if mdb.knownModules[moduleName] ~= true then
     mdb.knownModules[moduleName] = true
+    self._selectionVersion = (self._selectionVersion or 0) + 1
   end
 
   -- Default: enabled unless explicitly disabled.
@@ -610,7 +611,8 @@ function MemDebug:GetModuleGroupState(groupName)
   return totalCount > 0 and enabledCount == totalCount, enabledCount, totalCount
 end
 
-local function _ReloadForTrackingSelection(self, changed)
+local function _FinishTrackingSelection(self, changed)
+  if changed then self._selectionVersion = (self._selectionVersion or 0) + 1 end
   if changed and self:GetLoadMode() == "full" then
     self:Stop()
     _ensureDB().openAfterReload = true
@@ -640,7 +642,7 @@ function MemDebug:SetModuleGroupEnabled(groupName, enabled)
       end
     end
   end
-  _ReloadForTrackingSelection(self, changed)
+  _FinishTrackingSelection(self, changed)
 end
 
 function MemDebug:IsModuleEnabled(moduleName)
@@ -672,7 +674,7 @@ function MemDebug:EnableAllModules()
       end
     end
   end
-  _ReloadForTrackingSelection(self, changed)
+  _FinishTrackingSelection(self, changed)
 end
 
 function MemDebug:DisableAllModules()
@@ -689,7 +691,7 @@ function MemDebug:DisableAllModules()
       mdb.modules[name] = false
     end
   end
-  _ReloadForTrackingSelection(self, changed)
+  _FinishTrackingSelection(self, changed)
 end
 
 function MemDebug:GetModuleAlias(moduleName)
@@ -759,7 +761,7 @@ function MemDebug:SetModuleEnabled(moduleName, enabled)
   if enabled and self:IsEnabled() and self:GetLoadMode() ~= "full" then
     self:_InstallUniversalOnAttached(moduleName)
   end
-  _ReloadForTrackingSelection(self, changed)
+  _FinishTrackingSelection(self, changed)
 end
 function MemDebug:TrackKey(key, amount)
   if not self:IsEnabled() then return end
@@ -982,6 +984,30 @@ function MemDebug:NewPrivate(moduleName, opt)
 
     rawset(self, name, fn)
     return fn
+  end
+
+  -- Widget instances share a call-site record without retaining their closures.
+  function t:DefCallback(name, fn)
+    if type(name) ~= "string" or name == "" or type(fn) ~= "function" then return fn end
+    local module = self.__pleebugModuleName
+    if MemDebug:GetLoadMode() ~= "full" or modules[module] == false then return fn end
+
+    local groups = self.__pleebugCallbackGroups
+    if not groups then
+      groups = {}
+      self.__pleebugCallbackGroups = groups
+    end
+    local rec = groups[name]
+    local cpu = MemDebug.CPU
+    if not rec then
+      local _, registered = cpu:RegisterFunction(module, nil, name, fn, {
+        kind = "wrapped",
+        groupCallbacks = true,
+      })
+      rec = registered
+      groups[name] = rec
+    end
+    return cpu:CreateMeasuredCall(rec, fn, modules, module)
   end
 
   -- Owner methods remain original in Light mode and excluded Full files.

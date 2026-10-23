@@ -1,100 +1,178 @@
 # Pleebug
 
-Pleebug records function and event activity for development. Open it with `/pleebug` or `/pbug`. Debugging is disabled by default. Choose files, click **Enable debugging (reload)**, then use Start and Stop whenever needed, including during combat. Click **Disable debugging (reload)** before normal play. Entering or leaving debugging and changing measurement modes reload; Start and Stop do not. Start and Clear reset capture statistics.
+Pleebug helps you find which parts of an addon are doing work. Open it with `/pleebug` or `/pbug`.
 
-The first update to the explicit debugging switch sets `debuggingEnabled=false` once and records `debuggingOptInVersion=1`. Existing file selections, names and other settings remain. Full is the initial measurement mode; Light is an explicit alternative after enabling debugging. Later enable/disable choices and measurement-mode choices persist across reloads and logins. Captures always begin stopped. If the one-time migration finds native script profiling still enabled, it turns it off and reloads once after login so that session also starts without native profiling overhead. Subsequent logins do not repeat this migration or override the user's debugging choice.
+Debugging is off by default. Turn it on for an investigation, record a short capture, then turn it off before normal play.
 
-## Measurement modes
+## Record a capture
 
-- **Disabled:** `P:Def` and `P:SecDef` return original functions without registering CPU measurements or replacing owner methods. File metadata remains available for choosing files before enabling debugging. Start and Stop are unavailable, no collection hooks or samplers are installed, and disabling debugging sets `scriptProfile=0` before reloading.
-- **Light:** registers original function references and returns them unchanged. Blizzard's native CPU counters require `scriptProfile=1` and a reload. Per-call memory and per-function frame measurements are unavailable.
-- **Full:** switching to Full and reloading installs replacements only in the selected files. Recording is initially stopped. Start enables measurement immediately; Stop disables it immediately. The native measurement backend records time, allocated bytes and deallocated bytes. If unavailable, the timer backend records time only. Full mode can taint restricted execution paths.
+1. Open **Settings** and choose the addons and files you want to track.
+2. Click **Enable debugging (reload)**.
+3. Click **Start**, reproduce the problem, then click **Stop**.
+4. Expand the relevant addon and bucket, or search for an operation.
+5. Use **Export** to copy the displayed results.
+6. When finished, click **Disable debugging (reload)**.
 
-Stop freezes the selected snapshot, aggregate statistics and exact tab-separated export text in runtime memory. Results remain available while stopped, including after closing and reopening the window. Start and Clear discard the frozen text. A reload clears results and never resumes capture automatically. No capture data, arguments, returns, original functions or Blizzard result tables are saved.
+Start and Stop work immediately, including during combat. Enabling or disabling debugging, changing measurement modes, and changing file selections in Full mode require a reload outside combat. Light-mode selections apply immediately.
 
-Choose addons and files in Settings > Modules. Selections remain editable while debugging is enabled: Full saves each changed selection and reloads immediately; Light applies selections live. Full selection changes are unavailable in combat. Reload applies the saved selections, so excluded files retain original function identity. Selected wrappers remain installed while stopped, but forward calls without clocks, measurement calls, markers or recording. Disable debugging and reload to restore original references and remove collection hooks. Stop does not restore locals or erase existing taint. Entering or leaving debugging and changing measurement modes require leaving combat; Start and Stop work in combat. Both Light and Full are explicit development modes.
+Every reload starts with recording stopped. Closing the window does not stop a running capture. Start begins a fresh capture; Clear discards the current results. Results are kept in memory until Start, Clear or reload.
 
-## Function frame measurements
+The **Wrapping** indicator tells you whether Full wrappers are installed. Stopping a Full capture leaves those wrappers in place: calls still pass through a small enabled check, but do not read clocks or record measurements. Disable debugging and reload to restore the original functions. Stop does not remove existing taint.
 
-In Full mode, hover a function row for frame statistics. Export includes these columns after the existing measurement columns:
+## Read the list
 
-| Column | Meaning |
-| --- | --- |
-| `active_frames` | Capture frames containing completed measured calls to this function |
-| `cpu_avg_active_frame_ms` | Accumulated function time divided by active frames |
-| `cpu_peak_frame_ms` | Highest accumulated function time in one capture frame |
-| `calls_avg_active_frame` | Completed measured calls divided by active frames |
-| `calls_peak_frame` | Most completed measured calls in one capture frame |
+The list has three levels: **addon**, **bucket**, then **function**. Buckets use stable source-file identities and can have readable labels supplied by their owning addon. Renaming a label does not rename a registration or reset its measurements.
 
-These statistics cover the selected measurement window, including the current partial frame. Idle frames are excluded. For example, 80 calls taking 0.04 ms each in one frame accumulate 3.2 ms. Light-mode exports leave these fields empty.
+- Click an addon or bucket to open or close it. Closing an addon remembers which buckets were open.
+- **Expand children** opens the addon and all its buckets, even when the addon was collapsed.
+- **Collapse children** closes its buckets and leaves the addon open.
+- **Expand all** and **Collapse all** apply to the whole list.
 
-The frame key uses `GetTime()`, which is cached once per frame, so event and OnUpdate calls in that frame share the same key. There is no additional frame ticker or per-call history table. Each function retains at most 62 active-second aggregate buckets, covering the largest selectable window without retaining individual calls. Profiling clock ticks (`elapsedTicks`) are a separate quantity. If consecutive rendered frames return the same `GetTime()` value, their statistics merge; per-frame caching alone does not guarantee a unique frame identifier.
-
-Full measurements are inclusive: nested calls and their instrumentation can contribute to a parent's measurement. Recursive calls also overlap. Do not add parent and child rows to estimate independent addon CPU time. Light-mode function counters use `GetFunctionCPUUsage(fn, false)`. Their peak is the highest sampled average, not an individual slow call; global event counters have their own scope. Native allocation totals describe allocation activity, not retained memory. Allocation averages divide by calls with allocation data, so timer-fallback calls do not dilute them.
-
-## Call and sample meanings
-
-Function and global-event tooltips distinguish the average per call, latest value and peak. Exports separate these quantities rather than using one peak column for both modes:
+The main columns are:
 
 | Column | Meaning |
 | --- | --- |
-| `cpu_avg_ms` | Window cost divided by completed measured or sampled calls in that window |
-| `cpu_peak_call_ms` | Slowest completed Full measured call; blank for native sampling |
-| `cpu_last_call_ms` | Latest completed Full measured call |
-| `cpu_peak_sampled_avg_ms` | Highest native sample cost divided by that sample's calls |
-| `cpu_last_sampled_avg_ms` | Latest native sample cost divided by that sample's calls |
-| `cpu_scope` | Inclusive Full call, native function counter with subroutines disabled, or global event counter |
-| `phase_measurements` | Named phase call counts, average/peak milliseconds, allocated/deallocated averages |
+| Calls | Completed measured calls, or calls reported by a native sample |
+| Total ms | Measured CPU time in the selected window |
+| Avg ms | Total time divided by calls |
+| Peak ms | Slowest completed call in Full mode |
+| Sample ms | Highest sampled average in Light mode; this is not an individual slow call |
+| Alloc KiB | Average allocation per call with allocation data; optional in Settings |
 
-The old `cpu_peak_sample_ms` export column is replaced by the two explicit peak columns. Calls, CPU, allocations, frame statistics and phase statistics now use the same selected window. Full function counts include completed measurements; an errored call propagates its error and adds no completed measurement. Alias rows refer to the canonical function's same statistics and must not be added as independent work.
+Hover a row for its full identity, measurement backend, calls per second, frame statistics and other available details. The allocation maximum remains available in the tooltip and export when the column is hidden. Allocation measures bytes allocated during work, not memory still in use.
 
-## Capture windows and recording cost
+Addon and bucket rows show grouped call counts. Their CPU columns stay blank because function measurements can overlap. They are not complete addon CPU totals.
 
-The Settings window slider selects 5-60 seconds. Changing it changes the view immediately without restarting capture or clearing retained history. Start and Clear still reset capture data. Old peaks, allocation totals and phase measurements disappear as their buckets leave the selected window. A wider selection can recover data still inside the bounded history.
+The **Native addon CPU** summary is separate from the function list. It identifies the addon being measured and shows its native total, average and peak for the selected window. Addon memory is a separate memory-usage reading. Neither value is a sum of the function rows.
 
-Full recording reads the cached frame timestamp once per call. The second conversion is shared across calls in that frame, and each function binds its current bucket. Count and cost updates go to that same bucket; there are no separate function-count ring writes or additional precise-clock reads per call. Aggregation runs when publishing a snapshot, refreshing the window or freezing Stop. Individual return values and result/event tables are not retained in history.
+### Search, sort and missing rows
 
-Buckets have one-second resolution. The oldest partial second is included, so an established selected window can cover up to one extra second. A newly started capture covers only its elapsed duration. Tooltips and the status show the covered duration; calls per second divide by that duration. Exports include `window_seconds` (covered duration), `window_start` and `window_end` on every row. They also include `cpu_total_ms`, `alloc_total_kb`, `dealloc_avg_kb`, `dealloc_max_kb`, `dealloc_total_kb` and `allocation_calls`. Allocation averages divide by the measured allocation-call count, including when a window contains timer-fallback calls.
+Search matches addon names, bucket names, function names and internal paths, without regard to case. Matching branches open temporarily; clearing the search restores your expansion choices. Search does not change what is collected.
 
-One capture ticker owns native sampling, snapshot publication and visible-window refresh. Light sampling runs once per second while capture is active, whether the window is open or closed. There is no separate UI polling ticker. Native calls and CPU deltas are stored together at the sample timestamp. A sample cannot be split into individual call timestamps; delayed callbacks can make a sample span more than one second. Native peaks remain sample averages. The sampler never installs function wrappers. The addon overview in the status also uses the selected window; addon memory is a separate retained-memory snapshot, not window allocation activity.
+Click a column heading to sort by total time, average, peak, calls or name. Click it again to reverse the direction. Addons keep their registered order; buckets use name order except when sorting by calls. CPU sorting applies to individual functions and events, not invented group totals.
 
-Stop freezes the selected window and its text. Frozen values do not age away while stopped. Start or Clear discards them; reload clears all capture data. Rows with no recorded calls in the selected window are hidden by default, including inactive groups. Settings > Show rows with no calls restores them immediately and persists across reloads. This display filter never changes collection or recorded values; the Modules selection list remains available regardless of activity.
+Row order stays fixed during recording so the list does not move under the cursor. Click **Resort** or a heading to update it. New registrations are appended within their groups. Stopped results can be sorted normally.
 
-Export follows the same activity filter and expanded categories as the profiler list: collapsed groups contribute their summary row, and expanded groups include their displayed children and available measurements. All matching rows in the scrollable list are exported, including those outside the current viewport. Expand, collapse or change the display filter after Stop and export again without changing the frozen values.
+Functions and buckets with no calls are hidden by default. **Settings > Show rows with no calls** reveals them. Addon headers remain visible and explain an empty group:
 
-## Targeted phase markers
+| Message | Meaning |
+| --- | --- |
+| No calls in this window | Registrations exist, but none have recorded activity in the selected window |
+| Excluded from tracking | The addon or file is not selected |
+| No registered functions | The addon registered its name but has no function registrations in this load |
+| Addon not loaded | Metadata exists for the addon, but it is not loaded |
+| Debugging disabled | Collection is off |
+| Unwrapped function | A function is registered but has no Full wrapper or measured alias |
 
-Give a selected phase function a fixed label in its existing registration block:
+Only addons that register with Pleebug can appear. An optional addon that never loads cannot register itself; its absence is not a measurement of zero CPU. The settings list contains discovered files, regardless of their activity.
+
+A call can take too little time to show at three decimal places and still have a nonzero call count. A zero count means no calls were recorded for that row in the current window; it does not prove that all of the addon's work was measured.
+
+### Export
+
+Export copies tab-separated rows into a window for Ctrl+C. It follows the current search, zero-call filter, expansion and row order. Collapsed groups export their summary; expanded groups export their visible descendants. Rows below the current scroll position are included.
+
+Stop freezes the measurements. You can then search, sort, expand, collapse or change the zero-call filter and export again without changing those values. Hiding the allocation column does not remove detailed allocation fields from the export.
+
+## Choose a measurement mode
+
+| Mode | What it does |
+| --- | --- |
+| Debugging disabled | Keeps original function references. No measurement registrations, collection hooks or samplers are installed. Start and Stop are unavailable. |
+| Full | Wraps selected functions when files load. Start and Stop control measurement without replacing functions or reloading. Uses the native call-measurement API when available, otherwise a timer. Full mode can taint restricted paths. |
+| Light | Keeps original function references and samples Blizzard's CPU counters once per second. Requires `scriptProfile=1` and a reload. Does not provide per-call allocations or Full frame statistics. |
+
+Both recording modes have a performance cost. Use an uninstrumented run when comparing normal gameplay performance. In Full mode, a parent's measurement includes nested calls and their instrumentation. Do not add parent, child, recursive or alias rows together as independent work.
+
+The first update that introduced the debugging switch turns legacy debugging off once. It preserves file selections and display settings. After that, your choice persists across logins and reloads; it is not reset on every login. The same migration clears legacy native script profiling and can require one extra reload after login. Full is the initial mode when you opt in.
+
+Disabling debugging sets `scriptProfile=0` before reloading. Light and Full are investigation tools, not recommended gameplay settings.
+
+## Capture windows
+
+The window slider covers 5-60 seconds. Changing it adjusts the view without restarting capture. Counts, CPU, peaks, allocations and phases all use the same selected window. Old activity disappears as it leaves the window; widening the window can recover data still in history.
+
+History uses at most 62 one-second buckets per active function. The oldest partial second is included, so a settled window can cover up to one extra second. A new capture covers only the time since Start. Calls per second use the covered duration, which is also exported.
+
+Native function and event sampling, snapshot publication and visible-list updates share the existing one-second capture ticker. Full calls update their aggregate buckets as they complete. There is no separate UI polling ticker and no per-call history log. Recording continues when the window is closed.
+
+Full frame statistics use `GetTime()` as a frame key. They count active frames only and include the current partial frame. Consecutive frames with the same timestamp are combined. For example, 80 calls taking 0.04 ms each in one frame contribute 3.2 ms to that function's frame total. These are inclusive measurements, not independent frame CPU totals.
+
+## Add instrumentation
+
+Call `DropIn` once in each source file and register the functions that file owns:
 
 ```lua
-CollectRows = P:Def("CollectRows", CollectRows, nil, "Collect rows")
-UpdateWidgets = P:Def("UpdateWidgets", UpdateWidgets, nil, "Update widgets")
-ApplyLayout = P:Def("ApplyLayout", ApplyLayout, nil, "Apply layout")
+local P = ns.Pleebug:DropIn({})
+
+local function RefreshWidgets()
+  -- Existing work goes here.
+end
+RefreshWidgets = P:Def("RefreshWidgets", RefreshWidgets)
 ```
 
-These are registration examples, not claims that these functions exist in a particular module. `P:SecDef` accepts the label as its fifth argument. Labels must contain 1-43 bytes and no control characters. Short fixed names keep the prefixed native markers below 48 bytes. Never construct labels from runtime arguments or secret values.
+Register a function before passing it to a timer, event handler, adapter or other code that keeps its reference. A registration at the end of the file is too late if an earlier statement has already captured the original function. `DropIn` alone does not discover local functions or wrap every method automatically.
 
-The existing Full wrapper emits begin/end markers only through the native backend. The enclosing measured caller receives them in `results.events`; Pleebug pairs the snapshots and retains only time and allocation deltas. Hover or export that enclosing caller to see phases. A top-level phase has no enclosing measured caller and therefore produces no phase row of its own. Timer fallback, Light mode and excluded files emit no markers.
+`P:Def(name, fn)` returns the selected original function or Full wrapper. Assign that result back to the actual local or owner method. `P:SecDef(name, owner, methodName)` registers a named owner method and installs its Full wrapper when selected. Keep arguments and return values opaque, including secret values and nil returns. Original errors propagate; an errored Full call adds no completed measurement.
 
-This adds no calls to ordinary function bodies and no second wrapper around a phase function. Mark only the few named operations relevant to an investigation. Repeated and recursive same-name phases aggregate together and are inclusive; do not sum overlapping phases. Native markers reach all ongoing measurements, so ancestor rows can report the same phase. Unmatched markers are ignored. Original errors propagate unchanged, and an aborted measured call produces no completed phase statistics.
+For dynamic widget callbacks, use `P:DefCallback(name, fn)` with a fixed name for the source site. Full mode groups all instances under one record without retaining their closures or widgets. Light mode and disabled debugging return the original callback without registering that dynamic group. A group appears only after its first callback is constructed.
 
-Marker snapshots include instrumentation between their boundaries. They measure allocation activity, not retained memory. No per-call event history is kept. Start and Clear reset phase history along with call statistics; phase aggregates also expire with their selected window.
+The 20 files directly in PleebUI's `Core/GUI` use these registrations for their functions, methods and callbacks, including shared theme and font helpers. This does not imply coverage of every separate options provider or every function in every addon.
 
-## Instrumentation instructions
+### Addon names and bucket labels
 
-1. Use `ns.Pleebug:DropIn(...)` once per source file. Source filenames own function grouping.
-2. Put the registration block at the end of the file, after its function definitions, and register its owned named functions with `P:Def` or `P:SecDef`. Verify callers and any previously captured callback references reach the intended functions.
-3. Registration must not execute the function. Keep profiling calls out of ordinary function bodies. Light mode must preserve original function and method identity.
-4. Pass local function references to `P:Def`. Use `P:SecDef` for named owner methods when required. Neither helper discovers inaccessible locals automatically.
-5. Keep payloads opaque. Do not inspect, compare, format or derive grouping from secret arguments or returns. Preserve the number and positions of all returns, including nils, and propagate original errors.
-6. Build stable names and keys during registration. Full capture binds its registration record, native measurement function, optional phase marker names and module-settings table once. Backend availability is checked while measuring because Blizzard controls it. Full file selections apply when Full mode loads; changing them saves and reloads outside combat. Light selections change live. Do not normalize saved settings or reconstruct paths on each call.
-7. Keep completed call counts and costs in the same bounded bucket. Aggregate outside the measured execution path, and keep window selection separate from sampling cadence. Do not introduce per-call history allocations or an idle recording ticker.
-8. Start and Clear invalidate cached runtime statistics while preserving registrations. Stop freezes results and hides the existing frame sampler. Selected Full wrappers remain installed while stopped and must forward arguments and returns without performing measurement work. Reloading into Light mode or disabled debugging restores original function identities; disabled debugging also leaves collection inactive. Keep these lifecycle responsibilities symmetrical.
+An addon can provide its own display metadata:
 
-## Validation
+```lua
+pleebug:RegisterAddon(addonName, "Readable addon name", {
+  MyRuntimeFile = "Widget updates",
+}, 50)
+```
 
-Check window expiry with an old expensive call followed by newer inexpensive calls: narrow the selection and confirm the old count, CPU peak, allocation and phase totals disappear together; widen it and confirm retained data returns without resetting capture. Verify `cpu_avg_ms * calls` agrees with `cpu_total_ms` within rounding, and calls per second uses the exported duration. Check bounded history after several minutes and Light sampling with the window closed.
+`RegisterAddon(addonName, displayName, bucketLabels, sortOrder)` changes presentation only. It does not create measurements, move callbacks, or activate runtime work. Use the real loaded addon name and unchanged source-file keys. Existing `DropIn` callers are discovered automatically; display metadata is optional.
 
-Check Lua syntax and function contracts before in-game testing: no returns, nil gaps, trailing nils, multiple returns, errors, aliases, recursion, disabled files, group toggles, Stop, Start and Clear. Verify the one-time migration disables legacy Light and Full settings, including existing native script profiling, and does not disable an explicit later opt-in. Disabled debugging must preserve original function and method identity, leave CPU registrations empty and reject capture or hook installation. Verify Light returns original function objects, selected Full files wrap when Full mode loads, excluded files preserve identity, and debugging starts stopped after every reload. Exercise Start and Stop during combat without reload or reference replacement. Confirm stopped calls do not read clocks, invoke measurement APIs, emit markers or change aggregates. Test repeated captures, frozen export text, debugging-toggle and mode-change combat refusal, paired/recursive phase markers, and native/timer export fields.
+Ownership comes from the calling file's addon path unless `DropIn` supplies an explicit `addonName` or `addon`. Sharing a namespace does not make every file core-owned. Keep runtime frames, event handlers and timers in their owning addon. Do not add forwarding frames just to change attribution.
 
-After reload, exercise combat and restricted unit/action paths, file toggles, previews and live frames, and inspect Lua and taint logs. Confirm tooltips and exports agree, Stop freezes measurements, and several inexpensive calls in one frame produce the expected accumulated frame peak. Compare performance with a controlled uninstrumented baseline; a Lua harness cannot establish live taint safety or instrumentation overhead.
+### Phase markers
+
+To examine a few operations inside a measured caller, give their existing registrations short fixed labels:
+
+```lua
+RefreshWidgets = P:Def("RefreshWidgets", RefreshWidgets, nil, "Refresh widgets")
+```
+
+`P:SecDef` accepts the phase label as its fifth argument. Labels must be 1-43 bytes without control characters. Never build them from runtime arguments or secret values.
+
+The native backend emits paired markers. The enclosing measured caller reports their aggregate time and allocations in its tooltip and export. A top-level call has no enclosing measured caller to receive its phase. Light mode, excluded files and timer fallback emit no markers.
+
+Repeated and recursive phases overlap, and ancestor measurements can contain the same phase. Do not sum them. Unmatched markers are ignored. Pleebug retains aggregates, not the native per-call result or event tables.
+
+## Export field reference
+
+The export keeps detailed fields even when the main list uses fewer columns.
+
+| Fields | Meaning |
+| --- | --- |
+| `path`, `name`, `depth` | Stable row identity, display label and hierarchy level |
+| `calls`, `calls_per_sec` | Count and rate in the covered window |
+| `cpu_total_ms`, `cpu_avg_ms` | Measured total and average |
+| `cpu_peak_call_ms`, `cpu_last_call_ms` | Full-mode peak and latest completed call |
+| `cpu_peak_sampled_avg_ms`, `cpu_last_sampled_avg_ms` | Native sampled averages; not individual calls |
+| `measurement_state`, `measurement_kind`, `canonical_path` | Registration details and shared function identity |
+| `cpu_scope` | Inclusive Full measurement, native function counter or global event counter |
+| `alloc_avg_kb`, `alloc_max_kb`, `alloc_total_kb`, `allocation_calls` | Allocation activity and the number of calls with allocation data |
+| `dealloc_avg_kb`, `dealloc_max_kb`, `dealloc_total_kb` | Available deallocation measurements |
+| `active_frames`, `cpu_avg_active_frame_ms`, `cpu_peak_frame_ms` | Active-frame count, average accumulated time and peak accumulated time |
+| `calls_avg_active_frame`, `calls_peak_frame` | Average and peak calls per active frame |
+| `phase_measurements` | Named phase counts, timings and allocations |
+| `window_seconds`, `window_start`, `window_end` | Covered duration and boundaries |
+
+The `_kb` fields use 1024-byte units. Fields without measurements are blank. Allocation averages use calls with allocation data, so timer-only measurements do not dilute them. Alias rows share their canonical function's statistics. Native global event measurements are not owned by individual addons.
+
+## Before relying on a capture
+
+Check that the intended addon and files are selected, the Wrapping indicator matches the chosen mode, and recording is running. Exercise the specific operation during the capture; startup-only work will not appear in a later window.
+
+When changing instrumentation, verify original references in disabled and Light modes, selected wrappers in Full mode, nil returns, errors, aliases, repeated captures and Stop/Start/Clear. Check that UI filtering and sorting leave recorded values unchanged and that exports match the visible branches.
+
+Finally test in the game: reload, toggle debugging, change profiles, exercise live and preview frames, and enter and leave combat. Check for Lua errors, restricted-value errors and taint. Syntax checks and mocked tests cannot establish live combat safety or native CPU attribution.

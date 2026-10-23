@@ -16,7 +16,7 @@ local LibStub = _G.LibStub
 if not LibStub then return end
 local Pleebug, minor = LibStub("LibPleebug-1", true)
 -- Components must match the core selected by LibStub across bundled copies.
-if not Pleebug or minor ~= 9 then return end
+if not Pleebug or minor ~= 11 then return end
 
 -- Backwards-compatible alias (rest of file can keep using MemDebug)
 local MemDebug = Pleebug
@@ -478,8 +478,8 @@ function CPU:ResetRuntime()
   self._windowStartedAt = _now()
 
   -- Keep registered original function/event references, but reset baselines on Start/Clear.
-  if self._nativeByFunction then
-    for _, rec in pairs(self._nativeByFunction) do
+  if self._nativeFuncs then
+    for _, rec in pairs(self._nativeFuncs) do
       if type(rec) == "table" then
         rec.lastTime = nil
         rec.lastSelfTime = nil
@@ -763,17 +763,22 @@ function CPU:RegisterFunction(moduleName, bucket, funcName, fn, opt)
   self._nativeByFunction = self._nativeByFunction or setmetatable({}, { __mode = "k" })
   local registrationChanged = self._nativeFuncs[path] == nil
 
-  local rec = self._nativeByFunction[fn]
+  local rec
+  if opt.groupCallbacks then
+    rec = self._nativeFuncs[path]
+  else
+    rec = self._nativeByFunction[fn]
+  end
   if not rec then
     rec = {
-      fn = fn,
+      fn = not opt.groupCallbacks and fn or nil,
       canonicalPath = path,
       moduleName = moduleName,
       bucket = bucket,
       funcName = funcName,
       aliases = {},
     }
-    self._nativeByFunction[fn] = rec
+    if not opt.groupCallbacks then self._nativeByFunction[fn] = rec end
   end
 
   local previous = self._nativeFuncs[path]

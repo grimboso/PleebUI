@@ -3,7 +3,7 @@ local LibStub = _G.LibStub
 if not LibStub then return end
 local Pleebug, minor = LibStub("LibPleebug-1", true)
 -- Components must match the core selected by LibStub across bundled copies.
-if not Pleebug or minor ~= 9 then return end
+if not Pleebug or minor ~= 11 then return end
 
 -- Backwards-compatible alias (rest of file can keep using MemDebug)
 local MemDebug = Pleebug
@@ -33,8 +33,49 @@ local function _showRowsWithNoCalls()
   return displaySettings.showRowsWithNoCalls == true
 end
 
+local SORT_LABELS = { total = "Total time", average = "Average", peak = "Peak", calls = "Calls", name = "Name" }
+if not SORT_LABELS[displaySettings.sortBy] then displaySettings.sortBy = "total" end
+if type(displaySettings.sortDescending) ~= "boolean" then displaySettings.sortDescending = true end
+if type(displaySettings.showAllocations) ~= "boolean" then displaySettings.showAllocations = false end
+W.searchText = W.searchText or ""
+W._sortVersion = W._sortVersion or 0
+
 local function _rowVisible(node, showRowsWithNoCalls)
-  return showRowsWithNoCalls or node.hasCalls
+  return node.matchesSearch ~= false
+    and ((node.kind == "addon" and node.registered and not node.synthetic) or showRowsWithNoCalls or node.hasCalls)
+end
+
+local function _updateSearch(node, inherited)
+  local matches = inherited or W.searchText == ""
+    or (node.path ~= "" and (node.name .. " " .. node.path):lower():find(W.searchText, 1, true) ~= nil)
+  local descendant = false
+  for _, child in pairs(node.children) do
+    if _updateSearch(child, matches) then descendant = true end
+  end
+  node.matchesSearch = matches or descendant
+  return node.matchesSearch
+end
+
+function W:SetSearch(text)
+  self.searchText = tostring(text or ""):lower():match("^%s*(.-)%s*$")
+  if self.frame then self.frame._scroll:SetVerticalScroll(0) end
+  self:Refresh()
+end
+
+function W:SetSort(key)
+  if not SORT_LABELS[key] then return end
+  if displaySettings.sortBy == key then
+    displaySettings.sortDescending = not displaySettings.sortDescending
+  else
+    displaySettings.sortBy = key
+    displaySettings.sortDescending = key ~= "name"
+  end
+  self:Resort()
+end
+
+function W:Resort()
+  self._sortVersion = self._sortVersion + 1
+  self:Refresh()
 end
 
 local function _updateRowActivity(node, cpu)
@@ -103,27 +144,62 @@ local function _colorText(fs)
 end
 
 
-local function _sortedChildList(node, showRowsWithNoCalls)
-  local list = {}
-  for _, child in pairs(node.children or {}) do
-    if _rowVisible(child, showRowsWithNoCalls) then
-      list[#list + 1] = child
+local function _sortValue(node)
+  local stat = node.statKey and MemDebug.CPU:GetStat(node.statKey)
+  if displaySettings.sortBy == "calls" then return stat and stat.n or node.count or 0 end
+  if not stat or not stat.n or stat.n == 0 then return 0 end
+  if displaySettings.sortBy == "average" then return (stat.timeSum or 0) / stat.n end
+  if displaySettings.sortBy == "peak" then return stat.timeMax or 0 end
+  return stat.timeSum or 0
+end
+
+local function _compareNodes(parent, a, b)
+  if parent.path == "" then
+    local aOrder = MemDebug:GetAddonSortOrder(a.key)
+    local bOrder = MemDebug:GetAddonSortOrder(b.key)
+    if aOrder ~= bOrder then return aOrder < bOrder end
+  elseif displaySettings.sortBy == "calls" or (displaySettings.sortBy ~= "name" and a.statKey and b.statKey) then
+    local av, bv = _sortValue(a), _sortValue(b)
+    if av ~= bv then
+      if displaySettings.sortDescending then return av > bv end
+      return av < bv
     end
   end
-  table.sort(list, function(a, b)
-    if node.path == "" then
-      local aOrder = MemDebug:GetAddonSortOrder(a.key)
-      local bOrder = MemDebug:GetAddonSortOrder(b.key)
-      if aOrder ~= bOrder then return aOrder < bOrder end
-      if a.name ~= b.name then return a.name < b.name end
-      return a.key < b.key
+  if a.name ~= b.name then
+    if parent.path ~= "" and displaySettings.sortBy == "name" and displaySettings.sortDescending then
+      return a.name > b.name
     end
-    if a.count == b.count then
-      if a.name ~= b.name then return a.name < b.name end
-      return a.key < b.key
+    return a.name < b.name
+  end
+  return a.key < b.key
+end
+
+local function _sortedChildList(node, showRowsWithNoCalls)
+  local order = node._orderedChildren
+  local live = MemDebug:IsEnabled()
+  if not order or not live or node._sortVersion ~= W._sortVersion then
+    order = {}
+    for _, child in pairs(node.children) do order[#order + 1] = child end
+    table.sort(order, function(a, b) return _compareNodes(node, a, b) end)
+    node._orderedChildren = order
+    node._sortVersion = W._sortVersion
+    node._orderDirty = nil
+  elseif node._orderDirty then
+    local known, added = {}, {}
+    for i = 1, #order do known[order[i].key] = true end
+    for key, child in pairs(node.children) do
+      if not known[key] then added[#added + 1] = child end
     end
-    return a.count > b.count
-  end)
+    table.sort(added, function(a, b) return _compareNodes(node, a, b) end)
+    for i = 1, #added do order[#order + 1] = added[i] end
+    node._orderDirty = nil
+  end
+  local list = {}
+  for i = 1, #order do
+    local child = order[i]
+    child.orderIndex = i
+    if _rowVisible(child, showRowsWithNoCalls) then list[#list + 1] = child end
+  end
   return list
 end
 
@@ -141,7 +217,7 @@ local function _flatten(node, out, depth, expanded, showRowsWithNoCalls)
     return out
   end
 
-  if node.path == "" or not expanded or expanded[node.path] then
+  if node.path == "" or not expanded or expanded[node.path] or W.searchText ~= "" then
     local kids = _sortedChildList(node, showRowsWithNoCalls)
     for i = 1, #kids do
       _flatten(kids[i], out, depth + 1, expanded, showRowsWithNoCalls)
@@ -150,10 +226,7 @@ local function _flatten(node, out, depth, expanded, showRowsWithNoCalls)
 
   return out
 end
-
----------------------------
 -- Deferred tree building (prevents /pleebug freeze on large snapshots)
----------------------------
 W._buildInProgress = W._buildInProgress or false
 W._buildIterKey = W._buildIterKey or nil
 W._buildRoot = W._buildRoot or nil
@@ -174,6 +247,10 @@ local function _treeEnsureChild(parent, key, name, path, index, kind)
     child = { key = key, name = name, path = path, kind = kind,
       count = 0, children = {}, parent = parent }
     parent.children[key] = child
+    parent._orderDirty = true
+    local root = parent
+    while root.parent do root = root.parent end
+    root._searchDirty = true
     index[path] = child
   end
   return child
@@ -181,8 +258,10 @@ end
 
 local function _seedRegisteredAddons(root, index)
   for addonName in pairs(MemDebug:GetRegisteredAddons()) do
-    _treeEnsureChild(root, addonName,
+    local addon = _treeEnsureChild(root, addonName,
       MemDebug:GetAddonDisplayName(addonName), addonName, index, "addon")
+    addon.loaded = C_AddOns.IsAddOnLoaded(addonName)
+    addon.registered = true
   end
 end
 
@@ -210,6 +289,7 @@ local function _treeEnsureMetric(root, index, sourcePath)
 
   local ownerNode = _treeEnsureChild(root, owner,
     MemDebug:GetAddonDisplayName(owner), owner, index, "addon")
+  if kind == "event" then ownerNode.synthetic = true end
   local bucketPath = owner .. "." .. moduleName
   local bucketNode = _treeEnsureChild(ownerNode, moduleName,
     bucketName, bucketPath, index, "bucket")
@@ -263,10 +343,31 @@ local function _applyTreeSnapshot(root, index, snapshot, countedNodes, countedNo
 
 end
 
+local function _updateGroupSelections(root)
+  for _, addon in pairs(root.children) do addon.fileCount = 0; addon.selectedFiles = 0 end
+  local db = MemDebug:GetDB()
+  for moduleName, known in pairs(db.knownModules) do
+    local addon = known and root.children[db.moduleAddon[moduleName]]
+    if addon then
+      addon.fileCount = addon.fileCount + 1
+      if db.modules[moduleName] ~= false then addon.selectedFiles = addon.selectedFiles + 1 end
+    end
+  end
+  root._selectionVersion = MemDebug._selectionVersion or 0
+end
+
 function W:_ApplySnapshot(snapshot)
   _applyTreeSnapshot(self._buildRoot, self._treeIndex, snapshot, self._countedNodes, self._countedNodeSet)
   if not self._buildRoot then return end
   _updateRowActivity(self._buildRoot, MemDebug.CPU)
+  if self._buildRoot._selectionVersion ~= (MemDebug._selectionVersion or 0) then
+    _updateGroupSelections(self._buildRoot)
+  end
+  if self._buildRoot._searchDirty or self._buildRoot._searchText ~= self.searchText then
+    _updateSearch(self._buildRoot, false)
+    self._buildRoot._searchDirty = nil
+    self._buildRoot._searchText = self.searchText
+  end
   _wipe(self._flat)
   _flatten(self._buildRoot, self._flat, 0, self.expanded, _showRowsWithNoCalls())
 end
@@ -316,38 +417,53 @@ end
 
 function W:_FilterExportText(text)
   local lines, entries, parents = {}, {}, {}
+  local root = { children = {}, name = "", path = "" }
+  parents[0] = root
   for line in text:gmatch("[^\n]+") do
     if #lines == 0 then
       lines[1] = line
     else
-      local path, _, depth, calls = line:match("^([^\t]*)\t([^\t]*)\t([^\t]*)\t([^\t]*)")
+      local path, name, depth, calls = line:match("^([^\t]*)\t([^\t]*)\t([^\t]*)\t([^\t]*)")
       depth = tonumber(depth)
+      local parent = parents[depth - 1]
       local entry = {
-        path = path,
-        parent = parents[depth - 1],
+        path = path, name = name, parent = parent, children = {}, line = line,
+        kind = depth == 1 and "addon" or depth == 2 and "bucket" or "function",
+        registered = depth == 1 and MemDebug:GetRegisteredAddons()[path] ~= nil,
+        synthetic = self._treeIndex and self._treeIndex[path] and self._treeIndex[path].synthetic,
         hasCalls = (tonumber(calls) or 0) > 0,
-        line = line,
+        sourceOrder = #entries + 1,
       }
+      parent.children[#parent.children + 1] = entry
       parents[depth] = entry
       entries[#entries + 1] = entry
       if entry.hasCalls then
-        local parent = entry.parent
-        while parent and not parent.hasCalls do
-          parent.hasCalls = true
-          parent = parent.parent
+        local ancestor = parent
+        while ancestor and not ancestor.hasCalls do
+          ancestor.hasCalls = true
+          ancestor = ancestor.parent
         end
       end
     end
   end
-
-  local showRowsWithNoCalls = _showRowsWithNoCalls()
-  for i = 1, #entries do
-    local entry = entries[i]
-    local parent = entry.parent
-    entry.visible = _rowVisible(entry, showRowsWithNoCalls)
-      and (not parent or (parent.visible and self.expanded[parent.path]))
-    if entry.visible then lines[#lines + 1] = entry.line end
+  _updateSearch(root, false)
+  local function append(parent)
+    table.sort(parent.children, function(a, b)
+      local an = W._treeIndex and W._treeIndex[a.path]
+      local bn = W._treeIndex and W._treeIndex[b.path]
+      local av = an and an.orderIndex or a.sourceOrder
+      local bv = bn and bn.orderIndex or b.sourceOrder
+      if av == bv then return a.path < b.path end
+      return av < bv
+    end)
+    for _, entry in ipairs(parent.children) do
+      if _rowVisible(entry, _showRowsWithNoCalls()) then
+        lines[#lines + 1] = entry.line
+        if W.searchText ~= "" or W.expanded[entry.path] then append(entry) end
+      end
+    end
   end
+  append(root)
   return table.concat(lines, "\n")
 end
 
@@ -366,6 +482,8 @@ function W:_BuildExportRows(snapshot)
     _treeEnsureMetric(root, index, "Events.Global." .. eventName)
   end
   _applyTreeSnapshot(root, index, snapshot, {}, {})
+  _updateRowActivity(root, cpu)
+  _updateGroupSelections(root)
   return _flatten(root, {}, 0, nil, true)
 end
 
@@ -378,6 +496,8 @@ end
 
 function W:_StartDeferredBuild(snapshot)
   self._pendingSnapshot = snapshot or {}
+  self._previousTreeIndex = self._treeIndex
+  self._previousRoot = self._buildRoot
   self._buildRoot = { name = "root", path = "", count = 0, children = {} }
   self._treeIndex = {}
   _seedRegisteredAddons(self._buildRoot, self._treeIndex)
@@ -391,10 +511,6 @@ function W:_StartDeferredBuild(snapshot)
   local cpu = MemDebug and MemDebug.CPU
   self._buildingRegistrationVersion = cpu and cpu._registrationVersion or 0
   self._buildingAddonRegistrationVersion = MemDebug._addonRegistrationVersion
-
-  if self.frame and self.frame._statusText then
-    self.frame._statusText:SetText("Status: Building tree...")
-  end
 
   if C_Timer and C_Timer.After then
     _Defer(function()
@@ -454,9 +570,27 @@ function W:_BuildDeferredStep()
         _setAllBranches(self._buildRoot, self._expandAfterBuild)
         self._expandAfterBuild = nil
       end
+      if MemDebug:IsEnabled() and self._previousTreeIndex then
+        local function inheritOrder(node)
+          local previous = node.path == "" and self._previousRoot or self._previousTreeIndex[node.path]
+          if previous and previous._orderedChildren then
+            node._orderedChildren = {}
+            for _, child in ipairs(previous._orderedChildren) do
+              local replacement = node.children[child.key]
+              if replacement then node._orderedChildren[#node._orderedChildren + 1] = replacement end
+            end
+            node._sortVersion = previous._sortVersion
+            node._orderDirty = true
+          end
+          for _, child in pairs(node.children) do inheritOrder(child) end
+        end
+        inheritOrder(self._buildRoot)
+      end
+      self._previousTreeIndex = nil
+      self._previousRoot = nil
       self:_ApplySnapshot(snap)
-
       self:_RenderFlat()
+      self:_RenderSummary()
       return
     end
 
@@ -476,170 +610,175 @@ end
 
 local _ensureRow
 
-function W:_RenderFlat()
+local function _nodeState(node)
+  local addon = node.kind == "addon" and node or node.kind == "bucket" and node.parent
+    or node.parent and node.parent.parent
+  if addon and not addon.synthetic and addon.loaded == false then return "Addon not loaded" end
+  if not MemDebug:IsDebuggingEnabled() then return "Debugging disabled" end
+  if node.kind == "addon" and not node.synthetic then
+    if (node.fileCount or 0) > 0 and node.selectedFiles == 0 then return "Excluded from tracking" end
+  elseif node.kind == "bucket" and not MemDebug:IsModuleEnabled(node.key) then
+    return "Excluded from tracking"
+  elseif node.kind == "function" then
+    local rec, alias = MemDebug.CPU:GetFunctionRegistration(node.statKey)
+    if alias and not MemDebug:IsModuleEnabled(alias.moduleName) then return "Excluded from tracking" end
+    if MemDebug:GetLoadMode() == "full" and alias and alias.kind ~= "wrapped" then
+      local measured = false
+      for _, other in pairs(rec.aliases) do
+        if other.kind == "wrapped" then measured = true; break end
+      end
+      if not measured then return "Unwrapped function" end
+    end
+  end
+  if node.kind == "addon" or node.kind == "bucket" then
+    if not next(node.children) then return "No registered functions" end
+  end
+  if not node.hasCalls then return "No calls in this window" end
+end
 
+local COLUMNS = {
+  { key = "calls", title = "Calls", width = 110 },
+  { key = "total", title = "Total ms", width = 100 },
+  { key = "average", title = "Avg ms", width = 100 },
+  { key = "peak", title = "Peak ms", width = 110 },
+  { key = "allocation", title = "Alloc KiB", width = 120 },
+}
+
+function W:_LayoutColumns()
+  local f = self.frame
+  f._sortText:SetText("Sort: " .. SORT_LABELS[displaySettings.sortBy] .. (MemDebug:IsEnabled() and " (held)" or ""))
+  local layoutKey = tostring(self.fontSize) .. ":" .. tostring(displaySettings.showAllocations)
+    .. ":" .. displaySettings.sortBy .. ":" .. tostring(displaySettings.sortDescending) .. ":" .. MemDebug:GetLoadMode()
+  if self._layoutKey == layoutKey then return end
+  self._layoutKey = layoutKey
+  local scale = math.max(1, (self.fontSize or 14) / 14)
+  local right = 8
+  self._columnLayout = {}
+  for i = #COLUMNS, 1, -1 do
+    local column = COLUMNS[i]
+    local visible = column.key ~= "allocation" or displaySettings.showAllocations
+    local width = math.ceil(column.width * scale)
+    self._columnLayout[column.key] = { right = right, width = width, visible = visible }
+    if visible then right = right + width + 8 end
+  end
+  self._metricWidth = right
+  self.rowHeight = math.max(28, math.ceil((self.fontSize or 14) * self.uiScale) + 10)
+  local minimumWidth = math.ceil(right + 420 * scale)
+  f:SetResizeBounds(minimumWidth, 620, math.max(1800, minimumWidth), 1200)
+  if f:GetWidth() < minimumWidth then f:SetWidth(minimumWidth) end
+  f._listHeader:SetHeight(self.rowHeight)
+  for _, column in ipairs(COLUMNS) do
+    local cell = f._listHeader.cells[column.key]
+    local layout = self._columnLayout[column.key]
+    cell:ClearAllPoints()
+    cell:SetPoint("RIGHT", f._listHeader, "RIGHT", -layout.right, 0)
+    cell:SetSize(layout.width, self.rowHeight)
+    cell:SetShown(layout.visible)
+    local label = column.title
+    if column.key == "peak" and MemDebug:GetLoadMode() == "light" then label = "Sample ms" end
+    if displaySettings.sortBy == column.key then
+      label = label .. (displaySettings.sortDescending and " v" or " ^")
+    end
+    cell.text:SetText(label)
+    _applyFontSafe(cell.text, math.max(12, (self.fontSize or 14) - 1))
+  end
+  local name = f._listHeader.nameButton
+  name:ClearAllPoints()
+  name:SetPoint("LEFT", f._listHeader, "LEFT", 6, 0)
+  name:SetPoint("RIGHT", f._listHeader, "RIGHT", -right - 6, 0)
+  name:SetHeight(self.rowHeight)
+  name.text:SetText("Operation" .. (displaySettings.sortBy == "name" and (displaySettings.sortDescending and " v" or " ^") or ""))
+  _applyFontSafe(name.text, math.max(12, (self.fontSize or 14) - 1))
+end
+
+function W:_RenderFlat()
   local f = self.frame
   if not f or not f:IsShown() or self._rendering then return end
   self._rendering = true
-
+  self:_LayoutColumns()
   local flat = self._flat or {}
   local cpu = MemDebug.CPU
-  local interval = self._pendingInterval or (MemDebug.GetInterval and MemDebug:GetInterval()) or 10
-
-  local flatCount = #flat
-  local rowH = W.rowHeight or 24
+  local rowH = self.rowHeight
   local parent = f._content
-  if parent then
-    parent:SetHeight((flatCount + 1) * rowH)
-  end
-
+  parent:SetHeight((#flat + 1) * rowH)
   local scroll = f._scroll
-  local offset = scroll and scroll:GetVerticalScroll() or 0
-  local maxOffset = math.max(0, (flatCount + 1) * rowH - (scroll and scroll:GetHeight() or 520))
-  if offset > maxOffset then
-    offset = maxOffset
-    scroll:SetVerticalScroll(offset)
-  end
+  local offset = scroll:GetVerticalScroll()
+  local maxOffset = math.max(0, (#flat + 1) * rowH - scroll:GetHeight())
+  if offset > maxOffset then offset = maxOffset; scroll:SetVerticalScroll(offset) end
   local firstIndex = math.max(1, math.floor(offset / rowH) + 1)
-  local visibleCapacity = math.ceil((scroll and scroll:GetHeight() or 520) / rowH) + 3
-  local visibleCount = math.min(visibleCapacity, math.max(0, flatCount - firstIndex + 1))
-
+  local capacity = math.ceil(scroll:GetHeight() / rowH) + 3
+  local visibleCount = math.min(capacity, math.max(0, #flat - firstIndex + 1))
   for rowIndex = 1, visibleCount do
     local i = firstIndex + rowIndex - 1
     local entry = flat[i]
-    local row = _ensureRow(rowIndex)
-    row:Show()
-
-    if row.BG then
-      if (i % 2) == 0 then
-        row.BG:SetColorTexture(0.10, 0.10, 0.10, 0.35)
-      else
-        row.BG:SetColorTexture(0.07, 0.07, 0.07, 0.25)
-      end
-    end
-
-
-    if row.SetHeight then
-      row:SetHeight(rowH)
-    end
-    if row.label then
-      _applyFontSafe(row.label, W.fontSize or 14, nil)
-      _colorText(row.label)
-    end
-    if row.value then
-      _applyFontSafe(row.value, W.fontSize or 14, nil)
-      _colorText(row.value)
-    end
-    if row.cpuValue then
-      _applyFontSafe(row.cpuValue, W.fontSize or 14, nil)
-      _colorText(row.cpuValue)
-    end
-
-
-    row:ClearAllPoints()
-    local y = -2 - (i - 1) * rowH
-    row:SetPoint("TOPLEFT", parent, "TOPLEFT", 0, y)
-    row:SetPoint("TOPRIGHT", parent, "TOPRIGHT", 0, y)
-
     local node = entry.node
-    local depth = entry.depth or 0
-
-    local hasChildren = node.children and next(node.children) ~= nil
-    local prefix = ""
-    if hasChildren then
-      prefix = (self.expanded[node.path] and "- " or "+ ")
-    else
-      prefix = "  "
-    end
-
-    local indent = string.rep("   ", math.max(0, depth - 1))
-    local labelName = node.name
-
-
-    local count = node.count or 0
-    local rate = (interval and interval > 0) and (count / interval) or 0
-
-    local isFuncLeaf = node.kind == "function"
-    local isEventLeaf = node.kind == "event"
-    local statKey = node.statKey
-    local cpuPath = isFuncLeaf and statKey or nil
-
-    row.label:SetText(prefix .. indent .. labelName)
-    if node.kind == "addon" and hasChildren then
-      local childrenVisible = self.expanded[node.path] and self:AreAddonChildrenExpanded(node)
-      row.childAction:SetText(childrenVisible and "Collapse children" or "Expand children")
-      row.childAction:Show()
-    else
-      row.childAction:Hide()
-    end
-
-    local baseText = string.format("%d (%.1f/s)", count, rate)
-    if node.kind == "addon" and not hasChildren then
-      baseText = MemDebug:IsDebuggingEnabled() and "Not instrumented" or "Debugging disabled"
-    end
-    row.value:SetText(baseText)
-
-    local cpuText = ""
-    local memText = ""
-
-    if (isFuncLeaf or isEventLeaf) and cpu and cpu.GetStat and statKey then
-      local st = cpu:GetStat(statKey)
-      if st and st.n and st.n > 0 then
-        count = st.n
-        rate = count / interval
-        row.value:SetText(string.format("%d (%.1f/s)", count, rate))
-        local n = (st.n or 1)
-
-        local avgMs = (st.timeSum or 0) / n
-        local maxMs = st.timeMax or st.timeLast or 0
-
-        if st.native == true and isFuncLeaf and st.selfTimeSum ~= nil then
-          cpuText = string.format("%.3f/%.3fms self/incl", st.selfTimeSum / n, avgMs)
-        elseif st.native == true then
-          cpuText = string.format("%.3fms avg", avgMs)
-        else
-          cpuText = string.format("%.3f(%.3f)ms", avgMs, maxMs)
-        end
-
-        if st.native ~= true then
-          if st.allocN and st.allocN > 0 then
-            local avgMemKB = ((st.allocSum or 0) / (st.allocN or n)) / 1024
-            local maxMemKB = (st.allocMax or st.allocLast or 0) / 1024
-            memText = string.format("%.1f(%.1f)kb", avgMemKB, maxMemKB)
-          end
-        end
-      end
-    end
-
-    if isFuncLeaf and cpu and cpu.GetMeasurementState and cpuPath then
-      local state = cpu:GetMeasurementState(cpuPath)
-      if state then
-        cpuText = cpuText ~= "" and (cpuText .. "  " .. state) or state
-      end
-    end
-
-
-    if row.cpuValue then
-      row.cpuValue:SetText(cpuText)
-      row.cpuValue:SetShown(cpuText ~= "")
-    end
-
-    if row.memValue then
-      row.memValue:SetText(memText)
-      row.memValue:SetShown(memText ~= "")
-    end
+    local row = _ensureRow(rowIndex)
     row._data = entry
-  end
-
-  for i = visibleCount + 1, #self.rows do
-    if self.rows[i] then
-      self.rows[i]:Hide()
-      self.rows[i]._data = nil
+    row:Show()
+    row:SetHeight(rowH)
+    row:ClearAllPoints()
+    row:SetPoint("TOPLEFT", parent, "TOPLEFT", 0, -2 - (i - 1) * rowH)
+    row:SetPoint("TOPRIGHT", parent, "TOPRIGHT", 0, -2 - (i - 1) * rowH)
+    if node.kind == "addon" then row.BG:SetColorTexture(0.10, 0.20, 0.28, 0.95)
+    elseif node.kind == "bucket" then row.BG:SetColorTexture(0.13, 0.14, 0.17, 0.9)
+    else row.BG:SetColorTexture(0.08, 0.08, 0.09, i % 2 == 0 and 0.65 or 0.35) end
+    local indent = 8 + math.max(0, entry.depth - 1) * 20
+    local expandable = node.kind == "addon" or node.kind == "bucket"
+    row.chevron:ClearAllPoints()
+    row.chevron:SetPoint("LEFT", row, "LEFT", indent, 0)
+    row.chevron:SetText(expandable and (self.searchText ~= "" or self.expanded[node.path]) and "-" or expandable and "+" or "")
+    row.label:ClearAllPoints()
+    row.label:SetPoint("LEFT", row, "LEFT", indent + 18, 0)
+    row.label:SetPoint("RIGHT", row, "RIGHT", -self._metricWidth - (node.kind == "addon" and 140 or 6), 0)
+    row.label:SetText(node.name)
+    _applyFontSafe(row.label, self.fontSize, node.kind == "addon" and "OUTLINE" or nil)
+    if node.kind == "addon" then row.label:SetTextColor(0.6, 0.85, 1)
+    elseif node.kind == "bucket" then row.label:SetTextColor(0.92, 0.92, 0.95)
+    else _colorText(row.label) end
+    row.childAction:ClearAllPoints()
+    row.childAction:SetPoint("RIGHT", row, "RIGHT", -self._metricWidth - 6, 0)
+    row.childAction:SetShown(node.kind == "addon" and next(node.children) ~= nil)
+    local childrenExpanded = self.expanded[node.path] and self:AreAddonChildrenExpanded(node)
+    row.childAction:SetText(childrenExpanded and "Collapse children" or "Expand children")
+    for _, column in ipairs(COLUMNS) do
+      local cell = row.cells[column.key]
+      local layout = self._columnLayout[column.key]
+      cell:ClearAllPoints()
+      cell:SetPoint("RIGHT", row, "RIGHT", -layout.right, 0)
+      cell:SetWidth(layout.width)
+      cell:SetShown(layout.visible)
+      cell:SetText("")
+      _applyFontSafe(cell, self.fontSize)
+      _colorText(cell)
     end
+    local stat = node.statKey and cpu:GetStat(node.statKey)
+    row.cells.calls:SetText(tostring(stat and stat.n or node.count or 0))
+    if stat and stat.n and stat.n > 0 then
+      row.cells.total:SetText(string.format("%.3f", stat.timeSum or 0))
+      row.cells.average:SetText(string.format("%.3f", (stat.timeSum or 0) / stat.n))
+      row.cells.peak:SetText(string.format("%.3f", stat.timeMax or stat.timeLast or 0))
+      if not stat.native and stat.allocN and stat.allocN > 0 then
+        row.cells.allocation:SetText(string.format("%.2f", stat.allocSum / stat.allocN / 1024))
+      end
+    end
+    local state = _nodeState(node)
+    row.state:ClearAllPoints()
+    row.state:SetPoint("LEFT", row, "RIGHT", -self._metricWidth, 0)
+    row.state:SetPoint("RIGHT", row, "RIGHT", -8, 0)
+    _applyFontSafe(row.state, math.max(11, self.fontSize - 1))
+    row.state:SetText(state or "")
+    row.state:SetShown(state ~= nil and not node.hasCalls)
+    if state and not node.hasCalls then
+      for _, cell in pairs(row.cells) do cell:Hide() end
+    end
+    row.notice:SetShown(state ~= nil and node.hasCalls)
   end
+  for i = visibleCount + 1, #self.rows do self.rows[i]:Hide(); self.rows[i]._data = nil end
+  f._emptyText:SetText(self.searchText ~= "" and "No matching rows. Try another search or show rows with no calls in Settings."
+    or "No addons have registered with Pleebug.")
+  f._emptyText:SetShown(#flat == 0)
   self._rendering = nil
 end
-
 
 local function _applyBackdrop(frame, bg, border, inset)
   if not frame or not frame.SetBackdrop then return end
@@ -854,17 +993,17 @@ local function _ensureFrame()
   local f = CreateFrame("Frame", "PleeBUG_MemDebugWindow", UIParent, "BackdropTemplate")
   f:SetFrameStrata("FULLSCREEN_DIALOG")
   f:SetToplevel(true)
-  f:SetSize(720, 520)
+  f:SetSize(1120, 720)
   f:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
   f:SetClampedToScreen(true)
   f:SetMovable(true)
   f:SetResizable(true)
 
   if f.SetResizeBounds then
-    f:SetResizeBounds(520, 360, 1400, 1000)
+    f:SetResizeBounds(1000, 620, 1800, 1200)
   else
-    if f.SetMinResize then f:SetMinResize(520, 360) end
-    if f.SetMaxResize then f:SetMaxResize(1400, 1000) end
+    if f.SetMinResize then f:SetMinResize(1000, 620) end
+    if f.SetMaxResize then f:SetMaxResize(1800, 1200) end
   end
 
 
@@ -984,10 +1123,7 @@ local function _ensureFrame()
       self:Refresh()
     end
   end
-
- ------------------
   -- Export (copy table rows to a multiline editbox)
- ------------------
   local ExportFrame
   local ExportEditBox
 
@@ -1121,8 +1257,9 @@ local function _ensureFrame()
         local sampledPeak, lastCall, lastSample, scope, phaseText = "", "", "", "", ""
         local measurementState, measurementKind, canonicalPath = "", "", ""
         local uninstrumented = node.kind == "addon" and not next(node.children)
-        if uninstrumented then
-          measurementState = MemDebug:IsDebuggingEnabled() and "Not instrumented" or "Debugging disabled"
+        if node.kind == "addon" or node.kind == "bucket" then
+          local displayed = self._treeIndex and self._treeIndex[node.path]
+          measurementState = _nodeState(displayed or node) or ""
         end
         local activeFrames, frameAvgMs, framePeakMs, frameAvgCalls, framePeakCalls = "", "", "", "", ""
 
@@ -1407,12 +1544,19 @@ local function _ensureFrame()
   noCallsBox:SetPoint("TOPLEFT", fontSlider, "BOTTOMLEFT", 0, -8)
   f._noCallsBox = noCallsBox
 
+  local allocationsBox = _makeCheckbox(sf, "Show allocation column", displaySettings.showAllocations, function(value)
+    displaySettings.showAllocations = value
+    W:Refresh()
+  end)
+  allocationsBox:SetPoint("TOPLEFT", noCallsBox, "BOTTOMLEFT", 0, -4)
+  f._allocationsBox = allocationsBox
+
   -- Debug/profile mode controls
   local sf = f._settingsFrame or f
   local cpu = MemDebug and MemDebug.CPU
 
   local modeLabel = sf:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-  modeLabel:SetPoint("TOPLEFT", noCallsBox, "BOTTOMLEFT", 8, -12)
+  modeLabel:SetPoint("TOPLEFT", allocationsBox, "BOTTOMLEFT", 8, -12)
   modeLabel:SetText("Debugging: " .. MemDebug:GetDebugMode())
   _applyFontSafe(modeLabel, math.max(12, (W.fontSize or 14)), "OUTLINE")
   _colorText(modeLabel)
@@ -1490,7 +1634,7 @@ local panel = CreateFrame("Frame", nil, sf, "BackdropTemplate")
 
     local title = panel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     title:SetPoint("TOPLEFT", panel, "TOPLEFT", 0, 0)
-    title:SetText("Modules")
+    title:SetText("Addons and files")
     _applyFontSafe(title, math.max(12, (W.fontSize or 14)), "OUTLINE")
     _colorText(title)
     panel._title = title
@@ -1547,16 +1691,56 @@ local panel = CreateFrame("Frame", nil, sf, "BackdropTemplate")
   end
 
   local status = f:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-
-  status:SetPoint("TOPLEFT", startBtn, "BOTTOMLEFT", 0, -10)
-
-  status:SetText("No data yet - press Start.")
-    f._statusText = status
-  _applyFontSafe(status, W.fontSize or 14, nil)
+  status:SetPoint("TOPLEFT", f, "TOPLEFT", 12, -102)
+  status:SetPoint("TOPRIGHT", f, "TOPRIGHT", -14, -102)
+  status:SetJustifyH("LEFT")
+  status:SetHeight(24)
+  _applyFontSafe(status, 13)
   _colorText(status)
+  f._statusText = status
+
+  local native = f:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+  native:SetPoint("TOPLEFT", status, "BOTTOMLEFT", 0, -2)
+  native:SetPoint("TOPRIGHT", status, "BOTTOMRIGHT", 0, -2)
+  native:SetHeight(22)
+  native:SetJustifyH("LEFT")
+  _applyFontSafe(native, 12)
+  native:SetTextColor(0.65, 0.75, 0.82)
+  f._nativeText = native
+
+  local searchLabel = f:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+  searchLabel:SetPoint("TOPLEFT", native, "BOTTOMLEFT", 0, -12)
+  searchLabel:SetText("Search")
+  _applyFontSafe(searchLabel, 12)
+  local search = CreateFrame("EditBox", nil, f, "InputBoxTemplate")
+  search:SetAutoFocus(false)
+  search:SetSize(300, 24)
+  search:SetPoint("LEFT", searchLabel, "RIGHT", 12, 0)
+  search:SetScript("OnTextChanged", function(self) W:SetSearch(self:GetText()) end)
+  search:SetScript("OnEscapePressed", function(self) self:SetText(""); self:ClearFocus() end)
+  search:SetScript("OnEnterPressed", function(self) self:ClearFocus() end)
+  f._search = search
+  local clearSearch = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
+  clearSearch:SetSize(60, 24)
+  clearSearch:SetPoint("LEFT", search, "RIGHT", 8, 0)
+  clearSearch:SetText("Clear")
+  clearSearch:SetScript("OnClick", function() search:SetText(""); search:ClearFocus() end)
+  _skinButton(clearSearch)
+  local resort = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
+  resort:SetSize(80, 24)
+  resort:SetPoint("TOPRIGHT", native, "BOTTOMRIGHT", 0, -8)
+  resort:SetText("Resort")
+  resort:SetScript("OnClick", function() W:Resort() end)
+  _skinButton(resort)
+  f._resort = resort
+  local sortText = f:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+  sortText:SetPoint("RIGHT", resort, "LEFT", -12, 0)
+  _applyFontSafe(sortText, 12)
+  f._sortText = sortText
+
   -- Profiling table
   local listHolder = CreateFrame("Frame", nil, f, "BackdropTemplate")
-  listHolder:SetPoint("TOPLEFT", status, "BOTTOMLEFT", 0, -10)
+  listHolder:SetPoint("TOPLEFT", f, "TOPLEFT", 12, -204)
   listHolder:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -14, 14)
   f._listHolder = listHolder
 
@@ -1615,29 +1799,32 @@ local panel = CreateFrame("Frame", nil, sf, "BackdropTemplate")
   header:SetBackdropColor(0, 0, 0, 0.35)
   header:SetBackdropBorderColor(0.2, 0.2, 0.2, 0.9)
 
-  local function _mkHeaderText()
-    local fs = header:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    _applyFontSafe(fs, math.max(12, (W.fontSize or 14) - 1), "OUTLINE")
-    _colorText(fs)
-    return fs
+  header.cells = {}
+  local function makeHeader(key)
+    local button = CreateFrame("Button", nil, header)
+    local text = button:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    text:SetAllPoints(button)
+    text:SetJustifyH(key == "name" and "LEFT" or "RIGHT")
+    button.text = text
+    _colorText(text)
+    button:SetScript("OnClick", function() if key ~= "allocation" then W:SetSort(key) end end)
+    button:SetScript("OnEnter", function(self)
+      GameTooltip:SetOwner(self, "ANCHOR_TOP")
+      if key == "allocation" then
+        GameTooltip:AddLine("Average allocated KiB per measured allocation call. This is allocation activity, not retained memory.", 1, 1, 1, true)
+      else
+        GameTooltip:AddLine("Click to sort; click again to reverse.")
+        GameTooltip:AddLine("Row order stays fixed while recording. Click Resort to update it.", 0.8, 0.8, 0.8, true)
+        if key == "total" then GameTooltip:AddLine("Function measurements can overlap. Group CPU totals are deliberately left blank.", 0.8, 0.8, 0.8, true) end
+        if key == "peak" then GameTooltip:AddLine("Full functions show the slowest completed call. Native counters show the highest sampled average.", 0.8, 0.8, 0.8, true) end
+      end
+      GameTooltip:Show()
+    end)
+    button:SetScript("OnLeave", function() GameTooltip:Hide() end)
+    return button
   end
-
-  header.hCPU = _mkHeaderText()
-  header.hCPU:SetPoint("RIGHT", header, "RIGHT", -30, 0)
-  header.hCPU:SetText(MemDebug:GetDB().debugMode == "full" and "CPU avg / peak call" or "CPU self / inclusive")
-
-  header.hMem = _mkHeaderText()
-  header.hMem:SetPoint("RIGHT", header.hCPU, "LEFT", -10, 0)
-  header.hMem:SetText("Alloc avg (max)")
-
-  header.hCalls = _mkHeaderText()
-  header.hCalls:SetPoint("RIGHT", header.hMem, "LEFT", -10, 0)
-  header.hCalls:SetText("Calls")
-
-  header.hName = _mkHeaderText()
-  header.hName:SetPoint("LEFT", header, "LEFT", 6, 0)
-  header.hName:SetText("Name")
-
+  for _, column in ipairs(COLUMNS) do header.cells[column.key] = makeHeader(column.key) end
+  header.nameButton = makeHeader("name")
   f._listHeader = header
 
   -- Scroll area (LIST pane)
@@ -1652,21 +1839,12 @@ local panel = CreateFrame("Frame", nil, sf, "BackdropTemplate")
   -- If content is left at width 1, your row buttons become ~1px clickable even though text renders wider.
   -- Anchor content to the scroll frame so rows get a real width/hitbox.
   content:SetPoint("TOPLEFT", scroll, "TOPLEFT", 0, 0)
-  content:SetPoint("TOPRIGHT", scroll, "TOPRIGHT", -26, 0) -- leave space for the scrollbar
+  content:SetPoint("TOPRIGHT", scroll, "TOPRIGHT", 0, 0)
   content:SetSize(1, 1) -- height is driven by Refresh; width is driven by anchors above
   scroll:SetScrollChild(content)
 
   local function _SyncContentWidth()
-    if not (content and content.SetWidth and scroll and scroll.GetWidth) then return end
-
-    local sbw = 26
-    if scroll.ScrollBar and scroll.ScrollBar.GetWidth then
-      sbw = math.floor(scroll.ScrollBar:GetWidth() + 0.5) + 4
-    end
-
-    local w = (scroll:GetWidth() or 1) - sbw
-    if w < 1 then w = 1 end
-    content:SetWidth(w)
+    content:SetWidth(math.max(1, scroll:GetWidth()))
   end
 
   -- IMPORTANT: do this immediately so row buttons get a real hitbox on first show
@@ -1688,6 +1866,15 @@ local panel = CreateFrame("Frame", nil, sf, "BackdropTemplate")
 
   f._scroll = scroll
   f._content = content
+  local empty = listHolder:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+  empty:SetPoint("TOPLEFT", header, "BOTTOMLEFT", 12, -18)
+  empty:SetPoint("TOPRIGHT", header, "BOTTOMRIGHT", -12, -18)
+  empty:SetJustifyH("LEFT")
+  empty:SetWordWrap(true)
+  _applyFontSafe(empty, 13)
+  empty:SetTextColor(0.7, 0.7, 0.7)
+  empty:Hide()
+  f._emptyText = empty
   scroll:HookScript("OnVerticalScroll", function()
     if W._buildRoot and not W._buildInProgress then
       W:_RenderFlat()
@@ -2010,47 +2197,40 @@ function _ensureRow(i)
     hl:SetVertexColor(0.18, 0.18, 0.18, 0.55)
   end
 
+  row.chevron = row:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+  row.chevron:SetWidth(16)
+  row.chevron:SetJustifyH("CENTER")
+  _applyFontSafe(row.chevron, 14)
   row.label = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-  row.label:SetPoint("LEFT", row, "LEFT", 6, 0)
-  _applyFontSafe(row.label, W.fontSize or 14, nil)
-  _colorText(row.label)
+  row.label:SetJustifyH("LEFT")
+  row.label:SetWordWrap(false)
 
   local childAction = CreateFrame("Button", nil, row, "UIPanelButtonTemplate")
-  childAction:SetSize(108, 18)
-  childAction:SetPoint("LEFT", row.label, "RIGHT", 8, 0)
+  childAction:SetSize(130, 20)
   childAction:SetScript("OnClick", function()
-    local data = row._data
-    local node = data and data.node
+    local node = row._data and row._data.node
     if node and node.kind == "addon" then
-      local childrenVisible = W.expanded[node.path] and W:AreAddonChildrenExpanded(node)
-      W:SetAddonChildrenExpanded(node, not childrenVisible)
+      local expanded = W.expanded[node.path] and W:AreAddonChildrenExpanded(node)
+      W:SetAddonChildrenExpanded(node, not expanded)
     end
   end)
   _skinButton(childAction)
-  childAction:Hide()
   row.childAction = childAction
-
-  local rightSpacer = CreateFrame("Frame", nil, row)
-  rightSpacer:SetSize(18, 18)
-  rightSpacer:SetPoint("RIGHT", row, "RIGHT", -6, 0)
-
-  -- CPU avg ms column (separate from calls/sec)
-  row.cpuValue = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-  row.cpuValue:SetPoint("RIGHT", rightSpacer, "LEFT", -6, 0)
-  _applyFontSafe(row.cpuValue, W.fontSize or 14, nil)
-  _colorText(row.cpuValue)
-
-  -- Allocation avg kB column
-  row.memValue = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-  row.memValue:SetPoint("RIGHT", row.cpuValue, "LEFT", -10, 0)
-  _applyFontSafe(row.memValue, W.fontSize or 14, nil)
-  _colorText(row.memValue)
-
-  row.value = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-  -- Leave room for allocation and CPU columns.
-  row.value:SetPoint("RIGHT", row.memValue, "LEFT", -10, 0)
-  _applyFontSafe(row.value, W.fontSize or 14, nil)
-  _colorText(row.value)
+  row.cells = {}
+  for _, column in ipairs(COLUMNS) do
+    local cell = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    cell:SetJustifyH("RIGHT")
+    cell:SetWordWrap(false)
+    row.cells[column.key] = cell
+  end
+  row.state = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+  row.state:SetJustifyH("LEFT")
+  row.state:SetWordWrap(false)
+  row.state:SetTextColor(0.7, 0.7, 0.7)
+  row.notice = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+  row.notice:SetPoint("LEFT", row.label, "RIGHT", 0, 0)
+  row.notice:SetText("!")
+  row.notice:SetTextColor(1, 0.7, 0.2)
 
   row:SetScript("OnClick", function(self)
     local data = self._data
@@ -2066,13 +2246,29 @@ function _ensureRow(i)
 
   row:SetScript("OnEnter", function(self)
     local entry = self._data
-    local key = entry and entry.node and entry.node.statKey
-    if not key then return end
-    local st = MemDebug.CPU:GetStat(key)
-    if not st or not st.n or st.n == 0 then return end
-
+    if not entry then return end
+    local node = entry.node
+    local key = node.statKey
+    local cpu = MemDebug.CPU
+    local st = key and cpu:GetStat(key)
     GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-    GameTooltip:AddLine(entry.node.name)
+    GameTooltip:AddLine(node.name)
+    GameTooltip:AddLine(node.path, 0.65, 0.75, 0.82, true)
+    local state = _nodeState(node)
+    if state then GameTooltip:AddLine(state, 1, 0.8, 0.4) end
+    if node.kind == "function" then
+      local measurement = cpu:GetMeasurementState(key)
+      if measurement then GameTooltip:AddLine(measurement, 0.8, 0.8, 0.8, true) end
+    elseif node.kind == "addon" or node.kind == "bucket" then
+      GameTooltip:AddLine("Calls count registered activity. Nested functions can overlap; this is not complete addon CPU usage.", 0.8, 0.8, 0.8, true)
+    end
+    if not st or not st.n or st.n <= 0 then GameTooltip:Show(); return end
+    GameTooltip:AddDoubleLine("Calls", tostring(st.n), 1, 1, 1, 1, 1, 1)
+    GameTooltip:AddDoubleLine("Calls per second", string.format("%.1f", st.n / (W._pendingInterval or MemDebug:GetInterval())), 1, 1, 1, 1, 1, 1)
+    GameTooltip:AddDoubleLine("Total measured CPU", string.format("%.3f ms", st.timeSum or 0), 1, 1, 1, 1, 1, 1)
+    if st.allocN and st.allocN > 0 then
+      GameTooltip:AddDoubleLine("Allocated average / maximum", string.format("%.2f / %.2f KiB", st.allocSum / st.allocN / 1024, (st.allocMax or 0) / 1024), 1, 1, 1, 1, 1, 1)
+    end
     if st.native and st.selfTimeSum ~= nil then
       GameTooltip:AddDoubleLine("Self average per call", string.format("%.3f ms", st.selfTimeSum / st.n), 1, 1, 1, 1, 1, 1)
       GameTooltip:AddDoubleLine("Inclusive average per call", string.format("%.3f ms", st.timeSum / st.n), 1, 1, 1, 1, 1, 1)
@@ -2145,6 +2341,34 @@ function W:FreezeForStop()
   end
 end
 
+function W:_RenderSummary()
+  local f = self.frame
+  local cpu = MemDebug.CPU
+  local snap = self._pendingSnapshot or {}
+  local debuggingEnabled = MemDebug:IsDebuggingEnabled()
+  local enabled = MemDebug:IsEnabled()
+  local interval = snap.__interval or MemDebug:GetInterval()
+  local total = 0
+  if type(snap["Events.Total"]) == "number" then total = total + snap["Events.Total"] end
+  if type(snap["Funcs.Total"]) == "number" then total = total + snap["Funcs.Total"] end
+
+  local statusWord = not debuggingEnabled and "Debugging disabled" or enabled and "Recording" or "Stopped"
+  if self._buildInProgress then statusWord = statusWord .. " / building list" end
+  f._statusText:SetText(string.format("%s   |   %s   |   Window %.2f s   |   %d recorded calls/events",
+    statusWord, MemDebug:GetLoadMode() == "full" and "Full" or MemDebug:GetLoadMode() == "light" and "Light" or "No capture", interval, total))
+  local overview = cpu:GetOverview(snap.__windowSeconds or MemDebug:GetInterval(), snap.__windowEnd)
+  local memory = cpu:GetAddonMemoryKB()
+  local memoryText = memory and string.format("%.0f KiB", memory) or "unavailable"
+  if overview then
+    f._nativeText:SetText(string.format("Native addon CPU - %s: %.2f ms total / %.3f ms per frame avg / %.3f peak   |   Addon memory: %s",
+      MemDebug:GetAddonDisplayName(overview.addonName), overview.recentMs or 0,
+      overview.recentAverageMs or 0, overview.recentPeakMs or 0, memoryText))
+  else
+    f._nativeText:SetText(debuggingEnabled and ("Native addon CPU: unavailable   |   Addon memory: " .. memoryText)
+      or "Choose addons and files in Settings, then enable debugging to record.")
+  end
+end
+
 function W:Refresh(snapshot)
 
   if self._inRefresh then return end
@@ -2161,6 +2385,7 @@ function W:Refresh(snapshot)
   end
 
   f._noCallsBox._cb:SetChecked(_showRowsWithNoCalls())
+  f._allocationsBox._cb:SetChecked(displaySettings.showAllocations)
   local debuggingEnabled = MemDebug:IsDebuggingEnabled()
   local enabled = MemDebug:IsEnabled()
   local canReload = not InCombatLockdown()
@@ -2235,59 +2460,10 @@ function W:Refresh(snapshot)
   elseif not self._buildInProgress then
     self:_ApplySnapshot(snap)
     self:_RenderFlat()
-  elseif f._statusText then
-    f._statusText:SetText("Status: Building tree...")
-  end
-
-  if self._buildInProgress then
-    if f._statusText then
-      f._statusText:SetText("Status: Building tree...")
-    end
   end
 
 
-  local interval = snap.__interval or MemDebug:GetInterval()
-  local total = 0
-  if type(snap["Events.Total"]) == "number" then total = total + snap["Events.Total"] end
-  if type(snap["Funcs.Total"]) == "number" then total = total + snap["Funcs.Total"] end
-
-  if f._statusText then
-    local statusWord
-    if not debuggingEnabled then
-      statusWord = "Debugging disabled"
-    elseif liveMode then
-      statusWord = enabled and "Live (Running)" or "Live (Stopped)"
-    else
-      statusWord = enabled and "Running" or "Stopped"
-    end
-
-    local overview = cpu:GetOverview(snap.__windowSeconds or MemDebug:GetInterval(), snap.__windowEnd)
-    local addonMemoryKB = MemDebug and MemDebug.CPU and MemDebug.CPU.GetAddonMemoryKB
-      and MemDebug.CPU:GetAddonMemoryKB()
-    local addonMemoryText = addonMemoryKB and string.format("%.0fkb", addonMemoryKB) or "unavailable"
-    if not debuggingEnabled then
-      f._statusText:SetText("Debugging disabled - enable debugging to record.")
-    elseif overview then
-      local overviewName = MemDebug:GetAddonDisplayName(overview.addonName)
-      f._statusText:SetText(string.format(
-        "Status: %s   Window: %.2fs   Calls: %d   %s native in window: %.1fms total, %.3fms/frame avg, %.3fms/frame peak   %s memory: %s",
-        statusWord,
-        interval,
-        total,
-        overviewName,
-        overview.recentMs or 0,
-        overview.recentAverageMs or 0,
-        overview.recentPeakMs or 0,
-        overviewName,
-        addonMemoryText
-      ))
-    else
-      f._statusText:SetText(string.format("Status: %s   Window: %.2fs   Calls: %d   Memory: %s",
-        statusWord, interval, total, addonMemoryText))
-    end
-
-
-  end
+  self:_RenderSummary()
   self._inRefresh = nil
 end
 
