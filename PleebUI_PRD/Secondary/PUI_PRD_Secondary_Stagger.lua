@@ -190,12 +190,12 @@ local function Update(owner, bar, text, unit)
 end
 
 
-P:Def("Stagger.ResetRuntime", ResetRuntime)
-P:Def("Stagger.Poll", Poll)
-P:Def("Stagger.StartPolling", StartPolling)
-P:Def("Stagger.Build", Build)
-P:Def("Stagger.OnEvent", OnEvent)
-P:Def("Stagger.Update", Update)
+ResetRuntime = P:Def("Stagger.ResetRuntime", ResetRuntime)
+Poll = P:Def("Stagger.Poll", Poll)
+StartPolling = P:Def("Stagger.StartPolling", StartPolling)
+Build = P:Def("Stagger.Build", Build)
+OnEvent = P:Def("Stagger.OnEvent", OnEvent)
+Update = P:Def("Stagger.Update", Update)
 
 Secondary:RegisterAdapter("STAGGER", {
   events = {

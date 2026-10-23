@@ -114,10 +114,10 @@ function AuraSlotDriver:RefreshUnit(unit)
   end
 end
 
-targetDriver:SetScript("OnEvent", function()
-  AuraSlotDriver:RefreshUnit("target")
-end)
 local P = select(1, ns.Pleebug:DropIn(AuraSlotDriver, { name = "PRD.AuraSlotDriver" }))
+targetDriver:SetScript("OnEvent", P:Def("AuraSlotDriver.TargetEvent", function()
+  AuraSlotDriver:RefreshUnit("target")
+end, nil, nil, false))
 EnsureUnitRuntime = P:Def("AuraSlotDriver.EnsureUnitRuntime", EnsureUnitRuntime)
 UpdateTargetDriver = P:Def("AuraSlotDriver.UpdateTargetDriver", UpdateTargetDriver)
 UpdateUnitRuntime = P:Def("AuraSlotDriver.UpdateUnitRuntime", UpdateUnitRuntime)

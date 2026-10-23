@@ -411,7 +411,7 @@ end
 do
   local frame = CreateFrame("Frame")
   frame._puiOwner = M
-  frame:SetScript("OnEvent", function(eventFrame, event, ...)
+  frame:SetScript("OnEvent", P:Def("SecondaryEvent.OnEvent", function(eventFrame, event, ...)
     local currentOwner = eventFrame._puiOwner
     if currentOwner._puiRuntimeStarted ~= true then
       return
@@ -459,7 +459,7 @@ do
         adapter.OnEvent(currentOwner, event, ...)
       end
     end
-  end)
+  end, nil, nil, false))
   M._puiSecondaryEventFrame = frame
 end
 

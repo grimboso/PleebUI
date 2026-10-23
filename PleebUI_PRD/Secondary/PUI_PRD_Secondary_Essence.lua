@@ -124,18 +124,20 @@ local function UpdateActiveSegment(owner, segment)
   end
 end
 
+UpdateActiveSegment = P:Def("Essence.UpdateActiveSegment", UpdateActiveSegment)
+
 do
   local driver = CreateFrame("Frame")
   local group = driver:CreateAnimationGroup()
   local animation = group:CreateAnimation("Animation")
   animation:SetDuration(0.05)
   group:SetLooping("REPEAT")
-  group:SetScript("OnLoop", function()
+  group:SetScript("OnLoop", P:Def("Essence.OnLoop", function()
     local activeSegment = M._puiEssenceActiveSegment
     if activeSegment then
       UpdateActiveSegment(M, activeSegment)
     end
-  end)
+  end))
   M._puiEssenceAnimationGroup = group
 end
 
