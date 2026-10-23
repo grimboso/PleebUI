@@ -45,6 +45,9 @@ local type = _G.type
 local LDB = LibStub("LibDataBroker-1.1")
 local LDBIcon = LibStub("LibDBIcon-1.0")
 
+local DamageMetersRuntimeHost = CreateFrame("Frame")
+DamageMetersRuntimeHost:Hide()
+
 local Constants = {
   MAX_WINDOWS = 10,
   ROW_POOL_SIZE = 40,
@@ -651,27 +654,16 @@ function DamageMeters:ApplySettings()
   self:CompileRuntimeConfig()
 
   if self.db.profile.enabled == false then
+    self.runtimeApplyPending = nil
     self:SetRuntimeEnabled(false)
+    if self.launcher and not self.launcherRefreshPending then
+      DamageMetersRuntimeHost:Hide()
+    end
     return
   end
 
-  if not self:SetRuntimeEnabled(true) then
-    return
-  end
-
-  self:ApplyWindowConfiguration()
-  self:CancelCombatRefresh()
-  self:CancelHistoryCaptureWork()
-  if self.runtimeVisible and self:HasShownWindow() then
-    self:RegisterRuntimeEvents()
-    self:ScheduleHistoryCaptureWork(0.3)
-    self:RefreshWindows()
-  else
-    self:CancelTargetAnalysisRefresh()
-    self:CancelEncounterEndRefresh()
-    self:UnregisterRuntimeEvents()
-    SegmentPicker.Hide()
-  end
+  self.runtimeApplyPending = true
+  DamageMetersRuntimeHost:Show()
 end
 
 function DamageMeters:ClearUnsavedCombatHistory()
@@ -1126,8 +1118,9 @@ function DamageMeters:ApplyProfile()
   Config.SanitizeProfile()
   self:ClearAllWindowSelections()
   History:ApplyTrackingOptions()
-  LDBIcon:Refresh(LAUNCHER_NAME, self.db.profile.minimap)
+  self.launcherRefreshPending = true
   self:ApplySettings()
+  DamageMetersRuntimeHost:Show()
 end
 
 function DamageMeters:OnInitialize()
@@ -1140,7 +1133,7 @@ function DamageMeters:OnInitialize()
   self.runtimeEventsRegistered = false
   self.combatGeneration = 0
 
-  self:InitializeLauncher()
+  DamageMetersRuntimeHost:Show()
 
   Addon:RegisterOptionsSection("DamageMeters", function()
     return DamageMeters
@@ -1154,7 +1147,11 @@ function DamageMeters:OnEnable()
 end
 
 function DamageMeters:OnDisable()
+  self.runtimeApplyPending = nil
   self:SetRuntimeEnabled(false)
+  if self.launcher and not self.launcherRefreshPending then
+    DamageMetersRuntimeHost:Hide()
+  end
 end
 
 IsPlainUnitInCombat = P:Def("IsPlainUnitInCombat", IsPlainUnitInCombat)
@@ -1193,6 +1190,44 @@ DamageMeters.CHALLENGE_MODE_RESET = P:Def("DamageMeters.CHALLENGE_MODE_RESET", D
 DamageMeters.OnInitialize = P:Def("DamageMeters.OnInitialize", DamageMeters.OnInitialize)
 DamageMeters.OnEnable = P:Def("DamageMeters.OnEnable", DamageMeters.OnEnable)
 DamageMeters.OnDisable = P:Def("DamageMeters.OnDisable", DamageMeters.OnDisable)
+
+local function FlushDamageMetersRuntime(self)
+  self:Hide()
+
+  if not DamageMeters.launcher then
+    DamageMeters:InitializeLauncher()
+  end
+  if DamageMeters.launcherRefreshPending then
+    DamageMeters.launcherRefreshPending = nil
+    LDBIcon:Refresh(LAUNCHER_NAME, DamageMeters.db.profile.minimap)
+  end
+
+  if not DamageMeters.runtimeApplyPending then
+    return
+  end
+  DamageMeters.runtimeApplyPending = nil
+  if not DamageMeters:IsEnabled() or DamageMeters.db.profile.enabled == false then
+    return
+  end
+  if not DamageMeters:SetRuntimeEnabled(true) then
+    return
+  end
+
+  DamageMeters:ApplyWindowConfiguration()
+  DamageMeters:CancelCombatRefresh()
+  DamageMeters:CancelHistoryCaptureWork()
+  if DamageMeters.runtimeVisible and DamageMeters:HasShownWindow() then
+    DamageMeters:RegisterRuntimeEvents()
+    DamageMeters:ScheduleHistoryCaptureWork(0.3)
+    DamageMeters:RefreshWindows()
+  else
+    DamageMeters:CancelTargetAnalysisRefresh()
+    DamageMeters:CancelEncounterEndRefresh()
+    DamageMeters:UnregisterRuntimeEvents()
+    SegmentPicker.Hide()
+  end
+end
+DamageMetersRuntimeHost:SetScript("OnUpdate", FlushDamageMetersRuntime)
 
 local combatRefreshDriver = CreateFrame("Frame")
 local combatRefreshGroup = combatRefreshDriver:CreateAnimationGroup()
