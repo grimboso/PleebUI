@@ -368,6 +368,12 @@ local function Review()
   local name
   if index then name = select(2, C_SpecializationInfo.GetSpecializationInfo(index)) end
   Text("Specialization: " .. (name or "Not selected") .. ". Settings are saved as you change them. Examples are separate.")
+  local enabledModules = {}
+  for _, choice in ipairs(Addon:GetChildAddonChoices()) do
+    if choice.installed and choice.enabled then enabledModules[#enabledModules + 1] = choice.label end
+  end
+  Text("Modules selected for this profile: " .. (#enabledModules > 0 and table.concat(enabledModules, ", ") or "None") .. ".")
+  Action("Change module selection", function() callbacks.navigate("modules") end)
   for _, entry in ipairs({
     { "Unit frames", ns.Modules.UnitFrames and ns.UnitFrames:GetQuickSetupValue("enabled"), "unitframes" },
     { "Party frames", ns.Modules.PartyFrames and ns.Modules.PartyFrames.db.profile.enabled ~= false, "group", 1 },
@@ -404,18 +410,19 @@ local function BuildPage(key)
       local values, order = Addon:GetInstallerExistingProfiles()
       Dropdown("Use an existing profile (reload)", values, order, nil, function(name)
         local ok, message = Addon:ActivateExistingProfile(name)
-        if ok then ReloadUI() else callbacks.status(message) end
+        if ok then Addon:ApplyChildAddonProfile() else callbacks.status(message) end
       end)
       Action("Create a separate setup profile", function()
         Addon:PUI_ConfirmAction({
           title = "Create setup profile", text = "Create a profile with PleebUI defaults and reload? Your current profile will be kept.",
           yesText = "Create and reload", onYes = function()
+            if InCombatLockdown() then callbacks.status("Create a profile after combat ends.") return end
             local names, index = {}, 1
             for _, name in ipairs(Addon.db:GetProfiles({})) do names[name] = true end
             local name = "PleebUI Setup"
             while names[name] do index = index + 1; name = "PleebUI Setup " .. index end
             Addon.db:SetProfile(name)
-            ReloadUI()
+            Addon:ApplyChildAddonProfile()
           end,
         })
       end)
@@ -430,6 +437,20 @@ local function BuildPage(key)
       end
       Text("Tip: skipping a section keeps its current settings.")
     end
+  elseif key == "modules" then
+    Heading("Choose modules for " .. Addon.db:GetCurrentProfile())
+    Text("Uncheck modules you do not need or handle with another addon. Their saved settings are kept.")
+    Text("These choices belong to this profile and take effect after a reload. Until then, setup pages show the modules currently loaded.")
+    for _, choice in ipairs(Addon:GetChildAddonChoices()) do
+      local addonName = choice.name
+      local checkbox = Check(choice.label .. (choice.installed and "" or " (not installed)"), choice.enabled, function(value)
+        Addon.db.profile.childAddons[addonName] = value
+        Rebuild()
+      end, true)
+      checkbox:SetDisabled(not choice.installed)
+    end
+    Text("Apply now to configure newly enabled modules, or continue and apply all choices when you finish setup.")
+    Action("Apply and reload", function() Addon:ApplyChildAddonProfile() end, not Addon:ChildAddonProfileNeedsReload())
   elseif key == "appearance" then
     Text("Choose a readable look.\n• Global font affects PleebUI text.\n• Game UI scale resizes the whole interface.")
     Settings({ "UITheme" })
