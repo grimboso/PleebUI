@@ -88,6 +88,20 @@ function Addon:ChildAddonProfileNeedsReload()
   return false
 end
 
+local function SyncSavedAddonListToProfile()
+  if not _G.AddonList or _G.AddonList.save ~= true then return end
+
+  local enabled = Addon.db.profile.childAddons
+  local character = UnitNameUnmodified("player")
+  for _, addonName in ipairs(ChildAddons) do
+    if C_AddOns.DoesAddOnExist(addonName) then
+      enabled[addonName] = C_AddOns.GetAddOnEnableState(addonName, character) ~= Enum.AddOnEnableState.None
+    end
+  end
+
+  Addon:QueueChildAddonProfileCheck()
+end
+
 local function DismissReloadPrompt()
   ProfileCheckHost:UnregisterEvent("PLAYER_REGEN_DISABLED")
   local dialog = Addon._PUIConfirmDialog
@@ -145,6 +159,7 @@ ProfileCheckHost:SetScript("OnEvent", function(self, event)
         SessionAddonStates[addonName] = C_AddOns.GetAddOnEnableState(addonName, character) ~= Enum.AddOnEnableState.None
       end
     end
+    hooksecurefunc(C_AddOns, "SaveAddOns", SyncSavedAddonListToProfile)
   end
   self:Show()
 end)

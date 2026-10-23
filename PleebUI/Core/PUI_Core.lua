@@ -1491,7 +1491,20 @@ PUIProfileUpdateFrame:SetScript("OnUpdate", function(frame)
 end)
 
 function Addon:StaggeredUpdateAll(flags)
-  if flags and flags.profile == true then self:QueueChildAddonProfileCheck() end
+  if flags and flags.profile == true then
+    self:QueueChildAddonProfileCheck()
+
+    local unitFrames = ns.Modules.UnitFrames
+    if unitFrames then
+      unitFrames:EnsureConfigDefaults(unitFrames.db.profile)
+    end
+
+    local hunterTools = ns.Modules.HunterTools
+    if hunterTools and hunterTools:IsEnabled() then
+      hunterTools:EnsureConfigDefaults()
+    end
+  end
+
   if runtimeFontSlugNotice then runtimeFontSlugNotice:Hide() end
   local st = self._puiStaggeredUpdate
   if not st then
