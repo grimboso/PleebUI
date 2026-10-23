@@ -80,6 +80,8 @@ local function NormalizeDB()
   return db
 end
 
+HunterTools.EnsureConfigDefaults = NormalizeDB
+
 local function IsHunter()
   local _, class = UnitClass("player")
   return class == "HUNTER"
