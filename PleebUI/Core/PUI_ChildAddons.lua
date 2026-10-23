@@ -14,6 +14,30 @@ local ChildAddons = {
 local ProfileCheckHost = CreateFrame("Frame")
 ProfileCheckHost:Hide()
 local ReloadPromptCallback
+local SessionAddonStates = {}
+local ChildAddonLabels = {
+  PleebUI_ActionBars = "Action Bars",
+  PleebUI_DamageMeters = "Damage Meters",
+  PleebUI_PRD = "Personal Resource Display",
+  PleebUI_CooldownManager = "Cooldown Manager",
+  PleebUI_UnitFrames = "Unit Frames",
+  PleebUI_PlayerBuffs = "Player Buffs",
+  PleebUI_CombatTools = "Combat Tools",
+  PleebUI_Chat = "Chat",
+}
+
+function Addon:GetChildAddonChoices()
+  local choices = {}
+  for _, addonName in ipairs(ChildAddons) do
+    choices[#choices + 1] = {
+      name = addonName,
+      label = ChildAddonLabels[addonName],
+      installed = C_AddOns.DoesAddOnExist(addonName),
+      enabled = self.db.profile.childAddons[addonName] == true,
+    }
+  end
+  return choices
+end
 
 function Addon:MigrateChildAddonProfiles(saved)
   if not saved or saved.global and saved.global.childAddonProfileMigrationVersion == 1 then return end
@@ -49,19 +73,23 @@ function Addon:ApplyChildAddonProfile()
   ReloadUI()
 end
 
-local function NeedsProfileReload()
-  local enabled = Addon.db.profile.childAddons
+function Addon:ChildAddonProfileNeedsReload()
+  local enabled = self.db.profile.childAddons
   local character = UnitNameUnmodified("player")
   for _, addonName in ipairs(ChildAddons) do
     if C_AddOns.DoesAddOnExist(addonName) then
       local active = C_AddOns.GetAddOnEnableState(addonName, character) ~= Enum.AddOnEnableState.None
-      if active ~= enabled[addonName] then return true end
+      if active ~= enabled[addonName]
+        or SessionAddonStates[addonName] ~= nil and SessionAddonStates[addonName] ~= enabled[addonName] then
+        return true
+      end
     end
   end
   return false
 end
 
 local function DismissReloadPrompt()
+  ProfileCheckHost:UnregisterEvent("PLAYER_REGEN_DISABLED")
   local dialog = Addon._PUIConfirmDialog
   if ReloadPromptCallback and dialog and dialog._onYes == ReloadPromptCallback then
     dialog:Hide()
@@ -74,7 +102,8 @@ local function CheckProfileAddons()
   ProfileCheckHost:Hide()
   if not IsLoggedIn() then return end
   DismissReloadPrompt()
-  if not NeedsProfileReload() then
+  if _G.PleebUIOnboardingFrame and _G.PleebUIOnboardingFrame:IsShown() then return end
+  if not Addon:ChildAddonProfileNeedsReload() then
     ProfileCheckHost:UnregisterEvent("PLAYER_REGEN_ENABLED")
     return
   end
@@ -84,6 +113,7 @@ local function CheckProfileAddons()
   end
   local profileName = Addon.db:GetCurrentProfile()
   ReloadPromptCallback = function()
+    DismissReloadPrompt()
     if Addon.db:GetCurrentProfile() ~= profileName then
       Addon:QueueChildAddonProfileCheck()
       return
@@ -96,7 +126,9 @@ local function CheckProfileAddons()
     yesText = "Apply and reload",
     noText = "Later",
     onYes = ReloadPromptCallback,
+    onNo = DismissReloadPrompt,
   })
+  ProfileCheckHost:RegisterEvent("PLAYER_REGEN_DISABLED")
 end
 
 function Addon:QueueChildAddonProfileCheck()
@@ -106,6 +138,14 @@ end
 ProfileCheckHost:SetScript("OnUpdate", CheckProfileAddons)
 ProfileCheckHost:SetScript("OnEvent", function(self, event)
   self:UnregisterEvent(event)
+  if event == "PLAYER_LOGIN" then
+    local character = UnitNameUnmodified("player")
+    for _, addonName in ipairs(ChildAddons) do
+      if C_AddOns.DoesAddOnExist(addonName) then
+        SessionAddonStates[addonName] = C_AddOns.GetAddOnEnableState(addonName, character) ~= Enum.AddOnEnableState.None
+      end
+    end
+  end
   self:Show()
 end)
 ProfileCheckHost:RegisterEvent("PLAYER_LOGIN")
