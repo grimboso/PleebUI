@@ -14,6 +14,7 @@ local P = ns.Pleebug:DropIn(ChatLinks, { name = "Modules.Chat" })
 local ChatRuntimeHost = CreateFrame("Frame")
 ChatRuntimeHost:Hide()
 local ChatStartPending = false
+local ChatThemePending = false
 local PrimaryChatResizeHost = CreateFrame("Button", "PleebUI_PrimaryChatResizeHandle", UIParent)
 PrimaryChatResizeHost:Hide()
 
@@ -595,7 +596,7 @@ local function ChatProvider(AddonObj)
               end,
               set = function(_, v)
                 db.enableCopyFrame = not not v
-                ChatLinks:RefreshChatFrames()
+                ChatLinks:RefreshTheme()
               end,
             },
 
@@ -611,7 +612,7 @@ local function ChatProvider(AddonObj)
               end,
               set = function(_, value)
                 db.enableChatTools = value == true
-                ChatLinks:RefreshChatFrames()
+                ChatLinks:RefreshTheme()
               end,
             },
           },
@@ -2958,19 +2959,12 @@ function ChatLinks:RefreshChatFrames()
 end
 
 function ChatLinks:RefreshTheme()
-  if not self.db or not self.db.profile then
+  if not self.db or not self.db.profile or self._puiRuntimeEnabled ~= true then
     return
   end
 
-  if self._puiRuntimeEnabled ~= true then
-    return
-  end
-
-  self:RefreshChatFrames()
-
-  if CopyFrame then
-    self:ApplyCopyWindowStyle()
-  end
+  ChatThemePending = true
+  ChatRuntimeHost:Show()
 end
 
 function ChatLinks:OnProfileChanged()
@@ -3137,12 +3131,22 @@ local function FlushChatStartup()
     ChatStartPending = false
     ChatLinks:StartRuntime()
   end
+  if ChatThemePending then
+    ChatThemePending = false
+    if ChatLinks._puiRuntimeEnabled == true then
+      ChatLinks:RefreshChatFrames()
+      if CopyFrame then
+        ChatLinks:ApplyCopyWindowStyle()
+      end
+    end
+  end
 end
 ChatRuntimeHost:SetScript("OnUpdate", FlushChatStartup)
 ChatRuntimeHost:SetScript("OnEvent", FlushChatStartup)
 
 function ChatLinks:OnDisable()
   ChatStartPending = false
+  ChatThemePending = false
   ChatRuntimeHost:Hide()
   ChatRuntimeHost:UnregisterAllEvents()
   self._puiRuntimeEnabled = false
