@@ -278,24 +278,6 @@ local function FlushDeferredRefreshes(owner, refreshGlobal, refreshUnit)
   return true
 end
 
-local function CopyTable(src)
-  local out = {}
-
-  if type(src) ~= "table" then
-    return out
-  end
-
-  for key, value in pairs(src) do
-    if type(value) == "table" then
-      out[key] = CopyTable(value)
-    else
-      out[key] = value
-    end
-  end
-
-  return out
-end
-
 local function MergeMissing(dst, src)
   if type(dst) ~= "table" or type(src) ~= "table" then
     return dst
@@ -333,8 +315,8 @@ local function CurrentGroupContext()
   return "Solo"
 end
 
-local function GetPositionSettings(owner)
-  local profile = owner.db.profile
+function UF:GetPositionSettings()
+  local profile = self.db.profile
   profile.positionContexts = profile.positionContexts or {}
   local settings = profile.positionContexts
   if settings.switchMode ~= "Auto" and settings.switchMode ~= "Prompt" then
@@ -346,25 +328,17 @@ local function GetPositionSettings(owner)
   return settings
 end
 
-local function GetContextUnitConfig(owner, unit)
-  return owner.db.profile.units[unit]
-end
-
-function UF:GetPositionSettings()
-  return GetPositionSettings(self)
-end
-
 function UF:GetPositionEditContext(unit)
   return self._positionEditContexts and self._positionEditContexts[unit] or "Shared"
 end
 
 function UF:GetPositionConfig(unit, editing)
-  local shared = GetContextUnitConfig(self, unit)
+  local shared = self.db.profile.units[unit]
   if not shared or not CONTEXT_ROOT_UNITS[unit] then
     return shared
   end
 
-  local settings = GetPositionSettings(self)
+  local settings = self:GetPositionSettings()
   local selected = editing and self:GetPositionEditContext(unit) or settings.active
   local contexts = shared.contextPositions
   local override = contexts and contexts.enabled == true and contexts[selected]
@@ -376,7 +350,7 @@ end
 
 function UF:HasSeparatePosition(key)
   local unit = type(key) == "string" and key:match("^UF_(.+)$")
-  local shared = CONTEXT_ROOT_UNITS[unit] and GetContextUnitConfig(self, unit)
+  local shared = CONTEXT_ROOT_UNITS[unit] and self.db.profile.units[unit]
   return shared and shared.contextPositions and shared.contextPositions.enabled == true or false
 end
 
@@ -435,7 +409,7 @@ function UF:SetSeparatePosition(unit, enabled)
   if not CONTEXT_ROOT_UNITS[unit] or InCombatLockdown() then
     return false
   end
-  local shared = GetContextUnitConfig(self, unit)
+  local shared = self.db.profile.units[unit]
   if enabled and FrameUtil.HasSmartSnapLinks("UF_" .. unit) then
     Addon:Print("Remove the existing Smart Snap links before enabling separate positions for this frame.")
     return false
@@ -452,7 +426,7 @@ function UF:SetContextPositionEnabled(unit, context, enabled)
   if not CONTEXT_ROOT_UNITS[unit] or context == "Shared" or InCombatLockdown() then
     return
   end
-  local shared = GetContextUnitConfig(self, unit)
+  local shared = self.db.profile.units[unit]
   local contexts = shared.contextPositions
   if not contexts or contexts.enabled ~= true then
     return
@@ -472,7 +446,7 @@ function UF:RemoveContextPosition(unit, context)
   if not CONTEXT_ROOT_UNITS[unit] or context == "Shared" or InCombatLockdown() then
     return
   end
-  local shared = GetContextUnitConfig(self, unit)
+  local shared = self.db.profile.units[unit]
   if shared.contextPositions then
     shared.contextPositions[context] = nil
   end
@@ -484,7 +458,7 @@ function UF:ActivatePositionContext(context)
   if context ~= "Shared" and context ~= "Solo" and context ~= "Party" and context ~= "Raid" then
     return
   end
-  GetPositionSettings(self).active = context
+  self:GetPositionSettings().active = context
   self:ApplyActivePositionHolders()
 end
 
@@ -492,7 +466,7 @@ function UF:SetPositionSwitchMode(mode)
   if mode ~= "Auto" and mode ~= "Prompt" and mode ~= "Never" then
     return
   end
-  GetPositionSettings(self).switchMode = mode
+  self:GetPositionSettings().switchMode = mode
   self._pendingPositionGroup = nil
   if mode == "Auto" then
     self:ActivatePositionContext(CurrentGroupContext())
@@ -500,7 +474,7 @@ function UF:SetPositionSwitchMode(mode)
 end
 
 function UF:PromptPositionContext(context)
-  if GetPositionSettings(self).switchMode ~= "Prompt" or CurrentGroupContext() ~= context then
+  if self:GetPositionSettings().switchMode ~= "Prompt" or CurrentGroupContext() ~= context then
     return
   end
   local profile = self.db.profile
@@ -511,7 +485,7 @@ function UF:PromptPositionContext(context)
     noText = "Keep current",
     onYes = function()
       if self:IsEnabled() and self.db.profile == profile and CurrentGroupContext() == context
-        and GetPositionSettings(self).switchMode == "Prompt"
+        and self:GetPositionSettings().switchMode == "Prompt"
       then
         self:ActivatePositionContext(context)
       end
@@ -525,7 +499,7 @@ function UF:GROUP_ROSTER_UPDATE()
     return
   end
   self._lastPositionGroup = context
-  local settings = GetPositionSettings(self)
+  local settings = self:GetPositionSettings()
   if settings.switchMode == "Never" then
     self._pendingPositionGroup = nil
     return
@@ -1550,12 +1524,6 @@ function UF:HideSingleUnitFrame(unit)
   end
 end
 
-function UF:LoadSingleUnits()
-  for index = 1, #SINGLE_UNITS do
-    self:SpawnUnit(SINGLE_UNITS[index])
-  end
-end
-
 
 function UF:IterateSingleFrames(callback)
   for _, frame in pairs(self.frames or {}) do
@@ -2136,8 +2104,9 @@ function UF:StartRuntime()
   self.__puiRuntimeAvailable = true
   self._lastPositionGroup = CurrentGroupContext()
   self:RegisterEvent("GROUP_ROSTER_UPDATE")
-  if GetPositionSettings(self).switchMode == "Auto" then
-    GetPositionSettings(self).active = self._lastPositionGroup
+  local positionSettings = self:GetPositionSettings()
+  if positionSettings.switchMode == "Auto" then
+    positionSettings.active = self._lastPositionGroup
   end
   self:EnsureMovers()
 
@@ -2211,8 +2180,9 @@ function UF:OnProfileChanged()
   self._positionEditContexts = nil
   self._lastPositionGroup = CurrentGroupContext()
   self:EnsureConfigDefaults(self.db.profile)
-  if GetPositionSettings(self).switchMode == "Auto" then
-    GetPositionSettings(self).active = self._lastPositionGroup
+  local positionSettings = self:GetPositionSettings()
+  if positionSettings.switchMode == "Auto" then
+    positionSettings.active = self._lastPositionGroup
   end
   self:SafeRefresh("all")
   UFTags.RefreshNicknames()
@@ -2257,7 +2227,6 @@ local P = select(1, ns.Pleebug:DropIn(UF, { name = "UnitFrames.Core", trackEmbed
   UF.RegisterSingleStyle = P:Def("UF.RegisterSingleStyle", UF.RegisterSingleStyle)
   UF.SpawnUnit = P:Def("UF.SpawnUnit", UF.SpawnUnit)
   UF.HideSingleUnitFrame = P:Def("UF.HideSingleUnitFrame", UF.HideSingleUnitFrame)
-  UF.LoadSingleUnits = P:Def("UF.LoadSingleUnits", UF.LoadSingleUnits)
   UF.IterateSingleFrames = P:Def("UF.IterateSingleFrames", UF.IterateSingleFrames)
   UF.IterateHeaderChildren = P:Def("UF.IterateHeaderChildren", UF.IterateHeaderChildren)
   UF.RefreshNameTags = P:Def("UF.RefreshNameTags", UF.RefreshNameTags)
@@ -2288,7 +2257,6 @@ local P = select(1, ns.Pleebug:DropIn(UF, { name = "UnitFrames.Core", trackEmbed
   FlushDeferredRefreshes = P:Def("FlushDeferredRefreshes", FlushDeferredRefreshes)
   UF.QueueDeferredRefresh = QueueDeferredRefresh
   UF.FlushDeferredRefreshes = FlushDeferredRefreshes
-  CopyTable = P:Def("CopyTable", CopyTable)
   MergeMissing = P:Def("MergeMissing", MergeMissing)
   ResolveRelativeToObject = P:Def("ResolveRelativeToObject", ResolveRelativeToObject)
   GetSingleUnitHolderName = P:Def("GetSingleUnitHolderName", GetSingleUnitHolderName)

@@ -9,6 +9,7 @@ host:Hide()
 local starts = {}
 local jobs = {}
 local requests = {}
+local ownerGenerations = {}
 local moduleOrder = { "UnitFrames", "PartyFrames", "RaidFrames", "CastBar" }
 
 local function UpdateHost()
@@ -35,7 +36,7 @@ function Runtime:Request(owner, method, argument)
   end
   local job = pending[method]
   if not job then
-    job = { owner = owner, method = method }
+    job = { owner = owner, method = method, generation = ownerGenerations[owner] }
     pending[method] = job
     jobs[#jobs + 1] = job
   end
@@ -49,6 +50,7 @@ function Runtime:Request(owner, method, argument)
 end
 
 function Runtime:Cancel(owner)
+  ownerGenerations[owner] = (ownerGenerations[owner] or 0) + 1
   starts[owner] = nil
   requests[owner] = nil
   for index = #jobs, 1, -1 do
@@ -71,7 +73,7 @@ local function Flush()
   requests = {}
   for index = 1, #pending do
     local job = pending[index]
-    if job.owner:IsEnabled() then
+    if job.generation == ownerGenerations[job.owner] and job.owner:IsEnabled() then
       job.owner[job.method](job.owner, job.argument)
     end
   end
