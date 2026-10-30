@@ -446,7 +446,6 @@ function StanceBar:RefreshFull()
     if index <= count then
       UpdateStanceState(button)
       UpdateStanceCooldown(button)
-      UpdateHotkey(button)
     end
   end
 

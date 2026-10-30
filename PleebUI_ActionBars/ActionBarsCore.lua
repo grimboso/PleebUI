@@ -16,7 +16,6 @@ local Core = {}
 ns.ActionBarsCore = Core
 
 local P = select(1, ns.Pleebug:DropIn(Core))
-Core.module = ActionBar
 Core.LibKeyBound = LibStub("LibKeyBound-1.0")
 Core.subsystems = {}
 Core.subsystemOrder = {}
@@ -198,13 +197,7 @@ function Core:PrepareProfile()
   db.skin = db.skin or {}
   db.tooltipMode = NormalizeTooltipMode(db.tooltipMode)
 
-  self.lockActionBars = db.lockActionBars ~= false
-  self.castOnKeyDown = db.castOnKeyDown ~= false
-  self.alwaysShowGrid = db.alwaysShowGrid ~= false
-  self.countdownForCooldowns = db.countdownForCooldowns ~= false
-  self.spellUIForceAlpha = db.spellUIForceAlpha == true
-  self.tooltipMode = db.tooltipMode
-  self.useBlizzardVehicleUI = db.useBlizzardVehicleUI == true
+  self:RefreshRuntimeSettings()
 end
 
 function Core:RefreshRuntimeSettings()
@@ -622,7 +615,7 @@ function Core:RefreshOptionState(flags, barKey)
   if flags.grid or flags.buttonLock or flags.petCooldowns then
     local pet = self.subsystems.pet
     pet:LoadRuntimeConfig()
-    if flags.grid then pet:UpdateEmptyButtons() end
+    if flags.grid then pet:UpdateUsability() end
     if flags.petCooldowns then
       if pet.showCooldowns then pet:UpdateCooldowns() else pet:ClearCooldowns() end
     end
@@ -1382,8 +1375,6 @@ function Core:RegisterSubsystem(key, subsystem)
     self.subsystemOrder[#self.subsystemOrder + 1] = key
   end
 
-  subsystem.key = key
-  subsystem.core = self
   self.subsystems[key] = subsystem
 end
 
@@ -1639,13 +1630,13 @@ local function MergeRefreshFlags(target, flags)
   end
 end
 
-local function HasBarRefreshFlag(barRequests, refreshKey)
+local function HasBarStyleRefresh(barRequests)
   if type(barRequests) ~= "table" then
     return false
   end
 
   for _, flags in pairs(barRequests) do
-    if type(flags) == "table" and flags[refreshKey] then
+    if type(flags) == "table" and (flags.full or flags.skin or flags.fonts) then
       return true
     end
   end
@@ -1774,9 +1765,7 @@ function Core:FlushCombatWork()
   local barRequests = refreshFlags.bars
   if not refreshFlags.skin
     and not refreshFlags.fonts
-    and not HasBarRefreshFlag(barRequests, "full")
-    and not HasBarRefreshFlag(barRequests, "skin")
-    and not HasBarRefreshFlag(barRequests, "fonts")
+    and not HasBarStyleRefresh(barRequests)
   then
     for cooldown, request in pairs(cooldownStyles) do
       self:ApplyCooldownAppearance(cooldown, request.skin, request.hideNumbers, request.swipeColor)
@@ -1903,9 +1892,7 @@ function Core:RefreshAll(flags)
       or flags.fonts
       or flags.skin
       or cooldownTextChanged
-      or HasBarRefreshFlag(barRequests, "full")
-      or HasBarRefreshFlag(barRequests, "fonts")
-      or HasBarRefreshFlag(barRequests, "skin"))
+      or HasBarStyleRefresh(barRequests))
   then
     IconSkin.ProcessFontQueue()
   end
@@ -2061,7 +2048,7 @@ Core.AttachAlphaHandlers = P:Def("Core:AttachAlphaHandlers", Core.AttachAlphaHan
 Core.UpdateSpellUIVisibility = P:Def("Core:UpdateSpellUIVisibility", Core.UpdateSpellUIVisibility)
 Core.RegisterSpellUICallbacks = P:Def("Core:RegisterSpellUICallbacks", Core.RegisterSpellUICallbacks)
 MergeRefreshFlags = P:Def("MergeRefreshFlags", MergeRefreshFlags)
-HasBarRefreshFlag = P:Def("HasBarRefreshFlag", HasBarRefreshFlag)
+HasBarStyleRefresh = P:Def("HasBarStyleRefresh", HasBarStyleRefresh)
 Core.RegisterCombatFlush = P:Def("Core:RegisterCombatFlush", Core.RegisterCombatFlush)
 Core.QueueRefresh = P:Def("Core:QueueRefresh", Core.QueueRefresh)
 Core.QueueBindings = P:Def("Core:QueueBindings", Core.QueueBindings)

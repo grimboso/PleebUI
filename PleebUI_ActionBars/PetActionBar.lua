@@ -546,14 +546,6 @@ function PetBar:UpdateUsability()
   end
 end
 
-function PetBar:UpdateEmptyButtons()
-  if not self.bar then return end
-  local petActionsUsable = GetPetActionsUsable()
-  for index = 1, self.buttonCount do
-    ApplyPetActionUsability(self.bar.buttons[index], petActionsUsable)
-  end
-end
-
 function PetBar:UpdateCooldowns()
   if not self.bar or not self.showCooldowns then return end
 
@@ -622,7 +614,6 @@ function PetBar:RefreshFull()
     local button = bar.buttons[index]
     Core:ApplyButtonAppearance(button, skin)
     UpdatePetAction(button, petActionsUsable)
-    UpdateHotkey(button)
   end
 
   if self.showCooldowns then
@@ -661,7 +652,7 @@ function PetBar:Refresh(flags)
 
   if flags.cvars then
     self:LoadRuntimeConfig()
-    self:UpdateEmptyButtons()
+    self:UpdateUsability()
   end
   if flags.fonts then
     self:RefreshFonts()
@@ -758,7 +749,6 @@ PetBar.LayoutButtonDecorations = P:Def("PetBar:LayoutButtonDecorations", PetBar.
 PetBar.UpdateActions = P:Def("PetBar:UpdateActions", PetBar.UpdateActions)
 PetBar.UpdateStates = P:Def("PetBar:UpdateStates", PetBar.UpdateStates)
 PetBar.UpdateUsability = P:Def("PetBar:UpdateUsability", PetBar.UpdateUsability)
-PetBar.UpdateEmptyButtons = P:Def("PetBar:UpdateEmptyButtons", PetBar.UpdateEmptyButtons)
 PetBar.UpdateCooldowns = P:Def("PetBar:UpdateCooldowns", PetBar.UpdateCooldowns)
 PetBar.UpdateHotkeys = P:Def("PetBar:UpdateHotkeys", PetBar.UpdateHotkeys)
 PetBar.RefreshFonts = P:Def("PetBar:RefreshFonts", PetBar.RefreshFonts)
