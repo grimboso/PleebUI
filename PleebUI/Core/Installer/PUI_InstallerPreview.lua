@@ -187,7 +187,7 @@ local function BuildCurrent()
       request.box = box
     end
   elseif request.kind == "quality" then
-    if ns.CombatQuality then
+    if ns.Modules.CombatQuality then
       ns.Registry.Options.Quality.meta.page.buildPreview(navigation, owner, owner, request.path)
       request.box = owner.__puiQualityPreviewRoot
     else
@@ -224,7 +224,7 @@ local function BuildCurrent()
       request.box = box
     end
   elseif request.kind == "everyday" then
-    if request.path[1] == "chat" and not ns.Registry.ChatLinks then
+    if request.path[1] == "chat" and not ns.Modules.ChatLinks then
       local box = owner.disabledBox
       if not box then
         box = ns.PreviewBox.Create(request.host)
