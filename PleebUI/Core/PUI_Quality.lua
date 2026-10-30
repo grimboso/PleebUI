@@ -1296,8 +1296,8 @@ function Quality:ApplyAll()
 
   self:RefreshAuctionHousePreference()
 
-  if ns.CombatQuality then
-    ns.CombatToolsRuntime:Request(ns.CombatQuality, "ApplyRuntimeSettings")
+  if ns.Modules.CombatQuality then
+    ns.CombatToolsRuntime:Request(ns.Modules.CombatQuality, "ApplyRuntimeSettings")
   end
 
   C_CVar.SetCVar("autoLootDefault", q.autoLoot and "1" or "0")
@@ -1310,7 +1310,7 @@ function ns.QualityAPI.BuildOptionsContext(AddonObj)
 
     local function RequestApply(flags)
       AddonObj:ApplyOptionsChange("Quality", flags or {})
-      if ns.CombatQuality then ns.CombatQuality.RefreshPreview() end
+      if ns.Modules.CombatQuality then ns.Modules.CombatQuality.RefreshPreview() end
     end
 
     local q = GetQ()
@@ -1675,8 +1675,8 @@ local function QualityProvider(AddonObj)
 
 
     local tabs
-    if ns.CombatQuality then
-      tabs = ns.CombatQuality.BuildOptions(context)
+    if ns.Modules.CombatQuality then
+      tabs = ns.Modules.CombatQuality.BuildOptions(context)
     else
       tabs = {}
       for _, spec in ipairs({ { "combatTab", "Combat", 1 }, { "cursorTab", "Position indicators", 2 }, { "groupTab", "Group tools", 3 } }) do
@@ -1698,10 +1698,10 @@ Addon:RegisterOptionsSection("Quality", QualityProvider, 80, "Quality of Life", 
     previewWidth = 340,
     previewHeight = 190,
     previewPathMatches = function(path)
-      return ns.CombatQuality ~= nil and (path[2] == "combatTab" or path[2] == "cursorTab" or path[2] == "groupTab" or path[2] == "automationTab")
+      return ns.Modules.CombatQuality ~= nil and (path[2] == "combatTab" or path[2] == "cursorTab" or path[2] == "groupTab" or path[2] == "automationTab")
     end,
     buildPreview = function(...)
-      if ns.CombatQuality then return ns.CombatQuality.BuildPreview(...) end
+      if ns.Modules.CombatQuality then return ns.Modules.CombatQuality.BuildPreview(...) end
     end,
   },
 })

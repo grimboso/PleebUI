@@ -1299,8 +1299,8 @@ function Addon:RefreshIconFonts(atWorldEntry, profileRefresh)
       ns.Modules.CooldownManager:RefreshIconFonts()
     end
   end
-  if not atWorldEntry and ns.Registry.ChatLinks then
-    ns.Registry.ChatLinks:RefreshFonts()
+  if not atWorldEntry and ns.Modules.ChatLinks then
+    ns.Modules.ChatLinks:RefreshFonts()
   end
   if ns.Modules.PlayerBuffs then
     ns.Modules.PlayerBuffs:RefreshFonts()
@@ -1312,8 +1312,8 @@ function Addon:RefreshIconFonts(atWorldEntry, profileRefresh)
     ns.Modules.MovementWarning:RefreshFonts()
   end
   ns.Registry.Minimap:RefreshFonts()
-  if ns.CombatQuality then
-    ns.CombatQuality:RefreshFonts()
+  if ns.Modules.CombatQuality then
+    ns.Modules.CombatQuality:RefreshFonts()
   end
   ns.Theme.RefreshRuntimeFonts()
   RefreshRuntimeFontSlugNotice()
@@ -1599,7 +1599,7 @@ function Addon:_FlushUpdateBus(targets)
     minimap:RefreshFromOptions(flags)
   end
 
-  local chatLinks = ns.Registry.ChatLinks
+  local chatLinks = ns.Modules.ChatLinks
   flags = targets.ChatLinks
   if flags and chatLinks then
     if flags.theme == true then
