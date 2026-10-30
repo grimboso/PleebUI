@@ -134,16 +134,13 @@ local function BuildSecondaryStructures(owner)
   return true
 end
 
-local function GetAdapterEvents(adapter, owner)
-  if adapter.GetEvents then
-    return adapter.GetEvents(owner)
-  end
-
-  return adapter.events
-end
-
 local function RegisterAdapterEvents(frame, adapter, owner)
-  local events = GetAdapterEvents(adapter, owner)
+  local events
+  if adapter.GetEvents then
+    events = adapter.GetEvents(owner)
+  else
+    events = adapter.events
+  end
   local registered = frame._puiAdapterEvents
 
   if not registered then
@@ -468,9 +465,13 @@ function M:RegisterSecondaryEvents()
   frame:UnregisterAllEvents()
   frame._puiAdapterEvents = nil
 
+  local hasBuffCue = false
   for _, resource in ipairs(self.secondaryResources or {}) do
     if resource.definition.isAlternatePower ~= true then
       RegisterVisibilityEvents(frame, resource.config.visibilityMode)
+    end
+    if not hasBuffCue and resource.visible and ResourceHasBuffCue(resource.config) then
+      hasBuffCue = true
     end
   end
 
@@ -479,14 +480,6 @@ function M:RegisterSecondaryEvents()
     or self._puiSecondaryTextPending
   then
     frame:RegisterEvent("PLAYER_REGEN_ENABLED")
-  end
-
-  local hasBuffCue = false
-  for index = 1, #(self.secondaryResources or {}) do
-    if self.secondaryResources[index].visible and ResourceHasBuffCue(self.secondaryResources[index].config) then
-      hasBuffCue = true
-      break
-    end
   end
 
   if self._puiSecondaryCueStylePending or hasBuffCue then
@@ -560,7 +553,6 @@ BuildSecondaryStructures = P:Def(
   "BuildSecondaryStructures",
   BuildSecondaryStructures
 )
-GetAdapterEvents = P:Def("GetAdapterEvents", GetAdapterEvents)
 RegisterAdapterEvents = P:Def("RegisterAdapterEvents", RegisterAdapterEvents)
 RegisterVisibilityEvents = P:Def("RegisterVisibilityEvents", RegisterVisibilityEvents)
 M.RebuildSecondary = P:Def("RebuildSecondary", M.RebuildSecondary)

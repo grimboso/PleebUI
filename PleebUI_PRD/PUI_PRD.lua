@@ -12,7 +12,6 @@ local Pixel = ns.Pixel
 local Round = Pixel.Round
 
 local Theme     = ns.Theme
-local LSM       = ns.LSM
 local EditModeOverride = LibStub("LibEditModeOverride-1.0")
 local SHOW_BAR_TEXT_SETTING = Enum.EditModePersonalResourceDisplaySetting.ShowBarText
 local PLAYER_CLASS = select(2, UnitClass("player"))
@@ -21,12 +20,9 @@ local M = Addon:NewModule("PRD", "NumyAceEvent-3.0")
 M._puiResourceConfigCache = {}
 local _PRD_LAYOUT_ACTIVE = {}
 
--- Central registry references (match PleebUI pattern)
-ns.Registry.PRD         = M
-ns.Modules.PRD          = M
-ns.Registry.Modules.PRD = M
+ns.Modules.PRD = M
 
-local P, TrackThis = ns.Pleebug:DropIn({}, {
+local P = ns.Pleebug:DropIn({}, {
   name = "PRD",
   bucket = "PRD",
 })
@@ -266,7 +262,7 @@ function M:OnInitialize()
     -- Core update bus owns normal profile refresh.
     -- Keep only reset/new hooks for one-time PRD seeding.
     self.db.RegisterCallback(self, "OnProfileReset",   "OnProfileReset")
-    self.db.RegisterCallback(self, "OnNewProfile",     "OnNewProfile")
+    self.db.RegisterCallback(self, "OnNewProfile",     "OnProfileReset")
   end
 
   EventRegistry:RegisterCallback("EditMode.Exit", function()
@@ -1040,7 +1036,6 @@ function M:StopRuntime()
   if self._puiMoverRefreshFrame then
     self._puiMoverRefreshFrame:UnregisterAllEvents()
   end
-  self._puiMoverRefreshPending = nil
 
   if self.frame then
     self.frame:Hide()
@@ -1715,12 +1710,10 @@ end
 function M:AttachMover()
   -- PRD movers are addon-owned and must join startup SmartSnap before world entry.
   if InCombatLockdown() and FrameUtil._smartSnapWorldReady then
-    self._puiMoverRefreshPending = true
     self._puiMoverRefreshFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
     return
   end
 
-  self._puiMoverRefreshPending = nil
   if self._puiMoverRefreshFrame then
     self._puiMoverRefreshFrame:UnregisterAllEvents()
   end
@@ -1950,9 +1943,7 @@ function M:AttachMover()
     }
   end
 
- ----
   -- Root PRD stack mover
- ----
   FrameUtil:RegisterMover("PRD", self.frame, {
       label = "Personal Resource Display",
       moduleKey = "prd",
@@ -1997,9 +1988,7 @@ function M:AttachMover()
       end),
     })
 
- ----
   -- Per-bar movers (only when detached)
- ----
   local profile = GetProfile()
   if not profile then
     return
@@ -2011,9 +2000,7 @@ function M:AttachMover()
   local secondaryResources = self.secondaryResources or {}
 
 
- ----
   -- Health mover: only when detached
- ----
   if self.health and healthDetached then
     FrameUtil:RegisterMover("PRD_HEALTH", self.health, {
       label = "PRD: Health bar",
@@ -2057,9 +2044,7 @@ function M:AttachMover()
     FrameUtil:UnregisterMover("PRD_HEALTH")
   end
 
- ----
   -- Primary mover: only when detached
- ----
   if self.primary and primaryDetached then
     FrameUtil:RegisterMover("PRD_PRIMARY", self.primary, {
       label = "PRD: Primary bar",
@@ -2271,8 +2256,6 @@ function M:RefreshHealthTexture()
     return
   end
 
-  local cfg = self.db.profile.health
-
   local bar = self.healthBar
   if not bar and self.blizz and self.blizz.health then
     bar = self.blizz.health
@@ -2401,15 +2384,6 @@ function M:OnProfileReset()
   self:SeedHidePrimaryBySpec()
 end
 
-function M:OnNewProfile()
-  ns.PRDPreview.MarkDirty()
-  if self.db and self.db.char then
-    self.db.char.__puiSeededHidePrimaryBySpec = false
-  end
-  self:NormalizeProfile()
-  self:SeedHidePrimaryBySpec()
-end
-
 function M:OnDisable()
   self:StopRuntime()
   if ns.Modules.CooldownManager then
@@ -2485,7 +2459,6 @@ end
   M.ApplySettings = P:Def("ApplySettings", M.ApplySettings)
   M.SoftRebuild = P:Def("SoftRebuild", M.SoftRebuild)
   M.OnProfileReset = P:Def("OnProfileReset", M.OnProfileReset)
-  M.OnNewProfile = P:Def("OnNewProfile", M.OnNewProfile)
   M.OnEnable = P:Def("OnEnable", M.OnEnable)
   M.StartRuntime = P:Def("StartRuntime", M.StartRuntime)
   M.OnDisable = P:Def("OnDisable", M.OnDisable)
