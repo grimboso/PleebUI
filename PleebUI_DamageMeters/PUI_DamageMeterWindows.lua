@@ -135,7 +135,6 @@ local function CreateTextureButton(parent, texture, left, right, top, bottom)
   return button
 end
 
--- Keep breakdown helpers on one private owner so this chunk stays below Lua's 200-local limit.
 local function ShowMeterRowTooltip(row)
   GameTooltip:SetOwner(row, "ANCHOR_RIGHT")
   GameTooltip:SetText("Damage breakdown")
@@ -1336,7 +1335,7 @@ local function SelectWindowMeter(window, meterKey)
   ApplyWindowLayout(window)
   SetWindowNavigationMode(window, false)
   RefreshWindow(window, nil, windowDB)
-  DamageMeters:CompileCombatEventWindows()
+  DamageMeters:CompileCombatWindowRouting()
   UpdateBreakdownForWindow(window)
 end
 
@@ -1781,13 +1780,15 @@ function DamageMeters:UnregisterWindowMovers()
   end
 end
 
-function DamageMeters:CompileCombatEventWindows()
+function DamageMeters:CompileCombatWindowRouting()
+  local windows = {}
   local windowsByMeterType = {}
 
   if self.runtimeVisible and self.windows then
     for index = 1, self.runtimeWindowCount do
       local window = self.windows[index]
       if window and window.frame:IsShown() and window.runtime then
+        windows[#windows + 1] = window
         local meterType = METER_TYPES[window.runtime.meter]
         local meterWindows = windowsByMeterType[meterType]
         if not meterWindows then
@@ -1799,22 +1800,8 @@ function DamageMeters:CompileCombatEventWindows()
     end
   end
 
-  self.combatEventWindowsByMeterType = windowsByMeterType
-end
-
-function DamageMeters:CompileCombatRefreshWindows()
-  local windows = {}
-
-  if self.runtimeVisible and self.windows then
-    for index = 1, self.runtimeWindowCount do
-      local window = self.windows[index]
-      if window and window.frame:IsShown() and window.runtime then
-        windows[#windows + 1] = window
-      end
-    end
-  end
-
   self.combatRefreshWindows = windows
+  self.combatEventWindowsByMeterType = windowsByMeterType
 end
 
 function DamageMeters:ApplyWindowConfiguration()
@@ -1846,8 +1833,7 @@ function DamageMeters:ApplyWindowConfiguration()
     end
   end
 
-  self:CompileCombatEventWindows()
-  self:CompileCombatRefreshWindows()
+  self:CompileCombatWindowRouting()
 
   local selection = self.breakdownSelection
   if selection then
@@ -2332,8 +2318,7 @@ DamageMeters.ApplySnappedWindowResize = P:Def("DamageMeters.ApplySnappedWindowRe
 DamageMeters.CommitWindowResize = P:Def("DamageMeters.CommitWindowResize", DamageMeters.CommitWindowResize)
 DamageMeters.ResizeWindow = P:Def("DamageMeters.ResizeWindow", DamageMeters.ResizeWindow)
 DamageMeters.EnsureWindows = P:Def("DamageMeters.EnsureWindows", DamageMeters.EnsureWindows)
-DamageMeters.CompileCombatEventWindows = P:Def("DamageMeters.CompileCombatEventWindows", DamageMeters.CompileCombatEventWindows)
-DamageMeters.CompileCombatRefreshWindows = P:Def("DamageMeters.CompileCombatRefreshWindows", DamageMeters.CompileCombatRefreshWindows)
+DamageMeters.CompileCombatWindowRouting = P:Def("DamageMeters.CompileCombatWindowRouting", DamageMeters.CompileCombatWindowRouting)
 DamageMeters.ApplyWindowConfiguration = P:Def("DamageMeters.ApplyWindowConfiguration", DamageMeters.ApplyWindowConfiguration)
 DamageMeters.RefreshWindowAppearance = P:Def("DamageMeters.RefreshWindowAppearance", DamageMeters.RefreshWindowAppearance)
 DamageMeters.RefreshAppearance = P:Def("DamageMeters.RefreshAppearance", DamageMeters.RefreshAppearance)
@@ -2426,11 +2411,7 @@ end
 
 Windows.CreateTextureButton = CreateTextureButton
 Windows.SetHeaderButtonTooltip = SetHeaderButtonTooltip
-Windows.ResetWindowPosition = ResetWindowPosition
-Windows.UpdateHeaderText = UpdateHeaderText
 Windows.RefreshWindow = RefreshWindow
-Windows.SetWindowNavigationMode = SetWindowNavigationMode
 Windows.ShowMeterNavigation = ShowMeterNavigation
-Windows.SelectWindowMeter = SelectWindowMeter
 Windows.SelectWindowSegment = SelectWindowSegment
 Windows.RANK_TEXT = RANK_TEXT

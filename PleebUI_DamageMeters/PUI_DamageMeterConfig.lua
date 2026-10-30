@@ -496,60 +496,11 @@ function DamageMeters:GetOptions()
     },
   }
 
-  for index = 1, MAX_WINDOWS do
-    local windowIndex = index
-    options.args["window" .. windowIndex] = {
-      type = "group",
-      name = "Window " .. windowIndex,
-      order = 30 + windowIndex,
-      inline = true,
-      hidden = function()
-        return windowIndex > self.db.profile.windowCount
-      end,
-      args = {
-        shown = {
-          type = "toggle",
-          name = "Show window",
-          order = 10,
-          get = function()
-            return GetWindowDB(windowIndex).shown == true
-          end,
-          set = function(_, value)
-            if value then
-              self:ReopenWindow(windowIndex)
-            else
-              self:CloseWindow(windowIndex)
-            end
-          end,
-        },
-        resetPosition = {
-          type = "execute",
-          name = "Reset position",
-          order = 20,
-          func = function()
-            self:ResetWindowPosition(windowIndex)
-          end,
-        },
-        delete = {
-          type = "execute",
-          name = "Delete window",
-          confirm = true,
-          confirmText = "Delete this window and its saved settings?",
-          order = 30,
-          func = function()
-            self:DeleteWindow(windowIndex)
-          end,
-        },
-      },
-    }
-  end
-
   local source = options.args
   local appearance = source.appearance.args
   local general = source.general
   general.inline = nil
   general.args = { feature = { type = "group", name = "Feature", inline = true, order = 10, args = general.args } }
-  appearance.headerHeight.name = "Height"
   appearance.barHeight.name = "Height"
   appearance.barSpacing.name = "Spacing"
   appearance.barAlpha.name = "Opacity"
@@ -595,13 +546,52 @@ function DamageMeters:GetOptions()
     history = { type = "group", name = "Saved history", order = 30, args = { history = source.history } },
   }
   for index = 1, MAX_WINDOWS do
-    local key = "window" .. index
-    local window = source[key]
-    window.inline = nil
-    window.order = 40 + index
-    options.args[key] = window
+    local windowIndex = index
+    options.args["window" .. windowIndex] = {
+      type = "group",
+      name = "Window " .. windowIndex,
+      order = 40 + windowIndex,
+      hidden = function()
+        return windowIndex > self.db.profile.windowCount
+      end,
+      args = {
+        shown = {
+          type = "toggle",
+          name = "Show window",
+          order = 10,
+          get = function()
+            return GetWindowDB(windowIndex).shown == true
+          end,
+          set = function(_, value)
+            if value then
+              self:ReopenWindow(windowIndex)
+            else
+              self:CloseWindow(windowIndex)
+            end
+          end,
+        },
+        resetPosition = {
+          type = "execute",
+          name = "Reset position",
+          order = 20,
+          func = function()
+            self:ResetWindowPosition(windowIndex)
+          end,
+        },
+        delete = {
+          type = "execute",
+          name = "Delete window",
+          confirm = true,
+          confirmText = "Delete this window and its saved settings?",
+          order = 30,
+          func = function()
+            self:DeleteWindow(windowIndex)
+          end,
+        },
+      },
+    }
   end
-  appearance.headerHeight.name = "Header height"
+
   appearance.fontSize.name = "Font size"
   appearance.fontSize.order = 60
   return options

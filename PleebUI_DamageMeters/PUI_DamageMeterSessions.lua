@@ -326,7 +326,6 @@ Sessions.IsAvailableSessionSelection = IsAvailableSessionSelection
 Sessions.IsHistorySelection = IsHistorySelection
 Sessions.WindowSelectionsEqual = WindowSelectionsEqual
 Sessions.FormatDuration = FormatDuration
-Sessions.GetAvailableSessionInfo = GetAvailableSessionInfo
 Sessions.GetBlizzardSessionID = GetBlizzardSessionID
 Sessions.GetBlizzardSessionIDForSelection = GetBlizzardSessionIDForSelection
 Sessions.GetSessionStateKey = GetSessionStateKey

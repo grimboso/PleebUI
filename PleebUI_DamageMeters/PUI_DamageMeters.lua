@@ -4,7 +4,6 @@ local Addon = ns.Addon
 
 local DamageMeters = Addon:NewModule("DamageMeters", "NumyAceEvent-3.0")
 ns.Modules.DamageMeters = DamageMeters
-ns.Registry.DamageMeters = DamageMeters
 
 local P = select(1, ns.Pleebug:DropIn(DamageMeters, { name = "Modules.DamageMeters" }))
 
@@ -1111,10 +1110,8 @@ function SlashCmdList.PUI_DAMAGEMETERS(message)
 end
 
 function DamageMeters:ApplyProfile()
-  Breakdown.Close()
   Breakdown.InvalidateTargetAnalysisCache()
   Breakdown.InvalidateDeathRecapCache()
-  self.db = Addon.db:GetNamespace("DamageMeters")
   Config.SanitizeProfile()
   self:ClearAllWindowSelections()
   History:ApplyTrackingOptions()
