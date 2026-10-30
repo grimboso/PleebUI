@@ -304,7 +304,6 @@ local function EnsureSalvePreview()
   preview.icon = icon
   icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
 
-  ApplySalveVisual(preview, text, icon)
   preview:Hide()
   return preview
 end
@@ -463,7 +462,6 @@ function HunterTools:OnEditModeChanged(enable)
     and self:IsEnabled()
     and db.enabled == true
     and db.emergencySalveEnabled == true
-    and IsHunter()
     and FrameUtil.IsMoverPreviewVisible("hunter_emergency_salve")
 
   if showSalvePreview then

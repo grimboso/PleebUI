@@ -24,6 +24,12 @@ local MOBILITY_SPELLS = {
   WARRIOR = { 6544 },
 }
 
+local MOVEMENT_EVENTS = {
+  "PLAYER_ENTERING_WORLD", "SPELLS_CHANGED", "PLAYER_SPECIALIZATION_CHANGED",
+  "TRAIT_CONFIG_UPDATED", "UPDATE_SHAPESHIFT_FORM", "PLAYER_REGEN_ENABLED",
+  "PLAYER_REGEN_DISABLED",
+}
+
 local anchor
 local rows = {}
 local trackedCount = 0
@@ -463,25 +469,24 @@ function MovementWarning:ApplyRuntimeSettings()
   self:UnregisterAllEvents()
   NormalizeReminderSettings()
   local db = Addon.db.profile.movementWarning
-  if self:IsEnabled() and db.enabled then
+  local enabled = self:IsEnabled() and db.enabled
+  if enabled then
     EnsureDisplay()
     ApplyAnchor()
     RefreshSpellbook()
     RefreshSelectedSpells()
     self:RegisterEvent("SPELL_UPDATE_COOLDOWN", "OnSpellUpdateCooldown")
-    for _, event in ipairs({
-      "PLAYER_ENTERING_WORLD", "SPELLS_CHANGED", "PLAYER_SPECIALIZATION_CHANGED",
-      "TRAIT_CONFIG_UPDATED", "UPDATE_SHAPESHIFT_FORM", "PLAYER_REGEN_ENABLED",
-      "PLAYER_REGEN_DISABLED",
-    }) do
+    for _, event in ipairs(MOVEMENT_EVENTS) do
       self:RegisterEvent(event, "OnMovementEvent")
     end
   end
   if anchor then
-    FrameUtil.SetMoverSuppressed("movement_warning", not (self:IsEnabled() and db.enabled))
+    FrameUtil.SetMoverSuppressed("movement_warning", not enabled)
   end
   self:RefreshWarning()
-  self:RefreshOptionsPreview()
+  if not enabled then
+    self:RefreshOptionsPreview()
+  end
 end
 
 function MovementWarning:RefreshOptionsPreview()

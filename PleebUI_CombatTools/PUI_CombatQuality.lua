@@ -1,7 +1,7 @@
 local ns = LibStub("AceAddon-3.0"):GetAddon("PleebUI").ModuleNamespace
 local Addon = ns.Addon
 local CombatQuality = {}
-ns.CombatQuality = CombatQuality
+ns.Modules.CombatQuality = CombatQuality
 local Quality = CombatQuality
 local NormalizeDB = ns.QualityAPI.NormalizeDB
 local Clamp = ns.QualityAPI.Clamp

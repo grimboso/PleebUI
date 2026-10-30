@@ -7,6 +7,7 @@ local host = CreateFrame("Frame")
 host:Hide()
 local jobs = {}
 local requests = {}
+local ownerGenerations = {}
 
 local function UpdateHost()
   if #jobs > 0 then
@@ -27,7 +28,7 @@ function Runtime:Request(owner, method, argument)
   end
   local job = pending[method]
   if not job then
-    job = { owner = owner, method = method }
+    job = { owner = owner, method = method, generation = ownerGenerations[owner] }
     pending[method] = job
     jobs[#jobs + 1] = job
   end
@@ -41,6 +42,7 @@ function Runtime:Request(owner, method, argument)
 end
 
 function Runtime:Cancel(owner)
+  ownerGenerations[owner] = (ownerGenerations[owner] or 0) + 1
   requests[owner] = nil
   for index = #jobs, 1, -1 do
     if jobs[index].owner == owner then table.remove(jobs, index) end
@@ -55,7 +57,11 @@ local function Flush()
   requests = {}
   for index = 1, #pending do
     local job = pending[index]
-    job.owner[job.method](job.owner, job.argument)
+    if job.generation == ownerGenerations[job.owner]
+      and (job.owner == ns.Modules.CombatQuality or job.owner:IsEnabled())
+    then
+      job.owner[job.method](job.owner, job.argument)
+    end
   end
   UpdateHost()
 end
