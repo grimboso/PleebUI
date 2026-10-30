@@ -33,10 +33,28 @@ local function _showRowsWithNoCalls()
   return displaySettings.showRowsWithNoCalls == true
 end
 
-local SORT_LABELS = { total = "Total time", average = "Average", peak = "Peak", calls = "Calls", name = "Name" }
-if not SORT_LABELS[displaySettings.sortBy] then displaySettings.sortBy = "total" end
+local COLUMNS = {
+  { key = "calls", title = "Calls", label = "Number of calls", width = 110 },
+  { key = "average", title = "Avg ms", label = "Average cost per call", width = 110 },
+  { key = "peak", title = "Peak ms", label = "Peak cost per call", width = 110 },
+  { key = "allocation", title = "Avg mem KiB", label = "Average memory per call", width = 145 },
+  { key = "allocationPeak", title = "Peak mem KiB", label = "Peak memory per call", width = 145 },
+  { key = "total", title = "Total ms", label = "Total CPU time", width = 100 },
+}
+local SORT_LABELS = { total = "Total time", average = "Average cost", peak = "Peak cost", calls = "Calls",
+  allocation = "Average memory", allocationPeak = "Peak memory", name = "Name" }
+if type(displaySettings.columns) ~= "table" then
+  displaySettings.columns = {}
+  if displaySettings.sortBy == "total" then displaySettings.sortBy = "peak" end
+end
+for _, column in ipairs(COLUMNS) do
+  if type(displaySettings.columns[column.key]) ~= "boolean" then
+    displaySettings.columns[column.key] = column.key ~= "total"
+  end
+end
+displaySettings.showAllocations = nil
+if not SORT_LABELS[displaySettings.sortBy] then displaySettings.sortBy = "peak" end
 if type(displaySettings.sortDescending) ~= "boolean" then displaySettings.sortDescending = true end
-if type(displaySettings.showAllocations) ~= "boolean" then displaySettings.showAllocations = false end
 W.searchText = W.searchText or ""
 W._sortVersion = W._sortVersion or 0
 
@@ -150,6 +168,11 @@ local function _sortValue(node)
   if not stat or not stat.n or stat.n == 0 then return 0 end
   if displaySettings.sortBy == "average" then return (stat.timeSum or 0) / stat.n end
   if displaySettings.sortBy == "peak" then return stat.timeMax or 0 end
+  if displaySettings.sortBy == "allocation" or displaySettings.sortBy == "allocationPeak" then
+    if stat.native or not stat.allocN or stat.allocN == 0 then return 0 end
+    if displaySettings.sortBy == "allocationPeak" then return stat.allocMax or 0 end
+    return stat.allocSum / stat.allocN
+  end
   return stat.timeSum or 0
 end
 
@@ -272,7 +295,7 @@ local function _treeEnsureMetric(root, index, sourcePath)
   local owner, bucketName, leafName, kind, statKey
   if moduleName then
     owner = MemDebug:GetModuleAddon(moduleName) or "Unattributed"
-    bucketName = MemDebug:GetProfilerBucketName(moduleName)
+    bucketName = MemDebug:GetProfilerBucketName(moduleName, functionName)
     leafName = functionName
     kind = "function"
     statKey = moduleName .. "." .. functionName
@@ -290,11 +313,16 @@ local function _treeEnsureMetric(root, index, sourcePath)
   local ownerNode = _treeEnsureChild(root, owner,
     MemDebug:GetAddonDisplayName(owner), owner, index, "addon")
   if kind == "event" then ownerNode.synthetic = true end
-  local bucketPath = owner .. "." .. moduleName
-  local bucketNode = _treeEnsureChild(ownerNode, moduleName,
+  local bucketPath = owner .. "." .. bucketName
+  local bucketNode = _treeEnsureChild(ownerNode, bucketName,
     bucketName, bucketPath, index, "bucket")
-  local leafPath = bucketPath .. "." .. leafName
-  local leaf = _treeEnsureChild(bucketNode, leafName,
+  bucketNode.modules = bucketNode.modules or {}
+  if not bucketNode.modules[moduleName] then
+    bucketNode.modules[moduleName] = true
+    root._selectionVersion = nil
+  end
+  local leafPath = bucketPath .. "." .. statKey
+  local leaf = _treeEnsureChild(bucketNode, statKey,
     leafName, leafPath, index, kind)
   leaf.statKey = statKey
   index[sourcePath] = leaf
@@ -351,6 +379,16 @@ local function _updateGroupSelections(root)
     if addon then
       addon.fileCount = addon.fileCount + 1
       if db.modules[moduleName] ~= false then addon.selectedFiles = addon.selectedFiles + 1 end
+    end
+  end
+  for _, addon in pairs(root.children) do
+    for _, bucket in pairs(addon.children) do
+      bucket.fileCount = 0
+      bucket.selectedFiles = 0
+      for moduleName in pairs(bucket.modules) do
+        bucket.fileCount = bucket.fileCount + 1
+        if db.modules[moduleName] ~= false then bucket.selectedFiles = bucket.selectedFiles + 1 end
+      end
     end
   end
   root._selectionVersion = MemDebug._selectionVersion or 0
@@ -617,7 +655,7 @@ local function _nodeState(node)
   if not MemDebug:IsDebuggingEnabled() then return "Debugging disabled" end
   if node.kind == "addon" and not node.synthetic then
     if (node.fileCount or 0) > 0 and node.selectedFiles == 0 then return "Excluded from tracking" end
-  elseif node.kind == "bucket" and not MemDebug:IsModuleEnabled(node.key) then
+  elseif node.kind == "bucket" and node.fileCount > 0 and node.selectedFiles == 0 then
     return "Excluded from tracking"
   elseif node.kind == "function" then
     local rec, alias = MemDebug.CPU:GetFunctionRegistration(node.statKey)
@@ -636,19 +674,14 @@ local function _nodeState(node)
   if not node.hasCalls then return "No calls in this window" end
 end
 
-local COLUMNS = {
-  { key = "calls", title = "Calls", width = 110 },
-  { key = "total", title = "Total ms", width = 100 },
-  { key = "average", title = "Avg ms", width = 100 },
-  { key = "peak", title = "Peak ms", width = 110 },
-  { key = "allocation", title = "Alloc KiB", width = 120 },
-}
-
 function W:_LayoutColumns()
   local f = self.frame
   f._sortText:SetText("Sort: " .. SORT_LABELS[displaySettings.sortBy] .. (MemDebug:IsEnabled() and " (held)" or ""))
-  local layoutKey = tostring(self.fontSize) .. ":" .. tostring(displaySettings.showAllocations)
+  local layoutKey = tostring(self.fontSize)
     .. ":" .. displaySettings.sortBy .. ":" .. tostring(displaySettings.sortDescending) .. ":" .. MemDebug:GetLoadMode()
+  for _, column in ipairs(COLUMNS) do
+    layoutKey = layoutKey .. ":" .. tostring(displaySettings.columns[column.key])
+  end
   if self._layoutKey == layoutKey then return end
   self._layoutKey = layoutKey
   local scale = math.max(1, (self.fontSize or 14) / 14)
@@ -656,14 +689,14 @@ function W:_LayoutColumns()
   self._columnLayout = {}
   for i = #COLUMNS, 1, -1 do
     local column = COLUMNS[i]
-    local visible = column.key ~= "allocation" or displaySettings.showAllocations
+    local visible = displaySettings.columns[column.key]
     local width = math.ceil(column.width * scale)
     self._columnLayout[column.key] = { right = right, width = width, visible = visible }
     if visible then right = right + width + 8 end
   end
   self._metricWidth = right
   self.rowHeight = math.max(28, math.ceil((self.fontSize or 14) * self.uiScale) + 10)
-  local minimumWidth = math.ceil(right + 420 * scale)
+  local minimumWidth = math.max(1000, math.ceil(right + 420 * scale))
   f:SetResizeBounds(minimumWidth, 620, math.max(1800, minimumWidth), 1200)
   if f:GetWidth() < minimumWidth then f:SetWidth(minimumWidth) end
   f._listHeader:SetHeight(self.rowHeight)
@@ -759,6 +792,10 @@ function W:_RenderFlat()
       row.cells.peak:SetText(string.format("%.3f", stat.timeMax or stat.timeLast or 0))
       if not stat.native and stat.allocN and stat.allocN > 0 then
         row.cells.allocation:SetText(string.format("%.2f", stat.allocSum / stat.allocN / 1024))
+        row.cells.allocationPeak:SetText(string.format("%.2f", (stat.allocMax or 0) / 1024))
+      else
+        row.cells.allocation:SetText("-")
+        row.cells.allocationPeak:SetText("-")
       end
     end
     local state = _nodeState(node)
@@ -1459,6 +1496,47 @@ local function _ensureFrame()
     end
   end)
 
+  local columnsBtn = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
+  columnsBtn:SetSize(90, 22)
+  columnsBtn:SetPoint("LEFT", settingsBtn, "RIGHT", 8, 0)
+  columnsBtn:SetText("Columns")
+
+  local columnPicker = CreateFrame("Frame", nil, f, "BackdropTemplate")
+  columnPicker:SetSize(324, 224)
+  columnPicker:SetPoint("TOPLEFT", columnsBtn, "BOTTOMLEFT", 0, -6)
+  columnPicker:SetFrameLevel(f:GetFrameLevel() + 100)
+  columnPicker:SetClampedToScreen(true)
+  columnPicker:EnableMouse(true)
+  _skinFrame(columnPicker, "window")
+  local columnTitle = columnPicker:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+  columnTitle:SetPoint("TOPLEFT", columnPicker, "TOPLEFT", 12, -10)
+  columnTitle:SetText("Visible columns")
+  _applyFontSafe(columnTitle, 14, "OUTLINE")
+  _colorText(columnTitle)
+  local columnClose = CreateFrame("Button", nil, columnPicker, "UIPanelCloseButton")
+  columnClose:SetPoint("TOPRIGHT", columnPicker, "TOPRIGHT", -2, -2)
+  columnClose:SetScript("OnClick", function() columnPicker:Hide() end)
+  f._columnChecks = {}
+  for i, column in ipairs(COLUMNS) do
+    local key = column.key
+    local check = _makeCheckbox(columnPicker, column.label, displaySettings.columns[key], function(value)
+      displaySettings.columns[key] = value
+      if not value and displaySettings.sortBy == key then
+        displaySettings.sortBy = "name"
+        displaySettings.sortDescending = false
+        W:Resort()
+      else
+        W:Refresh()
+      end
+    end)
+    check:SetWidth(300)
+    check:SetPoint("TOPLEFT", columnPicker, "TOPLEFT", 12, -36 - (i - 1) * 30)
+    f._columnChecks[key] = check
+  end
+  columnPicker:Hide()
+  columnsBtn:SetScript("OnClick", function() columnPicker:SetShown(not columnPicker:IsShown()) end)
+  f:HookScript("OnHide", function() columnPicker:Hide() end)
+
   -- Built-in skin (square, 1px border, dark bg, accent hover)
   _skinButton(debuggingBtn)
   _skinButton(startBtn)
@@ -1466,6 +1544,7 @@ local function _ensureFrame()
   _skinButton(clearBtn)
   _skinButton(exportBtn)
   _skinButton(settingsBtn)
+  _skinButton(columnsBtn)
 
 
 
@@ -1544,19 +1623,12 @@ local function _ensureFrame()
   noCallsBox:SetPoint("TOPLEFT", fontSlider, "BOTTOMLEFT", 0, -8)
   f._noCallsBox = noCallsBox
 
-  local allocationsBox = _makeCheckbox(sf, "Show allocation column", displaySettings.showAllocations, function(value)
-    displaySettings.showAllocations = value
-    W:Refresh()
-  end)
-  allocationsBox:SetPoint("TOPLEFT", noCallsBox, "BOTTOMLEFT", 0, -4)
-  f._allocationsBox = allocationsBox
-
   -- Debug/profile mode controls
   local sf = f._settingsFrame or f
   local cpu = MemDebug and MemDebug.CPU
 
   local modeLabel = sf:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-  modeLabel:SetPoint("TOPLEFT", allocationsBox, "BOTTOMLEFT", 8, -12)
+  modeLabel:SetPoint("TOPLEFT", noCallsBox, "BOTTOMLEFT", 8, -12)
   modeLabel:SetText("Debugging: " .. MemDebug:GetDebugMode())
   _applyFontSafe(modeLabel, math.max(12, (W.fontSize or 14)), "OUTLINE")
   _colorText(modeLabel)
@@ -1807,17 +1879,17 @@ local panel = CreateFrame("Frame", nil, sf, "BackdropTemplate")
     text:SetJustifyH(key == "name" and "LEFT" or "RIGHT")
     button.text = text
     _colorText(text)
-    button:SetScript("OnClick", function() if key ~= "allocation" then W:SetSort(key) end end)
+    button:SetScript("OnClick", function() W:SetSort(key) end)
     button:SetScript("OnEnter", function(self)
       GameTooltip:SetOwner(self, "ANCHOR_TOP")
-      if key == "allocation" then
-        GameTooltip:AddLine("Average allocated KiB per measured allocation call. This is allocation activity, not retained memory.", 1, 1, 1, true)
-      else
-        GameTooltip:AddLine("Click to sort; click again to reverse.")
-        GameTooltip:AddLine("Row order stays fixed while recording. Click Resort to update it.", 0.8, 0.8, 0.8, true)
-        if key == "total" then GameTooltip:AddLine("Function measurements can overlap. Group CPU totals are deliberately left blank.", 0.8, 0.8, 0.8, true) end
-        if key == "peak" then GameTooltip:AddLine("Full functions show the slowest completed call. Native counters show the highest sampled average.", 0.8, 0.8, 0.8, true) end
+      GameTooltip:AddLine("Click to sort; click again to reverse.")
+      GameTooltip:AddLine("Row order stays fixed while recording. Click Resort to update it.", 0.8, 0.8, 0.8, true)
+      if key == "allocation" or key == "allocationPeak" then
+        GameTooltip:AddLine(key == "allocation" and "Average memory allocated per measured call (KiB)." or "Most memory allocated by one measured call (KiB).", 1, 1, 1, true)
+        GameTooltip:AddLine("Allocation activity, not retained memory. Requires a Full measurement with allocation data; '-' means unavailable.", 0.8, 0.8, 0.8, true)
       end
+      if key == "total" then GameTooltip:AddLine("Function measurements can overlap. Group CPU totals are deliberately left blank.", 0.8, 0.8, 0.8, true) end
+      if key == "peak" then GameTooltip:AddLine("Full functions show the slowest completed call. Native counters show the highest sampled average.", 0.8, 0.8, 0.8, true) end
       GameTooltip:Show()
     end)
     button:SetScript("OnLeave", function() GameTooltip:Hide() end)
@@ -2268,6 +2340,7 @@ function _ensureRow(i)
     GameTooltip:AddDoubleLine("Total measured CPU", string.format("%.3f ms", st.timeSum or 0), 1, 1, 1, 1, 1, 1)
     if st.allocN and st.allocN > 0 then
       GameTooltip:AddDoubleLine("Allocated average / maximum", string.format("%.2f / %.2f KiB", st.allocSum / st.allocN / 1024, (st.allocMax or 0) / 1024), 1, 1, 1, 1, 1, 1)
+      GameTooltip:AddDoubleLine("Total allocated", string.format("%.2f KiB", st.allocSum / 1024), 1, 1, 1, 1, 1, 1)
     end
     if st.native and st.selfTimeSum ~= nil then
       GameTooltip:AddDoubleLine("Self average per call", string.format("%.3f ms", st.selfTimeSum / st.n), 1, 1, 1, 1, 1, 1)
@@ -2360,8 +2433,8 @@ function W:_RenderSummary()
   local memory = cpu:GetAddonMemoryKB()
   local memoryText = memory and string.format("%.0f KiB", memory) or "unavailable"
   if overview then
-    f._nativeText:SetText(string.format("Native addon CPU - %s: %.2f ms total / %.3f ms per frame avg / %.3f peak   |   Addon memory: %s",
-      MemDebug:GetAddonDisplayName(overview.addonName), overview.recentMs or 0,
+    f._nativeText:SetText(string.format("Native addon CPU - %s: %.3f ms per frame avg / %.3f peak   |   Addon memory: %s",
+      MemDebug:GetAddonDisplayName(overview.addonName),
       overview.recentAverageMs or 0, overview.recentPeakMs or 0, memoryText))
   else
     f._nativeText:SetText(debuggingEnabled and ("Native addon CPU: unavailable   |   Addon memory: " .. memoryText)
@@ -2385,7 +2458,9 @@ function W:Refresh(snapshot)
   end
 
   f._noCallsBox._cb:SetChecked(_showRowsWithNoCalls())
-  f._allocationsBox._cb:SetChecked(displaySettings.showAllocations)
+  for key, check in pairs(f._columnChecks) do
+    check._cb:SetChecked(displaySettings.columns[key])
+  end
   local debuggingEnabled = MemDebug:IsDebuggingEnabled()
   local enabled = MemDebug:IsEnabled()
   local canReload = not InCombatLockdown()

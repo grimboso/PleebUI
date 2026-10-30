@@ -569,14 +569,15 @@ function MemDebug:GetAddonDisplayName(addonName)
   return self._registeredAddons[addonName] or tostring(addonName or "Unattributed")
 end
 
-function MemDebug:GetProfilerBucketName(moduleName)
-  local alias = self:GetModuleAlias(moduleName)
-  if alias then return alias end
+function MemDebug:GetProfilerBucketName(moduleName, functionName)
   local owner = self:GetModuleAddon(moduleName)
   local labels = owner and self._bucketDisplayNames[owner]
-  local name = labels and labels[moduleName]
-  if name then return name end
-  return (tostring(moduleName or "Unknown"):gsub("_", " "):gsub("(%l)(%u)", "%1 %2"))
+  if labels then
+    -- Function assignments override the source file's shared display group.
+    return (functionName and labels[moduleName .. "." .. functionName])
+      or labels[moduleName] or "unassigned"
+  end
+  return "unassigned"
 end
 
 function MemDebug:GetModuleGroup(moduleName)
