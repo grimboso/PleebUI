@@ -38,14 +38,6 @@ local LIFECYCLE_EVENTS = {
   "COOLDOWN_VIEWER_TABLE_HOTFIXED",
 }
 
-local function IsDataRestricted()
-  return InCombatLockdown()
-    or (not initializing and (
-      C_Secrets.ShouldAurasBeSecret()
-      or C_Secrets.ShouldCooldownsBeSecret()
-    ))
-end
-
 local SPELL_IDENTITY_EVENTS = {
   SPELLS_CHANGED = true,
   COOLDOWN_VIEWER_SPELL_OVERRIDE_UPDATED = true,
@@ -153,7 +145,11 @@ function Runtime:SetSubscriberEnabled(name, active)
 end
 
 function Runtime:IsDataRestricted()
-  return IsDataRestricted()
+  return InCombatLockdown()
+    or (not initializing and (
+      C_Secrets.ShouldAurasBeSecret()
+      or C_Secrets.ShouldCooldownsBeSecret()
+    ))
 end
 
 function Runtime:IsAuraRestricted()

@@ -30,7 +30,6 @@ local _PCM_IsSecret = issecretvalue
 local PCMCoreState = {
   ViewerCountCache = {},
   DurationCountCache = {},
-  SwipeFlagCache = {},
 }
 
 local PCMEnabled
@@ -59,6 +58,7 @@ local PCMTransitionState = {
   FlushQueued = false,
   Owner = nil,
   InvalidateClassSpellCache = false,
+  NativeSettingsOnly = false,
 }
 
 local function _PCM_IsTransitionPending()
@@ -86,8 +86,7 @@ local PCM_CUSTOM_BAR_AURA_CATEGORIES = {
 }
 
 local Cooldowns = Addon:NewModule("CooldownManager", "NumyAceEvent-3.0")
-ns.Modules.CooldownManager          = Cooldowns
-ns.Registry.Modules.CooldownManager = Cooldowns
+ns.Modules.CooldownManager = Cooldowns
 
 
 
@@ -167,7 +166,7 @@ end
 ns.PCM_ReconcileNativeCDM = _PCM_ReconcileNativeCDM
 
 
-local P, TrackThis = ns.Pleebug:DropIn(Cooldowns, { name = "PCM", bucket = "Core" })
+local P = ns.Pleebug:DropIn(Cooldowns, { name = "PCM", bucket = "Core" })
 
 
 
@@ -206,54 +205,13 @@ local function _PCM_IsAbilityViewerKey(key)
   return key == "EssentialCooldownViewer" or key == "UtilityCooldownViewer"
 end
 
-local function _RebuildViewerRegistry(self)
-
-  self._viewerRegistry = {}
-
-  for _, v in ipairs(PCM_VIEWERS) do
-    table.insert(self._viewerRegistry, v)
-  end
-
-  -- Build quick lookup maps so hot paths do not rescan the registry.
-  self.__puiViewerKindMap = {}
-  self.__puiViewerInfoByKey = {}
-
-  for i = 1, #self._viewerRegistry do
-    local info = self._viewerRegistry[i]
-    if info and info.key then
-      self.__puiViewerKindMap[info.key] = true
-      self.__puiViewerInfoByKey[info.key] = info
-
-    end
-  end
-end
-
 function Cooldowns:IterateViewers()
-  if not self._viewerRegistry then
-    _RebuildViewerRegistry(self)
-  end
-
-  return ipairs(self._viewerRegistry)
-end
-
-function Cooldowns:GetViewerInfo(key)
-  if not self._viewerRegistry then
-    _RebuildViewerRegistry(self)
-  end
-
-  local map = self.__puiViewerInfoByKey
-  if map then
-    return map[key]
-  end
+  return ipairs(PCM_VIEWERS)
 end
 
 function Cooldowns:GetViewerFrame(key)
   if not key then
     return nil
-  end
-
-  if not self._viewerRegistry then
-    _RebuildViewerRegistry(self)
   end
 
   local viewerFrame
@@ -300,10 +258,10 @@ local function _PCM_InitializeOwnedViewers(owner)
   end
 end
 
-local function _PCM_RefreshOwnedViewer(owner, viewerKey)
+local function _PCM_RefreshOwnedViewer(owner, viewerKey, mode)
   if viewerKey == "EssentialCooldownViewer" or viewerKey == "UtilityCooldownViewer" then
     local runtime = ns.PCMAbilityRuntime
-    runtime:ApplyViewerStyle(viewerKey, owner:_ResolveOwnedViewerStyle(viewerKey))
+    runtime:ApplyViewerStyle(viewerKey, owner:_ResolveOwnedViewerStyle(viewerKey), mode == "layout")
   elseif viewerKey == "BuffIconCooldownViewer" then
     ns.Modules.PCM_Buffs:RefreshSettings()
   elseif viewerKey == "BuffBarCooldownViewer" then
@@ -349,13 +307,7 @@ end
 function Cooldowns:SetViewerTooltipsEnabled(viewerKey, enabled)
   local changed = PCM_DB.SetOwnedViewerTooltipEnabled(viewerKey, enabled == true)
   if changed and _PCM_IsModuleEnabledFast() then
-    if viewerKey == "EssentialCooldownViewer" or viewerKey == "UtilityCooldownViewer" then
-      _PCM_RefreshOwnedViewer(self, viewerKey)
-    elseif viewerKey == "BuffIconCooldownViewer" then
-      ns.Modules.PCM_Buffs:RefreshSettings()
-    elseif viewerKey == "BuffBarCooldownViewer" then
-      ns.Modules.PCM_BuffBars:RefreshSettings()
-    end
+    _PCM_RefreshOwnedViewer(self, viewerKey)
   end
   return changed
 end
@@ -628,13 +580,11 @@ local function _PCM_InvalidateViewerRuleSettingCache(viewerKey)
   if viewerKey then
     PCMCoreState.ViewerCountCache[viewerKey] = nil
     PCMCoreState.DurationCountCache[viewerKey] = nil
-    PCMCoreState.SwipeFlagCache[viewerKey] = nil
     return
   end
 
   t_wipe(PCMCoreState.ViewerCountCache)
   t_wipe(PCMCoreState.DurationCountCache)
-  t_wipe(PCMCoreState.SwipeFlagCache)
 end
 
 local function _PCM_GetViewerCountFlagsCached(viewerKey)
@@ -749,7 +699,6 @@ function Cooldowns:SetDurationCountEnabled(viewerKey, enabled)
 
   cfg.enabled = not not enabled
   PCMCoreState.DurationCountCache[viewerKey] = cfg.enabled
-  PCMCoreState.SwipeFlagCache[viewerKey] = nil
 
   self:_RequestViewerRefresh("icons", viewerKey)
 end
@@ -759,15 +708,14 @@ function Cooldowns:GetDurationCountEnabled(viewerKey)
 end
 
 
-local function _PCM_InvalidateClassSpellCache()
-  IconSettings:InvalidateCatalog()
-end
-
-local function _PCM_BeginTransition(owner, invalidateClassSpellCache)
+local function _PCM_BeginTransition(owner, invalidateClassSpellCache, nativeSettingsOnly)
   if not owner then
     return
   end
 
+  PCMTransitionState.NativeSettingsOnly = nativeSettingsOnly == true
+    and not PCMTransitionState.SpellsChanged
+    and (not _PCM_IsTransitionPending() or PCMTransitionState.NativeSettingsOnly == true)
   PCMTransitionState.SpellsChanged = false
   PCMTransitionState.Queued = true
   PCMTransitionState.FlushQueued = false
@@ -797,7 +745,7 @@ _PCM_RunHardViewerTransition = function(owner, invalidateClassSpellCache)
   end
 
   if invalidateClassSpellCache then
-    _PCM_InvalidateClassSpellCache()
+    IconSettings:InvalidateCatalog()
   end
 
   ns.PCMAbilityCatalog:Invalidate("hard-transition")
@@ -832,7 +780,7 @@ local function _PCM_OnNativeSettingsHidden()
   local reloadRequired = NativeCDMSettingsChanged and PCMRuntime:IsDataRestricted()
   NativeCDMSettingsChanged = false
 
-  _PCM_BeginTransition(Cooldowns, false)
+  _PCM_BeginTransition(Cooldowns, false, true)
 
   if reloadRequired then
     ns.Addon:PUI_ConfirmAction({
@@ -850,6 +798,7 @@ local function _PCM_ReconcileRuntimeViewers(owner, catalogReady)
     return false
   end
 
+  local generation = ns.PCMAbilityCatalog:GetGeneration()
   if not catalogReady then
     ns.PCMAbilityCatalog:Invalidate("transition-finalize")
     ns.PCMAbilityCatalog:Refresh()
@@ -858,11 +807,13 @@ local function _PCM_ReconcileRuntimeViewers(owner, catalogReady)
     return false
   end
 
-  owner:_RequestViewerRefresh("all")
+  if not PCMTransitionState.NativeSettingsOnly then
+    owner:_RequestViewerRefresh("all")
+  end
   ns.PCMAbilityRuntime:Flush()
   ns.PCMAuraRuntime:Flush()
 
-  return true
+  return true, ns.PCMAbilityCatalog:GetGeneration() ~= generation
 end
 
 
@@ -876,23 +827,31 @@ local function _PCM_FinalizeTransition(token, catalogReady)
     PCMTransitionState.Queued = false
     PCMTransitionState.Owner = nil
     PCMTransitionState.InvalidateClassSpellCache = false
+    PCMTransitionState.NativeSettingsOnly = false
     return
   end
 
   local invalidateClassSpellCache = PCMTransitionState.InvalidateClassSpellCache == true
 
   if invalidateClassSpellCache then
-    _PCM_InvalidateClassSpellCache()
+    IconSettings:InvalidateCatalog()
   end
 
-  if not _PCM_ReconcileRuntimeViewers(owner, catalogReady) then
+  local reconciled, catalogChanged = _PCM_ReconcileRuntimeViewers(owner, catalogReady)
+  if not reconciled then
     return
   end
   _PCM_ReconcileNativeCDM()
 
+  local nativeSettingsOnly = PCMTransitionState.NativeSettingsOnly
   PCMTransitionState.Queued = false
   PCMTransitionState.Owner = nil
   PCMTransitionState.InvalidateClassSpellCache = false
+  PCMTransitionState.NativeSettingsOnly = false
+
+  if nativeSettingsOnly and not catalogChanged then
+    return
+  end
 
   owner:ConsumableTracker_Rebuild()
   ns.Modules.PCM_BB.RefreshAfterTalentSwap()
@@ -932,6 +891,7 @@ local function _PCM_FlushTransition(token)
     PCMTransitionState.SpellsChanged = false
     PCMTransitionState.Owner = nil
     PCMTransitionState.InvalidateClassSpellCache = false
+    PCMTransitionState.NativeSettingsOnly = false
     return
   end
 
@@ -952,7 +912,7 @@ local function _PCM_FlushTransition(token)
   end
 
   if not fullTransition then
-    _PCM_InvalidateClassSpellCache()
+    IconSettings:InvalidateCatalog()
     ns.PCMAbilityCatalog:Invalidate("spells-changed")
     local changed = ns.PCMAbilityCatalog:Refresh()
     if not ns.PCMAbilityCatalog:GetNativeConfiguration() then
@@ -1518,10 +1478,6 @@ local function _RefreshViewerOwnershipAfterBlizzardEditMode(self)
   FrameUtil.RelayoutSmartSnapCluster("PCM_EssentialCooldownViewer")
   FrameUtil.RelayoutSmartSnapCluster("PCM_UtilityCooldownViewer")
 
-  ns.Modules.PCM_Buffs:RefreshSettings()
-  ns.Modules.PCM_BuffBars:RefreshSettings()
-
-  self:_RequestViewerRefresh("layout")
   self:_RequestViewerRefresh("icons")
 end
 
@@ -1613,13 +1569,13 @@ function Cooldowns:_RequestViewerRefresh(mode, viewerKey)
   end
 
   if viewerKey and _PCM_IsCoreViewerKey(viewerKey) then
-    _PCM_RefreshOwnedViewer(self, viewerKey)
+    _PCM_RefreshOwnedViewer(self, viewerKey, mode)
     return
   end
 
   if not viewerKey then
     for _, info in self:IterateViewers() do
-      _PCM_RefreshOwnedViewer(self, info.key)
+      _PCM_RefreshOwnedViewer(self, info.key, mode)
     end
   end
 end
@@ -1719,6 +1675,7 @@ function Cooldowns:_PCM_RunDisableTeardown()
   PCMTransitionState.FlushQueued = false
   PCMTransitionState.Owner = nil
   PCMTransitionState.InvalidateClassSpellCache = false
+  PCMTransitionState.NativeSettingsOnly = false
 
   _DeactivatePCMOwnedFrames()
 
@@ -2109,6 +2066,7 @@ function Cooldowns:_OnSpellsChanged()
 
   self:ClearSavedSpellKnownCache()
   if _PCM_IsTransitionPending() then
+    PCMTransitionState.NativeSettingsOnly = false
     return
   end
 
@@ -2420,9 +2378,7 @@ end
   RoundPixel = P:Def('RoundPixel', RoundPixel)
   _PCM_IsModuleEnabledFast = P:Def('_PCM_IsModuleEnabledFast', _PCM_IsModuleEnabledFast)
   ns.PCM_IsModuleEnabledFast = _PCM_IsModuleEnabledFast
-  _RebuildViewerRegistry = P:Def('_RebuildViewerRegistry', _RebuildViewerRegistry)
   Cooldowns.IterateViewers = P:Def('Cooldowns:IterateViewers', Cooldowns.IterateViewers)
-  Cooldowns.GetViewerInfo = P:Def('Cooldowns:GetViewerInfo', Cooldowns.GetViewerInfo)
   Cooldowns.GetViewerFrame = P:Def('Cooldowns:GetViewerFrame', Cooldowns.GetViewerFrame)
   _PCM_EnsureEditModeLayout = P:Def('_PCM_EnsureEditModeLayout', _PCM_EnsureEditModeLayout)
   Cooldowns.GetViewerTooltipsEnabled = P:Def('Cooldowns:GetViewerTooltipsEnabled', Cooldowns.GetViewerTooltipsEnabled)
@@ -2451,7 +2407,6 @@ end
   _PCM_GetDurationCountEnabledCached = P:Def('_PCM_GetDurationCountEnabledCached', _PCM_GetDurationCountEnabledCached)
   Cooldowns.SetDurationCountEnabled = P:Def('Cooldowns:SetDurationCountEnabled', Cooldowns.SetDurationCountEnabled)
   Cooldowns.GetDurationCountEnabled = P:Def('Cooldowns:GetDurationCountEnabled', Cooldowns.GetDurationCountEnabled)
-  _PCM_InvalidateClassSpellCache = P:Def('_PCM_InvalidateClassSpellCache', _PCM_InvalidateClassSpellCache)
   _PCM_BeginTransition = P:Def('_PCM_BeginTransition', _PCM_BeginTransition)
   _PCM_RunHardViewerTransition = P:Def('_PCM_RunHardViewerTransition', _PCM_RunHardViewerTransition)
   _PCM_ReconcileRuntimeViewers = P:Def('_PCM_ReconcileRuntimeViewers', _PCM_ReconcileRuntimeViewers)

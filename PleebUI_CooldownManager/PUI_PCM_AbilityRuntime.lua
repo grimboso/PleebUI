@@ -1202,7 +1202,7 @@ local function RefreshRecordState(record, stateMask)
   if HasMask(stateMask, bit_bor(STATE_COOLDOWN, STATE_CHARGE, STATE_TOTEM)) then
     RefreshStateAppearance(record)
   end
-  if HasMask(stateMask, bit_bor(STATE_COOLDOWN_UPDATE, STATE_CHARGE, STATE_TOTEM)) then
+  if HasMask(stateMask, bit_bor(STATE_COOLDOWN, STATE_CHARGE, STATE_TOTEM)) then
     if entry.entryKind == "spell" then
       local parts = record.parts
       local isTotem = record.totemActive == true
@@ -1639,20 +1639,28 @@ local function MarkCooldownEventBucket(bucketName, stateMask, spellID, baseSpell
     end
 
     if refreshAll or directMatch then
+      local recordStateMask = stateMask
+      local needsRefresh = true
       if bucketName == "cooldown" then
         local cooldownInfo = C_Spell.GetSpellCooldown(record.runtimeSpellID)
         -- isOnGCD is never secret and is only reliable during SPELL_UPDATE_COOLDOWN.
-        record.cooldownIsOnGCD = cooldownInfo and cooldownInfo.isOnGCD == true or false
+        local isOnGCD = cooldownInfo and cooldownInfo.isOnGCD == true or false
+        if canRefreshGCDOnly and not directMatch then
+          needsRefresh = record.totemActive ~= true
+            and (isOnGCD or record.displayedCooldownIsOnGCD == true)
+          recordStateMask = STATE_GCD_ONLY
+        end
+        record.cooldownIsOnGCD = isOnGCD
         -- Retain only public booleans until this record is flushed.
         record.cooldownIsActive = cooldownInfo and cooldownInfo.isActive == true or false
-        record.hasEventCooldownState = cooldownInfo ~= nil
+        if needsRefresh or record.queued then
+          record.hasEventCooldownState = cooldownInfo ~= nil
+        end
       end
 
-      local recordStateMask = stateMask
-      if canRefreshGCDOnly and not directMatch and not totemBindings[record.cooldownID] then
-        recordStateMask = STATE_GCD_ONLY
+      if needsRefresh then
+        MarkRecordDirty(record, DIRTY_STATE, recordStateMask)
       end
-      MarkRecordDirty(record, DIRTY_STATE, recordStateMask)
     end
   end
 end
@@ -1702,7 +1710,9 @@ local function FlushDirtyRecords()
         RefreshRecordVisibility(record)
       end
       if HasMask(dirtyMask, DIRTY_STATE) then
-        if stateMask == STATE_USABLE then
+        if stateMask == STATE_GCD_ONLY then
+          RefreshSpellCooldown(record)
+        elseif stateMask == STATE_USABLE then
           RefreshUsableState(record)
         else
           RefreshRecordState(record, stateMask)
@@ -1844,9 +1854,21 @@ function AbilityRuntime:OnCatalogChanged(generation)
   end
 end
 
-function AbilityRuntime:ApplyViewerStyle(viewerKey, resolvedStyle)
+function AbilityRuntime:ApplyViewerStyle(viewerKey, resolvedStyle, layoutOnly)
   local viewer = GetViewer(viewerKey)
   if not viewer then
+    return
+  end
+
+  local currentStyle = viewer.resolvedStyle
+  if layoutOnly and currentStyle and currentStyle.iconSize == resolvedStyle.iconSize then
+    currentStyle.widthMode = resolvedStyle.widthMode
+    currentStyle.fixedWidth = resolvedStyle.fixedWidth
+    currentStyle.spacing = resolvedStyle.spacing
+    currentStyle.firstRowLimit = resolvedStyle.firstRowLimit
+    currentStyle.rowGrowth = resolvedStyle.rowGrowth
+    viewer.layoutDirty = true
+    ScheduleFlush()
     return
   end
 

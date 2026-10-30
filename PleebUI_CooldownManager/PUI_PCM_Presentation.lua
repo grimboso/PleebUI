@@ -1477,54 +1477,79 @@ end
 
 local function StopOwnedProcGlow(parts)
   local glowType = parts.ownedProcGlowType
+  local frame = parts.ownedProcGlowFrame
   if glowType == "pixel" then
-    LCG.PixelGlow_Stop(parts.frame, OWNED_PROC_GLOW_KEY)
+    LCG.PixelGlow_Stop(frame, OWNED_PROC_GLOW_KEY)
   elseif glowType == "autocast" then
-    LCG.AutoCastGlow_Stop(parts.frame, OWNED_PROC_GLOW_KEY)
+    LCG.AutoCastGlow_Stop(frame, OWNED_PROC_GLOW_KEY)
   elseif glowType == "actionbutton" then
-    LCG.ButtonGlow_Stop(parts.frame)
+    LCG.ButtonGlow_Stop(frame)
   elseif glowType == "proc" then
-    LCG.ProcGlow_Stop(parts.frame, OWNED_PROC_GLOW_KEY)
+    LCG.ProcGlow_Stop(frame, OWNED_PROC_GLOW_KEY)
   end
   parts.ownedProcGlowType = nil
-  parts.ownedProcGlowSignature = nil
+  parts.ownedProcGlowStyle = nil
 end
 
 function PCMPresentation.SetProcState(parts, active, config)
   if active ~= true or not config or config.enabled == false then
-    StopOwnedProcGlow(parts)
+    local glowType = parts.ownedProcGlowType
+    if active ~= true and config and config.enabled ~= false
+      and (glowType == "pixel" or glowType == "autocast")
+    then
+      -- A hidden parent stops child OnUpdate scripts while retaining the glow geometry.
+      parts.ownedProcGlowFrame:Hide()
+    else
+      StopOwnedProcGlow(parts)
+    end
     return
   end
 
   local glowType = tostring(config.type or "pixel")
-  local color = CopyColor(config.color, { 0.95, 0.95, 0.32, 1 })
+  local color = type(config.color) == "table" and config.color or nil
+  local r = color and (tonumber(color[1] or color.r) or 1) or 0.95
+  local g = color and (tonumber(color[2] or color.g) or 1) or 0.95
+  local b = color and (tonumber(color[3] or color.b) or 1) or 0.32
+  local a = color and (tonumber(color[4] or color.a) or 1) or 1
   local speed = math.max(20, math.min(200, tonumber(config.speed) or 100))
   local scale = math.max(0.5, math.min(2, tonumber(config.scale) or 1))
   local lines = math.max(2, math.min(16, tonumber(config.lines) or 8))
   local thickness = math.max(1, math.min(6, tonumber(config.thickness) or 2))
-  local speedMultiplier = speed / 100
-  local frequency = (glowType == "autocast" and 0.6 or glowType == "pixel" and 0.25 or 1)
-    * speedMultiplier
-  local duration = math.max(0.05, 1 / speedMultiplier)
-  local signature = table.concat({
-    glowType,
-    color[1], color[2], color[3], color[4],
-    frequency, scale, lines, thickness, duration,
-  }, ":")
-
-  if parts.ownedProcGlowSignature == signature then
+  local style = parts.ownedProcGlowStyle
+  if style and parts.ownedProcGlowType == glowType
+    and style.r == r and style.g == g and style.b == b and style.a == a
+    and style.speed == speed and style.scale == scale
+    and style.lines == lines and style.thickness == thickness
+  then
+    parts.ownedProcGlowFrame:Show()
     return
   end
 
   StopOwnedProcGlow(parts)
+  local frame = parts.ownedProcGlowFrame
+  if not frame then
+    frame = CreateFrame("Frame", nil, parts.frame)
+    frame:SetAllPoints(parts.frame)
+    frame:SetFrameLevel(parts.frame:GetFrameLevel())
+    frame:EnableMouse(false)
+    parts.ownedProcGlowFrame = frame
+  end
+  frame:Show()
+
+  color = { r, g, b, a }
+  local speedMultiplier = speed / 100
+  local frequency = (glowType == "autocast" and 0.6 or glowType == "pixel" and 0.25 or 1)
+    * speedMultiplier
+  local duration = math.max(0.05, 1 / speedMultiplier)
+
   if glowType == "pixel" then
-    LCG.PixelGlow_Start(parts.frame, color, lines, frequency, nil, thickness, 0, 0, true, OWNED_PROC_GLOW_KEY, 8)
+    LCG.PixelGlow_Start(frame, color, lines, frequency, nil, thickness, 0, 0, true, OWNED_PROC_GLOW_KEY, 8)
   elseif glowType == "autocast" then
-    LCG.AutoCastGlow_Start(parts.frame, color, lines, frequency, scale, 0, 0, OWNED_PROC_GLOW_KEY, 8)
+    LCG.AutoCastGlow_Start(frame, color, lines, frequency, scale, 0, 0, OWNED_PROC_GLOW_KEY, 8)
   elseif glowType == "actionbutton" then
-    LCG.ButtonGlow_Start(parts.frame, color, frequency, 8)
+    LCG.ButtonGlow_Start(frame, color, frequency, 8)
   elseif glowType == "proc" then
-    LCG.ProcGlow_Start(parts.frame, {
+    LCG.ProcGlow_Start(frame, {
       key = OWNED_PROC_GLOW_KEY,
       color = color,
       startAnim = true,
@@ -1538,7 +1563,10 @@ function PCMPresentation.SetProcState(parts, active, config)
   end
 
   parts.ownedProcGlowType = glowType
-  parts.ownedProcGlowSignature = signature
+  parts.ownedProcGlowStyle = {
+    r = r, g = g, b = b, a = a,
+    speed = speed, scale = scale, lines = lines, thickness = thickness,
+  }
 end
 
 function PCMPresentation.DeactivateOwnedIcon(parts)

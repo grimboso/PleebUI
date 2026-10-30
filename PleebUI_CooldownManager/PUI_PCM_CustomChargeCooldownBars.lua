@@ -337,6 +337,7 @@ local function _CSB_RegisterMover(barData, cfg)
 end
 
 local function _CSB_ApplyPresentation(barData, cfg)
+  barData.__puiChargeActive = nil
   local color
   if cfg.useClassColor then
     local r, g, b = _CSB_GetClassColor()
@@ -565,6 +566,7 @@ _CSB_UpdateOneBar = function(barData, cfg, chargeInfo)
   local spellID = PCMRuntime:ResolveTrackedSpell(trackedSpellID)
   if trackedSpellID and not spellID then return end
   if not spellID then
+    barData.__puiChargeActive = nil
     _CSB_ClearDurationState(barData)
     barData.frame:Hide()
     CustomIcons:Release(barData.customIconKey)
@@ -582,6 +584,7 @@ _CSB_UpdateOneBar = function(barData, cfg, chargeInfo)
   end
 
   if not chargeInfo then
+    barData.__puiChargeActive = nil
     _CSB_ClearDurationState(barData)
     barData.frame:Hide()
     if barEnabled then
@@ -593,19 +596,27 @@ _CSB_UpdateOneBar = function(barData, cfg, chargeInfo)
   end
   local active = chargeInfo.isActive == true
   local activeChanged = barData.__puiChargeActive ~= active
+  local chargesAtMaximum = not _G.issecretvalue(chargeInfo.currentCharges)
+    and chargeInfo.currentCharges == barData.maxCharges
+  local unchangedMaximum = chargesAtMaximum and barData.__puiCSBChargesAtMaximum == true
+  barData.__puiCSBChargesAtMaximum = chargesAtMaximum
+  if barData.__iconSpellID ~= spellID then
+    activeChanged = true
+    if cfg.showIcon and barData.icon then barData.icon:SetTexture(C_Spell.GetSpellTexture(spellID)) end
+    if not barEnabled then CustomIcons:UpdateSpellIdentity(barData.customIconKey, spellID) end
+    barData.__iconSpellID = spellID
+  end
+
+  if not active and not activeChanged and unchangedMaximum then
+    return
+  end
+
   local duration
   if active then
     duration = C_Spell.GetSpellChargeDuration(spellID)
   end
   barData.__puiChargeActive = active
-
   barData.frame:SetShown(barEnabled)
-
-  if barData.__iconSpellID ~= spellID then
-    if cfg.showIcon and barData.icon then barData.icon:SetTexture(C_Spell.GetSpellTexture(spellID)) end
-    if not barEnabled then CustomIcons:UpdateSpellIdentity(barData.customIconKey, spellID) end
-    barData.__iconSpellID = spellID
-  end
 
   if barEnabled then
     PCMPresentation.ApplyChargeCount(barData, chargeInfo.currentCharges)
@@ -734,6 +745,7 @@ _CSB_RebuildAll = function()
       local barData = _CSB_EnsureBarFrame(key)
 
       barData.cfg = cfg
+      barData.__puiChargeActive = nil
       barData.__order = order
       barData.hiddenBySpec = false
       barData.maxCharges = _CSB_ResolveMaxCharges(barData, cfg, chargeInfo)
