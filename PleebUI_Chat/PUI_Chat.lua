@@ -7,7 +7,7 @@ local OptionsUtil = ns.OptionsUtil
 local Round = ns.Pixel.Round
 
 local ChatLinks = Addon:NewModule("ChatLinks", "NumyAceEvent-3.0")
-ns.Registry.ChatLinks = ChatLinks
+ns.Modules.ChatLinks = ChatLinks
 
 local P = ns.Pleebug:DropIn(ChatLinks, { name = "Modules.Chat" })
 

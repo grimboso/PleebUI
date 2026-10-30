@@ -1,5 +1,5 @@
 local ns = LibStub("AceAddon-3.0"):GetAddon("PleebUI").ModuleNamespace
-local ChatLinks = ns.Registry.ChatLinks
+local ChatLinks = ns.Modules.ChatLinks
 local HistoryOwner = {}
 local P = ns.Pleebug:DropIn(HistoryOwner, { name = "Modules.Chat.History" })
 local HistoryFrame = CreateFrame("Frame")

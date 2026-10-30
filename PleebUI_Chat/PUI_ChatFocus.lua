@@ -1,5 +1,5 @@
 local ns = LibStub("AceAddon-3.0"):GetAddon("PleebUI").ModuleNamespace
-local ChatLinks = ns.Registry.ChatLinks
+local ChatLinks = ns.Modules.ChatLinks
 local FocusFade = {}
 local P = ns.Pleebug:DropIn(FocusFade, { name = "Modules.Chat.Focus" })
 local Driver = CreateFrame("Frame")
@@ -56,26 +56,29 @@ local function PanelHasVisibleWindow(panel)
   return false
 end
 
-local function PanelHasFocus(panel)
+local function GetPanelState(panel)
+  local visible = false
   for owner in pairs(panel.windows) do
     if owner.visible then
-      if owner.inputFocused or owner.dragging then return true end
+      visible = true
+      if owner.inputFocused or owner.dragging then return true, true end
       for _, hovered in pairs(owner.widgets) do
-        if hovered then return true end
+        if hovered then return true, true end
       end
     end
   end
-  return false
+  return visible, false
 end
 
 RefreshPanel = function(panel)
   if not Enabled then return end
   local fade = ChatLinks.db.profile.chatFade
-  if not PanelHasVisibleWindow(panel) or Editing or not fade.fadeWindow then
+  local visible, focused = GetPanelState(panel)
+  if not visible or Editing or not fade.fadeWindow then
     CancelPanelTimer(panel)
     panel.idle = false
     FadePanel(panel, 1, 0)
-  elseif PanelHasFocus(panel) then
+  elseif focused then
     CancelPanelTimer(panel)
     panel.idle = false
     FadePanel(panel, fade.windowFadeInAlpha, fade.windowFadeInDuration)
@@ -86,7 +89,9 @@ RefreshPanel = function(panel)
     if not panel.timer then
       panel.timer = C_Timer.NewTimer(fade.windowDelay, function()
         panel.timer = nil
-        if Enabled and not Editing and PanelHasVisibleWindow(panel) and not PanelHasFocus(panel) then
+        if not Enabled or Editing then return end
+        local visible, focused = GetPanelState(panel)
+        if visible and not focused then
           panel.idle = true
           local current = ChatLinks.db.profile.chatFade
           FadePanel(panel, current.windowFadeOutAlpha, current.windowFadeOutDuration)

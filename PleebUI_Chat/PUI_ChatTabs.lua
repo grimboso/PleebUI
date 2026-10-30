@@ -1,5 +1,5 @@
 local ns = LibStub("AceAddon-3.0"):GetAddon("PleebUI").ModuleNamespace
-local ChatLinks = ns.Registry.ChatLinks
+local ChatLinks = ns.Modules.ChatLinks
 local Tabs = {}
 local P = ns.Pleebug:DropIn(Tabs, { name = "Modules.Chat.Tabs" })
 local TabOwners = setmetatable({}, { __mode = "k" })
@@ -61,7 +61,7 @@ function ChatLinks:AttachChatTabVisuals(frame)
   local tab = _G[frame:GetName() .. "Tab"]
   local owner = TabOwners[tab]
   if not owner then
-    owner = { frame = frame, tabHovered = false, frameHovered = false }
+    owner = { tabHovered = false, frameHovered = false }
     TabOwners[tab] = owner
     tab:HookScript("OnEnter", function()
       if Enabled then owner.tabHovered = true; RefreshTabText(tab) end

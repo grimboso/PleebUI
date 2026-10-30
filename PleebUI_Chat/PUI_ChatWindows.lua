@@ -1,5 +1,5 @@
 local ns = LibStub("AceAddon-3.0"):GetAddon("PleebUI").ModuleNamespace
-local ChatLinks = ns.Registry.ChatLinks
+local ChatLinks = ns.Modules.ChatLinks
 local Lifecycle = {}
 local P = ns.Pleebug:DropIn(Lifecycle, { name = "Modules.Chat.Lifecycle" })
 local Events = CreateFrame("Frame")
