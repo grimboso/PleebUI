@@ -78,6 +78,15 @@ local function RefreshCategoryFonts()
   end
 end
 
+local function RefreshSearchEntryLayout(row)
+  local activity = row.ActivityName
+  activity:ClearAllPoints()
+  activity:SetPoint("LEFT", row, "LEFT", 10, -1)
+  activity:SetPoint("RIGHT", row.DataDisplay, "LEFT", -2, 0)
+  activity:SetWordWrap(false)
+  activity:SetMaxLines(1)
+end
+
 local function InstallGroupFinder(frame)
   Skins.Shell(frame)
   RefreshShellArtwork()
@@ -90,8 +99,9 @@ local function InstallGroupFinder(frame)
   end
   RefreshCategoryFonts()
   local search = LFGListFrame.SearchPanel
-  Skins.Button(search.RefreshButton)
-  search.RefreshButton.Icon:SetAtlas("uitools-icon-refresh")
+  local refreshSize = search.SearchBox:GetHeight()
+  Skins.RefreshButton(search.RefreshButton, refreshSize)
+  Skins.RefreshButton(LFGListFrame.ApplicationViewer.RefreshButton, refreshSize)
   search.ScrollBar:ClearAllPoints()
   search.ScrollBar:SetPoint("TOPRIGHT", search.ResultsInset, "TOPRIGHT", -6, -8)
   search.ScrollBar:SetPoint("BOTTOMRIGHT", search.ResultsInset, "BOTTOMRIGHT", -6, 8)
@@ -103,7 +113,9 @@ local function InstallGroupFinder(frame)
   end
   RefreshRewards(LFDQueueFrameRandomScrollFrameChildFrame)
   RefreshRewards(RaidFinderQueueFrameScrollFrameChildFrame)
-  -- Applicant and search-result state stays entirely in Blizzard's restricted path.
+  Skins.Hook(_G, "LFGListSearchEntry_Update", RefreshSearchEntryLayout)
+  search.ScrollBox:ForEachFrame(RefreshSearchEntryLayout)
+  -- Blizzard owns applicant and search-result state; only text geometry changes here.
   Skins.Hook(_G, "PVEFrame_ShowLeftInset", RefreshShellArtwork)
   Skins.Hook(_G, "GroupFinderFrameButton_SetEnabled", function(button)
     ns.Theme.ApplyFont(button.name, "header")

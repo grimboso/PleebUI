@@ -3,109 +3,100 @@ local Addon = ns.Addon
 local Options = {}
 ns.BlizzardSkinOptions = Options
 local registered = {}
+local owners = {}
 local sessionSettings
-local labels = {
-  ["InspectRecipeFrame.SchematicForm.QualityDialog"] = { "Inspect recipe: reagent quality", "Professions" },
-  ["ContainerFrameCombinedBags"] = { "Bags", "Bags" },
-  ["ContainerFrame6"] = { "Reagent bag", "Bags" },
-  ["AchievementFrame"] = { "Achievements", "Windows" },
-  ["AuctionHouseFrame"] = { "Auction House", "Auction house" },
-  ["AuctionHouseFrame.AuctionsFrame"] = { "Auction house: Auctions", "Auction house" },
-  ["AuctionHouseFrame.BrowseResultsFrame"] = { "Auction house: Browse Results", "Auction house" },
-  ["AuctionHouseFrame.BuyDialog"] = { "Auction house: Buy", "Auction house" },
-  ["AuctionHouseFrame.CommoditiesBuyFrame"] = { "Auction house: Commodities Buy", "Auction house" },
-  ["AuctionHouseFrame.CommoditiesSellFrame"] = { "Auction house: Commodities Sell", "Auction house" },
-  ["AuctionHouseFrame.CommoditiesSellList"] = { "Auction house: Commodities Sell List", "Auction house" },
-  ["AuctionHouseFrame.ItemBuyFrame"] = { "Auction house: Item Buy", "Auction house" },
-  ["AuctionHouseFrame.ItemSellFrame"] = { "Auction house: Item Sell", "Auction house" },
-  ["AuctionHouseFrame.ItemSellList"] = { "Auction house: Item Sell List", "Auction house" },
-  ["AuctionHouseFrame.WoWTokenResults"] = { "Auction house: WoWToken Results", "Auction house" },
-  ["AuctionHouseFrame.WoWTokenResults.GameTimeTutorial"] = { "Auction house: Game time Tutorial", "Auction house" },
-  ["AuctionHouseFrame.WoWTokenSellFrame"] = { "Auction house: WoWToken Sell", "Auction house" },
-  ["AuctionHouseMultisellProgressFrame"] = { "Auction selling progress", "Auction house" },
-  ["ChallengesFrame"] = { "Mythic+", "Groups & loot" },
-  ["ChallengesKeystoneFrame"] = { "Keystone", "Groups & loot" },
-  ["CharacterFrame"] = { "Character", "Character & items" },
-  ["ClassTrainerFrame"] = { "Trainer", "Windows" },
-  ["CollectionsJournal"] = { "Collections", "Windows" },
-  ["CommunitiesAvatarPickerDialog"] = { "Communities Avatar Picker", "Guild & Communities" },
-  ["CommunitiesFrame"] = { "Guild & Communities", "Guild & Communities" },
-  ["CommunitiesFrame.CommunityFinderFrame"] = { "Guild & Communities: Community Finder", "Guild & Communities" },
-  ["CommunitiesFrame.EditStreamDialog"] = { "Guild & Communities: Edit Stream", "Guild & Communities" },
-  ["CommunitiesFrame.GuildFinderFrame"] = { "Guild & Communities: Guild Finder", "Guild & Communities" },
-  ["CommunitiesFrame.GuildMemberDetailFrame"] = { "Guild & Communities: Guild Member Detail", "Guild & Communities" },
-  ["CommunitiesFrame.NotificationSettingsDialog"] = { "Guild & Communities: Notification Settings", "Guild & Communities" },
-  ["CommunitiesFrame.RecruitmentDialog"] = { "Guild & Communities: Recruitment", "Guild & Communities" },
-  ["CommunitiesGuildLogFrame"] = { "Guild log", "Guild & Communities" },
-  ["CommunitiesGuildTextEditFrame"] = { "Guild text editor", "Guild & Communities" },
-  ["CommunitiesSettingsDialog"] = { "Communities Settings", "Guild & Communities" },
-  ["CurrencyTransferLog"] = { "Currency transfer history", "Character & items" },
-  ["CurrencyTransferMenu"] = { "Currency transfer", "Character & items" },
-  ["DressUpFrame"] = { "Dressing room", "Windows" },
-  ["EncounterJournal"] = { "Adventure guide", "Windows" },
-  ["GameMenuFrame"] = { "Game menu", "System" },
-  ["GearManagerPopupFrame"] = { "Equipment set icon picker", "Character & items" },
-  ["GossipFrame"] = { "NPC conversations", "Windows" },
-  ["GroupLootFrame1"] = { "Loot roll 1", "Groups & loot" },
-  ["GroupLootFrame2"] = { "Loot roll 2", "Groups & loot" },
-  ["GroupLootFrame3"] = { "Loot roll 3", "Groups & loot" },
-  ["GroupLootFrame4"] = { "Loot roll 4", "Groups & loot" },
-  ["GroupLootHistoryFrame"] = { "Loot history", "Groups & loot" },
-  ["InspectFrame"] = { "Inspect", "Character & items" },
-  ["InspectRecipeFrame"] = { "Inspect recipe", "Professions" },
-  ["ItemInteractionFrame"] = { "Catalyst and item interactions", "Windows" },
-  ["ItemSocketingFrame"] = { "Gem socketing", "Windows" },
-  ["ItemUpgradeFrame"] = { "Item Upgrade", "Windows" },
-  ["LFDRoleCheckPopup"] = { "Dungeon role check", "Groups & loot" },
-  ["LFGDungeonReadyDialog"] = { "Enter dungeon", "Groups & loot" },
-  ["LFGDungeonReadyStatus"] = { "Dungeon ready status", "Groups & loot" },
-  ["LFGInvitePopup"] = { "Dungeon invitation", "Groups & loot" },
-  ["LFGListApplicationDialog"] = { "Group application", "Groups & loot" },
-  ["LFGListInviteDialog"] = { "Group invitation", "Groups & loot" },
-  ["LFGReadyCheckPopup"] = { "Dungeon ready check", "Groups & loot" },
-  ["LootFrame"] = { "Loot", "Windows" },
-  ["MacroPopupFrame"] = { "Macro icon picker", "System" },
-  ["MailFrame"] = { "Mail", "Windows" },
-  ["MerchantFrame"] = { "Merchant", "Windows" },
-  ["OpenMailFrame"] = { "Read mail", "Windows" },
-  ["PVEFrame"] = { "Dungeons & Raids", "Groups & loot" },
-  ["PVPQueueFrame"] = { "Player vs. Player", "Groups & loot" },
-  ["PVPQueueFrame.NewSeasonPopup"] = { "PvP: New Season", "Groups & loot" },
-  ["PVPReadyDialog"] = { "PvP ready check", "Groups & loot" },
-  ["PlayerSpellsFrame"] = { "Spellbook and player spells", "Character & items" },
-  ["PlayerSpellsFrame.TalentsFrame"] = { "Talents", "Character & items" },
-  ["ProfessionsBookFrame"] = { "Professions book", "Professions" },
-  ["ProfessionsCustomerOrdersFrame"] = { "Professions Customer Orders", "Professions" },
-  ["ProfessionsCustomerOrdersFrame.Form"] = { "Crafting orders: Form", "Professions" },
-  ["ProfessionsCustomerOrdersFrame.Form.CurrentListings"] = { "Crafting orders: Current Listings", "Professions" },
-  ["ProfessionsCustomerOrdersFrame.Form.QualityDialog"] = { "Crafting orders: Quality", "Professions" },
-  ["ProfessionsFrame"] = { "Professions", "Professions" },
-  ["ProfessionsFrame.CraftingPage.CraftingOutputLog"] = { "Professions: Crafting Output Log", "Professions" },
-  ["ProfessionsFrame.CraftingPage.GuildFrame"] = { "Professions: Guild", "Professions" },
-  ["ProfessionsFrame.CraftingPage.MinimizedSearchResults"] = { "Professions: Minimized Search Results", "Professions" },
-  ["ProfessionsFrame.CraftingPage.SchematicForm.QualityDialog"] = { "Professions: Quality", "Professions" },
-  ["ProfessionsFrame.OrdersPage"] = { "Professions: Orders Page", "Professions" },
-  ["ProfessionsFrame.OrdersPage.OrderView.CraftingOutputLog"] = { "Professions: Crafting Output Log", "Professions" },
-  ["ProfessionsFrame.OrdersPage.OrderView.DeclineOrderDialog"] = { "Professions: Decline Order", "Professions" },
-  ["ProfessionsFrame.OrdersPage.OrderView.OrderDetails.SchematicForm.QualityDialog"] = { "Professions: Quality", "Professions" },
-  ["ProfessionsFrame.SpecPage"] = { "Professions: Spec Page", "Professions" },
-  ["QuestFrame"] = { "NPC quests", "Windows" },
-  ["QuestMapFrame"] = { "Quest log", "Windows" },
-  ["QueueStatusFrame"] = { "Queue Status", "Groups & loot" },
-  ["ReadyCheckListenerFrame"] = { "Group ready check", "Groups & loot" },
-  ["ReputationFrame"] = { "Reputation", "Character & items" },
-  ["ReputationFrame.ReputationDetailFrame"] = { "Reputation details", "Character & items" },
-  ["SideDressUpFrame"] = { "Side dressing room", "Windows" },
-  ["StackSplitFrame"] = { "Stack Split", "Windows" },
-  ["StaticPopups"] = { "Popups", "System" },
-  ["TokenFrame"] = { "Currency", "Character & items" },
-  ["TokenFramePopup"] = { "Currency options", "Character & items" },
-  ["TradeFrame"] = { "Trade", "Windows" },
-  ["TransmogFrame"] = { "Transmogrification", "Windows" },
-  ["WeeklyRewardExpirationWarningDialog"] = { "Great Vault expiry warning", "Windows" },
-  ["WeeklyRewardsFrame"] = { "Great Vault", "Windows" },
-  ["WorldMapFrame"] = { "World map", "Windows" },
+local families = {
+  { "ContainerFrameCombinedBags", "Bags", "Bags", {
+    "ContainerFrame6", "StackSplitFrame",
+  } },
+  { "BankFrame", "Bank and Warband bank", "Bags", {
+    "BankFrame.BankPanel.TabSettingsMenu", "BankCleanUpConfirmationPopup",
+  } },
+  { "CharacterFrame", "Character sheet", "Character & items", {
+    "GearManagerPopupFrame", "ReputationFrame", "ReputationFrame.ReputationDetailFrame",
+    "TokenFrame", "TokenFramePopup", "CurrencyTransferMenu", "CurrencyTransferLog",
+    "ItemInteractionFrame", "ItemSocketingFrame", "ItemUpgradeFrame", "DressUpFrame",
+    "SideDressUpFrame", "TransmogFrame",
+  } },
+  { "InspectFrame", "Inspect", "Character & items" },
+  { "PVEFrame", "Dungeons and raids", "Groups & loot", {
+    "LFDRoleCheckPopup", "LFGDungeonReadyDialog", "LFGDungeonReadyStatus", "LFGInvitePopup",
+    "LFGListApplicationDialog", "LFGListInviteDialog", "LFGReadyCheckPopup", "ReadyCheckListenerFrame",
+    "QueueStatusFrame",
+  } },
+  { "PVPQueueFrame", "Player vs. Player", "Groups & loot", {
+    "PVPQueueFrame.NewSeasonPopup", "PVPReadyDialog",
+  } },
+  { "ChallengesFrame", "Mythic+", "Groups & loot", { "ChallengesKeystoneFrame" } },
+  { "LootFrame", "Loot", "Groups & loot", {
+    "GroupLootFrame1", "GroupLootFrame2", "GroupLootFrame3", "GroupLootFrame4", "GroupLootHistoryFrame",
+  } },
+  { "WeeklyRewardsFrame", "Great Vault", "Groups & loot", { "WeeklyRewardExpirationWarningDialog" } },
+  { "AchievementFrame", "Achievements", "Windows" },
+  { "AuctionHouseFrame", "Auction house", "Windows", {
+    "AuctionHouseFrame.AuctionsFrame", "AuctionHouseFrame.BrowseResultsFrame", "AuctionHouseFrame.BuyDialog",
+    "AuctionHouseFrame.CommoditiesBuyFrame", "AuctionHouseFrame.CommoditiesSellFrame", "AuctionHouseFrame.CommoditiesSellList",
+    "AuctionHouseFrame.ItemBuyFrame", "AuctionHouseFrame.ItemSellFrame", "AuctionHouseFrame.ItemSellList",
+    "AuctionHouseFrame.WoWTokenResults", "AuctionHouseFrame.WoWTokenResults.GameTimeTutorial",
+    "AuctionHouseFrame.WoWTokenSellFrame", "AuctionHouseMultisellProgressFrame",
+  } },
+  { "ClassTrainerFrame", "Trainer", "Windows" },
+  { "CollectionsJournal", "Collections", "Windows" },
+  { "CommunitiesFrame", "Guild and communities", "Windows", {
+    "CommunitiesFrame.CommunityFinderFrame", "CommunitiesFrame.EditStreamDialog", "CommunitiesFrame.GuildFinderFrame",
+    "CommunitiesFrame.GuildMemberDetailFrame", "CommunitiesFrame.NotificationSettingsDialog", "CommunitiesFrame.RecruitmentDialog",
+    "CommunitiesAvatarPickerDialog", "CommunitiesGuildLogFrame", "CommunitiesGuildTextEditFrame", "CommunitiesSettingsDialog",
+    "GuildBankFrame", "GuildBankPopupFrame",
+  } },
+  { "DelvesCompanionConfigurationFrame", "Delves", "Windows", {
+    "DelvesCompanionAbilityListFrame", "DelvesDifficultyPickerFrame",
+  } },
+  { "EncounterJournal", "Adventure guide", "Windows" },
+  { "GossipFrame", "NPC conversations", "Windows" },
+  { "MailFrame", "Mail", "Windows", { "OpenMailFrame" } },
+  { "MerchantFrame", "Merchant", "Windows" },
+  { "Notifications", "Notifications", "Windows", {
+    "AchievementNotifications", "AchievementProgressNotifications", "MountNotifications", "PetNotifications",
+    "ToyNotifications", "CosmeticNotifications", "WarbandSceneNotifications", "HonorNotifications",
+    "DungeonNotifications", "LootUpgradeNotifications", "LootNotifications", "RecipeNotifications",
+    "ProfessionUnlockNotifications", "QuestNotifications", "MoneyNotifications", "DelvesToastFrame",
+  } },
+  { "ObjectiveTrackerFrame", "Objective tracker", "Windows" },
+  { "PlayerSpellsFrame", "Spellbook and talents", "Windows", { "PlayerSpellsFrame.TalentsFrame" } },
+  { "ProfessionsFrame", "Professions", "Windows", {
+    "ProfessionsBookFrame", "InspectRecipeFrame", "InspectRecipeFrame.SchematicForm.QualityDialog",
+    "ProfessionsCustomerOrdersFrame", "ProfessionsCustomerOrdersFrame.Form", "ProfessionsCustomerOrdersFrame.Form.CurrentListings",
+    "ProfessionsCustomerOrdersFrame.Form.QualityDialog", "ProfessionsFrame.CraftingPage.CraftingOutputLog",
+    "ProfessionsFrame.CraftingPage.GuildFrame", "ProfessionsFrame.CraftingPage.MinimizedSearchResults",
+    "ProfessionsFrame.CraftingPage.SchematicForm.QualityDialog", "ProfessionsFrame.OrdersPage",
+    "ProfessionsFrame.OrdersPage.OrderView.CraftingOutputLog", "ProfessionsFrame.OrdersPage.OrderView.DeclineOrderDialog",
+    "ProfessionsFrame.OrdersPage.OrderView.OrderDetails.SchematicForm.QualityDialog", "ProfessionsFrame.SpecPage",
+  } },
+  { "QuestFrame", "NPC quests", "Windows" },
+  { "TradeFrame", "Trade", "Windows" },
+  { "WorldMapFrame", "World map and quest log", "Windows", { "QuestMapFrame" } },
+  { "AddonList", "AddOns", "System" },
+  { "GameMenuFrame", "Game menu", "System" },
+  { "MacroFrame", "Macros", "System", { "MacroPopupFrame" } },
+  { "PlayerChoiceFrame", "Player choices", "System" },
+  { "StaticPopups", "Popups", "System" },
+  { "TimeManagerFrame", "Clock, alarm and stopwatch", "System", { "StopwatchFrame" } },
 }
+local labels = {}
+for _, family in ipairs(families) do
+  local owner = family[1]
+  labels[owner] = { label = family[2], category = family[3] }
+  owners[owner] = owner
+  for _, name in ipairs(family[4] or {}) do owners[name] = owner end
+end
+local categoryOwners = {
+  ["Auction house"] = "AuctionHouseFrame",
+  ["Guild & Communities"] = "CommunitiesFrame",
+  ["Delves"] = "DelvesCompanionConfigurationFrame",
+  ["Notifications"] = "Notifications",
+  ["Professions"] = "ProfessionsFrame",
+}
+local categoryOrder = { "Windows", "Character & items", "Bags", "Groups & loot", "System" }
 
 hooksecurefunc(Addon, "EnsureSchema", function()
   local profile = Addon.db.profile.pui
@@ -113,12 +104,28 @@ hooksecurefunc(Addon, "EnsureSchema", function()
 end)
 
 local function GetSettings()
-  return Addon.db.profile.pui.blizzardSkins
+  local settings = Addon.db.profile.pui.blizzardSkins
+  if settings.groupedTogglesVersion ~= 1 then
+    local merged = {}
+    for _, owner in pairs(owners) do merged[owner] = settings[owner] end
+    for name, owner in pairs(owners) do
+      local value = settings[name]
+      if value ~= nil and (value == false or merged[owner] == nil) then merged[owner] = value end
+    end
+    for name, owner in pairs(owners) do
+      if name ~= owner then settings[name] = nil end
+    end
+    for owner, value in pairs(merged) do settings[owner] = value end
+    settings.groupedTogglesVersion = 1
+  end
+  return settings
 end
 
 function Options.Register(name, label, category)
-  local entry = labels[name]
-  registered[name] = { label = label or entry[1], category = category or entry[2] }
+  local owner = owners[name] or categoryOwners[category] or name
+  owners[name] = owner
+  local entry = labels[owner]
+  registered[owner] = entry or { label = label, category = category }
 end
 
 function Options.IsEnabled(name)
@@ -126,23 +133,16 @@ function Options.IsEnabled(name)
     sessionSettings = {}
     for key, value in pairs(GetSettings()) do sessionSettings[key] = value end
   end
-  if sessionSettings.enabled == false then return false end
-  if name == "QuestMapFrame" and sessionSettings.WorldMapFrame == false then return false end
-  local path = ""
-  for key in name:gmatch("[^.]+") do
-    path = path == "" and key or path .. "." .. key
-    if sessionSettings[path] == false then return false end
-  end
-  return true
+  return sessionSettings.enabled ~= false and sessionSettings[owners[name] or name] ~= false
 end
 
 function Options:GetOptions()
   local settings = {
-    type = "group", name = "Blizzard windows", childGroups = "tree",
+    type = "group", name = "Blizzard windows",
     args = {
       description = {
         type = "description", order = 2,
-        name = "Choose which game windows use PleebUI skins. Changes, including profile changes, take effect after a reload. Turning off a parent window also turns off its embedded panes.",
+        name = "Choose which game windows use PleebUI skins. Each toggle includes its related dialogs. Changes, including profile changes, take effect after a reload.",
       },
       enabled = {
         type = "toggle", name = "Skin Blizzard windows", order = 3, width = "full",
@@ -156,19 +156,19 @@ function Options:GetOptions()
       },
     },
   }
-  local groups = {}
-  for name, entry in pairs(registered) do
-    local category = entry.category
-    if not groups[category] then
-      groups[category] = { type = "group", name = category, inline = false, args = {}, order = 10 }
-      settings.args[category] = groups[category]
+  for index, category in ipairs(categoryOrder) do
+    local group = { type = "group", name = category, inline = true, args = {}, order = index + 10 }
+    settings.args[category] = group
+    for name, entry in pairs(registered) do
+      if entry.category == category then
+        group.args[name] = {
+          type = "toggle", name = entry.label,
+          get = function() return GetSettings()[name] ~= false end,
+          set = function(_, value) GetSettings()[name] = value end,
+          disabled = function() return GetSettings().enabled == false end,
+        }
+      end
     end
-    groups[category].args[name] = {
-      type = "toggle", name = entry.label,
-      get = function() return GetSettings()[name] ~= false end,
-      set = function(_, value) GetSettings()[name] = value end,
-      disabled = function() return GetSettings().enabled == false end,
-    }
   end
   return settings
 end

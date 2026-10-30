@@ -251,6 +251,13 @@ function Skins.Button(button, borderless)
   RefreshButtonState(button)
 end
 
+function Skins.RefreshButton(button, size)
+  Skins.Button(button)
+  button:SetSize(size, size)
+  button.Icon:SetAtlas("uitools-icon-refresh")
+  button.Icon:SetSize(16, 16)
+end
+
 function Skins.PositionSearchIcon(edit)
   local icon = edit.searchIcon
   if not icon then return end
