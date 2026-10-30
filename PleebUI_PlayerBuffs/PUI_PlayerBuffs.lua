@@ -746,16 +746,10 @@ local function EnsureRuntime()
   return true
 end
 
-local function SetRuntimeEnabled(enabled)
-  PlayerBuffs.runtimeEnabled = enabled == true
+local function DisableRuntime()
+  PlayerBuffs.runtimeEnabled = false
 
   if not PlayerBuffs.buffRoot then
-    return
-  end
-
-  if enabled then
-    ActivateAuraRuntime("buffs")
-    ActivateAuraRuntime("debuffs")
     return
   end
 
@@ -848,7 +842,6 @@ function PlayerBuffs:ApplyAnchorPosition(kind)
     ApplyOne("debuffs")
   end
 
-  self.pendingAnchorApply = nil
 end
 
 function PlayerBuffs:SaveAnchorPosition(frame, key)
@@ -1018,7 +1011,7 @@ function PlayerBuffs:ApplyRuntimeSettings(flags)
   self.db = db
 
   if db.enabled == false then
-    SetRuntimeEnabled(false)
+    DisableRuntime()
     RestoreBlizzardAuraFrames()
     self:RefreshMover()
     return
@@ -1312,7 +1305,7 @@ function PlayerBuffs:OnDisable()
   PlayerBuffsHost:Hide()
   PlayerBuffsHost:UnregisterAllEvents()
   self:UnregisterAllEvents()
-  SetRuntimeEnabled(false)
+  DisableRuntime()
 
   if InCombatLockdown() then
     self.pendingBlizzardRestore = true
@@ -1355,7 +1348,7 @@ end
   DisableBlizzardAuraFrames = P:Def("DisableBlizzardAuraFrames", DisableBlizzardAuraFrames)
   RestoreBlizzardAuraFrames = P:Def("RestoreBlizzardAuraFrames", RestoreBlizzardAuraFrames)
   EnsureRuntime = P:Def("EnsureRuntime", EnsureRuntime)
-  SetRuntimeEnabled = P:Def("SetRuntimeEnabled", SetRuntimeEnabled)
+  DisableRuntime = P:Def("DisableRuntime", DisableRuntime)
   PreviewAuraIconSize = P:Def("PreviewAuraIconSize", PreviewAuraIconSize)
   PreviewAuraTextSize = P:Def("PreviewAuraTextSize", PreviewAuraTextSize)
   ResolveApplyFlags = P:Def("ResolveApplyFlags", ResolveApplyFlags)
