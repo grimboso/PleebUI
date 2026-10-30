@@ -108,13 +108,13 @@ function CastBar:PlayerPostCastStart(element, unit, bar, cfg, spellID, isChannel
     local ms = (home + world) * 0.5
 
     bar.safeZoneText:Show()
-    bar.safeZoneText:ClearAllPoints()
     bar.safeZoneText:SetText(string_format("%.0fms", ms))
 
-    if isChanneling then
-      bar.safeZoneText:SetPoint("LEFT", bar.status, "BOTTOMLEFT", 0, 0)
-    else
-      bar.safeZoneText:SetPoint("RIGHT", bar.status, "BOTTOMRIGHT", 0, 0)
+    local anchor = isChanneling and "LEFT" or "RIGHT"
+    if bar.__puiSafeZoneTextAnchor ~= anchor then
+      bar.__puiSafeZoneTextAnchor = anchor
+      bar.safeZoneText:ClearAllPoints()
+      bar.safeZoneText:SetPoint(anchor, bar.status, "BOTTOM" .. anchor, 0, 0)
     end
   else
     bar.safeZone:Hide()
@@ -203,7 +203,6 @@ local function PlayerSpellcastEvent(_, event, _, arg2, arg3, arg4)
 end
 
 CastBar.__puiPlayerSpellcastEventFrame = CreateFrame("Frame")
-CastBar.__puiPlayerSpellcastEventFrame:SetScript("OnEvent", PlayerSpellcastEvent)
 
 function CastBar:RefreshPlayerSpellcastEvents()
   local cfg = self:GetUnitConfig("player")
@@ -315,6 +314,7 @@ end
 
 
   PlayerSpellcastEvent = P:Def("PlayerSpellcastEvent", PlayerSpellcastEvent)
+  CastBar.__puiPlayerSpellcastEventFrame:SetScript("OnEvent", PlayerSpellcastEvent)
   CastBar.RefreshPlayerSpellcastEvents = P:Def("CastBar.RefreshPlayerSpellcastEvents", CastBar.RefreshPlayerSpellcastEvents)
   CastBar.SPELL_ACTIVATION_OVERLAY_GLOW_SHOW = P:Def("CastBar.SPELL_ACTIVATION_OVERLAY_GLOW_SHOW", CastBar.SPELL_ACTIVATION_OVERLAY_GLOW_SHOW)
   CastBar.SPELL_ACTIVATION_OVERLAY_GLOW_HIDE = P:Def("CastBar.SPELL_ACTIVATION_OVERLAY_GLOW_HIDE", CastBar.SPELL_ACTIVATION_OVERLAY_GLOW_HIDE)

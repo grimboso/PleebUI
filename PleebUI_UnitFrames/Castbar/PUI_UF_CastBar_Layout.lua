@@ -185,9 +185,7 @@ function CastBar:UpdateUnitLayout(unit, resolvedConfig, overrideBar, presentatio
   bar.status:SetStatusBarColor(statusR, statusG, statusB, statusA or 1)
 
   if unit == "player" then
-    bar.__puiInstantColorR = statusR
-    bar.__puiInstantColorG = statusG
-    bar.__puiInstantColorB = statusB
+    bar.instantStatus:SetStatusBarColor(statusR, statusG, statusB, bar.__puiInstantAlpha)
   end
 
   if bar.spellName and cfg.text then
@@ -268,6 +266,7 @@ function CastBar:UpdateUnitLayout(unit, resolvedConfig, overrideBar, presentatio
     elseif bar.status:IsShown() and not bar.__puiTestState then
       CastBar.StartTimeText(bar)
     else
+      bar.__puiTimeTextStopped = nil
       bar.timeText:Show()
     end
 
@@ -333,8 +332,7 @@ function CastBar:UpdateUnitLayout(unit, resolvedConfig, overrideBar, presentatio
   if presentation == true or (bar.status.__puiActiveUnit and not bar.__puiInstantCast) then
     CastBar.UpdateCastTarget(bar, cfg, unit)
   else
-    targetText:SetText("")
-    targetText:Hide()
+    CastBar.ClearCastTarget(bar)
   end
 
   if unit == "player" then
@@ -355,6 +353,14 @@ function CastBar:UpdateUnitLayout(unit, resolvedConfig, overrideBar, presentatio
 
   CastBar.ApplyUninterruptTextureMode(bar, cfg)
 
+  bar.status.Delay = cfg.__puiShowDelayText ~= false
+    and cfg.__puiShowCastTime ~= false
+    and cfg.showRemainingTime ~= false
+    and bar.delayText or nil
+
+  if unit == "player" and bar.__puiInstantCast then
+    ns.PUICastBarPlayerInstant:ApplyVisualState(bar)
+  end
 end
 
 

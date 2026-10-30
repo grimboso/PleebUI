@@ -24,7 +24,6 @@ local string_format = string.format
 
 local CastBar = Addon:NewModule("CastBar", "NumyAceEvent-3.0")
 ns.Modules.CastBar = CastBar
-ns.Registry.Modules.CastBar = CastBar
 CastBar.defaults = ns.CastBarDefaults
 CastBar.DefaultColors = ns.CastBarDefaultColors
 
@@ -197,13 +196,23 @@ local function CB_ShouldShowCastTime(cfg)
   return cfg.__puiShowCastTime ~= false
 end
 
-local function CB_UpdateCastTarget(bar, cfg, unit)
-  if cfg.displayTarget ~= true then
-    bar.targetText:SetText("")
-    bar.targetText:Hide()
+local function CB_ClearCastTarget(bar)
+  if bar.__puiTargetTextCleared then
     return
   end
 
+  bar.targetText:SetText("")
+  bar.targetText:Hide()
+  bar.__puiTargetTextCleared = true
+end
+
+local function CB_UpdateCastTarget(bar, cfg, unit)
+  if cfg.displayTarget ~= true then
+    CB_ClearCastTarget(bar)
+    return
+  end
+
+  bar.__puiTargetTextCleared = nil
   if bar.__puiTestPresentation then
     bar.targetText:SetText(bar.__puiTestTargetName)
   else
@@ -211,6 +220,24 @@ local function CB_UpdateCastTarget(bar, cfg, unit)
   end
 
   bar.targetText:Show()
+end
+
+local function CB_StopTimeText(bar)
+  if bar.__puiTimeTextStopped then
+    return
+  end
+
+  if bar.__puiTimeTextEnabled then
+    bar.timeTextBinding:Disable()
+    bar.__puiTimeTextEnabled = nil
+  end
+  bar.timeText:SetText("")
+  bar.timeText:Hide()
+  bar.__puiTestTimeShowRemaining = nil
+  bar.__puiTestTimeShowTotal = nil
+  bar.__puiTestTimeRemainingTenths = nil
+  bar.__puiTestTimeTotalTenths = nil
+  bar.__puiTimeTextStopped = true
 end
 
 local function CB_SetTestCastVisuals(bar, cfg, spellName)
@@ -238,6 +265,7 @@ local function CB_SetTestTimeText(bar, cfg, remaining, total)
   local showTotal = cfg.showTotal ~= false
 
   if cfg.__puiShowCastTime ~= false and (showRemaining or showTotal) then
+    bar.__puiTimeTextStopped = nil
     bar.timeText:Show()
 
     local remainingTenths = showRemaining
@@ -268,12 +296,7 @@ local function CB_SetTestTimeText(bar, cfg, remaining, total)
       bar.timeText:SetFormattedText("%.1f", totalTenths * 0.1)
     end
   else
-    bar.__puiTestTimeShowRemaining = nil
-    bar.__puiTestTimeShowTotal = nil
-    bar.__puiTestTimeRemainingTenths = nil
-    bar.__puiTestTimeTotalTenths = nil
-    bar.timeText:SetText("")
-    bar.timeText:Hide()
+    CB_StopTimeText(bar)
   end
 end
 
@@ -313,9 +336,8 @@ local function CB_UpdateInterruptShield(bar, unit, cfg)
 end
 
 local function CB_HideHolderAfterOUFHide(bar)
-  bar.timeTextBinding:Disable()
-  bar.targetText:SetText("")
-  bar.targetText:Hide()
+  CB_StopTimeText(bar)
+  CB_ClearCastTarget(bar)
 
   if bar.__puiInstantCast then
     return
@@ -332,12 +354,6 @@ local function CB_HideHolderAfterOUFHide(bar)
   bar.icon:Hide()
   bar.spellName:SetText("")
   bar.spellName:Hide()
-  bar.__puiTestTimeShowRemaining = nil
-  bar.__puiTestTimeShowTotal = nil
-  bar.__puiTestTimeRemainingTenths = nil
-  bar.__puiTestTimeTotalTenths = nil
-  bar.timeText:SetText("")
-  bar.timeText:Hide()
   bar.spark:Hide()
   bar.uninterrupt:Hide()
   bar.uninterruptLeft:Hide()
@@ -386,13 +402,7 @@ local function CB_CreateTimeTextBinding(fontString)
   return binding
 end
 
-local function CB_StopTimeText(bar)
-  bar.timeTextBinding:Disable()
-  bar.timeText:SetText("")
-  bar.timeText:Hide()
-end
-
-local function CB_StartTimeText(bar)
+local function CB_StartTimeText(bar, refreshDuration)
   local element = bar.status
   local cfg = bar.__puiState.cfg
 
@@ -403,10 +413,13 @@ local function CB_StartTimeText(bar)
     return
   end
 
-  local durationObject = element:GetTimerDuration()
-  if not durationObject then
-    CB_StopTimeText(bar)
-    return
+  local durationObject
+  if refreshDuration ~= false then
+    durationObject = element:GetTimerDuration()
+    if not durationObject then
+      CB_StopTimeText(bar)
+      return
+    end
   end
 
   local delay = bar.__puiCastDelay or 0
@@ -437,8 +450,14 @@ local function CB_StartTimeText(bar)
     bar.timeTextBinding:SetTextFormat(format, components)
   end
 
-  bar.timeTextBinding:SetDuration(durationObject)
-  bar.timeTextBinding:Enable()
+  if refreshDuration ~= false then
+    bar.timeTextBinding:SetDuration(durationObject)
+  end
+  bar.__puiTimeTextStopped = nil
+  if not bar.__puiTimeTextEnabled then
+    bar.timeTextBinding:Enable()
+    bar.__puiTimeTextEnabled = true
+  end
   bar.timeTextBinding:UpdateFontString()
   bar.timeText:Show()
 end
@@ -453,7 +472,7 @@ local function CB_OUF_CustomDelayText(element, delay, isChanneling)
   bar.__puiCastDelayTenths = tenths
   bar.__puiCastDelay = tenths / 10
   bar.__puiChanneling = isChanneling == true
-  CB_StartTimeText(bar)
+  CB_StartTimeText(bar, false)
 end
 
 
@@ -517,8 +536,7 @@ local function CB_OUF_PostCastStop(element, unit, spellID, empowerComplete)
   local bar, cfg, resolvedUnit = CB_GetBarState(element, unit)
 
   CB_StopTimeText(bar)
-  bar.targetText:SetText("")
-  bar.targetText:Hide()
+  CB_ClearCastTarget(bar)
 
   element.__puiActiveUnit = nil
   element.__puiMissingCastSince = nil
@@ -544,8 +562,7 @@ local function CB_OUF_PostCastFail(element, unit, spellID)
   local bar = element.__puiOwnerBar
 
   CB_StopTimeText(bar)
-  bar.targetText:SetText("")
-  bar.targetText:Hide()
+  CB_ClearCastTarget(bar)
 
   element.__puiActiveUnit = nil
   element.__puiMissingCastSince = nil
@@ -627,8 +644,7 @@ function CastBar:OnDisable()
       end
 
       CB_StopTimeText(bar)
-      bar.targetText:SetText("")
-      bar.targetText:Hide()
+      CB_ClearCastTarget(bar)
       if bar.clipWarningText then
         bar.clipWarningText:Hide()
       end
@@ -673,6 +689,7 @@ end
   CastBar.SetTestCastVisuals = CB_SetTestCastVisuals
   CastBar.SetTestTimeText = CB_SetTestTimeText
   CastBar.UpdateCastTarget = CB_UpdateCastTarget
+  CastBar.ClearCastTarget = CB_ClearCastTarget
   CastBar.ApplyUninterruptTextureMode = CB_ApplyUninterruptTextureMode
   CastBar.SetIdleVisuals = CB_SetIdleVisuals
   CastBar.CreateTimeTextBinding = CB_CreateTimeTextBinding

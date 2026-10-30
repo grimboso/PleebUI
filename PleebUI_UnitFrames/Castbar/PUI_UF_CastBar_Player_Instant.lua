@@ -5,6 +5,7 @@
 
 local ns = LibStub("AceAddon-3.0"):GetAddon("PleebUI").ModuleNamespace
 
+local CastBar = ns.Modules.CastBar
 
 local Module = {}
 ns.PUICastBarPlayerInstant = Module
@@ -122,7 +123,6 @@ function Module:Stop(bar, preserveLiveCast)
     return
   end
 
-  bar.timeTextBinding:Disable()
   bar.icon:Hide()
   bar.bg:SetAlpha(0)
   bar.__puiIsIdle = true
@@ -144,6 +144,27 @@ function Module:StopActive(owner)
   end
 end
 
+function Module:ApplyVisualState(bar)
+  CastBar.StopTimeText(bar)
+  CastBar.ClearCastTarget(bar)
+  bar.safeZone:Hide()
+  bar.safeZoneBorder:Hide()
+  bar.safeZoneText:Hide()
+  bar.spark:Hide()
+  bar.uninterrupt:Hide()
+  bar.uninterruptLeft:Hide()
+  bar.uninterruptRight:Hide()
+
+  bar.__puiIsIdle = false
+  bar.__puiCastbarEditMoverVisible = nil
+  bar.bg:SetAlpha(1)
+  bar:SetAlpha(1)
+  bar:Show()
+  bar.instantSpellName:SetShown(bar.__puiInstantShowSpellName)
+  bar.icon:SetShown(bar.__puiInstantShowIcon)
+  bar.instantOverlay:SetShown(bar.__puiInstantUseOverlay)
+end
+
 local function CB_ApplyInstantVisuals(bar, spellID)
   local spellName = bar.__puiInstantSpellNames[spellID]
   local spellTexture = bar.__puiInstantSpellTextures[spellID]
@@ -159,37 +180,12 @@ local function CB_ApplyInstantVisuals(bar, spellID)
     bar.__puiInstantSpellTextures[spellID] = spellTexture
   end
 
-  bar.instantStatus:SetStatusBarColor(
-    bar.__puiInstantColorR,
-    bar.__puiInstantColorG,
-    bar.__puiInstantColorB,
-    bar.__puiInstantAlpha
-  )
-
-  bar.__puiIsIdle = false
-  bar.__puiCastbarEditMoverVisible = nil
-  bar.bg:SetAlpha(1)
-  bar:SetAlpha(1)
-  bar:Show()
+  if not bar.__puiInstantCast then
+    Module:ApplyVisualState(bar)
+  end
 
   bar.instantSpellName:SetText(spellName)
-  bar.instantSpellName:SetShown(bar.__puiInstantShowSpellName)
   bar.icon:SetTexture(spellTexture)
-  bar.icon:SetShown(bar.__puiInstantShowIcon)
-  bar.instantOverlay:SetShown(bar.__puiInstantUseOverlay)
-
-  bar.timeTextBinding:Disable()
-  bar.timeText:SetText("")
-  bar.timeText:Hide()
-  bar.targetText:SetText("")
-  bar.targetText:Hide()
-  bar.safeZone:Hide()
-  bar.safeZoneBorder:Hide()
-  bar.safeZoneText:Hide()
-  bar.spark:Hide()
-  bar.uninterrupt:Hide()
-  bar.uninterruptLeft:Hide()
-  bar.uninterruptRight:Hide()
 
   return true
 end
