@@ -103,22 +103,55 @@ hooksecurefunc(Addon, "EnsureSchema", function()
   if profile.blizzardSkins == nil then profile.blizzardSkins = {} end
 end)
 
+local function GetLegacyWindowEnabled(settings, name)
+  if name == "QuestMapFrame" and settings.WorldMapFrame == false then return false end
+  local path = ""
+  for key in name:gmatch("[^.]+") do
+    path = path == "" and key or path .. "." .. key
+    if settings[path] == false then return false end
+  end
+  return true
+end
+
 local function GetSettings()
   local settings = Addon.db.profile.pui.blizzardSkins
-  if settings.groupedTogglesVersion ~= 1 then
-    local merged = {}
-    for _, owner in pairs(owners) do merged[owner] = settings[owner] end
+  if settings.groupedTogglesVersion ~= 2 then
+    local windows = {}
     for name, owner in pairs(owners) do
-      local value = settings[name]
-      if value ~= nil and (value == false or merged[owner] == nil) then merged[owner] = value end
+      if name ~= owner then
+        if settings.groupedTogglesVersion == 1 then
+          windows[name] = settings[owner] ~= false
+        else
+          windows[name] = GetLegacyWindowEnabled(settings, name)
+        end
+      end
     end
-    for name, owner in pairs(owners) do
-      if name ~= owner then settings[name] = nil end
-    end
-    for owner, value in pairs(merged) do settings[owner] = value end
-    settings.groupedTogglesVersion = 1
+    for name, enabled in pairs(windows) do settings[name] = enabled end
+    settings.groupedTogglesVersion = 2
   end
   return settings
+end
+
+local function IsWindowEnabled(settings, name)
+  local enabled = settings[name]
+  if enabled == nil then enabled = settings[owners[name] or name] end
+  return enabled ~= false
+end
+
+local function HasMixedFamilySettings(settings, owner)
+  local enabled = IsWindowEnabled(settings, owner)
+  for name, family in pairs(owners) do
+    if family == owner and IsWindowEnabled(settings, name) ~= enabled then return true end
+  end
+  return false
+end
+
+local function SetFamilyEnabled(owner, enabled)
+  local settings = GetSettings()
+  settings[owner] = enabled
+  for name, family in pairs(owners) do
+    if family == owner and name ~= owner then settings[name] = nil end
+  end
 end
 
 function Options.Register(name, label, category)
@@ -133,7 +166,7 @@ function Options.IsEnabled(name)
     sessionSettings = {}
     for key, value in pairs(GetSettings()) do sessionSettings[key] = value end
   end
-  return sessionSettings.enabled ~= false and sessionSettings[owners[name] or name] ~= false
+  return sessionSettings.enabled ~= false and IsWindowEnabled(sessionSettings, name)
 end
 
 function Options:GetOptions()
@@ -162,9 +195,13 @@ function Options:GetOptions()
     for name, entry in pairs(registered) do
       if entry.category == category then
         group.args[name] = {
-          type = "toggle", name = entry.label,
+          type = "toggle",
+          name = function()
+            return entry.label .. (HasMixedFamilySettings(GetSettings(), name) and " (mixed)" or "")
+          end,
+          desc = "Changing this toggle applies to every window in the group. Mixed groups keep your existing window choices until you change them.",
           get = function() return GetSettings()[name] ~= false end,
-          set = function(_, value) GetSettings()[name] = value end,
+          set = function(_, value) SetFamilyEnabled(name, value) end,
           disabled = function() return GetSettings().enabled == false end,
         }
       end
