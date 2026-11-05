@@ -1468,14 +1468,23 @@ _PUI_PRD_ApplyNativeTextConfig = function(self, bar, key)
     return false
   end
 
-  local resourceSettings = key == "primary" and self:GetPrimaryResourceSettings() or nil
-  local cfg = resourceSettings and resourceSettings.text or self.db.profile.text[key]
+  local cfg, appearanceText
+  if key == "primary" then
+    local resourceSettings = self:GetPrimaryResourceSettings()
+    if not resourceSettings then
+      return false
+    end
+    cfg = resourceSettings.text
+    appearanceText = cfg
+  else
+    cfg = self.db.profile.text[key]
+    appearanceText = self:GetBarAppearance(key).text
+  end
   local text, leftText, rightText = _PUI_PRD_GetNativeBarText(bar)
   local leftMode = cfg and cfg.leftVisibility or "HIDE"
   local rightMode = cfg and cfg.rightVisibility or "HIDE"
   local left = cfg and cfg.left or nil
   local right = cfg and cfg.right or nil
-  local appearanceText = resourceSettings and resourceSettings.text or self:GetBarAppearance(key).text
   local usesMouseover = leftMode == "MOUSEOVER" or rightMode == "MOUSEOVER"
 
   local state = _PUI_PRD_GetBarState(bar)
