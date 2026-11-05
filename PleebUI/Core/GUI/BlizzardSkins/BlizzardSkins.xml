@@ -7,6 +7,7 @@
   <Script file="PUI_TimeManager.lua"/>
   <Script file="PUI_Stopwatch.lua"/>
   <Script file="PUI_CharacterSheet.lua"/>
+  <Script file="PUI_CharacterSheetForever.lua"/>
   <Script file="PUI_Inspect.lua"/>
   <Script file="PUI_Reputation.lua"/>
   <Script file="PUI_ReputationDetail.lua"/>

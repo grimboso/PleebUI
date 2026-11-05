@@ -2,6 +2,7 @@
   <Script file="PUI_PRD_AuraSlotDriver.lua"/>
   <Script file="PUI_PRD_AuraWidget.lua"/>
   <Script file="PUI_PRD.lua"/>
+  <Script file="PUI_PRD_SwingTimer.lua"/>
   <Script file="PUI_PRD_Primary.lua"/>
   <Script file="Secondary\PUI_PRD_Secondary_Registry.lua"/>
   <Script file="Secondary\PUI_PRD_Secondary.lua"/>

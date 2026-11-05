@@ -15,6 +15,7 @@ local families = {
   { "CharacterFrame", "Character sheet", "Character & items", {
     "GearManagerPopupFrame", "ReputationFrame", "ReputationFrame.ReputationDetailFrame",
     "TokenFrame", "TokenFramePopup", "CurrencyTransferMenu", "CurrencyTransferLog",
+    "SkillsFrame", "PVPRankFrame", "StatisticsFrame",
     "ItemInteractionFrame", "ItemSocketingFrame", "ItemUpgradeFrame", "DressUpFrame",
     "SideDressUpFrame", "TransmogFrame",
   } },

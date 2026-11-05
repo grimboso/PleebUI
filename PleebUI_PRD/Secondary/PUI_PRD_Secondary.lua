@@ -1820,6 +1820,7 @@ local function _ApplyDiscreteSecondaryBars(self, cur, maxV, r, g, b, a, chargedM
   end
 
   _UpdateResourceThresholdCue(self.secondary, config, cur)
+  cur = cur or 0
 
   if self._puiSecondaryBuildMode == "SEGMENTED" then
     local segments = self.secondarySegments

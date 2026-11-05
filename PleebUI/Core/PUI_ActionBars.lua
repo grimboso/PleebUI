@@ -14,6 +14,16 @@ ns.ActionBarsDefaults = {
     tooltipMode = "enabled",
     useBlizzardVehicleUI = false,
 
+    experienceBar = {
+      enabled = false,
+      width = 500,
+      height = 14,
+      fillColor = { 0.56, 0.36, 0.82, 1 },
+      restedColor = { 0.20, 0.47, 0.82, 0.65 },
+      showTicks = false,
+      text = "blizzard",
+    },
+
     bars = {
       ["1"] = { enabled = true, buttonOffset = 0, flyoutDirection = "UP", visibility = {} },
       ["2"] = { enabled = true, buttonOffset = 0, flyoutDirection = "UP", visibility = {} },

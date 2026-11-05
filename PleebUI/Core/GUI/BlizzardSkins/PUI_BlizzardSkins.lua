@@ -18,6 +18,7 @@ local styledTabs = setmetatable({}, { __mode = "k" })
 local windowHeaders = setmetatable({}, { __mode = "k" })
 local scrollRows = setmetatable({}, { __mode = "k" })
 local scrollBars = setmetatable({}, { __mode = "k" })
+local coloredProgressBars = setmetatable({}, { __mode = "k" })
 local hooks = setmetatable({}, { __mode = "k" })
 local driver = CreateFrame("Frame")
 local loggedIn = false
@@ -608,6 +609,36 @@ function Skins.Bar(bar)
   Theme.SkinStatusBar(bar)
 end
 
+local function PaintProgressFill(bar)
+  local color = Theme.GetColors().accent
+  bar.Fill:SetVertexColor(color[1] * 0.7, color[2] * 0.7, color[3] * 0.7, color[4])
+end
+
+local function ApplyProgressTexture(bar)
+  bar.Fill:SetTexture(Theme.GetBarTexture())
+  bar.Fill:SetHeight(15)
+end
+
+function Skins.ColoredProgressBar(bar)
+  -- The client sets the width and visibility of Fill directly.
+  for _, region in ipairs({ bar:GetRegions() }) do
+    if region:IsObjectType("Texture") and region:GetAtlas() == "common-stat-bar-BG" then
+      region:ClearAllPoints()
+      region:SetPoint("LEFT", bar.FillArea)
+      region:SetPoint("RIGHT", bar.FillArea)
+      region:SetHeight(15)
+      region:SetColorTexture(0, 0, 0, 0.6)
+    end
+  end
+  bar.Fill:RemoveMaskTexture(bar.Mask)
+  Skins.Font(bar.Text, "tiny")
+  coloredProgressBars[bar] = true
+  Skins.Hook(bar, "SetFillTextureByColorType", ApplyProgressTexture)
+  Skins.Hook(bar, "UpdateBarColor", PaintProgressFill)
+  ApplyProgressTexture(bar)
+  PaintProgressFill(bar)
+end
+
 function Skins.DropdownArrow(button)
   Skins.Button(button)
   Skins.Hide(button.Texture)
@@ -856,6 +887,10 @@ function Skins.RefreshTheme(refreshWindows)
   for tab in pairs(styledTabs) do RefreshTabState(tab) end
   for button in pairs(styledButtons) do RefreshButtonState(button) end
   for scrollbar in pairs(scrollBars) do RefreshScrollBar(scrollbar) end
+  for bar in pairs(coloredProgressBars) do
+    ApplyProgressTexture(bar)
+    PaintProgressFill(bar)
+  end
   ns.BlizzardWindowControls.RefreshTheme()
   if refreshWindows == false then return end
   for _, window in ipairs(windows) do

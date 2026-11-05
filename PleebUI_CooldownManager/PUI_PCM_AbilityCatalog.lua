@@ -1,5 +1,12 @@
 local ns = LibStub("AceAddon-3.0"):GetAddon("PleebUI").ModuleNamespace
 
+local GetSpecialization = GetSpecialization
+local GetSpecializationInfo = GetSpecializationInfo
+if ns.Client.IsForever then
+  GetSpecialization = C_SpecializationInfo.GetSpecialization
+  GetSpecializationInfo = C_SpecializationInfo.GetSpecializationInfo
+end
+
 local Catalog = {}
 ns.PCMAbilityCatalog = Catalog
 ns.PCMCatalog = Catalog

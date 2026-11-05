@@ -212,14 +212,22 @@ local function OnLeave(button)
   GameTooltip:Hide()
 end
 
+local function SetButtonChecked(button, checked)
+  button:SetChecked(checked)
+  local border = button.__puiCheckedBorder
+  if border then
+    border:SetShown(checked)
+  end
+end
+
 local function ApplyButtonCheckedState(button, isCurrent, isAutoRepeat, isAutoCastPet)
-  button:SetChecked((isCurrent or isAutoRepeat) and not isAutoCastPet)
+  SetButtonChecked(button, (isCurrent or isAutoRepeat) and not isAutoCastPet)
 end
 
 local function UpdateButtonState(button)
   local action = button.action
   if not action then
-    button:SetChecked(false)
+    SetButtonChecked(button, false)
     return
   end
 
@@ -387,7 +395,7 @@ end
 local function UpdateButtonStateAndFlash(button)
   local action = button.action
   if not action then
-    button:SetChecked(false)
+    SetButtonChecked(button, false)
     button:StopFlash(true)
     return
   end
@@ -890,7 +898,7 @@ function Engine:ClearButton(button)
   button.lossOfControlCooldown:SetCooldownFromDurationObject(EMPTY_COOLDOWN_DURATION, true)
   button.__puiLossOfControlReplacesNormal = nil
   button:StopFlash(true)
-  button:SetChecked(false)
+  SetButtonChecked(button, false)
   button:ClearFlash()
   button:ClearProfessionQuality()
   button:UpdateAssistedCombatRotationFrame()
@@ -1754,6 +1762,8 @@ function Engine:OnEvent(event, arg1, arg2, ...)
     end
   elseif event == "ACTION_USABLE_CHANGED" then
     self:RefreshUsable(arg1)
+  elseif event == "ACTIONBAR_UPDATE_STATE" then
+    self:QueueRuntimeUpdate("state")
   elseif event == "ACTIONBAR_UPDATE_COOLDOWN" then
     self:QueueRuntimeUpdate("cooldown")
   elseif event == "SPELL_UPDATE_CHARGES" then
@@ -1853,6 +1863,7 @@ function Engine:Enable()
   frame:RegisterEvent("ACTIONBAR_SLOT_CHANGED")
   frame:RegisterEvent("ACTION_RANGE_CHECK_UPDATE")
   frame:RegisterEvent("ACTION_USABLE_CHANGED")
+  frame:RegisterEvent("ACTIONBAR_UPDATE_STATE")
   frame:RegisterEvent("ACTIONBAR_UPDATE_COOLDOWN")
   frame:RegisterEvent("SPELL_UPDATE_CHARGES")
   frame:RegisterEvent("SPELL_UPDATE_ICON")

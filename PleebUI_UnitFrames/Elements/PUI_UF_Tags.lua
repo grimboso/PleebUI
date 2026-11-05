@@ -33,8 +33,35 @@ local function RefreshNicknameSetting()
   return UseNSRTNicknames
 end
 
-function Tags.GetDisplayName(unit)
-  local fallback = UnitName(unit)
+local nameConstants = Constants and Constants.CharacterNameSeparatorConsts
+local SURNAME_SEPARATOR = nameConstants and nameConstants.CHARACTERNAME_SURNAME_SEPARATOR or " "
+
+function Tags.FormatCharacterName(name, surname, format, hideSurname)
+  if issecretvalue(name) or issecretvalue(surname) then return name end
+  if type(name) ~= "string" or type(surname) ~= "string" or surname == "" then return name end
+
+  local suffix = SURNAME_SEPARATOR .. surname
+  local hasSurname = name:sub(-#suffix) == suffix
+  if hideSurname or format == "first" then
+    return hasSurname and name:sub(1, -#suffix - 1) or name
+  elseif format == "last" then
+    return surname
+  end
+  return hasSurname and name or name .. suffix
+end
+
+function Tags.GetDisplayName(unit, format)
+  local fallback, surname = UnitName(unit)
+  if ns.Client.IsForever and format and not issecretvalue(fallback) and not issecretvalue(surname) and surname and surname ~= "" then
+    local hideSurname = false
+    if not C_PlayerInfo.ShouldDisplaySurname() then
+      local isSelf = UnitIsUnit(unit, "player")
+      hideSurname = issecretvalue(isSelf) or isSelf
+    end
+    fallback = Tags.FormatCharacterName(fallback, surname, format, hideSurname)
+  end
+
+  if issecretvalue(fallback) then return fallback end
 
   if UseNSRTNicknames ~= true then
     return fallback
@@ -73,12 +100,26 @@ function Tags.RegisterOUFTags()
     return true
   end
 
-  RegisterTag(oUF, "pui:name", "UNIT_NAME_UPDATE PLAYER_ENTERING_WORLD", function(u)
-    if not u or not UnitExists(u) then
-      return ""
-    end
+  local nameEvents = "UNIT_NAME_UPDATE PLAYER_ENTERING_WORLD"
+  if ns.Client.IsForever then
+    nameEvents = nameEvents .. " CVAR_UPDATE"
+    oUF.Tags.SharedEvents.CVAR_UPDATE = true
+  end
+  RegisterTag(oUF, "pui:name", nameEvents, function(u, _, format)
+    if not u then return "" end
+    local exists = UnitExists(u)
+    if issecretvalue(exists) or not exists then return "" end
 
-    return Tags.GetDisplayName(u)
+    return Tags.GetDisplayName(u, format)
+  end)
+
+  RegisterTag(oUF, "pui:level", "UNIT_LEVEL PLAYER_LEVEL_UP", function(u)
+    local exists = UnitExists(u)
+    if issecretvalue(exists) or not exists then return "" end
+
+    local level = _G.UnitEffectiveLevel(u)
+    if issecretvalue(level) then return level end
+    return level > 0 and level or "??"
   end)
 
   RegisterTag(oUF, "pui:curhp", "UNIT_HEALTH UNIT_MAXHEALTH", function(u)

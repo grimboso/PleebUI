@@ -176,6 +176,7 @@ local function RegisterVisibilityEvents(frame, mode)
   end
 
   if mode == "TARGET" or mode == "COMBAT_OR_TARGET" then
+    frame._puiTracksTargetVisibility = true
     frame:RegisterEvent("PLAYER_TARGET_CHANGED")
   end
 end
@@ -416,10 +417,11 @@ do
 
     local visibilityEvent = event == "PLAYER_REGEN_DISABLED"
       or event == "PLAYER_REGEN_ENABLED"
-      or event == "PLAYER_TARGET_CHANGED"
+      or event == "PLAYER_TARGET_CHANGED" and eventFrame._puiTracksTargetVisibility
 
     if visibilityEvent then
       currentOwner:RefreshSecondaryVisibility()
+      if event == "PLAYER_TARGET_CHANGED" then return end
     end
 
     if event == "PLAYER_REGEN_ENABLED" then
@@ -464,6 +466,7 @@ function M:RegisterSecondaryEvents()
   local frame = self._puiSecondaryEventFrame
   frame:UnregisterAllEvents()
   frame._puiAdapterEvents = nil
+  frame._puiTracksTargetVisibility = nil
 
   local hasBuffCue = false
   for _, resource in ipairs(self.secondaryResources or {}) do

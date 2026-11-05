@@ -427,6 +427,11 @@ local function CombatWarning_RefreshMeleeSpec()
     return
   end
 
+  if ns.Client.IsForever then
+    CombatWarningMeleeSpec = false
+    return
+  end
+
   local specIndex = GetSpecialization()
   local specID = specIndex and GetSpecializationInfo(specIndex)
   if not specID then
@@ -938,6 +943,10 @@ local function IsPetClass()
   -- Mage: only warn if the player actually knows Summon Water Elemental.
   if class == "MAGE" then
     return IsPlayerSpell(31687)
+  end
+
+  if ns.Client.IsForever then
+    return class == "WARLOCK" or (class == "HUNTER" and IsPlayerSpell(883))
   end
 
   if class == "HUNTER" or class == "DEATHKNIGHT" then

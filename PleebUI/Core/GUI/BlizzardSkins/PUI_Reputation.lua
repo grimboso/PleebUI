@@ -17,6 +17,10 @@ end
 local function RefreshHeader(row)
   local collapsed = row:IsCollapsed()
   if issecretvalue(collapsed) then return end
+  if ns.Client.IsForever then
+    Theme.ApplyExpandCollapseTexture(row.StateIcon, not collapsed)
+    return
+  end
   Theme.ApplyExpandCollapseTexture(row.Right, not collapsed)
   Theme.ApplyExpandCollapseTexture(row.HighlightRight, not collapsed)
 end
@@ -63,7 +67,32 @@ local function RefreshRow(row)
   end
 end
 
+local function InstallForeverRow(row)
+  if row.Content then
+    Skins.Font(row.Content.Name)
+    Skins.ColoredProgressBar(row.Content.ReputationBar)
+    if row.ToggleCollapseButton then
+      Skins.Hook(row.ToggleCollapseButton, "RefreshIcon", RefreshToggle)
+      RefreshToggle(row.ToggleCollapseButton)
+    end
+  else
+    for _, region in ipairs({ row:GetRegions() }) do
+      if region:IsObjectType("Texture") and region:GetAtlas() == "common-button-list-collapseExpand" then
+        Skins.Hide(region)
+      end
+    end
+    Skins.Surface(row, true)
+    Skins.Font(row.Name, "nav")
+    Skins.Hook(row, "Initialize", RefreshHeader)
+    RefreshHeader(row)
+  end
+end
+
 local function RefreshRows(frame)
+  if ns.Client.IsForever then
+    Skins.ScrollRows(frame.ScrollBox, InstallForeverRow, false)
+    return
+  end
   Skins.ScrollRows(frame.ScrollBox, InstallRow, RefreshRow)
   RefreshBarTheme()
 end
@@ -77,3 +106,12 @@ Skins.Register("Blizzard_UIPanels_Game", "ReputationFrame", {
   onTheme = RefreshBarTheme,
   manageControls = false,
 })
+
+if ns.Client.IsForever then
+  Skins.Register("Blizzard_UIPanels_Game", "ReputationFrame.ReputationDetailFrame", {
+    install = function(frame)
+      Skins.ColoredProgressBar(frame.StandingBar)
+    end,
+    manageControls = false,
+  })
+end

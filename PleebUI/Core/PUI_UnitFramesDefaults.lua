@@ -277,6 +277,8 @@ UFDefaults.Player = {
 UFDefaults.Target = {
   target = {
     enabled = true,
+    showClassification = true,
+    classificationInInstances = false,
     width = 200,
     height = 40,
     powerHeight = 8,
@@ -288,7 +290,7 @@ UFDefaults.Target = {
       width = 32,
       zoom = 0,
     },
-    text = { healthMode = "CUR_PERCENT" },
+    text = { healthMode = "CUR_PERCENT", showLevel = true, colorHealthByDifficulty = true },
     point = "CENTER",
     relativeTo = "UIParent",
     relativePoint = "CENTER",
@@ -439,7 +441,7 @@ UFDefaults.Boss = {
       side = "LEFT",
       zoom = 0,
     },
-    text = { healthMode = "CUR_PERCENT" },
+    text = { healthMode = "CUR_PERCENT", showLevel = true, colorHealthByDifficulty = true },
     auras = {
       showBuffs = true,
       onlyPlayerBuffs = false,

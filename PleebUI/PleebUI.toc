@@ -1,4 +1,4 @@
-## Interface: 120105
+## Interface: 120105, 16001
 ## Title: PleebUI
 ## Notes:
 ## Author: Pleeb
@@ -9,6 +9,8 @@
 ## OptionalDeps: Ace3, LibSharedMedia-3.0, NorthernSkyRaidTools
 ## SavedVariables: PleebUIDB, LibPleebugDB
 ## LoadSavedVariablesFirst: 1
+
+Core\PUI_Client.lua
 
 # Bootstrap
 Bootstrap.xml

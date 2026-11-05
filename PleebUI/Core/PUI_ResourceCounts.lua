@@ -1,4 +1,11 @@
 local _, ns = ...
+
+local GetSpecialization = GetSpecialization
+local GetSpecializationInfo = GetSpecializationInfo
+if ns.Client.IsForever then
+  GetSpecialization = C_SpecializationInfo.GetSpecialization
+  GetSpecializationInfo = C_SpecializationInfo.GetSpecializationInfo
+end
 local Addon = ns.Addon
 local Counts = {}
 ns.ResourceCounts = Counts

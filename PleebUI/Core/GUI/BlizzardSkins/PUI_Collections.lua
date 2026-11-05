@@ -1,4 +1,5 @@
 local _, ns = ...
+if ns.Client.IsForever then return end
 local Skins = ns.BlizzardSkins
 local collectionButtons = setmetatable({}, { __mode = "k" })
 local collectionModels = setmetatable({}, { __mode = "k" })

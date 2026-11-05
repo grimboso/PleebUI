@@ -1677,13 +1677,23 @@ local function PRDPreview_RefreshLayout(box)
     end
     attachedHeight = attachedHeight + entry.bar.frame:GetHeight()
   end
+  local attachedRoot = box.__puiPRDPreviewAttachedRoot
+  local swingTimer = ns.PRDSwingTimer
+  if swingTimer.available and not profile.swingTimer.detached then
+    attachedHeight = attachedHeight + swingTimer.LayoutPreview(
+      box,
+      attachedRoot,
+      profile.showSwingTimer == true,
+      profile.swingTimer,
+      attachedHeight
+    )
+  end
 
   local maxWidth = stackWidth
   local totalHeight = attachedHeight
   local cursorY = 0
-  local attachedRoot = box.__puiPRDPreviewAttachedRoot
 
-  if #attached > 0 then
+  if attachedHeight > 0 then
     attachedRoot:SetSize(stackWidth, math_max(1, attachedHeight))
     attachedRoot:Show()
 
@@ -1704,7 +1714,7 @@ local function PRDPreview_RefreshLayout(box)
   end
 
   local outerBorder = profile.outerBorder or {}
-  local showOuterBorderInteraction = #attached > 0 and outerBorder.enabled == true
+  local showOuterBorderInteraction = attachedHeight > 0 and outerBorder.enabled == true
 
   if showOuterBorderInteraction then
     PRD:ApplyBarBorder(
@@ -1733,6 +1743,13 @@ local function PRDPreview_RefreshLayout(box)
     frame:SetPoint("TOP", layout, "TOP", 0, -cursorY)
     cursorY = cursorY + frame:GetHeight()
     maxWidth = math_max(maxWidth, frame:GetWidth())
+  end
+
+  if swingTimer.available and profile.swingTimer.detached and profile.showSwingTimer then
+    cursorY = cursorY + swingTimer.LayoutPreview(box, layout, true, profile.swingTimer, cursorY)
+    maxWidth = math_max(maxWidth, profile.swingTimer.width)
+  elseif swingTimer.available and profile.swingTimer.detached and box.swingTimerPreview then
+    box.swingTimerPreview:Hide()
   end
 
   totalHeight = cursorY
@@ -4158,7 +4175,7 @@ do
     end
 
     local args = {}
-    if resourceKey == "COMBO_POINTS" and PLAYER_CLASS == "ROGUE" then
+    if resourceKey == "COMBO_POINTS" and PLAYER_CLASS == "ROGUE" and not ns.Client.IsForever then
       args.colorChargedPoints = {
         type = "toggle", name = "Color charged combo points", order = 1,
         desc = "Highlights charged points in the segmented display, including points that are not filled yet.",
@@ -5229,6 +5246,93 @@ do
     }, "\031")
   end
 
+  local function PRD_BuildSwingTimerArgs()
+    local function GetConfig()
+      return PRD.db.profile.swingTimer
+    end
+
+    local function SetOption(key, value)
+      GetConfig()[key] = value
+      Addon:ApplyOptionsChange("PRD", { layout = true, mover = key == "detached" })
+    end
+
+    local function Range(key, name, order, minimum, maximum, disabled, step)
+      return {
+        type = "range", name = name, order = order,
+        min = minimum, max = maximum, step = step or 1, disabled = disabled,
+        get = function() return GetConfig()[key] end,
+        set = function(_, value) SetOption(key, value) end,
+      }
+    end
+
+    local function Color(key, name, order)
+      return {
+        type = "color", name = name, order = order, hasAlpha = true,
+        get = function() return unpack(GetConfig()[key]) end,
+        set = function(_, r, g, b, a) SetOption(key, { r, g, b, a }) end,
+      }
+    end
+
+    local function CountdownHidden()
+      return not GetConfig().showCountdown
+    end
+
+    return {
+      enabled = {
+        type = "toggle", name = "Show swing timer", order = 1, width = "full",
+        desc = "Shows melee swings, Auto Shot, and wand attacks.",
+        get = function() return PRD.db.profile.showSwingTimer == true end,
+        set = function(_, value)
+          PRD.db.profile.showSwingTimer = value
+          Addon:ApplyOptionsChange("PRD", { layout = true, mover = true })
+        end,
+      },
+      height = Range("height", "Bar height", 2, 4, 40),
+      detached = {
+        type = "toggle", name = "Detach swing timer", order = 3,
+        desc = "Gives the swing timer its own mover and width.",
+        get = function() return GetConfig().detached end,
+        set = function(_, value) SetOption("detached", value) end,
+      },
+      width = Range("width", "Detached width", 4, 120, 600, function()
+        return not GetConfig().detached
+      end),
+      texture = {
+        type = "select", dialogControl = "LSM30_Statusbar", name = "Texture", order = 5,
+        values = function() return OptionsUtil.BuildStatusbarValues(false) end,
+        get = function() return GetConfig().texture end,
+        set = function(_, value) SetOption("texture", value) end,
+      },
+      mainHandColor = Color("mainHandColor", "Main hand color", 6),
+      offHandColor = Color("offHandColor", "Off hand color", 7),
+      rangedColor = Color("rangedColor", "Ranged color", 8),
+      borderSize = Range("borderSize", "Border size", 9, 0, 12),
+      borderColor = Color("borderColor", "Border color", 10),
+      showCountdown = {
+        type = "toggle", name = "Show countdown", order = 11,
+        get = function() return GetConfig().showCountdown end,
+        set = function(_, value) SetOption("showCountdown", value) end,
+      },
+      font = {
+        type = "select", dialogControl = "LSM30_Font", name = "Countdown font", order = 12,
+        values = OptionsUtil.BuildFontValues,
+        disabled = CountdownHidden,
+        get = function() return OptionsUtil.ResolveFontKey(GetConfig().font, false) end,
+        set = function(_, value) SetOption("font", value) end,
+      },
+      fontSize = Range("fontSize", "Countdown font size", 13, 6, 32, CountdownHidden),
+      showWindup = {
+        type = "toggle", name = "Show ranged wind-up zone", order = 14,
+        desc = "Marks when to stop moving for Auto Shot or wand Shoot.",
+        get = function() return GetConfig().showWindup end,
+        set = function(_, value) SetOption("showWindup", value) end,
+      },
+      windupLead = Range("windupLead", "Wind-up lead time (sec)", 15, 0.1, 1, function()
+        return not GetConfig().showWindup
+      end, 0.05),
+    }
+  end
+
   local function PRDRootProvider()
     local provider = {}
 
@@ -5266,6 +5370,15 @@ do
           },
         },
       }
+
+      if ns.PRDSwingTimer.available then
+        options.args.swingTimer = {
+          type = "group",
+          name = "Swing Timer",
+          order = 4,
+          args = (buildAll or activeTab == "swingTimer") and PRD_BuildSwingTimerArgs() or {},
+        }
+      end
 
       return options
     end

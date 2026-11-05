@@ -59,8 +59,23 @@ local function ApplyProvider(frame, state)
   frame.Power:SetValue(power)
 
   local name = Presentation.Read(provider, "name", nil, frame, state)
-  if name ~= nil then
-    frame.NameText:SetText(name)
+  if issecretvalue(name) or name ~= nil then
+    if ns.Client.IsForever then
+      local text = state.config and state.config.text
+      local format = text and text.nameFormat or "full"
+      if frame.unit == "player" then
+        local playerName = ns.UFTags.GetDisplayName("player", format)
+        if issecretvalue(playerName) or playerName then name = playerName end
+      else
+        name = ns.UFTags.FormatCharacterName(name, Presentation.Read(provider, "surname", nil, frame, state), format)
+      end
+    end
+    if frame.__puiTextApplyShowLevel then
+      local level = frame.unit:match("^boss%d+$") and "??" or UnitEffectiveLevel("player")
+      frame.NameText:SetFormattedText("%s %s", level, name)
+    else
+      frame.NameText:SetText(name)
+    end
   end
 
   local healthText = Presentation.Read(provider, "healthText", nil, frame, state)

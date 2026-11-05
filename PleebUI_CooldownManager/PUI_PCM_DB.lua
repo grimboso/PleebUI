@@ -1,6 +1,13 @@
 
 local ns = LibStub("AceAddon-3.0"):GetAddon("PleebUI").ModuleNamespace
 
+local GetNumSpecializations = GetNumSpecializations
+local GetSpecializationInfo = GetSpecializationInfo
+if ns.Client.IsForever then
+  GetNumSpecializations = ns.Client.GetNumSpecializations
+  GetSpecializationInfo = C_SpecializationInfo.GetSpecializationInfo
+end
+
 local Addon = ns.Addon
 local P = select(1, ns.Pleebug:DropIn(ns, { name = "PCM", bucket = "DB" }))
 
@@ -17,34 +24,8 @@ local function _PCM_DB_Attach(Cooldowns)
   local Round = ns.Pixel.Round
 
   local function _GetWidthModeForViewer(viewerKey, style)
-    if not viewerKey then
-      return "icon"
-    end
-
     style = style or ns.PCM_DBExports.GetStyleDB()
-    if not style then
-      if viewerKey == "EssentialCooldownViewer" or viewerKey == "UtilityCooldownViewer" then
-        return "fixed"
-      end
-      return "icon"
-    end
-
-    style.viewerWidthMode = style.viewerWidthMode or {}
-    local m = style.viewerWidthMode[viewerKey]
-
-    -- Defaults:
-    -- Essential + Utility should start in fixed width mode.
-    if m == nil and (viewerKey == "EssentialCooldownViewer" or viewerKey == "UtilityCooldownViewer") then
-      style.viewerWidthMode[viewerKey] = "fixed"
-      return "fixed"
-    end
-
-    -- Explicit mode from options
-    if m == "fixed" then
-      return "fixed"
-    end
-
-    return "icon"
+    return style.viewerWidthMode[viewerKey] == "fixed" and "fixed" or "icon"
   end
 
   local function _GetFixedWidthForViewer(viewerKey, style)
@@ -1679,6 +1660,8 @@ do
   end
 
   -- Profile style DB (db.profile.cooldownManager.style)
+  local abilityViewerKeys = { "EssentialCooldownViewer", "UtilityCooldownViewer" }
+
   function E.GetStyleDB(root)
     root = root or E.GetPCMRoot()
     if not root then
@@ -1705,7 +1688,7 @@ do
         iconSize = 36,
         iconSpacing = 2,
 
-        viewerSizes      = {},
+        viewerSizes      = { EssentialCooldownViewer = 35, UtilityCooldownViewer = 35 },
         viewerSpacing    = {},
         viewerColumns    = {},
         viewerRowGrowth  = {},
@@ -1728,6 +1711,15 @@ do
     style.viewerRowGrowth  = style.viewerRowGrowth  or {}
     style.viewerWidthMode  = style.viewerWidthMode  or {}
     style.viewerFixedWidth = style.viewerFixedWidth or {}
+
+    for _, viewerKey in ipairs(abilityViewerKeys) do
+      if style.viewerWidthMode[viewerKey] == nil then
+        style.viewerWidthMode[viewerKey] = "icon"
+        if style.viewerSizes[viewerKey] == nil then
+          style.viewerSizes[viewerKey] = 35
+        end
+      end
+    end
 
     -- BuffViewer defaults live here now too.
     style.buffBar = style.buffBar or {}

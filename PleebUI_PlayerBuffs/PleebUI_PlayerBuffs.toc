@@ -1,4 +1,4 @@
-## Interface: 120105
+## Interface: 120105, 16001
 ## Title: PleebUI Player Buffs
 ## Notes: Player buffs for PleebUI.
 ## Author: Pleeb
