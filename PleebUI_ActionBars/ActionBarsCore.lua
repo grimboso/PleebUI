@@ -368,7 +368,21 @@ local function StyleButtonStateTextures(button, icon)
 
   StyleButtonStateTexture(pushed, icon, 0.9, 0.8, 0.1, 0.3)
   StyleButtonStateTexture(highlight, icon, 1, 1, 1, 0.3)
-  StyleButtonStateTexture(checked, icon, 1, 1, 1, 0.3)
+  if button.__puiActionBarManaged then
+    StyleButtonStateTexture(button.Flash, icon, 1, 0.08, 0.08, 0.55)
+  end
+  if button.__puiActionBarManaged then
+    HideRegion(checked)
+    local border = CreateFrame("Frame", nil, button, "BackdropTemplate")
+    border:SetFrameLevel(button:GetFrameLevel() + 11)
+    border:SetAllPoints(icon)
+    border:SetBackdrop({ edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 3 })
+    border:SetBackdropBorderColor(1, 0.78, 0.15, 1)
+    border:SetShown(button:GetChecked())
+    button.__puiCheckedBorder = border
+  else
+    StyleButtonStateTexture(checked, icon, 1, 1, 1, 0.3)
+  end
 end
 
 local function CreateEquippedBorderEdge(parent, alpha)

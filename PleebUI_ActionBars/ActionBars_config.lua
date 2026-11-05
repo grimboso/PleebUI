@@ -1646,6 +1646,72 @@ local function ActionBarsOptionsProvider(Addon)
     ArrangeBarPage(tabs.special.args.pet.args)
     ArrangeBarPage(tabs.special.args.stance.args)
 
+    local experience = db.experienceBar
+    local function SetExperienceOption(key, value)
+      experience[key] = value
+      ns.ExperienceBar:Update()
+    end
+
+    local function ExperienceDisabled()
+      return not experience.enabled
+    end
+
+    local function ExperienceSize(key, name, order, min, max)
+      return {
+        type = "range", name = name, order = order, min = min, max = max, step = 1,
+        disabled = ExperienceDisabled,
+        get = function() return experience[key] end,
+        set = function(_, value) SetExperienceOption(key, value) end,
+      }
+    end
+
+    local function ExperienceColor(key, name, order)
+      return {
+        type = "color", name = name, order = order, hasAlpha = true,
+        disabled = ExperienceDisabled,
+        get = function() return unpack(experience[key]) end,
+        set = function(_, r, g, b, a) SetExperienceOption(key, { r, g, b, a }) end,
+      }
+    end
+
+    tabs.experienceBar = {
+      type = "group",
+      name = "Experience Bar",
+      order = 200,
+      args = {
+        enabled = {
+          type = "toggle",
+          name = "Enable",
+          desc = "Move the bar in PleebUI Edit Mode.",
+          order = 10,
+          get = function() return experience.enabled end,
+          set = function(_, value) SetExperienceOption("enabled", value) end,
+        },
+        width = ExperienceSize("width", "Width", 20, 100, 1200),
+        height = ExperienceSize("height", "Height", 30, 6, 48),
+        fillColor = ExperienceColor("fillColor", "Fill color", 40),
+        restedColor = ExperienceColor("restedColor", "Rested color", 50),
+        showTicks = {
+          type = "toggle",
+          name = "Show bar ticks",
+          order = 55,
+          disabled = ExperienceDisabled,
+          get = function() return experience.showTicks end,
+          set = function(_, value) SetExperienceOption("showTicks", value) end,
+        },
+
+        text = {
+          type = "select",
+          name = "XP text",
+          order = 60,
+          values = { blizzard = "Blizzard setting", always = "Always show", hidden = "Hide" },
+          disabled = ExperienceDisabled,
+          get = function() return experience.text end,
+          set = function(_, value) SetExperienceOption("text", value) end,
+        },
+      },
+    }
+
     return {
       type = "group",
       name = "Action bars",

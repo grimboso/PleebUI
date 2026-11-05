@@ -2608,7 +2608,11 @@ local function _PUI_RefreshRootRegistryNav(frame)
 
       if meta and meta.navExpandable == true then
         _PUI_SetRootNavGroupExpanded(meta.navGroup, not meta.navExpanded)
-        Addon:OpenOptions({ node.key }, false, true)
+        if node.key == _PUI_GetSelectedRootRegistryKey() then
+          _PUI_RefreshRootRegistryNav(frame)
+        else
+          Addon:OpenOptions({ node.key }, false, true)
+        end
         return
       end
 

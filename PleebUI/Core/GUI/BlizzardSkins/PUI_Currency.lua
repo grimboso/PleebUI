@@ -21,7 +21,9 @@ end
 local function InstallRow(row)
   local surface = Skins.Surface(row, true)
   surface:SetFrameLevel(math.max(0, row:GetFrameLevel() - 2))
-  if row.Right then
+  if ns.Client.IsForever and row.StateIcon then
+    Skins.Font(row.Name, "nav")
+  elseif row.Right then
     for _, key in ipairs({ "Left", "Middle", "HighlightLeft", "HighlightMiddle" }) do Skins.Hide(row[key]) end
     Skins.Font(row.Name, "nav")
     Skins.Hook(row, "UpdateCollapsedState", RefreshHeader)

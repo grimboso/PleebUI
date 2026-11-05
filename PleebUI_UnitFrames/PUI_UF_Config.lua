@@ -1752,6 +1752,20 @@ local function UFCB_BuildSharedTextLeafArgs(opts)
   return UFCB_MergeOptionArgs(opts.prefixArgs, args, opts.suffixArgs)
 end
 
+local NAME_FORMAT_VALUES = {
+  full = "First and last name",
+  first = "First name only",
+  last = "Last name only",
+}
+
+local function UFCB_BuildNameFormatOption(get, set)
+  return {
+    type = "select", name = "Name format", order = 20,
+    values = NAME_FORMAT_VALUES, sorting = { "full", "first", "last" },
+    get = get, set = set,
+  }
+end
+
 local function UFCB_BuildUnitTextArgs(unitKey, kind)
   local cfg = UF:GetConfigUnit(unitKey)
   local ufDB = UF.db.profile
@@ -1858,10 +1872,13 @@ local function UFCB_BuildUnitTextArgs(unitKey, kind)
 
         if kind == "name" then
           text.hideNameText = defaultText.hideNameText
+          text.showLevel = defaultText.showLevel
+          text.nameFormat = defaultText.nameFormat
 
         elseif kind == "health" then
           text.hideHealthText = defaultText.hideHealthText
           text.healthMode = defaultText.healthMode
+          text.colorHealthByDifficulty = defaultText.colorHealthByDifficulty
 
         elseif kind == "power" then
           text.powerMode = defaultText.powerMode
@@ -1924,6 +1941,37 @@ local function UFCB_BuildUnitTextArgs(unitKey, kind)
       end,
     },
   }
+
+  if unitKey == "target" or unitKey == "boss" then
+    local key, label
+    if kind == "name" then
+      key, label = "showLevel", "Show level"
+    elseif kind == "health" then
+      key, label = "colorHealthByDifficulty", "Color health numbers by difficulty"
+    end
+    if key then
+      prefixArgs[key] = {
+        type = "toggle", name = label, order = 25,
+        get = function() return text[key] == true end,
+        set = function(_, value)
+          if UFCB_BlockCombat() then return end
+          text[key] = value
+          Addon:ApplyOptionsChange("UnitFrames", { mode = "text", unit = unitKey })
+        end,
+      }
+    end
+  end
+
+  if kind == "name" and ns.Client.IsForever then
+    prefixArgs.nameFormat = UFCB_BuildNameFormatOption(
+      function() return text.nameFormat or "full" end,
+      function(_, value)
+        if UFCB_BlockCombat() then return end
+        text.nameFormat = value
+        Addon:ApplyOptionsChange("UnitFrames", { mode = "text", unit = unitKey })
+      end
+    )
+  end
 
   if kind == "name" then
     prefixArgs.hideNameText = {
@@ -5759,6 +5807,7 @@ local function UFCB_BuildPartyTextArgs(kind, groupKind)
 
       if kind == "name" then
         db.colors.useClassForNames = defaultColors.useClassForNames
+        db.text.nameFormat = defaultText.nameFormat
       end
     end)
 
@@ -5778,6 +5827,14 @@ local function UFCB_BuildPartyTextArgs(kind, groupKind)
 
   if cfg.modeKey then
     prefixArgs.mode = BuildGroupedTextModeArg()
+  elseif kind == "name" and ns.Client.IsForever then
+    prefixArgs.nameFormat = UFCB_BuildNameFormatOption(
+      function()
+        local text = GetDB().text
+        return text and text.nameFormat or "full"
+      end,
+      function(_, value) SetTextValue("nameFormat", value) end
+    )
   end
 
   for _, colorDef in ipairs(cfg.colors or {}) do
@@ -7476,6 +7533,27 @@ local function UFCB_BuildUnitBaseLeafSpecs(unitKey, opts)
       showPvPIndicator = general.showPvPIndicator,
       showCombatIndicator = general.showCombatIndicator,
     })
+  end
+  if unitKey == "target" then
+    local function ClassificationOption(key, name, order)
+      return {
+        type = "toggle", name = name, order = order,
+        disabled = key == "classificationInInstances" and function()
+          return UF:GetConfigUnit(unitKey).showClassification ~= true
+        end or nil,
+        get = function() return UF:GetConfigUnit(unitKey)[key] == true end,
+        set = function(_, value)
+          if UFCB_BlockCombat() then return end
+          UF:GetConfigUnit(unitKey)[key] = value
+          Addon:ApplyOptionsChange("UnitFrames", { mode = "text", unit = unitKey })
+        end,
+      }
+    end
+    indicators.classification = UFCB_BuildInlineArgsGroup("Elite and rare", 10, {
+      enabled = ClassificationOption("showClassification", "Elite/Rare indicator", 10),
+      inInstances = ClassificationOption("classificationInInstances", "Show in instances", 20),
+    })
+    indicators.classification.arg = { puiExplicit = true }
   end
   local specs = UFCB_BuildFrameLeafSpecs(general,
     UFCB_BuildUnitTextArgs(unitKey, "name"), UFCB_BuildUnitTextArgs(unitKey, "health"),

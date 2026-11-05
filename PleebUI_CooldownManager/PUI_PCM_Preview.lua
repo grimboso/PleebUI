@@ -531,24 +531,19 @@ local function PCMPreview_EnsureBarCount(panel, count)
 end
 
 local function PCMPreview_GetViewerStyle(root, viewerKey, defaultWidth)
-  local style = type(root) == "table" and root.style or {}
+  local ownedViewer = viewerKey == "EssentialCooldownViewer"
+    or viewerKey == "UtilityCooldownViewer"
+  local style = ownedViewer and DB.GetStyleDB(root) or (type(root) == "table" and root.style or {})
   local sizes = type(style.viewerSizes) == "table" and style.viewerSizes or {}
   local spacings = type(style.viewerSpacing) == "table" and style.viewerSpacing or {}
   local columns = type(style.viewerColumns) == "table" and style.viewerColumns or {}
   local growth = type(style.viewerGrowth) == "table" and style.viewerGrowth or {}
   local rowGrowth = type(style.viewerRowGrowth) == "table" and style.viewerRowGrowth or {}
-  local widthModes = type(style.viewerWidthMode) == "table" and style.viewerWidthMode or {}
   local fixedWidths = type(style.viewerFixedWidth) == "table" and style.viewerFixedWidth or {}
   local columnCount = columns[viewerKey] or 0
   local growthMode = growth[viewerKey]
   local rowGrowthMode = rowGrowth[viewerKey] == "UP" and "UP" or "DOWN"
-  local widthMode = widthModes[viewerKey] == "icon" and "icon" or "fixed"
-  local ownedViewer = viewerKey == "EssentialCooldownViewer"
-    or viewerKey == "UtilityCooldownViewer"
-
-  if viewerKey == "BuffIconCooldownViewer" then
-    widthMode = "icon"
-  end
+  local widthMode = ownedViewer and Cooldowns._GetWidthModeForViewer(viewerKey, style) or "icon"
 
   if growthMode ~= "RIGHT" and growthMode ~= "LEFT" then
     growthMode = "CENTER"

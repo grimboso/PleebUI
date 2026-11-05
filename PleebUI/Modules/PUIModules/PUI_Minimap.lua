@@ -36,6 +36,8 @@ function MinimapModule:OnInitialize()
       -- Position is stored as TOPRIGHT offsets (20px from top-right by default).
       x                     = -20,
       y                     = -20,
+      dayNightX             = -4,
+      dayNightY             = -4,
 
 
       -- Minimap-attached element toggles
@@ -1083,6 +1085,46 @@ local function ApplyMinimapElementHides(db)
 end
 
 
+local dayNightBlizzardAnchor
+local dayNightScaleHooked
+local dayNightMoverKey = "MinimapDayNight"
+
+local function ApplyDayNightPosition(indicator, db)
+  indicator:ClearAllPoints()
+  indicator:SetPoint("TOPRIGHT", _G.Minimap, "TOPRIGHT", db.dayNightX, db.dayNightY)
+end
+
+local function UpdateDayNightPosition(enabled)
+  local cluster = _G.MinimapCluster
+  local indicator = cluster and cluster.DielFrame
+  if not indicator or indicator:IsForbidden() then
+    return
+  end
+
+  if enabled then
+    if not dayNightBlizzardAnchor then
+      dayNightBlizzardAnchor = { indicator:GetPoint(1) }
+    end
+    if not dayNightScaleHooked then
+      dayNightScaleHooked = true
+      hooksecurefunc(cluster, "SetEditModeScale", function()
+        if dayNightBlizzardAnchor then
+          dayNightBlizzardAnchor = { indicator:GetPoint(1) }
+          ApplyDayNightPosition(indicator, MinimapModule.db.profile)
+          FrameUtil:RefreshGhostMover(dayNightMoverKey)
+        end
+      end)
+    end
+    ApplyDayNightPosition(indicator, MinimapModule.db.profile)
+  elseif dayNightBlizzardAnchor then
+    indicator:ClearAllPoints()
+    indicator:SetPoint(unpack(dayNightBlizzardAnchor, 1, 5))
+    dayNightBlizzardAnchor = nil
+  end
+
+  FrameUtil:RefreshGhostMover(dayNightMoverKey)
+end
+
 local function ApplySquareMask(db)
   local map = _G.Minimap
   if not map or map:IsForbidden() then
@@ -1189,6 +1231,7 @@ local function ApplySquareMask(db)
   end
 
   ApplyMinimapElementHides(db)
+  UpdateDayNightPosition(true)
 end
 
 
@@ -1219,6 +1262,75 @@ local function GetMinimapMoverGeometry(minimapCluster)
   return width, height
 end
 
+local function RegisterDayNightMover(minimapMover)
+  if not dayNightBlizzardAnchor then
+    return
+  end
+
+  local cluster = _G.MinimapCluster
+  local indicator = cluster.DielFrame
+  local map = _G.Minimap
+  local function IsAvailable()
+    return dayNightBlizzardAnchor ~= nil
+  end
+
+  FrameUtil:EnsureGhostMover(dayNightMoverKey, {
+    label = "Day/night indicator",
+    moduleKey = "minimap",
+    moduleLabel = "Minimap",
+    optionsString = "Minimap",
+    liveFrame = indicator,
+    isAvailable = IsAvailable,
+    smartSnap = { family = "positionOnly", isRuntimeActive = IsAvailable },
+    getSize = function()
+      local scale = indicator:GetEffectiveScale() / UIParent:GetEffectiveScale()
+      return indicator:GetWidth() * scale, indicator:GetHeight() * scale
+    end,
+    getPoint = function()
+      return "TOPRIGHT", indicator, "TOPRIGHT", 0, 0
+    end,
+    shouldShow = function()
+      return IsAvailable() and ns.Flags.IsEditing == true
+    end,
+    savePosition = function(mover)
+      local right, top = mover:GetRight(), mover:GetTop()
+      local mapRight, mapTop = map:GetRight(), map:GetTop()
+      if not (right and top and mapRight and mapTop) then
+        return
+      end
+
+      local uiScale = UIParent:GetEffectiveScale()
+      local mapScale = map:GetEffectiveScale() / uiScale
+      mapRight, mapTop = mapRight * mapScale, mapTop * mapScale
+
+      -- The map mover can reach its new position before the live map in a group drag.
+      if minimapMover:IsShown() then
+        local _, _, left, bottom = GetMinimapMoverGeometry(cluster)
+        local moverLeft, moverBottom = minimapMover:GetLeft(), minimapMover:GetBottom()
+        if left and bottom and moverLeft and moverBottom then
+          mapRight = mapRight + moverLeft - left - (UIParent:GetLeft() or 0)
+          mapTop = mapTop + moverBottom - bottom - (UIParent:GetBottom() or 0)
+        end
+      end
+
+      local scale = indicator:GetEffectiveScale() / uiScale
+      local db = MinimapModule.db.profile
+      db.dayNightX = (right - mapRight) / scale
+      db.dayNightY = (top - mapTop) / scale
+      ApplyDayNightPosition(indicator, db)
+    end,
+    onDragStop = function()
+      FrameUtil:RefreshGhostMover(dayNightMoverKey)
+    end,
+    resetPosition = function()
+      local db = MinimapModule.db.profile
+      db.dayNightX, db.dayNightY = -4, -4
+      ApplyDayNightPosition(indicator, db)
+      FrameUtil:RefreshGhostMover(dayNightMoverKey)
+    end,
+  })
+end
+
 local function RegisterMinimapMover()
   local mm = _G.MinimapCluster
   if mm:IsForbidden() then
@@ -1237,7 +1349,7 @@ local function RegisterMinimapMover()
     ApplyMinimapAnchor(db)
   end
 
-  FrameUtil:EnsureGhostMover("Minimap", {
+  local minimapMover = FrameUtil:EnsureGhostMover("Minimap", {
     frameName = "PleebUI_MinimapGhostMover",
     label = "Minimap",
     moduleKey = "minimap",
@@ -1322,6 +1434,7 @@ local function RegisterMinimapMover()
       }
     end,
   })
+  RegisterDayNightMover(minimapMover)
 end
 
 function MinimapModule:OnEditModeChanged(enable)
@@ -1329,6 +1442,7 @@ function MinimapModule:OnEditModeChanged(enable)
     RegisterMinimapMover()
   else
     FrameUtil:RefreshGhostMover("Minimap")
+    FrameUtil:RefreshGhostMover(dayNightMoverKey)
   end
 end
 
@@ -1379,6 +1493,7 @@ function MinimapModule:OnProfileChanged()
   ns.MinimapData.Initialize()
 
   if not db.enabled then
+    UpdateDayNightPosition(false)
     ApplyAddonCompartmentVisibility(false)
     local cluster = _G.MinimapCluster
     _CancelClockCoordinateTicker(cluster and cluster.__pui_clockBox)
@@ -1396,6 +1511,7 @@ function MinimapModule:RefreshFromOptions(flags)
   ns.MinimapData.Initialize()
 
   if not db.enabled then
+    UpdateDayNightPosition(false)
     ApplyAddonCompartmentVisibility(false)
     local cluster = _G.MinimapCluster
     _CancelClockCoordinateTicker(cluster and cluster.__pui_clockBox)
@@ -1491,6 +1607,7 @@ function MinimapModule:OnEnable()
 end
 
 function MinimapModule:OnDisable()
+  UpdateDayNightPosition(false)
   ApplyAddonCompartmentVisibility(false)
   ns.MinimapData.SetBucketEnabled(false)
   self:UnregisterEvent("PLAYER_MAP_CHANGED")

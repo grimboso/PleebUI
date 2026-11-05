@@ -4,6 +4,14 @@ local Secondary = ns.PRDSecondary
 local P = ns.Pleebug:DropIn({}, { name = "PRD_Secondary_Power" })
 
 local function ReadPowerValues(owner, unit)
+  if ns.Client.IsForever and owner.secondaryType == Enum.PowerType.ComboPoints then
+    local points = GetComboPoints(unit, "target")
+    if issecretvalue(points) then
+      return nil, owner.secondaryMax
+    end
+    return points, owner.secondaryMax, points
+  end
+
   local current = UnitPower(unit, owner.secondaryType, owner.secondaryPowerPrecise)
   local divisor = owner.secondaryCurrentDivisor
   if divisor ~= 1 then
@@ -48,6 +56,11 @@ local function UpdatePower(owner, bar, text, unit)
   end
   Secondary.ApplyDiscreteSecondaryBars(owner, current, maximum, r, g, b, a, chargedMask)
 
+  if current == nil then
+    Secondary.SetSecondaryCenterText(text, nil, false)
+    return
+  end
+
   local displayMaximum = maximum
   if maximum == math.floor(maximum) then
     displayMaximum = math.floor(maximum)
@@ -79,22 +92,22 @@ local function UpdateSecretPower(owner, bar, text, unit)
 end
 
 local function OnEvent(owner, event, _, powerToken)
-  if event == "UNIT_POWER_POINT_CHARGE" then
+  if event == "UNIT_POWER_POINT_CHARGE" or event == "PLAYER_TARGET_CHANGED" or event == "COMBO_TARGET_CHANGED" then
     owner:UpdateSecondary()
     return
   end
-  if powerToken ~= owner.secondaryToken then
+  if event ~= "ADDON_RESTRICTION_STATE_CHANGED" and powerToken ~= owner.secondaryToken then
     return
   end
 
-  if event == "UNIT_MAXPOWER" then
+  if event == "UNIT_MAXPOWER" or event == "ADDON_RESTRICTION_STATE_CHANGED" then
     if owner.secondaryAdapter.key == "POWER_SECRET" then
       owner:UpdateSecondary()
       return
     end
 
     local maximum = UnitPowerMax("player", owner.secondaryType)
-    if not issecretvalue(maximum) and maximum == owner.secondaryMax then
+    if issecretvalue(maximum) or maximum == owner.secondaryMax then
       owner:UpdateSecondary()
       return
     end
@@ -117,8 +130,19 @@ local CHARGED_POWER_EVENTS = {
   UNIT_POWER_POINT_CHARGE = "player",
 }
 
+local FOREVER_COMBO_EVENTS = {
+  UNIT_POWER_UPDATE = "player",
+  UNIT_MAXPOWER = "player",
+  PLAYER_TARGET_CHANGED = true,
+  COMBO_TARGET_CHANGED = true,
+  ADDON_RESTRICTION_STATE_CHANGED = true,
+}
+
 Secondary:RegisterAdapter("POWER", {
   GetEvents = function(owner)
+    if ns.Client.IsForever and owner.secondaryType == Enum.PowerType.ComboPoints then
+      return FOREVER_COMBO_EVENTS
+    end
     return owner.secondaryResourceConfig.behavior.colorChargedPoints and CHARGED_POWER_EVENTS or POWER_EVENTS
   end,
   Build = P:Def("Power.Build", BuildPower),

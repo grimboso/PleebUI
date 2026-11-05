@@ -1,5 +1,6 @@
 <Ui xmlns="http://www.blizzard.com/wow/ui/">
   <Script file="ActionBarsCore.lua"/>
+  <Script file="ExperienceBar.lua"/>
   <Script file="ActionButton.lua"/>
   <Script file="ActionBars.lua"/>
   <Script file="PetActionBar.lua"/>

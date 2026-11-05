@@ -6558,13 +6558,15 @@ function FrameUtil.SetKeyboardMovementEnabled(enable, noPersist)
 end
 
 local function ApplyObjectiveTrackerMoverPosition(mover, tracker)
-  if not mover or not tracker then
+  if InCombatLockdown() then
     return
   end
 
-  local x, y = GetOffsetsForFrame(mover)
+  local scale = UIParent:GetEffectiveScale() / tracker:GetEffectiveScale()
+  local x = (mover:GetRight() - UIParent:GetRight()) * scale
+  local y = (mover:GetTop() - UIParent:GetTop()) * scale
   tracker:ClearAllPoints()
-  tracker:SetPoint("CENTER", UIParent, "CENTER", x, y)
+  tracker:SetPoint("TOPRIGHT", UIParent, "TOPRIGHT", x, y)
 end
 
 local function SaveObjectiveTrackerMoverPosition(mover, tracker)
@@ -6599,9 +6601,15 @@ function FrameUtil._EnsureObjectiveTrackerMover()
       return tracker
     end,
     getSize = function(_, liveFrame)
-      return liveFrame:GetSize()
+      local scale = liveFrame:GetEffectiveScale() / UIParent:GetEffectiveScale()
+      return liveFrame:GetWidth() * scale, liveFrame.Header:GetHeight() * scale
     end,
     getPoint = function(_, liveFrame)
+      local right, top = liveFrame:GetRight(), liveFrame:GetTop()
+      if right and top then
+        local scale = liveFrame:GetEffectiveScale() / UIParent:GetEffectiveScale()
+        return "TOPRIGHT", UIParent, "TOPRIGHT", right * scale - UIParent:GetRight(), top * scale - UIParent:GetTop()
+      end
       return liveFrame:GetPoint(1)
     end,
     shouldShow = function()

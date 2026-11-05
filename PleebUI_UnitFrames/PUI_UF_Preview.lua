@@ -1286,6 +1286,7 @@ local function BuildAuraPreviewFrame(box, canvas, context)
     powerMax = 100,
     name = context.previewName
       or (context.grouped and (context.unitKey == "raid" and "Raid member" or "Party member") or "Preview unit"),
+    surname = ns.Client.IsForever and context.grouped and not context.partyPetPreview and "Stormwind" or nil,
     healthText = tostring(tonumber(context.previewHealth) or 73) .. "%",
     powerText = tostring(tonumber(context.previewPower) or 62) .. "%",
     healthColor = healthColor,

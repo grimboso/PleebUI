@@ -77,6 +77,12 @@ local SHORT_HEALTH_TAGS = {
 }
 local SHORT_DEFAULT_HEALTH_TAG = "[pui:curhp]/[maxhp]"
 
+local NAME_TAGS = {
+  first = "[pui:name(first)]",
+  last = "[pui:name(last)]",
+  full = "[pui:name(full)]",
+}
+
 local POWER_TAGS = {
   HIDE = "",
   PERCENT = "[perpp<$%]",
@@ -632,6 +638,125 @@ function Text.Construct(frame, unit, cfg, deferLayout)
   end
 end
 
+local CLASSIFICATION_ATLAS = {
+  elite = "nameplates-icon-elite-gold",
+  worldboss = "nameplates-icon-elite-gold",
+  rareelite = "nameplates-icon-elite-silver",
+  rare = "nameplates-icon-rareelite",
+}
+local FRIENDLY_LEVEL_COLOR = { r = 1, g = 0.82, b = 0 }
+
+local function ApplyHealthDifficultyColor(frame, color)
+  frame.__puiHealthDifficultyColor = color
+  frame.HealthText:SetTextColor(
+    color and color.r or frame.__puiHealthTextColorR or 1,
+    color and color.g or frame.__puiHealthTextColorG or 1,
+    color and color.b or frame.__puiHealthTextColorB or 1,
+    frame.__puiHealthTextColorA or 1
+  )
+end
+
+local function ApplyClassificationBadge(frame, atlas)
+  local badge = frame.ClassificationBadge
+  if atlas then
+    badge:SetAtlas(atlas)
+    badge:Show()
+  elseif badge then
+    badge:Hide()
+  end
+end
+
+local function UpdateUnitDifficulty(frame, event, unit)
+  if (event == "UNIT_LEVEL" or event == "UNIT_FACTION" or event == "UNIT_CLASSIFICATION_CHANGED")
+    and unit ~= frame.__unit then return end
+  unit = frame.__unit
+
+  local color, atlas
+  local exists = unit and UnitExists(unit)
+  if not issecretvalue(exists) and exists then
+    if frame.__puiColorHealthByDifficulty then
+      local attackable = UnitCanAttack("player", unit)
+      if not issecretvalue(attackable) then
+        if attackable then
+          local difficulty = C_PlayerInfo.GetContentDifficultyCreatureForPlayer(unit)
+          if not issecretvalue(difficulty) then
+            color = GetDifficultyColor(difficulty)
+          end
+        else
+          color = FRIENDLY_LEVEL_COLOR
+        end
+      end
+    end
+
+    if frame.__puiShowClassification and (frame.__puiClassificationInInstances or not IsInInstance()) then
+      local classification = UnitClassification(unit)
+      if not issecretvalue(classification) then
+        atlas = CLASSIFICATION_ATLAS[classification]
+      end
+    end
+  end
+
+  if frame.__puiColorHealthByDifficulty then
+    ApplyHealthDifficultyColor(frame, color)
+  end
+  ApplyClassificationBadge(frame, atlas)
+end
+
+local function EnableUnitDifficulty(frame)
+  if not frame.__puiColorHealthByDifficulty and not frame.__puiShowClassification then return end
+
+  frame:RegisterEvent("UNIT_LEVEL", UpdateUnitDifficulty)
+  frame:RegisterEvent("UNIT_FACTION", UpdateUnitDifficulty)
+  frame:RegisterEvent("UNIT_CLASSIFICATION_CHANGED", UpdateUnitDifficulty)
+  frame:RegisterEvent("PLAYER_LEVEL_UP", UpdateUnitDifficulty, true)
+  frame:RegisterEvent("ZONE_CHANGED_NEW_AREA", UpdateUnitDifficulty, true)
+  return true
+end
+
+local function DisableUnitDifficulty(frame)
+  frame:UnregisterEvent("UNIT_LEVEL", UpdateUnitDifficulty)
+  frame:UnregisterEvent("UNIT_FACTION", UpdateUnitDifficulty)
+  frame:UnregisterEvent("UNIT_CLASSIFICATION_CHANGED", UpdateUnitDifficulty)
+  frame:UnregisterEvent("PLAYER_LEVEL_UP", UpdateUnitDifficulty)
+  frame:UnregisterEvent("ZONE_CHANGED_NEW_AREA", UpdateUnitDifficulty)
+  ApplyHealthDifficultyColor(frame, nil)
+  ApplyClassificationBadge(frame, nil)
+end
+
+ns.oUF:AddElement("PUIUnitDifficulty", UpdateUnitDifficulty, EnableUnitDifficulty, DisableUnitDifficulty)
+
+local function ConfigureUnitDifficulty(frame, unit, cfg, textCfg, hpMode)
+  local target = unit == "target"
+  local boss = unit:match("^boss%d+$") ~= nil
+  if not target and not boss then return end
+
+  local colorHealth = hpMode ~= "HIDE" and textCfg.colorHealthByDifficulty == true
+  local showBadge = target and cfg and cfg.showClassification == true
+  if showBadge and not frame.ClassificationBadge then
+    local badge = frame.TextParent:CreateTexture(nil, "OVERLAY")
+    Pixel.Size(badge, 16, 16)
+    Pixel.Point(badge, "LEFT", frame.Health, "RIGHT", 2, 0)
+    frame.ClassificationBadge = badge
+  end
+
+  if frame.__puiColorHealthByDifficulty and not colorHealth then
+    ApplyHealthDifficultyColor(frame, nil)
+  end
+  frame.__puiColorHealthByDifficulty = colorHealth
+  frame.__puiShowClassification = showBadge
+  frame.__puiClassificationInInstances = cfg and cfg.classificationInInstances == true
+
+  if frame.__puiPresentationFrame then
+    ApplyHealthDifficultyColor(frame, colorHealth and GetDifficultyColor(Enum.RelativeContentDifficulty.Difficult) or nil)
+    ApplyClassificationBadge(frame, showBadge and CLASSIFICATION_ATLAS.rareelite or nil)
+  elseif colorHealth or showBadge then
+    frame:EnableElement("PUIUnitDifficulty")
+    UpdateUnitDifficulty(frame)
+  else
+    frame:DisableElement("PUIUnitDifficulty")
+  end
+end
+
 function Text.ApplyTextColors(frame, colors)
   if not frame then
     return
@@ -663,7 +788,12 @@ function Text.ApplyTextColors(frame, colors)
     frame[cachePrefix .. "G"] = g
     frame[cachePrefix .. "B"] = b
     frame[cachePrefix .. "A"] = a
-    fontString:SetTextColor(r, g, b, a)
+    local difficultyColor = fontString == frame.HealthText and frame.__puiHealthDifficultyColor
+    if difficultyColor then
+      fontString:SetTextColor(difficultyColor.r, difficultyColor.g, difficultyColor.b, a)
+    else
+      fontString:SetTextColor(r, g, b, a)
+    end
   end
 
   Apply(frame.NameText, "__puiNameTextColor", colors and colors.nameText)
@@ -716,6 +846,11 @@ function Text.ApplyFrame(frame, unit, cfg, fontRev, opts)
   local curRev = tonumber(fontRev) or 0
   local textKey = Text.GetConfigTextKey(cfg)
   local classColoredNames = opts.colors and opts.colors.useClassForNames == true
+  local showLevel = textCfg.showLevel == true
+  local nameTag = "[pui:name]"
+  if ns.Client.IsForever then
+    nameTag = NAME_TAGS[textCfg.nameFormat] or NAME_TAGS.full
+  end
 
   if frame.__puiTextApplyUnit ~= unit
     or frame.__puiTextApplyUseConfigText ~= useConfigText
@@ -724,6 +859,8 @@ function Text.ApplyFrame(frame, unit, cfg, fontRev, opts)
     or frame.__puiTextApplyPowerMode ~= ppMode
     or frame.__puiTextApplyShortenValues ~= shortenValues
     or frame.__puiTextApplyHideNameText ~= hideNameText
+    or frame.__puiTextApplyShowLevel ~= showLevel
+    or frame.__puiTextApplyNameTag ~= nameTag
     or frame.__puiTextApplyShowHealth ~= showHealth
     or frame.__puiTextApplyShowPower ~= showPower
     or frame.__puiTextApplyConfigKey ~= textKey
@@ -755,6 +892,8 @@ function Text.ApplyFrame(frame, unit, cfg, fontRev, opts)
     frame.__puiTextApplyPowerMode = ppMode
     frame.__puiTextApplyShortenValues = shortenValues
     frame.__puiTextApplyHideNameText = hideNameText
+    frame.__puiTextApplyShowLevel = showLevel
+    frame.__puiTextApplyNameTag = nameTag
     frame.__puiTextApplyShowHealth = showHealth
     frame.__puiTextApplyShowPower = showPower
     frame.__puiTextApplyConfigKey = textKey
@@ -766,7 +905,7 @@ function Text.ApplyFrame(frame, unit, cfg, fontRev, opts)
       Text.TagOrClearFrame(
         frame,
         frame.NameText,
-        classColoredNames and "[raidcolor][pui:name]|r" or "[pui:name]"
+        (showLevel and "[pui:level] " or "") .. (classColoredNames and "[raidcolor]" .. nameTag .. "|r" or nameTag)
       )
     end
 
@@ -877,6 +1016,8 @@ function Text.ApplyFrame(frame, unit, cfg, fontRev, opts)
 
     Text.ApplyTextColors(frame, colors)
   end
+
+  ConfigureUnitDifficulty(frame, unit, cfg, textCfg, hpMode)
 end
 
   Round = P:Def("Text.Round", Round)

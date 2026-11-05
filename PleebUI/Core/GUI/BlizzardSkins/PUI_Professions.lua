@@ -1,4 +1,5 @@
 local _, ns = ...
+if ns.Client.IsForever then return end
 local Skins, Templates = ns.BlizzardSkins, ns.ProfessionSkins
 
 local function RefreshProfessions(frame)

@@ -1441,6 +1441,9 @@ function Breakdown.SetEnemyDamagePlayerRow(breakdown, row, spell, index, maxAmou
   local classFilename = details.unitClassFilename
   local classColor = RAID_CLASS_COLORS[classFilename]
   local specIconID = details.specIconID
+  if ns.Client.IsForever and IsSecret(specIconID) then
+    specIconID = nil
+  end
   local playerName = details.unitName
 
   row.rank:SetText(RANK_TEXT[index] or (index .. "."))

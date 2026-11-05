@@ -183,6 +183,7 @@ function M:InvalidateRuntimeConfig()
 end
 
 function M:SeedHidePrimaryBySpec()
+  if ns.Client.IsForever then return end
   local db = self and self.db and self.db.profile
   if not db then
     return
@@ -578,6 +579,7 @@ function M:UnregisterAllMovers()
   FrameUtil:UnregisterMover("PRD_HEALTH")
   FrameUtil:UnregisterMover("PRD_PRIMARY")
   FrameUtil:UnregisterMover("PRD_SECONDARY")
+  FrameUtil:UnregisterMover("PRD_SWING_TIMER")
 
   local moverKeys = self._puiSecondaryMoverKeys
   if moverKeys then
@@ -1002,6 +1004,9 @@ function M:StopRuntime()
   self._puiRuntimeStartPending = nil
   self._puiRuntimeFrame:Hide()
   ns.PRDAuraWidget.StopRuntime()
+  if ns.PRDSwingTimer.available then
+    ns.PRDSwingTimer.Stop()
+  end
   self._puiRuntimeStarted = false
   wipe(_PRD_LAYOUT_ACTIVE)
 
@@ -1520,7 +1525,16 @@ function M:ApplyLayout()
   for index = 2, n do
     activeStack[index].gapBefore = self:GetStackGap(activeStack[index - 1].key, activeStack[index].key)
   end
-  self._puiAttachedCount = n
+  local swingHeight = 0
+  local swingTimer = ns.PRDSwingTimer
+  if swingTimer.available then
+    swingHeight = swingTimer.Layout(
+      self.frame,
+      self._puiRuntimeStarted == true and db.showSwingTimer == true,
+      db.swingTimer
+    )
+  end
+  self._puiAttachedCount = n + (swingHeight > 0 and 1 or 0)
 
   local stackWidth = savedStackWidth
   local anchor = db.anchor
@@ -1537,7 +1551,7 @@ function M:ApplyLayout()
     self.frame:ClearAllPoints()
     local relPoint = anchor.relPoint or point
     self.frame:SetPoint(point, UIParent, relPoint, ax, ay)
-    self.frame:SetSize(stackWidth, totalHeight)
+    self.frame:SetSize(stackWidth, totalHeight + swingHeight)
     self.frame:Show()
 
     local currentTop = 0
@@ -1556,7 +1570,7 @@ function M:ApplyLayout()
     self.frame:ClearAllPoints()
     local relPoint = anchor.relPoint or point
     self.frame:SetPoint(point, UIParent, relPoint, ax, ay)
-    self.frame:SetSize(stackWidth, 1)
+    self.frame:SetSize(stackWidth, math.max(1, swingHeight))
     self.frame:Show()
   end
 
@@ -1998,6 +2012,27 @@ function M:AttachMover()
     and not self:IsPlayerHealthReplacementActive()
   local primaryDetached = profile.primary.detached == true
   local secondaryResources = self.secondaryResources or {}
+
+  local swing = ns.PRDSwingTimer.container
+  if swing and swing.active and profile.swingTimer.detached then
+    FrameUtil:RegisterMover("PRD_SWING_TIMER", swing, {
+      label = "PRD: Swing Timer",
+      moduleKey = "prd",
+      moduleLabel = "Personal Resource Display",
+      optionsString = "PRD,swingTimer",
+      savePosition = function(frame)
+        SaveAnchor(frame, GetProfile().swingTimer.anchor, false)
+      end,
+      resetPosition = function(frame)
+        local anchor = GetProfile().swingTimer.anchor
+        anchor.point, anchor.x, anchor.y = "CENTER", 0, -285
+        frame:ClearAllPoints()
+        frame:SetPoint(anchor.point, UIParent, anchor.point, anchor.x, anchor.y)
+      end,
+    })
+  else
+    FrameUtil:UnregisterMover("PRD_SWING_TIMER")
+  end
 
 
   -- Health mover: only when detached

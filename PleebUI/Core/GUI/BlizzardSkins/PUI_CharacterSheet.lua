@@ -3465,7 +3465,7 @@ do
   driver:SetScript("OnEvent", function(self, event, arg1)
 
     if event == "ADDON_LOADED" then
-      if arg1 == "Blizzard_UIPanels_Game" and ns.BlizzardSkinOptions.IsEnabled("CharacterFrame") then
+      if arg1 == "Blizzard_UIPanels_Game" and not ns.Client.IsForever and ns.BlizzardSkinOptions.IsEnabled("CharacterFrame") then
         C_Timer.After(0.1, SetupCharacterFrameSkinning)
       end
 
@@ -3473,7 +3473,7 @@ do
     end
 
     if event == "PLAYER_LOGIN" then
-      local character = ns.BlizzardSkinOptions.IsEnabled("CharacterFrame")
+      local character = not ns.Client.IsForever and ns.BlizzardSkinOptions.IsEnabled("CharacterFrame")
       local inspect = ns.BlizzardSkinOptions.IsEnabled("InspectFrame")
       if character then
         self:RegisterEvent("PLAYER_EQUIPMENT_CHANGED")
@@ -3516,7 +3516,7 @@ do
     end
 
     if event == "PLAYER_REGEN_ENABLED" then
-      if ns.BlizzardSkinOptions.IsEnabled("CharacterFrame") then
+      if not ns.Client.IsForever and ns.BlizzardSkinOptions.IsEnabled("CharacterFrame") then
         CS_RefreshPlayerItemStatPresence()
         CS_RefreshSecondaryStatRatingTexts()
         local popup = _G.GearManagerPopupFrame

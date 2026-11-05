@@ -3,6 +3,8 @@ local _, ns = ...
 local Secondary = {}
 ns.ResourceSettings = Secondary
 
+local FOREVER_CLASS_SETTINGS = 0
+
 local COMBO_POINTS = {
   adapter = "POWER",
   resourceKey = "COMBO_POINTS",
@@ -576,13 +578,15 @@ local function DefinitionContainsAlternatePower(entry)
 end
 
 local PLAYER_CLASS = select(2, UnitClass("player"))
-Secondary.PlayerClassHasAlternatePower = DefinitionContainsAlternatePower(DEFINITIONS[PLAYER_CLASS])
+Secondary.PlayerClassHasAlternatePower = not ns.Client.IsForever
+  and DefinitionContainsAlternatePower(DEFINITIONS[PLAYER_CLASS])
 
 function Secondary:GetResourceDefinition(resourceKey)
   return RESOURCE_DEFINITIONS_BY_CLASS[PLAYER_CLASS][resourceKey]
 end
 
 local function GetPlayerSpecID()
+  if ns.Client.IsForever then return nil end
   local specIndex = C_SpecializationInfo.GetSpecialization()
   if not specIndex then
     return nil
@@ -606,7 +610,17 @@ for classID = 1, GetNumClasses() do
   end
 end
 
+local FOREVER_COMBO_POINTS = { COMBO_POINTS }
+
 local function GetResolvedDefinitionCandidates()
+  if ns.Client.IsForever then
+    if PLAYER_CLASS == "ROGUE"
+      or PLAYER_CLASS == "DRUID" and GetShapeshiftFormID() == DRUID_CAT_FORM
+    then
+      return FOREVER_COMBO_POINTS, FOREVER_CLASS_SETTINGS
+    end
+    return nil, FOREVER_CLASS_SETTINGS
+  end
   local entry = DEFINITIONS[PLAYER_CLASS]
   if not entry then
     return nil, nil
@@ -755,7 +769,17 @@ for classToken, specs in pairs(SPECIALIZATIONS_BY_CLASS) do
   end
 end
 
+local FOREVER_COMBO_POINT_OPTIONS = {
+  { key = "COMBO_POINTS", name = "Combo Points", category = "CLASS_RESOURCE", specID = FOREVER_CLASS_SETTINGS },
+}
+
 function Secondary:GetResourceOptionsForClass(classToken, specID)
+  if ns.Client.IsForever then
+    if classToken == "ROGUE" or classToken == "DRUID" then
+      return FOREVER_COMBO_POINT_OPTIONS
+    end
+    return NO_RESOURCE_OPTIONS
+  end
   return RESOURCE_OPTIONS_BY_SPEC[classToken][specID or GetPlayerSpecID()] or NO_RESOURCE_OPTIONS
 end
 
@@ -763,7 +787,7 @@ function Secondary:GetResourceSettings(profile, resourceKey, classToken, specID,
   local secondary = profile.secondary
   secondary.resourceSettings = secondary.resourceSettings or {}
   classToken = classToken or PLAYER_CLASS
-  specID = specID or GetPlayerSpecID()
+  specID = specID or (ns.Client.IsForever and FOREVER_CLASS_SETTINGS or GetPlayerSpecID())
   if not specID then return nil end
   local classSettings = secondary.resourceSettings[classToken]
   if not classSettings then
@@ -792,7 +816,7 @@ function Secondary:GetResourceSettings(profile, resourceKey, classToken, specID,
   settings.behavior = settings.behavior or {}
   local behavior = settings.behavior
   if behavior.darkenPartial == nil then behavior.darkenPartial = false end
-  if resourceKey == "COMBO_POINTS" and classToken == "ROGUE" then
+  if resourceKey == "COMBO_POINTS" and classToken == "ROGUE" and not ns.Client.IsForever then
     if behavior.colorChargedPoints == nil then behavior.colorChargedPoints = false end
     if behavior.chargedColor == nil then behavior.chargedColor = { 0.44, 0.77, 1, 1 } end
   elseif resourceKey == "MAELSTROM_WEAPON" then
@@ -852,7 +876,9 @@ function Secondary:GetResourceSettings(profile, resourceKey, classToken, specID,
   settings.useSharedAppearance = nil
   if settings.height == nil then settings.height = secondary.height or profile.appearance.height or 15 end
   if settings.width == nil then settings.width = secondary.width or profile.size.width or 240 end
-  if settings.perSegment == nil then settings.perSegment = secondary.perSegment == true end
+  if settings.perSegment == nil then
+    settings.perSegment = (ns.Client.IsForever and resourceKey == "COMBO_POINTS") or secondary.perSegment == true
+  end
   if settings.texture == nil then settings.texture = secondary.texture or profile.appearance.texture or "Pleebar" end
   if settings.useCustomColor == nil then settings.useCustomColor = secondary.useCustomColor == true end
   if settings.useBlizzardPowerColor == nil then settings.useBlizzardPowerColor = secondary.useBlizzardPowerColor ~= false end
@@ -958,6 +984,7 @@ local function CopyMissingResourceSettings(target, source)
 end
 
 function Secondary:NormalizeProfile(profile)
+  if ns.Client.IsForever then return end
   local secondary = profile.secondary
   local migrating = secondary.__puiSpecResourcesMigrated ~= true
   local allSettings = secondary.resourceSettings or {}

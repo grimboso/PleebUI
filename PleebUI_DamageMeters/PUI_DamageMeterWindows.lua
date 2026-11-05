@@ -861,17 +861,18 @@ local function SetAbbreviatedRowValue(
   if valueIsSecret then
     row[modeField] = nil
     row[valueField] = nil
+  elseif row[modeField] == mode and row[valueField] == value then
+    return
+  else
+    row[modeField] = mode
+    row[valueField] = value
+  end
+
+  if ns.Client.IsForever and mode == "RATE" then
+    fontString:SetFormattedText("%.0f", value)
+  else
     fontString:SetText(AbbreviateNumbers(value, NUMBER_ABBREVIATION_OPTIONS))
-    return
   end
-
-  if row[modeField] == mode and row[valueField] == value then
-    return
-  end
-
-  row[modeField] = mode
-  row[valueField] = value
-  fontString:SetText(AbbreviateNumbers(value, NUMBER_ABBREVIATION_OPTIONS))
 end
 
 local function SetDeathTimeRowValue(row, value)
@@ -1047,6 +1048,9 @@ local function SetRowSource(
   local iconKind
   local iconValue
   local specIconID = source.specIconID
+  if ns.Client.IsForever and IsSecret(specIconID) then
+    specIconID = nil
+  end
   if showSpecIcons == nil then showSpecIcons = DamageMeters.runtimeShowSpecIcons end
   if showSpecIcons then
     if type(specIconID) == "number" and specIconID > 0 then

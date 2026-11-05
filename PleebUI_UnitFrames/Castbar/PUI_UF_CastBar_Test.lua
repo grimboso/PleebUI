@@ -31,7 +31,9 @@ local TEST_CLASS_TOKENS = {
 local TEST_CLASS_COLORS = {}
 for index = 1, #TEST_CLASS_TOKENS do
   local color = RAID_CLASS_COLORS[TEST_CLASS_TOKENS[index]]
-  TEST_CLASS_COLORS[index] = { color.r, color.g, color.b, 1 }
+  if not ns.Client.IsForever or color then
+    TEST_CLASS_COLORS[#TEST_CLASS_COLORS + 1] = { color.r, color.g, color.b, 1 }
+  end
 end
 
 local TEST_CAST_ICONS = {

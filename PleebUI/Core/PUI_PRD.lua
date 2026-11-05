@@ -67,6 +67,23 @@ ns.PRDDefaults = {
 
     hideHealth  = false,
     hidePrimary = false,
+    showSwingTimer = false,
+    swingTimer = {
+      height = 8,
+      detached = false,
+      width = 250,
+      anchor = { point = "CENTER", x = 0, y = -285 },
+      texture = "Pleebar",
+      mainHandColor = { 0.90, 0.66, 0.28, 1 },
+      offHandColor = { 0.72, 0.48, 0.24, 1 },
+      rangedColor = { 0.35, 0.75, 0.45, 1 },
+      borderSize = 1,
+      borderColor = { 0.20, 0.20, 0.24, 1 },
+      showCountdown = false,
+      fontSize = 10,
+      showWindup = true,
+      windupLead = 0.5,
+    },
     usePlayerHealth = false,
     stackOrder = { "health", "primary" },
 

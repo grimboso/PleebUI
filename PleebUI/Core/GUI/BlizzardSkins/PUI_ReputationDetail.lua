@@ -1,4 +1,5 @@
 local _, ns = ...
+if ns.Client.IsForever then return end
 local Skins = ns.BlizzardSkins
 
 Skins.Register("Blizzard_UIPanels_Game", "ReputationFrame.ReputationDetailFrame", {

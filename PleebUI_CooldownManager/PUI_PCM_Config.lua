@@ -1,6 +1,13 @@
 -- File: PUI_PCM_Config.lua
 local ns = LibStub("AceAddon-3.0"):GetAddon("PleebUI").ModuleNamespace
 
+local GetNumSpecializations = GetNumSpecializations
+local GetSpecializationInfo = GetSpecializationInfo
+if ns.Client.IsForever then
+  GetNumSpecializations = ns.Client.GetNumSpecializations
+  GetSpecializationInfo = C_SpecializationInfo.GetSpecializationInfo
+end
+
 
 
 local Addon = ns.Addon
@@ -337,26 +344,6 @@ end
 
 local function SetViewerIconSpacing(cm, viewerKey, v)
   _PCM_SetStyleMapNumber(cm, "viewerSpacing", viewerKey, v, 4, 0, 8)
-end
-
-local function GetViewerWidthMode(cm, viewerKey)
-  local style = cm.style or {}
-  cm.style = style
-  style.viewerWidthMode = style.viewerWidthMode or {}
-
-  local m = style.viewerWidthMode[viewerKey]
-
-  -- Defaults:
-  -- Essential + Utility should start in fixed width mode.
-  if m == nil and (viewerKey == "EssentialCooldownViewer" or viewerKey == "UtilityCooldownViewer") then
-    style.viewerWidthMode[viewerKey] = "fixed"
-    return "fixed"
-  end
-
-  if m ~= "fixed" then
-    m = "icon"
-  end
-  return m
 end
 
 local function SetViewerWidthMode(cm, viewerKey, mode)
@@ -1036,6 +1023,7 @@ end
 
 
 local function _PCM_BuildCooldownViewerArgs(cm, viewerKey, opts)
+  local style = DB.GetStyleDB(cm)
   opts = opts or {}
   local args = {}
 
@@ -1057,7 +1045,7 @@ local function _PCM_BuildCooldownViewerArgs(cm, viewerKey, opts)
   end
 
   local function GetViewerTotalWidth()
-    if GetViewerWidthMode(cm, viewerKey) == "fixed" then
+    if Cooldowns._GetWidthModeForViewer(viewerKey, style) == "fixed" then
       return ns.Pixel.Round(GetViewerFixedWidth(cm, viewerKey) + GetViewerBorderPad())
     end
 
@@ -1092,7 +1080,7 @@ local function _PCM_BuildCooldownViewerArgs(cm, viewerKey, opts)
       fixed = "Fixed width",
     },
     get = function()
-      return GetViewerWidthMode(cm, viewerKey)
+      return Cooldowns._GetWidthModeForViewer(viewerKey, style)
     end,
     set = function(_, key)
       SetViewerWidthMode(cm, viewerKey, key)
@@ -1110,7 +1098,7 @@ local function _PCM_BuildCooldownViewerArgs(cm, viewerKey, opts)
     step = 1,
 
     hidden = function()
-      return GetViewerWidthMode(cm, viewerKey) == "fixed"
+      return Cooldowns._GetWidthModeForViewer(viewerKey, style) == "fixed"
     end,
     get = function()
       return GetViewerIconSize(cm, viewerKey)
@@ -10021,7 +10009,6 @@ ns.Registry.Options.CooldownManager.getSearchEntries = Options.GetSearchEntries
   SetViewerIconSize = P:Def('SetViewerIconSize', SetViewerIconSize)
   GetViewerIconSpacing = P:Def('GetViewerIconSpacing', GetViewerIconSpacing)
   SetViewerIconSpacing = P:Def('SetViewerIconSpacing', SetViewerIconSpacing)
-  GetViewerWidthMode = P:Def('GetViewerWidthMode', GetViewerWidthMode)
   SetViewerWidthMode = P:Def('SetViewerWidthMode', SetViewerWidthMode)
   GetViewerFixedWidth = P:Def('GetViewerFixedWidth', GetViewerFixedWidth)
   SetViewerFixedWidth = P:Def('SetViewerFixedWidth', SetViewerFixedWidth)

@@ -69,7 +69,13 @@ local function ResolveMaximum(definition, deferSecretAuraMaximum, specID)
       resolvedMax = auraMaximum
     end
   elseif definition.maxFromPowerType ~= nil then
-    resolvedMax = UnitPowerMax("player", definition.maxFromPowerType) or 0
+    local powerMaximum = UnitPowerMax("player", definition.maxFromPowerType)
+    if ns.Client.IsForever and issecretvalue(powerMaximum) then
+      -- Keep the standard combo point layout available while the maximum is restricted.
+      resolvedMax = 5
+    else
+      resolvedMax = powerMaximum or 0
+    end
   end
 
   resolvedMax = tonumber(resolvedMax) or 0
