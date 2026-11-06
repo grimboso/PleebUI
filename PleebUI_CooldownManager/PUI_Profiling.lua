@@ -14,7 +14,6 @@ pleebug:RegisterAddon(addonName, "Cooldown Manager", {
   PUI_PCM_AuraLayout = "Aura Viewer Layout",
   PUI_PCM = "Cooldown Manager Core",
   PUI_PCM_Keybinds = "Keybind Text",
-  PUI_PCM_TotemTracker = "Totems",
   PUI_PCM_CustomDurationSource = "Duration Sources",
   PUI_PCM_AbilityRuntime = "Essential and Utility Runtime",
   PUI_PCM_AuraRuntime = "Aura Viewer Runtime",

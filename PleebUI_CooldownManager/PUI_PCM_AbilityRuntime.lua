@@ -10,7 +10,7 @@ local PCMPresentation = ns.PCMPresentation
 local IconSettings = ns.PCMIconSettings
 local PCMKeybinds = ns.PCMKeybinds
 local AuraSlotDriver = ns.PCMAuraSlotDriver
-local TotemTracker = ns.PCMTotemTracker
+local TotemTracker = ns.TotemTracker
 
 local CreateFrame = CreateFrame
 local UIParent = UIParent
