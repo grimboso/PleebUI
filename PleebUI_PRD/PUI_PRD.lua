@@ -783,6 +783,10 @@ function M:ApplyRequestedFlags(flags)
     self:ApplyLayout()
   end
 
+  if flags.formManaVisibility then
+    ns.PRDForeverExtras.RefreshManaVisibility(self)
+  end
+
   if flags.health then
     self:RefreshHealthTexture()
   end
@@ -898,6 +902,7 @@ function M:OnPrimaryResourceChanged(event, unit)
   end
   self:RebuildSecondary()
   self:RefreshPrimaryResourcePresentation()
+  ns.PRDForeverExtras.RefreshManaVisibility(self)
 
   local activeOptionsPath = ns._PUIActiveOptionsPath
   local targetOptionsPath
@@ -1004,6 +1009,7 @@ function M:StopRuntime()
   self._puiRuntimeStartPending = nil
   self._puiRuntimeFrame:Hide()
   ns.PRDAuraWidget.StopRuntime()
+  ns.PRDForeverExtras.Stop()
   if ns.PRDSwingTimer.available then
     ns.PRDSwingTimer.Stop()
   end
@@ -1534,7 +1540,9 @@ function M:ApplyLayout()
       db.swingTimer
     )
   end
-  self._puiAttachedCount = n + (swingHeight > 0 and 1 or 0)
+  local extraHeight = ns.PRDForeverExtras.Layout(self, db, swingHeight)
+  local accessoryHeight = swingHeight + extraHeight
+  self._puiAttachedCount = n + (accessoryHeight > 0 and 1 or 0)
 
   local stackWidth = savedStackWidth
   local anchor = db.anchor
@@ -1551,7 +1559,7 @@ function M:ApplyLayout()
     self.frame:ClearAllPoints()
     local relPoint = anchor.relPoint or point
     self.frame:SetPoint(point, UIParent, relPoint, ax, ay)
-    self.frame:SetSize(stackWidth, totalHeight + swingHeight)
+    self.frame:SetSize(stackWidth, totalHeight + accessoryHeight)
     self.frame:Show()
 
     local currentTop = 0
@@ -1570,7 +1578,7 @@ function M:ApplyLayout()
     self.frame:ClearAllPoints()
     local relPoint = anchor.relPoint or point
     self.frame:SetPoint(point, UIParent, relPoint, ax, ay)
-    self.frame:SetSize(stackWidth, math.max(1, swingHeight))
+    self.frame:SetSize(stackWidth, math.max(1, accessoryHeight))
     self.frame:Show()
   end
 
@@ -2310,6 +2318,7 @@ function M:RefreshPrimaryTexture()
     return
   end
 
+  ns.PRDForeverExtras.RefreshManaStyle(self.db.profile)
   if self.db.profile.hidePrimary == true then
     return
   end

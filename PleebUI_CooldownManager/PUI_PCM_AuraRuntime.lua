@@ -10,7 +10,7 @@ local AuraSlotDriver = ns.PCMAuraSlotDriver
 local AuraWidget = ns.PCMAuraWidget
 local IconSettings = ns.PCMIconSettings
 local PCMPresentation = ns.PCMPresentation
-local TotemTracker = ns.PCMTotemTracker
+local TotemTracker = ns.TotemTracker
 
 local CreateFrame = CreateFrame
 local UIParent = UIParent

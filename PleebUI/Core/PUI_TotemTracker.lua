@@ -1,10 +1,11 @@
-local ns = LibStub("AceAddon-3.0"):GetAddon("PleebUI").ModuleNamespace
+local _, ns = ...
 
 local TotemTracker = {
   bindingsBySpellID = {},
   knownSpellIDs = {},
+  activeSlots = {},
 }
-ns.PCMTotemTracker = TotemTracker
+ns.TotemTracker = TotemTracker
 
 local summonSpellIDs = {
   [2484] = 2484,
@@ -47,8 +48,10 @@ for _, override in pairs(petOverrides) do
 end
 
 local class = UnitClassBase("player")
+local trackElementalSlots = ns.Client.IsForever and class == "SHAMAN"
 local monitor = CreateFrame("Frame")
 local listeners = {}
+local spellListeners = {}
 local slotBindings = {}
 local petBindings = {}
 local petTimers = {}
@@ -85,16 +88,36 @@ local function PublishBindings()
 end
 
 local function NotifyListeners()
-  PublishBindings()
+  if next(spellListeners) ~= nil then
+    PublishBindings()
+  end
   for owner, callback in pairs(listeners) do
     callback(owner)
   end
 end
 
+local function ReadSlot(slot, duration)
+  local active, _, _, _, icon, _, spellID = GetTotemInfo(slot)
+  if trackElementalSlots then
+    if duration == nil
+      or (not issecretvalue(active) and not active)
+      or (not duration:HasSecretValues() and duration:IsZero())
+    then
+      TotemTracker.activeSlots[slot] = nil
+    else
+      local state = TotemTracker.activeSlots[slot] or {}
+      state.duration = duration
+      state.icon = not issecretvalue(icon) and icon or nil
+      TotemTracker.activeSlots[slot] = state
+    end
+  end
+  return spellID
+end
+
 local function SeedSlots()
   for slot = 1, GetNumTotemSlots() do
-    local spellID = select(7, GetTotemInfo(slot))
     local duration = GetTotemDuration(slot)
+    local spellID = ReadSlot(slot, duration)
     if duration == nil then
       slotBindings[slot] = nil
     elseif not issecretvalue(spellID) then
@@ -117,12 +140,15 @@ local function FlushSlots()
     local previous = slotBindings[slot]
     slotBindings[slot] = nil
     local duration = GetTotemDuration(slot)
+    local nativeSpellID
+    if trackElementalSlots or (duration ~= nil and not queuedSpellID) then
+      nativeSpellID = ReadSlot(slot, duration)
+    end
     if duration ~= nil then
       local spellID = queuedSpellID
       if spellID then
         queuedSpellID = summonSequences[spellID]
       else
-        local nativeSpellID = select(7, GetTotemInfo(slot))
         if not issecretvalue(nativeSpellID) and nativeSpellID and nativeSpellID > 0 then
           spellID = nativeSpellID
         else
@@ -182,16 +208,21 @@ monitor:SetScript("OnEvent", function(_, event, arg1, arg2, spellID)
   end
 end)
 
-function TotemTracker:RegisterListener(owner, callback)
+function TotemTracker:RegisterListener(owner, callback, slotsOnly)
   if listeners[owner] then
     return
   end
   if next(listeners) == nil then
-    monitor:RegisterUnitEvent("UNIT_SPELLCAST_SUCCEEDED", "player")
     monitor:RegisterEvent("PLAYER_TOTEM_UPDATE")
     monitor:RegisterEvent("PLAYER_ENTERING_WORLD")
     SeedSlots()
-    PublishBindings()
+  end
+  if not slotsOnly then
+    if next(spellListeners) == nil then
+      monitor:RegisterUnitEvent("UNIT_SPELLCAST_SUCCEEDED", "player")
+      PublishBindings()
+    end
+    spellListeners[owner] = true
   end
   listeners[owner] = callback
   callback(owner)
@@ -199,25 +230,31 @@ end
 
 function TotemTracker:UnregisterListener(owner)
   listeners[owner] = nil
-  if next(listeners) ~= nil then
-    return
+  if spellListeners[owner] then
+    spellListeners[owner] = nil
+    if next(spellListeners) == nil then
+      monitor:UnregisterEvent("UNIT_SPELLCAST_SUCCEEDED")
+      queuedSpellID = nil
+      for _, timer in pairs(petTimers) do
+        timer:Cancel()
+      end
+      wipe(petTimers)
+      wipe(petBindings)
+      wipe(self.bindingsBySpellID)
+    end
   end
-  monitor:UnregisterAllEvents()
-  monitor:SetScript("OnUpdate", nil)
-  queuedSpellID = nil
-  sequence = 0
-  for _, timer in pairs(petTimers) do
-    timer:Cancel()
+  if next(listeners) == nil then
+    monitor:UnregisterAllEvents()
+    monitor:SetScript("OnUpdate", nil)
+    sequence = 0
+    wipe(slotBindings)
+    wipe(pendingSlots)
+    wipe(pendingSlotSet)
+    wipe(self.activeSlots)
   end
-  wipe(petTimers)
-  wipe(petBindings)
-  wipe(slotBindings)
-  wipe(pendingSlots)
-  wipe(pendingSlotSet)
-  wipe(self.bindingsBySpellID)
 end
 
-local P = select(1, ns.Pleebug:DropIn(TotemTracker, { name = "PCM", bucket = "TotemTracker" }))
+local P = select(1, ns.Pleebug:DropIn(TotemTracker, { name = "PUI_TotemTracker" }))
 FlushSlots = P:Def("TotemTracker.FlushSlots", FlushSlots)
 SeedSlots = P:Def("TotemTracker.SeedSlots", SeedSlots)
 TotemTracker.RegisterListener = P:Def("TotemTracker:RegisterListener", TotemTracker.RegisterListener)

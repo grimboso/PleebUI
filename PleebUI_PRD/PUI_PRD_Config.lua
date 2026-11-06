@@ -1678,6 +1678,7 @@ local function PRDPreview_RefreshLayout(box)
     attachedHeight = attachedHeight + entry.bar.frame:GetHeight()
   end
   local attachedRoot = box.__puiPRDPreviewAttachedRoot
+  attachedHeight = attachedHeight + ns.PRDForeverExtras.LayoutPreview(box, attachedRoot, profile, attachedHeight)
   local swingTimer = ns.PRDSwingTimer
   if swingTimer.available and not profile.swingTimer.detached then
     attachedHeight = attachedHeight + swingTimer.LayoutPreview(
@@ -2976,7 +2977,9 @@ do
     }
     args.visibilityGroup.hidden = nil
     if args.visibilityGroup.args.hideAlternateMana then
-      args.visibilityGroup.args.hideAlternateMana.hidden = not ns.PRDSecondary.PlayerClassHasAlternatePower
+      args.visibilityGroup.args.hideAlternateMana.hidden = not (
+        ns.PRDSecondary.PlayerClassHasAlternatePower or ns.PRDForeverExtras.hasFormMana
+      )
     end
     layout.detached = {
       type = "toggle",
@@ -3785,7 +3788,11 @@ do
             end,
             set = function(_, value)
               cfg.hideAlternateMana = not value
-              Addon:ApplyOptionsChange("PRD", { secondaryRebuild = true, secondaryText = true, layout = true })
+              if ns.PRDForeverExtras.hasFormMana then
+                Addon:ApplyOptionsChange("PRD", { formManaVisibility = true })
+              else
+                Addon:ApplyOptionsChange("PRD", { secondaryRebuild = true, secondaryText = true, layout = true })
+              end
             end,
           },
         },
@@ -5330,6 +5337,11 @@ do
       windupLead = Range("windupLead", "Wind-up lead time (sec)", 15, 0.1, 1, function()
         return not GetConfig().showWindup
       end, 0.05),
+      highlightQueuedAttack = ns.PRDSwingTimer.hasQueuedAttack and {
+        type = "toggle", name = "Highlight queued melee attacks", order = 16,
+        get = function() return GetConfig().highlightQueuedAttack end,
+        set = function(_, value) SetOption("highlightQueuedAttack", value) end,
+      } or nil,
     }
   end
 
@@ -5370,6 +5382,23 @@ do
           },
         },
       }
+
+      if ns.PRDForeverExtras.hasTotems then
+        options.args.totems = {
+          type = "group", name = "Totems", order = 5,
+          args = (buildAll or activeTab == "totems") and {
+            enabled = {
+              type = "toggle", name = "Show active totems", order = 1,
+              desc = "Shows your elemental totems and their remaining time.",
+              get = function() return PRD.db.profile.showTotems == true end,
+              set = function(_, value)
+                PRD.db.profile.showTotems = value
+                Addon:ApplyOptionsChange("PRD", { layout = true })
+              end,
+            },
+          } or {},
+        }
+      end
 
       if ns.PRDSwingTimer.available then
         options.args.swingTimer = {

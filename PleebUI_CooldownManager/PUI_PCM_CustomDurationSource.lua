@@ -20,7 +20,7 @@ DurationSource.sourceHelp = "Automatic\nUses an available ground effect, totem o
   .. "\n\nBuff/debuff\nTracks the player buff or target debuff, including the buff from standing in a ground effect."
   .. "\n\nCreate separate bars or icons for the effect's lifetime and its buff/debuff."
 
-local TotemTracker = ns.PCMTotemTracker
+local TotemTracker = ns.TotemTracker
 local records = {}
 local listening = false
 

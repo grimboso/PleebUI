@@ -8,6 +8,13 @@ if not SwingTimer.available then return end
 
 local PRD = ns.Modules.PRD
 local SwingType = Enum.PlayerSwingType
+local queuedAttackIDs = ({
+  WARRIOR = { 78, 845 },
+  DRUID = { 6807 },
+  HUNTER = { 2973 },
+})[UnitClassBase("player")]
+SwingTimer.hasQueuedAttack = queuedAttackIDs ~= nil
+local QUEUE_COLOR = { 1, 0.76, 0.26, 1 }
 local ROWS = {
   { swingType = SwingType.MainHand, colorKey = "mainHandColor" },
   { swingType = SwingType.OffHand, colorKey = "offHandColor" },
@@ -33,6 +40,32 @@ local function UpdateWindupZone(row, config)
   row.windupEdge:SetShown(show)
 end
 
+local function PaintQueuedAttack(row, config, queued)
+  row.fill:SetStatusBarColor(unpack(queued and QUEUE_COLOR or config.mainHandColor))
+  if queued then
+    row.background:SetColorTexture(0.60, 0.34, 0.08, 0.85)
+  else
+    row.background:SetColorTexture(0, 0, 0, 0.65)
+  end
+end
+
+local function RefreshQueuedAttack(container)
+  local queued = false
+  if container.config.highlightQueuedAttack and container.queueSpellNames then
+    for _, name in ipairs(container.queueSpellNames) do
+      local current = C_Spell.IsCurrentSpell(name)
+      if not issecretvalue(current) and current then
+        queued = true
+        break
+      end
+    end
+  end
+  if queued ~= container.queued then
+    container.queued = queued
+    PaintQueuedAttack(container.byType[SwingType.MainHand], container.config, queued)
+  end
+end
+
 local function CreateRows(parent)
   local container = CreateFrame("Frame", nil, parent)
   container:Hide()
@@ -50,6 +83,7 @@ local function CreateRows(parent)
     fill:Hide()
     local text = fill:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     text:SetPoint("CENTER")
+    row.background = background
     row.fill = fill
     row.text = text
     if definition.swingType == SwingType.Ranged then
@@ -87,7 +121,11 @@ local function LayoutRows(container, config)
       row:SetPoint("TOPRIGHT", container, "TOPRIGHT", 0, -height)
       row:SetHeight(rowHeight)
       row.fill:SetStatusBarTexture(texture)
-      row.fill:SetStatusBarColor(unpack(config[ROWS[index].colorKey]))
+      if row == container.byType[SwingType.MainHand] then
+        PaintQueuedAttack(row, config, container.queued)
+      else
+        row.fill:SetStatusBarColor(unpack(config[ROWS[index].colorKey]))
+      end
       PRD:ApplyBarBorder(row, PRD:GetBarBorderThickness(config, row), config.borderColor)
       row.text:SetFont(font or STANDARD_TEXT_FONT, config.fontSize, "OUTLINE")
       row.text:SetShown(config.showCountdown)
@@ -135,7 +173,9 @@ local function LayoutChangedWeapons(container)
 end
 
 local function OnEvent(container, event, duration, swingType)
-  if event == "PLAYER_SWING" then
+  if event == "ACTIONBAR_UPDATE_STATE" then
+    RefreshQueuedAttack(container)
+  elseif event == "PLAYER_SWING" then
     if issecretvalue(swingType) or issecretvalue(duration) then return end
     local row = container.byType[swingType]
     if not row or duration <= 0 then return end
@@ -152,11 +192,16 @@ local function OnEvent(container, event, duration, swingType)
     row.binding:SetDuration(row.duration)
     row.fill:Show()
     if row.text:IsShown() then row.binding:Enable() end
+    if swingType == SwingType.MainHand and container.queued then
+      RefreshQueuedAttack(container)
+    end
   elseif event == "UNIT_INVENTORY_CHANGED" or event == "UNIT_ATTACK_SPEED" or event == "PLAYER_REGEN_ENABLED" then
     if RefreshWeapons(container) then LayoutChangedWeapons(container) end
+    if event == "PLAYER_REGEN_ENABLED" then RefreshQueuedAttack(container) end
   elseif event == "PLAYER_LEAVE_COMBAT" then
     ClearRow(container.byType[SwingType.MainHand])
     ClearRow(container.byType[SwingType.OffHand])
+    RefreshQueuedAttack(container)
   elseif event == "STOP_AUTOREPEAT_SPELL" then
     ClearRow(container.byType[SwingType.Ranged])
   else
@@ -164,6 +209,7 @@ local function OnEvent(container, event, duration, swingType)
       ClearRow(row)
     end
     if RefreshWeapons(container) then LayoutChangedWeapons(container) end
+    RefreshQueuedAttack(container)
   end
 end
 
@@ -172,6 +218,7 @@ function SwingTimer.Stop()
   if not container or not container.active then return end
   container.active = false
   container.config = nil
+  container.queued = nil
   container:UnregisterAllEvents()
   container:Hide()
   for _, row in ipairs(container.rows) do
@@ -207,6 +254,21 @@ function SwingTimer.Layout(parent, enabled, config)
     container:RegisterUnitEvent("UNIT_INVENTORY_CHANGED", "player")
     container:RegisterUnitEvent("UNIT_ATTACK_SPEED", "player")
   end
+  if queuedAttackIDs and config.highlightQueuedAttack then
+    if not container.queueSpellNames then
+      container.queueSpellNames = {}
+      for _, spellID in ipairs(queuedAttackIDs) do
+        local name = C_Spell.GetSpellName(spellID)
+        if not issecretvalue(name) and name then
+          container.queueSpellNames[#container.queueSpellNames + 1] = name
+        end
+      end
+    end
+    container:RegisterEvent("ACTIONBAR_UPDATE_STATE")
+  elseif queuedAttackIDs then
+    container:UnregisterEvent("ACTIONBAR_UPDATE_STATE")
+  end
+  RefreshQueuedAttack(container)
   container:ClearAllPoints()
   if config.detached then
     local anchor = config.anchor
@@ -242,6 +304,7 @@ function SwingTimer.LayoutPreview(box, root, enabled, config, offset)
     end
     container.byType[SwingType.Ranged].swingSeconds = 2.5
   end
+  container.queued = SwingTimer.hasQueuedAttack and config.highlightQueuedAttack
   container:SetParent(root)
   container:ClearAllPoints()
   if config.detached then

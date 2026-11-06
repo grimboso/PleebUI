@@ -26,6 +26,7 @@ pleebug:RegisterAddon(addonName, "PleebUI", {
   PUI_UnitFramesDefaults = "Unit Frame Defaults",
   PUI_AuraWidget = "Aura Widgets",
   PUI_BarWidget = "Bar Widgets",
+  PUI_TotemTracker = "Totems",
   PUI_Presentation = "Widget Presentation",
   PUI_MinimapData = "Minimap Data Buttons",
   PUI_Minimap = "Minimap",

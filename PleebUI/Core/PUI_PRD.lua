@@ -67,6 +67,7 @@ ns.PRDDefaults = {
 
     hideHealth  = false,
     hidePrimary = false,
+    showTotems = false,
     showSwingTimer = false,
     swingTimer = {
       height = 8,
@@ -81,6 +82,7 @@ ns.PRDDefaults = {
       borderColor = { 0.20, 0.20, 0.24, 1 },
       showCountdown = false,
       fontSize = 10,
+      highlightQueuedAttack = true,
       showWindup = true,
       windupLead = 0.5,
     },
