@@ -649,7 +649,12 @@ function Core:ApplyCooldownAppearance(cooldown, skin, hideNumbers, swipeColor)
     and cooldown.__puiActionBarSwipeColor ~= swipeColor
   local needsHideNumbers = cooldown.__puiActionBarHideNumbers ~= hideNumbers
 
-  if not needsStyle and not needsDrawSwipe and not needsSwipeColor and not needsHideNumbers then
+  if needsHideNumbers then
+    cooldown:SetHideCountdownNumbers(hideNumbers)
+    cooldown.__puiActionBarHideNumbers = hideNumbers
+  end
+
+  if not needsStyle and not needsDrawSwipe and not needsSwipeColor then
     return
   end
 
@@ -681,10 +686,6 @@ function Core:ApplyCooldownAppearance(cooldown, skin, hideNumbers, swipeColor)
     cooldown:SetSwipeColor(unpack(swipeColor))
   end
 
-  if needsHideNumbers then
-    cooldown.__puiActionBarHideNumbers = hideNumbers
-    cooldown:SetHideCountdownNumbers(hideNumbers)
-  end
 end
 
 function Core:ApplyButtonCooldownAppearance(button, skin)

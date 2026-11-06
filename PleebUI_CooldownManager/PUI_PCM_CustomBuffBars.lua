@@ -986,9 +986,7 @@ _CustomBars_ApplyVisibility = function(f, cfg, isInCombat)
   local attachment = _customBarsAuraDriver.attachments[f]
   local auraButton = attachment and attachment.slot and attachment.slot.button
   if auraButton then
-    local activeAlpha = cfg.activeAuraEnabled == true
-      and (tonumber(cfg.activeAlpha) or 100) / 100 or 1
-    auraButton:SetAlpha(alpha * activeAlpha)
+    _customBarsAuraDriver:ApplyButtonAlpha(auraButton, f, cfg)
   end
   PCMPresentation.SetCustomBarBuffGlowContextAlpha(
     "buff:" .. tostring(f.__puiBarId),
@@ -1205,6 +1203,17 @@ _customBarsAuraDriver = {
 
 function _customBarsAuraDriver:IsButtonRestyleLocked()
   return C_Secrets.ShouldAurasBeSecret() == true
+end
+
+function _customBarsAuraDriver:ApplyButtonAlpha(button, f, cfg)
+  if not button:CanBeAccessedInContext() then
+    self.styleDeferred[f] = cfg
+    return
+  end
+
+  local activeAlpha = cfg.activeAuraEnabled == true
+    and (tonumber(cfg.activeAlpha) or 100) / 100 or 1
+  button:SetAlpha((f.__puiCBBVisAlpha or 1) * activeAlpha)
 end
 
 function _customBarsAuraDriver:InvalidateCandidateCache()
@@ -1449,6 +1458,52 @@ function _customBarsAuraDriver:UpdateActivity(f)
   _CustomBars_ApplyVisibility(f, f.__puiCfg, _CustomBars._lastCombatState)
 end
 
+function _customBarsAuraDriver:ApplyAuraExternalChrome(f, applicationsEnabled, durationEnabled, mode)
+  local secretVisibility = f.__puiShowOnlyWhenActive == true
+  local secretDurationVisibility = secretVisibility or f.__puiHideDurWhenMissing == true
+  local durationBarEnabled = durationEnabled and (mode == "bar" or mode == "bar+icon")
+  local durationFrameEnabled = durationEnabled and (mode == "icon" or mode == "bar+icon")
+
+  self:SetExternalChromeShown(
+    f.bg,
+    f.__puiBorderTop,
+    f.__puiBorderBottom,
+    f.__puiBorderLeft,
+    f.__puiBorderRight,
+    not secretVisibility
+  )
+
+  self:SetExternalChromeShown(
+    f.durBG,
+    f.__puiDurBorderTop,
+    f.__puiDurBorderBottom,
+    f.__puiDurBorderLeft,
+    f.__puiDurBorderRight,
+    durationBarEnabled and not secretDurationVisibility
+  )
+
+  self:SetExternalChromeShown(
+    f.durIconBG,
+    f.__puiDurIconBorderTop,
+    f.__puiDurIconBorderBottom,
+    f.__puiDurIconBorderLeft,
+    f.__puiDurIconBorderRight,
+    durationFrameEnabled and not secretDurationVisibility
+  )
+
+  self:SetExternalChromeShown(
+    f.spellIconBG,
+    f.__puiSpellIconBorderTop,
+    f.__puiSpellIconBorderBottom,
+    f.__puiSpellIconBorderLeft,
+    f.__puiSpellIconBorderRight,
+    applicationsEnabled
+      and f.__puiShowSpellIconNextToBar == true
+      and not durationFrameEnabled
+      and not secretVisibility
+  )
+end
+
 function _customBarsAuraDriver:ApplyCombinedStyle(sub, f, cfg)
   local button = sub.button
   sub.applicationThresholdParent = f
@@ -1482,14 +1537,6 @@ function _customBarsAuraDriver:ApplyCombinedStyle(sub, f, cfg)
     borderSize,
     secretVisibility
   )
-  self:SetExternalChromeShown(
-    f.bg,
-    f.__puiBorderTop,
-    f.__puiBorderBottom,
-    f.__puiBorderLeft,
-    f.__puiBorderRight,
-    not secretVisibility
-  )
 
   self:ApplyChrome(
     sub.durationChrome,
@@ -1498,14 +1545,6 @@ function _customBarsAuraDriver:ApplyCombinedStyle(sub, f, cfg)
     borderR, borderG, borderB, borderA,
     borderSize,
     durationBarEnabled and secretDurationVisibility
-  )
-  self:SetExternalChromeShown(
-    f.durBG,
-    f.__puiDurBorderTop,
-    f.__puiDurBorderBottom,
-    f.__puiDurBorderLeft,
-    f.__puiDurBorderRight,
-    durationBarEnabled and not secretDurationVisibility
   )
 
   local iconBorderSize = tonumber(cfg.durationIconBorderSize) or 0
@@ -1529,25 +1568,6 @@ function _customBarsAuraDriver:ApplyCombinedStyle(sub, f, cfg)
     iconBorderR, iconBorderG, iconBorderB, iconBorderA,
     iconBorderSize,
     (durationFrameEnabled and secretDurationVisibility) or activeOnlySpellIconEnabled
-  )
-  self:SetExternalChromeShown(
-    f.durIconBG,
-    f.__puiDurIconBorderTop,
-    f.__puiDurIconBorderBottom,
-    f.__puiDurIconBorderLeft,
-    f.__puiDurIconBorderRight,
-    durationFrameEnabled and not secretDurationVisibility
-  )
-  self:SetExternalChromeShown(
-    f.spellIconBG,
-    f.__puiSpellIconBorderTop,
-    f.__puiSpellIconBorderBottom,
-    f.__puiSpellIconBorderLeft,
-    f.__puiSpellIconBorderRight,
-    applicationsEnabled
-      and f.__puiShowSpellIconNextToBar == true
-      and not durationFrameEnabled
-      and not activeOnlySpellIconEnabled
   )
 
   if applicationsEnabled then
@@ -1881,8 +1901,7 @@ function _customBarsAuraDriver:ApplyCombinedStyle(sub, f, cfg)
 
   local activeAppearanceEnabled = cfg.activeAuraEnabled == true
   local activeDesaturated = activeAppearanceEnabled and cfg.desaturateActive == true
-  local activeAlpha = activeAppearanceEnabled and (tonumber(cfg.activeAlpha) or 100) / 100 or 1
-  button:SetAlpha(activeAlpha)
+  self:ApplyButtonAlpha(button, f, cfg)
   sub.icon:SetDesaturated(activeDesaturated)
   if sub.applicationBar and sub.applicationBar:GetStatusBarTexture() then
     sub.applicationBar:GetStatusBarTexture():SetDesaturated(activeDesaturated)
@@ -1901,7 +1920,7 @@ function _customBarsAuraDriver:ApplyStyle(f, cfg)
     return
   end
 
-  if self:IsButtonRestyleLocked() then
+  if self:IsButtonRestyleLocked() or not attachment.slot.button:CanBeAccessedInContext() then
     self.styleDeferred[f] = cfg
     return
   end
@@ -2161,7 +2180,7 @@ function _customBarsAuraDriver:CreateSlot(unit, filter, candidate, f, cfg, appli
     )
     self:SetSlotAttached(sub, true)
 
-    if self:IsButtonRestyleLocked() then
+    if self:IsButtonRestyleLocked() or not sub.button:CanBeAccessedInContext() then
       self.styleDeferred[f] = cfg
     else
       self.styleDeferred[f] = nil
@@ -2287,6 +2306,8 @@ function _customBarsAuraDriver:Attach(f, cfg)
     oldSub.candidate = nil
     oldSub.candidateSignature = nil
   end
+
+  self:ApplyAuraExternalChrome(f, applicationsEnabled, durationEnabled, mode)
 
   local slot = self:CreateSlot(
     unit,

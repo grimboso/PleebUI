@@ -16,6 +16,7 @@ local AuraContainerItemEnchantmentSlot = _G.AuraContainerItemEnchantmentSlot
 local AuraContainerItemEnchantmentSortMethod = _G.AuraContainerItemEnchantmentSortMethod
 local AuraContainerSortDirection = _G.AuraContainerSortDirection
 local AuraContainerSortMethod = _G.AuraContainerSortMethod
+local C_Secrets = _G.C_Secrets
 local CVarCallbackRegistry = _G.CVarCallbackRegistry
 local CreateFont = _G.CreateFont
 local CreateFrame = _G.CreateFrame
@@ -28,7 +29,6 @@ local ipairs = _G.ipairs
 local pairs = _G.pairs
 local setmetatable = _G.setmetatable
 local tonumber = _G.tonumber
-local tostring = _G.tostring
 local type = _G.type
 
 local Theme = ns.Theme
@@ -332,52 +332,40 @@ local function GetButtonParts(button)
   return parts
 end
 
-local function ApplyBorder(parts, style)
+local function ApplyAuraButtonBorder(runtime, button)
+  local parts = GetButtonParts(button)
+  local style = puiStyleCaches[runtime.kind]
   local thickness = style.borderThickness
-
-  if parts.borderThickness ~= thickness then
-    parts.borderThickness = thickness
-    parts.borderTop:SetHeight(thickness)
-    parts.borderBottom:SetHeight(thickness)
-    parts.borderLeft:SetWidth(thickness)
-    parts.borderRight:SetWidth(thickness)
-  end
-
-  local colorChanged = parts.borderR ~= style.borderR
-    or parts.borderG ~= style.borderG
-    or parts.borderB ~= style.borderB
-    or parts.borderA ~= style.borderA
-
-  if colorChanged then
-    parts.borderR = style.borderR
-    parts.borderG = style.borderG
-    parts.borderB = style.borderB
-    parts.borderA = style.borderA
-    parts.borderTop:SetVertexColor(style.borderR, style.borderG, style.borderB, style.borderA)
-    parts.borderBottom:SetVertexColor(style.borderR, style.borderG, style.borderB, style.borderA)
-    parts.borderLeft:SetVertexColor(style.borderR, style.borderG, style.borderB, style.borderA)
-    parts.borderRight:SetVertexColor(style.borderR, style.borderG, style.borderB, style.borderA)
-  end
-
   local shown = thickness > 0
-  parts.borderTop:SetShown(shown)
-  parts.borderBottom:SetShown(shown)
-  parts.borderLeft:SetShown(shown)
-  parts.borderRight:SetShown(shown)
+
+  if runtime.kind == "debuffs" then
+    button:ClearDispelTypeTextures()
+  end
+
+  parts.borderTop:SetHeight(thickness)
+  parts.borderBottom:SetHeight(thickness)
+  parts.borderLeft:SetWidth(thickness)
+  parts.borderRight:SetWidth(thickness)
+
+  for _, texture in ipairs({ parts.borderTop, parts.borderBottom, parts.borderLeft, parts.borderRight }) do
+    texture:SetVertexColor(style.borderR, style.borderG, style.borderB, style.borderA)
+    texture:SetShown(shown)
+    if shown and runtime.kind == "debuffs" then
+      button:AddDispelTypeTexture(texture, {
+        style = _G.Enum.CustomAuraButtonDispelTypeTextureStyle.PreserveAsset,
+        showWhenHarmful = true,
+        showWhenHelpful = false,
+        showWithoutDispelType = true,
+      })
+    end
+  end
 end
 
-local function BuildRuntimeVariantKey(db, kind)
-  local iconSize, textHeight, _, spacing = GetDisplayMetrics(db, kind)
-  local style = puiStyleCaches[kind]
-
-  return tostring(iconSize)
-    .. ":" .. tostring(textHeight)
-    .. ":" .. tostring(spacing)
-    .. ":" .. tostring(style.borderThickness)
-    .. ":" .. tostring(style.borderR)
-    .. ":" .. tostring(style.borderG)
-    .. ":" .. tostring(style.borderB)
-    .. ":" .. tostring(style.borderA)
+local function SizeAuraButton(runtime, button)
+  local parts = GetButtonParts(button)
+  button:SetSize(runtime.iconSize, runtime.elementHeight)
+  parts.icon:SetSize(runtime.iconSize, runtime.iconSize)
+  parts.durationTextHolder:SetHeight(runtime.textHeight)
 end
 
 local function BuildGroupLayout(runtime, layoutIndex)
@@ -393,18 +381,16 @@ local function BuildGroupLayout(runtime, layoutIndex)
   }
 end
 
-local function ConfigureAuraButton(runtime, button)
+local function InitializeAuraButton(runtime, button)
   local parts = GetButtonParts(button)
-  local iconSize = runtime.iconSize
-  local textHeight = runtime.textHeight
   local style = puiStyleCaches[runtime.kind]
   local playerAuraFont = playerAuraFonts[runtime.kind]
 
-  button:SetSize(iconSize, runtime.elementHeight)
+  runtime.buttons[button] = true
+  SizeAuraButton(runtime, button)
 
   parts.icon:ClearAllPoints()
   parts.icon:SetPoint("TOP", button, "TOP", 0, 0)
-  parts.icon:SetSize(iconSize, iconSize)
   parts.icon:SetTexCoord(0.07, 0.93, 0.07, 0.93)
   parts.icon:SetDrawLayer("ARTWORK", -1)
 
@@ -420,7 +406,6 @@ local function ConfigureAuraButton(runtime, button)
   parts.durationTextHolder:ClearAllPoints()
   parts.durationTextHolder:SetPoint("TOPLEFT", parts.icon, "BOTTOMLEFT", 0, 0)
   parts.durationTextHolder:SetPoint("TOPRIGHT", parts.icon, "BOTTOMRIGHT", 0, 0)
-  parts.durationTextHolder:SetHeight(textHeight)
   parts.durationTextHolder:SetFrameLevel(button:GetFrameLevel() + 3)
 
   parts.durationText:SetDrawLayer("OVERLAY", 7)
@@ -453,17 +438,7 @@ local function ConfigureAuraButton(runtime, button)
   parts.borderRight:SetPoint("TOPRIGHT", parts.icon, "TOPRIGHT", 0, 0)
   parts.borderRight:SetPoint("BOTTOMRIGHT", parts.icon, "BOTTOMRIGHT", 0, 0)
 
-  ApplyBorder(parts, style)
-  if runtime.kind == "debuffs" and style.borderThickness > 0 then
-    for _, texture in ipairs({ parts.borderTop, parts.borderBottom, parts.borderLeft, parts.borderRight }) do
-      button:AddDispelTypeTexture(texture, {
-        style = _G.Enum.CustomAuraButtonDispelTypeTextureStyle.PreserveAsset,
-        showWhenHarmful = true,
-        showWhenHelpful = false,
-        showWithoutDispelType = true,
-      })
-    end
-  end
+  ApplyAuraButtonBorder(runtime, button)
 
   parts.icon:Show()
   parts.applicationHolder:Show()
@@ -500,19 +475,17 @@ local function CreateAuraRoot(frameName)
   return root
 end
 
-local function CreateAuraRuntime(kind, variantKey)
-  local iconSize, textHeight, elementHeight, spacing, width, height = GetDisplayMetrics(PlayerBuffs.db, kind)
+local function CreateAuraRuntime(kind)
   local root = GetRoot(kind)
   local runtime = {
     kind = kind,
-    key = variantKey,
-    iconSize = iconSize,
-    textHeight = textHeight,
-    elementHeight = elementHeight,
-    spacing = spacing,
-    width = width,
-    height = height,
+    buttons = {},
+    groupKey = kind == "debuffs" and PLAYER_DEBUFFS_GROUP_KEY or PLAYER_BUFFS_GROUP_KEY,
+    groupLayoutIndex = kind == "buffs" and 2 or 1,
   }
+  runtime.iconSize, runtime.textHeight, runtime.elementHeight, runtime.spacing, runtime.width, runtime.height =
+    GetDisplayMetrics(PlayerBuffs.db, kind)
+  runtime.styleSerial = puiStyleCaches[kind].serial
 
   local container = CreateFrame("AuraContainer", nil, root, "CustomAuraContainerTemplate")
   runtime.container = container
@@ -522,7 +495,7 @@ local function CreateAuraRuntime(kind, variantKey)
   container:SetFrameStrata("LOW")
   container:SetFlowLayoutAnchorPoint("TOPRIGHT")
   container:SetFlowLayoutAxis(AnchorUtil.FlowLayoutAxis.Horizontal)
-  container:SetFlowLayoutMaximumLineSize(width + ns.Pixel.GetOnePixel())
+  container:SetFlowLayoutMaximumLineSize(runtime.width + ns.Pixel.GetOnePixel())
   container:SetFlowLayoutGrowthDirection(AnchorUtil.FlowDirection.Left, AnchorUtil.FlowDirection.Down)
   container:SetFlowLayoutPadding(0, 0, 0, 0)
   container:SetUnit(GetActiveUnit())
@@ -530,12 +503,10 @@ local function CreateAuraRuntime(kind, variantKey)
   container:Hide()
 
   local initializeFrame = function(button)
-    ConfigureAuraButton(runtime, button)
+    InitializeAuraButton(runtime, button)
   end
-  local groupKey = kind == "debuffs" and PLAYER_DEBUFFS_GROUP_KEY or PLAYER_BUFFS_GROUP_KEY
   local filterString = kind == "debuffs" and "HARMFUL" or "HELPFUL"
   local maxFrameCount = kind == "debuffs" and _G.DEBUFF_MAX_DISPLAY or _G.BUFF_MAX_DISPLAY
-  local groupLayoutIndex = kind == "buffs" and 2 or 1
 
   if kind == "buffs" then
     container:AddItemEnchantment(AuraContainerItemEnchantmentSlot.MainHand, {
@@ -558,16 +529,50 @@ local function CreateAuraRuntime(kind, variantKey)
     container:SetItemEnchantmentLayout(enchantmentLayout)
   end
 
-  container:AddAuraGroup(groupKey, filterString, {
+  container:AddAuraGroup(runtime.groupKey, filterString, {
     maxFrameCount = maxFrameCount,
     templateNames = PLAYER_AURA_TEMPLATE_NAMES,
     initializeFrame = initializeFrame,
     sortMethod = AuraContainerSortMethod.Default,
     sortDirection = AuraContainerSortDirection.Normal,
-    layout = BuildGroupLayout(runtime, groupLayoutIndex),
+    layout = BuildGroupLayout(runtime, runtime.groupLayoutIndex),
   })
 
   return runtime
+end
+
+local function UpdateAuraRuntime(runtime)
+  local kind = runtime.kind
+  local iconSize, textHeight, elementHeight, spacing, width, height = GetDisplayMetrics(PlayerBuffs.db, kind)
+  local layoutChanged = iconSize ~= runtime.iconSize or textHeight ~= runtime.textHeight
+    or spacing ~= runtime.spacing or width ~= runtime.width or height ~= runtime.height
+  local styleSerial = puiStyleCaches[kind].serial
+  local styleChanged = styleSerial ~= runtime.styleSerial
+
+  if layoutChanged then
+    runtime.iconSize, runtime.textHeight, runtime.elementHeight = iconSize, textHeight, elementHeight
+    runtime.spacing, runtime.width, runtime.height = spacing, width, height
+    local container = runtime.container
+    container:SetFlowLayoutMaximumLineSize(width + ns.Pixel.GetOnePixel())
+    container:SetAuraGroupLayout(runtime.groupKey, BuildGroupLayout(runtime, runtime.groupLayoutIndex))
+    if kind == "buffs" then
+      local enchantmentLayout = BuildGroupLayout(runtime, 1)
+      enchantmentLayout.placement = _G.CustomAuraContainerItemEnchantmentPlacement.BeforeAuraGroups
+      container:SetItemEnchantmentLayout(enchantmentLayout)
+    end
+  end
+
+  if layoutChanged or styleChanged then
+    for button in pairs(runtime.buttons) do
+      if layoutChanged then
+        SizeAuraButton(runtime, button)
+      end
+      if styleChanged then
+        ApplyAuraButtonBorder(runtime, button)
+      end
+    end
+    runtime.styleSerial = styleSerial
+  end
 end
 
 local function DisableAuraRuntime(runtime)
@@ -577,46 +582,26 @@ local function DisableAuraRuntime(runtime)
 
   runtime.container:SetEnabled(false)
   runtime.container:Hide()
-  runtime.enabled = false
 end
 
 local function ActivateAuraRuntime(kind)
-  local db = PlayerBuffs.db
-  local variantKey = BuildRuntimeVariantKey(db, kind)
-  local variants = PlayerBuffs.runtimeVariants[kind]
-  local activeRuntime = PlayerBuffs.activeRuntimes[kind]
-
-  if activeRuntime and activeRuntime.key ~= variantKey then
-    DisableAuraRuntime(activeRuntime)
-    activeRuntime = nil
-  end
-
-  if not activeRuntime then
-    activeRuntime = variants[variantKey]
-
-    if not activeRuntime then
-      activeRuntime = CreateAuraRuntime(kind, variantKey)
-      variants[variantKey] = activeRuntime
-    end
-
-    PlayerBuffs.activeRuntimes[kind] = activeRuntime
+  local runtime = PlayerBuffs.activeRuntimes[kind]
+  if runtime then
+    UpdateAuraRuntime(runtime)
+  else
+    runtime = CreateAuraRuntime(kind)
+    PlayerBuffs.activeRuntimes[kind] = runtime
   end
 
   local root = GetRoot(kind)
   root:SetScale(1)
-  root:SetSize(activeRuntime.width, activeRuntime.height)
-
-  if PlayerBuffs.runtimeEnabled then
-    if not activeRuntime.enabled then
-      activeRuntime.container:SetUnit(GetActiveUnit())
-      activeRuntime.container:Show()
-      activeRuntime.container:SetEnabled(true)
-      activeRuntime.enabled = true
-    end
-    root:Show()
+  root:SetSize(runtime.width, runtime.height)
+  if not runtime.container:IsEnabled() then
+    runtime.container:SetUnit(GetActiveUnit())
+    runtime.container:Show()
+    runtime.container:SetEnabled(true)
   end
-
-  return activeRuntime
+  root:Show()
 end
 
 local function CaptureBlizzardAuraOffsets()
@@ -736,10 +721,6 @@ local function EnsureRuntime()
 
   CaptureBlizzardAuraOffsets()
 
-  PlayerBuffs.runtimeVariants = {
-    buffs = {},
-    debuffs = {},
-  }
   PlayerBuffs.activeRuntimes = {}
   PlayerBuffs.buffRoot = CreateAuraRoot("PUI_PlayerBuffContainer")
   PlayerBuffs.debuffRoot = CreateAuraRoot("PUI_PlayerDebuffContainer")
@@ -995,6 +976,9 @@ function PlayerBuffs:EnsureMovers()
 end
 
 function PlayerBuffs:ApplyRuntimeSettings(flags)
+  if self.pendingApply then
+    flags = MergePendingApplyFlags(self.pendingApply, flags)
+  end
   local applyAll, applyStyle, applyBuffSize, applyDebuffSize = ResolveApplyFlags(flags)
 
   if not applyAll and not applyStyle and not applyBuffSize and not applyDebuffSize then
@@ -1007,16 +991,23 @@ function PlayerBuffs:ApplyRuntimeSettings(flags)
   end
 
   local db = GetProfileDB()
-  self.pendingApply = nil
   self.db = db
 
   if db.enabled == false then
+    self.pendingApply = nil
     DisableRuntime()
     RestoreBlizzardAuraFrames()
     self:RefreshMover()
     return
   end
 
+  -- Existing aura buttons deny addon access while auras are secret.
+  if self.activeRuntimes and C_Secrets.ShouldAurasBeSecret() then
+    self.pendingApply = MergePendingApplyFlags(self.pendingApply, flags)
+    return
+  end
+
+  self.pendingApply = nil
   local buffStyleChanged, debuffStyleChanged
   if applyStyle or puiStyleCaches.buffs.serial == 0 then
     buffStyleChanged = RefreshStyleCache(db, "buffs")
@@ -1086,7 +1077,11 @@ function PlayerBuffs:UpdateUnit(event, unit)
   end
 end
 
-function PlayerBuffs:OnRegenEnabled()
+function PlayerBuffs:OnRestrictionsChanged()
+  if InCombatLockdown() then
+    return
+  end
+
   if self.pendingBlizzardRestore then
     self.pendingBlizzardRestore = nil
     self:UnregisterEvent("PLAYER_REGEN_ENABLED")
@@ -1263,7 +1258,8 @@ function PlayerBuffs:StartRuntime()
     return
   end
 
-  self:RegisterEvent("PLAYER_REGEN_ENABLED", "OnRegenEnabled")
+  self:RegisterEvent("PLAYER_REGEN_ENABLED", "OnRestrictionsChanged")
+  self:RegisterEvent("ADDON_RESTRICTION_STATE_CHANGED", "OnRestrictionsChanged")
   self:RegisterEvent("PLAYER_ENTERING_WORLD", "UpdateUnit")
   self:RegisterEvent("UNIT_ENTERED_VEHICLE", "UpdateUnit")
   self:RegisterEvent("UNIT_EXITED_VEHICLE", "UpdateUnit")
@@ -1309,7 +1305,7 @@ function PlayerBuffs:OnDisable()
 
   if InCombatLockdown() then
     self.pendingBlizzardRestore = true
-    self:RegisterEvent("PLAYER_REGEN_ENABLED", "OnRegenEnabled")
+    self:RegisterEvent("PLAYER_REGEN_ENABLED", "OnRestrictionsChanged")
   else
     RestoreBlizzardAuraFrames()
   end
@@ -1336,12 +1332,13 @@ end
   ApplyFontObject = P:Def("ApplyFontObject", ApplyFontObject)
   RefreshStyleCache = P:Def("RefreshStyleCache", RefreshStyleCache)
   GetButtonParts = P:Def("GetButtonParts", GetButtonParts)
-  ApplyBorder = P:Def("ApplyBorder", ApplyBorder)
-  BuildRuntimeVariantKey = P:Def("BuildRuntimeVariantKey", BuildRuntimeVariantKey)
+  ApplyAuraButtonBorder = P:Def("ApplyAuraButtonBorder", ApplyAuraButtonBorder)
+  SizeAuraButton = P:Def("SizeAuraButton", SizeAuraButton)
   BuildGroupLayout = P:Def("BuildGroupLayout", BuildGroupLayout)
-  ConfigureAuraButton = P:Def("ConfigureAuraButton", ConfigureAuraButton)
+  InitializeAuraButton = P:Def("InitializeAuraButton", InitializeAuraButton)
   CreateAuraRoot = P:Def("CreateAuraRoot", CreateAuraRoot)
   CreateAuraRuntime = P:Def("CreateAuraRuntime", CreateAuraRuntime)
+  UpdateAuraRuntime = P:Def("UpdateAuraRuntime", UpdateAuraRuntime)
   DisableAuraRuntime = P:Def("DisableAuraRuntime", DisableAuraRuntime)
   ActivateAuraRuntime = P:Def("ActivateAuraRuntime", ActivateAuraRuntime)
   CaptureBlizzardAuraOffsets = P:Def("CaptureBlizzardAuraOffsets", CaptureBlizzardAuraOffsets)
@@ -1363,7 +1360,7 @@ end
   PlayerBuffs.StartRuntime = P:Def("PlayerBuffs.StartRuntime", PlayerBuffs.StartRuntime)
   PlayerBuffs.RefreshFonts = P:Def("PlayerBuffs.RefreshFonts", PlayerBuffs.RefreshFonts)
   PlayerBuffs.UpdateUnit = P:Def("PlayerBuffs.UpdateUnit", PlayerBuffs.UpdateUnit)
-  PlayerBuffs.OnRegenEnabled = P:Def("PlayerBuffs.OnRegenEnabled", PlayerBuffs.OnRegenEnabled)
+  PlayerBuffs.OnRestrictionsChanged = P:Def("PlayerBuffs.OnRestrictionsChanged", PlayerBuffs.OnRestrictionsChanged)
   PlayerBuffs.GetOptions = P:Def("PlayerBuffs.GetOptions", PlayerBuffs.GetOptions)
   PlayerBuffs.OnInitialize = P:Def("PlayerBuffs.OnInitialize", PlayerBuffs.OnInitialize)
   PlayerBuffs.OnEnable = P:Def("PlayerBuffs.OnEnable", PlayerBuffs.OnEnable)

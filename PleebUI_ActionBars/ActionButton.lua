@@ -1421,10 +1421,10 @@ local function FlushCooldownAndCountRefresh(self, flushID, cooldownRefresh, char
     if button.__puiRuntimeFlushID ~= flushID and button.__puiHasAction then
       if chargeCountRefresh then
         self:UpdateCount(button)
-        RefreshButtonChargeCooldown(button)
       end
-      if cooldownRefresh then
-        UpdateButtonCooldown(button, false, false)
+      -- A temporary recast can switch timers on either event.
+      if cooldownRefresh or chargeCountRefresh then
+        UpdateButtonCooldown(button, true, false)
       end
     end
   end
@@ -1518,13 +1518,10 @@ local function FlushBroadRefresh(
 
       if chargeCountRefresh then
         self:UpdateCount(button)
-        if not lossOfControlRefresh then
-          RefreshButtonChargeCooldown(button)
-        end
       end
 
-      if cooldownRefresh or lossOfControlRefresh then
-        UpdateButtonCooldown(button, false, lossOfControlRefresh == true)
+      if cooldownRefresh or chargeCountRefresh or lossOfControlRefresh then
+        UpdateButtonCooldown(button, true, lossOfControlRefresh == true)
       end
 
       if assistedCombatRefresh then
