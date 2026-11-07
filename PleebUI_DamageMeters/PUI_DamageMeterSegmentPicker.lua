@@ -1384,30 +1384,43 @@ local function ShowWindowConfigMenu(window)
         Windows.RefreshWindow(window, nil, windowDB)
       end
     )
-    rootDescription:CreateCheckbox(
-      "Sync segment selection",
-      function()
-        return windowDB.syncSegments == true
-      end,
-      function()
-        windowDB.syncSegments = windowDB.syncSegments ~= true
-        window.runtime.syncSegments = windowDB.syncSegments
-      end
-    )
-    rootDescription:CreateCheckbox(
-      "Automatically switch to Current in combat",
-      function()
-        return windowDB.autoCurrentOnCombat == true
-      end,
-      function()
-        windowDB.autoCurrentOnCombat = windowDB.autoCurrentOnCombat ~= true
-        window.runtime.autoCurrentOnCombat = windowDB.autoCurrentOnCombat
-      end
-    )
-    rootDescription:CreateDivider()
-    rootDescription:CreateButton("Clear unsaved segments", function()
-      ConfirmClearUnsavedSegments()
-    end)
+    if windowDB.meter == "THREAT" then
+      rootDescription:CreateCheckbox(
+        "Auto-hide Threat",
+        function()
+          return windowDB.autoHideThreat == true
+        end,
+        function()
+          windowDB.autoHideThreat = not windowDB.autoHideThreat
+          DamageMeters:ApplySettings()
+        end
+      )
+    else
+      rootDescription:CreateCheckbox(
+        "Sync segment selection",
+        function()
+          return windowDB.syncSegments == true
+        end,
+        function()
+          windowDB.syncSegments = windowDB.syncSegments ~= true
+          window.runtime.syncSegments = windowDB.syncSegments
+        end
+      )
+      rootDescription:CreateCheckbox(
+        "Automatically switch to Current in combat",
+        function()
+          return windowDB.autoCurrentOnCombat == true
+        end,
+        function()
+          windowDB.autoCurrentOnCombat = windowDB.autoCurrentOnCombat ~= true
+          window.runtime.autoCurrentOnCombat = windowDB.autoCurrentOnCombat
+        end
+      )
+      rootDescription:CreateDivider()
+      rootDescription:CreateButton("Clear unsaved segments", function()
+        ConfirmClearUnsavedSegments()
+      end)
+    end
     rootDescription:CreateButton("Reset position", function()
       DamageMeters:ResetWindowPosition(window.index)
     end)

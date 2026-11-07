@@ -4473,6 +4473,8 @@ local GROUPED_GENERAL_COMMON_RESET_KEYS = {
 }
 
 local PARTY_GENERAL_RESET_KEYS = {
+  showMissingBuffs = true,
+  missingBuffsThornsOnTanks = true,
   hideInRaid = true,
   showPlayer = true,
   showSolo = true,
@@ -4507,6 +4509,8 @@ local PARTY_GENERAL_RESET_KEYS = {
 }
 
 local RAID_GENERAL_RESET_KEYS = {
+  showMissingBuffs = true,
+  missingBuffsThornsOnTanks = true,
   hideBlizzard = true,
   enableMainTankFrames = true,
   growthDirection = true,
@@ -5215,6 +5219,24 @@ local function UFCB_BuildPartyGeneralArgs(groupKind, opts)
               local db = GetDB()
               return not (db and db.showRaidTarget ~= false)
             end,
+          }),
+        },
+      },
+      missingBuffs = {
+        type = "group",
+        name = "Missing buffs",
+        order = 5,
+        inline = true,
+        hidden = function() return not ns.Client.IsForever end,
+        args = {
+          enabled = BuildGroupedToggle("showMissingBuffs", "Show missing buffs", 1, {
+            desc = "Shows buffs you know how to cast on group members who are missing them. Only active out of combat.",
+            flags = { indicators = true },
+          }),
+          thornsOnTanks = BuildGroupedToggle("missingBuffsThornsOnTanks", "Thorns only on tanks", 2, {
+            hidden = function() return select(2, UnitClass("player")) ~= "DRUID" end,
+            disabled = function() return GetDB().showMissingBuffs ~= true end,
+            flags = { indicators = true },
           }),
         },
       },

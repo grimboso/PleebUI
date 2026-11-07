@@ -12,7 +12,7 @@ local math_floor = _G.math.floor
 
 local MAX_WINDOWS = Constants.MAX_WINDOWS
 local BREAKDOWN_ROW_POOL_SIZE = Constants.BREAKDOWN_ROW_POOL_SIZE
-local METER_TYPES = Constants.METER_TYPES
+local METER_NAMES = Constants.METER_NAMES
 local SESSION_TYPES = Constants.SESSION_TYPES
 local Clamp = ns.DamageMeterUtil.Clamp
 local Round = ns.Pixel.Round
@@ -99,7 +99,7 @@ local function SanitizeProfile()
     local windowDB = GetWindowDB(index)
     local defaultPosition = DEFAULT_WINDOW_POSITIONS[index]
 
-    if not METER_TYPES[windowDB.meter] then
+    if not METER_NAMES[windowDB.meter] then
       windowDB.meter = "DAMAGE_DONE"
     end
     if not SESSION_TYPES[windowDB.session] then
@@ -110,6 +110,7 @@ local function SanitizeProfile()
     windowDB.locked = windowDB.locked ~= false
     windowDB.shown = windowDB.shown ~= false
     windowDB.alwaysShowMe = windowDB.alwaysShowMe == true
+    windowDB.autoHideThreat = windowDB.autoHideThreat == true
     windowDB.syncSegments = windowDB.syncSegments == true
     windowDB.autoCurrentOnCombat = windowDB.autoCurrentOnCombat == true
     windowDB.width = Clamp(math_floor(windowDB.width or 320), 220, 700)
@@ -568,6 +569,23 @@ function DamageMeters:GetOptions()
             else
               self:CloseWindow(windowIndex)
             end
+          end,
+        },
+        autoHideThreat = {
+          type = "toggle",
+          name = "Auto-hide Threat",
+          desc = "Hide this window while solo or when there is no threat to show.",
+          order = 15,
+          hidden = function()
+            local windowDB = self.db.profile.windows[windowIndex]
+            return not windowDB or windowDB.meter ~= "THREAT"
+          end,
+          get = function()
+            return GetWindowDB(windowIndex).autoHideThreat == true
+          end,
+          set = function(_, value)
+            GetWindowDB(windowIndex).autoHideThreat = value
+            self:ApplySettings()
           end,
         },
         resetPosition = {

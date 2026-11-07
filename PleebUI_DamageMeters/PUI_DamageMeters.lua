@@ -125,6 +125,11 @@ Constants.METER_CATEGORIES = {
   },
 }
 
+if ns.Client.IsForever then
+  Constants.METER_NAMES.THREAT = "Threat"
+  table.insert(Constants.METER_CATEGORIES[3].keys, 1, "THREAT")
+end
+
 Constants.METER_TYPES = {
   DAMAGE_DONE = Enum.DamageMeterType.DamageDone,
   DPS = Enum.DamageMeterType.Dps,
@@ -604,6 +609,9 @@ function DamageMeters:SetRuntimeEnabled(enabled)
 
   if not enabled then
     self.runtimeEnabled = false
+    if ns.Client.IsForever then
+      ns.DamageMeterThreat.SetActive(false)
+    end
     Breakdown.InvalidateTargetAnalysisCache()
     Breakdown.InvalidateDeathRecapCache()
     self.playerInCombat = false

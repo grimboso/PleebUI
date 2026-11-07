@@ -3,6 +3,7 @@
   <Script file="PUI_HunterTools.lua"/>
   <Script file="PUI_MovementWarning.lua"/>
   <Script file="PUI_RaidUtility.lua"/>
+  <Script file="PUI_WeaponWarnings.lua"/>
   <Script file="PUI_CombatQuality.lua"/>
   <Script file="PUI_Profiling.lua"/>
 </Ui>

@@ -1396,6 +1396,7 @@ ApplyPetWarnings = function()
 end
 
 function Quality:RefreshFonts()
+  if ns.Client.IsForever then ns.WeaponWarnings.RefreshFont() end
   if not PetWarnText then
     return
   end
@@ -1421,6 +1422,7 @@ function CombatQuality:ApplyRuntimeSettings()
   ns.Theme.ApplyFont(CombatTimerText, "body", q.combatTimerFontSize, nil, "qualityOfLife")
   ApplyCombatTimerAppearance(CombatTimerFrame, q)
   ApplyPetWarnings()
+  if ns.Client.IsForever then ns.WeaponWarnings.Apply(q) end
   ns.RaidUtilityModule.ApplyAll()
   ApplyCrosshair(not not q.crosshair)
   ApplyCursorRing((not not q.cursorRingShowInner) or (not not q.cursorRingShowOutline))
@@ -2085,6 +2087,28 @@ function CombatQuality.BuildOptions(context)
     local _, playerClass = UnitClass("player")
     if playerClass == "HUNTER" then
       options.args.combatTab.args.emergencySalve = ns.Modules.HunterTools:GetOptions()
+    end
+
+    if ns.Client.IsForever then
+      options.args.combatTab.args.weaponWarnings = {
+        type = "group",
+        name = "Weapon buffs",
+        order = 15,
+        inline = true,
+        args = {
+          enabled = {
+            type = "toggle",
+            name = "Track weapon buffs per hand",
+            desc = "Warns out of combat when an equipped weapon is missing a poison, imbue, or temporary coating.",
+            order = 1,
+            get = function() return ns.WeaponWarnings.IsEnabled(GetQ()) end,
+            set = function(_, value)
+              GetQ().weaponBuffWarnings = value
+              RequestApply()
+            end,
+          },
+        },
+      }
     end
 
     options.args.qualityTab, options.args.automationTab = nil, nil

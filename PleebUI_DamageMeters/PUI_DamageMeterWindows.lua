@@ -7,6 +7,7 @@ local DamageMeters = ns.Modules.DamageMeters
 local Windows = ns.DamageMeterWindows
 local Config = ns.DamageMeterConfig
 local Sessions = ns.DamageMeterSessions
+local Threat = ns.DamageMeterThreat
 local Breakdown = ns.DamageMeterBreakdown
 local SegmentPicker = ns.DamageMeterSegmentPicker
 local Constants = ns.DamageMeterConstants
@@ -243,6 +244,9 @@ local function CreateMeterRow(parent)
   row.primaryAmount = primaryAmount
 
   row:SetScript("OnEnter", function(self)
+    if self.window and self.window.rowDisplayMeter == "THREAT" then
+      return
+    end
     local breakdown = DamageMeters.breakdown
     if breakdown and breakdown.pinned then
       ShowMeterRowTooltip(self)
@@ -257,6 +261,9 @@ local function CreateMeterRow(parent)
     Breakdown.ScheduleTransientClose(self)
   end)
   row:SetScript("OnClick", function(self, button)
+    if self.window and self.window.rowDisplayMeter == "THREAT" then
+      return
+    end
     if button == "LeftButton" then
       Breakdown.OpenForRow(self, true)
     elseif button == "RightButton" then
@@ -539,6 +546,8 @@ local function CompileWindowRuntime(window, windowDB)
   runtime.meter = windowDB.meter
   runtime.session = windowDB.session
   runtime.alwaysShowMe = windowDB.alwaysShowMe == true
+  runtime.shown = windowDB.shown == true
+  runtime.autoHideThreat = windowDB.autoHideThreat == true
   runtime.syncSegments = windowDB.syncSegments == true
   runtime.autoCurrentOnCombat = windowDB.autoCurrentOnCombat == true
   return runtime
@@ -548,6 +557,7 @@ local function UpdateHeaderText(window, windowDB, session)
   windowDB = windowDB or GetWindowDB(window.index)
 
   local meterName = METER_NAMES[windowDB.meter]
+  local isThreat = windowDB.meter == "THREAT"
   local sessionLabel
 
   if window.navigationMode then
@@ -559,7 +569,9 @@ local function UpdateHeaderText(window, windowDB, session)
       window.subtitle:SetText("Choose meter")
     end
 
-    sessionLabel = GetSessionDisplay(windowDB, session)
+    if not isThreat then
+      sessionLabel = GetSessionDisplay(windowDB, session)
+    end
   else
     if window.headerMode ~= windowDB.meter then
       window.headerMode = windowDB.meter
@@ -569,7 +581,11 @@ local function UpdateHeaderText(window, windowDB, session)
     end
 
     local duration
-    sessionLabel, duration = GetSessionDisplay(windowDB, session)
+    if isThreat then
+      sessionLabel = Threat.label or ""
+    else
+      sessionLabel, duration = GetSessionDisplay(windowDB, session)
+    end
 
     if IsSecret(duration) then
       if window.headerSessionLabel ~= sessionLabel or window.headerDurationSecond ~= false then
@@ -597,7 +613,7 @@ local function UpdateHeaderText(window, windowDB, session)
     RefreshHeaderButtonTooltip(window.meterButton)
   end
 
-  if window.headerSessionTooltip ~= sessionLabel then
+  if not isThreat and window.headerSessionTooltip ~= sessionLabel then
     window.headerSessionTooltip = sessionLabel
     SetHeaderButtonTooltip(window.sessionButton, "Change segment", sessionLabel)
     RefreshHeaderButtonTooltip(window.sessionButton)
@@ -644,20 +660,28 @@ local function ApplyWindowStyle(window, previewDB)
   window.snapHint:SetText("Smart Snap highlights compatible meters. Shift-drag detaches the moved meter.")
 
   local buttons = window.headerButtons
+  local isThreat = windowDB.meter == "THREAT"
+  local buttonCount, lastButton = 0, nil
   for index = 1, #buttons do
     local button = buttons[index]
-    button:SetSize(buttonSize, buttonSize)
-    button:ClearAllPoints()
-    button:SetPoint("RIGHT", window.header, "RIGHT", -4 - ((index - 1) * (buttonSize + 2)), 0)
+    local shown = not isThreat or (button ~= window.sessionButton and button ~= window.resetButton)
+    button:SetShown(shown)
+    if shown then
+      button:SetSize(buttonSize, buttonSize)
+      button:ClearAllPoints()
+      button:SetPoint("RIGHT", window.header, "RIGHT", -4 - (buttonCount * (buttonSize + 2)), 0)
+      buttonCount = buttonCount + 1
+      lastButton = button
+    end
   end
 
   window.title:ClearAllPoints()
   window.title:SetPoint("TOPLEFT", window.header, "TOPLEFT", 8, -3)
-  window.title:SetPoint("RIGHT", buttons[#buttons], "LEFT", -6, 0)
+  window.title:SetPoint("RIGHT", lastButton, "LEFT", -6, 0)
 
   window.subtitle:ClearAllPoints()
   window.subtitle:SetPoint("BOTTOMLEFT", window.header, "BOTTOMLEFT", 8, 3)
-  window.subtitle:SetPoint("RIGHT", buttons[#buttons], "LEFT", -6, 0)
+  window.subtitle:SetPoint("RIGHT", lastButton, "LEFT", -6, 0)
 
   window.viewport:ClearAllPoints()
   window.viewport:SetPoint("TOPLEFT", window.header, "BOTTOMLEFT", 4, -4)
@@ -818,7 +842,10 @@ local function ConfigureWindowRowDisplay(window, meterKey)
   local countOnly = meterKey == "INTERRUPTS" or meterKey == "DISPELS" or meterKey == "DEATHS"
   local ratePrimary = meterKey == "DPS" or meterKey == "HPS"
 
-  if meterKey == "DEATHS" then
+  local isThreat = meterKey == "THREAT"
+  if isThreat then
+    window.rowDisplayKind = "THREAT"
+  elseif meterKey == "DEATHS" then
     window.rowDisplayKind = "DEATH"
   elseif countOnly then
     window.rowDisplayKind = "COUNT"
@@ -828,7 +855,7 @@ local function ConfigureWindowRowDisplay(window, meterKey)
     window.rowDisplayKind = "AMOUNT"
   end
 
-  for index = 1, window.activeRowCount do
+  for index = 1, #window.rows do
     local row = window.rows[index]
     row.primarySuffix:SetText("")
 
@@ -838,10 +865,11 @@ local function ConfigureWindowRowDisplay(window, meterKey)
       row.secondarySuffix:SetText("")
     else
       row.amountSeparator:SetText("·")
-      row.secondarySuffix:SetText(ratePrimary and "" or "/s")
+      row.secondarySuffix:SetText(isThreat and "%" or (ratePrimary and "" or "/s"))
     end
   end
 
+  window.emptyText:SetText(isThreat and "No threat data" or "No combat data")
   window.rowDisplayMeter = meterKey
 end
 
@@ -868,7 +896,7 @@ local function SetAbbreviatedRowValue(
     row[valueField] = value
   end
 
-  if ns.Client.IsForever and mode == "RATE" then
+  if mode == "PERCENT" or (ns.Client.IsForever and mode == "RATE") then
     fontString:SetFormattedText("%.0f", value)
   else
     fontString:SetText(AbbreviateNumbers(value, NUMBER_ABBREVIATION_OPTIONS))
@@ -903,15 +931,21 @@ local function SetRowSource(
 )
   local classFilename = source.classFilename
 
-  if row.sourceIndex ~= rank then
-    row.sourceIndex = rank
-    row.rank:SetText(RANK_TEXT[rank] or (rank .. "."))
+  row.sourceIndex = rank
+  local displayRank = source.isPullThreat and 0 or (source.threatRank or rank)
+  if row.displayRank ~= displayRank then
+    row.displayRank = displayRank
+    row.rank:SetText(displayRank == 0 and "" or (RANK_TEXT[displayRank] or (displayRank .. ".")))
   end
 
-  if row.classFilename ~= classFilename then
+  local isPullThreat = source.isPullThreat == true
+  if row.classFilename ~= classFilename or row.isPullThreat ~= isPullThreat then
     row.classFilename = classFilename
+    row.isPullThreat = isPullThreat
     local classColor = RAID_CLASS_COLORS[classFilename]
-    if classColor then
+    if isPullThreat then
+      row.fill:SetStatusBarColor(1, 0.48, 0.18, 1)
+    elseif classColor then
       row.fill:SetStatusBarColor(classColor.r, classColor.g, classColor.b, 1)
     else
       row.fill:SetStatusBarColor(0.62, 0.62, 0.62, 1)
@@ -1040,8 +1074,8 @@ local function SetRowSource(
       "secondaryAmountMode",
       "secondaryAmountValue",
       row.secondaryAmount,
-      "RATE",
-      source.amountPerSecond
+      displayKind == "THREAT" and "PERCENT" or "RATE",
+      displayKind == "THREAT" and source.threatPercent or source.amountPerSecond
     )
   end
 
@@ -1101,6 +1135,7 @@ local function HideWindowRowsFrom(window, firstIndex)
     local row = window.rows[index]
     row.window = nil
     row.sourceIndex = nil
+    row.displayRank = nil
     row.isLocalPlayer = nil
     row.classFilename = nil
     row.deathRecapID = nil
@@ -1158,7 +1193,9 @@ local function RefreshWindow(window, session, windowDB)
     ConfigureWindowRowDisplay(window, windowDB.meter)
   end
 
-  if session == nil then
+  if windowDB.meter == "THREAT" then
+    session = Threat
+  elseif session == nil then
     session = GetCombatSession(windowDB, windowDB.meter)
   elseif session == NO_COMBAT_SESSION then
     session = nil
@@ -1260,6 +1297,58 @@ local function RefreshWindow(window, session, windowDB)
   window.usedRows = rowIndex
 end
 
+local function IsThreatWindow(window)
+  return window and window.runtime and window.runtime.meter == "THREAT"
+    and window.runtime.shown and not window.navigationMode
+end
+
+function DamageMeters:RefreshThreatWindows()
+  if not Threat or not self.runtimeEnabled or not self.runtimeVisible or not UIParent:IsVisible() then
+    return
+  end
+
+  local hasGroupThreat = IsInGroup() and #Threat.combatSources > 0
+  for index = 1, self.runtimeWindowCount do
+    local window = self.windows[index]
+    if IsThreatWindow(window) then
+      local shown = not window.runtime.autoHideThreat or hasGroupThreat
+      window.frame:SetShown(shown)
+      if shown then
+        RefreshWindow(window, Threat)
+      end
+    end
+  end
+end
+
+local function SyncThreatWindows()
+  if not Threat then
+    return
+  end
+
+  local active = false
+  if DamageMeters.runtimeEnabled and DamageMeters.runtimeVisible and UIParent:IsVisible() then
+    for index = 1, DamageMeters.runtimeWindowCount do
+      local window = DamageMeters.windows[index]
+      if IsThreatWindow(window) then
+        active = true
+        if not window.runtime.autoHideThreat then
+          Threat.SetActive(true, false)
+          return
+        end
+      end
+    end
+  end
+  Threat.SetActive(active, true)
+end
+
+if Threat then
+  UIParent:HookScript("OnShow", function()
+    SyncThreatWindows()
+    DamageMeters:RefreshThreatWindows()
+  end)
+  UIParent:HookScript("OnHide", SyncThreatWindows)
+end
+
 local function UpdateBreakdownForWindow(window)
   local selection = DamageMeters.breakdownSelection
   if not selection or selection.ownerWindow ~= window then
@@ -1267,7 +1356,8 @@ local function UpdateBreakdownForWindow(window)
   end
 
   local windowDB = GetWindowDB(window.index)
-  if selection.mode == "DEATH_RECAP"
+  if windowDB.meter == "THREAT"
+    or selection.mode == "DEATH_RECAP"
     or selection.mode == "ENEMY_PLAYERS"
     or selection.mode == "LIVE_ENEMY_PLAYERS"
   then
@@ -1323,10 +1413,11 @@ local function ShowMeterNavigation(window)
   end
 
   SetWindowNavigationMode(window, true)
+  SyncThreatWindows()
 end
 
 local function SelectWindowMeter(window, meterKey)
-  if not window or not METER_TYPES[meterKey] then
+  if not window or not METER_NAMES[meterKey] then
     return
   end
 
@@ -1338,8 +1429,13 @@ local function SelectWindowMeter(window, meterKey)
   ApplyWindowStyle(window)
   ApplyWindowLayout(window)
   SetWindowNavigationMode(window, false)
-  RefreshWindow(window, nil, windowDB)
+  CompileWindowRuntime(window, windowDB)
   DamageMeters:CompileCombatWindowRouting()
+  if meterKey == "THREAT" then
+    DamageMeters:RefreshThreatWindows()
+  else
+    RefreshWindow(window, nil, windowDB)
+  end
   UpdateBreakdownForWindow(window)
 end
 
@@ -1369,13 +1465,17 @@ local function ApplyWindowSegmentSelection(window, sessionKey, selection, refres
 end
 
 local function SelectWindowSegment(window, sessionKey, selection)
+  if window.runtime.meter == "THREAT" then
+    return
+  end
+
   if window.runtime.syncSegments ~= true then
     ApplyWindowSegmentSelection(window, sessionKey, selection, true)
     return
   end
   for index = 1, DamageMeters.runtimeWindowCount do
     local syncedWindow = DamageMeters.windows[index]
-    if syncedWindow.runtime.syncSegments == true then
+    if syncedWindow.runtime.meter ~= "THREAT" and syncedWindow.runtime.syncSegments == true then
       ApplyWindowSegmentSelection(
         syncedWindow,
         sessionKey,
@@ -1391,7 +1491,7 @@ function DamageMeters:SelectCurrentSessionsOnCombat()
   self.currentDisplaySessionID = nil
   for index = 1, self.runtimeWindowCount do
     local window = self.windows[index]
-    if window.runtime.autoCurrentOnCombat == true
+    if window.runtime.meter ~= "THREAT" and window.runtime.autoCurrentOnCombat == true
       and (window.runtime.session ~= "CURRENT"
         or GetWindowSelection(window.runtime) ~= nil)
     then
@@ -1791,7 +1891,7 @@ function DamageMeters:CompileCombatWindowRouting()
   if self.runtimeVisible and self.windows then
     for index = 1, self.runtimeWindowCount do
       local window = self.windows[index]
-      if window and window.frame:IsShown() and window.runtime then
+      if window and window.frame:IsShown() and window.runtime and window.runtime.meter ~= "THREAT" then
         windows[#windows + 1] = window
         local meterType = METER_TYPES[window.runtime.meter]
         local meterWindows = windowsByMeterType[meterType]
@@ -1806,6 +1906,7 @@ function DamageMeters:CompileCombatWindowRouting()
 
   self.combatRefreshWindows = windows
   self.combatEventWindowsByMeterType = windowsByMeterType
+  SyncThreatWindows()
 end
 
 function DamageMeters:ApplyWindowConfiguration()
@@ -1825,7 +1926,9 @@ function DamageMeters:ApplyWindowConfiguration()
       ApplyWindowPosition(window)
       ApplyWindowStyle(window)
       ApplyWindowLayout(window)
-      window.frame:Show()
+      if windowDB.meter ~= "THREAT" or window.navigationMode then
+        window.frame:Show()
+      end
       FrameUtil:RegisterMover(MOVER_PREFIX .. window.index, window.frame, window.moverOptions)
     elseif window then
       window.dragState = nil
@@ -1838,11 +1941,12 @@ function DamageMeters:ApplyWindowConfiguration()
   end
 
   self:CompileCombatWindowRouting()
+  self:RefreshThreatWindows()
 
   local selection = self.breakdownSelection
   if selection then
     local ownerDB = selection.ownerIndex <= db.windowCount and GetWindowDB(selection.ownerIndex) or nil
-    if not db.visible or not ownerDB or ownerDB.shown == false then
+    if not db.visible or not ownerDB or ownerDB.shown == false or ownerDB.meter == "THREAT" then
       Breakdown.Close()
     elseif self.breakdown and self.breakdown.frame:IsShown() then
       Breakdown.ApplyStyle(self.breakdown)
@@ -1874,7 +1978,7 @@ function DamageMeters:RefreshAppearance()
   local db = self.db.profile
   for index = 1, db.windowCount do
     local window = self.windows[index]
-    if window and window.frame:IsShown() then
+    if window and (window.frame:IsShown() or IsThreatWindow(window)) then
       ApplyWindowStyle(window)
       ApplyWindowLayout(window)
     end
@@ -2029,7 +2133,9 @@ function DamageMeters:MarkCurrentWindowsDirty()
       and not window.navigationMode
     then
       local windowRuntime = window.runtime
-      if GetWindowSelection(windowRuntime) == nil and windowRuntime.session == "CURRENT" then
+      if windowRuntime.meter ~= "THREAT"
+        and GetWindowSelection(windowRuntime) == nil and windowRuntime.session == "CURRENT"
+      then
         window.needsCombatRefresh = true
         marked = true
       end
