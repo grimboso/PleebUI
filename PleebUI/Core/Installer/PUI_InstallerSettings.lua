@@ -94,14 +94,10 @@ local BAR_CONTROLS = {
   { "layout/arrangement/iconsPerRow", "Buttons per row", optional = true },
   { "text/hotkey/showText", "Show keybinds" },
 }
-local NATIVE_RESOURCE_CONTROLS = {
-  { "feature/enabled", "Show this bar" }, { "layoutGroup/height", "Bar height" },
-  { "textGroup/percentVisibility", "Show percent" }, { "textGroup/valueVisibility", "Show value" },
-}
 local RESOURCE_CONTROLS = {
-  { "feature/enabled", "Enable this resource" }, { "feature/visibility", "Show bar" },
-  { "layout/height", "Bar height" },
-  { "textGroup/textMode", "Resource text", optional = true },
+  { "general/feature/enabled", "Enable this resource" }, { "general/feature/visibility", "Show bar" },
+  { "general/layout/height", "Bar height" },
+  { "text/textGroup/textMode", "Resource text", optional = true },
   { "display/showIconCount", "Show count on spell icons", optional = true },
 }
 local ROOT_CONTROLS = {
@@ -189,7 +185,14 @@ local function LessonControls(path, node)
     end
     return definitions
   elseif path[1] == "PRD" then
-    return path[2] == "resources" and RESOURCE_CONTROLS or NATIVE_RESOURCE_CONTROLS
+    if path[2] == "resources" then return RESOURCE_CONTROLS end
+    return {
+      path[2] == "health" and { "general/feature/display", "Health display" }
+        or { "general/feature/enabled", "Show this bar" },
+      { "general/layoutGroup/height", "Bar height" },
+      { "text/textGroup/percentVisibility", "Show percent" },
+      { "text/textGroup/valueVisibility", "Show value" },
+    }
   elseif path[1] == "CooldownManager" then
     local definitions = {}
     local fields = path[2] == "consumables"
