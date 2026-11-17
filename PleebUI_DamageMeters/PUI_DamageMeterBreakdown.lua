@@ -22,6 +22,7 @@ local ScrollBoxConstants = _G.ScrollBoxConstants
 local Ambiguate = _G.Ambiguate
 local RAID_CLASS_COLORS = _G.RAID_CLASS_COLORS
 local AbbreviateNumbers = _G.AbbreviateNumbers
+local NUMBER_ABBREVIATION_OPTIONS = _G.NUMBER_ABBREVIATION_OPTIONS
 local UnitGUID = _G.UnitGUID
 local UnitName = _G.UnitName
 local math_abs = _G.math.abs
@@ -59,6 +60,13 @@ local CreateTextureButton = Windows.CreateTextureButton
 local SetHeaderButtonTooltip = Windows.SetHeaderButtonTooltip
 local ShowMeterNavigation = Windows.ShowMeterNavigation
 local RANK_TEXT = Windows.RANK_TEXT
+local IS_FOREVER = ns.Client.IsForever
+local ABBREVIATION_OPTIONS = IS_FOREVER and NUMBER_ABBREVIATION_OPTIONS or nil
+local PERCENT_FORMAT = IS_FOREVER and "%.0f%%" or "%.1f%%"
+local RECAP_HEALTH_FORMAT = IS_FOREVER and "Health: %s / %s (%.0f%%)" or "Health: %s / %s (%.1f%%)"
+local RECAP_HP_FORMAT = IS_FOREVER and "%.0f%% HP" or "%.1f%% HP"
+local RECAP_TIME_FORMAT = IS_FOREVER and "-%.0fs" or "-%.1fs"
+local RECAP_TIME_TOOLTIP_FORMAT = IS_FOREVER and "%.0f seconds before death" or "%.1f seconds before death"
 
 function Breakdown.GetDB()
   return DamageMeters.db.profile.breakdown
@@ -1007,22 +1015,22 @@ function Breakdown.BuildDeathEventFlags(event, index, data)
 
   local overkill = event.overkill
   if type(overkill) == "number" and overkill > 0 then
-    flags[#flags + 1] = AbbreviateNumbers(overkill) .. " overkill"
+    flags[#flags + 1] = AbbreviateNumbers(overkill, ABBREVIATION_OPTIONS) .. " overkill"
   end
 
   local absorbed = event.absorbed
   if type(absorbed) == "number" and absorbed > 0 then
-    flags[#flags + 1] = AbbreviateNumbers(absorbed) .. " absorbed"
+    flags[#flags + 1] = AbbreviateNumbers(absorbed, ABBREVIATION_OPTIONS) .. " absorbed"
   end
 
   local resisted = event.resisted
   if type(resisted) == "number" and resisted > 0 then
-    flags[#flags + 1] = AbbreviateNumbers(resisted) .. " resisted"
+    flags[#flags + 1] = AbbreviateNumbers(resisted, ABBREVIATION_OPTIONS) .. " resisted"
   end
 
   local blocked = event.blocked
   if type(blocked) == "number" and blocked > 0 then
-    flags[#flags + 1] = AbbreviateNumbers(blocked) .. " blocked"
+    flags[#flags + 1] = AbbreviateNumbers(blocked, ABBREVIATION_OPTIONS) .. " blocked"
   end
 
   return flags
@@ -1045,7 +1053,7 @@ function Breakdown.ShowDeathRecapTooltip(row)
   local timestamp = event.timestamp
   if type(timestamp) == "number" then
     GameTooltip:AddLine(
-      string_format("%.1f seconds before death", math_max(0, data.deathTimestamp - timestamp)),
+      string_format(RECAP_TIME_TOOLTIP_FORMAT, math_max(0, data.deathTimestamp - timestamp)),
       0.78,
       0.78,
       0.78
@@ -1056,9 +1064,9 @@ function Breakdown.ShowDeathRecapTooltip(row)
   local maxHealth = data.maxHealth
   if type(currentHP) == "number" and type(maxHealth) == "number" and maxHealth > 0 then
     GameTooltip:AddLine(
-      string_format("Health: %s / %s (%.1f%%)",
-        AbbreviateNumbers(currentHP),
-        AbbreviateNumbers(maxHealth),
+      string_format(RECAP_HEALTH_FORMAT,
+        AbbreviateNumbers(currentHP, ABBREVIATION_OPTIONS),
+        AbbreviateNumbers(maxHealth, ABBREVIATION_OPTIONS),
         currentHP / maxHealth * 100
       ),
       1,
@@ -1086,7 +1094,7 @@ local function SetBreakdownNumericValue(
   if IsSecret(value) then
     row[modeField] = nil
     row[valueField] = nil
-    SetNumericText(fontString, value)
+    SetNumericText(fontString, value, mode)
     return
   end
 
@@ -1096,7 +1104,7 @@ local function SetBreakdownNumericValue(
 
   row[modeField] = mode
   row[valueField] = value
-  SetNumericText(fontString, value)
+  SetNumericText(fontString, value, mode)
 end
 
 function Breakdown.SetAmountText(row, spell, sourceTotalAmount, meterKey)
@@ -1217,7 +1225,7 @@ function Breakdown.SetAmountText(row, spell, sourceTotalAmount, meterKey)
     and type(sourceTotalAmount) == "number"
     and sourceTotalAmount > 0
   then
-    row.percent:SetText(string_format("%.1f%%", (totalAmount / sourceTotalAmount) * 100))
+    row.percent:SetText(string_format(PERCENT_FORMAT, (totalAmount / sourceTotalAmount) * 100))
   end
 end
 
@@ -1241,7 +1249,7 @@ function Breakdown.SetSpellMetadataText(row, spell)
 
   local overkillAmount = spell.overkillAmount
   if type(overkillAmount) == "number" and overkillAmount > 0 then
-    parts[#parts + 1] = AbbreviateNumbers(overkillAmount) .. " overkill"
+    parts[#parts + 1] = AbbreviateNumbers(overkillAmount, ABBREVIATION_OPTIONS) .. " overkill"
   end
 
   row.percent:SetText(table_concat(parts, " · "))
@@ -1412,12 +1420,12 @@ function Breakdown.SetDeathRecapRow(breakdown, row, event, index, data)
   local timestamp = event.timestamp
   if type(timestamp) == "number" then
     row.amountSeparator:SetText("·")
-    row.secondaryAmount:SetText(string_format("-%.1fs", math_max(0, data.deathTimestamp - timestamp)))
+    row.secondaryAmount:SetText(string_format(RECAP_TIME_FORMAT, math_max(0, data.deathTimestamp - timestamp)))
   end
 
   local metadata = {}
   if type(currentHP) == "number" and type(maxHealth) == "number" and maxHealth > 0 then
-    metadata[#metadata + 1] = string_format("%.1f%% HP", currentHP / maxHealth * 100)
+    metadata[#metadata + 1] = string_format(RECAP_HP_FORMAT, currentHP / maxHealth * 100)
   end
   local flags = Breakdown.BuildDeathEventFlags(event, index, data)
   for flagIndex = 1, #flags do

@@ -21,6 +21,7 @@ local tonumber = _G.tonumber
 local type = _G.type
 
 local FrameUtil = ns.FrameUtil
+local GetPetHappiness = ns.Client.IsForever and _G.C_PetInfo and _G.C_PetInfo.GetPetHappiness
 
 local EMERGENCY_SALVE_SPELL_ID = 459517
 local FEIGN_DEATH_SPELL_ID = 5384
@@ -33,6 +34,11 @@ local SALVE_CANDIDATES = {
 }
 
 local SALVE_TEMPLATE_NAMES = { "PUI_AuraApplicationDurationTemplate" }
+
+local PET_HAPPINESS_MOVER = "hunter_pet_happiness"
+local PET_HAPPINESS_DEFAULT_Y = -145
+local PET_HAPPINESS_ATLASES = { "UI-PetMad", "UI-PetNeutral", "UI-PetHappiness" }
+local PetHappinessFrame
 
 local SalveAnchor
 local SalveContainer
@@ -77,6 +83,16 @@ local function NormalizeDB()
   db.emergencySalveAnchor.x = tonumber(db.emergencySalveAnchor.x) or 0
   db.emergencySalveAnchor.y = tonumber(db.emergencySalveAnchor.y) or 220
 
+  if GetPetHappiness then
+    if db.petHappinessEnabled == nil then db.petHappinessEnabled = true end
+    if db.petHappinessWarningEnabled == nil then db.petHappinessWarningEnabled = false end
+    if db.petHappinessWarningThreshold ~= 2 then db.petHappinessWarningThreshold = 1 end
+    db.petHappinessSize = Clamp(db.petHappinessSize or 20, 12, 64)
+    db.petHappinessAnchor = db.petHappinessAnchor or {}
+    db.petHappinessAnchor.x = tonumber(db.petHappinessAnchor.x) or 0
+    db.petHappinessAnchor.y = tonumber(db.petHappinessAnchor.y) or PET_HAPPINESS_DEFAULT_Y
+  end
+
   return db
 end
 
@@ -85,6 +101,114 @@ HunterTools.EnsureConfigDefaults = NormalizeDB
 local function IsHunter()
   local _, class = UnitClass("player")
   return class == "HUNTER"
+end
+
+local function IsPetHappinessActive()
+  local db = Addon.db.profile.hunterTools
+  return HunterTools:IsEnabled() and db.enabled == true
+    and (db.petHappinessEnabled == true or db.petHappinessWarningEnabled == true)
+end
+
+local function RefreshPetHappiness()
+  if not PetHappinessFrame then return end
+
+  local db = Addon.db.profile.hunterTools
+  local happiness
+  if IsPetHappinessActive() then
+    if ns.Flags.IsEditing then
+      if FrameUtil.IsMoverPreviewVisible(PET_HAPPINESS_MOVER) then
+        happiness = db.petHappinessWarningEnabled == true and db.petHappinessWarningThreshold or 3
+      end
+    else
+      local _, isHunterPet = _G.HasPetUI()
+      if isHunterPet then
+        happiness = GetPetHappiness()
+      end
+    end
+  end
+
+  local atlas = PET_HAPPINESS_ATLASES[happiness]
+  local icon = PetHappinessFrame.icon
+  if db.petHappinessEnabled == true and atlas then
+    if icon.puiAtlas ~= atlas then
+      icon:SetAtlas(atlas)
+      icon.puiAtlas = atlas
+    end
+    icon:Show()
+  else
+    icon:Hide()
+  end
+  PetHappinessFrame.warning:SetShown(
+    db.petHappinessWarningEnabled == true and atlas ~= nil and happiness <= db.petHappinessWarningThreshold
+  )
+end
+RefreshPetHappiness = P:Def("RefreshPetHappiness", RefreshPetHappiness)
+
+local function LayoutPetHappiness(frame)
+  local db = Addon.db.profile.hunterTools
+  local anchor = db.petHappinessAnchor
+  frame:SetSize(db.petHappinessSize, db.petHappinessSize)
+  frame:ClearAllPoints()
+  frame:SetPoint("CENTER", UIParent, "CENTER", anchor.x, anchor.y)
+
+  local warning = frame.warning
+  warning:ClearAllPoints()
+  if db.petHappinessEnabled == true then
+    warning:SetPoint("TOP", frame, "BOTTOM", 0, -4)
+  else
+    warning:SetPoint("CENTER", frame, "CENTER")
+  end
+end
+
+local function ApplyPetHappinessWarningFont(warning)
+  local path = _G.GameFontHighlightLarge:GetFont()
+  ns.Theme.SetRuntimeFont(warning, path, ns.Theme.ResolveFontSize(20, "qualityOfLife"), "OUTLINE")
+end
+
+local function EnsurePetHappinessFrame()
+  if PetHappinessFrame then return end
+
+  local frame = CreateFrame("Frame", nil, UIParent)
+  PetHappinessFrame = frame
+  frame:SetScript("OnEvent", RefreshPetHappiness)
+  local icon = frame:CreateTexture(nil, "ARTWORK")
+  frame.icon = icon
+  icon:SetAllPoints()
+  icon:Hide()
+
+  local warning = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlightLarge")
+  frame.warning = warning
+  ApplyPetHappinessWarningFont(warning)
+  warning:SetText("Feed Pet")
+  warning:SetTextColor(1, 0.82, 0)
+  warning:Hide()
+  LayoutPetHappiness(frame)
+
+  FrameUtil:RegisterMover(PET_HAPPINESS_MOVER, frame, {
+    label = "Pet happiness",
+    moduleKey = "hunterTools",
+    moduleLabel = "Hunter Tools",
+    isAvailable = IsPetHappinessActive,
+    onPreviewVisibilityChanged = function()
+      if ns.Flags.IsEditing then RefreshPetHappiness() end
+    end,
+    optionsString = "Quality,combatTab",
+    smartSnap = {
+      family = "positionOnly",
+      isRuntimeActive = IsPetHappinessActive,
+    },
+    savePosition = function()
+      local x, y = FrameUtil.GetMoverOffsets(frame)
+      local anchor = Addon.db.profile.hunterTools.petHappinessAnchor
+      anchor.x = math_floor((x or 0) + 0.5)
+      anchor.y = math_floor((y or 0) + 0.5)
+    end,
+    resetPosition = function()
+      local anchor = Addon.db.profile.hunterTools.petHappinessAnchor
+      anchor.x, anchor.y = 0, PET_HAPPINESS_DEFAULT_Y
+      LayoutPetHappiness(frame)
+    end,
+  })
 end
 
 local function RefreshEmergencySalveKnown()
@@ -436,6 +560,25 @@ function HunterTools:ApplyRuntimeSettings()
   NormalizeDB()
   RefreshEmergencySalveKnown()
   RefreshEmergencySalve()
+  if GetPetHappiness then
+    local happinessActive = IsPetHappinessActive()
+    if happinessActive then
+      if PetHappinessFrame then
+        LayoutPetHappiness(PetHappinessFrame)
+      else
+        EnsurePetHappinessFrame()
+      end
+      PetHappinessFrame:RegisterUnitEvent("UNIT_HAPPINESS", "pet")
+      PetHappinessFrame:RegisterUnitEvent("UNIT_PET", "player")
+      PetHappinessFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
+    elseif PetHappinessFrame then
+      PetHappinessFrame:UnregisterAllEvents()
+    end
+    if PetHappinessFrame then
+      FrameUtil.SetMoverSuppressed(PET_HAPPINESS_MOVER, not happinessActive)
+      RefreshPetHappiness()
+    end
+  end
   RefreshEventRegistration()
 
   if ns.Flags.IsEditing then
@@ -445,6 +588,9 @@ end
 
 function HunterTools:RefreshFonts()
   StyleEmergencySalveButton()
+  if PetHappinessFrame then
+    ApplyPetHappinessWarningFont(PetHappinessFrame.warning)
+  end
 
   if SalvePreview then
     ApplySalveVisual(SalvePreview, SalvePreview.text, SalvePreview.icon)
@@ -610,8 +756,9 @@ function HunterTools:GetOptions()
   })
   warning.disabled = MasterDisabled
 
-  return {
-    type = "group", name = "Emergency Salve", inline = true, order = 40, arg = { puiExplicit = true },
+  local options = {
+    type = "group", name = GetPetHappiness and "Hunter Tools" or "Emergency Salve",
+    inline = true, order = 40, arg = { puiExplicit = true },
     args = {
       feature = {
         type = "group", name = "Feature", inline = true, order = 10,
@@ -623,6 +770,42 @@ function HunterTools:GetOptions()
       warning = warning,
     },
   }
+  if GetPetHappiness then
+    options.args.warning.name = "Emergency Salve warning"
+    local showHappiness = ToggleOption("Show pet happiness", "petHappinessEnabled", 10)
+    local iconSize = RangeOption("Icon size", "petHappinessSize", 12, 64, 20)
+    iconSize.disabled = function()
+      local db = NormalizeDB()
+      return db.enabled ~= true or db.petHappinessEnabled ~= true
+    end
+    options.args.petHappiness = {
+      type = "group", name = "Pet happiness", inline = true, order = 30,
+      disabled = MasterDisabled,
+      args = {
+        showHappiness = showHappiness,
+        iconSize = iconSize,
+        showWarning = ToggleOption("Show Feed Pet warning", "petHappinessWarningEnabled", 30),
+        warningThreshold = {
+          type = "select",
+          name = "Warn when",
+          order = 40,
+          values = { [1] = "Unhappy only", [2] = "Content or unhappy" },
+          disabled = function()
+            local db = NormalizeDB()
+            return db.enabled ~= true or db.petHappinessWarningEnabled ~= true
+          end,
+          get = function()
+            return NormalizeDB().petHappinessWarningThreshold
+          end,
+          set = function(_, value)
+            NormalizeDB().petHappinessWarningThreshold = value
+            HunterTools:ApplySettings()
+          end,
+        },
+      },
+    }
+  end
+  return options
 end
 
 function HunterTools:OnInitialize()
@@ -637,6 +820,7 @@ function HunterTools:OnInitialize()
     order = 30,
     onChanged = function(enable)
       self:OnEditModeChanged(enable)
+      RefreshPetHappiness()
     end,
   })
 
@@ -654,6 +838,12 @@ function HunterTools:OnDisable()
   ns.CombatToolsRuntime:Cancel(self)
   self:UnregisterAllEvents()
   RefreshSalvePreview(false)
+  if PetHappinessFrame then
+    PetHappinessFrame:UnregisterAllEvents()
+    FrameUtil.SetMoverSuppressed(PET_HAPPINESS_MOVER, true)
+    PetHappinessFrame.icon:Hide()
+    PetHappinessFrame.warning:Hide()
+  end
 
   if SalveCooldownGate then
     SalveCooldownGate:SetAlpha(0)

@@ -4,5 +4,6 @@
   <Script file="PUI_Dragonriding.lua"/>
   <Include file="..\..\Core\GUI\BlizzardSkins\BlizzardSkins.xml"/>
   <Script file="PUI_Bags.lua"/>
+  <Script file="PUI_MenuBars.lua"/>
   <Script file="PUI_EnchantTargets.lua"/>
 </Ui>

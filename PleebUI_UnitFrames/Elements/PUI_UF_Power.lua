@@ -29,8 +29,12 @@ function Power.PostUpdatePower(element, unit, cur, min, max)
     element.cur = cur
     element.min = min
     element.max = max
+  elseif element.frequentUpdates then
+    local text = owner.PowerText
+    if text.UpdateTag and text:IsVisible() then
+      text:UpdateTag()
+    end
   end
-
 end
 
 local function ConstructPowerPrediction(frame, unit)
@@ -92,7 +96,8 @@ function Power.Construct(frame, unit)
   powerBar.colorSelection = nil
   powerBar.colorReaction = nil
   powerBar.displayAltPower = false
-  powerBar.frequentUpdates = false
+  powerBar.frequentUpdates = ns.Client.IsForever and unit == "player"
+    and not frame.__puiGroupKind and not frame.__puiPresentationFrame
   powerBar.smoothing = StatusBarInterpolation.Immediate
 
   if not powerBar.bg then
@@ -118,7 +123,7 @@ end
 function Power.ConfigureFrame(frame, unit, cfg, layout, colors, opts)
   local powerBar = frame.Power
 
-  powerBar.PostUpdate = frame.isForced == true and Power.PostUpdatePower or nil
+  powerBar.PostUpdate = (frame.isForced == true or powerBar.frequentUpdates) and Power.PostUpdatePower or nil
   powerBar.colorClass = nil
   powerBar.colorReaction = nil
   powerBar.colorSelection = nil
@@ -126,7 +131,6 @@ function Power.ConfigureFrame(frame, unit, cfg, layout, colors, opts)
   powerBar.colorDisconnected = false
   powerBar.colorTapping = false
   powerBar.displayAltPower = cfg and cfg.displayAltPower == true
-  powerBar.frequentUpdates = false
 
 
   local usePower = cfg and cfg.showPower ~= false and opts.forceNoPower ~= true and (tonumber(layout.powerHeight) or 0) > 0

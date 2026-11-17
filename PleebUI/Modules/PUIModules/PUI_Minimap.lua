@@ -485,24 +485,30 @@ function MinimapModule:RefreshCoordinateUpdates(event)
   _ClockBox_UpdateCoords(box)
 end
 
-local function ApplyClockCoordsBox(db)
+local function ApplyClockCoordsBox(db, restore)
   local map = _G.Minimap
   if not map or map:IsForbidden() then
     return
   end
 
   local btn = _ResolveClockButton()
-  local box = _EnsureClockBox()
+  local box
+  if restore then
+    box = _G.MinimapCluster.__pui_clockBox
+  else
+    box = _EnsureClockBox()
+  end
   if not box then
     return
   end
 
-  local enableBox  = db.clockBoxEnabled and true or false
+  local enableBox = not restore and db.clockBoxEnabled
   local showCoords = db.clockBoxShowCoords and true or false
   local showClock = db.hideClock ~= true
 
   if not enableBox then
     _CancelClockCoordinateTicker(box)
+    if restore and not box:IsShown() then return end
     box:Hide()
     box:SetScript("OnUpdate", nil)
 
@@ -524,6 +530,11 @@ local function ApplyClockCoordsBox(db)
       zoneBtn:ClearAllPoints()
       if o.p1 then
         zoneBtn:SetPoint(o.p1, o.relTo, o.p2, o.x, o.y)
+      end
+      if ns.Client.IsForever then
+        zoneBtn:SetWidth(o.width)
+        zoneBtn:EnableDrawLayer("BACKGROUND")
+        zoneBtn.__pui_zoneOrig = nil
       end
       zoneBtn.__pui_zoneBoxed = nil
     end
@@ -552,6 +563,12 @@ local function ApplyClockCoordsBox(db)
       if o.p1 then
         tracking:SetPoint(o.p1, o.relTo, o.p2, o.x, o.y)
       end
+      if ns.Client.IsForever then
+        tracking:SetSize(o.width, o.height)
+        tracking.Button:SetScale(o.buttonScale)
+        tracking:EnableDrawLayer("BACKGROUND")
+        tracking.__pui_trackOrig = nil
+      end
       tracking.__pui_trackBoxed = nil
     end
 
@@ -561,6 +578,10 @@ local function ApplyClockCoordsBox(db)
       calendar:ClearAllPoints()
       if o.p1 then
         calendar:SetPoint(o.p1, o.relTo, o.p2, o.x, o.y)
+      end
+      if ns.Client.IsForever then
+        calendar:SetScale(o.scale)
+        calendar.__pui_calOrig = nil
       end
       calendar.__pui_calBoxed = nil
     end
@@ -720,6 +741,11 @@ local function ApplyClockCoordsBox(db)
         parent = tracking:GetParent(),
         p1 = p1, relTo = relTo, p2 = p2, x = x, y = y,
       }
+      if ns.Client.IsForever then
+        local original = tracking.__pui_trackOrig
+        original.width, original.height = tracking:GetSize()
+        original.buttonScale = tracking.Button:GetScale()
+      end
     end
 
     tracking:SetParent(wrap)
@@ -729,7 +755,10 @@ local function ApplyClockCoordsBox(db)
     if tracking.SetSize then
       tracking:SetSize(iconSize, iconSize)
     end
-    if tracking.Icon and tracking.Icon.SetAllPoints then
+    if ns.Client.IsForever then
+      tracking:DisableDrawLayer("BACKGROUND")
+      tracking.Button:SetScale(iconSize / tracking.Button:GetWidth())
+    elseif tracking.Icon and tracking.Icon.SetAllPoints then
       tracking.Icon:SetAllPoints(tracking)
     end
 
@@ -762,6 +791,7 @@ local function ApplyClockCoordsBox(db)
       calendar.__pui_calOrig = {
         parent = calendar:GetParent(),
         p1 = p1, relTo = relTo, p2 = p2, x = x, y = y,
+        scale = ns.Client.IsForever and calendar:GetScale() or nil,
       }
     end
 
@@ -770,21 +800,25 @@ local function ApplyClockCoordsBox(db)
     calendar:SetPoint("CENTER", wrap, "CENTER", 0, 0)
     calendar.__pui_calBoxed = true
 
-    if calendar.SetSize then
-      calendar:SetSize(iconSize, iconSize)
-    end
+    if ns.Client.IsForever then
+      calendar:SetScale(iconSize / calendar:GetWidth())
+    else
+      if calendar.SetSize then
+        calendar:SetSize(iconSize, iconSize)
+      end
 
-    local nt = calendar.GetNormalTexture and calendar:GetNormalTexture()
-    if nt and nt.SetAllPoints then
-      nt:SetAllPoints(calendar)
-    end
-    local pt = calendar.GetPushedTexture and calendar:GetPushedTexture()
-    if pt and pt.SetAllPoints then
-      pt:SetAllPoints(calendar)
-    end
-    local ht = calendar.GetHighlightTexture and calendar:GetHighlightTexture()
-    if ht and ht.SetAllPoints then
-      ht:SetAllPoints(calendar)
+      local nt = calendar.GetNormalTexture and calendar:GetNormalTexture()
+      if nt and nt.SetAllPoints then
+        nt:SetAllPoints(calendar)
+      end
+      local pt = calendar.GetPushedTexture and calendar:GetPushedTexture()
+      if pt and pt.SetAllPoints then
+        pt:SetAllPoints(calendar)
+      end
+      local ht = calendar.GetHighlightTexture and calendar:GetHighlightTexture()
+      if ht and ht.SetAllPoints then
+        ht:SetAllPoints(calendar)
+      end
     end
 
     if showCalendar then
@@ -840,6 +874,7 @@ local function ApplyClockCoordsBox(db)
       zoneBtn.__pui_zoneOrig = {
         parent = zoneBtn:GetParent(),
         p1 = p1, relTo = relTo, p2 = p2, x = x, y = y,
+        width = ns.Client.IsForever and zoneBtn:GetWidth() or nil,
       }
     end
 
@@ -855,6 +890,9 @@ local function ApplyClockCoordsBox(db)
     zoneBtn:ClearAllPoints()
     zoneBtn:SetPoint("BOTTOM", box, "BOTTOM", 0, pad)
     zoneBtn:SetWidth(box:GetWidth() or 1)
+    if ns.Client.IsForever then
+      zoneBtn:DisableDrawLayer("BACKGROUND")
+    end
 
     zoneFS:SetParent(box)
     zoneFS:ClearAllPoints()
@@ -1085,7 +1123,7 @@ local function ApplyMinimapElementHides(db)
 end
 
 
-local dayNightBlizzardAnchor
+local dayNightBlizzardLayout
 local dayNightScaleHooked
 local dayNightMoverKey = "MinimapDayNight"
 
@@ -1102,24 +1140,39 @@ local function UpdateDayNightPosition(enabled)
   end
 
   if enabled then
-    if not dayNightBlizzardAnchor then
-      dayNightBlizzardAnchor = { indicator:GetPoint(1) }
+    if not dayNightBlizzardLayout then
+      dayNightBlizzardLayout = {
+        anchor = { indicator:GetPoint(1) },
+        strata = indicator:GetFrameStrata(),
+        level = indicator:GetFrameLevel(),
+      }
     end
+
+    local map = _G.Minimap
+    local box = cluster.__pui_clockBox
+    local level = math.max(map:GetFrameLevel(), cluster.__pui_mmBorder:GetFrameLevel())
+    if box and box:IsShown() then
+      level = math.max(level, box:GetFrameLevel())
+    end
+    indicator:SetFrameStrata(map:GetFrameStrata())
+    indicator:SetFrameLevel(level + 1)
     if not dayNightScaleHooked then
       dayNightScaleHooked = true
       hooksecurefunc(cluster, "SetEditModeScale", function()
-        if dayNightBlizzardAnchor then
-          dayNightBlizzardAnchor = { indicator:GetPoint(1) }
+        if dayNightBlizzardLayout then
+          dayNightBlizzardLayout.anchor = { indicator:GetPoint(1) }
           ApplyDayNightPosition(indicator, MinimapModule.db.profile)
           FrameUtil:RefreshGhostMover(dayNightMoverKey)
         end
       end)
     end
     ApplyDayNightPosition(indicator, MinimapModule.db.profile)
-  elseif dayNightBlizzardAnchor then
+  elseif dayNightBlizzardLayout then
     indicator:ClearAllPoints()
-    indicator:SetPoint(unpack(dayNightBlizzardAnchor, 1, 5))
-    dayNightBlizzardAnchor = nil
+    indicator:SetPoint(unpack(dayNightBlizzardLayout.anchor, 1, 5))
+    indicator:SetFrameStrata(dayNightBlizzardLayout.strata)
+    indicator:SetFrameLevel(dayNightBlizzardLayout.level)
+    dayNightBlizzardLayout = nil
   end
 
   FrameUtil:RefreshGhostMover(dayNightMoverKey)
@@ -1263,7 +1316,7 @@ local function GetMinimapMoverGeometry(minimapCluster)
 end
 
 local function RegisterDayNightMover(minimapMover)
-  if not dayNightBlizzardAnchor then
+  if not dayNightBlizzardLayout then
     return
   end
 
@@ -1271,7 +1324,7 @@ local function RegisterDayNightMover(minimapMover)
   local indicator = cluster.DielFrame
   local map = _G.Minimap
   local function IsAvailable()
-    return dayNightBlizzardAnchor ~= nil
+    return dayNightBlizzardLayout ~= nil
   end
 
   FrameUtil:EnsureGhostMover(dayNightMoverKey, {
@@ -1495,8 +1548,12 @@ function MinimapModule:OnProfileChanged()
   if not db.enabled then
     UpdateDayNightPosition(false)
     ApplyAddonCompartmentVisibility(false)
-    local cluster = _G.MinimapCluster
-    _CancelClockCoordinateTicker(cluster and cluster.__pui_clockBox)
+    if ns.Client.IsForever then
+      ApplyClockCoordsBox(db, true)
+    else
+      local cluster = _G.MinimapCluster
+      _CancelClockCoordinateTicker(cluster and cluster.__pui_clockBox)
+    end
     return
   end
 
@@ -1513,8 +1570,12 @@ function MinimapModule:RefreshFromOptions(flags)
   if not db.enabled then
     UpdateDayNightPosition(false)
     ApplyAddonCompartmentVisibility(false)
-    local cluster = _G.MinimapCluster
-    _CancelClockCoordinateTicker(cluster and cluster.__pui_clockBox)
+    if ns.Client.IsForever then
+      ApplyClockCoordsBox(db, true)
+    else
+      local cluster = _G.MinimapCluster
+      _CancelClockCoordinateTicker(cluster and cluster.__pui_clockBox)
+    end
     return
   end
 
@@ -1619,8 +1680,12 @@ function MinimapModule:OnDisable()
   self:UnregisterEvent("CHALLENGE_MODE_RESET")
   self.playerMapID = nil
 
-  local cluster = _G.MinimapCluster
-  _CancelClockCoordinateTicker(cluster and cluster.__pui_clockBox)
+  if ns.Client.IsForever then
+    ApplyClockCoordsBox(self.db.profile, true)
+  else
+    local cluster = _G.MinimapCluster
+    _CancelClockCoordinateTicker(cluster and cluster.__pui_clockBox)
+  end
 
   if _G.GetMinimapShape == PleebUI_GetMinimapShape and OriginalGetMinimapShape then
     _G.GetMinimapShape = OriginalGetMinimapShape

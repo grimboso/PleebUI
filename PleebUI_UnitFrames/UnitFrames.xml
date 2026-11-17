@@ -2,6 +2,7 @@
   <Include file="..\PleebUI\Libs\oUF\oUF.xml"/>
   <Script file="PUI_UF_Runtime.lua"/>
   <Script file="Elements\PUI_UF_Indicators.lua"/>
+  <Script file="Elements\PUI_UF_MissingBuffs.lua"/>
   <Script file="Elements\PUI_UF_FrameGlow.lua"/>
   <Script file="Elements\PUI_UF_AuraHighlight.lua"/>
   <Script file="Elements\PUI_UF_Range.lua"/>

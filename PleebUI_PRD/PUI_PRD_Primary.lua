@@ -783,8 +783,12 @@ end
 
 function PRDBarPresentation.ApplyGeometry(instance, state)
   if instance.preview ~= true then
-    if not InCombatLockdown() then
-      state.owner = _PUI_ApplyNativeBarGeometry(M, instance.status, state.role or instance.role)
+    local role = state.role or instance.role
+    if InCombatLockdown() then
+      M._puiNativeGeometryRefresh = M._puiNativeGeometryRefresh or {}
+      M._puiNativeGeometryRefresh[role] = true
+    else
+      state.owner = _PUI_ApplyNativeBarGeometry(M, instance.status, role)
     end
     return
   end

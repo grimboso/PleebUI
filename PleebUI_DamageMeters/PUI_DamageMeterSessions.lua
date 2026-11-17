@@ -12,6 +12,7 @@ local _G = _G
 local AbbreviateNumbers = _G.AbbreviateNumbers
 local C_DamageMeter = _G.C_DamageMeter
 local DAMAGE_METER_COMBAT_NUMBER = _G.DAMAGE_METER_COMBAT_NUMBER
+local NUMBER_ABBREVIATION_OPTIONS = _G.NUMBER_ABBREVIATION_OPTIONS
 local math_floor = _G.math.floor
 local math_max = _G.math.max
 local string_format = _G.string.format
@@ -278,13 +279,13 @@ local function GetSessionDisplay(windowDB, session)
   return SESSION_NAMES[windowDB.session], C_DamageMeter.GetSessionDurationSeconds(SESSION_TYPES[windowDB.session])
 end
 
-local function SetNumericText(fontString, value)
-  if IsSecret(value) then
-    fontString:SetText(AbbreviateNumbers(value))
-  elseif value == nil then
+local function SetNumericText(fontString, value, mode)
+  if not IsSecret(value) and value == nil then
     fontString:SetText("")
+  elseif ns.Client.IsForever and mode == "RATE" then
+    fontString:SetFormattedText("%.0f", value)
   else
-    fontString:SetText(AbbreviateNumbers(value))
+    fontString:SetText(AbbreviateNumbers(value, ns.Client.IsForever and NUMBER_ABBREVIATION_OPTIONS or nil))
   end
 end
 

@@ -664,6 +664,10 @@ function UFIndicators.ConfigureSharedUnitIndicators(frame, layout)
     end
   end
 
+  if UFIndicators.ConfigureMissingBuffs then
+    UFIndicators.ConfigureMissingBuffs(frame, config, isPet)
+  end
+
   frame.__puiIndicatorConfiguredConfig = config
   frame.__puiIndicatorConfiguredLayout = layout
   frame.__puiIndicatorConfiguredPet = isPet

@@ -58,7 +58,13 @@ end
 function Templates.Rank(bar)
   Skins.Hide(bar.Border)
   Skins.Hide(bar.Background)
-  Skins.Surface(bar, true, true)
+  if ns.Client.IsForever then
+    local track = Skins.Surface(bar)
+    track:ClearAllPoints()
+    track:SetAllPoints(bar.Background)
+  else
+    Skins.Surface(bar, true, true)
+  end
   ns.Theme.ApplyFont(bar.Rank.Text, "tiny")
   bar.Rank.Text:SetHeight(0)
   Skins.DropdownArrow(bar.ExpansionDropdownButton)

@@ -861,11 +861,16 @@ function Engine:RegisterButtonRangeCheck(button)
   end
 
   local count = self.rangeActionCounts[action] or 0
+  self.rangeActionCounts[action] = count + 1
+  button.__puiRangeAction = action
   if count == 0 then
     C_ActionBar.EnableActionRangeCheck(action, true)
   end
-  self.rangeActionCounts[action] = count + 1
-  button.__puiRangeAction = action
+
+  local inRange = C_ActionBar.IsActionInRange(action, "target")
+  if not issecretvalue(inRange) then
+    ActionButton_UpdateRangeIndicator(button, inRange ~= nil, inRange)
+  end
 end
 
 function Engine:UnregisterButtonRangeCheck(button)
@@ -874,6 +879,7 @@ function Engine:UnregisterButtonRangeCheck(button)
     return
   end
 
+  button.__puiRangeAction = nil
   local count = self.rangeActionCounts[action]
   if count == 1 then
     self.rangeActionCounts[action] = nil
@@ -881,7 +887,7 @@ function Engine:UnregisterButtonRangeCheck(button)
   else
     self.rangeActionCounts[action] = count - 1
   end
-  button.__puiRangeAction = nil
+  ActionButton_UpdateRangeIndicator(button, false, false)
 end
 
 function Engine:ClearButton(button)
@@ -1763,6 +1769,9 @@ function Engine:OnEvent(event, arg1, arg2, ...)
     self:QueueRuntimeUpdate("state")
   elseif event == "ACTIONBAR_UPDATE_COOLDOWN" then
     self:QueueRuntimeUpdate("cooldown")
+  elseif event == "LOADING_SCREEN_DISABLED" then
+    self:QueueRuntimeUpdate("chargeCount")
+    self:QueueRuntimeUpdate("lossOfControl")
   elseif event == "SPELL_UPDATE_CHARGES" then
     self:QueueRuntimeUpdate("chargeCount")
   elseif event == "SPELL_UPDATE_ICON" then
@@ -1862,6 +1871,9 @@ function Engine:Enable()
   frame:RegisterEvent("ACTION_USABLE_CHANGED")
   frame:RegisterEvent("ACTIONBAR_UPDATE_STATE")
   frame:RegisterEvent("ACTIONBAR_UPDATE_COOLDOWN")
+  if ns.Client.IsForever then
+    frame:RegisterEvent("LOADING_SCREEN_DISABLED")
+  end
   frame:RegisterEvent("SPELL_UPDATE_CHARGES")
   frame:RegisterEvent("SPELL_UPDATE_ICON")
   frame:RegisterEvent("UPDATE_SHAPESHIFT_FORM")

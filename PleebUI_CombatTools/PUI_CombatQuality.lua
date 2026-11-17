@@ -3,6 +3,7 @@ local Addon = ns.Addon
 local CombatQuality = {}
 ns.Modules.CombatQuality = CombatQuality
 local Quality = CombatQuality
+local P = ns.Pleebug:DropIn(CombatQuality)
 local NormalizeDB = ns.QualityAPI.NormalizeDB
 local Clamp = ns.QualityAPI.Clamp
 local SeedAnchorDefaults = ns.QualityAPI.SeedAnchorDefaults
@@ -337,7 +338,7 @@ local function EnsureCombatTimer()
     CombatTimerText:SetText(mm .. ":" .. ss)
   end
 
-  f.__puiCombatTimerUpdate = CombatTimer_Update
+  f.__puiCombatTimerUpdate = P:DefCallback("CombatTimer_Update", CombatTimer_Update)
 
   return f
 end
@@ -574,6 +575,7 @@ local function CombatWarning_UpdateRange()
   -- The range result may be secret in combat, so it must go directly into a render API.
   CombatWarningNotAttackingText:SetAlphaFromBoolean(C_Item.IsItemInRange(COMBAT_WARNING_MELEE_RANGE_ITEM, "target"), 0, 1)
 end
+CombatWarning_UpdateRange = P:Def("CombatWarning_UpdateRange", CombatWarning_UpdateRange)
 
 local function CombatWarning_Update()
   local q = GetQ()
@@ -784,6 +786,7 @@ local function CursorRing_OnUpdate()
   f.__puiLastCursorY = y
   f:SetPoint("CENTER", UIParent, "BOTTOMLEFT", x / CursorRingScale, y / CursorRingScale)
 end
+CursorRing_OnUpdate = P:Def("CursorRing_OnUpdate", CursorRing_OnUpdate)
 
 local function ApplyCursorRing(enabled)
   local f = EnsureCursorRing()
@@ -1396,6 +1399,7 @@ ApplyPetWarnings = function()
 end
 
 function Quality:RefreshFonts()
+  if ns.Client.IsForever then ns.WeaponWarnings.RefreshFont() end
   if not PetWarnText then
     return
   end
@@ -1421,6 +1425,7 @@ function CombatQuality:ApplyRuntimeSettings()
   ns.Theme.ApplyFont(CombatTimerText, "body", q.combatTimerFontSize, nil, "qualityOfLife")
   ApplyCombatTimerAppearance(CombatTimerFrame, q)
   ApplyPetWarnings()
+  if ns.Client.IsForever then ns.WeaponWarnings.Apply(q) end
   ns.RaidUtilityModule.ApplyAll()
   ApplyCrosshair(not not q.crosshair)
   ApplyCursorRing((not not q.cursorRingShowInner) or (not not q.cursorRingShowOutline))
@@ -2085,6 +2090,28 @@ function CombatQuality.BuildOptions(context)
     local _, playerClass = UnitClass("player")
     if playerClass == "HUNTER" then
       options.args.combatTab.args.emergencySalve = ns.Modules.HunterTools:GetOptions()
+    end
+
+    if ns.Client.IsForever then
+      options.args.combatTab.args.weaponWarnings = {
+        type = "group",
+        name = "Weapon buffs",
+        order = 15,
+        inline = true,
+        args = {
+          enabled = {
+            type = "toggle",
+            name = "Track weapon buffs per hand",
+            desc = "Warns out of combat when an equipped weapon is missing a poison, imbue, or temporary coating.",
+            order = 1,
+            get = function() return ns.WeaponWarnings.IsEnabled(GetQ()) end,
+            set = function(_, value)
+              GetQ().weaponBuffWarnings = value
+              RequestApply()
+            end,
+          },
+        },
+      }
     end
 
     options.args.qualityTab, options.args.automationTab = nil, nil

@@ -938,6 +938,11 @@ end
 
 function M:OnPrimaryRestrictionsCleared()
   self:ReassertBlizzardPRDRoot()
+  local geometryRefresh = self._puiNativeGeometryRefresh
+  if geometryRefresh then
+    self._puiNativeGeometryRefresh = nil
+    self:RequestRefresh(geometryRefresh)
+  end
   self:RequestBlizzardBarTextSync()
   self:ApplyTextSettings()
 
@@ -1023,6 +1028,7 @@ function M:StopRuntime()
   self:UnregisterAllEvents()
   self:UnregisterSecondaryEvents()
   self._puiBarTextLayoutRefreshPending = nil
+  self._puiNativeGeometryRefresh = nil
 
   if self._puiBarTextSyncTimer then
     self._puiBarTextSyncTimer:Cancel()

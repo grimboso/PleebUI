@@ -108,6 +108,11 @@ local function RefreshFactionBar(frame)
 end
 
 local function RefreshCommunities(frame)
+  if ns.Client.IsForever then
+    local memberDetail = frame.GuildMemberDetailFrame
+    memberDetail:ClearAllPoints()
+    memberDetail:SetPoint("TOPLEFT", frame.ChatTab, "TOPRIGHT", 6, -40)
+  end
   Skins.Shell(frame)
   Skins.Apply(frame, layout)
   InstallPortrait(frame)

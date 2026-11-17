@@ -146,6 +146,13 @@ function Tags.RegisterOUFTags()
     return AbbreviateLargeNumbers(UnitPowerMax(u))
   end)
 
+  if ns.Client.IsForever then
+    -- The player power element drives these tags directly after updating the bar.
+    for _, name in ipairs({ "curpp", "maxpp", "perpp", "pui:curpp", "pui:maxpp" }) do
+      RegisterTag(oUF, "pui:power:" .. name, "", oUF.Tags.Methods[name])
+    end
+  end
+
   oUF.Tags.SharedEvents.PLAYER_ENTERING_WORLD = true
 
   Tags._puiTagsRegistered = true

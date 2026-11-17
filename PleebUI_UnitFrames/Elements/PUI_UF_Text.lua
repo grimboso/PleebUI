@@ -916,7 +916,11 @@ function Text.ApplyFrame(frame, unit, cfg, fontRev, opts)
     end
 
     if showPower then
-      Text.TagOrClearFrame(frame, frame.PowerText, powerTags[ppMode] or defaultPowerTag)
+      local powerTag = powerTags[ppMode] or defaultPowerTag
+      if powerBar.frequentUpdates then
+        powerTag = powerTag:gsub("%[([%w:]+)", "[pui:power:%1")
+      end
+      Text.TagOrClearFrame(frame, frame.PowerText, powerTag)
     elseif frame.PowerText then
       Text.TagOrClearFrame(frame, frame.PowerText, "")
     end
