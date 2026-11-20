@@ -205,7 +205,7 @@ function Controls.Install(frame, visualRoot, name, controlsParent)
     hooksecurefunc(frame, "SetScale", function() ApplyWindow(frame) end)
   end
   if visualRoot then state.visualRoot = visualRoot end
-  local controlRoot = frame
+  local controlRoot = controlsParent or frame
   state.drag:SetFrameStrata(controlRoot:GetFrameStrata())
   state.grip:SetFrameStrata(controlRoot:GetFrameStrata())
   state.drag:SetFrameLevel(controlRoot:GetFrameLevel() + 100)

@@ -7,6 +7,7 @@ SwingTimer.available = ns.Client.IsForever and C_EventUtils.IsEventValid("PLAYER
 if not SwingTimer.available then return end
 
 local PRD = ns.Modules.PRD
+local oUF = ns.oUF
 local SwingType = Enum.PlayerSwingType
 local queuedAttackIDs = ({
   WARRIOR = { 78, 845 },
@@ -22,7 +23,7 @@ local ROWS = {
 }
 local ROW_GAP = 2
 local EVENTS = {
-  "PLAYER_SWING", "WEAPON_SLOT_CHANGED", "PLAYER_ENTERING_WORLD",
+  "WEAPON_SLOT_CHANGED", "PLAYER_ENTERING_WORLD",
   "PLAYER_DEAD", "PLAYER_LEAVE_COMBAT", "PLAYER_REGEN_ENABLED", "STOP_AUTOREPEAT_SPELL",
 }
 
@@ -66,7 +67,7 @@ local function RefreshQueuedAttack(container)
   end
 end
 
-local function CreateRows(parent)
+local function CreateRows(parent, driver, postUpdate)
   local container = CreateFrame("Frame", nil, parent)
   container:Hide()
   container.rows = {}
@@ -77,7 +78,19 @@ local function CreateRows(parent)
     local background = row:CreateTexture(nil, "BACKGROUND")
     background:SetAllPoints()
     background:SetColorTexture(0, 0, 0, 0.65)
-    local fill = CreateFrame("StatusBar", nil, row)
+    local fillParent = CreateFrame("Frame", nil, row)
+    fillParent:SetAllPoints()
+    local fill
+    if driver then
+      fill = driver:CreateSwingElement(definition.swingType)
+      fill:SetParent(fillParent)
+      fill.direction = Enum.StatusBarTimerDirection.RemainingTime
+      fill.PostUpdate = postUpdate
+      fill.prdRow = row
+      fill.prdContainer = container
+    else
+      fill = CreateFrame("StatusBar", nil, fillParent)
+    end
     fill:SetAllPoints()
     fill:SetFrameLevel(row:GetFrameLevel())
     fill:Hide()
@@ -85,7 +98,11 @@ local function CreateRows(parent)
     text:SetPoint("CENTER")
     row.background = background
     row.fill = fill
+    row.fillParent = fillParent
     row.text = text
+    if driver then
+      fill.Time = text
+    end
     if definition.swingType == SwingType.Ranged then
       local zone = fill:CreateTexture(nil, "ARTWORK", nil, 1)
       zone:SetPoint("TOPLEFT", fill)
@@ -130,11 +147,6 @@ local function LayoutRows(container, config)
       row.text:SetFont(font or STANDARD_TEXT_FONT, config.fontSize, "OUTLINE")
       row.text:SetShown(config.showCountdown)
       if row.windupZone then UpdateWindupZone(row, config) end
-      if row.binding and row.fill:IsShown() and config.showCountdown then
-        row.binding:Enable()
-      elseif row.binding then
-        row.binding:Disable()
-      end
       height = height + rowHeight + ROW_GAP
     end
   end
@@ -143,8 +155,7 @@ end
 
 local function ClearRow(row)
   row.swingSeconds = nil
-  row.binding:Disable()
-  row.fill:Hide()
+  row.fillParent:Hide()
 end
 
 local function SetWeaponAvailability(row, speed)
@@ -172,29 +183,28 @@ local function LayoutChangedWeapons(container)
   end
 end
 
-local function OnEvent(container, event, duration, swingType)
+local function PostSwingUpdate(fill, event, swingType, duration)
+  if event ~= "PLAYER_SWING" or issecretvalue(duration) or not duration or duration <= 0 then
+    return
+  end
+
+  local row, container = fill.prdRow, fill.prdContainer
+  if not row.available then
+    row.available = true
+    LayoutChangedWeapons(container)
+  end
+  row.fillParent:Show()
+  if swingType == SwingType.Ranged then
+    row.swingSeconds = duration
+    UpdateWindupZone(row, container.config)
+  elseif swingType == SwingType.MainHand and container.queued then
+    RefreshQueuedAttack(container)
+  end
+end
+
+local function OnEvent(container, event)
   if event == "ACTIONBAR_UPDATE_STATE" then
     RefreshQueuedAttack(container)
-  elseif event == "PLAYER_SWING" then
-    if issecretvalue(swingType) or issecretvalue(duration) then return end
-    local row = container.byType[swingType]
-    if not row or duration <= 0 then return end
-    if not row.available then
-      row.available = true
-      LayoutChangedWeapons(container)
-    end
-    row.duration:SetTimeFromStart(GetTime(), duration)
-    row.fill:SetTimerDuration(row.duration, nil, Enum.StatusBarTimerDirection.RemainingTime)
-    if swingType == SwingType.Ranged then
-      row.swingSeconds = duration
-      UpdateWindupZone(row, container.config)
-    end
-    row.binding:SetDuration(row.duration)
-    row.fill:Show()
-    if row.text:IsShown() then row.binding:Enable() end
-    if swingType == SwingType.MainHand and container.queued then
-      RefreshQueuedAttack(container)
-    end
   elseif event == "UNIT_INVENTORY_CHANGED" or event == "UNIT_ATTACK_SPEED" or event == "PLAYER_REGEN_ENABLED" then
     if RefreshWeapons(container) then LayoutChangedWeapons(container) end
     if event == "PLAYER_REGEN_ENABLED" then RefreshQueuedAttack(container) end
@@ -213,13 +223,45 @@ local function OnEvent(container, event, duration, swingType)
   end
 end
 
+local driverStyle = "PleebUI_PRDSwingDriver"
+local spawnOnCombatEnd = CreateFrame("Frame")
+spawnOnCombatEnd:SetScript("OnEvent", function(frame)
+  frame:UnregisterEvent("PLAYER_REGEN_ENABLED")
+  PRD:ApplyLayout()
+end)
+
+local function CreateSwingDriver()
+  local previousStyle = oUF:GetActiveStyle()
+  oUF:RegisterStyle(driverStyle, function(frame)
+    frame.dontExpose = true
+    frame:EnableMouse(false)
+    frame:SetSize(1, 1)
+    frame:SetPoint("TOPLEFT", UIParent)
+  end)
+  oUF:SetActiveStyle(driverStyle)
+
+  -- Only this spawn skips suppression of the Blizzard player frame.
+  local driver = oUF.Spawn({ DisableBlizzard = function() end }, "player", driverStyle)
+  ClickCastFrames[driver] = nil
+  if previousStyle then
+    oUF:SetActiveStyle(previousStyle)
+  end
+  return driver
+end
+
 function SwingTimer.Stop()
+  spawnOnCombatEnd:UnregisterEvent("PLAYER_REGEN_ENABLED")
   local container = SwingTimer.container
   if not container or not container.active then return end
   container.active = false
   container.config = nil
   container.queued = nil
   container:UnregisterAllEvents()
+  container.driver:DisableElement("Swing")
+  if container.stockSwingTimer and container.stockSwingTimer ~= "0" and C_CVar.GetCVar("showSwingTimer") == "0" then
+    C_CVar.SetCVar("showSwingTimer", container.stockSwingTimer)
+  end
+  container.stockSwingTimer = nil
   container:Hide()
   for _, row in ipairs(container.rows) do
     ClearRow(row)
@@ -234,21 +276,28 @@ function SwingTimer.Layout(parent, enabled, config)
 
   local container = SwingTimer.container
   if not container then
-    container = CreateRows(parent)
+    if InCombatLockdown() then
+      spawnOnCombatEnd:RegisterEvent("PLAYER_REGEN_ENABLED")
+      return 0
+    end
+    local driver = CreateSwingDriver()
+    container = CreateRows(parent, driver, PostSwingUpdate)
+    container.driver = driver
     SwingTimer.container = container
     container:SetScript("OnEvent", OnEvent)
     container.byType[SwingType.MainHand].available = true
     local formatter = C_StringUtil.CreateNumericRuleFormatter()
     formatter:AddBreakpoint({ threshold = 0, format = "%.1f" })
     for _, row in ipairs(container.rows) do
-      row.duration = C_DurationUtil.CreateDuration()
-      row.binding = ns.BarWidget.CreateDurationBinding(row.text)
-      row.binding:SetFormatter(formatter)
+      row.fill.Time.formatter = formatter
+      ClearRow(row)
     end
   end
   container.config = config
   if not container.active then
     container.active = true
+    container.stockSwingTimer = C_CVar.GetCVar("showSwingTimer")
+    container.driver:EnableElement("Swing")
     RefreshWeapons(container)
     FrameUtil.RegisterFrameForEvents(container, EVENTS)
     container:RegisterUnitEvent("UNIT_INVENTORY_CHANGED", "player")

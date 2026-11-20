@@ -9,6 +9,7 @@ local hands = {
   { inventorySlot = INVSLOT_MAINHAND, weaponSlot = Enum.WeaponSlot.MainHand, name = "MAIN-HAND" },
   { inventorySlot = INVSLOT_OFFHAND, weaponSlot = Enum.WeaponSlot.OffHand, name = "OFF-HAND" },
 }
+local poisonsSpellID = 2842
 local imbueSpells = {
   SHAMAN = { 8017, 8024, 8033, 8232 },
   WARLOCK = { 6366, 2362 },
@@ -21,8 +22,7 @@ local pendingUpdate
 
 local function GetClassWeaponBuff()
   if class == "ROGUE" then
-    local level = UnitLevel("player")
-    if not issecretvalue(level) and level >= 20 then return "POISON" end
+    if C_SpellBook.IsSpellKnown(poisonsSpellID) then return "POISON" end
     return
   end
 
@@ -144,9 +144,7 @@ local function UpdateEvents(enteringCombat)
   events:RegisterEvent("PLAYER_DEAD")
   events:RegisterEvent("PLAYER_ALIVE")
   events:RegisterEvent("PLAYER_UNGHOST")
-  if class == "ROGUE" then
-    events:RegisterEvent("PLAYER_LEVEL_UP")
-  elseif imbueSpells[class] then
+  if class == "ROGUE" or imbueSpells[class] then
     events:RegisterEvent("SPELLS_CHANGED")
   end
   UpdateWarning()

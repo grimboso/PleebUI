@@ -361,6 +361,21 @@ function DamageMeters:GetOptions()
         order = 25,
         inline = true,
         args = {
+          openOnMouseover = {
+            type = "toggle",
+            name = "Show breakdown on mouseover",
+            desc = "Hover over a meter row for a temporary breakdown. Turn this off to open breakdowns only with a left-click.",
+            order = 5,
+            get = function()
+              return self.db.profile.breakdown.openOnMouseover
+            end,
+            set = function(_, value)
+              self.db.profile.breakdown.openOnMouseover = value
+              if not value and self.breakdownSelection and not self.breakdown.pinned then
+                Breakdown.Close()
+              end
+            end,
+          },
           position = {
             type = "select",
             name = "Position",

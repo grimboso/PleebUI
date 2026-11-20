@@ -1742,7 +1742,29 @@ function Breakdown.Close()
   breakdown.frame:Hide()
 end
 
-function Breakdown.OpenLiveEnemyPlayers(ownerWindow, row, source, pinned)
+local function GetSourceIdentifiers(source)
+  local sourceGUID = source.sourceGUID
+  local sourceCreatureID = source.sourceCreatureID
+  if IsSecret(sourceGUID) then
+    sourceGUID = nil
+  end
+  if IsSecret(sourceCreatureID) then
+    sourceCreatureID = nil
+  end
+  return sourceGUID, sourceCreatureID
+end
+
+function Breakdown.OpenLiveEnemyPlayers(ownerWindow, row, source, pinned, pinnedSelection)
+  local sourceGUID, sourceCreatureID = GetSourceIdentifiers(source)
+  local sourceKey = sourceGUID or sourceCreatureID
+  if pinnedSelection and pinnedSelection.mode == "LIVE_ENEMY_PLAYERS"
+    and sourceKey == pinnedSelection.liveSourceKey
+    and (sourceKey or row.sourceIndex == pinnedSelection.ownerSourceIndex)
+  then
+    Breakdown.Close()
+    return
+  end
+
   local windowDB = GetWindowDB(ownerWindow.index)
   local breakdown = Breakdown.Ensure()
 
@@ -1753,6 +1775,8 @@ function Breakdown.OpenLiveEnemyPlayers(ownerWindow, row, source, pinned)
     ownerRow = row,
     ownerIndex = ownerWindow.index,
     mode = "LIVE_ENEMY_PLAYERS",
+    liveSourceKey = sourceKey,
+    ownerSourceIndex = row.sourceIndex,
     meterKey = windowDB.meter,
     sessionKey = windowDB.session,
     sessionID = GetBlizzardSessionID(windowDB),
@@ -1796,8 +1820,15 @@ function Breakdown.OpenForRow(row, pinned)
   end
 
   local existingBreakdown = DamageMeters.breakdown
-  if pinned ~= true and existingBreakdown and existingBreakdown.pinned then
-    return
+  local pinnedSelection
+  if existingBreakdown and existingBreakdown.pinned then
+    if pinned ~= true then
+      return
+    end
+    local selection = DamageMeters.breakdownSelection
+    if selection.ownerWindow == ownerWindow then
+      pinnedSelection = selection
+    end
   end
 
   local windowDB = GetWindowDB(ownerWindow.index)
@@ -1817,6 +1848,14 @@ function Breakdown.OpenForRow(row, pinned)
       local session = GetCombatSession(windowDB, windowDB.meter)
       local source = session and session.combatSources[row.sourceIndex]
       storedDeathRecapData = source and source.deathRecapData
+    end
+
+    local recapKey = storedDeathRecapData or recapID
+    if pinnedSelection and pinnedSelection.mode == "DEATH_RECAP"
+      and recapKey == (pinnedSelection.storedDeathRecapData or pinnedSelection.deathRecapID)
+    then
+      Breakdown.Close()
+      return
     end
 
     local hasLiveRecap = false
@@ -1869,7 +1908,7 @@ function Breakdown.OpenForRow(row, pinned)
       return
     end
 
-    Breakdown.OpenLiveEnemyPlayers(ownerWindow, row, source, pinned)
+    Breakdown.OpenLiveEnemyPlayers(ownerWindow, row, source, pinned, pinnedSelection)
     return
   end
 
@@ -1906,15 +1945,7 @@ function Breakdown.OpenForRow(row, pinned)
       return
     end
 
-    sourceGUID = source.sourceGUID
-    if IsSecret(sourceGUID) then
-      sourceGUID = nil
-    end
-
-    sourceCreatureID = source.sourceCreatureID
-    if IsSecret(sourceCreatureID) then
-      sourceCreatureID = nil
-    end
+    sourceGUID, sourceCreatureID = GetSourceIdentifiers(source)
 
     if not sourceGUID and not sourceCreatureID then
       return
@@ -1928,6 +1959,11 @@ function Breakdown.OpenForRow(row, pinned)
     end
 
     classFilename = source.classFilename
+  end
+
+  if pinnedSelection and (sourceGUID or sourceCreatureID) == (pinnedSelection.sourceGUID or pinnedSelection.sourceCreatureID) then
+    Breakdown.Close()
+    return
   end
 
   local breakdown = Breakdown.Ensure()

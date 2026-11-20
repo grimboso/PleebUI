@@ -1,6 +1,6 @@
 local parent, ns = ...
 local global = C_AddOns.GetAddOnMetadata(parent, 'X-oUF')
-local _VERSION = '14.2.0'
+local _VERSION = '14.3.1'
 if(_VERSION:find('project%-version')) then
 	_VERSION = 'devel'
 end
@@ -347,8 +347,8 @@ local function updatePet(self, event, unit)
 end
 
 local function updateRaid(self, event)
-	local unitGUID = UnitGUID(self.__unit)
-	if(unitGUID ~= nil and not issecretvalue(unitGUID) and unitGUID ~= self.unitGUID) then
+	local unitGUID = scrubsecretvalues(UnitGUID(self.__unit))
+	if(unitGUID and unitGUID ~= self.unitGUID) then
 		self.unitGUID = unitGUID
 
 		self:UpdateAllElements(event)
@@ -384,7 +384,8 @@ local function initObject(unit, style, styleFunc, header, ...)
 		-- frame will be stuck with the 'vehicle' unit.
 		object:RegisterEvent('PLAYER_ENTERING_WORLD', evalUnitAndUpdate, true)
 
-		if(not objectUnit:match('%w+target') and not object.isNamePlate) then
+		local isEventlessUnit = objectUnit:match('%w+target')
+		if(not isEventlessUnit and not object.isNamePlate) then
 			object:RegisterEvent('UNIT_ENTERED_VEHICLE', evalUnitAndUpdate)
 			object:RegisterEvent('UNIT_EXITED_VEHICLE', evalUnitAndUpdate)
 
@@ -402,7 +403,7 @@ local function initObject(unit, style, styleFunc, header, ...)
 			object:SetAttribute('*type2', 'togglemenu')
 			object:SetAttribute('toggleForVehicle', true)
 
-			if(objectUnit:match('%w+target')) then
+			if(isEventlessUnit) then
 				oUF:HandleEventlessUnit(object)
 			else
 				oUF:HandleUnit(object)
@@ -1138,7 +1139,12 @@ function oUF:AddMetaElement(name, create, update, enable, disable)
 		enable = enable,
 		disable = disable,
 	}
-	self:RegisterMetaFunction('Create' .. name, create)
+	self:RegisterMetaFunction('Create' .. name .. 'Element', create)
+
+	if(name == 'Auras') then
+		-- deprecated fallback, will be removed in oUF 15
+		self:RegisterMetaFunction('Create' .. name, create)
+	end
 end
 
 --[[ oUF:GetUnitFrame(unit)

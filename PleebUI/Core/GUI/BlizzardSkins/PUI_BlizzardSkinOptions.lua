@@ -20,6 +20,8 @@ local families = {
     "SideDressUpFrame", "TransmogFrame",
   } },
   { "InspectFrame", "Inspect", "Character & items" },
+  { "LFGParentFrame", "Looking for group", "Groups & loot", { "LFGListingFrame", "LFGBrowseFrame", "LFGWhoListFrame" } },
+  { "FriendsFrame", "Friends", "Windows", { "FriendsFrame.IgnoreListWindow", "FriendsFriendsFrame", "AddFriendFrame", "BattleNetInviteFrame" } },
   { "PVEFrame", "Dungeons and raids", "Groups & loot", {
     "LFDRoleCheckPopup", "LFGDungeonReadyDialog", "LFGDungeonReadyStatus", "LFGInvitePopup",
     "LFGListApplicationDialog", "LFGListInviteDialog", "LFGReadyCheckPopup", "ReadyCheckListenerFrame",
@@ -83,6 +85,11 @@ local families = {
   { "StaticPopups", "Popups", "System" },
   { "TimeManagerFrame", "Clock, alarm and stopwatch", "System", { "StopwatchFrame" } },
 }
+if ns.Client.IsForever then
+  for index = 1, 7 do
+    families[1][4][#families[1][4] + 1] = "ContainerFrame" .. index
+  end
+end
 local labels = {}
 for _, family in ipairs(families) do
   local owner = family[1]

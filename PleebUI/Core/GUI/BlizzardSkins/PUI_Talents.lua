@@ -1,5 +1,6 @@
 local _, ns = ...
 local Skins = ns.BlizzardSkins
+local isForever = ns.Client.IsForever
 
 local function RefreshTalentControlSurface(control, bg, border)
   local surface = Skins.Surface(control, true)
@@ -12,8 +13,10 @@ end
 
 local function RefreshTalentColors(frame)
   local colors = ns.Theme.GetColors()
-  local background = colors.background
-  frame.BottomBar:SetColorTexture(background[1], background[2], background[3], background[4])
+  if not isForever then
+    local background = colors.background
+    frame.BottomBar:SetColorTexture(background[1], background[2], background[3], background[4])
+  end
 
   RefreshTalentControlSurface(frame.LoadSystem.Dropdown, colors.control, colors.controlBorder)
   RefreshTalentControlSurface(frame.SearchBox, colors.control, colors.controlBorder)
@@ -56,7 +59,9 @@ end
 
 Skins.Register("Blizzard_PlayerSpells", "PlayerSpellsFrame.TalentsFrame", {
   install = function(frame)
-    Skins.Hide(frame.BlackBG)
+    if not isForever then
+      Skins.Hide(frame.BlackBG)
+    end
     frame.Background:SetAlpha(0.75)
     Skins.Button(frame.ApplyButton, true)
     Skins.Button(frame.InspectCopyButton, true)
@@ -67,7 +72,9 @@ Skins.Register("Blizzard_PlayerSpells", "PlayerSpellsFrame.TalentsFrame", {
     Skins.Button(frame.ResetButton, true)
     Skins.Button(frame.UndoButton, true)
     Skins.Font(frame.ClassCurrencyDisplay.CurrencyLabel, "header")
-    Skins.Font(frame.SpecCurrencyDisplay.CurrencyLabel, "header")
+    if not isForever and frame.SpecCurrencyDisplay then
+      Skins.Font(frame.SpecCurrencyDisplay.CurrencyLabel, "header")
+    end
     Skins.Font(frame.HeroTalentsContainer.HeroSpecLabel, "header")
     local preview = frame.SearchPreviewContainer
     Skins.Chrome(preview)
@@ -77,11 +84,14 @@ Skins.Register("Blizzard_PlayerSpells", "PlayerSpellsFrame.TalentsFrame", {
     Skins.ScrollRows(preview.ScrollBox, SkinTalentSearchResult, false)
     Skins.Hook(preview, "UpdateResultsDisplay", SkinSuggestedTalentResults)
     SkinSuggestedTalentResults(preview)
-    for _, key in ipairs({ "Top", "Middle", "Bottom" }) do
-      Skins.Hide(frame.PvPTalentList[key])
+    if not isForever then
+      local pvpTalentList = frame.PvPTalentList
+      for _, key in ipairs({ "Top", "Middle", "Bottom" }) do
+        Skins.Hide(pvpTalentList[key])
+      end
+      Skins.Surface(pvpTalentList)
+      Skins.ScrollRows(pvpTalentList.ScrollBox, SkinPvPTalentRow, SkinPvPTalentRow)
     end
-    Skins.Surface(frame.PvPTalentList)
-    Skins.ScrollRows(frame.PvPTalentList.ScrollBox, SkinPvPTalentRow, SkinPvPTalentRow)
     RefreshTalentColors(frame)
   end,
   onTheme = RefreshTalentColors,

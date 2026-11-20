@@ -32,6 +32,28 @@ local function SkinBankTabs(panel)
   SkinBankTab(panel.PurchaseTab)
 end
 
+local function SkinForeverBankPageTabs(frame)
+  for tab in frame.bankPageTabPool:EnumerateActive() do
+    if not bankTabs[tab] then
+      bankTabs[tab] = true
+      Skins.Hide(tab.Background)
+      Skins.Surface(tab, true)
+      tab.Icon:RemoveMaskTexture(tab.Mask)
+      for _, texture in ipairs({ tab.SelectedTexture, tab.HighlightTexture, tab.TabGlow }) do
+        texture:ClearAllPoints()
+        texture:SetAllPoints(tab.Icon)
+        Skins.Selection(texture, 0.25)
+      end
+    end
+  end
+end
+
+local function SkinForeverBankBags(frame)
+  for button in frame.itemButtonBagPool:EnumerateActive() do
+    Skins.BankItemButton(button)
+  end
+end
+
 local function SkinBankCheckbox(checkbox)
   Skins.CheckBox(checkbox)
   Skins.Hook(checkbox, "Init", function(control) Skins.Font(control.Text) end)
@@ -42,12 +64,12 @@ Skins.Register("Blizzard_UIPanels_Game", "BankFrame", {
   manageControls = false,
   install = function(frame)
     Skins.Shell(frame)
-    Skins.TabSystem(frame.TabSystem)
+    if not ns.Client.IsForever then Skins.TabSystem(frame.TabSystem) end
     Skins.EditBox(frame.BankItemSearchBox)
     local panel = frame.BankPanel
     Skins.Hide(panel.NineSlice)
     Skins.Hide(panel.EdgeShadows)
-    Skins.Font(panel.Header.Text, "header")
+    if not ns.Client.IsForever then Skins.Font(panel.Header.Text, "header") end
     Skins.Surface(panel.AutoSortButton, true)
 
     local money = panel.MoneyFrame
@@ -56,9 +78,19 @@ Skins.Register("Blizzard_UIPanels_Game", "BankFrame", {
     Skins.Button(money.WithdrawButton)
     Skins.Button(money.DepositButton)
 
-    local deposit = panel.AutoDepositFrame
-    Skins.Button(deposit.DepositButton)
-    SkinBankCheckbox(deposit.IncludeReagentsCheckbox)
+    if ns.Client.IsForever then
+      Skins.Font(frame.BagText)
+      Skins.Font(frame.BagCost)
+      Skins.Button(panel.PurchaseButton)
+      Skins.Hook(frame, "RefreshPageTabs", SkinForeverBankPageTabs)
+      Skins.Hook(frame, "RefreshBagButtons", SkinForeverBankBags)
+      SkinForeverBankPageTabs(frame)
+      SkinForeverBankBags(frame)
+    else
+      local deposit = panel.AutoDepositFrame
+      Skins.Button(deposit.DepositButton)
+      SkinBankCheckbox(deposit.IncludeReagentsCheckbox)
+    end
 
     for _, prompt in ipairs(panel.Prompts) do
       Skins.StripRegions(prompt)
@@ -82,9 +114,11 @@ Skins.Register("Blizzard_UIPanels_Game", "BankFrame", {
 
     -- Native pools rebuild on tab switches and purchases, not on every item update.
     Skins.Hook(panel, "GenerateItemSlotsForSelectedTab", SkinBankItems)
-    Skins.Hook(panel, "RefreshBankTabs", SkinBankTabs)
     SkinBankItems(panel)
-    SkinBankTabs(panel)
+    if panel.bankTabPool then
+      Skins.Hook(panel, "RefreshBankTabs", SkinBankTabs)
+      SkinBankTabs(panel)
+    end
   end,
 })
 

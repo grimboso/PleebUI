@@ -1262,8 +1262,13 @@ local function ApplySquareMask(db)
     local cluster = _G.MinimapCluster
     local map = _G.Minimap
     if cluster and map and not cluster:IsForbidden() and not map:IsForbidden() then
-      cluster.__pui_mmBorder = cluster.__pui_mmBorder or CreateFrame("Frame", nil, cluster)
       local b = cluster.__pui_mmBorder
+      if not b then
+        -- The Forever border follows the rendered map's visibility.
+        b = CreateFrame("Frame", nil, ns.Client.IsForever and map or cluster)
+        b.__puiUseTextureBackdrop = ns.Client.IsForever
+        cluster.__pui_mmBorder = b
+      end
       b:SetFrameStrata((map.GetFrameStrata and map:GetFrameStrata()) or "MEDIUM")
       if b.SetFrameLevel and map.GetFrameLevel then
         b:SetFrameLevel((map:GetFrameLevel() or 0) + 40)
@@ -1273,12 +1278,10 @@ local function ApplySquareMask(db)
       b:SetPoint("TOPLEFT", map, "TOPLEFT", 0, 0)
       b:SetPoint("BOTTOMRIGHT", map, "BOTTOMRIGHT", 0, 0)
 
-      Theme.SetSquareBackdrop(b, nil, edge)
-
-      local bgFrame = b._puiBg or b
-      if bgFrame and bgFrame.SetBackdropColor then
-        bgFrame:SetBackdropColor(0, 0, 0, 0)
-      end
+      Theme.SetSquareBackdrop(b, {
+        bg = { 0, 0, 0, 0 },
+        border = Theme.GetColors().border,
+      }, edge)
       b:Show()
     end
   end

@@ -17,7 +17,15 @@ Skins.Register("Blizzard_MailFrame", "MailFrame", {
     Skins.Hide(InboxFrameBg)
     Skins.Tab(MailFrameTab1)
     Skins.Tab(MailFrameTab2)
-    for _, entry in ipairs({ { InboxPrevPageButton, "<" }, { InboxNextPageButton, ">" } }) do
+    local previousPageButton, nextPageButton
+    if ns.Client.IsForever then
+      previousPageButton = frame.InboxFrame.PrevPageButton
+      nextPageButton = frame.InboxFrame.NextPageButton
+    else
+      previousPageButton = InboxPrevPageButton
+      nextPageButton = InboxNextPageButton
+    end
+    for _, entry in ipairs({ { previousPageButton, "<" }, { nextPageButton, ">" } }) do
       for _, region in ipairs({ entry[1]:GetRegions() }) do Skins.Hide(region) end
       Skins.Arrow(entry[1], entry[2])
     end
@@ -62,7 +70,11 @@ Skins.Register("Blizzard_MailFrame", "MailFrame", {
       ns.Theme.ApplyFont(button.Count, "body")
     end
     RepaintMailItems()
-    Skins.Hook(_G, "InboxFrame_Update", RepaintMailItems)
+    if ns.Client.IsForever then
+      Skins.Hook(frame.InboxFrame, "Update", RepaintMailItems)
+    else
+      Skins.Hook(_G, "InboxFrame_Update", RepaintMailItems)
+    end
     Skins.Hook(_G, "SendMailFrame_Update", RepaintMailItems)
   end,
   onShow = RepaintMailItems,

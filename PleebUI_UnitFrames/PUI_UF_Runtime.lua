@@ -1,6 +1,4 @@
-local _, childNamespace = ...
 local ns = LibStub("AceAddon-3.0"):GetAddon("PleebUI").ModuleNamespace
-ns.oUF = childNamespace.oUF
 
 local Runtime = {}
 ns.UFRuntime = Runtime

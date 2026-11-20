@@ -47,8 +47,7 @@ local function EnsureShellHost(frame)
   local state = GetBagFrameState(frame)
   local host = state.shellHost
   if not host then
-    local hostName = frame == _G.ContainerFrameCombinedBags and "PUI_CombinedBagShellHost" or "PUI_ReagentBagShellHost"
-    host = CreateFrame("Frame", hostName, frame)
+    host = CreateFrame("Frame", nil, frame)
     host:EnableMouse(false)
     state.shellHost = host
   end
@@ -108,7 +107,7 @@ local function SkinMoneyFrame(frame)
   EnsureControlBackdrop(frame, moneyFrame, moneyFrame, "moneyBackdrop", 2)
 end
 
-local function SkinSearchAndSort(frame)
+local function SkinSearchAndSort()
   local searchBox = _G.BagItemSearchBox
   Theme.WidgetSkins.UIEditBox(searchBox)
 
@@ -116,7 +115,7 @@ local function SkinSearchAndSort(frame)
   searchBox.searchIcon:SetVertexColor(colors.accent[1], colors.accent[2], colors.accent[3], colors.accent[4])
 
   local sortButton = _G.BagItemAutoSortButton
-  EnsureControlBackdrop(frame, sortButton, sortButton, "sortBackdrop", 0)
+  ns.BlizzardSkins.Surface(sortButton, true)
 end
 
 local function CreateItemBorder(button)
@@ -170,11 +169,9 @@ end
 
 local function SkinItemButton(button)
   local frame = button:GetParent()
-  if frame ~= _G.ContainerFrameCombinedBags and frame ~= _G.ContainerFrame6 then
-    return
-  end
-
-  if not ns.BlizzardSkinOptions.IsEnabled(frame == _G.ContainerFrameCombinedBags and "ContainerFrameCombinedBags" or "ContainerFrame6") then return end
+  local state = bagFrameStates[frame]
+  if not state or not state.optionName then return end
+  if not ns.BlizzardSkinOptions.IsEnabled(state.optionName) then return end
 
   if InCombatLockdown() then
     pendingItemButtons[button] = true
@@ -211,12 +208,12 @@ local function SkinCurrentItems(frame)
   end
 end
 
-local function ApplyBagFrameSkin(frame, usesSharedControls)
+local function ApplyBagFrameSkin(frame)
   if not frame then
     return
   end
 
-  if not ns.BlizzardSkinOptions.IsEnabled(frame == _G.ContainerFrameCombinedBags and "ContainerFrameCombinedBags" or "ContainerFrame6") then return end
+  if not ns.BlizzardSkinOptions.IsEnabled(bagFrameStates[frame].optionName) then return end
 
   if InCombatLockdown() then
     Bags.themeRefreshPending = true
@@ -236,22 +233,10 @@ local function ApplyBagFrameSkin(frame, usesSharedControls)
 
   SkinPortrait(frame)
   SkinMoneyFrame(frame)
-  if usesSharedControls then
-    SkinSearchAndSort(frame)
+  if frame == _G.ContainerFrameCombinedBags or (ns.Client.IsForever and frame == _G.ContainerFrame1) then
+    SkinSearchAndSort()
   end
   SkinCurrentItems(frame)
-end
-
-local function ApplyCombinedBagSkin()
-  ApplyBagFrameSkin(_G.ContainerFrameCombinedBags, true)
-end
-
-local function ApplyReagentBagSkin()
-  ApplyBagFrameSkin(_G.ContainerFrame6, false)
-end
-
-local function RefreshBagScale()
-  Bags:RefreshTheme()
 end
 
 local function SetupBagSkins()
@@ -270,16 +255,22 @@ local function SetupBagSkins()
 
   if not Bags.framesHooked then
     Bags.framesHooked = true
-    frame:HookScript("OnShow", ApplyCombinedBagSkin)
-    reagentFrame:HookScript("OnShow", ApplyReagentBagSkin)
+    GetBagFrameState(frame).optionName = "ContainerFrameCombinedBags"
+    GetBagFrameState(reagentFrame).optionName = "ContainerFrame6"
+    if ns.Client.IsForever then
+      for index = 1, NUM_CONTAINER_FRAMES do
+        local bag = _G["ContainerFrame" .. index]
+        GetBagFrameState(bag).optionName = "ContainerFrame" .. index
+      end
+    end
+    for bag in pairs(bagFrameStates) do bag:HookScript("OnShow", ApplyBagFrameSkin) end
   end
 
   if not Bags.scaleListenerRegistered then
     Bags.scaleListenerRegistered = true
-    FrameScale:RegisterScaleListener(RefreshBagScale)
+    FrameScale:RegisterScaleListener(function() Bags:RefreshTheme() end)
   else
-    ApplyCombinedBagSkin()
-    ApplyReagentBagSkin()
+    Bags:RefreshTheme()
   end
 end
 
@@ -303,10 +294,10 @@ function Bags:RefreshTheme()
   end
 
   self.themeRefreshPending = false
-  ApplyCombinedBagSkin()
-  ApplyReagentBagSkin()
-  RefreshCurrentItemThemes(_G.ContainerFrameCombinedBags)
-  RefreshCurrentItemThemes(_G.ContainerFrame6)
+  for frame in pairs(bagFrameStates) do
+    ApplyBagFrameSkin(frame)
+    RefreshCurrentItemThemes(frame)
+  end
 end
 
 local function ProcessDeferredWork()
@@ -356,9 +347,6 @@ RefreshItemButtonTheme = P:Def("Bags.RefreshItemButtonTheme", RefreshItemButtonT
 SkinItemButton = P:Def("Bags.SkinItemButton", SkinItemButton)
 SkinCurrentItems = P:Def("Bags.SkinCurrentItems", SkinCurrentItems)
 ApplyBagFrameSkin = P:Def("Bags.ApplyBagFrameSkin", ApplyBagFrameSkin)
-ApplyCombinedBagSkin = P:Def("Bags.ApplyCombinedBagSkin", ApplyCombinedBagSkin)
-ApplyReagentBagSkin = P:Def("Bags.ApplyReagentBagSkin", ApplyReagentBagSkin)
-RefreshBagScale = P:Def("Bags.RefreshBagScale", RefreshBagScale)
 SetupBagSkins = P:Def("Bags.SetupBagSkins", SetupBagSkins)
 RefreshCurrentItemThemes = P:Def("Bags.RefreshCurrentItemThemes", RefreshCurrentItemThemes)
 Bags.RefreshTheme = P:Def("Bags:RefreshTheme", Bags.RefreshTheme)

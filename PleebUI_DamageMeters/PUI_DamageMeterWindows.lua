@@ -244,7 +244,9 @@ local function CreateMeterRow(parent)
   row.primaryAmount = primaryAmount
 
   row:SetScript("OnEnter", function(self)
-    if self.window and self.window.rowDisplayMeter == "THREAT" then
+    if not DamageMeters.db.profile.breakdown.openOnMouseover
+      or (self.window and self.window.rowDisplayMeter == "THREAT")
+    then
       return
     end
     local breakdown = DamageMeters.breakdown
@@ -258,7 +260,9 @@ local function CreateMeterRow(parent)
     if GameTooltip:IsOwned(self) then
       GameTooltip:Hide()
     end
-    Breakdown.ScheduleTransientClose(self)
+    if DamageMeters.db.profile.breakdown.openOnMouseover then
+      Breakdown.ScheduleTransientClose(self)
+    end
   end)
   row:SetScript("OnClick", function(self, button)
     if self.window and self.window.rowDisplayMeter == "THREAT" then

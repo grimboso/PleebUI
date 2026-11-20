@@ -1,6 +1,7 @@
 local _, ns = ...
 local Skins, Theme = ns.BlizzardSkins, ns.Theme
 local modules
+local headerOnlyModules
 local styledButtons = setmetatable({}, { __mode = "k" })
 local styledBars = setmetatable({}, { __mode = "k" })
 local headerSkins = setmetatable({}, { __mode = "k" })
@@ -15,12 +16,14 @@ local function TintTrackerButton(button)
   pushed:SetVertexColor(color[1], color[2], color[3], color[4])
 end
 
+local function UpdateTrackerCollapseGlyph(header, collapsed)
+  if not issecretvalue(collapsed) then
+    headerSkins[header].label:SetText(collapsed and "+" or "−")
+  end
+end
+
 local function RefreshTrackerHeader(header)
-  local collapsed = header:GetParent():IsCollapsed()
-  if issecretvalue(collapsed) then return end
   local skin = headerSkins[header]
-  -- The addon-owned glyph can follow native collapse changes during combat.
-  if skin then skin.label:SetText(collapsed and "+" or "−") end
   local colors = Theme.GetColors()
   header.Background:SetTexture("")
   header.Text:SetTextColor(unpack(colors.accent))
@@ -29,17 +32,17 @@ local function RefreshTrackerHeader(header)
     local label = button:CreateFontString(nil, "OVERLAY")
     label:SetPoint("CENTER", button, "CENTER")
     Theme.ApplyFont(label, "button")
-    label:SetText(collapsed and "+" or "−")
     local divider = header:CreateTexture(nil, "BORDER")
     divider:SetPoint("BOTTOMLEFT", header, "BOTTOMLEFT", 7, 0)
     divider:SetPoint("BOTTOMRIGHT", header, "BOTTOMRIGHT", -1, 0)
     divider:SetHeight(1)
     skin = { label = label, divider = divider }
     headerSkins[header] = skin
+    UpdateTrackerCollapseGlyph(header, header:GetParent():IsCollapsed())
+    Skins.Hook(header, "SetCollapsed", UpdateTrackerCollapseGlyph)
   end
   skin.label:SetTextColor(unpack(colors.text))
   skin.divider:SetColorTexture(colors.accent[1], colors.accent[2], colors.accent[3], 0.45)
-  -- Native collapse changes reassign these atlases even during combat.
   button:GetNormalTexture():SetAlpha(0)
   button:GetPushedTexture():SetAlpha(0)
   local highlight = button:GetHighlightTexture()
@@ -91,6 +94,9 @@ end
 
 local function RefreshObjectiveTracker(frame)
   RefreshTrackerHeader(frame.Header)
+  for _, module in pairs(headerOnlyModules) do
+    RefreshTrackerHeader(module.Header)
+  end
   for _, module in pairs(modules) do
     RefreshTrackerHeader(module.Header)
     module:EnumerateActiveBlocks(SkinTrackerBlock)
@@ -107,21 +113,21 @@ Skins.Register("Blizzard_ObjectiveTracker", "ObjectiveTrackerFrame", {
   label = "Objective tracker",
   category = "Windows",
   manageControls = false,
+  installOnLoad = true,
   install = function(frame)
+    -- These modules share widget pools with Blizzard's tooltips and map.
+    headerOnlyModules = { ScenarioObjectiveTracker, UIWidgetObjectiveTracker }
     modules = {
-      ScenarioObjectiveTracker, UIWidgetObjectiveTracker, CampaignQuestObjectiveTracker,
-      QuestObjectiveTracker, AdventureObjectiveTracker, AchievementObjectiveTracker,
+      CampaignQuestObjectiveTracker, QuestObjectiveTracker, AdventureObjectiveTracker, AchievementObjectiveTracker,
       MonthlyActivitiesObjectiveTracker, ProfessionsRecipeTracker, BonusObjectiveTracker,
       WorldQuestObjectiveTracker, InitiativeTasksObjectiveTracker,
     }
-    Skins.Hook(frame.Header, "SetCollapsed", RefreshTrackerHeader)
     for _, module in pairs(modules) do
-      Skins.Hook(module.Header, "SetCollapsed", RefreshTrackerHeader)
       Skins.Hook(module, "AddBlock", function(_, block) SkinTrackerBlock(block) end)
       Skins.Hook(module, "GetProgressBar", SkinTrackerProgressBar)
       Skins.Hook(module, "GetTimerBar", SkinTrackerTimerBar)
     end
+    RefreshObjectiveTracker(frame)
   end,
-  onShow = RefreshObjectiveTracker,
   onTheme = RefreshObjectiveTracker,
 })

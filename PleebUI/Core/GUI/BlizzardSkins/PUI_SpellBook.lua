@@ -58,7 +58,8 @@ local function RefreshSpells()
 end
 
 local function RefreshSpellBook(frame)
-  Skins.Shell(frame)
+  -- Blizzard uses portrait coordinates to select a class from a shared texture.
+  Skins.Shell(frame, nil, true)
   Skins.TabSystem(frame.TabSystem)
   local book = frame.SpellBookFrame
   book.BookCornerFlipbook:SetTexture(nil)
@@ -82,9 +83,6 @@ end
 
 Skins.Register("Blizzard_PlayerSpells", "PlayerSpellsFrame", function(frame)
   RefreshSpellBook(frame)
-  Skins.Hook(frame, "UpdatePortrait", function(updatedFrame)
-    Skins.Icon(updatedFrame.PortraitContainer.portrait)
-  end)
   Skins.Hook(frame.SpellBookFrame, "SetMinimized", function()
     RefreshSpellBook(frame)
   end)

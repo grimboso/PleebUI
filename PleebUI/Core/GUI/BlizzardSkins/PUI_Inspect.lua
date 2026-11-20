@@ -28,6 +28,12 @@ local function CS_SkinInspectPvPFrame()
     return
   end
 
+  if ns.Client.IsForever then
+    ns.BlizzardSkins.Texts(pvp.MainInfoFrame)
+    ns.BlizzardSkins.Font(pvp.SeasonTimerField)
+    return
+  end
+
   if pvp.BG and pvp.BG.SetAlpha then
     pvp.BG:SetAlpha(0)
   end
@@ -94,7 +100,7 @@ local function EnsureInspectShellHost()
 
   host:ClearAllPoints()
   host:SetPoint("TOPLEFT", InspectFrame, "TOPLEFT", 0, 0)
-  host:SetPoint("BOTTOMRIGHT", InspectFrame, "BOTTOMRIGHT", 0, -40)
+  host:SetPoint("BOTTOMRIGHT", InspectFrame, "BOTTOMRIGHT", 0, ns.Client.IsForever and 0 or -40)
 
   ns.Theme.WidgetSkins.Frame(host)
 end
@@ -219,11 +225,17 @@ local function SetupInspectFrameSkinning()
     if InspectModelFrameBorderBottom2 then InspectModelFrameBorderBottom2:SetAlpha(0) end
   end
 
-  ns.BlizzardSkins.WindowTabs(InspectFrame, {
-    InspectFrameTab1,
-    InspectFrameTab2,
-    InspectFrameTab3,
-  })
+  if ns.Client.IsForever then
+    for _, tab in ipairs(InspectFrame.ModeTabs.Tabs) do
+      ns.BlizzardSkins.SideTab(tab)
+    end
+  else
+    ns.BlizzardSkins.WindowTabs(InspectFrame, {
+      InspectFrameTab1,
+      InspectFrameTab2,
+      InspectFrameTab3,
+    })
+  end
 
   local function UpdateInspectPaperDollVisibility()
     local unit = InspectFrame and InspectFrame.unit
@@ -254,7 +266,7 @@ local function SetupInspectFrameSkinning()
   end
 
   if not CharacterSheet._inspectSlotHook then
-    hooksecurefunc("InspectPaperDollFrame_UpdateButtons", function()
+    hooksecurefunc(InspectPaperDollFrame, "UpdateButtons", function()
       local unit = InspectFrame and InspectFrame.unit
       if not unit then
         return
@@ -294,7 +306,9 @@ local function RefreshInspectTheme()
     CS_SkinButton(InspectPaperDollFrame and InspectPaperDollFrame.ViewButton)
     CS_SkinButton(InspectPaperDollItemsFrame and InspectPaperDollItemsFrame.InspectTalents)
     local pvp = _G.InspectPVPFrame
-    if pvp then
+    if ns.Client.IsForever then
+      CS_SkinInspectPvPFrame()
+    elseif pvp then
       for index = 1, 3 do CS_ApplyBackdrop(pvp["TalentSlot" .. index], CS_CONTROL) end
     end
 

@@ -159,7 +159,7 @@ function Skins.WindowTitle(frame, title, surface)
   title:SetJustifyV("MIDDLE")
 end
 
-function Skins.Shell(frame, backgroundFrame)
+function Skins.Shell(frame, backgroundFrame, preservePortraitTexCoords)
   Skins.Chrome(frame)
   local surface = Skins.Surface(backgroundFrame or frame)
   Skins.Chrome(frame.Inset)
@@ -177,7 +177,9 @@ function Skins.Shell(frame, backgroundFrame)
     portrait:SetPoint("TOPLEFT", frame, "TOPLEFT", 5, -5)
     portrait:SetSize(38, 38)
     portrait:SetAlpha(1)
-    Skins.Icon(portrait)
+    if not preservePortraitTexCoords then
+      Skins.Icon(portrait)
+    end
     local holder = Skins.Surface(container, true)
     holder:ClearAllPoints()
     holder:SetPoint("TOPLEFT", portrait, "TOPLEFT", -1, 1)
@@ -486,6 +488,20 @@ function Skins.Tab(tab)
   RefreshTabState(tab)
 end
 
+function Skins.SideTab(tab)
+  Skins.Hide(tab.Background)
+  tab.Icon:RemoveMaskTexture(tab.Mask)
+  local surface = Skins.Surface(tab, true)
+  surface:ClearAllPoints()
+  surface:SetPoint("TOPLEFT", tab.Icon, "TOPLEFT", -1, 1)
+  surface:SetPoint("BOTTOMRIGHT", tab.Icon, "BOTTOMRIGHT", 1, -1)
+  for _, texture in ipairs({ tab.SelectedTexture, tab.HighlightTexture, tab.TabGlow }) do
+    texture:ClearAllPoints()
+    texture:SetAllPoints(tab.Icon)
+    Skins.Selection(texture)
+  end
+end
+
 function Skins.WindowTabs(frame, tabs)
   local previous
 
@@ -521,7 +537,6 @@ function Skins.WidenScrollBar(scrollbar)
     track:SetWidth(width - 2)
     track.Thumb:SetWidth(width - 4)
     track.Thumb:SetHitRectInsets(0, 0, 0, 0)
-    scrollbar.thumbAnchor = "TOP"
   end
 end
 
@@ -586,7 +601,6 @@ function Skins.ScrollBar(scrollbar)
     end
   end
   RefreshScrollBar(scrollbar)
-  scrollbar:SetHideIfUnscrollable(true)
 end
 
 function Skins.Apply(root, layout)
@@ -634,7 +648,7 @@ function Skins.ColoredProgressBar(bar)
   Skins.Font(bar.Text, "tiny")
   coloredProgressBars[bar] = true
   Skins.Hook(bar, "SetFillTextureByColorType", ApplyProgressTexture)
-  Skins.Hook(bar, "UpdateBarColor", PaintProgressFill)
+  if bar.UpdateBarColor then Skins.Hook(bar, "UpdateBarColor", PaintProgressFill) end
   ApplyProgressTexture(bar)
   PaintProgressFill(bar)
 end

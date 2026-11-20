@@ -4671,33 +4671,6 @@ local function UFCB_BuildPartyGeneralArgs(groupKind, opts)
     })
   end
 
-  local function SetPartyPlayerShown(_, value)
-    if UFCB_BlockCombat() then
-      ns.OptionsLifecycle.RefreshModel({ "unitframes" })
-      return
-    end
-
-    value = value == true
-
-    local db = GetDB()
-    if db.showPlayer == value then
-      return
-    end
-
-    Addon:PUI_ConfirmAction({
-      title = "Reload required",
-      text = "Changing Show self in party requires reloading the UI.",
-      yesText = "Apply + Reload",
-      onYes = function()
-        GetDB().showPlayer = value
-        ReloadUI()
-      end,
-      onNo = function()
-        ns.OptionsLifecycle.RefreshModel({ "unitframes" })
-      end,
-    })
-  end
-
   local function BuildGroupedRange(key, name, order, minValue, maxValue, opts)
     opts = opts or {}
 
@@ -5310,9 +5283,8 @@ local function UFCB_BuildPartyGeneralArgs(groupKind, opts)
   }
 
   if not isRaid then
-    args.core.args.showSelfInParty = BuildGroupedToggle("showPlayer", "Show self in party (reload required)", 5, {
-      desc = "Requires a UI reload.",
-      set = SetPartyPlayerShown,
+    args.core.args.showSelfInParty = BuildGroupedToggle("showPlayer", "Show self in party", 5, {
+      flags = { visibility = true },
     })
     args.core.args.showSolo = BuildGroupedToggle("showSolo", "Show party while solo", 5.5, {
       

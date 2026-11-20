@@ -21,6 +21,7 @@ ns.DamageMetersDefaults = {
       dungeonSummariesToKeep = 10,
     },
     breakdown = {
+      openOnMouseover = true,
       position = "AUTO",
       width = 360,
       height = 260,

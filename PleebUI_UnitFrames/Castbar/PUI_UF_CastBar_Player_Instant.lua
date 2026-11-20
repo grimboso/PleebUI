@@ -16,7 +16,7 @@ local C_Spell = C_Spell
 local C_DurationUtil = C_DurationUtil
 local CreateFrame = CreateFrame
 
-local CB_GCD_DUMMY_SPELL_ID = 61304
+local CB_GCD_DUMMY_SPELL_ID = ns.Client.IsForever and 1283885 or 61304
 local CB_INSTANT_CLEANUP_DURATION = 1.50
 
 local function CB_OnInstantCleanupFinished(group)

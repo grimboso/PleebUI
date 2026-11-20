@@ -150,7 +150,7 @@ end
 
 local function CreateAuraElement(frame, layout, appearance)
   local parent = frame.RaisedElementParent or frame
-  local container = frame:CreateAuras({
+  local container = frame:CreateAurasElement({
     initialAnchor = layout.initialAnchor,
     layout = AnchorUtil.FlowLayoutAxis.Horizontal,
     layoutLimit = layout.width,

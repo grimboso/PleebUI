@@ -35,6 +35,7 @@ local table_sort = _G.table.sort
 local setmetatable = _G.setmetatable
 
 local PartyFrames = Addon:NewModule("PartyFrames", "NumyAceEvent-3.0")
+local shutdownFrame = CreateFrame("Frame")
 ns.Modules.PartyFrames = PartyFrames
 
 local Pixel = ns.Pixel
@@ -126,6 +127,16 @@ local function ComparePartyFrames(db, firstFrame, secondFrame)
 end
 
 local function GetPartyVisibilityDriver(db)
+  if ns.Client.IsForever then
+    if db.hideInRaid == false then
+      return db.showSolo == true and "show" or "[@party1,exists][@raid1,exists] show; hide"
+    elseif db.showSolo == true then
+      return "[@raid1,exists] hide; show"
+    end
+
+    return "[@raid1,exists] hide; [@party1,exists] show; hide"
+  end
+
   if db.hideInRaid == false then
     if db.showSolo == true then
       return "show"
@@ -162,7 +173,7 @@ local function ApplyAnchor(self)
   Pixel.Point(anchor, point, _G[db.relativeTo or "UIParent"] or UIParent, db.relativePoint or point, db.x or 0, db.y or 0)
 
   FrameUtil.UpdateLinearHeaderAnchorSize(self, {
-    count = self.partyFrames and (self.partyPlayerFrame and 5 or 4) or ((db.showPlayer == true) and 5 or 4),
+    count = db.showPlayer == true and 5 or 4,
     width = width,
     height = height,
     spacing = Round(db.spacing or 8),
@@ -584,7 +595,7 @@ function PartyFrames:LayoutPartyFrames()
     end
   end
 
-  if self.partyPlayerFrame then
+  if db.showPlayer == true and self.partyPlayerFrame then
     frames[#frames + 1] = self.partyPlayerFrame
   end
 
@@ -653,34 +664,43 @@ function PartyFrames:LayoutPetFrames()
   end
 end
 
+local function StopPartyFrame(frame)
+  if frame:IsEnabled() then
+    frame:Disable()
+  end
+  UF:DisableFrameRuntime(frame)
+end
+
 function PartyFrames:ConfigureChildren()
+  local db = self.db.profile
   for index = 1, 4 do
-    local frame = self.partyFrames and self.partyFrames[index]
-    if frame then
-      self:Update_PartyFrames(frame)
+    local frame = self.partyFrames[index]
+    if not frame:IsEnabled() then
+      frame:Enable()
     end
+    self:Update_PartyFrames(frame)
   end
 
-  if self.partyPlayerFrame then
-    self:Update_PartyFrames(self.partyPlayerFrame)
+  local player = self.partyPlayerFrame
+  if db.showPlayer == true then
+    if not player:IsEnabled() then
+      player:Enable()
+    end
+    self:Update_PartyFrames(player)
+  else
+    StopPartyFrame(player)
   end
 
-  local petDB = PartyFrames.db.profile.partyPets
-
+  local petDB = db.partyPets
   for index = 1, 4 do
-    local pet = self.petFrames and self.petFrames[index]
-    if pet then
-      if not petDB or petDB.enabled == false then
-        if pet:IsEnabled() then
-          pet:Disable()
-        end
-        UF:DisableFrameRuntime(pet)
-      else
-        if not pet:IsEnabled() then
-          pet:Enable()
-        end
-        self:Update_PartyPetFrames(pet, index)
+    local pet = self.petFrames[index]
+    if petDB and petDB.enabled ~= false then
+      if not pet:IsEnabled() then
+        pet:Enable()
       end
+      self:Update_PartyPetFrames(pet, index)
+    else
+      StopPartyFrame(pet)
     end
   end
 
@@ -727,32 +747,39 @@ function PartyFrames:RefreshGroupLayout()
   self:LayoutPartyFrames()
 end
 
+local function StopRuntimeFrames(owner)
+  if owner.anchor then
+    if owner._visibilityDriver then
+      UnregisterStateDriver(owner.anchor, "visibility")
+      owner._visibilityDriver = nil
+    end
+    owner.anchor:Hide()
+  end
+
+  if owner.partyFrames then
+    for _, frame in ipairs(owner.partyFrames) do
+      StopPartyFrame(frame)
+    end
+  end
+  if owner.partyPlayerFrame then
+    StopPartyFrame(owner.partyPlayerFrame)
+  end
+  if owner.petFrames then
+    for _, frame in ipairs(owner.petFrames) do
+      StopPartyFrame(frame)
+    end
+  end
+end
+
+shutdownFrame:SetScript("OnEvent", function(frame, event)
+  frame:UnregisterEvent(event)
+  StopRuntimeFrames(PartyFrames)
+end)
+
 function PartyFrames:RefreshVisibility()
-  local db = PartyFrames.db.profile
-
+  local db = self.db.profile
   if db.enabled == false then
-    if self.anchor then
-      if self._visibilityDriver then
-        UnregisterStateDriver(self.anchor, "visibility")
-        self._visibilityDriver = nil
-      end
-      self.anchor:Hide()
-    end
-
-    if self.partyFrames then
-      for index = 1, 4 do
-        UF:DisableFrameRuntime(self.partyFrames[index])
-      end
-    end
-
-    UF:DisableFrameRuntime(self.partyPlayerFrame)
-
-    if self.petFrames then
-      for _, frame in pairs(self.petFrames) do
-        UF:DisableFrameRuntime(frame)
-      end
-    end
-
+    StopRuntimeFrames(self)
     return false
   end
 
@@ -768,7 +795,6 @@ function PartyFrames:RefreshVisibility()
     self._visibilityDriver = visibilityDriver
   end
 
-  self.anchor:Show()
   return true
 end
 
@@ -782,7 +808,7 @@ local function IteratePartyMemberFrames(owner, callback)
     end
   end
 
-  if owner.partyPlayerFrame then
+  if owner.partyPlayerFrame and owner.partyPlayerFrame:IsEnabled() then
     callback(owner.partyPlayerFrame)
   end
 end
@@ -1050,6 +1076,8 @@ function PartyFrames:Refresh()
     return
   end
 
+  self:CreateRuntimeFrames()
+
   if self:RefreshVisibility() then
     self:ConfigureChildren()
   end
@@ -1116,20 +1144,6 @@ end
 function PartyFrames:PLAYER_REGEN_ENABLED()
   self:UnregisterEvent("PLAYER_REGEN_ENABLED")
 
-  if self.__puiTopologyCreationPending then
-    self.__puiTopologyCreationPending = nil
-
-    if not self:IsEnabled() then
-      return
-    end
-
-    self:CreateRuntimeFrames()
-    self:Refresh()
-    self.__puiDeferredRefresh = nil
-    self.pendingGroupUpdate = nil
-    return
-  end
-
   local flushed = UF.FlushDeferredRefreshes(self, function(mode)
     self:SafeRefresh(mode)
   end)
@@ -1156,13 +1170,10 @@ function PartyFrames:StartRuntime()
   self:RegisterEvent("PARTY_MEMBER_DISABLE", "RefreshAuraAvailability")
 
   oUF:Factory(function()
-    if InCombatLockdown() then
-      self.__puiTopologyCreationPending = true
-      self:RegisterEvent("PLAYER_REGEN_ENABLED")
+    if not self:IsEnabled() then
       return
     end
 
-    self:CreateRuntimeFrames()
     self:Refresh()
   end)
 end
@@ -1181,6 +1192,7 @@ function PartyFrames:SetMoversVisible(show)
 end
 
 function PartyFrames:OnEnable()
+  shutdownFrame:UnregisterEvent("PLAYER_REGEN_ENABLED")
   ns.UFRuntime:ScheduleStart(self)
 end
 
@@ -1188,22 +1200,14 @@ function PartyFrames:OnDisable()
   ns.UFRuntime:Cancel(self)
   self:UnregisterAllEvents()
   self.__puiDeferredRefresh = nil
-  self.__puiTopologyCreationPending = nil
   self.pendingGroupUpdate = nil
   self._pendingAuraRefresh = nil
   self._auraRefreshScheduled = nil
 
-  IteratePartyFrames(self, function(frame)
-    UF:DisableFrameRuntime(frame)
-  end)
-
-  if self.anchor then
-    if not InCombatLockdown() and self._visibilityDriver then
-      UnregisterStateDriver(self.anchor, "visibility")
-      self._visibilityDriver = nil
-    end
-
-    self.anchor:Hide()
+  if InCombatLockdown() then
+    shutdownFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
+  else
+    StopRuntimeFrames(self)
   end
 end
 
